@@ -1,6 +1,27 @@
-# gitignore template for LangChain products, e.g., LangGraph, LangSmith
-# website: https://www.langchain.com/
-# website: https://www.langchain.com/langgraph
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
 
-# LangGraph
-.langgraph_api/
+# ---- Virtual environments ----
+venv/
+.venv/
+env/
+ENV/
+lib/
+bin/
+include/
+
+# ---- Playwright ----
+ms-playwright/
+
+# ---- Generated output ----
+seek_results.html
+
+# ---- OS / IDE ----
+.DS_Store
+.vscode/
+.idea/
+playwright
+openai
+python-dotenv
