@@ -9,9 +9,10 @@ from review_insights import apply_skill_review_decisions
 
 HOST = "127.0.0.1"
 PORT = 8765
-BASE_DIR = Path(__file__).resolve().parent
-RUN_STATS_PATH = BASE_DIR / "seek_run_stats.json"
-REVIEW_DATA_PATH = BASE_DIR / "seek_review_data.json"
+ROOT_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = ROOT_DIR / "output"
+RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
+REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
 
 ADMIN_HTML = """<!doctype html>
 <html lang="en">
@@ -205,7 +206,7 @@ ADMIN_HTML = """<!doctype html>
   <main class="page">
     <section class="hero">
       <h1>SEEK Admin Console</h1>
-      <p>Update your fit profile, exclusions, search window, and review lists here. <code>profile.json</code> is the runtime source of truth for every scrape, while <code>What Rob Knows.txt</code> stays your human master note for imports and updates.</p>
+      <p>Update your fit profile, exclusions, search window, and review lists here. <code>profile.json</code> is the runtime source of truth for every scrape, while <code>rob_capability_profile.txt</code> stays your human master note for imports and updates.</p>
     </section>
 
     <nav class="tabs" aria-label="Admin sections">
@@ -300,7 +301,7 @@ ADMIN_HTML = """<!doctype html>
         <div class="help">Paste CV text, capability notes, or a new knowledge dump here. The system will convert it into structured profile fields and save it to <code>profile.json</code>.</div>
         <div class="panel-actions">
           <button class="secondary" id="apply_learning">Apply Learning Update</button>
-          <button class="secondary" id="import_knowledge_file">Import What Rob Knows</button>
+          <button class="secondary" id="import_knowledge_file">Import Capability Profile</button>
         </div>
       </section>
 

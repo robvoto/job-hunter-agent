@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any
 
 
-BASE_DIR = Path(__file__).resolve().parent
-PROFILE_PATH = BASE_DIR / "profile.json"
+ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
+PROFILE_PATH = DATA_DIR / "profile.json"
 
 DEFAULT_SEARCH_SETTINGS = {
     "keywords": "business analyst",
@@ -279,6 +280,7 @@ DEFAULT_PROFILE = {
 
 
 def ensure_profile_exists() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     if PROFILE_PATH.exists():
         return
     save_profile(DEFAULT_PROFILE)

@@ -3,8 +3,9 @@ from pathlib import Path
 from typing import Any
 
 
-BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_KNOWLEDGE_FILE = BASE_DIR / "What Rob Knows.txt"
+ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
+DEFAULT_KNOWLEDGE_FILE = DATA_DIR / "rob_capability_profile.txt"
 
 
 def repair_text(text: str) -> str:

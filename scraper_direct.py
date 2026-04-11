@@ -34,13 +34,15 @@ SELECTOR_CARD_SALARY = '[data-automation="jobSalary"]'
 SELECTOR_SHORT_DESCRIPTION = '[data-automation="jobShortDescription"]'
 SELECTOR_DETAILS = '[data-automation="jobAdDetails"]'
 
-BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
+OUTPUT_DIR = ROOT_DIR / "output"
 MAX_LLM_CHARS = 3000
-LLM_CACHE_PATH = BASE_DIR / "llm_cache.json"
-DEBUG_JSON_PATH = BASE_DIR / "seek_results.json"
-JOB_HISTORY_PATH = BASE_DIR / "job_history.json"
-RUN_STATS_PATH = BASE_DIR / "seek_run_stats.json"
-REVIEW_DATA_PATH = BASE_DIR / "seek_review_data.json"
+LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
+DEBUG_JSON_PATH = OUTPUT_DIR / "seek_results.json"
+JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
+RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
+REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
 SEEK_JOBS_BASE_URL = "https://www.seek.com.au/jobs"
 
 
@@ -62,6 +64,7 @@ def load_json_dict(path: Path) -> Dict[str, dict]:
 
 
 def save_json(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -737,7 +740,8 @@ def render_html(
 """
     output_file = Path(output_path)
     if not output_file.is_absolute():
-        output_file = BASE_DIR / output_file
+        output_file = ROOT_DIR / output_file
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(html, encoding="utf-8")
 
 
