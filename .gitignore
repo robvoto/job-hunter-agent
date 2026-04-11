@@ -25,6 +25,7 @@ data/job_history.json
 .DS_Store
 .vscode/
 .idea/
+*.code-workspace
 playwright
 openai
 python-dotenv
