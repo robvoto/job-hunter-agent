@@ -18,6 +18,8 @@ def build_system_prompt() -> str:
     profile = load_profile()
     summary = profile.get("candidate_summary", "")
     strengths = profile.get("strengths", [])
+    cv_text = (profile.get("cv_text") or "").strip()
+    capability_rules = profile.get("capability_profile_rules", [])
     notes = profile.get("llm_prompt_notes", [])
 
     parts = [
@@ -26,6 +28,19 @@ def build_system_prompt() -> str:
     ]
     if strengths:
         parts.append("Strong fit areas: " + ", ".join(strengths) + ".")
+    if cv_text:
+        parts.append("Candidate CV / background:")
+        parts.append(cv_text[:4000])
+    if capability_rules:
+        parts.append("Capability levels:")
+        for rule in capability_rules:
+            name = str(rule.get("name") or "").strip()
+            level = str(rule.get("level") or "").strip()
+            fit = str(rule.get("fit") or "").strip()
+            aliases = ", ".join(str(alias).strip() for alias in rule.get("aliases", []) if str(alias).strip())
+            if name and level:
+                fit_text = f", {fit}" if fit else ""
+                parts.append(f"- {name}: {level}{fit_text}" + (f" ({aliases})" if aliases else ""))
     if notes:
         parts.append("Important preferences:")
         parts.extend(f"- {note}" for note in notes)

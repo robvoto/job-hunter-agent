@@ -10,6 +10,137 @@ def _matches_any(text: str, patterns: list[str]) -> bool:
     return any(re.search(pattern, text) for pattern in patterns if pattern)
 
 
+def _normalize_reason_token(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower())
+    return cleaned.strip("_") or "unknown"
+
+
+def _normalize_level(value: str) -> str:
+    level = (value or "").strip().lower()
+    aliases = {
+        "none": "none",
+        "no": "none",
+        "low": "low",
+        "weak": "low",
+        "basic": "basic",
+        "limited": "basic",
+        "working": "working",
+        "intermediate": "working",
+        "strong": "strong",
+        "expert": "strong",
+    }
+    return aliases.get(level, level or "basic")
+
+
+def _normalize_fit(value: str, level: str) -> str:
+    fit = (value or "").strip().lower()
+    aliases = {
+        "core": "core",
+        "primary": "core",
+        "supporting": "supporting",
+        "secondary": "supporting",
+        "contextual": "contextual",
+        "adjacent": "contextual",
+        "avoid": "avoid",
+        "reject": "avoid",
+    }
+    if fit in aliases:
+        return aliases[fit]
+    if level == "strong":
+        return "core"
+    if level == "working":
+        return "supporting"
+    return "contextual"
+
+
+def _count_alias_hits(text: str, aliases: list[str]) -> tuple[int, int]:
+    total_hits = 0
+    distinct_hits = 0
+    for alias in aliases:
+        alias_lower = (alias or "").strip().lower()
+        if not alias_lower:
+            continue
+        pattern = rf"(?<!\w){re.escape(alias_lower)}(?!\w)"
+        matches = re.findall(pattern, text)
+        if matches:
+            total_hits += len(matches)
+            distinct_hits += 1
+    return total_hits, distinct_hits
+
+
+def _matches_hard_requirement(text: str, alias: str) -> bool:
+    alias_lower = (alias or "").strip().lower()
+    if not alias_lower:
+        return False
+
+    escaped_alias = re.escape(alias_lower)
+    patterns = [
+        rf"(strong|solid|extensive|proven|demonstrated|hands[- ]on|deep|advanced|expert).{{0,45}}{escaped_alias}",
+        rf"{escaped_alias}.{{0,45}}(required|essential|must have|mandatory|highly desirable)",
+        rf"(required|essential|must have|mandatory|highly desirable).{{0,45}}{escaped_alias}",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def _matches_soft_requirement(text: str, alias: str) -> bool:
+    alias_lower = (alias or "").strip().lower()
+    if not alias_lower:
+        return False
+
+    escaped_alias = re.escape(alias_lower)
+    patterns = [
+        rf"(experience in|experience with|knowledge of|understanding of|proficiency in).{{0,45}}{escaped_alias}",
+        rf"{escaped_alias}.{{0,35}}(experience|knowledge|understanding|proficiency)",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def _matches_missing_skill_requirement(description_lower: str, skill_lower: str) -> bool:
+    escaped_skill = re.escape(skill_lower)
+    mandatory_patterns = [
+        rf"\b(strong|extensive|proven|solid|deep|hands[- ]on|expert)\b.{{0,25}}\b{escaped_skill}\b",
+        rf"\b{escaped_skill}\b.{{0,35}}\b(required|essential|must have|mandatory)\b",
+        rf"\b(required|essential|must have|mandatory)\b.{{0,35}}\b{escaped_skill}\b",
+    ]
+    return any(re.search(pattern, description_lower) for pattern in mandatory_patterns)
+
+
+def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:
+    capability_rules = profile.get("capability_profile_rules", [])
+    positive_hits = 0
+
+    for rule in capability_rules:
+        name = str(rule.get("name") or "").strip()
+        level = _normalize_level(str(rule.get("level") or "basic"))
+        fit = _normalize_fit(str(rule.get("fit") or ""), level)
+        aliases = [str(alias).strip() for alias in rule.get("aliases", []) if str(alias).strip()]
+        if not name or not aliases:
+            continue
+
+        total_hits, distinct_hits = _count_alias_hits(description_lower, aliases)
+        if level in {"strong", "working"}:
+            positive_hits += distinct_hits
+
+        hard_requirement_match = any(_matches_hard_requirement(description_lower, alias) for alias in aliases)
+        soft_requirement_match = any(_matches_soft_requirement(description_lower, alias) for alias in aliases)
+        reason_token = _normalize_reason_token(name)
+
+        if (fit == "avoid" or level == "none") and (hard_requirement_match or soft_requirement_match or distinct_hits >= 2):
+            return False, f"DESC_CAPABILITY_NONE:{reason_token}"
+        if level == "low" and (hard_requirement_match or soft_requirement_match or distinct_hits >= 3):
+            return False, f"DESC_CAPABILITY_LOW:{reason_token}"
+        if level == "basic" and hard_requirement_match and distinct_hits >= 2:
+            return False, f"DESC_CAPABILITY_BASIC:{reason_token}"
+        if fit == "contextual" and hard_requirement_match and distinct_hits >= 2:
+            return False, f"DESC_CAPABILITY_CONTEXT:{reason_token}"
+        if fit == "contextual" and distinct_hits >= 4 and positive_hits <= 2:
+            return False, f"DESC_PRIMARY_FOCUS:{reason_token}"
+        if level in {"low", "basic"} and distinct_hits >= 4 and positive_hits <= 2:
+            return False, f"DESC_PRIMARY_FOCUS:{reason_token}"
+
+    return True, "OK"
+
+
 def passes_title_filters(title: str) -> Tuple[bool, str]:
     """
     Title-based gatekeeping.
@@ -40,7 +171,7 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
     return True, "TITLE_POTENTIAL_MATCH"
 
 
-def passes_content_filters(details_text: str) -> Tuple[bool, str]:
+def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[bool, str]:
     """
     Description-based filtering.
     Returns (True, "OK") if description fits, else (False, "REASON").
@@ -50,6 +181,7 @@ def passes_content_filters(details_text: str) -> Tuple[bool, str]:
 
     profile = load_profile()
     description_lower = details_text.lower()
+    card_location_lower = (card_location or "").lower()
 
     for rule in profile.get("reject_description_phrase_rules", []):
         phrase = (rule.get("phrase") or "").strip().lower()
@@ -62,5 +194,21 @@ def passes_content_filters(details_text: str) -> Tuple[bool, str]:
         reason = rule.get("reason", f"DESC_REJECT:{pattern}")
         if pattern and re.search(pattern, description_lower):
             return False, reason
+
+    ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
+    if not ok_capability:
+        return False, capability_reason
+
+    for skill in profile.get("must_not_require_skills", []):
+        skill_lower = (skill or "").strip().lower()
+        if not skill_lower:
+            continue
+        if _matches_missing_skill_requirement(description_lower, skill_lower):
+            return False, f"DESC_MANDATORY_SKILL:{_normalize_reason_token(skill_lower)}"
+
+    if "canberra" in card_location_lower and "sydney" not in card_location_lower:
+        for pattern in profile.get("canberra_only_description_patterns", []):
+            if pattern and re.search(pattern, description_lower):
+                return False, "DESC_LOCATION:canberra_only"
 
     return True, "OK"

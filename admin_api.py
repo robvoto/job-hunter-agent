@@ -1,11 +1,17 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
-from profile_store import load_profile, patch_profile, save_profile
+from profile_learning import DEFAULT_KNOWLEDGE_FILE, build_learning_patch, merge_capability_rules, repair_text
+from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
+from review_insights import apply_skill_review_decisions
 
 
 HOST = "127.0.0.1"
 PORT = 8765
+BASE_DIR = Path(__file__).resolve().parent
+RUN_STATS_PATH = BASE_DIR / "seek_run_stats.json"
+REVIEW_DATA_PATH = BASE_DIR / "seek_review_data.json"
 
 ADMIN_HTML = """<!doctype html>
 <html lang="en">
@@ -59,6 +65,39 @@ ADMIN_HTML = """<!doctype html>
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 18px;
     }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 22px;
+    }
+    .tab-button {
+      background: white;
+      color: var(--accent-2);
+      border: 1px solid var(--line);
+    }
+    .tab-button.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .group {
+      margin-top: 22px;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .group-title {
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+    }
+    .group-copy {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
     .panel {
       padding: 18px;
     }
@@ -95,6 +134,12 @@ ADMIN_HTML = """<!doctype html>
       flex-wrap: wrap;
       margin-top: 22px;
     }
+    .panel-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
     button {
       border: 0;
       border-radius: 999px;
@@ -129,18 +174,65 @@ ADMIN_HTML = """<!doctype html>
       background: #fff0e6;
       color: #9a3412;
     }
+    .review-list {
+      display: grid;
+      gap: 12px;
+    }
+    .review-card {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .review-card h3 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+    .review-card p {
+      margin: 0 0 8px;
+      color: var(--muted);
+    }
+    .review-card ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+    .review-card li {
+      margin: 4px 0;
+    }
   </style>
 </head>
 <body>
   <main class="page">
     <section class="hero">
       <h1>SEEK Admin Console</h1>
-      <p>Update your fit profile, exclusions, search window, and manual review lists here. Saving updates <code>profile.json</code> for the scraper and LLM.</p>
+      <p>Update your fit profile, exclusions, search window, and review lists here. <code>profile.json</code> is the runtime source of truth for every scrape, while <code>What Rob Knows.txt</code> stays your human master note for imports and updates.</p>
     </section>
 
-    <div class="grid">
+    <nav class="tabs" aria-label="Admin sections">
+      <button class="tab-button active" data-tab-target="search">Search</button>
+      <button class="tab-button" data-tab-target="profile">Rob Profile</button>
+      <button class="tab-button" data-tab-target="review">Review</button>
+      <button class="tab-button" data-tab-target="test">Test</button>
+    </nav>
+
+    <section class="group tab-panel active" data-tab-panel="search">
+      <h2 class="group-title">Search</h2>
+      <p class="group-copy">This controls what SEEK gets asked for before we scrape anything.</p>
+      <div class="grid">
       <section class="panel">
-        <h2>Search Window</h2>
+        <h2>Search Setup</h2>
+        <label for="keywords">Keywords</label>
+        <input id="keywords" type="text">
+        <div class="help">Use the same words you would type into SEEK. For now we keep this simple and explicit.</div>
+
+        <label for="locations">Locations</label>
+        <textarea id="locations"></textarea>
+        <div class="help">One exact SEEK location per line. For now this should include <code>All Sydney NSW</code> and <code>All Canberra ACT</code>.</div>
+
+        <label for="classification_ids">Classification ids</label>
+        <textarea id="classification_ids"></textarea>
+        <div class="help">One SEEK classification id per line. This is a useful pre-filter because it reduces how many cards we ever need to inspect.</div>
+
         <label for="date_range_days">How far back to search</label>
         <select id="date_range_days">
           <option value="1">Today</option>
@@ -161,21 +253,62 @@ ADMIN_HTML = """<!doctype html>
           <option value="false">No</option>
         </select>
         <div class="help">If enabled, ads older than the selected date window are skipped even if SEEK still returns them.</div>
-      </section>
 
+        <label for="sort_newest_first">Sort newest first on SEEK</label>
+        <select id="sort_newest_first">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+        <div class="help">If enabled, the scraper asks SEEK to sort by date so the freshest ads appear first.</div>
+        <div class="panel-actions">
+          <button class="primary" id="save_search">Save Search Settings</button>
+        </div>
+      </section>
+      </div>
+    </section>
+
+    <section class="group tab-panel" data-tab-panel="profile">
+      <h2 class="group-title">Rob Profile</h2>
+      <p class="group-copy">This is the learning and fit model the scraper should use on every run.</p>
+      <div class="grid">
       <section class="panel">
         <h2>Candidate Fit</h2>
         <label for="candidate_summary">Candidate summary</label>
         <textarea id="candidate_summary"></textarea>
-        <div class="help">Short paragraph describing what you are good at and the kind of work you want.</div>
+        <div class="help">Short plain-English summary of what you are good at and the kind of roles you want. This replaces the old hardcoded fit text.</div>
 
         <label for="strengths">Strengths</label>
         <textarea id="strengths"></textarea>
         <div class="help">One strength per line.</div>
 
+        <label for="cv_text">CV / background text</label>
+        <textarea id="cv_text"></textarea>
+        <div class="help">Paste the current version of your CV or a solid summary here. This is saved locally and included in every LLM review run.</div>
+
         <label for="llm_prompt_notes">Important fit notes</label>
         <textarea id="llm_prompt_notes"></textarea>
         <div class="help">One note per line. Example: reject cyber or security-heavy roles.</div>
+        <div class="panel-actions">
+          <button class="primary" id="save_profile">Save Profile</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Learning Inbox</h2>
+        <label for="learning_update_text">Paste new knowledge about Rob</label>
+        <textarea id="learning_update_text"></textarea>
+        <div class="help">Paste CV text, capability notes, or a new knowledge dump here. The system will convert it into structured profile fields and save it to <code>profile.json</code>.</div>
+        <div class="panel-actions">
+          <button class="secondary" id="apply_learning">Apply Learning Update</button>
+          <button class="secondary" id="import_knowledge_file">Import What Rob Knows</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Capability Matrix</h2>
+        <label for="capability_profile_rules">Capability profile rules</label>
+        <textarea id="capability_profile_rules"></textarea>
+        <div class="help">One line per rule in the format <code>name || level || fit || alias 1, alias 2, alias 3</code>. Use levels like <code>strong</code>, <code>working</code>, <code>basic</code>, <code>low</code>, or <code>none</code>. Use fit like <code>core</code>, <code>supporting</code>, <code>contextual</code>, or <code>avoid</code>.</div>
       </section>
 
       <section class="panel">
@@ -197,13 +330,27 @@ ADMIN_HTML = """<!doctype html>
         <h2>Description Exclusions</h2>
         <label for="reject_description_phrase_rules">Reject description phrases</label>
         <textarea id="reject_description_phrase_rules"></textarea>
-        <div class="help">One line per rule in the format <code>phrase || reason</code>. Example: <code>wealth management || DESC_FINANCE:wealth management</code>.</div>
+        <div class="help">If the job description contains the phrase on the left, reject it and record the reason on the right. Example: <code>wealth management || DESC_FINANCE:wealth management</code>.</div>
 
         <label for="reject_description_regex_rules">Reject description regex rules</label>
         <textarea id="reject_description_regex_rules"></textarea>
         <div class="help">One line per rule in the format <code>pattern || reason</code>.</div>
-      </section>
 
+        <label for="must_not_require_skills">Mandatory skills you do not have</label>
+        <textarea id="must_not_require_skills"></textarea>
+        <div class="help">One skill per line. If the description says that skill is required or essential, the role is rejected. This is how we catch things like mandatory HubSpot CRM experience.</div>
+
+        <label for="canberra_only_description_patterns">Canberra-only description patterns</label>
+        <textarea id="canberra_only_description_patterns"></textarea>
+        <div class="help">One regex per line. These only trigger when the card location is Canberra and help reject roles that insist you must be Canberra-based.</div>
+      </section>
+      </div>
+    </section>
+
+    <section class="group tab-panel" data-tab-panel="review">
+      <h2 class="group-title">Review</h2>
+      <p class="group-copy">Use this area to teach the scraper about new skills and manage review lists without mixing that work into your search settings.</p>
+      <div class="grid">
       <section class="panel">
         <h2>Review Controls</h2>
         <label for="applied_job_keys">Applied jobs</label>
@@ -213,25 +360,59 @@ ADMIN_HTML = """<!doctype html>
         <label for="hidden_job_keys">Hidden jobs</label>
         <textarea id="hidden_job_keys"></textarea>
         <div class="help">One SEEK job URL or job ID per line. Use this for anything you never want to see again.</div>
+        <div class="panel-actions">
+          <button class="primary" id="save_review_controls">Save Review Controls</button>
+        </div>
       </section>
-    </div>
 
-    <div class="actions">
-      <button class="primary" id="save">Save Changes</button>
-      <button class="secondary" id="reload">Reload Profile</button>
-    </div>
+      <section class="panel">
+        <h2>Unknown Skills Review</h2>
+        <div id="unknown_skills_panel" class="help">Run the scraper to see unclassified skills from recent job descriptions.</div>
+        <div class="panel-actions">
+          <button class="secondary" id="apply_skill_reviews">Apply Skill Decisions</button>
+        </div>
+      </section>
+      </div>
+    </section>
+
+    <section class="group tab-panel" data-tab-panel="test">
+      <h2 class="group-title">Test</h2>
+      <p class="group-copy">Use this tab to validate what the scraper did on the latest run and spot false rejects quickly.</p>
+      <div class="grid">
+      <section class="panel">
+        <h2>Latest Run Stats</h2>
+        <div id="run_stats_panel" class="help">No run stats loaded yet.</div>
+      </section>
+
+      <section class="panel">
+        <h2>Rejected Samples</h2>
+        <div id="rejections_panel" class="help">Rejected jobs grouped by reason will appear here after a scraper run.</div>
+        <div class="panel-actions">
+          <button class="secondary" id="refresh_review">Refresh Test Data</button>
+          <button class="secondary" id="reload">Reload Profile</button>
+        </div>
+      </section>
+      </div>
+    </section>
 
     <div class="status" id="status"></div>
   </main>
 
   <script>
     const statusEl = document.getElementById('status');
+    const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
+    const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
 
     const listTextAreas = [
+      'locations',
       'strengths',
+      'cv_text',
       'llm_prompt_notes',
       'target_title_patterns',
       'adjacent_title_patterns',
+      'classification_ids',
+      'must_not_require_skills',
+      'canberra_only_description_patterns',
       'applied_job_keys',
       'hidden_job_keys',
     ];
@@ -247,12 +428,34 @@ ADMIN_HTML = """<!doctype html>
       statusEl.className = `status ${kind}`;
     }
 
+    function setActiveTab(tabName) {
+      const tabExists = tabButtons.some(button => button.dataset.tabTarget === tabName);
+      const resolvedTab = tabExists ? tabName : 'search';
+      for (const button of tabButtons) {
+        button.classList.toggle('active', button.dataset.tabTarget === resolvedTab);
+      }
+      for (const panel of tabPanels) {
+        panel.classList.toggle('active', panel.dataset.tabPanel === resolvedTab);
+      }
+      try {
+        window.localStorage.setItem('seekAdminActiveTab', resolvedTab);
+      } catch (error) {
+      }
+    }
+
     function toLines(value) {
       return value.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean);
     }
 
     function rulesToText(rules, key) {
       return (rules || []).map(rule => `${rule[key] || ''} || ${rule.reason || ''}`).join('\\n');
+    }
+
+    function capabilityRulesToText(rules) {
+      return (rules || []).map(rule => {
+        const aliases = (rule.aliases || []).join(', ');
+        return `${rule.name || ''} || ${rule.level || ''} || ${rule.fit || ''} || ${aliases}`;
+      }).join('\\n');
     }
 
     function textToRules(value, key) {
@@ -265,13 +468,32 @@ ADMIN_HTML = """<!doctype html>
       }).filter(rule => rule[key]);
     }
 
-    function fillForm(profile) {
-      document.getElementById('date_range_days').value = String(profile.search_settings?.date_range_days ?? 3);
-      document.getElementById('max_pages_cap').value = String(profile.search_settings?.max_pages_cap ?? 10);
-      document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
-      document.getElementById('candidate_summary').value = profile.candidate_summary || '';
+    function textToCapabilityRules(value) {
+      return toLines(value).map(line => {
+        const parts = line.split('||');
+        const aliasesIndex = parts.length >= 4 ? 3 : 2;
+        return {
+          name: (parts[0] || '').trim(),
+          level: (parts[1] || '').trim().toLowerCase(),
+          fit: (parts.length >= 4 ? (parts[2] || '') : '').trim().toLowerCase(),
+          aliases: (parts[aliasesIndex] || '').split(',').map(item => item.trim()).filter(Boolean),
+        };
+      }).filter(rule => rule.name && rule.level && rule.aliases.length);
+    }
 
-      for (const id of ['strengths', 'llm_prompt_notes', 'target_title_patterns', 'adjacent_title_patterns']) {
+    function fillForm(profile) {
+      document.getElementById('keywords').value = profile.search_settings?.keywords || '';
+      document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\\n');
+      document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\\n');
+      document.getElementById('date_range_days').value = String(profile.search_settings?.date_range_days ?? '');
+      document.getElementById('max_pages_cap').value = String(profile.search_settings?.max_pages_cap ?? '');
+      document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
+      document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
+      document.getElementById('candidate_summary').value = profile.candidate_summary || '';
+      document.getElementById('cv_text').value = profile.cv_text || '';
+      document.getElementById('capability_profile_rules').value = capabilityRulesToText(profile.capability_profile_rules);
+
+      for (const id of ['strengths', 'llm_prompt_notes', 'target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills', 'canberra_only_description_patterns']) {
         document.getElementById(id).value = (profile[id] || []).join('\\n');
       }
 
@@ -293,12 +515,178 @@ ADMIN_HTML = """<!doctype html>
       showStatus('Profile loaded.', 'ok');
     }
 
+    function renderRunStats(stats) {
+      const panel = document.getElementById('run_stats_panel');
+      if (!stats || !stats.run_started_at) {
+        panel.innerHTML = '<p>No run stats yet. Run the scraper once and reload this page.</p>';
+        return;
+      }
+      const rejectHtml = (stats.top_reject_reasons || [])
+        .map(item => `<li><strong>${item.reason}</strong>: ${item.count}</li>`)
+        .join('');
+      const targets = Object.entries(stats.search_targets || {})
+        .map(([name, pages]) => `<li><strong>${name}</strong>: pages ${pages.join(', ')}</li>`)
+        .join('');
+      panel.innerHTML = `
+        <p><strong>Run:</strong> ${stats.run_started_at}</p>
+        <p><strong>Pages crawled:</strong> ${stats.page_count} | <strong>Cards seen:</strong> ${stats.cards_seen} | <strong>Detail pages opened:</strong> ${stats.detail_fetches} | <strong>Keep rate:</strong> ${(Number(stats.keep_rate || 0) * 100).toFixed(1)}%</p>
+        <p><strong>Search window:</strong> last ${stats.search_window_days} day(s) | <strong>Sort newest first:</strong> ${stats.sort_newest_first ? 'Yes' : 'No'}</p>
+        <p><strong>Search targets:</strong></p>
+        <ul>${targets || '<li>None</li>'}</ul>
+        <p><strong>Top reject reasons:</strong></p>
+        <ul>${rejectHtml || '<li>None</li>'}</ul>
+      `;
+    }
+
+    async function loadRunStats() {
+      const response = await fetch('/api/run-stats');
+      if (!response.ok) {
+        renderRunStats(null);
+        return;
+      }
+      const stats = await response.json();
+      renderRunStats(stats);
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function reviewOptionMarkup(selectedValue) {
+      const options = [
+        ['', 'Choose a fit decision'],
+        ['no_knowledge', 'No knowledge'],
+        ['basic_only', 'Basic only'],
+        ['working_knowledge', 'Working knowledge'],
+        ['strong', 'Strong'],
+        ['avoid', 'Avoid'],
+        ['not_core_but_acceptable', 'Not core but acceptable'],
+      ];
+      return options.map(([value, label]) => {
+        const selected = value === selectedValue ? ' selected' : '';
+        return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+      }).join('');
+    }
+
+    function renderUnknownSkills(items) {
+      const panel = document.getElementById('unknown_skills_panel');
+      if (!items || !items.length) {
+        panel.innerHTML = '<p>No unknown skills from recent runs. That means the profile already knows the repeated concepts it has been seeing.</p>';
+        return;
+      }
+
+      panel.innerHTML = `
+        <div class="review-list">
+          ${items.map(item => `
+            <div class="review-card">
+              <h3>${escapeHtml(item.skill)}</h3>
+              <p>Seen ${Number(item.count || 0)} time(s) in recent descriptions.</p>
+              <label>How should we treat this?</label>
+              <select class="skill-choice" data-skill="${escapeHtml(item.skill)}">
+                ${reviewOptionMarkup('')}
+              </select>
+              <p>Examples:</p>
+              <ul>
+                ${(item.examples || []).map(example => `
+                  <li>
+                    <a href="${escapeHtml(example.url || '#')}" target="_blank" rel="noreferrer">${escapeHtml(example.title || 'Untitled role')}</a>
+                    ${example.company ? ` - ${escapeHtml(example.company)}` : ''}
+                    ${example.search_location ? ` (${escapeHtml(example.search_location)})` : ''}
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderRejections(items) {
+      const panel = document.getElementById('rejections_panel');
+      if (!items || !items.length) {
+        panel.innerHTML = '<p>No rejected sample data yet. Run the scraper and then refresh review data.</p>';
+        return;
+      }
+
+      panel.innerHTML = `
+        <div class="review-list">
+          ${items.map(item => `
+            <div class="review-card">
+              <h3>${escapeHtml(item.reason)}</h3>
+              <p>${Number(item.count || 0)} job(s) rejected for this reason.</p>
+              <ul>
+                ${(item.samples || []).map(sample => `
+                  <li>
+                    <a href="${escapeHtml(sample.url || '#')}" target="_blank" rel="noreferrer">${escapeHtml(sample.title || 'Untitled role')}</a>
+                    ${sample.company ? ` - ${escapeHtml(sample.company)}` : ''}
+                    ${sample.search_location ? ` (${escapeHtml(sample.search_location)})` : ''}
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    async function loadReviewData() {
+      const response = await fetch('/api/review-data');
+      if (!response.ok) {
+        renderUnknownSkills([]);
+        renderRejections([]);
+        return;
+      }
+      const payload = await response.json();
+      renderUnknownSkills(payload.unknown_skills || []);
+      renderRejections(payload.rejections_by_reason || []);
+    }
+
+    async function applyLearningUpdate() {
+      const text = document.getElementById('learning_update_text').value.trim();
+      if (!text) {
+        throw new Error('Paste some new knowledge first.');
+      }
+      const response = await fetch('/api/learning', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not apply learning update');
+      }
+      fillForm(payload.profile || {});
+      document.getElementById('learning_update_text').value = '';
+      showStatus(payload.message || 'Learning update applied.', 'ok');
+    }
+
+    async function importKnowledgeFile() {
+      const response = await fetch('/api/import-knowledge-file', {
+        method: 'POST',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not import knowledge file');
+      }
+      fillForm(payload.profile || {});
+      showStatus(payload.message || 'Knowledge file imported.', 'ok');
+    }
+
     function collectProfile() {
       return {
         search_settings: {
+          keywords: document.getElementById('keywords').value.trim(),
+          locations: toLines(document.getElementById('locations').value),
+          classification_ids: toLines(document.getElementById('classification_ids').value),
           date_range_days: Number(document.getElementById('date_range_days').value),
           max_pages_cap: Number(document.getElementById('max_pages_cap').value),
           enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
+          sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
         },
         review_controls: {
           applied_job_keys: toLines(document.getElementById('applied_job_keys').value),
@@ -306,31 +694,133 @@ ADMIN_HTML = """<!doctype html>
         },
         candidate_summary: document.getElementById('candidate_summary').value.trim(),
         strengths: toLines(document.getElementById('strengths').value),
+        cv_text: document.getElementById('cv_text').value.trim(),
+        capability_profile_rules: textToCapabilityRules(document.getElementById('capability_profile_rules').value),
         llm_prompt_notes: toLines(document.getElementById('llm_prompt_notes').value),
         target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
         adjacent_title_patterns: toLines(document.getElementById('adjacent_title_patterns').value),
+        must_not_require_skills: toLines(document.getElementById('must_not_require_skills').value),
+        canberra_only_description_patterns: toLines(document.getElementById('canberra_only_description_patterns').value),
         reject_title_rules: textToRules(document.getElementById('reject_title_rules').value, 'pattern'),
         reject_description_phrase_rules: textToRules(document.getElementById('reject_description_phrase_rules').value, 'phrase'),
         reject_description_regex_rules: textToRules(document.getElementById('reject_description_regex_rules').value, 'pattern'),
       };
     }
 
-    async function saveProfile() {
+    async function patchProfile(payload, successMessage) {
       const response = await fetch('/api/profile', {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(collectProfile()),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'Could not save profile');
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload.error || 'Could not save profile');
       }
-      showStatus('Profile saved to profile.json.', 'ok');
+      const updated = await response.json();
+      fillForm(updated);
+      showStatus(successMessage, 'ok');
+      return updated;
     }
 
-    document.getElementById('save').addEventListener('click', async () => {
+    async function saveSearchSettings() {
+      const profile = collectProfile();
+      await patchProfile(
+        { search_settings: profile.search_settings },
+        'Search settings saved to profile.json.'
+      );
+    }
+
+    async function saveProfileSection() {
+      const profile = collectProfile();
+      await patchProfile(
+        {
+          candidate_summary: profile.candidate_summary,
+          strengths: profile.strengths,
+          cv_text: profile.cv_text,
+          capability_profile_rules: profile.capability_profile_rules,
+          llm_prompt_notes: profile.llm_prompt_notes,
+          target_title_patterns: profile.target_title_patterns,
+          adjacent_title_patterns: profile.adjacent_title_patterns,
+          must_not_require_skills: profile.must_not_require_skills,
+          canberra_only_description_patterns: profile.canberra_only_description_patterns,
+          reject_title_rules: profile.reject_title_rules,
+          reject_description_phrase_rules: profile.reject_description_phrase_rules,
+          reject_description_regex_rules: profile.reject_description_regex_rules,
+        },
+        'Rob profile saved to profile.json.'
+      );
+    }
+
+    async function saveReviewControls() {
+      const profile = collectProfile();
+      await patchProfile(
+        { review_controls: profile.review_controls },
+        'Review controls saved to profile.json.'
+      );
+    }
+
+    async function applySkillReviews() {
+      const decisions = Array.from(document.querySelectorAll('.skill-choice'))
+        .map(element => ({
+          skill: element.dataset.skill || '',
+          choice: element.value || '',
+        }))
+        .filter(item => item.skill && item.choice);
+
+      if (!decisions.length) {
+        throw new Error('Choose at least one skill decision first.');
+      }
+
+      const response = await fetch('/api/skill-decisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decisions }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not apply skill decisions');
+      }
+      fillForm(payload.profile || {});
+      await loadReviewData();
+      showStatus(payload.message || 'Skill decisions applied to profile.json.', 'ok');
+    }
+
+    document.getElementById('save_search').addEventListener('click', async () => {
       try {
-        await saveProfile();
+        await saveSearchSettings();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('save_profile').addEventListener('click', async () => {
+      try {
+        await saveProfileSection();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('save_review_controls').addEventListener('click', async () => {
+      try {
+        await saveReviewControls();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('apply_learning').addEventListener('click', async () => {
+      try {
+        await applyLearningUpdate();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('import_knowledge_file').addEventListener('click', async () => {
+      try {
+        await importKnowledgeFile();
       } catch (error) {
         showStatus(error.message, 'error');
       }
@@ -344,7 +834,43 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
-    loadProfile().catch(error => showStatus(error.message, 'error'));
+    document.getElementById('refresh_review').addEventListener('click', async () => {
+      try {
+        await Promise.all([
+          loadRunStats(),
+          loadReviewData(),
+        ]);
+        showStatus('Review data refreshed.', 'ok');
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('apply_skill_reviews').addEventListener('click', async () => {
+      try {
+        await applySkillReviews();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    for (const button of tabButtons) {
+      button.addEventListener('click', () => setActiveTab(button.dataset.tabTarget));
+    }
+
+    try {
+      const savedTab = window.localStorage.getItem('seekAdminActiveTab');
+      if (savedTab) {
+        setActiveTab(savedTab);
+      }
+    } catch (error) {
+    }
+
+    Promise.all([
+      loadProfile(),
+      loadRunStats(),
+      loadReviewData(),
+    ]).catch(error => showStatus(error.message, 'error'));
   </script>
 </body>
 </html>
@@ -352,13 +878,83 @@ ADMIN_HTML = """<!doctype html>
 
 
 class AdminHandler(BaseHTTPRequestHandler):
+    @staticmethod
+    def _apply_learning_text(text: str) -> dict:
+        cleaned = repair_text(text)
+        if not cleaned:
+            raise ValueError("No learning text provided")
+        patch = build_learning_patch(cleaned)
+        if not patch:
+            raise ValueError("Could not extract structured learning from that text")
+        current = load_profile()
+        if patch.get("capability_profile_rules"):
+            patch["capability_profile_rules"] = merge_capability_rules(
+                merge_capability_rules(
+                    DEFAULT_PROFILE.get("capability_profile_rules", []),
+                    current.get("capability_profile_rules", []),
+                ),
+                patch.get("capability_profile_rules", []),
+            )
+        profile = patch_profile(patch)
+        return {
+            "ok": True,
+            "message": "Learning update applied to profile.json.",
+            "profile": profile,
+        }
+
+    @staticmethod
+    def _normalize_job_key(value: str) -> str:
+        raw = (value or "").strip()
+        if not raw:
+            return ""
+        import re
+
+        match = re.search(r"/job/(\d+)", raw)
+        if match:
+            return match.group(1)
+        if re.fullmatch(r"\d+", raw):
+            return raw
+        return raw.split("#", 1)[0]
+
+    @classmethod
+    def _append_review_key(cls, action: str, job_key: str) -> dict:
+        normalized = cls._normalize_job_key(job_key)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        profile = load_profile()
+        review_controls = profile.setdefault("review_controls", {})
+
+        list_name = {
+            "applied": "applied_job_keys",
+            "hidden": "hidden_job_keys",
+        }.get(action)
+        if not list_name:
+            raise ValueError("Unsupported review action")
+
+        existing = [
+            cls._normalize_job_key(value)
+            for value in review_controls.get(list_name, [])
+            if cls._normalize_job_key(value)
+        ]
+        if normalized not in existing:
+            existing.append(normalized)
+        review_controls[list_name] = existing
+        save_profile(profile)
+        return {
+            "ok": True,
+            "action": action,
+            "job_key": normalized,
+            "saved_count": len(existing),
+        }
+
     def _send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, PUT, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, PUT, PATCH, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
@@ -397,6 +993,28 @@ class AdminHandler(BaseHTTPRequestHandler):
         if self.path == "/api/health":
             self._send_json(200, {"ok": True})
             return
+        if self.path == "/api/run-stats":
+            if RUN_STATS_PATH.exists():
+                try:
+                    payload = json.loads(RUN_STATS_PATH.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict):
+                        self._send_json(200, payload)
+                        return
+                except Exception:
+                    pass
+            self._send_json(200, {})
+            return
+        if self.path == "/api/review-data":
+            if REVIEW_DATA_PATH.exists():
+                try:
+                    payload = json.loads(REVIEW_DATA_PATH.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict):
+                        self._send_json(200, payload)
+                        return
+                except Exception:
+                    pass
+            self._send_json(200, {})
+            return
         if self.path == "/api/profile":
             self._send_json(200, load_profile())
             return
@@ -423,6 +1041,62 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": str(exc)})
             return
         self._send_json(200, updated)
+
+    def do_POST(self) -> None:
+        if self.path == "/api/learning":
+            try:
+                payload = self._read_json_body()
+                result = self._apply_learning_text(str(payload.get("text") or ""))
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
+            return
+        if self.path == "/api/import-knowledge-file":
+            try:
+                if not DEFAULT_KNOWLEDGE_FILE.exists():
+                    raise FileNotFoundError(f"Could not find {DEFAULT_KNOWLEDGE_FILE}")
+                result = self._apply_learning_text(DEFAULT_KNOWLEDGE_FILE.read_text(encoding="utf-8", errors="ignore"))
+                result["message"] = f"Imported learning from {DEFAULT_KNOWLEDGE_FILE}."
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
+            return
+        if self.path == "/api/skill-decisions":
+            try:
+                payload = self._read_json_body()
+                decisions = payload.get("decisions", [])
+                if not isinstance(decisions, list):
+                    raise ValueError("decisions must be a list")
+                profile = load_profile()
+                updated = apply_skill_review_decisions(profile, decisions)
+                save_profile(updated)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "message": "Skill review decisions applied to profile.json.",
+                    "profile": updated,
+                },
+            )
+            return
+        if self.path != "/api/review":
+            self._send_json(404, {"error": "Not found"})
+            return
+        try:
+            payload = self._read_json_body()
+            result = self._append_review_key(
+                str(payload.get("action", "")).strip().lower(),
+                str(payload.get("job_key") or payload.get("url") or "").strip(),
+            )
+        except Exception as exc:
+            self._send_json(400, {"error": str(exc)})
+            return
+        self._send_json(200, result)
 
     def log_message(self, format: str, *args) -> None:
         return

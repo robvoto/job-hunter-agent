@@ -18,6 +18,8 @@ ms-playwright/
 # ---- Generated output ----
 seek_results.html
 seek_results.json
+seek_run_stats.json
+seek_review_data.json
 llm_cache.json
 job_history.json
 profile.json

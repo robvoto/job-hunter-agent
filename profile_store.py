@@ -4,13 +4,31 @@ from pathlib import Path
 from typing import Any
 
 
-PROFILE_PATH = Path("profile.json")
+BASE_DIR = Path(__file__).resolve().parent
+PROFILE_PATH = BASE_DIR / "profile.json"
+
+DEFAULT_SEARCH_SETTINGS = {
+    "keywords": "business analyst",
+    "locations": [
+        "All Sydney NSW",
+        "All Canberra ACT",
+    ],
+    "classification_ids": [
+        "6076",
+        "1209",
+        "6123",
+        "6281",
+        "1223",
+    ],
+    "date_range_days": 3,
+    "max_pages_cap": 10,
+    "enforce_posted_age_limit": True,
+    "sort_newest_first": True,
+}
 
 DEFAULT_PROFILE = {
     "search_settings": {
-        "date_range_days": 3,
-        "max_pages_cap": 10,
-        "enforce_posted_age_limit": True,
+        **DEFAULT_SEARCH_SETTINGS,
     },
     "review_controls": {
         "applied_job_keys": [],
@@ -30,6 +48,116 @@ DEFAULT_PROFILE = {
         "workshops",
         "backlog refinement",
         "change delivery",
+    ],
+    "cv_text": "",
+    "capability_profile_rules": [
+        {
+            "name": "business analysis delivery",
+            "level": "strong",
+            "fit": "core",
+            "aliases": [
+                "requirements elicitation",
+                "requirements gathering",
+                "process mapping",
+                "stakeholder engagement",
+                "workshops",
+                "backlog refinement",
+                "user stories",
+                "discovery",
+                "business process improvement",
+                "uat",
+            ],
+        },
+        {
+            "name": "api and integration",
+            "level": "working",
+            "fit": "supporting",
+            "aliases": [
+                "api",
+                "apis",
+                "integration",
+                "integrations",
+                "rest api",
+                "interface",
+            ],
+        },
+        {
+            "name": "data analysis and validation",
+            "level": "working",
+            "fit": "supporting",
+            "aliases": [
+                "sql",
+                "excel",
+                "data mapping",
+                "data validation",
+                "data migration",
+                "query databases",
+                "database queries",
+            ],
+        },
+        {
+            "name": "advanced data analytics and bi",
+            "level": "low",
+            "fit": "contextual",
+            "aliases": [
+                "data analytics",
+                "analytics",
+                "data warehousing",
+                "etl",
+                "data modelling",
+                "sql",
+                "power bi",
+                "tableau",
+                "snowflake",
+                "azure data factory",
+                "data governance",
+                "data quality",
+                "data lineage",
+                "data visualisation",
+            ],
+        },
+        {
+            "name": "hr and workforce management",
+            "level": "low",
+            "fit": "contextual",
+            "aliases": [
+                "human resources",
+                "hr",
+                "workforce management",
+                "workforce planning",
+                "hcm",
+                "people systems",
+                "talent management",
+                "rostering",
+                "payroll",
+            ],
+        },
+        {
+            "name": "crm platform administration",
+            "level": "low",
+            "fit": "contextual",
+            "aliases": [
+                "hubspot",
+                "hubspot crm",
+                "salesforce",
+                "crm workflows",
+                "crm dashboard",
+                "marketing automation",
+            ],
+        },
+        {
+            "name": "cyber and security",
+            "level": "none",
+            "fit": "avoid",
+            "aliases": [
+                "cyber security",
+                "cybersecurity",
+                "information security",
+                "security operations",
+                "threat detection",
+                "identity and access management",
+            ],
+        },
     ],
     "llm_prompt_notes": [
         "Prefer roles centered on discovery, requirements, delivery, process improvement, and stakeholder engagement.",
@@ -61,6 +189,27 @@ DEFAULT_PROFILE = {
         r"\bimplementation specialist\b",
         r"\bconsultant\b.*\bimplementation\b",
         r"\bimplementation\b.*\bconsultant\b",
+    ],
+    "must_not_require_skills": [
+        "hubspot",
+        "hubspot crm",
+        "salesforce",
+        "servicenow",
+        "workday",
+        "sap",
+        "oracle",
+        "pega",
+        "d365",
+        "dynamics 365",
+    ],
+    "canberra_only_description_patterns": [
+        r"\bmust be based in canberra\b",
+        r"\bmust reside in canberra\b",
+        r"\bcanberra[- ]based\b",
+        r"\blocated in canberra\b.{0,40}\b(required|mandatory|essential)\b",
+        r"\bcanberra office\b.{0,50}\b(required|mandatory|essential|5 days|full[- ]time)\b",
+        r"\bonsite in canberra\b",
+        r"\bwork from canberra\b",
     ],
     "reject_title_rules": [
         {"pattern": r"\bproject manager\b", "reason": "TITLE_BAD_ROLE:project manager"},
@@ -167,3 +316,7 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
     current = load_profile()
     merged = _deep_merge(current, patch)
     return save_profile(merged)
+
+
+def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:
+    return _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), profile.get("search_settings", {}))
