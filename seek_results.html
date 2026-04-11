@@ -1,3 +1,187 @@
-<html><head><meta charset='utf-8'></head><body>
-<h1>SEEK – Filtered Results</h1>
-<ul>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SEEK Filtered Results</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: #fffaf2;
+      --card: #ffffff;
+      --ink: #1f2933;
+      --muted: #5b6470;
+      --line: #e6dccd;
+      --accent: #14532d;
+      --accent-soft: #e6f4ea;
+      --warm: #9a3412;
+      --warm-soft: #fff0e6;
+      --cool: #1d4ed8;
+      --cool-soft: #e8f0ff;
+      --shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(20, 83, 45, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(154, 52, 18, 0.08), transparent 24%),
+        var(--bg);
+      color: var(--ink);
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(255, 250, 242, 0.96), rgba(255, 255, 255, 0.96));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin: 20px 0 0;
+    }
+    .summary-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .summary-card strong {
+      display: block;
+      font-size: 1.75rem;
+      margin-bottom: 6px;
+    }
+    .summary-card span {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .section {
+      margin-top: 28px;
+    }
+    .section h2 {
+      margin: 0 0 14px;
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
+    .job-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .job-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .job-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-new { background: var(--accent-soft); color: var(--accent); }
+    .badge-seen { background: var(--cool-soft); color: var(--cool); }
+    .badge-potential { background: var(--warm-soft); color: var(--warm); }
+    .job-link {
+      display: inline-block;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 1.35rem;
+      font-weight: 750;
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }
+    .job-link:hover { text-decoration: underline; }
+    .job-company {
+      color: var(--muted);
+      font-size: 1rem;
+      margin-bottom: 14px;
+    }
+    .job-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .chip {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      font-size: 0.92rem;
+    }
+    .job-teaser {
+      margin: 0 0 10px;
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    .job-history {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .empty-state {
+      margin: 0;
+      padding: 18px;
+      background: var(--card);
+      border: 1px dashed var(--line);
+      border-radius: 18px;
+      color: var(--muted);
+    }
+    @media (max-width: 700px) {
+      .page { padding: 20px 14px 40px; }
+      .hero { padding: 22px 18px; }
+      .job-card { padding: 16px; }
+      .job-link { font-size: 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>SEEK Filtered Results</h1>
+      <p>Latest run: 10 Apr 2026 06:52 PM. Search window: roles published within the last 3 day(s). This file updates each run, while history is tracked separately so repeats are clearly marked.</p>
+      <div class="summary-grid">
+        <div class="summary-card"><strong>16</strong><span>Kept This Run</span></div>
+        <div class="summary-card"><strong>1</strong><span>New Matches</span></div>
+        <div class="summary-card"><strong>15</strong><span>Previously Seen</span></div>
+      </div>
+    </section>
+    <section class="section"><h2>New Matches</h2><div class="job-grid"><article class="job-card"><div class="job-badges"><span class="badge badge-new">New Match</span></div><a class="job-link" href="https://www.seek.com.au/job/91447508?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=6d1126fe809c738da60babb00b6b1da0835d921e" target="_blank" rel="noopener noreferrer">Business Analyst (Junior-Lead) Multiple Roles!</a><div class="job-company">Talent – Specialists in tech, transformation &amp; beyond</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 58m ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span><span class="chip"><strong>Salary:</strong> $450 - $700 per day</span></div><p class="job-teaser">Multiple BA roles | Sydney | up to $450-700/day | 5-12 month contracts | clearance required + full AU work rights | leading consultancy</p><div class="job-history">First time this scraper has kept it</div></article></div></section>
+    <section class="section"><h2>Previously Seen Matches</h2><div class="job-grid"><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91411525?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=0ff9902e3e8cc215973cee27e8f0e46c33c19e0b" target="_blank" rel="noopener noreferrer">Business Analyst</a><div class="job-company">Endeavour Group</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 1d ago</span><span class="chip"><strong>Location:</strong> Barangaroo, Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span></div><p class="job-teaser">Fixed term contract supporting business users with proprietary software in a transformation environment</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91390111?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=1932617d0f551f5ef3eaeca828f7ca9d13bf41b1" target="_blank" rel="noopener noreferrer">Technical Business Analyst</a><div class="job-company">Ethos BeathChapman</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 2d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span><span class="chip"><strong>Salary:</strong> Competitive</span></div><p class="job-teaser">Technical BA Insurance Claims Transformation Hybrid CBD based</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91414258?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=bc21f89f48f727e0c9ed2924d2685bdaf6ebdfbd" target="_blank" rel="noopener noreferrer">Data Business Analyst</a><div class="job-company">Peoplebank Australia NSW</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 1d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span><span class="chip"><strong>Salary:</strong> Competitive Remuneration</span></div><p class="job-teaser">Our client is seeking an experienced  Data Business Analyst  to play a key role in delivering a large-scale Digital Transformation program. This</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91404666?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=640069670e3a844d9687c0736289e1f6642e29c7" target="_blank" rel="noopener noreferrer">Senior Business Analyst</a><div class="job-company">CSR Limited</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 1d ago</span><span class="chip"><strong>Location:</strong> North Ryde, Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span></div><p class="job-teaser">An exciting opportunity for an experienced Senior BA to work within Transformation.</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91417746?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=3a19e80b69fa03f64f2cb125e0439724ff937a1c" target="_blank" rel="noopener noreferrer">Technology Business Analyst (12mth Fixed Term Contract) - New role</a><div class="job-company">Mallesons</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 1d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span></div><p class="job-teaser">You are a Tech BA who can anticipate problems before they happen; bridge gaps seamlessly; and have an ability to focus on value delivery</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91363712?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=1127a79b3325309a966e231e5fd5f9323ae0dc1c" target="_blank" rel="noopener noreferrer">Business Analyst - UKG Pro</a><div class="job-company">TalentWeb Consulting</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 3d ago</span><span class="chip"><strong>Location:</strong> Macquarie Park, Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span></div><p class="job-teaser">We are currently partnering with a well-established organisation to recruit an exp Business Analyst with UKG Pro for an initial 12-months.</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91355989?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=ad7dc971bffa11b567d4beb4eaf75708fe73934c" target="_blank" rel="noopener noreferrer">Senior Business Analyst</a><div class="job-company">Heritage and People&#x27;s Choice</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 3d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span></div><p class="job-teaser">As a Sr. BA, help shape the future of digital banking by leading complex payments and integration initiatives that deliver real customer impact.</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91386657?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=646280b19150381db966d55dcea732f98a6b9e9e" target="_blank" rel="noopener noreferrer">SmartComm Business Analyst</a><div class="job-company">Tenzing Ltd</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 2d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span></div><p class="job-teaser">Tech BA | SmartCOMM | Drive enterprise customer comms transformation at massive scale</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91357116?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=879bf0f5066320408e8aaf59db3d1a3b1534bca7" target="_blank" rel="noopener noreferrer">Senior Business Analyst - AML Reform / Fenergo</a><div class="job-company">Anton Murray Consulting</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 3d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span></div><p class="job-teaser">Senior AML BA contract role within a global financial services firm, driving regulatory change, process mapping and KYC onboarding improvements.</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91402413?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=0d7baf18476ca062d8c9d5d421f9746c085a1ad1" target="_blank" rel="noopener noreferrer">Business Analyst - Deposits</a><div class="job-company">Rabobank</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 2d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span></div><p class="job-teaser">Rabobank is seeking a Business Analyst with strong experience in banking, particularly across deposits products, to support key growth initiatives...</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span><span class="badge badge-potential">Potential Match</span></div><a class="job-link" href="https://www.seek.com.au/job/91409072?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=4578e9e6210f2a9bcc1fdf30ac37fb3423e2a03f" target="_blank" rel="noopener noreferrer">IT Systems Analyst</a><div class="job-company">Hays | Technology</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 1d ago</span><span class="chip"><strong>Location:</strong> Alexandria, Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span><span class="chip"><strong>Salary:</strong> $130</span></div><p class="job-teaser">IT Systems Analyst | Permanent position</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span><span class="badge badge-potential">Potential Match</span></div><a class="job-link" href="https://www.seek.com.au/job/91410083?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=8dec75c0418f8554963e7a761c9469da8c6e13be" target="_blank" rel="noopener noreferrer">Implementation Consultant - Talent</a><div class="job-company">Group Elephant Australia Pty Ltd</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 1d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span></div><p class="job-teaser">Leading end-to-end HR solutions while engaging stakeholders, driving workshops, and delivering impactful outcomes across multiple projects</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span><span class="badge badge-potential">Potential Match</span></div><a class="job-link" href="https://www.seek.com.au/job/91356958?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=03534173a8dccdeec5225dd5e47afa1d5a0bf69b" target="_blank" rel="noopener noreferrer">Pega Systems Analyst</a><div class="job-company">Recruitment Hive</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 3d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span><span class="chip"><strong>Salary:</strong> $130 - $155 per hour (inc-Super)</span></div><p class="job-teaser">Define Pega systems business requirements &amp; workflows &amp; assist with the design of Pega system software - 	Certified Pega Business Architect</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91365866?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=5b9620ea8327db6c005c3e884015ca83e6945500" target="_blank" rel="noopener noreferrer">Tech BA</a><div class="job-company">Techforce Recruitment</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 3d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Contract/Temp</span></div><p class="job-teaser">Exciting role for Tech BA to work on multimedia asset management project,  6 months initially &amp; will extend.  Hybrid work model</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article><article class="job-card"><div class="job-badges"><span class="badge badge-seen">Seen Before</span></div><a class="job-link" href="https://www.seek.com.au/job/91375623?type=standard&amp;ref=search-standalone&amp;origin=cardTitle#sol=70cb953bf88009fc267c4763c08b215f50406711" target="_blank" rel="noopener noreferrer">Digital Business Analyst</a><div class="job-company">SS&amp;C Technologies</div><div class="job-meta"><span class="chip"><strong>Published:</strong> 3d ago</span><span class="chip"><strong>Location:</strong> Sydney NSW</span><span class="chip"><strong>Type:</strong> Full time</span></div><p class="job-teaser">We are seeking a highly motivated Digital Business Analyst to join our team. This role bridges the gap between business needs and technology,...</p><div class="job-history">Seen kept before since 10 Apr 2026 12:41 PM</div></article></div></section>
+  </main>
+</body>
+</html>

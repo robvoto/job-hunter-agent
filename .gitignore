@@ -17,6 +17,10 @@ ms-playwright/
 
 # ---- Generated output ----
 seek_results.html
+seek_results.json
+llm_cache.json
+job_history.json
+profile.json
 
 # ---- OS / IDE ----
 .DS_Store
