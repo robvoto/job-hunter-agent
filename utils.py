@@ -79,6 +79,39 @@ def extract_salary(details_text: str) -> str:
     return "N/A"
 
 
+def extract_work_mode(text: str) -> str:
+    if not text:
+        return "N/A"
+
+    lowered = text.lower()
+    if any(token in lowered for token in ["hybrid", "split between home and office", "mix of home and office"]):
+        return "Hybrid"
+    if any(
+        token in lowered
+        for token in [
+            "work from home",
+            "wfh",
+            "remote",
+            "fully remote",
+            "100% remote",
+        ]
+    ):
+        return "Remote"
+    if any(
+        token in lowered
+        for token in [
+            "on site",
+            "onsite",
+            "office based",
+            "office-based",
+            "must be in office",
+            "5 days in office",
+        ]
+    ):
+        return "On-site"
+    return "N/A"
+
+
 def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
     if not posted_text:
         return None

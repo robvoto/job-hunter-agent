@@ -21,6 +21,8 @@ data/profile.json
 data/llm_cache.json
 data/job_history.json
 data/capability_profile.txt
+data/application_inputs/
+data/application_materials.json
 TODO.txt
 
 # ---- OS / IDE ----

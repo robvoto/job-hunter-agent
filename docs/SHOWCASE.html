@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Hunter Agent Showcase</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --paper: #fffaf2;
+      --card: #ffffff;
+      --ink: #1f2933;
+      --muted: #5b6470;
+      --line: #e6dccd;
+      --accent: #14532d;
+      --accent-soft: #e6f4ea;
+      --warm: #9a3412;
+      --shadow: 0 16px 38px rgba(31, 41, 51, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(20, 83, 45, 0.08), transparent 30%),
+        radial-gradient(circle at top right, rgba(154, 52, 18, 0.08), transparent 24%),
+        var(--bg);
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 36px 20px 64px;
+    }
+    .hero, .panel {
+      background: rgba(255, 250, 242, 0.96);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+    }
+    .hero {
+      padding: 34px 30px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2.3rem, 4vw, 4rem);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+    }
+    .hero p {
+      margin: 0;
+      max-width: 52rem;
+      color: var(--muted);
+      font-size: 1.08rem;
+      line-height: 1.6;
+    }
+    .button-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+    .button-row a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 11px 16px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+    }
+    .button-row a.primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      margin-top: 18px;
+    }
+    .panel {
+      padding: 22px;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+      letter-spacing: -0.03em;
+    }
+    .panel p, li {
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    ul {
+      margin: 10px 0 0 18px;
+      padding: 0;
+    }
+    .flow {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 14px;
+    }
+    .step {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .badge-warm {
+      background: #fff0e6;
+      color: var(--warm);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="badge">Local-first AI job search</div>
+      <h1>Job Hunter Agent</h1>
+      <p>A practical recruiting assistant that turns a candidate’s source documents into a working fit profile, scrapes and filters jobs with explainable logic, and keeps a persistent shortlist instead of a throwaway report.</p>
+      <div class="button-row">
+        <a class="primary" href="http://127.0.0.1:8765/admin">Open Admin</a>
+        <a href="http://127.0.0.1:8765/demo">Open Local Demo Route</a>
+        <a href="../output/seek_results.html">Open Dashboard</a>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="badge">What it already does</div>
+        <h2>Current Working Product</h2>
+        <ul>
+          <li>Scrapes SEEK with direct job-page capture for better reliability</li>
+          <li>Uses deterministic rules before any LLM call</li>
+          <li>Keeps a persistent local dashboard with saved, hidden, and fresh jobs</li>
+          <li>Tracks review actions such as opened, hidden, and applied</li>
+          <li>Stores local runtime state in plain files for transparency</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <div class="badge badge-warm">What is being added now</div>
+        <h2>Profile Import Pipeline</h2>
+        <ul>
+          <li>Import detailed CV and STAR-style source documents</li>
+          <li>Generate a working <code>profile.json</code> automatically</li>
+          <li>Use admin to refine that profile over time</li>
+          <li>Prepare for tailored CVs and cover letters later</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top: 18px;">
+      <div class="badge">How it works</div>
+      <h2>Simple Product Flow</h2>
+      <div class="flow">
+        <div class="step">
+          <strong>1. Source Docs In</strong>
+          User brings one strong CV, then optionally richer notes like STAR examples.
+        </div>
+        <div class="step">
+          <strong>2. Profile Created</strong>
+          The app creates a machine-readable runtime profile used for matching.
+        </div>
+        <div class="step">
+          <strong>3. Jobs Filtered</strong>
+          Deterministic rules and optional LLM review shortlist the meaningful roles.
+        </div>
+        <div class="step">
+          <strong>4. Dashboard Persists</strong>
+          Good roles stay visible locally even after they fall off the live source.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 18px;">
+      <div class="badge">Why this matters</div>
+      <h2>What makes it sellable already</h2>
+      <p>This is already more than a scraper. It has a real product shape: profile memory, explainable filters, persistent shortlist history, and a clear path to application automation. It is honest to present it as a working local prototype with a strong architecture and active next steps, rather than pretending every automation path is finished.</p>
+    </section>
+  </main>
+</body>
+</html>

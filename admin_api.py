@@ -5,14 +5,23 @@ from pathlib import Path
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from review_insights import apply_skill_review_decisions
+from source_documents import (
+    import_source_materials_to_profile,
+    import_uploaded_documents_to_profile,
+    load_source_materials,
+    save_source_materials,
+)
 
 
 HOST = "127.0.0.1"
 PORT = 8765
 ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = ROOT_DIR / "output"
 RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
+JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
+SHOWCASE_PATH = ROOT_DIR / "docs" / "SHOWCASE.html"
 
 ADMIN_HTML = """<!doctype html>
 <html lang="en">
@@ -273,6 +282,38 @@ ADMIN_HTML = """<!doctype html>
       <p class="group-copy">This is the learning and fit model the scraper should use on every run.</p>
       <div class="grid">
       <section class="panel">
+        <h2>Source Documents</h2>
+        <p class="help">Normal users should start from the guided onboarding flow, not from internal file-path setup.</p>
+        <div class="panel-actions">
+          <button class="primary" id="open_onboarding" type="button">Open Onboarding</button>
+        </div>
+        <details style="margin-top: 18px;">
+          <summary style="cursor: pointer; font-weight: 700;">Advanced Source Config</summary>
+          <label for="profile_source_paths">Profile source documents</label>
+          <textarea id="profile_source_paths"></textarea>
+          <div class="help">One line per source in the format <code>Label || path</code>.</div>
+
+          <label for="instructions_file">Project instructions file</label>
+          <input id="instructions_file" type="text">
+
+          <label for="cv_variant_paths">CV variants and templates</label>
+          <textarea id="cv_variant_paths"></textarea>
+          <div class="help">One line per variant in the format <code>key || label || path || use tag 1, use tag 2</code>.</div>
+
+          <label for="cover_letter_preferences_file">Cover letter preferences file</label>
+          <input id="cover_letter_preferences_file" type="text">
+
+          <label for="source_materials_notes">Notes</label>
+          <textarea id="source_materials_notes"></textarea>
+          <div class="help">Local-only notes about how to use these materials. This does not go into <code>profile.json</code>.</div>
+          <div class="panel-actions">
+            <button class="secondary" id="save_source_materials">Save Source Documents</button>
+            <button class="secondary" id="import_source_materials">Import Saved Sources</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel">
         <h2>Candidate Fit</h2>
         <label for="candidate_summary">Candidate summary</label>
         <textarea id="candidate_summary"></textarea>
@@ -459,6 +500,39 @@ ADMIN_HTML = """<!doctype html>
       }).join('\\n');
     }
 
+    function sourceRowsToText(rows) {
+      return (rows || []).map(row => `${row.label || ''} || ${row.path || ''}`).join('\\n');
+    }
+
+    function textToSourceRows(value) {
+      return toLines(value).map(line => {
+        const parts = line.split('||');
+        return {
+          label: (parts[0] || '').trim(),
+          path: (parts[1] || '').trim(),
+        };
+      }).filter(row => row.label && row.path);
+    }
+
+    function cvVariantsToText(rows) {
+      return (rows || []).map(row => {
+        const tags = (row.use_for || []).join(', ');
+        return `${row.key || ''} || ${row.label || ''} || ${row.path || ''} || ${tags}`;
+      }).join('\\n');
+    }
+
+    function textToCvVariants(value) {
+      return toLines(value).map(line => {
+        const parts = line.split('||');
+        return {
+          key: (parts[0] || '').trim(),
+          label: (parts[1] || '').trim(),
+          path: (parts[2] || '').trim(),
+          use_for: (parts[3] || '').split(',').map(item => item.trim()).filter(Boolean),
+        };
+      }).filter(row => row.key && row.label && row.path);
+    }
+
     function textToRules(value, key) {
       return toLines(value).map(line => {
         const parts = line.split('||');
@@ -506,6 +580,14 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('hidden_job_keys').value = (profile.review_controls?.hidden_job_keys || []).join('\\n');
     }
 
+    function fillSourceMaterials(materials) {
+      document.getElementById('profile_source_paths').value = sourceRowsToText(materials.profile_sources || []);
+      document.getElementById('instructions_file').value = materials.instructions_file || '';
+      document.getElementById('cv_variant_paths').value = cvVariantsToText(materials.cv_variants || []);
+      document.getElementById('cover_letter_preferences_file').value = materials.cover_letter_preferences_file || '';
+      document.getElementById('source_materials_notes').value = materials.notes || '';
+    }
+
     async function loadProfile() {
       const response = await fetch('/api/profile');
       if (!response.ok) {
@@ -514,6 +596,25 @@ ADMIN_HTML = """<!doctype html>
       const profile = await response.json();
       fillForm(profile);
       showStatus('Profile loaded.', 'ok');
+    }
+
+    function collectSourceMaterials() {
+      return {
+        profile_sources: textToSourceRows(document.getElementById('profile_source_paths').value),
+        instructions_file: document.getElementById('instructions_file').value.trim(),
+        cv_variants: textToCvVariants(document.getElementById('cv_variant_paths').value),
+        cover_letter_preferences_file: document.getElementById('cover_letter_preferences_file').value.trim(),
+        notes: document.getElementById('source_materials_notes').value.trim(),
+      };
+    }
+
+    async function loadSourceMaterials() {
+      const response = await fetch('/api/source-materials');
+      if (!response.ok) {
+        throw new Error('Could not load source documents');
+      }
+      const materials = await response.json();
+      fillSourceMaterials(materials);
     }
 
     function renderRunStats(stats) {
@@ -678,6 +779,38 @@ ADMIN_HTML = """<!doctype html>
       showStatus(payload.message || 'Knowledge file imported.', 'ok');
     }
 
+    async function saveSourceMaterials() {
+      const response = await fetch('/api/source-materials', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(collectSourceMaterials()),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not save source documents');
+      }
+      fillSourceMaterials(payload);
+      showStatus('Source documents saved locally.', 'ok');
+    }
+
+    async function importSourceMaterials() {
+      const response = await fetch('/api/import-source-materials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(collectSourceMaterials()),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not import source documents');
+      }
+      fillSourceMaterials(payload.materials || {});
+      fillForm(payload.profile || {});
+      const importedCount = Number((payload.imported_sources || []).length || 0);
+      const missingCount = Number((payload.missing_sources || []).length || 0);
+      const suffix = missingCount ? ` Imported ${importedCount}, skipped ${missingCount}.` : '';
+      showStatus((payload.message || 'Source documents imported.') + suffix, 'ok');
+    }
+
     function collectProfile() {
       return {
         search_settings: {
@@ -827,6 +960,26 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
+    document.getElementById('save_source_materials').addEventListener('click', async () => {
+      try {
+        await saveSourceMaterials();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('import_source_materials').addEventListener('click', async () => {
+      try {
+        await importSourceMaterials();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('open_onboarding').addEventListener('click', () => {
+      window.location.href = '/start';
+    });
+
     document.getElementById('reload').addEventListener('click', async () => {
       try {
         await loadProfile();
@@ -869,6 +1022,7 @@ ADMIN_HTML = """<!doctype html>
 
     Promise.all([
       loadProfile(),
+      loadSourceMaterials(),
       loadRunStats(),
       loadReviewData(),
     ]).catch(error => showStatus(error.message, 'error'));
@@ -877,8 +1031,304 @@ ADMIN_HTML = """<!doctype html>
 </html>
 """
 
+ONBOARDING_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Hunter Agent Onboarding</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --card: #fffaf2;
+      --ink: #1f2933;
+      --muted: #5b6470;
+      --line: #e6dccd;
+      --accent: #14532d;
+      --accent-2: #1d4ed8;
+      --shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px 18px 52px;
+    }
+    .hero, .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+    .hero {
+      padding: 26px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      letter-spacing: -0.04em;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .panel {
+      padding: 18px;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+    }
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 700;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      background: white;
+      color: var(--ink);
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .help {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+    button, a.button-link {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+    .secondary, a.button-link.secondary {
+      background: white;
+      color: var(--accent-2);
+      border: 1px solid var(--line);
+    }
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      display: none;
+    }
+    .status.ok {
+      display: block;
+      background: #e6f4ea;
+      color: #14532d;
+    }
+    .status.error {
+      display: block;
+      background: #fff0e6;
+      color: #9a3412;
+    }
+    .summary-box {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: white;
+      display: none;
+    }
+    .summary-box.visible {
+      display: block;
+    }
+    .summary-box h3 {
+      margin: 0 0 8px;
+    }
+    .summary-box p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .summary-box ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Set Up Your Profile</h1>
+      <p>Start with one strong detailed CV. If you have extra background or longer career history, you can add that too. We will turn those documents into a working profile the scraper can use, and you can refine it later in admin.</p>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Step 1. Primary CV</h2>
+        <label for="primary_cv">Detailed CV</label>
+        <input id="primary_cv" type="file" accept=".docx,.md,.txt">
+        <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
+
+        <label for="supporting_cv">Optional supporting background</label>
+        <input id="supporting_cv" type="file" accept=".docx,.md,.txt">
+        <div class="help">Optional: a long-form career history or extra background document.</div>
+
+        <label for="extra_notes">Optional extra notes</label>
+        <textarea id="extra_notes" placeholder="Anything important you want the system to know, in plain English."></textarea>
+        <div class="help">You can leave this blank. STAR examples can come later if you want.</div>
+
+        <div class="actions">
+          <button class="primary" id="create_profile" type="button">Create Profile</button>
+          <a class="button-link secondary" href="/admin">Go To Admin</a>
+        </div>
+        <div class="status" id="status"></div>
+      </section>
+
+      <section class="panel">
+        <h2>What Happens Next</h2>
+        <div class="help">
+          1. We read your uploaded document text.<br>
+          2. We build or enrich <code>profile.json</code>.<br>
+          3. You review the generated summary, strengths, and fit notes in admin.<br>
+          4. Then you can run the scraper and use the dashboard.
+        </div>
+        <div class="summary-box" id="summary_box">
+          <h3>Generated Profile Snapshot</h3>
+          <p id="summary_text"></p>
+          <ul id="strengths_list"></ul>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const summaryBox = document.getElementById('summary_box');
+    const summaryText = document.getElementById('summary_text');
+    const strengthsList = document.getElementById('strengths_list');
+
+    function showStatus(message, kind) {
+      statusEl.textContent = message;
+      statusEl.className = `status ${kind}`;
+    }
+
+    async function fileToPayload(file, label) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+        reader.readAsDataURL(file);
+      });
+      const parts = dataUrl.split(',', 2);
+      return {
+        label,
+        filename: file.name,
+        content_base64: parts[1] || '',
+      };
+    }
+
+    function renderProfileSnapshot(profile) {
+      summaryText.textContent = profile.candidate_summary || 'Profile created.';
+      const strengths = (profile.strengths || []).slice(0, 8);
+      strengthsList.innerHTML = strengths.map(item => `<li>${item}</li>`).join('');
+      summaryBox.classList.add('visible');
+    }
+
+    async function createProfile() {
+      const primary = document.getElementById('primary_cv').files[0];
+      const supporting = document.getElementById('supporting_cv').files[0];
+      const extraNotes = document.getElementById('extra_notes').value.trim();
+
+      if (!primary) {
+        throw new Error('Choose your detailed CV first.');
+      }
+
+      const files = [await fileToPayload(primary, 'Primary CV')];
+      if (supporting) {
+        files.push(await fileToPayload(supporting, 'Supporting Background'));
+      }
+
+      const response = await fetch('/api/onboarding/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files,
+          extra_text: extraNotes,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not create profile');
+      }
+      renderProfileSnapshot(payload.profile || {});
+      showStatus(payload.message || 'Profile created.', 'ok');
+    }
+
+    document.getElementById('create_profile').addEventListener('click', async () => {
+      try {
+        await createProfile();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>
+"""
+
 
 class AdminHandler(BaseHTTPRequestHandler):
+    @staticmethod
+    def _load_job_history() -> dict:
+        if not JOB_HISTORY_PATH.exists():
+            return {}
+        try:
+            payload = json.loads(JOB_HISTORY_PATH.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+        return {}
+
+    @staticmethod
+    def _save_job_history(history: dict) -> None:
+        JOB_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        JOB_HISTORY_PATH.write_text(
+            json.dumps(history, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     @staticmethod
     def _apply_learning_text(text: str) -> dict:
         cleaned = repair_text(text)
@@ -918,7 +1368,39 @@ class AdminHandler(BaseHTTPRequestHandler):
         return raw.split("#", 1)[0]
 
     @classmethod
-    def _append_review_key(cls, action: str, job_key: str) -> dict:
+    def _persist_review_event(cls, action: str, job_key: str, url: str = "", title: str = "") -> None:
+        normalized = cls._normalize_job_key(job_key or url)
+        if not normalized:
+            return
+
+        history = cls._load_job_history()
+        entry = history.get(normalized, {})
+        now_iso = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
+
+        entry["job_key"] = normalized
+        if title and not entry.get("title"):
+            entry["title"] = title
+        if url:
+            entry["url"] = url
+
+        if action == "hidden":
+            entry["is_hidden"] = True
+            if not entry.get("first_hidden_at"):
+                entry["first_hidden_at"] = now_iso
+            entry["last_hidden_at"] = now_iso
+        elif action == "unhide":
+            entry["is_hidden"] = False
+            entry["last_unhidden_at"] = now_iso
+        elif action == "applied":
+            if not entry.get("first_applied_at"):
+                entry["first_applied_at"] = now_iso
+            entry["last_applied_at"] = now_iso
+
+        history[normalized] = entry
+        cls._save_job_history(history)
+
+    @classmethod
+    def _append_review_key(cls, action: str, job_key: str, url: str = "", title: str = "") -> dict:
         normalized = cls._normalize_job_key(job_key)
         if not normalized:
             raise ValueError("Missing job key")
@@ -942,11 +1424,73 @@ class AdminHandler(BaseHTTPRequestHandler):
             existing.append(normalized)
         review_controls[list_name] = existing
         save_profile(profile)
+        cls._persist_review_event(action, normalized, url=url, title=title)
         return {
             "ok": True,
             "action": action,
             "job_key": normalized,
             "saved_count": len(existing),
+        }
+
+    @classmethod
+    def _remove_review_key(cls, action: str, job_key: str, url: str = "", title: str = "") -> dict:
+        normalized = cls._normalize_job_key(job_key)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        profile = load_profile()
+        review_controls = profile.setdefault("review_controls", {})
+
+        list_name = {
+            "unhide": "hidden_job_keys",
+        }.get(action)
+        if not list_name:
+            raise ValueError("Unsupported review action")
+
+        existing = [
+            cls._normalize_job_key(value)
+            for value in review_controls.get(list_name, [])
+            if cls._normalize_job_key(value)
+        ]
+        updated = [value for value in existing if value != normalized]
+        review_controls[list_name] = updated
+        save_profile(profile)
+        cls._persist_review_event(action, normalized, url=url, title=title)
+        return {
+            "ok": True,
+            "action": action,
+            "job_key": normalized,
+            "saved_count": len(updated),
+        }
+
+    @classmethod
+    def _record_job_view(cls, job_key: str, url: str = "", title: str = "") -> dict:
+        normalized = cls._normalize_job_key(job_key or url)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        history = cls._load_job_history()
+        entry = history.get(normalized, {})
+        now_iso = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
+
+        entry["job_key"] = normalized
+        if title and not entry.get("title"):
+            entry["title"] = title
+        if url:
+            entry["url"] = url
+        entry["times_viewed"] = int(entry.get("times_viewed", 0) or 0) + 1
+        if not entry.get("first_viewed_at"):
+            entry["first_viewed_at"] = now_iso
+        entry["last_viewed_at"] = now_iso
+
+        history[normalized] = entry
+        cls._save_job_history(history)
+        return {
+            "ok": True,
+            "action": "viewed",
+            "job_key": normalized,
+            "times_viewed": entry["times_viewed"],
+            "last_viewed_at": entry["last_viewed_at"],
         }
 
     def _send_json(self, status: int, payload: dict) -> None:
@@ -985,9 +1529,18 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     def do_GET(self) -> None:
-        if self.path in {"/", "/admin", "/profile"}:
+        if self.path in {"/", "/admin", "/profile", "/demo", "/start", "/onboarding"}:
             if self.path == "/profile":
                 self._redirect("/admin")
+                return
+            if self.path in {"/start", "/onboarding"}:
+                self._send_html(ONBOARDING_HTML)
+                return
+            if self.path == "/demo":
+                if SHOWCASE_PATH.exists():
+                    self._send_html(SHOWCASE_PATH.read_text(encoding="utf-8", errors="ignore"))
+                    return
+                self._send_html("<h1>Demo page not found</h1>")
                 return
             self._send_html(ADMIN_HTML)
             return
@@ -1019,6 +1572,9 @@ class AdminHandler(BaseHTTPRequestHandler):
         if self.path == "/api/profile":
             self._send_json(200, load_profile())
             return
+        if self.path == "/api/source-materials":
+            self._send_json(200, load_source_materials(create_if_missing=True))
+            return
         self._send_json(404, {"error": "Not found"})
 
     def do_PATCH(self) -> None:
@@ -1033,15 +1589,23 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(200, updated)
 
     def do_PUT(self) -> None:
-        if self.path != "/api/profile":
-            self._send_json(404, {"error": "Not found"})
+        if self.path == "/api/profile":
+            try:
+                updated = save_profile(self._read_json_body())
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, updated)
             return
-        try:
-            updated = save_profile(self._read_json_body())
-        except Exception as exc:
-            self._send_json(400, {"error": str(exc)})
+        if self.path == "/api/source-materials":
+            try:
+                updated = save_source_materials(self._read_json_body())
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, updated)
             return
-        self._send_json(200, updated)
+        self._send_json(404, {"error": "Not found"})
 
     def do_POST(self) -> None:
         if self.path == "/api/learning":
@@ -1060,6 +1624,29 @@ class AdminHandler(BaseHTTPRequestHandler):
                     raise FileNotFoundError(f"Could not find {knowledge_file}")
                 result = self._apply_learning_text(knowledge_file.read_text(encoding="utf-8", errors="ignore"))
                 result["message"] = f"Imported learning from {knowledge_file}."
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
+            return
+        if self.path == "/api/import-source-materials":
+            try:
+                payload = self._read_json_body()
+                materials = save_source_materials(payload) if payload else load_source_materials(create_if_missing=True)
+                result = import_source_materials_to_profile(materials)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
+            return
+        if self.path == "/api/onboarding/import":
+            try:
+                payload = self._read_json_body()
+                files = payload.get("files", [])
+                extra_text = str(payload.get("extra_text") or "")
+                if not isinstance(files, list):
+                    raise ValueError("files must be a list")
+                result = import_uploaded_documents_to_profile(files, extra_text=extra_text)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
@@ -1091,10 +1678,27 @@ class AdminHandler(BaseHTTPRequestHandler):
             return
         try:
             payload = self._read_json_body()
-            result = self._append_review_key(
-                str(payload.get("action", "")).strip().lower(),
-                str(payload.get("job_key") or payload.get("url") or "").strip(),
-            )
+            action = str(payload.get("action", "")).strip().lower()
+            if action == "viewed":
+                result = self._record_job_view(
+                    str(payload.get("job_key") or payload.get("url") or "").strip(),
+                    str(payload.get("url") or "").strip(),
+                    str(payload.get("title") or "").strip(),
+                )
+            elif action == "unhide":
+                result = self._remove_review_key(
+                    action,
+                    str(payload.get("job_key") or payload.get("url") or "").strip(),
+                    str(payload.get("url") or "").strip(),
+                    str(payload.get("title") or "").strip(),
+                )
+            else:
+                result = self._append_review_key(
+                    action,
+                    str(payload.get("job_key") or payload.get("url") or "").strip(),
+                    str(payload.get("url") or "").strip(),
+                    str(payload.get("title") or "").strip(),
+                )
         except Exception as exc:
             self._send_json(400, {"error": str(exc)})
             return
