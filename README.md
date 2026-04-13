@@ -20,13 +20,22 @@ The reliable path is the direct-page scraper in [scraper_direct.py](scraper_dire
 Install dependencies:
 
 ```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python -m playwright install chromium
 ```
 
 Run the scraper:
 
 ```powershell
 python main.py
+```
+
+Rebuild the dashboard from saved local state without scraping:
+
+```powershell
+python scraper_direct.py --rebuild-dashboard
 ```
 
 Run the admin console:
@@ -38,8 +47,10 @@ python admin_api.py
 ## Important Notes
 
 - `data/profile.json` is the runtime source of truth used on every scrape.
-- `data/rob_capability_profile.txt` is the human-readable master note you can import from admin.
-- `output/seek_results.html` is the readable shortlist.
+- `data/capability_profile.txt` is the local human-readable candidate note used for imports.
+- `data/capability_profile.template.txt` is the committed starter template for new users.
+- `TODO.txt`, `data/capability_profile.txt`, `data/profile.json`, `data/job_history.json`, and `data/llm_cache.json` are intended to stay local.
+- `output/seek_results.html` is a persistent readable dashboard built from the latest scrape plus local keep history.
 - `output/seek_results.json`, `output/seek_run_stats.json`, and `output/seek_review_data.json` are for debugging and tuning.
 
 For more detail on persistence, moving the project, and what gets regenerated, see [docs/OPERATIONS.md](docs/OPERATIONS.md).

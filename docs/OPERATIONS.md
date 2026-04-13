@@ -3,9 +3,37 @@
 ## Source Of Truth
 
 - `data/profile.json` is the machine-readable runtime profile.
-- `data/rob_capability_profile.txt` is the human-readable master note.
+- `data/capability_profile.txt` is the local human-readable candidate note.
+- `data/capability_profile.template.txt` is the committed starter template.
 
-The scraper and admin UI read `data/profile.json` on every run. The knowledge text file is not reparsed automatically every scrape; it is imported into the profile when you choose to do that from the admin console.
+The scraper and admin UI read `data/profile.json` on every run. The knowledge text file is not reparsed automatically every scrape; it is imported into the profile when you choose to do that from the admin console. The local note file should stay personal and untracked, while the template is safe to keep in the repo.
+
+## Local Setup
+
+Recommended Windows setup:
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m playwright install chromium
+```
+
+Use `.venv\Scripts\python.exe` when you want to be explicit about running inside the project environment.
+
+## Dashboard Model
+
+`output/seek_results.html` is now a persistent local dashboard:
+
+- kept jobs from the latest run stay at the top
+- previously kept jobs remain in a local archive
+- older archive items are hidden by default once they age past the current threshold
+
+If you want to rebuild the dashboard from saved local data without doing a new scrape, run:
+
+```powershell
+python scraper_direct.py --rebuild-dashboard
+```
 
 ## What Gets Regenerated
 
@@ -21,6 +49,8 @@ These are local runtime state files and should normally be kept:
 - `data/profile.json`
 - `data/job_history.json`
 - `data/llm_cache.json`
+- `data/capability_profile.txt`
+- `TODO.txt`
 
 ## Moving The Project
 
@@ -29,7 +59,7 @@ The code now resolves important paths relative to the repo folder, not the shell
 If you move this project to another machine or another folder, bring these with it:
 
 - `data/profile.json`
-- `data/rob_capability_profile.txt`
+- `data/capability_profile.txt`
 - optionally `data/job_history.json` if you want to keep seen/applied history
 - optionally `data/llm_cache.json` if you want to keep cached LLM decisions
 
@@ -42,7 +72,7 @@ If you move this project to another machine or another folder, bring these with 
 Main UI:
 
 - `Search` tab: what SEEK is asked for
-- `Rob Profile` tab: CV, fit model, and learned capabilities
+- `Candidate Profile` tab: CV, fit model, and learned capabilities
 - `Review` tab: applied/hidden controls and unknown skill decisions
 - `Test` tab: latest run stats and rejected sample inspection
 

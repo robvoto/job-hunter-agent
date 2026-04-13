@@ -38,12 +38,29 @@ ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = ROOT_DIR / "output"
 MAX_LLM_CHARS = 3000
+ARCHIVE_STALE_AFTER_DAYS = 15
 LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
 DEBUG_JSON_PATH = OUTPUT_DIR / "seek_results.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
 SEEK_JOBS_BASE_URL = "https://www.seek.com.au/jobs"
+KEEP_SNAPSHOT_FIELDS = (
+    "title",
+    "company",
+    "url",
+    "posted",
+    "posted_age_days",
+    "salary",
+    "location",
+    "work_type",
+    "teaser",
+    "title_reason",
+    "content_reason",
+    "llm_decision",
+    "search_location",
+    "search_keywords",
+)
 
 
 def configure_console_output() -> None:
@@ -61,6 +78,18 @@ def load_json_dict(path: Path) -> Dict[str, dict]:
     except Exception:
         pass
     return {}
+
+
+def load_json_list(path: Path) -> List[dict]:
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+    except Exception:
+        pass
+    return []
 
 
 def save_json(path: Path, payload) -> None:
@@ -263,6 +292,33 @@ def format_timestamp_label(value: Optional[str]) -> str:
         return value
 
 
+def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
+    timestamp = parse_timestamp(value)
+    if not timestamp:
+        return None
+    try:
+        return max((reference - timestamp).days, 0)
+    except Exception:
+        return None
+
+
+def build_keep_snapshot(record: dict) -> dict:
+    snapshot = {}
+    for field in KEEP_SNAPSHOT_FIELDS:
+        if field in record:
+            snapshot[field] = record.get(field)
+    return snapshot
+
+
 def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> None:
     job_key = record.get("job_key")
     if not job_key:
@@ -293,6 +349,7 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
             entry["first_kept_at"] = run_iso
         entry["last_kept_at"] = run_iso
         entry["times_kept"] = prior_kept_count + 1
+        entry["last_kept_snapshot"] = build_keep_snapshot(record)
         record["times_kept"] = entry["times_kept"]
         record["first_kept_at"] = entry["first_kept_at"]
         record["last_kept_at"] = entry["last_kept_at"]
@@ -305,6 +362,69 @@ def finalize_record(history: Dict[str, dict], audit_rows: List[dict], record: di
     audit_rows.append(record)
 
 
+def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: datetime) -> Optional[dict]:
+    if int(entry.get("times_kept", 0) or 0) <= 0:
+        return None
+
+    snapshot = entry.get("last_kept_snapshot")
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+
+    archived_age_days = days_since(entry.get("last_kept_at"), run_started_at)
+    record = {
+        "job_key": job_key,
+        "title": snapshot.get("title") or entry.get("title") or "Untitled",
+        "company": snapshot.get("company") or entry.get("company") or "N/A",
+        "url": snapshot.get("url") or entry.get("url") or "#",
+        "posted": snapshot.get("posted") or "N/A",
+        "posted_age_days": snapshot.get("posted_age_days"),
+        "salary": snapshot.get("salary") or "N/A",
+        "location": snapshot.get("location") or "N/A",
+        "work_type": snapshot.get("work_type") or "N/A",
+        "teaser": snapshot.get("teaser") or "N/A",
+        "title_reason": snapshot.get("title_reason"),
+        "content_reason": snapshot.get("content_reason"),
+        "llm_decision": snapshot.get("llm_decision"),
+        "search_location": snapshot.get("search_location") or "N/A",
+        "search_keywords": snapshot.get("search_keywords") or "",
+        "seen_before": True,
+        "times_kept": int(entry.get("times_kept", 0) or 0),
+        "first_kept_at": entry.get("first_kept_at"),
+        "last_kept_at": entry.get("last_kept_at"),
+        "first_seen_at": entry.get("first_seen_at"),
+        "last_seen_at": entry.get("last_seen_at"),
+        "archived": True,
+        "archived_age_days": archived_age_days,
+        "is_stale": archived_age_days is not None and archived_age_days > ARCHIVE_STALE_AFTER_DAYS,
+    }
+    return record
+
+
+def build_archive_records(
+    history: Dict[str, dict],
+    current_run_keys: Set[str],
+    applied_job_keys: Set[str],
+    hidden_job_keys: Set[str],
+    run_started_at: datetime,
+) -> List[dict]:
+    records: List[dict] = []
+    blocked_keys = applied_job_keys | hidden_job_keys
+
+    for job_key, entry in history.items():
+        normalized_key = normalize_job_key(str(job_key))
+        if not normalized_key or normalized_key in current_run_keys or normalized_key in blocked_keys:
+            continue
+        record = build_history_dashboard_record(normalized_key, entry, run_started_at)
+        if record:
+            records.append(record)
+
+    records.sort(
+        key=lambda item: parse_timestamp(item.get("last_kept_at")) or datetime.min,
+        reverse=True,
+    )
+    return records
+
+
 def render_job_card(record: dict) -> str:
     title = safe_html(record.get("title", "Untitled"))
     company = safe_html(record.get("company", "N/A"))
@@ -313,14 +433,20 @@ def render_job_card(record: dict) -> str:
     teaser = record.get("teaser", "N/A")
     title_reason = record.get("title_reason")
     seen_before = bool(record.get("seen_before"))
+    archived = bool(record.get("archived"))
+    is_stale = bool(record.get("is_stale"))
 
     badges = []
-    if seen_before:
+    if archived:
+        badges.append('<span class="badge badge-archive">Archive</span>')
+    elif seen_before:
         badges.append('<span class="badge badge-seen">Seen Before</span>')
     else:
         badges.append('<span class="badge badge-new">New Match</span>')
     if title_reason == "TITLE_POTENTIAL_MATCH":
         badges.append('<span class="badge badge-potential">Potential Match</span>')
+    if is_stale:
+        badges.append('<span class="badge badge-stale">15+ Days Old</span>')
 
     chips = []
     for label, value in [
@@ -334,11 +460,21 @@ def render_job_card(record: dict) -> str:
                 f'<span class="chip"><strong>{safe_html(label)}:</strong> {safe_html(str(value))}</span>'
             )
 
-    history_line = (
-        f"Seen kept before since {safe_html(format_timestamp_label(record.get('first_kept_at')))}"
-        if seen_before
-        else "First time this scraper has kept it"
-    )
+    if archived:
+        archived_age_days = record.get("archived_age_days")
+        age_line = (
+            f"{archived_age_days} day(s) since it last passed filters"
+            if archived_age_days is not None
+            else "Age since last keep is unknown"
+        )
+        history_line = (
+            f"Saved from earlier runs. Last kept {safe_html(format_timestamp_label(record.get('last_kept_at')))}. "
+            f"First kept {safe_html(format_timestamp_label(record.get('first_kept_at')))}. {safe_html(age_line)}"
+        )
+    elif seen_before:
+        history_line = f"Seen kept before since {safe_html(format_timestamp_label(record.get('first_kept_at')))}"
+    else:
+        history_line = "First time this scraper has kept it"
 
     teaser_html = (
         f'<p class="job-teaser">{safe_html(teaser)}</p>'
@@ -371,6 +507,25 @@ def render_section(title: str, records: List[dict], empty_message: str) -> str:
         )
     cards = "".join(render_job_card(record) for record in records)
     return f'<section class="section"><h2>{safe_html(title)}</h2><div class="job-grid">{cards}</div></section>'
+
+
+def load_last_kept_records() -> List[dict]:
+    audit_rows = load_json_list(DEBUG_JSON_PATH)
+    if not audit_rows:
+        return []
+
+    latest_run_started_at = max(
+        (str(row.get("run_started_at") or "") for row in audit_rows if row.get("run_started_at")),
+        default="",
+    )
+    if not latest_run_started_at:
+        return []
+
+    return [
+        row
+        for row in audit_rows
+        if row.get("decision") == "KEEP" and str(row.get("run_started_at") or "") == latest_run_started_at
+    ]
 
 
 def build_run_stats(
@@ -433,9 +588,28 @@ def render_html(
     date_range_days: int,
     sort_newest_first: bool,
     run_stats: dict,
+    job_history: Dict[str, dict],
+    applied_job_keys: Set[str],
+    hidden_job_keys: Set[str],
+    dashboard_reference_at: Optional[datetime] = None,
 ) -> None:
+    reference_time = dashboard_reference_at or run_started_at
     new_records = [record for record in kept_records if not record.get("seen_before")]
     seen_records = [record for record in kept_records if record.get("seen_before")]
+    current_run_keys = {
+        normalize_job_key(str(record.get("job_key") or ""))
+        for record in kept_records
+        if normalize_job_key(str(record.get("job_key") or ""))
+    }
+    archive_records = build_archive_records(
+        job_history,
+        current_run_keys,
+        applied_job_keys,
+        hidden_job_keys,
+        reference_time,
+    )
+    recent_archive_records = [record for record in archive_records if not record.get("is_stale")]
+    stale_archive_records = [record for record in archive_records if record.get("is_stale")]
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
     target_summaries = []
     for location, pages in (run_stats.get("search_targets") or {}).items():
@@ -557,6 +731,23 @@ def render_html(
     .badge-new {{ background: var(--accent-soft); color: var(--accent); }}
     .badge-seen {{ background: var(--cool-soft); color: var(--cool); }}
     .badge-potential {{ background: var(--warm-soft); color: var(--warm); }}
+    .badge-archive {{ background: #f3e8ff; color: #6b21a8; }}
+    .badge-stale {{ background: #f3f4f6; color: #4b5563; }}
+    .section-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }}
+    .section-head h2 {{
+      margin: 0;
+    }}
+    .section-copy {{
+      margin: 0 0 14px;
+      color: var(--muted);
+    }}
     .job-link {{
       display: inline-block;
       color: var(--ink);
@@ -645,6 +836,20 @@ def render_html(
       border-radius: 18px;
       color: var(--muted);
     }}
+    .toggle-button {{
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--card);
+      color: var(--cool);
+    }}
+    .toggle-button[disabled] {{
+      opacity: 0.55;
+      cursor: default;
+    }}
     @media (max-width: 700px) {{
       .page {{ padding: 20px 14px 40px; }}
       .hero {{ padding: 22px 18px; }}
@@ -656,12 +861,14 @@ def render_html(
 <body>
   <main class="page">
     <section class="hero">
-      <h1>SEEK Filtered Results</h1>
-      <p>Latest run: {safe_html(run_label)}. Search window: roles published within the last {date_range_days} day(s). SEEK sort: {"newest first" if sort_newest_first else "default relevance"}. This file updates each run, while history is tracked separately so repeats are clearly marked.</p>
+      <h1>Personal SEEK Dashboard</h1>
+      <p>Latest run: {safe_html(run_label)}. Search window: roles published within the last {date_range_days} day(s). SEEK sort: {"newest first" if sort_newest_first else "default relevance"}. This page rebuilds from the latest scrape plus your local keep history, so strong roles stay visible even after they fall outside the live SEEK date window.</p>
       <div class="summary-grid">
         <div class="summary-card"><strong>{len(kept_records)}</strong><span>Kept This Run</span></div>
         <div class="summary-card"><strong>{len(new_records)}</strong><span>New Matches</span></div>
         <div class="summary-card"><strong>{len(seen_records)}</strong><span>Previously Seen</span></div>
+        <div class="summary-card"><strong>{len(recent_archive_records)}</strong><span>Recent Archive</span></div>
+        <div class="summary-card"><strong>{len(stale_archive_records)}</strong><span>Older Archive</span></div>
         <div class="summary-card"><strong>{run_stats.get("page_count", 0)}</strong><span>Pages Crawled</span></div>
         <div class="summary-card"><strong>{run_stats.get("cards_seen", 0)}</strong><span>Cards Seen</span></div>
         <div class="summary-card"><strong>{run_stats.get("detail_fetches", 0)}</strong><span>Detail Pages Opened</span></div>
@@ -679,6 +886,20 @@ def render_html(
     </section>
     {render_section("New Matches", new_records, "No brand-new kept roles this run.")}
     {render_section("Previously Seen Matches", seen_records, "No repeated kept roles this run.")}
+    {render_section("Saved From Earlier Runs", recent_archive_records, "No recent archived matches right now.")}
+    <section class="section">
+      <div class="section-head">
+        <h2>Older Archive</h2>
+        <button class="toggle-button" type="button" data-toggle-target="older-archive" {'disabled' if not stale_archive_records else ''}>{'Show' if stale_archive_records else 'No'} Older Archive ({len(stale_archive_records)})</button>
+      </div>
+      <p class="section-copy">Matches older than {ARCHIVE_STALE_AFTER_DAYS} days since their last keep are hidden by default so the dashboard stays focused. Use this when you want to revisit older good roles.</p>
+      <div id="older-archive" hidden>
+        <div class="job-grid">
+          {''.join(render_job_card(record) for record in stale_archive_records)}
+        </div>
+      </div>
+      {'' if stale_archive_records else '<p class="empty-state">No older archived matches right now.</p>'}
+    </section>
   </main>
   <script>
     const REVIEW_API_URL = 'http://127.0.0.1:8765/api/review';
@@ -728,6 +949,23 @@ def render_html(
     }}
 
     document.addEventListener('click', event => {{
+      const toggle = event.target.closest('[data-toggle-target]');
+      if (toggle) {{
+        const target = document.getElementById(toggle.dataset.toggleTarget || '');
+        if (!target) {{
+          return;
+        }}
+        const isHidden = target.hasAttribute('hidden');
+        if (isHidden) {{
+          target.removeAttribute('hidden');
+          toggle.textContent = toggle.textContent.replace('Show', 'Hide');
+        }} else {{
+          target.setAttribute('hidden', '');
+          toggle.textContent = toggle.textContent.replace('Hide', 'Show');
+        }}
+        return;
+      }}
+
       const button = event.target.closest('.review-button');
       if (!button) {{
         return;
@@ -998,6 +1236,10 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                 configured_date_range,
                 sort_newest_first,
                 run_stats,
+                job_history,
+                applied_job_keys,
+                hidden_job_keys,
+                run_started_at,
             )
             save_llm_cache(llm_cache)
             save_job_history(job_history)
@@ -1015,5 +1257,35 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
             browser.close()
 
 
+def rebuild_html_dashboard() -> str:
+    profile = load_profile()
+    search_settings = get_search_settings(profile)
+    configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
+    sort_newest_first = bool(search_settings.get("sort_newest_first", True))
+    run_stats = load_json_dict(RUN_STATS_PATH)
+    run_started_at = parse_timestamp(run_stats.get("run_started_at")) or datetime.now().astimezone()
+    reference_time = datetime.now().astimezone()
+    applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
+    job_history = load_job_history()
+    kept_records = load_last_kept_records()
+
+    render_html(
+        OUTPUT_HTML,
+        kept_records,
+        run_started_at,
+        configured_date_range,
+        sort_newest_first,
+        run_stats,
+        job_history,
+        applied_job_keys,
+        hidden_job_keys,
+        reference_time,
+    )
+    return OUTPUT_HTML
+
+
 if __name__ == "__main__":
-    scrape_seek_jobs_direct()
+    if "--rebuild-dashboard" in sys.argv:
+        rebuild_html_dashboard()
+    else:
+        scrape_seek_jobs_direct()

@@ -20,6 +20,8 @@ output/
 data/profile.json
 data/llm_cache.json
 data/job_history.json
+data/capability_profile.txt
+TODO.txt
 
 # ---- OS / IDE ----
 .DS_Store

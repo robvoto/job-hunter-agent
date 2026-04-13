@@ -5,7 +5,28 @@ from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
-DEFAULT_KNOWLEDGE_FILE = DATA_DIR / "rob_capability_profile.txt"
+LOCAL_KNOWLEDGE_FILE = DATA_DIR / "capability_profile.txt"
+KNOWLEDGE_TEMPLATE_FILE = DATA_DIR / "capability_profile.template.txt"
+LEGACY_KNOWLEDGE_FILE = DATA_DIR / "rob_capability_profile.txt"
+DEFAULT_KNOWLEDGE_FILE = LOCAL_KNOWLEDGE_FILE
+
+
+def resolve_knowledge_file(create_if_missing: bool = False) -> Path:
+    for candidate in [LOCAL_KNOWLEDGE_FILE, LEGACY_KNOWLEDGE_FILE]:
+        if candidate.exists():
+            return candidate
+
+    if create_if_missing and KNOWLEDGE_TEMPLATE_FILE.exists():
+        LOCAL_KNOWLEDGE_FILE.write_text(
+            KNOWLEDGE_TEMPLATE_FILE.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        return LOCAL_KNOWLEDGE_FILE
+
+    if KNOWLEDGE_TEMPLATE_FILE.exists():
+        return KNOWLEDGE_TEMPLATE_FILE
+
+    return LOCAL_KNOWLEDGE_FILE
 
 
 def repair_text(text: str) -> str:

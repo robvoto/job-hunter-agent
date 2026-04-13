@@ -2,7 +2,7 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from profile_learning import DEFAULT_KNOWLEDGE_FILE, build_learning_patch, merge_capability_rules, repair_text
+from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from review_insights import apply_skill_review_decisions
 
@@ -206,12 +206,12 @@ ADMIN_HTML = """<!doctype html>
   <main class="page">
     <section class="hero">
       <h1>SEEK Admin Console</h1>
-      <p>Update your fit profile, exclusions, search window, and review lists here. <code>profile.json</code> is the runtime source of truth for every scrape, while <code>rob_capability_profile.txt</code> stays your human master note for imports and updates.</p>
+      <p>Update your fit profile, exclusions, search window, and review lists here. <code>profile.json</code> is the runtime source of truth for every scrape, while <code>data/capability_profile.txt</code> is your local candidate note for imports and updates.</p>
     </section>
 
     <nav class="tabs" aria-label="Admin sections">
       <button class="tab-button active" data-tab-target="search">Search</button>
-      <button class="tab-button" data-tab-target="profile">Rob Profile</button>
+      <button class="tab-button" data-tab-target="profile">Candidate Profile</button>
       <button class="tab-button" data-tab-target="review">Review</button>
       <button class="tab-button" data-tab-target="test">Test</button>
     </nav>
@@ -269,7 +269,7 @@ ADMIN_HTML = """<!doctype html>
     </section>
 
     <section class="group tab-panel" data-tab-panel="profile">
-      <h2 class="group-title">Rob Profile</h2>
+      <h2 class="group-title">Candidate Profile</h2>
       <p class="group-copy">This is the learning and fit model the scraper should use on every run.</p>
       <div class="grid">
       <section class="panel">
@@ -296,12 +296,12 @@ ADMIN_HTML = """<!doctype html>
 
       <section class="panel">
         <h2>Learning Inbox</h2>
-        <label for="learning_update_text">Paste new knowledge about Rob</label>
+        <label for="learning_update_text">Paste new candidate knowledge</label>
         <textarea id="learning_update_text"></textarea>
         <div class="help">Paste CV text, capability notes, or a new knowledge dump here. The system will convert it into structured profile fields and save it to <code>profile.json</code>.</div>
         <div class="panel-actions">
           <button class="secondary" id="apply_learning">Apply Learning Update</button>
-          <button class="secondary" id="import_knowledge_file">Import Capability Profile</button>
+          <button class="secondary" id="import_knowledge_file">Import Local Capability Note</button>
         </div>
       </section>
 
@@ -749,7 +749,7 @@ ADMIN_HTML = """<!doctype html>
           reject_description_phrase_rules: profile.reject_description_phrase_rules,
           reject_description_regex_rules: profile.reject_description_regex_rules,
         },
-        'Rob profile saved to profile.json.'
+        'Candidate profile saved to profile.json.'
       );
     }
 
@@ -1055,10 +1055,11 @@ class AdminHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/import-knowledge-file":
             try:
-                if not DEFAULT_KNOWLEDGE_FILE.exists():
-                    raise FileNotFoundError(f"Could not find {DEFAULT_KNOWLEDGE_FILE}")
-                result = self._apply_learning_text(DEFAULT_KNOWLEDGE_FILE.read_text(encoding="utf-8", errors="ignore"))
-                result["message"] = f"Imported learning from {DEFAULT_KNOWLEDGE_FILE}."
+                knowledge_file = resolve_knowledge_file(create_if_missing=True)
+                if not knowledge_file.exists():
+                    raise FileNotFoundError(f"Could not find {knowledge_file}")
+                result = self._apply_learning_text(knowledge_file.read_text(encoding="utf-8", errors="ignore"))
+                result["message"] = f"Imported learning from {knowledge_file}."
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return

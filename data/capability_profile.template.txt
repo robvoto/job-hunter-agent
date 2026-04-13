@@ -1,0 +1,288 @@
+# CANDIDATE CAPABILITY PROFILE (STARTER TEMPLATE)
+
+## PURPOSE
+
+This file is a local working note for one candidate.
+Use it to capture honest capability depth, preferred positioning, and important limits before importing it into `profile.json`.
+
+Replace the example content with real candidate information before using it as a source of truth.
+
+---
+
+## EXPERIENCE SUMMARY (REALITY BASELINE)
+
+Years in IT: 8+
+Roles:
+
+* Business Analyst (primary)
+* Technical Business Analyst (supporting)
+* Delivery / Agile contributor (supporting)
+
+Environment:
+
+* Mix of government, enterprise, and product delivery
+
+---
+
+## CORE STRENGTH IDENTITY
+
+Primary strength:
+-> Turning messy business problems into clear delivery decisions
+
+Typical scenario:
+
+* incomplete requirements
+* multiple stakeholders
+* changing delivery priorities
+
+What this candidate does:
+
+* clarify intent
+* structure rules
+* map workflows
+* bridge business and technical teams
+
+---
+
+## TECHNICAL DEPTH (HONEST LEVELS)
+
+### APIs / Integration
+
+Level: 6 / 10
+
+CAN DO:
+
+* Understand REST API concepts and payloads
+* Support integration discovery and functional design
+* Work with delivery teams to clarify interface behaviour
+
+LIMITS:
+
+* Not a backend engineer
+* Not responsible for low-level implementation design
+
+---
+
+### SQL / DATA
+
+Level: 6.5 / 10
+
+CAN DO:
+
+* Query data for analysis and validation
+* Support data mapping and migration checking
+* Investigate records where no UI exists
+
+LIMITS:
+
+* Not a specialist data engineer
+* Not focused on advanced analytics or modelling
+
+---
+
+### SYSTEM / TECHNICAL UNDERSTANDING
+
+Level: 6.5 / 10
+
+CAN DO:
+
+* Translate business logic into expected system behaviour
+* Work across frontend, backend, and data concepts
+* Identify impacts, dependencies, and edge cases
+
+LIMITS:
+
+* Not a full solution architect
+
+---
+
+### BPMN / PROCESS MODELLING
+
+Level: 8.5 / 10
+
+CAN DO:
+
+* Map AS-IS and TO-BE processes
+* Model workflows to align stakeholders
+* Use diagrams to support delivery decisions
+
+---
+
+### AGILE / DELIVERY
+
+Level: 7.5 / 10
+
+CAN DO:
+
+* Write user stories and acceptance criteria
+* Support backlog refinement and sprint delivery
+* Work closely with delivery, QA, and technical teams
+
+LIMITS:
+
+* Not primarily seeking pure Scrum Master roles
+
+---
+
+### CLOUD / INFRASTRUCTURE
+
+Level: 4 / 10
+
+CAN DO:
+
+* Understand core cloud and infrastructure concepts
+* Work with engineering teams on requirements and impacts
+
+LIMITS:
+
+* No deep hands-on cloud engineering background
+
+---
+
+## BUSINESS ANALYSIS CAPABILITY (REAL CORE)
+
+Level: 8.5 / 10
+
+CAN DO:
+
+* Elicit requirements in ambiguous environments
+* Facilitate workshops
+* Define business rules and workflows
+* Shape user stories and acceptance criteria
+* Work independently on complex delivery streams
+
+---
+
+## STAKEHOLDER MANAGEMENT
+
+Level: 8.5 / 10
+
+CAN DO:
+
+* Work across business, delivery, and technical groups
+* Adjust communication style for different audiences
+* Drive alignment across competing needs
+
+KNOWN RISK:
+
+* May need stronger boundaries when requirements are still unclear
+
+---
+
+## DELIVERY CONTEXT STRENGTH
+
+BEST FIT:
+
+* Business analysis roles in delivery or transformation
+* Ambiguous environments needing structure
+* Stakeholder-heavy process and rules work
+
+WEAKER FIT:
+
+* Pure engineering roles
+* Deep specialist architecture roles
+* Heavy platform administration roles
+
+---
+
+## TOOLS (REAL USAGE LEVEL)
+
+Strong:
+
+* Jira / Azure DevOps
+* BPMN or process mapping tools
+* SQL
+
+Moderate:
+
+* Confluence
+* Postman
+
+Basic:
+
+* Cloud consoles
+* BI tools
+
+---
+
+## AI / INNOVATION (DIFFERENTIATOR)
+
+Projects:
+
+* Internal automation or AI-assisted analysis experiments
+
+Level: Emerging but practical
+
+CAN DO:
+
+* Use AI tools to support business analysis workflows
+* Build lightweight automation for practical tasks
+
+LIMITS:
+
+* Not an ML engineer
+* Not focused on model training
+
+---
+
+## WORKING STYLE
+
+* Learns domains quickly
+* Comfortable with ambiguity
+* Bridges business and technical conversations
+* Independent once context is clear
+
+---
+
+## HOW TO POSITION (FOR AI)
+
+If role is:
+
+-> Government:
+Emphasise:
+
+* traceability
+* policy or rules interpretation
+* governance
+
+-> Private sector:
+Emphasise:
+
+* delivery
+* stakeholder management
+* speed to clarity
+
+-> Technical BA:
+Emphasise:
+
+* SQL
+* APIs
+* system behaviour
+* data mapping
+
+---
+
+## HARD RULES FOR AI
+
+* Do not present the candidate as an engineer unless that is true
+* Do not overstate architecture depth
+* Keep examples grounded in real delivery work
+* Prefer specific examples over generic claims
+
+---
+
+## CONFIDENCE SUMMARY
+
+Where this candidate is strongest:
+
+* business analysis
+* stakeholder alignment
+* translating ambiguity into delivery
+
+Where careful positioning is needed:
+
+* deep engineering responsibilities
+* specialist infrastructure topics
+* advanced analytics claims
+
+---

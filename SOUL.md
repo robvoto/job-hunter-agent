@@ -37,7 +37,8 @@ The project is past the initial prototype stage.
 - search settings are configurable from the local admin UI
 - search supports date window, sort by newest, locations, and classification filters
 - runtime profile is persisted in `data/profile.json`
-- human-editable capability note is stored in `data/rob_capability_profile.txt`
+- human-editable candidate note lives in local `data/capability_profile.txt`
+- repo-safe starter content lives in `data/capability_profile.template.txt`
 - unknown-skill review exists in admin so the system can learn from repeated concepts in job descriptions
 - applied and hidden jobs can be recorded from the review workflow
 - outputs are written to `output/` as HTML, JSON, run stats, and review data
@@ -84,7 +85,8 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `review_insights.py` | Unknown skill extraction and rejected-sample review data |
 | `utils.py` | Shared parsing and URL helpers |
 | `data/profile.json` | Runtime source of truth for the candidate profile |
-| `data/rob_capability_profile.txt` | Human-readable master note for candidate knowledge |
+| `data/capability_profile.txt` | Local human-readable candidate note used for imports |
+| `data/capability_profile.template.txt` | Repo-safe starter template for new users |
 | `data/job_history.json` | Seen/applied/hidden history support |
 | `data/llm_cache.json` | Cached LLM decisions |
 | `output/seek_results.html` | Human-readable shortlist |
@@ -131,7 +133,7 @@ The admin UI is the main local control surface.
 
 Tabs:
 - `Search`: what SEEK gets asked for
-- `Rob Profile`: summary, CV text, capability matrix, title/description rules
+- `Candidate Profile`: summary, CV text, capability matrix, title/description rules
 - `Review`: applied/hidden controls and unknown skill decisions
 - `Test`: latest run stats and rejected samples
 
@@ -145,7 +147,8 @@ When applied, new knowledge is written into `data/profile.json` and should then 
 ## Persistence rules
 
 - `data/profile.json` is the runtime source of truth
-- `data/rob_capability_profile.txt` is the human master note
+- `data/capability_profile.txt` is the local human master note
+- `data/capability_profile.template.txt` is the committed starter template
 - generated outputs under `output/` are disposable and can be recreated
 - profile/history/cache under `data/` should be treated as valuable local state
 
