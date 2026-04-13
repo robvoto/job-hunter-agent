@@ -1,3 +1,15 @@
+"""Profile persistence and defaults.
+
+Main goals:
+- define the runtime profile structure used by matching and review flows
+- create a safe default profile for first run
+- load, merge, patch, and save profile.json consistently
+
+Notes:
+- profile.json is the runtime source of truth
+- onboarding and imports may generate it, and admin refines it over time
+"""
+
 import copy
 import json
 from pathlib import Path
@@ -7,6 +19,10 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
 PROFILE_PATH = DATA_DIR / "profile.json"
+MIN_DATE_RANGE_DAYS = 1
+MAX_DATE_RANGE_DAYS = 30
+MIN_PAGES_CAP = 1
+MAX_PAGES_CAP_HARD_LIMIT = 25
 
 DEFAULT_SEARCH_SETTINGS = {
     "keywords": "business analyst",
@@ -50,6 +66,8 @@ DEFAULT_PROFILE = {
         "backlog refinement",
         "change delivery",
     ],
+    "llm_profile_brief": "",
+    "star_evidence_text": "",
     "cv_text": "",
     "capability_profile_rules": [
         {
@@ -291,18 +309,24 @@ def load_profile() -> dict[str, Any]:
     try:
         data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return _deep_merge(copy.deepcopy(DEFAULT_PROFILE), data)
+            merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), data)
+            merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
+            return merged
     except Exception:
         pass
-    return copy.deepcopy(DEFAULT_PROFILE)
+    fallback = copy.deepcopy(DEFAULT_PROFILE)
+    fallback["search_settings"] = normalize_search_settings(fallback.get("search_settings", {}))
+    return fallback
 
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    normalized = copy.deepcopy(profile)
+    normalized["search_settings"] = normalize_search_settings(normalized.get("search_settings", {}))
     PROFILE_PATH.write_text(
-        json.dumps(profile, ensure_ascii=False, indent=2),
+        json.dumps(normalized, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    return profile
+    return normalized
 
 
 def _deep_merge(base: Any, patch: Any) -> Any:
@@ -320,5 +344,34 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
     return save_profile(merged)
 
 
+def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
+    merged = _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
+
+    try:
+        merged["date_range_days"] = max(
+            MIN_DATE_RANGE_DAYS,
+            min(int(merged.get("date_range_days", DEFAULT_SEARCH_SETTINGS["date_range_days"])), MAX_DATE_RANGE_DAYS),
+        )
+    except Exception:
+        merged["date_range_days"] = DEFAULT_SEARCH_SETTINGS["date_range_days"]
+
+    try:
+        merged["max_pages_cap"] = max(
+            MIN_PAGES_CAP,
+            min(int(merged.get("max_pages_cap", DEFAULT_SEARCH_SETTINGS["max_pages_cap"])), MAX_PAGES_CAP_HARD_LIMIT),
+        )
+    except Exception:
+        merged["max_pages_cap"] = DEFAULT_SEARCH_SETTINGS["max_pages_cap"]
+
+    merged["enforce_posted_age_limit"] = bool(merged.get("enforce_posted_age_limit", True))
+    merged["sort_newest_first"] = bool(merged.get("sort_newest_first", True))
+    merged["keywords"] = str(merged.get("keywords") or "").strip()
+    merged["locations"] = [str(value).strip() for value in merged.get("locations", []) if str(value).strip()]
+    merged["classification_ids"] = [
+        str(value).strip() for value in merged.get("classification_ids", []) if str(value).strip()
+    ]
+    return merged
+
+
 def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:
-    return _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), profile.get("search_settings", {}))
+    return normalize_search_settings(profile.get("search_settings", {}))

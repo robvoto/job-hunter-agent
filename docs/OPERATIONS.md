@@ -43,7 +43,7 @@ python -m playwright install chromium
 Run the current source connector:
 
 ```powershell
-python main.py
+python run_jobs.py
 ```
 
 Rebuild the dashboard from saved local state:

@@ -37,6 +37,7 @@ STRENGTH_KEYWORDS = [
     ("government delivery", ["government", "federal", "state government", "public sector", "baseline clearance"]),
     ("digital transformation", ["digital delivery", "transformation", "service improvement", "change delivery"]),
 ]
+STAR_LABEL_KEYWORDS = ("star", "achievement", "example", "selection criteria", "impact")
 
 UPLOAD_SLOT_MAP = {
     "primary cv": "primary_cv",
@@ -231,6 +232,7 @@ def _build_profile_import_result(
     imported_sources: list[dict[str, Any]],
     missing_sources: list[str],
     combined_text: str,
+    source_sections: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     patch = build_learning_patch(combined_text)
     patch["cv_text"] = combined_text
@@ -254,20 +256,51 @@ def _build_profile_import_result(
     if merged_strengths:
         patch["strengths"] = merged_strengths[:20]
 
+    merged_capability_rules = existing_profile.get("capability_profile_rules", [])
     if patch.get("capability_profile_rules"):
-        patch["capability_profile_rules"] = merge_capability_rules(
+        merged_capability_rules = merge_capability_rules(
             merge_capability_rules(
                 DEFAULT_PROFILE.get("capability_profile_rules", []),
                 existing_profile.get("capability_profile_rules", []),
             ),
             patch.get("capability_profile_rules", []),
         )
+        patch["capability_profile_rules"] = merged_capability_rules
 
+    merged_notes = existing_profile.get("llm_prompt_notes", [])
     if patch.get("llm_prompt_notes"):
-        patch["llm_prompt_notes"] = list(dict.fromkeys([
+        merged_notes = list(dict.fromkeys([
             *existing_profile.get("llm_prompt_notes", []),
             *patch.get("llm_prompt_notes", []),
         ]))[:30]
+        patch["llm_prompt_notes"] = merged_notes
+
+    final_summary = str(patch.get("candidate_summary") or existing_profile.get("candidate_summary") or "").strip()
+    final_strengths = patch.get("strengths") or existing_profile.get("strengths", [])
+    final_rules = patch.get("capability_profile_rules") or merged_capability_rules
+    final_notes = patch.get("llm_prompt_notes") or merged_notes
+
+    llm_profile_brief = build_llm_profile_brief(
+        summary=final_summary,
+        strengths=final_strengths,
+        capability_rules=final_rules,
+        notes=final_notes,
+    )
+    if llm_profile_brief:
+        patch["llm_profile_brief"] = llm_profile_brief
+
+    star_sections = []
+    for section in source_sections or []:
+        label = str(section.get("label") or "").lower()
+        if any(keyword in label for keyword in STAR_LABEL_KEYWORDS):
+            star_sections.append(str(section.get("text") or "").strip())
+    imported_star_text = "\n\n".join(item for item in star_sections if item).strip()
+    if imported_star_text:
+        existing_star_text = str(existing_profile.get("star_evidence_text") or "").strip()
+        merged_star_text = "\n\n".join(
+            item for item in [existing_star_text, imported_star_text] if item
+        ).strip()
+        patch["star_evidence_text"] = merged_star_text[:5000]
 
     profile = patch_profile(patch)
     return {
@@ -314,6 +347,49 @@ def _extract_strengths_from_text(text: str) -> list[str]:
     return strengths[:12]
 
 
+def build_llm_profile_brief(
+    summary: str,
+    strengths: list[str],
+    capability_rules: list[dict[str, Any]],
+    notes: list[str],
+) -> str:
+    lines: list[str] = []
+    cleaned_summary = str(summary or "").strip()
+    if cleaned_summary:
+        lines.append(f"Candidate summary: {cleaned_summary}")
+
+    cleaned_strengths = [str(item).strip() for item in strengths or [] if str(item).strip()]
+    if cleaned_strengths:
+        lines.append("Core strengths: " + ", ".join(cleaned_strengths[:10]))
+
+    preferred_rules = []
+    avoid_rules = []
+    for rule in capability_rules or []:
+        if not isinstance(rule, dict):
+            continue
+        name = str(rule.get("name") or "").strip()
+        level = str(rule.get("level") or "").strip()
+        fit = str(rule.get("fit") or "").strip()
+        if not name or not level:
+            continue
+        line = f"{name} ({level}{', ' + fit if fit else ''})"
+        if fit == "avoid" or level == "none":
+            avoid_rules.append(line)
+        else:
+            preferred_rules.append(line)
+
+    if preferred_rules:
+        lines.append("Capability profile: " + "; ".join(preferred_rules[:8]))
+    if avoid_rules:
+        lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:6]))
+
+    cleaned_notes = [str(item).strip() for item in notes or [] if str(item).strip()]
+    if cleaned_notes:
+        lines.append("Fit notes: " + " | ".join(cleaned_notes[:8]))
+
+    return "\n".join(lines).strip()[:3000]
+
+
 def import_source_materials_to_profile(materials: dict[str, Any] | None = None) -> dict[str, Any]:
     resolved_materials = normalize_source_materials(materials or load_source_materials(create_if_missing=True))
     import_sources = _collect_import_sources(resolved_materials)
@@ -322,6 +398,7 @@ def import_source_materials_to_profile(materials: dict[str, Any] | None = None) 
 
     imported_sources: list[dict[str, Any]] = []
     combined_sections: list[str] = []
+    source_sections: list[dict[str, str]] = []
     missing_sources: list[str] = []
 
     for source in import_sources:
@@ -343,12 +420,13 @@ def import_source_materials_to_profile(materials: dict[str, Any] | None = None) 
             "characters": len(text),
         })
         combined_sections.append(f"## {label}\n{text}")
+        source_sections.append({"label": label, "text": text})
 
     if not combined_sections:
         raise ValueError("Could not read any configured source documents.")
 
     combined_text = "\n\n".join(combined_sections).strip()
-    result = _build_profile_import_result(imported_sources, missing_sources, combined_text)
+    result = _build_profile_import_result(imported_sources, missing_sources, combined_text, source_sections)
     result["materials"] = resolved_materials
     return result
 
@@ -357,6 +435,7 @@ def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], ex
     imported_sources: list[dict[str, Any]] = []
     missing_sources: list[str] = []
     combined_sections: list[str] = []
+    source_sections: list[dict[str, str]] = []
 
     for item in files_payload or []:
         if not isinstance(item, dict):
@@ -387,6 +466,7 @@ def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], ex
             "characters": len(text),
         })
         combined_sections.append(f"## {label}\n{text}")
+        source_sections.append({"label": label, "text": text})
 
     extra_clean = repair_text(extra_text)
     if extra_clean:
@@ -396,9 +476,10 @@ def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], ex
             "characters": len(extra_clean),
         })
         combined_sections.append(f"## Extra Notes\n{extra_clean}")
+        source_sections.append({"label": "Extra Notes", "text": extra_clean})
 
     if not combined_sections:
         raise ValueError("No readable onboarding documents were provided.")
 
     combined_text = "\n\n".join(combined_sections).strip()
-    return _build_profile_import_result(imported_sources, missing_sources, combined_text)
+    return _build_profile_import_result(imported_sources, missing_sources, combined_text, source_sections)

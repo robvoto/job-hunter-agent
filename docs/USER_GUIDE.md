@@ -93,7 +93,7 @@ Think of admin as the maintenance surface for your profile, not the place where 
 Run the current source connector:
 
 ```powershell
-python main.py
+python run_jobs.py
 ```
 
 Then open the dashboard at:

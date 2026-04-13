@@ -1,4 +1,16 @@
-# scraper_direct.py
+"""Current direct-page job-source connector and dashboard builder.
+
+Main goals:
+- fetch current job listings from the active source implementation
+- apply deterministic filtering and optional LLM fit review
+- persist audit data, run stats, review insights, and dashboard HTML
+
+Notes:
+- this filename is historical; in product and documentation language we prefer
+  "source connector" over "scraper"
+- the current implementation is SEEK-specific, but the normalized record shape
+  is intended to be reusable for additional sources later
+"""
 
 import json
 import re
@@ -12,13 +24,12 @@ from playwright.sync_api import sync_playwright
 
 from config import MAX_PAGES_CAP, OUTPUT_HTML, SEEK_URL
 from filters import passes_content_filters, passes_title_filters
-from llm_gate import llm_is_enabled, llm_should_consider
+from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider
 from profile_store import get_search_settings, load_profile
 from review_insights import build_review_data, extract_detected_skills
 from utils import (
     extract_salary,
     extract_work_mode,
-    fingerprint_text,
     parse_seek_posted_age_days,
     safe_html,
     set_page_param,
@@ -370,27 +381,52 @@ def score_to_match_label(score: int) -> str:
     return "Borderline"
 
 
-def score_to_star_count(score: int) -> int:
-    if score <= 0:
-        return 0
-    if score >= 88:
-        return 5
-    if score >= 74:
-        return 4
-    if score >= 58:
-        return 3
-    if score >= 42:
-        return 2
-    return 1
+def humanize_reject_reason(reason: Optional[str]) -> str:
+    raw = str(reason or "").strip()
+    if not raw:
+        return "Other filtered-out roles"
 
+    direct_map = {
+        "TITLE_NOT_TARGET": "Title outside target role family",
+        "NO_DETAILS": "Could not read full job details",
+        "LLM_REJECT": "AI fit review rejected",
+        "DUPLICATE_URL": "Duplicate listing removed",
+        "ALREADY_APPLIED": "Already marked as applied",
+        "MANUALLY_HIDDEN": "Already hidden by you",
+        "UNKNOWN": "Other filtered-out roles",
+    }
+    if raw in direct_map:
+        return direct_map[raw]
 
-def render_match_stars(score: int) -> str:
-    star_count = score_to_star_count(score)
-    stars = []
-    for index in range(5):
-        class_name = "star star-on" if index < star_count else "star star-off"
-        stars.append(f'<span class="{class_name}">&#9733;</span>')
-    return "".join(stars)
+    prefix, _, detail = raw.partition(":")
+    cleaned_detail = detail.replace("_", " ").strip()
+    if prefix == "TITLE_BAD_KEYWORD" and cleaned_detail:
+        return f"Excluded title keyword: {cleaned_detail}"
+    if prefix == "TITLE_BAD_ROLE" and cleaned_detail:
+        return f"Excluded role family: {cleaned_detail}"
+    if prefix == "POSTED_TOO_OLD" and cleaned_detail:
+        return f"Older than the search window ({cleaned_detail} days)"
+    if prefix == "DESC_LOCATION" and cleaned_detail:
+        return f"Location mismatch: {cleaned_detail}"
+    if prefix == "DESC_FINANCE" and cleaned_detail:
+        return f"Finance-domain mismatch: {cleaned_detail}"
+    if prefix == "DESC_TREASURY" and cleaned_detail:
+        return f"Treasury or banking-specialist role: {cleaned_detail}"
+    if prefix == "DESC_ERP_FIN" and cleaned_detail:
+        return f"ERP or finance-specialist workflow: {cleaned_detail}"
+    if prefix == "DESC_CAPABILITY_LOW" and cleaned_detail:
+        return f"Low-fit specialist area: {cleaned_detail}"
+    if prefix == "CARD_EXCEPTION" and cleaned_detail:
+        return f"Collection error: {cleaned_detail}"
+    if prefix == "DESC_BAD_PHRASE" and cleaned_detail:
+        return f"Excluded description phrase: {cleaned_detail}"
+    if prefix == "DESC_BAD_REGEX" and cleaned_detail:
+        return f"Excluded description pattern: {cleaned_detail}"
+    if prefix == "TITLE_POTENTIAL_MATCH":
+        return "Adjacent title match"
+
+    fallback = raw.replace("_", " ").lower()
+    return fallback[:1].upper() + fallback[1:]
 
 
 def fit_score(record: dict) -> int:
@@ -708,7 +744,6 @@ def render_job_card(record: dict) -> str:
     seen_by_you = viewed_by_user(record)
     fit_points = fit_score(record)
     fit_label = score_to_match_label(fit_points)
-    score_stars = render_match_stars(fit_points)
     posted_text = normalize_posted_text(record.get("posted"))
     posted_date_label = format_posted_date_label(
         posted_text,
@@ -727,11 +762,6 @@ def render_job_card(record: dict) -> str:
         badges.append('<span class="badge badge-archive">Saved For Later</span>')
     else:
         badges.append('<span class="badge badge-new">New Job</span>')
-    badges.append(
-        f'<span class="badge badge-fit badge-fit-{safe_html(fit_label.lower())}">{safe_html(fit_label)} Match</span>'
-    )
-    if title_reason == "TITLE_POTENTIAL_MATCH":
-        badges.append('<span class="badge badge-potential">Potential Match</span>')
     if is_stale:
         badges.append('<span class="badge badge-stale">15+ Days Old</span>')
     if seen_by_you:
@@ -740,8 +770,7 @@ def render_job_card(record: dict) -> str:
     score_html = (
         '<div class="match-score">'
         f'<span class="match-score-number">{fit_points}/100</span>'
-        f'<span class="match-score-label">{safe_html(fit_label)} match</span>'
-        f'<span class="match-score-stars" aria-label="{fit_points} out of 100">{score_stars}</span>'
+        f'<span class="match-score-label">{safe_html(fit_label)} fit</span>'
         "</div>"
     )
 
@@ -764,11 +793,11 @@ def render_job_card(record: dict) -> str:
             chips.append(
                 f'<span class="chip"><strong>{safe_html(label)}:</strong> {safe_html(str(value))}</span>'
             )
-    chips.append(f'<span class="chip chip-score"><strong>Match:</strong> {fit_points}/100</span>')
-
     context_bits = []
     if record.get("search_location") not in (None, "", "N/A"):
         context_bits.append(f"Search: {record.get('search_location')}")
+    if title_reason == "TITLE_POTENTIAL_MATCH":
+        context_bits.append("Adjacent title match, kept because the description still looked relevant")
     if seen_by_you and record.get("last_viewed_at"):
         context_bits.append(f"Opened by you {format_timestamp_label(record.get('last_viewed_at'))}")
     if hidden_record and record.get("last_hidden_at"):
@@ -1339,16 +1368,19 @@ def render_html(
       transform: translateY(-1px);
     }}
     .review-applied {{
-      background: var(--accent-soft);
-      color: var(--accent);
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 10px 18px rgba(20, 83, 45, 0.18);
     }}
     .review-hide {{
-      background: var(--warm-soft);
+      background: white;
       color: var(--warm);
+      border: 1px solid rgba(154, 52, 18, 0.22);
     }}
     .review-unhide {{
-      background: var(--cool-soft);
-      color: var(--cool);
+      background: var(--cool);
+      color: white;
+      box-shadow: 0 10px 18px rgba(29, 78, 216, 0.16);
     }}
     .review-button[disabled] {{
       opacity: 0.6;
@@ -1506,7 +1538,7 @@ def render_html(
             <span class="side-toggle-hint">Show / hide</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Latest run: {safe_html(run_label)}. Search window: roles published within the last {date_range_days} day(s). SEEK sort: {"newest first" if sort_newest_first else "default relevance"}. This page rebuilds from the latest scrape plus your local keep history, so strong roles stay visible even after they fall outside the live SEEK date window. The page auto-refreshes every {AUTO_REFRESH_SECONDS} seconds so it picks up later runs without a manual browser reload.</p>
+            <p class="side-panel-copy">Latest run: {safe_html(run_label)}. Search window: roles published within the last {date_range_days} day(s). Result order: {"newest jobs first" if sort_newest_first else "source default relevance"}. This page rebuilds from the latest scrape plus your local keep history, so strong roles stay visible even after they fall outside the live SEEK date window. The page auto-refreshes every {AUTO_REFRESH_SECONDS} seconds so it picks up later runs without a manual browser reload.</p>
             <div class="side-panel-summary-grid">
               <div class="summary-card"><strong>{len(kept_records)}</strong><span>Fresh Matches</span></div>
               <div class="summary-card"><strong>{sum(1 for record in current_records if not record.get("seen_before"))}</strong><span>New Jobs</span></div>
@@ -1527,9 +1559,9 @@ def render_html(
             <span class="side-toggle-hint">Show / hide</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Search targets this run: {safe_html(" | ".join(target_summaries) or "None")}. This is the fastest way to tell whether we stopped early because SEEK ran out of fresh pages or because the current page cap was reached.</p>
+            <p class="side-panel-copy">Search targets this run: {safe_html(" | ".join(target_summaries) or "None")}. This is the fastest way to tell whether we stopped early because SEEK ran out of fresh pages or because the current page-check limit was reached.</p>
             <div class="job-meta">
-              {''.join(f'<span class="chip"><strong>{safe_html(str(item.get("reason", "UNKNOWN")))}:</strong> {safe_html(str(item.get("count", 0)))}</span>' for item in run_stats.get("top_reject_reasons", []))}
+              {''.join(f'<span class="chip" title="{safe_html(str(item.get("reason", "UNKNOWN")))}"><strong>{safe_html(humanize_reject_reason(str(item.get("reason", "UNKNOWN"))))}:</strong> {safe_html(str(item.get("count", 0)))}</span>' for item in run_stats.get("top_reject_reasons", []))}
             </div>
           </div>
         </details>
@@ -2003,7 +2035,7 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                                 continue
 
                             llm_input_text = details_text[:MAX_LLM_CHARS]
-                            llm_fp = fingerprint_text(llm_input_text)
+                            llm_fp = build_llm_cache_key(llm_input_text)
 
                             if not llm_is_enabled():
                                 llm_decision = "MAYBE"

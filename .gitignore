@@ -23,8 +23,10 @@ data/job_history.json
 data/capability_profile.txt
 data/application_inputs/
 data/application_materials.json
+data/agent_settings.json
+data/agent_state.json
 TODO.txt
-
+appData-dontupload.txt
 # ---- OS / IDE ----
 .DS_Store
 .vscode/

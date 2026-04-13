@@ -49,6 +49,12 @@ python -m playwright install chromium
 Run the job-source connector:
 
 ```powershell
+python run_jobs.py
+```
+
+Compatibility entry point:
+
+```powershell
 python main.py
 ```
 
@@ -64,10 +70,23 @@ Run the local web UI:
 python admin_api.py
 ```
 
+Run the daily local agent once:
+
+```powershell
+python agent_runner.py
+```
+
+Run the daily local agent in loop mode:
+
+```powershell
+python agent_runner.py --loop
+```
+
 Then open:
 
 - onboarding: `http://127.0.0.1:8765/start`
 - admin: `http://127.0.0.1:8765/admin`
+- dashboard: `http://127.0.0.1:8765/dashboard`
 - demo/showcase: `http://127.0.0.1:8765/demo`
 
 ## Important Files
@@ -80,6 +99,9 @@ Then open:
 
 - `data/application_materials.template.json`
   Example local-only source-material manifest.
+
+- `data/agent_settings.template.json`
+  Starter template for daily-agent scheduling and notification delivery.
 
 - `output/seek_results.html`
   Persistent shortlist dashboard generated from the latest run plus local history.
@@ -101,11 +123,30 @@ These are intended to stay local and ignored:
 - `data/llm_cache.json`
 - `data/application_inputs/`
 - `data/application_materials.json`
+- `data/agent_settings.json`
+- `data/agent_state.json`
 - `output/`
 
 ## LLM Notes
 
 If `OPENAI_API_KEY` is not set, the app still works, but the live LLM review step is effectively disabled and falls back to deterministic filtering plus `MAYBE`.
+
+## Daily Agent Notes
+
+The first daily agent layer is now local-first:
+
+- `agent_runner.py` runs the current connector, rebuilds the dashboard, and creates a compact digest
+- email delivery uses SMTP settings from local `data/agent_settings.json`
+- Telegram delivery uses a bot token plus chat id from local `data/agent_settings.json`
+- the digest is also written locally to `output/agent_last_summary.txt`
+
+Recommended beta setup:
+
+1. Copy `data/agent_settings.template.json` to local `data/agent_settings.json`
+2. Fill in email and/or Telegram settings
+3. Test with `python agent_runner.py --no-notify`
+4. If the summary looks right, test live delivery with `python agent_runner.py`
+5. Use Windows Task Scheduler for the real daily schedule
 
 ## Docs
 

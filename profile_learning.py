@@ -1,3 +1,15 @@
+"""Profile learning helpers.
+
+Main goals:
+- repair imported text
+- extract summaries, strengths, notes, and capability rules from human material
+- provide a local knowledge-note fallback for profile enrichment
+
+Notes:
+- capability_profile.txt is a local editable knowledge note
+- capability_profile.template.txt is the committed starter template for new users
+"""
+
 import re
 from pathlib import Path
 from typing import Any

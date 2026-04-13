@@ -47,12 +47,12 @@ The project is past the initial prototype stage.
 - applied and hidden jobs can be recorded from the review workflow
 - outputs are written to `output/` as HTML, JSON, run stats, and review data
 - history and cache are persisted locally
+- first daily agent runner now exists with email and Telegram notifier hooks
 
 ### What is still incomplete
 
 - this is not yet a true agent
-- no scheduler yet
-- no WhatsApp or Telegram delivery yet
+- no WhatsApp delivery yet
 - no LinkedIn scraper yet
 - no authenticated SEEK session reuse yet
 - no durable cloud persistence yet
@@ -112,11 +112,14 @@ Do not move the project back to pane-based scraping unless there is a very stron
 
 | Path | Purpose |
 |------|---------|
-| `main.py` | Thin entry point for local runs |
+| `main.py` | Thin compatibility entry point for local runs |
+| `run_jobs.py` | Preferred descriptive runner for the current job collection flow |
 | `scraper_direct.py` | Main SEEK scraper using direct job pages |
 | `filters.py` | Deterministic title and content filtering |
 | `llm_gate.py` | Optional constrained LLM decision step |
 | `admin_api.py` | Local admin console and profile/review API |
+| `agent_runner.py` | Local daily agent runner for collection, digest, and notification delivery |
+| `agent_settings.py` | Local agent settings and state helpers |
 | `profile_store.py` | Runtime profile loading, defaults, and persistence |
 | `profile_learning.py` | Converts free-text knowledge into structured profile updates |
 | `review_insights.py` | Unknown skill extraction and rejected-sample review data |
@@ -126,12 +129,14 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `data/capability_profile.txt` | Local human-readable candidate note used for imports |
 | `data/capability_profile.template.txt` | Repo-safe starter template for new users |
 | `data/application_materials.template.json` | Starter manifest for local-only CV / instructions / application inputs |
+| `data/agent_settings.template.json` | Starter template for local agent scheduling and notifier config |
 | `data/job_history.json` | Seen/applied/hidden history support |
 | `data/llm_cache.json` | Cached LLM decisions |
 | `output/seek_results.html` | Human-readable shortlist |
 | `output/seek_results.json` | Full audit/debug output |
 | `output/seek_run_stats.json` | Latest run metrics |
 | `output/seek_review_data.json` | Unknown skills and reject-sample review data |
+| `output/agent_last_summary.txt` | Latest plain-text agent digest |
 | `legacy/` | Older scraper drafts kept for reference only |
 | `docs/OPERATIONS.md` | Persistence and runtime behavior notes |
 | `docs/USER_GUIDE.md` | End-user setup and usage guide |
@@ -242,6 +247,10 @@ Current dashboard behavior:
 
 The dashboard is still generated HTML rather than a full live app, but it is now acting as a local memory layer for the job hunt.
 
+The admin server now also serves the dashboard at:
+
+- `http://127.0.0.1:8765/dashboard`
+
 ---
 
 ## Persistence rules
@@ -252,12 +261,15 @@ The dashboard is still generated HTML rather than a full live app, but it is now
 - local source documents for applications should live under ignored paths such as `data/application_inputs/`
 - generated outputs under `output/` are disposable and can be recreated
 - profile/history/cache under `data/` should be treated as valuable local state
+- local agent settings and state also live under `data/`
 
 Keep personal and local-only:
 
 - `data/profile.json`
 - `data/capability_profile.txt`
 - `data/job_history.json`
+- `data/agent_settings.json`
+- `data/agent_state.json`
 - `data/llm_cache.json`
 - `data/application_inputs/`
 - `data/application_materials.json`

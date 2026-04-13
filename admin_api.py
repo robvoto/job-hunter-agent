@@ -2,10 +2,12 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from config import OUTPUT_HTML
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from review_insights import apply_skill_review_decisions
 from source_documents import (
+    build_llm_profile_brief,
     import_source_materials_to_profile,
     load_source_materials,
     persist_uploaded_source_pack,
@@ -22,6 +24,7 @@ RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 SHOWCASE_PATH = ROOT_DIR / "docs" / "SHOWCASE.html"
+DASHBOARD_PATH = ROOT_DIR / OUTPUT_HTML
 
 ADMIN_HTML = """<!doctype html>
 <html lang="en">
@@ -215,7 +218,7 @@ ADMIN_HTML = """<!doctype html>
   <main class="page">
     <section class="hero">
       <h1>Job Hunter Admin</h1>
-      <p>Update your profile, review controls, and current job-source settings here. <code>profile.json</code> is the runtime source of truth for matching, while <code>data/capability_profile.txt</code> is your local candidate note for imports and updates.</p>
+      <p>Use this workspace to tune search, maintain the candidate profile, review what the system has learned, and check the health of the latest run.</p>
     </section>
 
     <nav class="tabs" aria-label="Admin sections">
@@ -253,9 +256,9 @@ ADMIN_HTML = """<!doctype html>
         </select>
         <div class="help">This updates the source-side date filter before collection starts.</div>
 
-        <label for="max_pages_cap">Max pages to crawl</label>
-        <input id="max_pages_cap" type="number" min="1" max="100">
-        <div class="help">Guardrail so broad searches do not run forever.</div>
+        <label for="max_pages_cap">Max pages to check</label>
+        <input id="max_pages_cap" type="number" min="1" max="25">
+        <div class="help">Safety limit for broad searches. Keep this low so a loose search does not fan out into huge result sets. The app enforces a hard cap of 25 pages even if a larger value is saved elsewhere.</div>
 
         <label for="enforce_posted_age_limit">Strictly reject older ads</label>
         <select id="enforce_posted_age_limit">
@@ -264,12 +267,12 @@ ADMIN_HTML = """<!doctype html>
         </select>
         <div class="help">If enabled, roles older than the selected date window are skipped even if the source still returns them.</div>
 
-        <label for="sort_newest_first">Sort newest first on source</label>
+        <label for="sort_newest_first">Prefer newest jobs first</label>
         <select id="sort_newest_first">
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, the current connector asks the source to sort by date so the freshest roles appear first.</div>
+        <div class="help">If enabled, searches ask the current job source to order results by newest posting date first. This is important for broad searches because the app only checks a limited number of pages.</div>
         <div class="panel-actions">
           <button class="primary" id="save_search">Save Search Settings</button>
         </div>
@@ -297,6 +300,10 @@ ADMIN_HTML = """<!doctype html>
         <textarea id="candidate_summary"></textarea>
         <div class="help">This starts from onboarding/imported documents, then becomes your editable top-level positioning summary.</div>
 
+        <label for="llm_profile_brief">AI fit brief</label>
+        <textarea id="llm_profile_brief"></textarea>
+        <div class="help">This is the compact structured brief the AI uses first. It should summarize strengths, positioning, important capability signals, and practical fit boundaries without repeating every detail from the full background text.</div>
+
         <label for="strengths">Strengths</label>
         <textarea id="strengths"></textarea>
         <div class="help">Starts from the initial import. Keep one strength per line and edit as you learn what should be emphasized.</div>
@@ -308,6 +315,10 @@ ADMIN_HTML = """<!doctype html>
         <label for="llm_prompt_notes">Important fit notes</label>
         <textarea id="llm_prompt_notes"></textarea>
         <div class="help">Starts from imported material and your later refinements. Use one note per line for high-signal guidance such as role preferences, domain boundaries, and honest gaps.</div>
+
+        <label for="star_evidence_text">STAR / evidence notes</label>
+        <textarea id="star_evidence_text"></textarea>
+        <div class="help">Optional deeper examples, impact stories, or evidence snippets. This should contain richer proof points, not general profile summary text.</div>
         <div class="panel-actions">
           <button class="primary" id="save_profile">Save Profile</button>
         </div>
@@ -510,7 +521,9 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
       document.getElementById('candidate_summary').value = profile.candidate_summary || '';
+      document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
       document.getElementById('cv_text').value = profile.cv_text || '';
+      document.getElementById('star_evidence_text').value = profile.star_evidence_text || '';
       document.getElementById('capability_profile_rules').value = capabilityRulesToText(profile.capability_profile_rules);
 
       for (const id of ['strengths', 'llm_prompt_notes', 'target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills', 'canberra_only_description_patterns']) {
@@ -574,7 +587,7 @@ ADMIN_HTML = """<!doctype html>
       panel.innerHTML = `
         <p><strong>Run:</strong> ${stats.run_started_at}</p>
         <p><strong>Pages crawled:</strong> ${stats.page_count} | <strong>Cards seen:</strong> ${stats.cards_seen} | <strong>Detail pages opened:</strong> ${stats.detail_fetches} | <strong>Keep rate:</strong> ${(Number(stats.keep_rate || 0) * 100).toFixed(1)}%</p>
-        <p><strong>Search window:</strong> last ${stats.search_window_days} day(s) | <strong>Sort newest first:</strong> ${stats.sort_newest_first ? 'Yes' : 'No'}</p>
+        <p><strong>Search window:</strong> last ${stats.search_window_days} day(s) | <strong>Prefer newest jobs first:</strong> ${stats.sort_newest_first ? 'Yes' : 'No'}</p>
         <p><strong>Search targets:</strong></p>
         <ul>${targets || '<li>None</li>'}</ul>
         <p><strong>Top reject reasons:</strong></p>
@@ -753,8 +766,10 @@ ADMIN_HTML = """<!doctype html>
           hidden_job_keys: toLines(document.getElementById('hidden_job_keys').value),
         },
         candidate_summary: document.getElementById('candidate_summary').value.trim(),
+        llm_profile_brief: document.getElementById('llm_profile_brief').value.trim(),
         strengths: toLines(document.getElementById('strengths').value),
         cv_text: document.getElementById('cv_text').value.trim(),
+        star_evidence_text: document.getElementById('star_evidence_text').value.trim(),
         capability_profile_rules: textToCapabilityRules(document.getElementById('capability_profile_rules').value),
         llm_prompt_notes: toLines(document.getElementById('llm_prompt_notes').value),
         target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
@@ -796,8 +811,10 @@ ADMIN_HTML = """<!doctype html>
       await patchProfile(
         {
           candidate_summary: profile.candidate_summary,
+          llm_profile_brief: profile.llm_profile_brief,
           strengths: profile.strengths,
           cv_text: profile.cv_text,
+          star_evidence_text: profile.star_evidence_text,
           capability_profile_rules: profile.capability_profile_rules,
           llm_prompt_notes: profile.llm_prompt_notes,
           target_title_patterns: profile.target_title_patterns,
@@ -1228,6 +1245,120 @@ ONBOARDING_HTML = """<!doctype html>
 
 class AdminHandler(BaseHTTPRequestHandler):
     @staticmethod
+    def _combine_text_sections(*sections: str) -> str:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for section in sections:
+            value = repair_text(str(section or ""))
+            if not value:
+                continue
+            normalized = value.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            cleaned.append(value)
+        return "\n\n".join(cleaned).strip()
+
+    @staticmethod
+    def _merge_profile_learning_patch(current: dict, patch: dict, raw_text: str) -> dict:
+        merged_patch = dict(patch or {})
+        current = current or load_profile()
+
+        imported_summary = str(merged_patch.get("candidate_summary") or "").strip()
+        existing_summary = str(current.get("candidate_summary") or "").strip()
+        default_summary = str(DEFAULT_PROFILE.get("candidate_summary") or "").strip()
+        if imported_summary and existing_summary and existing_summary != default_summary:
+            merged_patch.pop("candidate_summary", None)
+
+        if merged_patch.get("strengths"):
+            merged_patch["strengths"] = list(dict.fromkeys([
+                *current.get("strengths", []),
+                *merged_patch.get("strengths", []),
+            ]))[:20]
+
+        if merged_patch.get("capability_profile_rules"):
+            merged_patch["capability_profile_rules"] = merge_capability_rules(
+                merge_capability_rules(
+                    DEFAULT_PROFILE.get("capability_profile_rules", []),
+                    current.get("capability_profile_rules", []),
+                ),
+                merged_patch.get("capability_profile_rules", []),
+            )
+
+        if merged_patch.get("llm_prompt_notes"):
+            merged_patch["llm_prompt_notes"] = list(dict.fromkeys([
+                *current.get("llm_prompt_notes", []),
+                *merged_patch.get("llm_prompt_notes", []),
+            ]))[:30]
+
+        merged_cv_text = AdminHandler._combine_text_sections(current.get("cv_text", ""), raw_text)
+        if merged_cv_text:
+            merged_patch["cv_text"] = merged_cv_text
+
+        final_summary = str(
+            merged_patch.get("candidate_summary")
+            or current.get("candidate_summary")
+            or ""
+        ).strip()
+        final_strengths = merged_patch.get("strengths") or current.get("strengths", [])
+        final_rules = merged_patch.get("capability_profile_rules") or current.get("capability_profile_rules", [])
+        final_notes = merged_patch.get("llm_prompt_notes") or current.get("llm_prompt_notes", [])
+        llm_profile_brief = build_llm_profile_brief(
+            summary=final_summary,
+            strengths=final_strengths,
+            capability_rules=final_rules,
+            notes=final_notes,
+        )
+        if llm_profile_brief:
+            merged_patch["llm_profile_brief"] = llm_profile_brief
+
+        return merged_patch
+
+    @staticmethod
+    def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:
+        normalized = dict(patch or {})
+        current = current or load_profile()
+
+        if "llm_profile_brief" in normalized:
+            cleaned_brief = str(normalized.get("llm_profile_brief") or "").strip()
+            if cleaned_brief:
+                normalized["llm_profile_brief"] = cleaned_brief
+            else:
+                auto_brief = build_llm_profile_brief(
+                    summary=str(normalized.get("candidate_summary", current.get("candidate_summary", "")) or "").strip(),
+                    strengths=normalized.get("strengths", current.get("strengths", [])),
+                    capability_rules=normalized.get(
+                        "capability_profile_rules",
+                        current.get("capability_profile_rules", []),
+                    ),
+                    notes=normalized.get("llm_prompt_notes", current.get("llm_prompt_notes", [])),
+                )
+                normalized["llm_profile_brief"] = auto_brief
+        elif not str(current.get("llm_profile_brief") or "").strip():
+            relevant_fields = {
+                "candidate_summary",
+                "strengths",
+                "capability_profile_rules",
+                "llm_prompt_notes",
+            }
+            if any(field in normalized for field in relevant_fields):
+                auto_brief = build_llm_profile_brief(
+                    summary=str(normalized.get("candidate_summary", current.get("candidate_summary", "")) or "").strip(),
+                    strengths=normalized.get("strengths", current.get("strengths", [])),
+                    capability_rules=normalized.get(
+                        "capability_profile_rules",
+                        current.get("capability_profile_rules", []),
+                    ),
+                    notes=normalized.get("llm_prompt_notes", current.get("llm_prompt_notes", [])),
+                )
+                if auto_brief:
+                    normalized["llm_profile_brief"] = auto_brief
+
+        if "star_evidence_text" in normalized:
+            normalized["star_evidence_text"] = str(normalized.get("star_evidence_text") or "").strip()
+        return normalized
+
+    @staticmethod
     def _load_job_history() -> dict:
         if not JOB_HISTORY_PATH.exists():
             return {}
@@ -1256,14 +1387,7 @@ class AdminHandler(BaseHTTPRequestHandler):
         if not patch:
             raise ValueError("Could not extract structured learning from that text")
         current = load_profile()
-        if patch.get("capability_profile_rules"):
-            patch["capability_profile_rules"] = merge_capability_rules(
-                merge_capability_rules(
-                    DEFAULT_PROFILE.get("capability_profile_rules", []),
-                    current.get("capability_profile_rules", []),
-                ),
-                patch.get("capability_profile_rules", []),
-            )
+        patch = AdminHandler._merge_profile_learning_patch(current, patch, cleaned)
         profile = patch_profile(patch)
         return {
             "ok": True,
@@ -1447,12 +1571,18 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     def do_GET(self) -> None:
-        if self.path in {"/", "/admin", "/profile", "/demo", "/start", "/onboarding"}:
+        if self.path in {"/", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard"}:
             if self.path == "/profile":
                 self._redirect("/admin")
                 return
             if self.path in {"/start", "/onboarding"}:
                 self._send_html(ONBOARDING_HTML)
+                return
+            if self.path == "/dashboard":
+                if DASHBOARD_PATH.exists():
+                    self._send_html(DASHBOARD_PATH.read_text(encoding="utf-8", errors="ignore"))
+                    return
+                self._send_html("<h1>Dashboard not found yet</h1><p>Run the current job-source connector first.</p>")
                 return
             if self.path == "/demo":
                 if SHOWCASE_PATH.exists():
@@ -1500,7 +1630,9 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Not found"})
             return
         try:
-            updated = patch_profile(self._read_json_body())
+            current = load_profile()
+            patch = self._normalize_profile_patch_for_save(current, self._read_json_body())
+            updated = patch_profile(patch)
         except Exception as exc:
             self._send_json(400, {"error": str(exc)})
             return
