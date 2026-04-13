@@ -7,8 +7,8 @@ from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_pro
 from review_insights import apply_skill_review_decisions
 from source_documents import (
     import_source_materials_to_profile,
-    import_uploaded_documents_to_profile,
     load_source_materials,
+    persist_uploaded_source_pack,
     save_source_materials,
 )
 
@@ -28,7 +28,7 @@ ADMIN_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SEEK Admin Console</title>
+  <title>Job Hunter Admin</title>
   <style>
     :root {
       --bg: #f4efe7;
@@ -214,8 +214,8 @@ ADMIN_HTML = """<!doctype html>
 <body>
   <main class="page">
     <section class="hero">
-      <h1>SEEK Admin Console</h1>
-      <p>Update your fit profile, exclusions, search window, and review lists here. <code>profile.json</code> is the runtime source of truth for every scrape, while <code>data/capability_profile.txt</code> is your local candidate note for imports and updates.</p>
+      <h1>Job Hunter Admin</h1>
+      <p>Update your profile, review controls, and current job-source settings here. <code>profile.json</code> is the runtime source of truth for matching, while <code>data/capability_profile.txt</code> is your local candidate note for imports and updates.</p>
     </section>
 
     <nav class="tabs" aria-label="Admin sections">
@@ -227,21 +227,21 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel active" data-tab-panel="search">
       <h2 class="group-title">Search</h2>
-      <p class="group-copy">This controls what SEEK gets asked for before we scrape anything.</p>
+      <p class="group-copy">This controls what the current live job source gets asked for before we fetch any roles.</p>
       <div class="grid">
       <section class="panel">
         <h2>Search Setup</h2>
         <label for="keywords">Keywords</label>
         <input id="keywords" type="text">
-        <div class="help">Use the same words you would type into SEEK. For now we keep this simple and explicit.</div>
+        <div class="help">Use the same words you would search with in the current job source.</div>
 
         <label for="locations">Locations</label>
         <textarea id="locations"></textarea>
-        <div class="help">One exact SEEK location per line. For now this should include <code>All Sydney NSW</code> and <code>All Canberra ACT</code>.</div>
+        <div class="help">One source-specific location per line. For the current SEEK connector this should include values such as <code>All Sydney NSW</code> and <code>All Canberra ACT</code>.</div>
 
         <label for="classification_ids">Classification ids</label>
         <textarea id="classification_ids"></textarea>
-        <div class="help">One SEEK classification id per line. This is a useful pre-filter because it reduces how many cards we ever need to inspect.</div>
+        <div class="help">One classification id per line for the current connector. This is a useful pre-filter because it reduces how many roles we ever need to inspect.</div>
 
         <label for="date_range_days">How far back to search</label>
         <select id="date_range_days">
@@ -251,7 +251,7 @@ ADMIN_HTML = """<!doctype html>
           <option value="14">Last 14 days</option>
           <option value="30">Last 30 days</option>
         </select>
-        <div class="help">This updates SEEK's own date filter before scraping starts.</div>
+        <div class="help">This updates the source-side date filter before collection starts.</div>
 
         <label for="max_pages_cap">Max pages to crawl</label>
         <input id="max_pages_cap" type="number" min="1" max="100">
@@ -262,14 +262,14 @@ ADMIN_HTML = """<!doctype html>
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, ads older than the selected date window are skipped even if SEEK still returns them.</div>
+        <div class="help">If enabled, roles older than the selected date window are skipped even if the source still returns them.</div>
 
-        <label for="sort_newest_first">Sort newest first on SEEK</label>
+        <label for="sort_newest_first">Sort newest first on source</label>
         <select id="sort_newest_first">
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, the scraper asks SEEK to sort by date so the freshest ads appear first.</div>
+        <div class="help">If enabled, the current connector asks the source to sort by date so the freshest roles appear first.</div>
         <div class="panel-actions">
           <button class="primary" id="save_search">Save Search Settings</button>
         </div>
@@ -279,57 +279,35 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Candidate Profile</h2>
-      <p class="group-copy">This is the learning and fit model the scraper should use on every run.</p>
+      <p class="group-copy">This is the learning and fit model the job engine should use on every run.</p>
       <div class="grid">
       <section class="panel">
         <h2>Source Documents</h2>
-        <p class="help">Normal users should start from the guided onboarding flow, not from internal file-path setup.</p>
+        <p class="help">Normal users should start from the guided onboarding flow. The system keeps an internal local source pack so you do not need to manage file-path plumbing here.</p>
+        <div id="source_documents_summary" class="help">No source pack connected yet. Start with onboarding.</div>
         <div class="panel-actions">
           <button class="primary" id="open_onboarding" type="button">Open Onboarding</button>
+          <button class="secondary" id="import_source_materials">Rebuild Profile From Source Pack</button>
         </div>
-        <details style="margin-top: 18px;">
-          <summary style="cursor: pointer; font-weight: 700;">Advanced Source Config</summary>
-          <label for="profile_source_paths">Profile source documents</label>
-          <textarea id="profile_source_paths"></textarea>
-          <div class="help">One line per source in the format <code>Label || path</code>.</div>
-
-          <label for="instructions_file">Project instructions file</label>
-          <input id="instructions_file" type="text">
-
-          <label for="cv_variant_paths">CV variants and templates</label>
-          <textarea id="cv_variant_paths"></textarea>
-          <div class="help">One line per variant in the format <code>key || label || path || use tag 1, use tag 2</code>.</div>
-
-          <label for="cover_letter_preferences_file">Cover letter preferences file</label>
-          <input id="cover_letter_preferences_file" type="text">
-
-          <label for="source_materials_notes">Notes</label>
-          <textarea id="source_materials_notes"></textarea>
-          <div class="help">Local-only notes about how to use these materials. This does not go into <code>profile.json</code>.</div>
-          <div class="panel-actions">
-            <button class="secondary" id="save_source_materials">Save Source Documents</button>
-            <button class="secondary" id="import_source_materials">Import Saved Sources</button>
-          </div>
-        </details>
       </section>
 
       <section class="panel">
         <h2>Candidate Fit</h2>
         <label for="candidate_summary">Candidate summary</label>
         <textarea id="candidate_summary"></textarea>
-        <div class="help">Short plain-English summary of what you are good at and the kind of roles you want. This replaces the old hardcoded fit text.</div>
+        <div class="help">This starts from onboarding/imported documents, then becomes your editable top-level positioning summary.</div>
 
         <label for="strengths">Strengths</label>
         <textarea id="strengths"></textarea>
-        <div class="help">One strength per line.</div>
+        <div class="help">Starts from the initial import. Keep one strength per line and edit as you learn what should be emphasized.</div>
 
         <label for="cv_text">CV / background text</label>
         <textarea id="cv_text"></textarea>
-        <div class="help">Paste the current version of your CV or a solid summary here. This is saved locally and included in every LLM review run.</div>
+        <div class="help">This is the background text created from onboarding/imported source documents. It is the richest profile context the app uses during matching and LLM review.</div>
 
         <label for="llm_prompt_notes">Important fit notes</label>
         <textarea id="llm_prompt_notes"></textarea>
-        <div class="help">One note per line. Example: reject cyber or security-heavy roles.</div>
+        <div class="help">Starts from imported material and your later refinements. Use one note per line for high-signal guidance such as role preferences, domain boundaries, and honest gaps.</div>
         <div class="panel-actions">
           <button class="primary" id="save_profile">Save Profile</button>
         </div>
@@ -391,17 +369,17 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel" data-tab-panel="review">
       <h2 class="group-title">Review</h2>
-      <p class="group-copy">Use this area to teach the scraper about new skills and manage review lists without mixing that work into your search settings.</p>
+      <p class="group-copy">Use this area to teach the system about new skills and manage review lists without mixing that work into your search settings.</p>
       <div class="grid">
       <section class="panel">
         <h2>Review Controls</h2>
         <label for="applied_job_keys">Applied jobs</label>
         <textarea id="applied_job_keys"></textarea>
-        <div class="help">One SEEK job URL or job ID per line. These will be hidden from future runs.</div>
+        <div class="help">One job URL or job ID per line. These will be hidden from future runs.</div>
 
         <label for="hidden_job_keys">Hidden jobs</label>
         <textarea id="hidden_job_keys"></textarea>
-        <div class="help">One SEEK job URL or job ID per line. Use this for anything you never want to see again.</div>
+        <div class="help">One job URL or job ID per line. Use this for anything you never want to see again.</div>
         <div class="panel-actions">
           <button class="primary" id="save_review_controls">Save Review Controls</button>
         </div>
@@ -409,7 +387,7 @@ ADMIN_HTML = """<!doctype html>
 
       <section class="panel">
         <h2>Unknown Skills Review</h2>
-        <div id="unknown_skills_panel" class="help">Run the scraper to see unclassified skills from recent job descriptions.</div>
+        <div id="unknown_skills_panel" class="help">Run the job source connector to see unclassified skills from recent job descriptions.</div>
         <div class="panel-actions">
           <button class="secondary" id="apply_skill_reviews">Apply Skill Decisions</button>
         </div>
@@ -419,7 +397,7 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel" data-tab-panel="test">
       <h2 class="group-title">Test</h2>
-      <p class="group-copy">Use this tab to validate what the scraper did on the latest run and spot false rejects quickly.</p>
+      <p class="group-copy">Use this tab to validate what the current run did and spot false rejects quickly.</p>
       <div class="grid">
       <section class="panel">
         <h2>Latest Run Stats</h2>
@@ -428,7 +406,7 @@ ADMIN_HTML = """<!doctype html>
 
       <section class="panel">
         <h2>Rejected Samples</h2>
-        <div id="rejections_panel" class="help">Rejected jobs grouped by reason will appear here after a scraper run.</div>
+        <div id="rejections_panel" class="help">Rejected roles grouped by reason will appear here after a run.</div>
         <div class="panel-actions">
           <button class="secondary" id="refresh_review">Refresh Test Data</button>
           <button class="secondary" id="reload">Reload Profile</button>
@@ -500,39 +478,6 @@ ADMIN_HTML = """<!doctype html>
       }).join('\\n');
     }
 
-    function sourceRowsToText(rows) {
-      return (rows || []).map(row => `${row.label || ''} || ${row.path || ''}`).join('\\n');
-    }
-
-    function textToSourceRows(value) {
-      return toLines(value).map(line => {
-        const parts = line.split('||');
-        return {
-          label: (parts[0] || '').trim(),
-          path: (parts[1] || '').trim(),
-        };
-      }).filter(row => row.label && row.path);
-    }
-
-    function cvVariantsToText(rows) {
-      return (rows || []).map(row => {
-        const tags = (row.use_for || []).join(', ');
-        return `${row.key || ''} || ${row.label || ''} || ${row.path || ''} || ${tags}`;
-      }).join('\\n');
-    }
-
-    function textToCvVariants(value) {
-      return toLines(value).map(line => {
-        const parts = line.split('||');
-        return {
-          key: (parts[0] || '').trim(),
-          label: (parts[1] || '').trim(),
-          path: (parts[2] || '').trim(),
-          use_for: (parts[3] || '').split(',').map(item => item.trim()).filter(Boolean),
-        };
-      }).filter(row => row.key && row.label && row.path);
-    }
-
     function textToRules(value, key) {
       return toLines(value).map(line => {
         const parts = line.split('||');
@@ -581,11 +526,18 @@ ADMIN_HTML = """<!doctype html>
     }
 
     function fillSourceMaterials(materials) {
-      document.getElementById('profile_source_paths').value = sourceRowsToText(materials.profile_sources || []);
-      document.getElementById('instructions_file').value = materials.instructions_file || '';
-      document.getElementById('cv_variant_paths').value = cvVariantsToText(materials.cv_variants || []);
-      document.getElementById('cover_letter_preferences_file').value = materials.cover_letter_preferences_file || '';
-      document.getElementById('source_materials_notes').value = materials.notes || '';
+      const panel = document.getElementById('source_documents_summary');
+      const sources = materials.profile_sources || [];
+      if (!sources.length) {
+        panel.innerHTML = 'No source pack connected yet. Start with onboarding.';
+        return;
+      }
+      const sourceHtml = sources.map(item => `<li><strong>${escapeHtml(item.label || 'Source document')}</strong></li>`).join('');
+      panel.innerHTML = `
+        <p><strong>Connected source pack:</strong> ${sources.length} item(s)</p>
+        <ul>${sourceHtml}</ul>
+        <p>${escapeHtml(materials.notes || 'Stored locally for profile generation and later application work.')}</p>
+      `;
     }
 
     async function loadProfile() {
@@ -596,16 +548,6 @@ ADMIN_HTML = """<!doctype html>
       const profile = await response.json();
       fillForm(profile);
       showStatus('Profile loaded.', 'ok');
-    }
-
-    function collectSourceMaterials() {
-      return {
-        profile_sources: textToSourceRows(document.getElementById('profile_source_paths').value),
-        instructions_file: document.getElementById('instructions_file').value.trim(),
-        cv_variants: textToCvVariants(document.getElementById('cv_variant_paths').value),
-        cover_letter_preferences_file: document.getElementById('cover_letter_preferences_file').value.trim(),
-        notes: document.getElementById('source_materials_notes').value.trim(),
-      };
     }
 
     async function loadSourceMaterials() {
@@ -620,7 +562,7 @@ ADMIN_HTML = """<!doctype html>
     function renderRunStats(stats) {
       const panel = document.getElementById('run_stats_panel');
       if (!stats || !stats.run_started_at) {
-        panel.innerHTML = '<p>No run stats yet. Run the scraper once and reload this page.</p>';
+        panel.innerHTML = '<p>No run stats yet. Run the current job-source connector once and reload this page.</p>';
         return;
       }
       const rejectHtml = (stats.top_reject_reasons || [])
@@ -711,7 +653,7 @@ ADMIN_HTML = """<!doctype html>
     function renderRejections(items) {
       const panel = document.getElementById('rejections_panel');
       if (!items || !items.length) {
-        panel.innerHTML = '<p>No rejected sample data yet. Run the scraper and then refresh review data.</p>';
+        panel.innerHTML = '<p>No rejected sample data yet. Run the current job-source connector and then refresh review data.</p>';
         return;
       }
 
@@ -779,25 +721,9 @@ ADMIN_HTML = """<!doctype html>
       showStatus(payload.message || 'Knowledge file imported.', 'ok');
     }
 
-    async function saveSourceMaterials() {
-      const response = await fetch('/api/source-materials', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(collectSourceMaterials()),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || 'Could not save source documents');
-      }
-      fillSourceMaterials(payload);
-      showStatus('Source documents saved locally.', 'ok');
-    }
-
     async function importSourceMaterials() {
       const response = await fetch('/api/import-source-materials', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(collectSourceMaterials()),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -955,14 +881,6 @@ ADMIN_HTML = """<!doctype html>
     document.getElementById('import_knowledge_file').addEventListener('click', async () => {
       try {
         await importKnowledgeFile();
-      } catch (error) {
-        showStatus(error.message, 'error');
-      }
-    });
-
-    document.getElementById('save_source_materials').addEventListener('click', async () => {
-      try {
-        await saveSourceMaterials();
       } catch (error) {
         showStatus(error.message, 'error');
       }
@@ -1190,7 +1108,7 @@ ONBOARDING_HTML = """<!doctype html>
   <main class="page">
     <section class="hero">
       <h1>Set Up Your Profile</h1>
-      <p>Start with one strong detailed CV. If you have extra background or longer career history, you can add that too. We will turn those documents into a working profile the scraper can use, and you can refine it later in admin.</p>
+      <p>Start with one strong detailed CV. If you have extra background or longer career history, you can add that too. We will turn those documents into a working profile the job engine can use, and you can refine it later in admin.</p>
     </section>
 
     <div class="grid">
@@ -1221,7 +1139,7 @@ ONBOARDING_HTML = """<!doctype html>
           1. We read your uploaded document text.<br>
           2. We build or enrich <code>profile.json</code>.<br>
           3. You review the generated summary, strengths, and fit notes in admin.<br>
-          4. Then you can run the scraper and use the dashboard.
+          4. Then you can run the current job-source connector and use the dashboard.
         </div>
         <div class="summary-box" id="summary_box">
           <h3>Generated Profile Snapshot</h3>
@@ -1646,7 +1564,9 @@ class AdminHandler(BaseHTTPRequestHandler):
                 extra_text = str(payload.get("extra_text") or "")
                 if not isinstance(files, list):
                     raise ValueError("files must be a list")
-                result = import_uploaded_documents_to_profile(files, extra_text=extra_text)
+                materials = persist_uploaded_source_pack(files, extra_text=extra_text)
+                result = import_source_materials_to_profile(materials)
+                result["materials"] = materials
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return

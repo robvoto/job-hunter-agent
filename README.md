@@ -1,35 +1,43 @@
 # Job Hunter Agent
 
-Autonomous job discovery and decision system designed to reduce or eliminate manual job searching.
+Local-first job discovery and fit-evaluation system.
 
-This system continuously discovers roles, evaluates them against a structured capability profile, and produces actionable outputs using a combination of deterministic filtering and optional LLM-based review.
+The product goal is simple: a user gives the app strong source material about their experience, the app builds a working profile, reviews jobs against that profile, and keeps a meaningful shortlist instead of forcing the user to search manually every day.
 
-The goal is not to scrape jobs — it is to model and automate the decision process a human would normally perform when searching, filtering, and assessing job opportunities.
-## Current Focus
+Current implemented job source:
 
-The reliable path is the direct-page scraper in [scraper_direct.py](scraper_direct.py). We do not use the old right-pane approach as the main workflow anymore.
+- SEEK
 
-## Project Layout
+The architecture is intentionally broader than a single site. SEEK is the current source connector, not the long-term boundary of the product.
 
-- `main.py`: thin local entry point for the direct scraper
-- `admin_api.py`: local admin UI at `http://127.0.0.1:8765/admin`
-- `data/`: local knowledge and runtime state
-- `output/`: generated HTML, JSON, stats, and review data
-- `legacy/`: older drafts and pane-based scraper code kept for reference
-- `docs/`: project notes and operational guidance
+## What Works Now
 
-## How The Data Model Works
+- guided onboarding at `http://127.0.0.1:8765/start`
+- local admin console at `http://127.0.0.1:8765/admin`
+- persistent local profile in `data/profile.json`
+- deterministic filtering before any LLM review
+- optional constrained LLM decision step
+- persistent dashboard with fresh, saved, and hidden jobs
+- local review tracking for opened, hidden, and applied roles
 
-- `data/profile.json`: the runtime profile used by the scraper, filters, and LLM
-- `data/capability_profile.txt`: a local human-readable note that can be imported into the runtime profile
-- admin UI: the ongoing editor for `data/profile.json`
-- source CVs / STAR notes / application materials: local source documents that should feed the profile and later application generation
+## Product Model
 
-The intended model is: import a strong CV once, generate `profile.json`, then keep refining it from the admin UI.
+The system has three main layers:
+
+1. Source documents
+   A detailed CV, plus optional extra background or evidence.
+
+2. Runtime profile
+   `data/profile.json` is the machine-readable profile used by filtering, matching, and LLM review.
+
+3. Dashboard and outputs
+   HTML shortlist, run stats, review data, and later application packs.
+
+The admin UI edits layer 2. The onboarding flow creates layer 2 from layer 1.
 
 ## Local Commands
 
-Install dependencies:
+Set up the environment:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -38,42 +46,70 @@ pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-Run the scraper:
+Run the job-source connector:
 
 ```powershell
 python main.py
 ```
 
-Rebuild the dashboard from saved local state without scraping:
+Rebuild the dashboard from saved local state:
 
 ```powershell
 python scraper_direct.py --rebuild-dashboard
 ```
 
-Run the admin console:
+Run the local web UI:
 
 ```powershell
 python admin_api.py
 ```
 
-Open the local showcase/demo page:
+Then open:
 
-- `http://127.0.0.1:8765/demo`
+- onboarding: `http://127.0.0.1:8765/start`
+- admin: `http://127.0.0.1:8765/admin`
+- demo/showcase: `http://127.0.0.1:8765/demo`
 
-## Important Notes
+## Important Files
 
-- `data/profile.json` is the runtime source of truth used on every scrape.
-- `data/capability_profile.txt` is the local human-readable candidate note used for imports.
-- `data/capability_profile.template.txt` is the committed starter template for new users.
-- `data/application_materials.template.json` is a starter manifest for local-only application inputs.
-- the admin UI now includes a first-pass source-document importer that can build `profile.json` from local CV / STAR files.
-- `TODO.txt`, `data/capability_profile.txt`, `data/profile.json`, `data/job_history.json`, and `data/llm_cache.json` are intended to stay local.
-- `output/seek_results.html` is a persistent readable dashboard built from the latest scrape plus local keep history.
-- `output/seek_results.json`, `output/seek_run_stats.json`, and `output/seek_review_data.json` are for debugging and tuning.
-- If `OPENAI_API_KEY` is not set, the app runs without live LLM decisions and falls back to deterministic filtering plus `MAYBE`.
+- `data/profile.json`
+  Runtime source of truth for matching.
 
-For more detail, see:
+- `data/capability_profile.txt`
+  Local human-readable note file used for imports and updates.
 
-- [docs/OPERATIONS.md](docs/OPERATIONS.md)
+- `data/application_materials.template.json`
+  Example local-only source-material manifest.
+
+- `output/seek_results.html`
+  Persistent shortlist dashboard generated from the latest run plus local history.
+
+- `output/seek_results.json`
+- `output/seek_run_stats.json`
+- `output/seek_review_data.json`
+  Debugging and tuning outputs.
+
+## Local-Only State
+
+These are intended to stay local and ignored:
+
+- `.venv/`
+- `TODO.txt`
+- `data/profile.json`
+- `data/capability_profile.txt`
+- `data/job_history.json`
+- `data/llm_cache.json`
+- `data/application_inputs/`
+- `data/application_materials.json`
+- `output/`
+
+## LLM Notes
+
+If `OPENAI_API_KEY` is not set, the app still works, but the live LLM review step is effectively disabled and falls back to deterministic filtering plus `MAYBE`.
+
+## Docs
+
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- [docs/OPERATIONS.md](docs/OPERATIONS.md)
+- [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
 - [SOUL.md](SOUL.md)

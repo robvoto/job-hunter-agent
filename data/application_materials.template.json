@@ -1,45 +1,16 @@
 {
   "profile_sources": [
     {
-      "label": "Master CV",
-      "path": "data/application_inputs/cv_master.md"
+      "label": "Primary CV",
+      "path": "data/application_inputs/source_pack/primary_cv.md"
     },
     {
-      "label": "Extended Career History",
-      "path": "data/application_inputs/cv_extended_history.md"
-    },
-    {
-      "label": "STAR Examples",
-      "path": "data/application_inputs/star_examples.md"
+      "label": "Supporting Background",
+      "path": "data/application_inputs/source_pack/supporting_background.md"
     }
   ],
-  "instructions_file": "data/application_inputs/project_instructions.md",
-  "cv_variants": [
-    {
-      "key": "government",
-      "label": "Government CV",
-      "path": "data/application_inputs/cv_government.md",
-      "use_for": ["government", "public sector", "regulated"]
-    },
-    {
-      "key": "private",
-      "label": "Private Sector CV",
-      "path": "data/application_inputs/cv_private.md",
-      "use_for": ["private sector", "commercial", "consulting"]
-    },
-    {
-      "key": "master",
-      "label": "All Roles CV",
-      "path": "data/application_inputs/cv_master.md",
-      "use_for": ["fallback", "broad tailoring"]
-    },
-    {
-      "key": "extended-history",
-      "label": "Extended Career History CV",
-      "path": "data/application_inputs/cv_extended_history.md",
-      "use_for": ["older experience", "deep background checks"]
-    }
-  ],
-  "cover_letter_preferences_file": "data/application_inputs/cover_letter_preferences.md",
-  "notes": "Keep the real files in data/application_inputs/ so they stay local only. Export DOCX/PDF CVs to Markdown or plain text before wiring them into automation."
+  "instructions_file": "",
+  "cv_variants": [],
+  "cover_letter_preferences_file": "",
+  "notes": "Starter local source-pack structure. Normal users should use onboarding rather than editing this file directly."
 }

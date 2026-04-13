@@ -2,119 +2,118 @@
 
 ## What This App Does
 
-This project is a local-first SEEK job finder for Business Analyst-style roles.
+This app helps a candidate build a profile once, review jobs against that profile, and keep a local shortlist that gets better over time.
 
-It helps you:
+Current live job source:
 
-- scrape fresh jobs from SEEK
-- filter out obvious bad fits
-- keep a persistent shortlist locally
-- remember jobs you already liked, hid, or applied for
-- maintain a candidate profile that improves matching over time
+- SEEK
 
-## The Simple Mental Model
+That is the current source connector, not the final limit of the product.
 
-Think of the system in three layers:
+## First-Time Use
 
-1. Your source documents
-   Your detailed CV and any extra notes, achievements, or STAR examples.
-
-2. Your runtime profile
-   `data/profile.json` is the machine-readable version of your profile that the app uses on every scrape.
-
-3. Your dashboard and outputs
-   The HTML dashboard, run stats, and later application drafts.
-
-The admin page exists to edit layer 2.
-
-## First-Time Setup
-
-Create the local environment:
-
-```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m playwright install chromium
-```
-
-## Running The App
-
-Run a scrape:
-
-```powershell
-python main.py
-```
-
-Rebuild the dashboard without scraping:
-
-```powershell
-python scraper_direct.py --rebuild-dashboard
-```
-
-Run the admin console:
+1. Start the local web UI:
 
 ```powershell
 python admin_api.py
 ```
 
-Then open:
+2. Open:
+
+- `http://127.0.0.1:8765/start`
+
+3. Upload:
+
+- one strong detailed CV
+- optionally one supporting background document
+- optionally extra notes in plain English
+
+4. Click `Create Profile`
+
+5. Then open admin:
 
 - `http://127.0.0.1:8765/admin`
-- `http://127.0.0.1:8765/demo`
+
+The app will create or enrich `data/profile.json`, which becomes your working profile for job matching.
+
+## What Onboarding Creates
+
+The onboarding flow creates a runtime profile from your source documents.
+
+That profile includes:
+
+- candidate summary
+- strengths
+- CV/background text
+- capability rules
+- fit notes
+
+You can then refine those fields from admin.
 
 ## What The Admin Is For
 
-Use the admin page to maintain your runtime profile and review controls.
+Use the admin UI to maintain the runtime profile and review controls.
 
 Tabs:
 
-- `Search`: keywords, locations, classifications, date window, sort order
-- `Candidate Profile`: summary, strengths, CV/background text, fit notes, rules
-- `Review`: hidden jobs, applied jobs, and unknown-skill decisions
-- `Test`: latest run stats and rejected sample review
+- `Search`: controls the current job-source query
+- `Candidate Profile`: profile summary, strengths, background text, fit notes, and rules
+- `Review`: hidden jobs, applied jobs, and skill-review decisions
+- `Test`: latest run stats and rejected samples
 
-Inside `Candidate Profile`, the `Source Documents` panel is now the first-pass import path for local CV and STAR files.
+Think of admin as the maintenance surface for your profile, not the place where you upload raw source files every time.
 
-Important point:
+## What The Main Profile Fields Mean
 
-- the admin should be the ongoing editor for your profile
-- it is not meant to replace your original source documents
+`Candidate summary`
 
-## How Profile Data Should Work
+- the short top-level positioning statement
+- created from onboarding, then edited over time
 
-For a new user, the intended flow is:
+`Strengths`
 
-1. Start with one strong detailed CV
-2. Import it into the app
-3. Let the app generate `data/profile.json`
-4. Refine that profile from the admin page over time
+- important things the app should emphasize when evaluating fit
+- initially created from imported source material
+- can be refined later as you learn what should stand out
 
-Optional later inputs:
+`CV / background text`
 
-- a long-form career history document
-- STAR examples
-- writing preferences for cover letters or selection criteria
+- the larger background context used for matching and LLM review
+- this should reflect what you uploaded during onboarding
+- you can edit it, but it should stay consistent with your real experience
 
-These richer files should improve the profile and later application drafting, but they should not become competing runtime systems.
+`Important fit notes`
 
-## LLM Usage
+- high-signal rules or context
+- for example domain preferences, known gaps, role boundaries, and honest exclusions
+- starts from imported material and can be refined later
+
+## Running A Job Review
+
+Run the current source connector:
+
+```powershell
+python main.py
+```
+
+Then open the dashboard at:
+
+- `output/seek_results.html`
+
+## LLM Use
 
 The LLM is optional.
 
 Current behavior:
 
 - deterministic filters run first
-- only surviving job descriptions go to the LLM
-- the LLM reads your runtime profile from `data/profile.json`
+- only surviving job descriptions reach the LLM
+- the LLM reads from `data/profile.json`
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
-- decisions are cached in `data/llm_cache.json`
 
-If `OPENAI_API_KEY` is not set, the app treats the LLM as disabled.
+If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
 
-## Local Files You Should Keep
-
-These files are valuable local state:
+## Local Files To Keep
 
 - `data/profile.json`
 - `data/capability_profile.txt`
@@ -122,31 +121,8 @@ These files are valuable local state:
 - `data/llm_cache.json`
 - `TODO.txt`
 
-These are also local-only if you use them:
+These are also local-only if used:
 
 - `data/application_inputs/`
 - `data/application_materials.json`
 - `.venv/`
-
-## Dashboard Meaning
-
-The dashboard is a persistent local shortlist.
-
-It shows:
-
-- fresh matches from the latest run
-- saved jobs from earlier runs
-- hidden jobs you can unhide
-- older saved jobs in a collapsed section
-
-It also tracks whether you opened a job, but that is only a light ranking hint, not a hard rule.
-
-## What Is Coming Next
-
-Planned next step:
-
-- import source documents cleanly into `profile.json`
-
-Planned later step:
-
-- `Prepare Application` packs with tailored CVs, cover letters, and supporting notes per job

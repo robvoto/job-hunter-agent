@@ -1,26 +1,35 @@
 # Operations Notes
 
-## Source Of Truth
+## Runtime Source Of Truth
 
-- `data/profile.json` is the machine-readable runtime profile.
-- `data/capability_profile.txt` is the local human-readable candidate note.
-- `data/capability_profile.template.txt` is the committed starter template.
-- `data/application_inputs/` should hold local-only source documents if you use CV/application automation later.
+- `data/profile.json` is the machine-readable runtime profile
+- `data/capability_profile.txt` is the human-readable local note
+- `data/capability_profile.template.txt` is the committed starter template
 
-The scraper and admin UI read `data/profile.json` on every run. The knowledge text file is not reparsed automatically every scrape; it is imported into the profile when you choose to do that from the admin console. The local note file should stay personal and untracked, while the template is safe to keep in the repo.
+Filtering, matching, admin editing, and LLM review all depend on `data/profile.json`.
 
-The intended long-term model is:
+## Profile Creation Model
 
-- source documents create or enrich `data/profile.json`
-- admin edits and maintains `data/profile.json`
-- scraper, filters, and LLM consume `data/profile.json`
-- application outputs should be generated from that profile plus source documents, not maintained as separate competing runtime truth
+The intended runtime model is:
 
-There is now a first-pass source-document import path in the admin UI. It stores local source-document references in `data/application_materials.json` and can import `.docx`, `.md`, and `.txt` source files into `profile.json`.
+1. source documents come in through onboarding
+2. onboarding creates or enriches `data/profile.json`
+3. admin refines `data/profile.json`
+4. the job-source connector and LLM read `data/profile.json`
+
+Current onboarding persists a local source pack under ignored paths and uses that to build the runtime profile.
+
+## Current Source Connector
+
+The current implemented job source is SEEK.
+
+Important note:
+
+- the product is broader than SEEK
+- the current connector code lives in `scraper_direct.py` for historical reasons
+- do not treat that filename as the intended long-term product naming model
 
 ## Local Setup
-
-Recommended Windows setup:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -29,107 +38,85 @@ pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-Use `.venv\Scripts\python.exe` when you want to be explicit about running inside the project environment.
+## Main Commands
 
-## Dashboard Model
+Run the current source connector:
 
-`output/seek_results.html` is now a persistent local dashboard:
+```powershell
+python main.py
+```
 
-- kept jobs from the latest run stay at the top
-- previously kept jobs remain in a local archive
-- hidden jobs are reviewable and can be unhidden
-- older archive items are hidden by default once they age past the current threshold
-- filters support sort, scope, posted age, work mode, score, and pagination
-- run stats and efficiency are tucked into a side panel
-
-If you want to rebuild the dashboard from saved local data without doing a new scrape, run:
+Rebuild the dashboard from saved local state:
 
 ```powershell
 python scraper_direct.py --rebuild-dashboard
 ```
 
-## What Gets Regenerated
+Run the local UI:
 
-These files are safe to regenerate:
+```powershell
+python admin_api.py
+```
+
+## Dashboard Model
+
+`output/seek_results.html` is a persistent local shortlist.
+
+It currently supports:
+
+- fresh jobs from the latest run
+- saved jobs from earlier runs
+- hidden jobs with unhide review
+- older saved jobs collapsed by default
+- filtering, sorting, and pagination
+- local viewed/opened tracking
+
+## Files That Can Be Rebuilt
 
 - `output/seek_results.html`
 - `output/seek_results.json`
 - `output/seek_run_stats.json`
 - `output/seek_review_data.json`
 
-These are local runtime state files and should normally be kept:
+## Files That Should Usually Be Kept
 
 - `data/profile.json`
 - `data/job_history.json`
 - `data/llm_cache.json`
 - `data/capability_profile.txt`
-- `data/application_inputs/` if you add local CV or STAR source files
-- `data/application_materials.json` if you create a local application-input manifest
+- `data/application_inputs/`
+- `data/application_materials.json`
 - `TODO.txt`
 
 ## Moving The Project
 
-The code now resolves important paths relative to the repo folder, not the shell's current working directory. That means starting `python main.py` or `python admin_api.py` from another folder should not create a second accidental `profile.json`.
+The code resolves important paths relative to the repo, not the shell working directory.
 
-If you move this project to another machine or another folder, bring these with it:
+If moving to another machine and you want to preserve local state, bring:
 
 - `data/profile.json`
 - `data/capability_profile.txt`
-- optionally `data/job_history.json` if you want to keep seen/applied history
-- optionally `data/llm_cache.json` if you want to keep cached LLM decisions
-- optionally `data/application_inputs/` if you want your local source documents available for future application generation
-
-## When Defaults Are Used
-
-`data/profile.json` is only initialized from defaults if it does not exist. If the file is present, the project loads it and merges missing fields from the default profile.
-
-## Admin Usage
-
-Main UI:
-
-- `Search` tab: what SEEK is asked for
-- `Candidate Profile` tab: CV, fit model, and learned capabilities
-- `Review` tab: applied/hidden controls and unknown skill decisions
-- `Test` tab: latest run stats and rejected sample inspection
-
-Think of the admin as the editor for the runtime profile, not the original home of your source documents.
-
-For a new person, the desired onboarding path is:
-
-1. import one detailed CV
-2. build `data/profile.json`
-3. review and refine the generated profile in admin
-4. keep improving it over time with learning updates
-
-Extra source files like STAR notes or long-form career history should enrich the profile and later application drafting, but not replace admin as the editing surface.
+- optionally `data/job_history.json`
+- optionally `data/llm_cache.json`
+- optionally `data/application_inputs/`
+- optionally `data/application_materials.json`
 
 ## LLM Runtime
 
-The LLM is optional and only used after deterministic filters pass.
+The LLM is optional and constrained.
 
 Current flow:
 
-- title filters
-- content filters
+- title filtering
+- content filtering
 - optional LLM `KEEP` / `REJECT` / `MAYBE`
 
-The LLM prompt reads from `data/profile.json`, especially:
+The prompt reads from `data/profile.json`, especially:
 
 - candidate summary
 - strengths
 - CV/background text
 - capability rules
-- important fit notes
+- fit notes
 
-If `OPENAI_API_KEY` is absent, the project runs with the LLM effectively disabled.
-
-## Why This Matters
-
-The project should be:
-
-- deterministic first
-- explainable
-- cheap to run
-- easy to debug
-
-That is why the runtime profile and generated review artifacts are stored locally in plain files rather than hidden inside code.
+If `OPENAI_API_KEY` is missing, the app runs without live LLM review.

@@ -13,6 +13,8 @@ from profile_store import DEFAULT_PROFILE, load_profile, patch_profile
 
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
+APPLICATION_INPUTS_DIR = DATA_DIR / "application_inputs"
+SOURCE_PACK_DIR = APPLICATION_INPUTS_DIR / "source_pack"
 SOURCE_MATERIALS_PATH = DATA_DIR / "application_materials.json"
 SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json"
 
@@ -35,6 +37,11 @@ STRENGTH_KEYWORDS = [
     ("government delivery", ["government", "federal", "state government", "public sector", "baseline clearance"]),
     ("digital transformation", ["digital delivery", "transformation", "service improvement", "change delivery"]),
 ]
+
+UPLOAD_SLOT_MAP = {
+    "primary cv": "primary_cv",
+    "supporting background": "supporting_background",
+}
 
 
 def _deep_merge(base: Any, patch: Any) -> Any:
@@ -145,6 +152,8 @@ def _read_docx_bytes(data: bytes) -> str:
 
 def read_source_document(path_value: str) -> str:
     path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = ROOT_DIR / path
     if not path.exists():
         raise FileNotFoundError(f"Could not find source document: {path}")
     suffix = path.suffix.lower()
@@ -153,6 +162,53 @@ def read_source_document(path_value: str) -> str:
     if suffix in {".txt", ".md"}:
         return repair_text(path.read_text(encoding="utf-8", errors="ignore"))
     raise ValueError(f"Unsupported source document type: {path.suffix}")
+
+
+def _slugify_filename(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+    return slug or "source_document"
+
+
+def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:
+    SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
+    profile_sources: list[dict[str, str]] = []
+
+    for index, item in enumerate(files_payload or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("filename") or f"Source Document {index}").strip()
+        filename = str(item.get("filename") or "").strip()
+        content_base64 = str(item.get("content_base64") or "").strip()
+        if not filename or not content_base64:
+            continue
+        raw_bytes = base64.b64decode(content_base64)
+        suffix = Path(filename).suffix.lower() or ".txt"
+        slot_name = UPLOAD_SLOT_MAP.get(label.lower(), _slugify_filename(label))
+        target_name = f"{slot_name}{suffix}"
+        target_path = SOURCE_PACK_DIR / target_name
+        target_path.write_bytes(raw_bytes)
+        profile_sources.append({
+            "label": label,
+            "path": str(target_path.relative_to(ROOT_DIR)),
+        })
+
+    extra_clean = repair_text(extra_text)
+    if extra_clean:
+        notes_path = SOURCE_PACK_DIR / "extra_notes.txt"
+        notes_path.write_text(extra_clean, encoding="utf-8")
+        profile_sources.append({
+            "label": "Extra Notes",
+            "path": str(notes_path.relative_to(ROOT_DIR)),
+        })
+
+    materials = {
+        "profile_sources": profile_sources,
+        "instructions_file": "",
+        "cv_variants": [],
+        "cover_letter_preferences_file": "",
+        "notes": "Managed by onboarding. Internal local evidence pack.",
+    }
+    return save_source_materials(materials)
 
 
 def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
