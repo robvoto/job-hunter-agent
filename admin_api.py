@@ -54,7 +54,7 @@ ADMIN_HTML = """<!doctype html>
       color: var(--ink);
     }
     .page {
-      max-width: 1100px;
+      max-width: 1380px;
       margin: 0 auto;
       padding: 24px 18px 48px;
     }
@@ -215,9 +215,233 @@ ADMIN_HTML = """<!doctype html>
     .inline-status.error {
       color: #9a3412;
     }
+    .panel-copy {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+    .panel-kicker {
+      display: inline-block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .help-drawer {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.55);
+      overflow: hidden;
+    }
+    .help-drawer summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 12px 14px;
+      font-weight: 700;
+      color: var(--accent-2);
+    }
+    .help-drawer summary::-webkit-details-marker {
+      display: none;
+    }
+    .help-drawer p {
+      margin: 0;
+      padding: 0 14px 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .profile-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.95fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .profile-main,
+    .profile-side {
+      min-width: 0;
+    }
+    .profile-side {
+      display: grid;
+      gap: 18px;
+    }
+    .profile-main-panel {
+      padding: 22px 22px 24px;
+    }
+    .profile-panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      padding-bottom: 18px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .profile-panel-head h2,
+    .advanced-head h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+    .profile-panel-actions {
+      justify-content: flex-end;
+      margin-top: 0;
+    }
+    .profile-group {
+      padding-top: 18px;
+      margin-top: 18px;
+      border-top: 1px solid rgba(230, 220, 205, 0.72);
+    }
+    .profile-group:first-of-type {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 0;
+    }
+    .profile-group h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .profile-group-copy {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .profile-fields-grid,
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    .field-block {
+      min-width: 0;
+    }
+    .field-block.field-span-2 {
+      grid-column: 1 / -1;
+    }
+    .field-block label:first-child {
+      margin-top: 14px;
+    }
+    .field-help {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    .field-help code {
+      font-size: 0.82rem;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      font-weight: 700;
+    }
+    .checkbox-row input {
+      width: auto;
+      margin: 0;
+    }
+    textarea.is-readonly {
+      background: #f7f2ea;
+      color: #5b6470;
+    }
+    #candidate_summary,
+    #llm_profile_brief {
+      min-height: 170px;
+    }
+    #strengths,
+    #llm_prompt_notes,
+    #star_evidence_text,
+    #learning_update_text {
+      min-height: 180px;
+    }
+    #cv_text {
+      min-height: 460px;
+    }
+    #capability_profile_rules {
+      min-height: 180px;
+    }
+    #target_title_patterns,
+    #adjacent_title_patterns,
+    #reject_title_rules,
+    #reject_description_phrase_rules,
+    #reject_description_regex_rules,
+    #must_not_require_skills,
+    #canberra_only_description_patterns {
+      min-height: 120px;
+    }
+    .side-panel {
+      padding: 18px;
+    }
+    .summary-box {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.56);
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .advanced-shell {
+      grid-column: 1 / -1;
+      padding: 22px;
+    }
+    .advanced-head {
+      margin-bottom: 14px;
+    }
+    .advanced-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .subpanel {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      min-width: 0;
+    }
+    .subpanel h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+    }
+    .subpanel .field-help {
+      margin-bottom: 6px;
+    }
     .review-list {
       display: grid;
       gap: 12px;
+    }
+    @media (max-width: 1180px) {
+      .profile-shell {
+        grid-template-columns: 1fr;
+      }
+      .advanced-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 760px) {
+      .profile-panel-head,
+      .profile-fields-grid,
+      .field-grid {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+      .profile-panel-head {
+        display: block;
+      }
+      .profile-panel-actions {
+        justify-content: flex-start;
+        margin-top: 14px;
+      }
+      .field-block.field-span-2 {
+        grid-column: auto;
+      }
     }
     .review-card {
       background: white;
@@ -310,107 +534,194 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Candidate Profile</h2>
-      <p class="group-copy">This is the learning and fit model the job engine should use on every run.</p>
-      <div class="grid">
-      <section class="panel">
+      <p class="group-copy">Maintain the core candidate story here, then tune advanced matching rules separately.</p>
+      <div class="profile-shell">
+      <div class="profile-main">
+      <section class="panel profile-main-panel">
+        <div class="profile-panel-head">
+          <div>
+            <div class="panel-kicker">Main profile editing</div>
+            <h2>Candidate Profile</h2>
+            <p class="panel-copy">This is the primary fit context the engine should use on every run.</p>
+          </div>
+          <div class="panel-actions profile-panel-actions">
+            <button class="primary" id="save_profile">Save Profile</button>
+            <span class="inline-status" id="save_profile_status" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <details class="help-drawer">
+          <summary>Editing tips</summary>
+          <p>Keep the summary current, keep strengths concrete, and use the longer source text for detailed evidence. If you want the AI brief rebuilt from the latest summary, clear it and save.</p>
+        </details>
+
+        <section class="profile-group">
+          <h3>Profile Summary</h3>
+          <p class="profile-group-copy">Who the candidate is and how the engine should frame them.</p>
+          <div class="profile-fields-grid">
+            <div class="field-block field-span-2">
+              <label for="candidate_summary">Candidate summary</label>
+              <textarea id="candidate_summary"></textarea>
+              <div class="field-help">Top-level positioning in 2-4 sentences.</div>
+            </div>
+          </div>
+          <details class="help-drawer">
+            <summary>Advanced AI context</summary>
+            <p>The AI fit brief is normally auto-generated from the summary, strengths, notes, and rules. Only turn on manual override if you want to force a custom machine-facing brief.</p>
+            <div class="field-grid" style="padding: 0 14px 14px;">
+              <div class="field-block field-span-2">
+                <label class="checkbox-row" for="llm_profile_brief_manual_override">
+                  <input id="llm_profile_brief_manual_override" type="checkbox">
+                  Manually override AI fit brief
+                </label>
+                <div class="field-help" id="llm_profile_brief_mode_hint">Auto-generated from your main profile inputs.</div>
+              </div>
+              <div class="field-block field-span-2">
+                <label for="llm_profile_brief">AI fit brief preview</label>
+                <textarea id="llm_profile_brief"></textarea>
+                <div class="field-help" id="llm_profile_brief_help">Preview only while auto mode is active.</div>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="profile-group">
+          <h3>Strength Signals</h3>
+          <p class="profile-group-copy">Highlight the signals that should improve fit and the notes that should shape judgement.</p>
+          <div class="profile-fields-grid">
+            <div class="field-block">
+              <label for="strengths">Strengths</label>
+              <textarea id="strengths"></textarea>
+              <div class="field-help">One strong signal per line.</div>
+            </div>
+            <div class="field-block">
+              <label for="llm_prompt_notes">Important notes</label>
+              <textarea id="llm_prompt_notes"></textarea>
+              <div class="field-help">One note per line for preferences, boundaries, or honest gaps.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="profile-group">
+          <h3>Commercial Preferences</h3>
+          <p class="profile-group-copy">Light ranking signals for pay expectations.</p>
+          <div class="field-grid">
+            <div class="field-block">
+              <label for="minimum_salary_yearly">Minimum annual salary</label>
+              <input id="minimum_salary_yearly" type="number" min="0" step="1000">
+              <div class="field-help">Used when permanent roles list salary.</div>
+            </div>
+            <div class="field-block">
+              <label for="minimum_daily_rate">Minimum daily rate</label>
+              <input id="minimum_daily_rate" type="number" min="0" step="50">
+              <div class="field-help">Used when contract roles list day rate.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="profile-group">
+          <h3>Core Source Text</h3>
+          <p class="profile-group-copy">Main evidence the engine can draw from during matching and AI review.</p>
+          <div class="profile-fields-grid">
+            <div class="field-block field-span-2">
+              <label for="cv_text">CV / background text</label>
+              <textarea id="cv_text"></textarea>
+              <div class="field-help">Primary source material used for matching, specialist-fit checks, and AI review.</div>
+            </div>
+            <div class="field-block field-span-2">
+              <label for="star_evidence_text">STAR / evidence notes</label>
+              <textarea id="star_evidence_text"></textarea>
+              <div class="field-help">Optional examples, impact stories, or selection-criteria style evidence.</div>
+            </div>
+          </div>
+        </section>
+      </section>
+      </div>
+
+      <aside class="profile-side">
+      <section class="panel side-panel">
+        <div class="panel-kicker">Source management</div>
         <h2>Source Documents</h2>
-        <p class="help">Normal users should start from the guided onboarding flow. The app stores your uploaded source documents as a local source pack so it can rebuild your profile later without asking you to upload everything again.</p>
-        <div id="source_documents_summary" class="help">No source pack connected yet. Start with onboarding.</div>
+        <p class="panel-copy">Saved onboarding files and profile rebuild tools.</p>
+        <div id="source_documents_summary" class="summary-box">No source pack connected yet. Start with onboarding.</div>
+        <details class="help-drawer">
+          <summary>What this is for</summary>
+          <p>The app stores uploaded source material locally so you can rebuild the candidate profile later without pasting everything again.</p>
+        </details>
         <div class="panel-actions">
-          <button class="primary" id="open_onboarding" type="button">Open Onboarding</button>
-          <button class="secondary" id="import_source_materials">Refresh Profile From Saved Source Documents</button>
+          <button class="secondary" id="open_onboarding" type="button">Open Onboarding / Source Pack</button>
+          <button class="secondary" id="import_source_materials">Refresh From Saved Source Documents</button>
+          <span class="inline-status" id="source_materials_status" aria-live="polite"></span>
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Candidate Fit</h2>
-        <label for="candidate_summary">Candidate summary</label>
-        <textarea id="candidate_summary"></textarea>
-        <div class="help">This starts from onboarding/imported documents, then becomes your editable top-level positioning summary.</div>
-
-        <label for="llm_profile_brief">AI fit brief</label>
-        <textarea id="llm_profile_brief"></textarea>
-        <div class="help">This is the compact structured brief the AI reads first before the longer background text. It is usually auto-generated when you import source documents or learning updates. If it is empty, the app can still work, but the AI has less clean summary context.</div>
-
-        <label for="strengths">Strengths</label>
-        <textarea id="strengths"></textarea>
-        <div class="help">Starts from the initial import. Keep one strength per line and edit as you learn what should be emphasized.</div>
-
-        <label for="minimum_salary_yearly">Minimum annual salary (optional)</label>
-        <input id="minimum_salary_yearly" type="number" min="0" step="1000">
-        <div class="help">Used as a light scoring signal when a role lists an annual salary. Leave blank or 0 to ignore.</div>
-
-        <label for="minimum_daily_rate">Minimum daily rate (optional)</label>
-        <input id="minimum_daily_rate" type="number" min="0" step="50">
-        <div class="help">Used as a light scoring signal when a role lists a contract day rate. Leave blank or 0 to ignore.</div>
-
-        <label for="cv_text">CV / background text</label>
-        <textarea id="cv_text"></textarea>
-        <div class="help">This is the background text created from onboarding/imported source documents. It is the richest profile context the app uses during matching and LLM review.</div>
-
-        <label for="llm_prompt_notes">Important fit notes</label>
-        <textarea id="llm_prompt_notes"></textarea>
-        <div class="help">Starts from imported material and your later refinements. Use one note per line for high-signal guidance such as role preferences, domain boundaries, and honest gaps.</div>
-
-        <label for="star_evidence_text">STAR / evidence notes</label>
-        <textarea id="star_evidence_text"></textarea>
-        <div class="help">Optional deeper examples, impact stories, or evidence snippets. This is where a STAR document belongs. It only fills automatically if you imported a source document whose label clearly looks like STAR, achievements, examples, or selection criteria. Otherwise you can paste or maintain it here manually.</div>
-        <div class="panel-actions">
-          <button class="primary" id="save_profile">Save Profile</button>
-          <span class="inline-status" id="save_profile_status" aria-live="polite"></span>
-        </div>
-      </section>
-
-      <section class="panel">
+      <section class="panel side-panel">
+        <div class="panel-kicker">Incremental learning</div>
         <h2>Learning Inbox</h2>
+        <p class="panel-copy">Add new capability notes without editing the whole profile manually.</p>
         <label for="learning_update_text">Paste new candidate knowledge</label>
         <textarea id="learning_update_text"></textarea>
-        <div class="help">Paste CV text, capability notes, or a new knowledge dump here. The system will convert it into structured profile fields and save it to <code>profile.json</code>.</div>
+        <div class="field-help">Paste CV text, capability notes, or a focused knowledge update.</div>
         <div class="panel-actions">
           <button class="secondary" id="apply_learning">Apply Learning Update</button>
           <button class="secondary" id="import_knowledge_file">Import Local Capability Note</button>
+          <span class="inline-status" id="learning_status" aria-live="polite"></span>
         </div>
       </section>
+      </aside>
 
-      <section class="panel">
-        <h2>Capability Matrix</h2>
-        <label for="capability_profile_rules">Capability profile rules</label>
-        <textarea id="capability_profile_rules"></textarea>
-        <div class="help">One line per rule in the format <code>name || level || fit || alias 1, alias 2, alias 3</code>. Use levels like <code>strong</code>, <code>working</code>, <code>basic</code>, <code>low</code>, or <code>none</code>. Use fit like <code>core</code>, <code>supporting</code>, <code>contextual</code>, or <code>avoid</code>.</div>
-      </section>
+      <section class="panel advanced-shell">
+        <div class="advanced-head">
+          <div class="panel-kicker">Advanced tuning</div>
+          <h2>Advanced Matching Rules</h2>
+          <p class="panel-copy">Engine-tuning controls kept separate from the main candidate profile editor.</p>
+        </div>
+        <details class="help-drawer">
+          <summary>When to edit these rules</summary>
+          <p>Use these controls when the engine is matching too broadly or missing obvious rejects. These are tuning rules, not core profile storytelling fields.</p>
+        </details>
+        <div class="advanced-grid">
+          <section class="subpanel">
+            <h3>Capability Matrix</h3>
+            <label for="capability_profile_rules">Capability profile rules</label>
+            <textarea id="capability_profile_rules"></textarea>
+            <div class="field-help">Format: <code>name || level || fit || alias 1, alias 2</code>.</div>
+          </section>
 
-      <section class="panel">
-        <h2>Title Matching</h2>
-        <label for="target_title_patterns">Target title patterns</label>
-        <textarea id="target_title_patterns"></textarea>
-        <div class="help">One regex pattern per line. These are strong matches.</div>
+          <section class="subpanel">
+            <h3>Title Matching</h3>
+            <label for="target_title_patterns">Target title patterns</label>
+            <textarea id="target_title_patterns"></textarea>
+            <div class="field-help">One strong-match regex per line.</div>
 
-        <label for="adjacent_title_patterns">Adjacent title patterns</label>
-        <textarea id="adjacent_title_patterns"></textarea>
-        <div class="help">One regex pattern per line. These are possible matches.</div>
+            <label for="adjacent_title_patterns">Adjacent title patterns</label>
+            <textarea id="adjacent_title_patterns"></textarea>
+            <div class="field-help">One possible-match regex per line.</div>
 
-        <label for="reject_title_rules">Reject title rules</label>
-        <textarea id="reject_title_rules"></textarea>
-        <div class="help">One line per rule in the format <code>pattern || reason</code>.</div>
-      </section>
+            <label for="reject_title_rules">Reject title rules</label>
+            <textarea id="reject_title_rules"></textarea>
+            <div class="field-help">Format: <code>pattern || reason</code>.</div>
+          </section>
 
-      <section class="panel">
-        <h2>Description Exclusions</h2>
-        <label for="reject_description_phrase_rules">Reject description phrases</label>
-        <textarea id="reject_description_phrase_rules"></textarea>
-        <div class="help">If the job description contains the phrase on the left, reject it and record the reason on the right. Example: <code>wealth management || DESC_FINANCE:wealth management</code>.</div>
+          <section class="subpanel">
+            <h3>Description Exclusions</h3>
+            <label for="reject_description_phrase_rules">Reject description phrases</label>
+            <textarea id="reject_description_phrase_rules"></textarea>
+            <div class="field-help">Format: <code>phrase || reason</code>.</div>
 
-        <label for="reject_description_regex_rules">Reject description regex rules</label>
-        <textarea id="reject_description_regex_rules"></textarea>
-        <div class="help">One line per rule in the format <code>pattern || reason</code>.</div>
+            <label for="reject_description_regex_rules">Reject description regex rules</label>
+            <textarea id="reject_description_regex_rules"></textarea>
+            <div class="field-help">Format: <code>pattern || reason</code>.</div>
 
-        <label for="must_not_require_skills">Mandatory skills you do not have</label>
-        <textarea id="must_not_require_skills"></textarea>
-        <div class="help">One skill per line. If the description says that skill is required or essential, the role is rejected. This is how we catch things like mandatory HubSpot CRM experience.</div>
+            <label for="must_not_require_skills">Mandatory skills you do not have</label>
+            <textarea id="must_not_require_skills"></textarea>
+            <div class="field-help">One skill per line for essential-skill rejection.</div>
 
-        <label for="canberra_only_description_patterns">Canberra-only description patterns</label>
-        <textarea id="canberra_only_description_patterns"></textarea>
-        <div class="help">One regex per line. These only trigger when the card location is Canberra and help reject roles that insist you must be Canberra-based.</div>
+            <label for="canberra_only_description_patterns">Canberra-only description patterns</label>
+            <textarea id="canberra_only_description_patterns"></textarea>
+            <div class="field-help">One regex per line for Canberra-based-only restrictions.</div>
+          </section>
+        </div>
       </section>
       </div>
     </section>
@@ -506,6 +817,15 @@ ADMIN_HTML = """<!doctype html>
     const statusEl = document.getElementById('status');
     const saveProfileButton = document.getElementById('save_profile');
     const saveProfileStatusEl = document.getElementById('save_profile_status');
+    const llmProfileBriefModeToggle = document.getElementById('llm_profile_brief_manual_override');
+    const llmProfileBriefEl = document.getElementById('llm_profile_brief');
+    const llmProfileBriefModeHintEl = document.getElementById('llm_profile_brief_mode_hint');
+    const llmProfileBriefHelpEl = document.getElementById('llm_profile_brief_help');
+    const importSourceMaterialsButton = document.getElementById('import_source_materials');
+    const sourceMaterialsStatusEl = document.getElementById('source_materials_status');
+    const applyLearningButton = document.getElementById('apply_learning');
+    const importKnowledgeFileButton = document.getElementById('import_knowledge_file');
+    const learningStatusEl = document.getElementById('learning_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     let telegramConnectLink = '';
@@ -596,6 +916,24 @@ ADMIN_HTML = """<!doctype html>
       }).filter(rule => rule.name && rule.level && rule.aliases.length);
     }
 
+    function syncLlmProfileBriefMode() {
+      const manualMode = Boolean(llmProfileBriefModeToggle?.checked);
+      if (llmProfileBriefEl) {
+        llmProfileBriefEl.readOnly = !manualMode;
+        llmProfileBriefEl.classList.toggle('is-readonly', !manualMode);
+      }
+      if (llmProfileBriefModeHintEl) {
+        llmProfileBriefModeHintEl.textContent = manualMode
+          ? 'Manual override is active. This text will be saved exactly as written.'
+          : 'Auto-generated from your main profile inputs.';
+      }
+      if (llmProfileBriefHelpEl) {
+        llmProfileBriefHelpEl.textContent = manualMode
+          ? 'Use this only when you need to override the generated AI-facing brief.'
+          : 'Preview only while auto mode is active.';
+      }
+    }
+
     function fillForm(profile) {
       document.getElementById('keywords').value = profile.search_settings?.keywords || '';
       document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\\n');
@@ -606,6 +944,7 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
       document.getElementById('candidate_summary').value = profile.candidate_summary || '';
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
+      document.getElementById('llm_profile_brief_manual_override').checked = (profile.llm_profile_brief_mode || 'auto') === 'manual';
       document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly || '');
       document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate || '');
       document.getElementById('cv_text').value = profile.cv_text || '';
@@ -622,6 +961,7 @@ ADMIN_HTML = """<!doctype html>
 
       document.getElementById('applied_job_keys').value = (profile.review_controls?.applied_job_keys || []).join('\\n');
       document.getElementById('hidden_job_keys').value = (profile.review_controls?.hidden_job_keys || []).join('\\n');
+      syncLlmProfileBriefMode();
     }
 
     function renderTelegramSubscribers(subscribers) {
@@ -979,7 +1319,10 @@ ADMIN_HTML = """<!doctype html>
           hidden_job_keys: toLines(document.getElementById('hidden_job_keys').value),
         },
         candidate_summary: document.getElementById('candidate_summary').value.trim(),
-        llm_profile_brief: document.getElementById('llm_profile_brief').value.trim(),
+        llm_profile_brief_mode: document.getElementById('llm_profile_brief_manual_override').checked ? 'manual' : 'auto',
+        llm_profile_brief: document.getElementById('llm_profile_brief_manual_override').checked
+          ? document.getElementById('llm_profile_brief').value.trim()
+          : '',
         strengths: toLines(document.getElementById('strengths').value),
         cv_text: document.getElementById('cv_text').value.trim(),
         star_evidence_text: document.getElementById('star_evidence_text').value.trim(),
@@ -1024,6 +1367,7 @@ ADMIN_HTML = """<!doctype html>
       await patchProfile(
         {
           candidate_summary: profile.candidate_summary,
+          llm_profile_brief_mode: profile.llm_profile_brief_mode,
           llm_profile_brief: profile.llm_profile_brief,
           salary_preferences: profile.salary_preferences,
           strengths: profile.strengths,
@@ -1110,27 +1454,49 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
-    document.getElementById('apply_learning').addEventListener('click', async () => {
+    applyLearningButton.addEventListener('click', async () => {
+      applyLearningButton.disabled = true;
+      importKnowledgeFileButton.disabled = true;
+      showInlineStatus(learningStatusEl, 'Applying learning update...', 'loading');
       try {
         await applyLearningUpdate();
+        showInlineStatus(learningStatusEl, 'Learning update applied.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
+        showInlineStatus(learningStatusEl, error.message, 'error');
+      } finally {
+        applyLearningButton.disabled = false;
+        importKnowledgeFileButton.disabled = false;
       }
     });
 
-    document.getElementById('import_knowledge_file').addEventListener('click', async () => {
+    importKnowledgeFileButton.addEventListener('click', async () => {
+      applyLearningButton.disabled = true;
+      importKnowledgeFileButton.disabled = true;
+      showInlineStatus(learningStatusEl, 'Importing capability note...', 'loading');
       try {
         await importKnowledgeFile();
+        showInlineStatus(learningStatusEl, 'Capability note imported.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
+        showInlineStatus(learningStatusEl, error.message, 'error');
+      } finally {
+        applyLearningButton.disabled = false;
+        importKnowledgeFileButton.disabled = false;
       }
     });
 
-    document.getElementById('import_source_materials').addEventListener('click', async () => {
+    importSourceMaterialsButton.addEventListener('click', async () => {
+      importSourceMaterialsButton.disabled = true;
+      showInlineStatus(sourceMaterialsStatusEl, 'Refreshing profile from source documents...', 'loading');
       try {
         await importSourceMaterials();
+        showInlineStatus(sourceMaterialsStatusEl, 'Profile refreshed from saved source documents.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
+        showInlineStatus(sourceMaterialsStatusEl, error.message, 'error');
+      } finally {
+        importSourceMaterialsButton.disabled = false;
       }
     });
 
@@ -1203,6 +1569,10 @@ ADMIN_HTML = """<!doctype html>
       } catch (error) {
         showStatus(error.message, 'error');
       }
+    });
+
+    llmProfileBriefModeToggle?.addEventListener('change', () => {
+      syncLlmProfileBriefMode();
     });
 
     for (const button of tabButtons) {
@@ -1388,7 +1758,7 @@ ONBOARDING_HTML = """<!doctype html>
   <main class="page">
     <section class="hero">
       <h1>Set Up Your Profile</h1>
-      <p>Start with one strong detailed CV. If you have extra background or longer career history, you can add that too. We will turn those documents into a working profile the job engine can use, and you can refine it later in admin.</p>
+      <p>Start with one strong detailed CV. We will turn it into a working profile the job engine can use, and you can refine it later in admin.</p>
     </section>
 
     <div class="grid">
@@ -1397,10 +1767,6 @@ ONBOARDING_HTML = """<!doctype html>
         <label for="primary_cv">Detailed CV</label>
         <input id="primary_cv" type="file" accept=".docx,.md,.txt">
         <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
-
-        <label for="supporting_cv">Optional supporting background</label>
-        <input id="supporting_cv" type="file" accept=".docx,.md,.txt">
-        <div class="help">Optional: a long-form career history or extra background document.</div>
 
         <label for="extra_notes">Optional extra notes</label>
         <textarea id="extra_notes" placeholder="Anything important you want the system to know, in plain English."></textarea>
@@ -1465,7 +1831,6 @@ ONBOARDING_HTML = """<!doctype html>
 
     async function createProfile() {
       const primary = document.getElementById('primary_cv').files[0];
-      const supporting = document.getElementById('supporting_cv').files[0];
       const extraNotes = document.getElementById('extra_notes').value.trim();
 
       if (!primary) {
@@ -1473,9 +1838,6 @@ ONBOARDING_HTML = """<!doctype html>
       }
 
       const files = [await fileToPayload(primary, 'Primary CV')];
-      if (supporting) {
-        files.push(await fileToPayload(supporting, 'Supporting Background'));
-      }
 
       const response = await fetch('/api/onboarding/import', {
         method: 'POST',
@@ -1582,14 +1944,19 @@ class AdminHandler(BaseHTTPRequestHandler):
         final_strengths = merged_patch.get("strengths") or current.get("strengths", [])
         final_rules = merged_patch.get("capability_profile_rules") or current.get("capability_profile_rules", [])
         final_notes = merged_patch.get("llm_prompt_notes") or current.get("llm_prompt_notes", [])
-        llm_profile_brief = build_llm_profile_brief(
-            summary=final_summary,
-            strengths=final_strengths,
-            capability_rules=final_rules,
-            notes=final_notes,
-        )
-        if llm_profile_brief:
-            merged_patch["llm_profile_brief"] = llm_profile_brief
+        brief_mode = str(
+            merged_patch.get("llm_profile_brief_mode", current.get("llm_profile_brief_mode", "auto")) or "auto"
+        ).strip().lower()
+        if brief_mode != "manual":
+            llm_profile_brief = build_llm_profile_brief(
+                summary=final_summary,
+                strengths=final_strengths,
+                capability_rules=final_rules,
+                notes=final_notes,
+            )
+            if llm_profile_brief:
+                merged_patch["llm_profile_brief"] = llm_profile_brief
+            merged_patch["llm_profile_brief_mode"] = "auto"
 
         return merged_patch
 
@@ -1597,41 +1964,26 @@ class AdminHandler(BaseHTTPRequestHandler):
     def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:
         normalized = dict(patch or {})
         current = current or load_profile()
+        brief_mode = str(
+            normalized.get("llm_profile_brief_mode", current.get("llm_profile_brief_mode", "auto")) or "auto"
+        ).strip().lower()
+        if brief_mode != "manual":
+            brief_mode = "auto"
+        normalized["llm_profile_brief_mode"] = brief_mode
 
-        if "llm_profile_brief" in normalized:
-            cleaned_brief = str(normalized.get("llm_profile_brief") or "").strip()
-            if cleaned_brief:
-                normalized["llm_profile_brief"] = cleaned_brief
-            else:
-                auto_brief = build_llm_profile_brief(
-                    summary=str(normalized.get("candidate_summary", current.get("candidate_summary", "")) or "").strip(),
-                    strengths=normalized.get("strengths", current.get("strengths", [])),
-                    capability_rules=normalized.get(
-                        "capability_profile_rules",
-                        current.get("capability_profile_rules", []),
-                    ),
-                    notes=normalized.get("llm_prompt_notes", current.get("llm_prompt_notes", [])),
-                )
-                normalized["llm_profile_brief"] = auto_brief
-        elif not str(current.get("llm_profile_brief") or "").strip():
-            relevant_fields = {
-                "candidate_summary",
-                "strengths",
-                "capability_profile_rules",
-                "llm_prompt_notes",
-            }
-            if any(field in normalized for field in relevant_fields):
-                auto_brief = build_llm_profile_brief(
-                    summary=str(normalized.get("candidate_summary", current.get("candidate_summary", "")) or "").strip(),
-                    strengths=normalized.get("strengths", current.get("strengths", [])),
-                    capability_rules=normalized.get(
-                        "capability_profile_rules",
-                        current.get("capability_profile_rules", []),
-                    ),
-                    notes=normalized.get("llm_prompt_notes", current.get("llm_prompt_notes", [])),
-                )
-                if auto_brief:
-                    normalized["llm_profile_brief"] = auto_brief
+        if brief_mode == "manual":
+            normalized["llm_profile_brief"] = str(normalized.get("llm_profile_brief") or "").strip()
+        else:
+            auto_brief = build_llm_profile_brief(
+                summary=str(normalized.get("candidate_summary", current.get("candidate_summary", "")) or "").strip(),
+                strengths=normalized.get("strengths", current.get("strengths", [])),
+                capability_rules=normalized.get(
+                    "capability_profile_rules",
+                    current.get("capability_profile_rules", []),
+                ),
+                notes=normalized.get("llm_prompt_notes", current.get("llm_prompt_notes", [])),
+            )
+            normalized["llm_profile_brief"] = auto_brief
 
         if "star_evidence_text" in normalized:
             normalized["star_evidence_text"] = str(normalized.get("star_evidence_text") or "").strip()

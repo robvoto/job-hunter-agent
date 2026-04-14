@@ -1,11 +1,9 @@
-"""Compatibility entry point.
+"""Deprecated shim that forwards to the canonical scraper entry point.
 
-Main goal:
-- preserve the simple `python main.py` entry path
-- delegate to the clearer `run_jobs.py` runner
+Canonical command:
+- python scraper_direct.py
 
-Notes:
-- prefer `python run_jobs.py` in docs and day-to-day use
+This file remains only as a safety alias for older local habits.
 """
 
 from run_jobs import main

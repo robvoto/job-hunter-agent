@@ -4,10 +4,40 @@ JOB HUNTER AGENT - QUICK RUN COMMANDS
 Open this file anytime when you forget what to run.
 
 
+CANONICAL COMMAND
+-----------------
+
+Default command:
+python scraper_direct.py
+
+This is the one canonical run command for the job-hunter agent.
+
+Use it by default unless you specifically need a testing or rebuild-only workflow.
+
+
 MAIN COMMANDS
 -------------
 
-1. Dashboard-only test refresh
+1. Default run
+
+Command:
+python scraper_direct.py
+
+What it does:
+- runs the normal scrape
+- uses your normal search settings from `profile.json`
+- keeps the quick card gate on
+- uses the normal shortlist behavior
+- rebuilds the dashboard with the latest normal run
+
+Use this when:
+- you want the real shortlist
+- you want the dashboard out of test mode
+- you want fresh jobs using the current saved profile
+- you are unsure what to run and want the safe default
+
+
+2. Dashboard-only test refresh
 
 Command:
 python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
@@ -16,8 +46,9 @@ What it does:
 - does NOT scrape SEEK
 - does NOT run the LLM
 - rebuilds the dashboard from jobs already saved locally
-- resets "New To You" for testing
-- shows a broader shortlist for testing (35+ score)
+- resets `New To You` for testing
+- shows a broader shortlist for testing
+- the right panel will say `Test mode ON`
 
 Use this when:
 - you want a longer list quickly
@@ -25,7 +56,7 @@ Use this when:
 - you do not need fresh jobs
 
 
-2. Fresh test scrape
+3. Fresh test scrape
 
 Command:
 python scraper_direct.py --test-scrape-mode
@@ -34,11 +65,11 @@ What it does:
 - does a real scrape
 - runs the normal scoring pipeline
 - can run LLM review where needed
-- uses a practical wider net for testing
-- resets "New To You" for testing
-- uses at least 7 days and 6 pages
+- uses a wider net for testing
+- resets `New To You` for testing
 - skips the quick card metadata gate for testing
-- shows a broader shortlist for testing (35+ score)
+- shows a broader shortlist for testing
+- the right panel will say `Test mode ON`
 
 Use this when:
 - you need fresh jobs
@@ -46,19 +77,33 @@ Use this when:
 - you want more results than the normal run
 
 
-3. Normal scrape
+4. Reset viewed state only
 
 Command:
-python scraper_direct.py
+python scraper_direct.py --rebuild-dashboard --reset-new-to-you
 
 What it does:
-- runs the normal scrape
-- uses your normal search settings from profile.json
-- keeps the quick card gate on
-- keeps the normal shortlist threshold
+- does NOT scrape SEEK
+- does NOT run the LLM
+- rebuilds the dashboard from current saved results
+- resets `Viewed / New To You` for display
+- does NOT switch the dashboard into test mode
 
 Use this when:
-- you want the normal production-style shortlist
+- you want the current dashboard to feel like a first look again
+- you want clean feedback on the current results without a new scrape
+
+
+ADMIN SERVER
+------------
+
+Start or restart admin:
+python admin_api.py
+
+Use this when:
+- you want to open `http://127.0.0.1:8765/admin`
+- you want to open `http://127.0.0.1:8765/dashboard`
+- you changed admin UI/server code and want the latest behavior
 
 
 OUTPUT FILE
@@ -74,29 +119,40 @@ WHAT "NEW TO YOU" MEANS
 -----------------------
 
 Normal run:
-- a job is "New To You" if you have not opened it from the dashboard before
+- a job is `New To You` if you have not opened it from the dashboard before
 
 Test dashboard mode / test scrape mode:
-- everything is treated as "New To You" for testing
+- everything is treated as `New To You` for testing
+
+Reset viewed state only:
+- current jobs are shown as unseen again, but the dashboard stays in normal mode
 
 
 WHICH ONE SHOULD I USE?
 -----------------------
 
-If you just want to see a longer dashboard quickly:
-python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
-
-If you need fresh jobs and fresh scoring:
-python scraper_direct.py --test-scrape-mode
-
-If you want the normal real shortlist:
+If you are unsure, always use:
 python scraper_direct.py
 
+This is the canonical command.
 
-OPTIONAL EXTRA
---------------
+Only use the others when you intentionally want a special workflow.
 
-If you only want to reset "New To You" without using a full test mode:
+If you want a clean first-look dashboard from current saved results:
 python scraper_direct.py --rebuild-dashboard --reset-new-to-you
 
-This only resets the viewed state for the dashboard display. It does not fetch new jobs.
+If you want to test the dashboard UI without scraping:
+python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
+
+If you need fresh jobs and a wider test run:
+python scraper_direct.py --test-scrape-mode
+
+
+QUICK NOTES
+-----------
+
+- If the right panel says `Test mode ON`, you are looking at a test-mode dashboard.
+- Run `python scraper_direct.py` to get back to a normal dashboard.
+- Console logs now show whether a run is `real` or `test`.
+- If you save profile changes in admin, the next scrape will use them.
+- If admin save feedback does not look right, restart the admin server with `python admin_api.py`.

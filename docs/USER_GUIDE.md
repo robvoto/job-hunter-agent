@@ -25,7 +25,6 @@ python admin_api.py
 3. Upload:
 
 - one strong detailed CV
-- optionally one supporting background document
 - optionally extra notes in plain English
 
 4. Click `Create Profile`
@@ -99,7 +98,7 @@ Think of admin as the maintenance surface for your profile, not the place where 
 Run the current source connector:
 
 ```powershell
-python run_jobs.py
+python scraper_direct.py
 ```
 
 Then open the dashboard at:
@@ -135,7 +134,7 @@ If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
 
 ## Which Command Does What
 
-`python run_jobs.py`
+`python scraper_direct.py`
 
 - refreshes jobs
 - rebuilds the dashboard
@@ -148,7 +147,7 @@ If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
 
 Simple rule:
 
-- if you just want fresh jobs, run `python run_jobs.py`
+- if you just want fresh jobs, run `python scraper_direct.py`
 - if you want automation and notifications, use `python agent_runner.py`
 
 ## Local Files To Keep

@@ -1,12 +1,9 @@
-"""Descriptive runner for the current job-source collection flow.
+"""Deprecated shim that forwards to the canonical scraper entry point.
 
-Main goals:
-- run the current job collection pipeline
-- regenerate dashboard and review outputs from the latest live run
+Canonical command:
+- python scraper_direct.py
 
-Notes:
-- this is the preferred descriptive entry point for human use
-- main.py remains as a thin compatibility wrapper
+This file remains only as a safety alias for older local habits.
 """
 
 from scraper_direct import scrape_seek_jobs_direct

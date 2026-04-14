@@ -43,7 +43,7 @@ python -m playwright install chromium
 Run the current source connector:
 
 ```powershell
-python run_jobs.py
+python scraper_direct.py
 ```
 
 Rebuild the dashboard from saved local state:
@@ -124,8 +124,8 @@ If `OPENAI_API_KEY` is missing, the app runs without live LLM review.
 
 ## Runner Split
 
-- `python run_jobs.py`
-  Refreshes jobs and rebuilds the dashboard.
+- `python scraper_direct.py`
+  Canonical direct run for refreshing jobs and rebuilding the dashboard.
 
 - `python agent_runner.py`
   Wraps the refresh flow, builds a digest, and optionally sends notifications.

@@ -112,8 +112,6 @@ Do not move the project back to pane-based scraping unless there is a very stron
 
 | Path | Purpose |
 |------|---------|
-| `main.py` | Thin compatibility entry point for local runs |
-| `run_jobs.py` | Preferred descriptive runner for the current job collection flow |
 | `scraper_direct.py` | Main SEEK scraper using direct job pages |
 | `filters.py` | Deterministic title and content filtering |
 | `llm_gate.py` | Optional constrained LLM decision step |

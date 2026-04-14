@@ -3,10 +3,6 @@
     {
       "label": "Primary CV",
       "path": "data/application_inputs/source_pack/primary_cv.md"
-    },
-    {
-      "label": "Supporting Background",
-      "path": "data/application_inputs/source_pack/supporting_background.md"
     }
   ],
   "instructions_file": "",

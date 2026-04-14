@@ -51,18 +51,15 @@ Do not rename major files casually unless there is time to clean the whole proje
 ## Current Onboarding Flow
 
 1. User visits `/start`
-2. Uploads a detailed CV and optional supporting background
+2. Uploads a detailed CV
 3. Uploaded documents are saved into a local source pack under ignored paths
 4. The source pack is imported into `data/profile.json`
 5. Admin is then used to refine the runtime profile
 
 ## Current Runner Split
 
-- `run_jobs.py`
-  Preferred explicit entry point for refreshing source data and rebuilding outputs.
-
-- `main.py`
-  Compatibility wrapper that forwards to `run_jobs.py`.
+- `scraper_direct.py`
+  Canonical direct entry point for refreshing source data and rebuilding outputs.
 
 - `agent_runner.py`
   Orchestration layer for refresh plus digest plus notifications.

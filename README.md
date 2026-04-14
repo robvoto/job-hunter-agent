@@ -59,17 +59,13 @@ python -m playwright install chromium
 
 Run the job-source connector:
 
-```powershell
-python run_jobs.py
-```
-
-This is the main refresh command. Use it when you want fresh job results and a rebuilt dashboard.
-
-Compatibility entry point:
+Canonical refresh command:
 
 ```powershell
-python main.py
+python scraper_direct.py
 ```
+
+Use this by default when you want fresh job results and a rebuilt dashboard.
 
 Rebuild the dashboard from saved local state:
 
@@ -93,7 +89,7 @@ This is the orchestration layer. It can run the connector, rebuild the dashboard
 
 Most users should think of it like this:
 
-- `python run_jobs.py` = refresh jobs and dashboard
+- `python scraper_direct.py` = canonical refresh command
 - `python agent_runner.py` = optional automation wrapper around the refresh flow
 
 Run the daily local agent in loop mode:

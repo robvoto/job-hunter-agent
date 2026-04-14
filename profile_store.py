@@ -34,6 +34,7 @@ DEFAULT_EVIDENCE_TIER_WEIGHTS = {
     "secondary_older_evidence": 0.55,
     "background_optional_evidence": 0.25,
 }
+DEFAULT_LLM_PROFILE_BRIEF_MODE = "auto"
 
 DEFAULT_SEARCH_SETTINGS = {
     "keywords": "business analyst",
@@ -89,6 +90,7 @@ DEFAULT_PROFILE = {
         "preferred_contract_months": 12,
         "short_contract_months": 6,
     },
+    "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
     "star_evidence_text": "",
     "cv_text": "",
@@ -532,6 +534,9 @@ def load_profile() -> dict[str, Any]:
             merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), data)
             merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
             merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
+            merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
+                merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+            )
             merged["evidence_tiers"] = normalize_evidence_tiers(
                 merged.get("evidence_tiers", {}),
                 merged.get("cv_text", ""),
@@ -545,6 +550,9 @@ def load_profile() -> dict[str, Any]:
     fallback = copy.deepcopy(DEFAULT_PROFILE)
     fallback["search_settings"] = normalize_search_settings(fallback.get("search_settings", {}))
     fallback["salary_preferences"] = normalize_salary_preferences(fallback.get("salary_preferences", {}))
+    fallback["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
+        fallback.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+    )
     fallback["evidence_tiers"] = normalize_evidence_tiers(
         fallback.get("evidence_tiers", {}),
         fallback.get("cv_text", ""),
@@ -559,6 +567,9 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized = copy.deepcopy(profile)
     normalized["search_settings"] = normalize_search_settings(normalized.get("search_settings", {}))
     normalized["salary_preferences"] = normalize_salary_preferences(normalized.get("salary_preferences", {}))
+    normalized["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
+        normalized.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+    )
     normalized["evidence_tiers"] = normalize_evidence_tiers(
         normalized.get("evidence_tiers", {}),
         normalized.get("cv_text", ""),
@@ -631,6 +642,13 @@ def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, in
         "minimum_salary_yearly": minimum_salary_yearly,
         "minimum_daily_rate": minimum_daily_rate,
     }
+
+
+def normalize_llm_profile_brief_mode(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == "manual":
+        return "manual"
+    return DEFAULT_LLM_PROFILE_BRIEF_MODE
 
 
 def classify_evidence_section_label(label: str) -> str:

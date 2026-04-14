@@ -3701,6 +3701,10 @@ def render_html(
 
 def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
     configure_console_output()
+    if TEST_SCRAPE_MODE:
+        print("Mode: test scrape run")
+    else:
+        print("Mode: real scrape run (default)")
 
     profile = load_profile()
     previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
@@ -4072,6 +4076,13 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
 
 
 def rebuild_html_dashboard() -> str:
+    configure_console_output()
+    if TEST_DASHBOARD_MODE:
+        print("Mode: test dashboard rebuild")
+    elif TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
+        print("Mode: real dashboard rebuild with viewed-state reset")
+    else:
+        print("Mode: real dashboard rebuild")
     profile = load_profile()
     search_settings = get_search_settings(profile)
     configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
@@ -4096,10 +4107,6 @@ def rebuild_html_dashboard() -> str:
         reference_time,
     )
     print(f"Dashboard rebuilt at {OUTPUT_HTML}")
-    if TEST_DASHBOARD_MODE:
-        print("Mode: dashboard test mode")
-    elif TEST_SCRAPE_MODE:
-        print("Mode: scrape test mode")
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         print("New To You has been reset for testing.")
     return OUTPUT_HTML
