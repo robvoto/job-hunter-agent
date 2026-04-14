@@ -23,7 +23,10 @@
   "telegram": {
     "enabled": false,
     "bot_token": "",
+    "bot_username": "",
     "chat_id": "",
-    "disable_link_preview": false
+    "disable_link_preview": false,
+    "last_update_id": 0,
+    "subscribers": []
   }
 }

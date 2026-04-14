@@ -41,7 +41,7 @@ The project is past the initial prototype stage.
 - repo-safe starter content lives in `data/capability_profile.template.txt`
 - source documents can now be imported into `data/profile.json` from the admin UI
 - dashboard is now persistent and rebuilds from the latest scrape plus local job history
-- dashboard supports hidden-job review, saved-job archive, match filters, and pagination
+- dashboard supports hidden-job review, kept-earlier archive, match filters, salary-target filtering, and pagination
 - viewed/opened jobs are tracked locally when the admin API is available
 - unknown-skill review exists in admin so the system can learn from repeated concepts in job descriptions
 - applied and hidden jobs can be recorded from the review workflow
@@ -191,6 +191,13 @@ Relationship to `profile.json`:
 
 Important rule:
 - selecting a skill decision does nothing until `Apply Skill Decisions` is pressed
+
+Current dashboard language:
+
+- `Fresh Matches` = kept in the latest run
+- `Kept From Earlier Runs` = previously kept and still surfaced from history
+- `Hidden Jobs` = manually hidden review list
+- `Older Kept Jobs` = older historical keeps collapsed by default
 
 When applied, new knowledge is written into `data/profile.json` and should then appear in the capability matrix.
 

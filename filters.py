@@ -182,17 +182,22 @@ def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[
     profile = load_profile()
     description_lower = details_text.lower()
     card_location_lower = (card_location or "").lower()
+    soft_domain_prefixes = ("DESC_TREASURY", "DESC_ERP_FIN")
 
     for rule in profile.get("reject_description_phrase_rules", []):
         phrase = (rule.get("phrase") or "").strip().lower()
         reason = rule.get("reason", f"DESC_REJECT:{phrase}")
         if phrase and phrase in description_lower:
+            if any(reason.startswith(prefix) for prefix in soft_domain_prefixes):
+                continue
             return False, reason
 
     for rule in profile.get("reject_description_regex_rules", []):
         pattern = rule.get("pattern", "")
         reason = rule.get("reason", f"DESC_REJECT:{pattern}")
         if pattern and re.search(pattern, description_lower):
+            if any(reason.startswith(prefix) for prefix in soft_domain_prefixes):
+                continue
             return False, reason
 
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
@@ -210,5 +215,57 @@ def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[
         for pattern in profile.get("canberra_only_description_patterns", []):
             if pattern and re.search(pattern, description_lower):
                 return False, "DESC_LOCATION:canberra_only"
+
+    return True, "OK"
+
+
+def passes_quick_card_filters(
+    title: str,
+    teaser: str = "",
+    company: str = "",
+    location: str = "",
+    work_mode: str = "",
+    work_type: str = "",
+    salary: str = "",
+) -> Tuple[bool, str]:
+    profile = load_profile()
+    title_lower = (title or "").strip().lower()
+    teaser_lower = (teaser or "").strip().lower()
+    combined = "\n".join(
+        part for part in [
+            title_lower,
+            teaser_lower,
+            (company or "").strip().lower(),
+            (location or "").strip().lower(),
+            (work_mode or "").strip().lower(),
+            (work_type or "").strip().lower(),
+            (salary or "").strip().lower(),
+        ]
+        if part
+    )
+    counter_patterns = profile.get("cheap_keep_counter_patterns", [])
+    counter_hits = sum(1 for pattern in counter_patterns if pattern and re.search(pattern, combined))
+    direct_ba_title = bool(re.search(r"\bbusiness analyst\b|\btechnical business analyst\b|\bsenior ba\b|\btech(?:nical)?\s+ba\b", title_lower))
+
+    for rule in profile.get("cheap_reject_metadata_rules", []):
+        pattern = rule.get("pattern", "")
+        reason = rule.get("reason", f"CARD_SPECIALIST:{pattern}")
+        scope = str(rule.get("scope") or "title_or_teaser").strip().lower()
+        haystack = teaser_lower
+        if scope == "title":
+            haystack = title_lower
+        elif scope == "teaser":
+            haystack = teaser_lower
+        else:
+            haystack = "\n".join(part for part in [title_lower, teaser_lower] if part)
+
+        if not pattern or not haystack or not re.search(pattern, haystack):
+            continue
+
+        title_has_specialist_signal = bool(re.search(pattern, title_lower))
+        unusually_strong_counter = direct_ba_title and counter_hits >= 4 and not title_has_specialist_signal
+        if unusually_strong_counter:
+            continue
+        return False, reason
 
     return True, "OK"

@@ -12,6 +12,7 @@ Notes:
 
 import copy
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,16 @@ MIN_DATE_RANGE_DAYS = 1
 MAX_DATE_RANGE_DAYS = 30
 MIN_PAGES_CAP = 1
 MAX_PAGES_CAP_HARD_LIMIT = 25
+DEFAULT_EVIDENCE_TIERS = {
+    "primary_current_evidence": "",
+    "secondary_older_evidence": "",
+    "background_optional_evidence": "",
+}
+DEFAULT_EVIDENCE_TIER_WEIGHTS = {
+    "primary_current_evidence": 1.0,
+    "secondary_older_evidence": 0.55,
+    "background_optional_evidence": 0.25,
+}
 
 DEFAULT_SEARCH_SETTINGS = {
     "keywords": "business analyst",
@@ -66,9 +77,27 @@ DEFAULT_PROFILE = {
         "backlog refinement",
         "change delivery",
     ],
+    "salary_preferences": {
+        "minimum_salary_yearly": 0,
+        "minimum_daily_rate": 0,
+    },
+    "match_preferences": {
+        "home_location": "Sydney NSW",
+        "secondary_location": "Canberra ACT",
+        "prefer_government": True,
+        "prefer_permanent": True,
+        "preferred_contract_months": 12,
+        "short_contract_months": 6,
+    },
     "llm_profile_brief": "",
     "star_evidence_text": "",
     "cv_text": "",
+    "evidence_tiers": {
+        **DEFAULT_EVIDENCE_TIERS,
+    },
+    "evidence_tier_weights": {
+        **DEFAULT_EVIDENCE_TIER_WEIGHTS,
+    },
     "capability_profile_rules": [
         {
             "name": "business analysis delivery",
@@ -183,6 +212,197 @@ DEFAULT_PROFILE = {
         "Allow BA-adjacent roles like systems analyst or implementation consultant if the description still reads like a fit.",
         "Reject hands-on security or cyber roles.",
         "Reject specialist platform roles when they are mainly configuration, engineering, or admin rather than business analysis.",
+    ],
+    "cheap_keep_counter_patterns": [
+        r"\bbusiness analyst\b",
+        r"\brequirements?\b",
+        r"\bstakeholder\b",
+        r"\bworkshops?\b",
+        r"\buser stories?\b",
+        r"\bacceptance criteria\b",
+        r"\bbpmn\b",
+        r"\bprocess mapping\b",
+        r"\bagile\b",
+        r"\bdigital delivery\b",
+        r"\bgovernment\b",
+    ],
+    "cheap_reject_metadata_rules": [
+        {"pattern": r"\berp\b|\bvendor selection\b|\bvendor evaluation\b", "reason": "CARD_SPECIALIST:erp", "scope": "title_or_teaser"},
+        {"pattern": r"\btreasury\b|\bcore banking\b|\bloan systems?\b|\bmarket data\b", "reason": "CARD_SPECIALIST:treasury", "scope": "title_or_teaser"},
+        {"pattern": r"\binsurance\b|\bguidewire\b|\bund(er)?writing\b|\bclaims?\b|\bpolicycenter\b|\bclaimcenter\b", "reason": "CARD_SPECIALIST:insurance", "scope": "title_or_teaser"},
+        {"pattern": r"\bfinancial systems?\b|\bfinance systems?\b|\bfinance transformation\b|\bfinance function\b", "reason": "CARD_SPECIALIST:finance", "scope": "title_or_teaser"},
+        {"pattern": r"\bsalesforce\b|\bsfmc\b|\bcrm platform\b", "reason": "CARD_SPECIALIST:salesforce", "scope": "title_or_teaser"},
+        {"pattern": r"\bmachine learning\b|\bdata science\b|\bpredictive analytics\b|\badvanced analytics\b", "reason": "CARD_SPECIALIST:data_ml", "scope": "title_or_teaser"},
+        {"pattern": r"\bsupply chain\b|\bprocurement\b|\bwarehouse management\b", "reason": "CARD_SPECIALIST:supply_chain", "scope": "title_or_teaser"},
+    ],
+    "dominant_signal_clusters": [
+        {
+            "name": "telecommunications and oss/bss context",
+            "aliases": [
+                "telecommunications",
+                "telecom",
+                "wholesale telecommunications",
+                "enterprise telecommunications",
+                "oss",
+                "bss",
+                "provisioning",
+                "network operations",
+                "service assurance",
+                "carrier",
+            ],
+            "fit_label": "Telecommunications context",
+            "watchout_label": "Role leans toward telecommunications or OSS/BSS delivery depth",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 3,
+            "partial_penalty": 8,
+            "weak_penalty": 11,
+        },
+        {
+            "name": "finance systems and accounting context",
+            "aliases": [
+                "finance systems",
+                "financial systems",
+                "treasury",
+                "accounting",
+                "general ledger",
+                "accounts payable",
+                "accounts receivable",
+                "reconciliation",
+                "month end",
+                "year end",
+            ],
+            "fit_label": "Finance systems context",
+            "watchout_label": "Role leans toward finance systems or accounting background",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 3,
+            "partial_penalty": 8,
+            "weak_penalty": 11,
+        },
+        {
+            "name": "data reporting and analytics track",
+            "aliases": [
+                "reporting",
+                "power bi",
+                "tableau",
+                "data analytics",
+                "analytics",
+                "data visualisation",
+                "bi",
+                "business intelligence",
+                "dashboarding",
+                "data modelling",
+            ],
+            "fit_label": "Data and reporting context",
+            "watchout_label": "Role leans toward a data, BI, or analytics-heavy profile",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 2,
+            "partial_penalty": 7,
+            "weak_penalty": 10,
+        },
+        {
+            "name": "erp or platform-heavy implementation",
+            "aliases": [
+                "erp",
+                "platform implementation",
+                "vendor selection",
+                "vendor evaluation",
+                "oracle",
+                "sap",
+                "dynamics 365",
+                "netsuite",
+                "salesforce",
+                "platform migration",
+            ],
+            "fit_label": "Platform implementation context",
+            "watchout_label": "Role leans toward ERP or platform implementation depth",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 3,
+            "partial_penalty": 8,
+            "weak_penalty": 11,
+        },
+        {
+            "name": "structured change management track",
+            "aliases": [
+                "adkar",
+                "change management",
+                "change impact",
+                "change readiness",
+                "communications plan",
+                "training plan",
+                "stakeholder change",
+                "change framework",
+            ],
+            "fit_label": "Structured change delivery context",
+            "watchout_label": "Role leans toward structured change management depth",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 2,
+            "partial_penalty": 6,
+            "weak_penalty": 9,
+        },
+        {
+            "name": "higher education domain",
+            "aliases": [
+                "higher education",
+                "university",
+                "student systems",
+                "student lifecycle",
+                "curriculum",
+                "enrolment",
+                "tertiary",
+            ],
+            "fit_label": "Higher education context",
+            "watchout_label": "Role leans toward higher education domain experience",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 2,
+            "partial_penalty": 6,
+            "weak_penalty": 9,
+        },
+        {
+            "name": "healthcare and care services domain",
+            "aliases": [
+                "healthcare",
+                "hospital",
+                "clinical",
+                "patient",
+                "aged care",
+                "health service",
+                "ehealth",
+                "care pathway",
+            ],
+            "fit_label": "Healthcare context",
+            "watchout_label": "Role leans toward healthcare or care-services experience",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 2,
+            "partial_penalty": 6,
+            "weak_penalty": 9,
+        },
+        {
+            "name": "insurance domain and platforms",
+            "aliases": [
+                "insurance",
+                "claims",
+                "underwriting",
+                "policy",
+                "guidewire",
+                "policycenter",
+                "claimcenter",
+                "broker",
+            ],
+            "fit_label": "Insurance context",
+            "watchout_label": "Role leans toward insurance domain or platform experience",
+            "min_alias_hits": 2,
+            "min_snippet_hits": 2,
+            "positive_bonus": 2,
+            "partial_penalty": 7,
+            "weak_penalty": 10,
+        },
     ],
     "target_title_patterns": [
         r"\bbusiness analyst\b",
@@ -311,17 +531,41 @@ def load_profile() -> dict[str, Any]:
         if isinstance(data, dict):
             merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), data)
             merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
+            merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
+            merged["evidence_tiers"] = normalize_evidence_tiers(
+                merged.get("evidence_tiers", {}),
+                merged.get("cv_text", ""),
+            )
+            merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
+                merged.get("evidence_tier_weights", {})
+            )
             return merged
     except Exception:
         pass
     fallback = copy.deepcopy(DEFAULT_PROFILE)
     fallback["search_settings"] = normalize_search_settings(fallback.get("search_settings", {}))
+    fallback["salary_preferences"] = normalize_salary_preferences(fallback.get("salary_preferences", {}))
+    fallback["evidence_tiers"] = normalize_evidence_tiers(
+        fallback.get("evidence_tiers", {}),
+        fallback.get("cv_text", ""),
+    )
+    fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
+        fallback.get("evidence_tier_weights", {})
+    )
     return fallback
 
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized = copy.deepcopy(profile)
     normalized["search_settings"] = normalize_search_settings(normalized.get("search_settings", {}))
+    normalized["salary_preferences"] = normalize_salary_preferences(normalized.get("salary_preferences", {}))
+    normalized["evidence_tiers"] = normalize_evidence_tiers(
+        normalized.get("evidence_tiers", {}),
+        normalized.get("cv_text", ""),
+    )
+    normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
+        normalized.get("evidence_tier_weights", {})
+    )
     PROFILE_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -371,6 +615,136 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         str(value).strip() for value in merged.get("classification_ids", []) if str(value).strip()
     ]
     return merged
+
+
+def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, int]:
+    source = payload if isinstance(payload, dict) else {}
+    try:
+        minimum_salary_yearly = max(0, int(source.get("minimum_salary_yearly", 0) or 0))
+    except Exception:
+        minimum_salary_yearly = 0
+    try:
+        minimum_daily_rate = max(0, int(source.get("minimum_daily_rate", 0) or 0))
+    except Exception:
+        minimum_daily_rate = 0
+    return {
+        "minimum_salary_yearly": minimum_salary_yearly,
+        "minimum_daily_rate": minimum_daily_rate,
+    }
+
+
+def classify_evidence_section_label(label: str) -> str:
+    lowered = str(label or "").strip().lower()
+    if not lowered:
+        return "primary_current_evidence"
+    if any(token in lowered for token in ("primary", "detailed", "current", "recent", "main", "core")):
+        return "primary_current_evidence"
+    if any(token in lowered for token in ("supporting", "older", "secondary", "legacy", "earlier", "previous")):
+        return "secondary_older_evidence"
+    if any(token in lowered for token in ("background", "optional", "extra", "additional", "note", "notes", "cert", "education")):
+        return "background_optional_evidence"
+    return "primary_current_evidence"
+
+
+def _combine_unique_sections(parts: list[str]) -> str:
+    seen: set[str] = set()
+    cleaned_parts: list[str] = []
+    for item in parts:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        normalized = re.sub(r"\s+", " ", text).strip().lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned_parts.append(text)
+    return "\n\n".join(cleaned_parts).strip()
+
+
+def build_evidence_tiers_from_sections(sections: list[dict[str, str]] | None) -> dict[str, str]:
+    buckets = {key: [] for key in DEFAULT_EVIDENCE_TIERS}
+    for section in sections or []:
+        if not isinstance(section, dict):
+            continue
+        label = str(section.get("label") or "").strip()
+        text = str(section.get("text") or "").strip()
+        if not text:
+            continue
+        bucket = classify_evidence_section_label(label)
+        buckets[bucket].append(text)
+    return {
+        bucket: _combine_unique_sections(parts)
+        for bucket, parts in buckets.items()
+    }
+
+
+def infer_evidence_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
+    text = str(cv_text or "").strip()
+    if not text:
+        return dict(DEFAULT_EVIDENCE_TIERS)
+
+    heading_matches = list(re.finditer(r"(?m)^##\s+(.+?)\s*$", text))
+    if heading_matches:
+        sections: list[dict[str, str]] = []
+        for index, match in enumerate(heading_matches):
+            label = match.group(1).strip()
+            start = match.end()
+            end = heading_matches[index + 1].start() if index + 1 < len(heading_matches) else len(text)
+            body = text[start:end].strip()
+            if body:
+                sections.append({"label": label, "text": body})
+        tiers = build_evidence_tiers_from_sections(sections)
+        if any(tiers.values()):
+            return tiers
+
+    if "supporting background" in text.lower():
+        parts = re.split(r"(?im)^##\s+supporting background\s*$", text, maxsplit=1)
+        primary = parts[0].strip()
+        secondary = parts[1].strip() if len(parts) > 1 else ""
+        return {
+            "primary_current_evidence": primary,
+            "secondary_older_evidence": secondary,
+            "background_optional_evidence": "",
+        }
+
+    return {
+        "primary_current_evidence": text,
+        "secondary_older_evidence": "",
+        "background_optional_evidence": "",
+    }
+
+
+def normalize_evidence_tiers(payload: dict[str, Any] | None, cv_text: str = "") -> dict[str, str]:
+    normalized = dict(DEFAULT_EVIDENCE_TIERS)
+    source = payload if isinstance(payload, dict) else {}
+    inferred = infer_evidence_tiers_from_cv_text(cv_text)
+    for key in normalized:
+        value = str(source.get(key) or "").strip()
+        normalized[key] = value or inferred.get(key, "")
+    return normalized
+
+
+def normalize_evidence_tier_weights(payload: dict[str, Any] | None) -> dict[str, float]:
+    source = payload if isinstance(payload, dict) else {}
+    normalized = dict(DEFAULT_EVIDENCE_TIER_WEIGHTS)
+    for key, default in DEFAULT_EVIDENCE_TIER_WEIGHTS.items():
+        try:
+            value = float(source.get(key, default) or default)
+        except Exception:
+            value = default
+        normalized[key] = max(min(value, 1.0), 0.0)
+    return normalized
+
+
+def get_evidence_tiers(profile: dict[str, Any]) -> dict[str, str]:
+    return normalize_evidence_tiers(
+        profile.get("evidence_tiers", {}),
+        str(profile.get("cv_text") or ""),
+    )
+
+
+def get_evidence_tier_weights(profile: dict[str, Any]) -> dict[str, float]:
+    return normalize_evidence_tier_weights(profile.get("evidence_tier_weights", {}))
 
 
 def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:

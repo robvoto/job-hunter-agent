@@ -65,10 +65,11 @@ python admin_api.py
 It currently supports:
 
 - fresh jobs from the latest run
-- saved jobs from earlier runs
+- kept jobs from earlier runs
 - hidden jobs with unhide review
-- older saved jobs collapsed by default
+- older kept jobs collapsed by default
 - filtering, sorting, and pagination
+- salary-target filtering tied to admin salary preferences
 - local viewed/opened tracking
 
 ## Files That Can Be Rebuilt
@@ -120,3 +121,11 @@ The prompt reads from `data/profile.json`, especially:
 - fit notes
 
 If `OPENAI_API_KEY` is missing, the app runs without live LLM review.
+
+## Runner Split
+
+- `python run_jobs.py`
+  Refreshes jobs and rebuilds the dashboard.
+
+- `python agent_runner.py`
+  Wraps the refresh flow, builds a digest, and optionally sends notifications.

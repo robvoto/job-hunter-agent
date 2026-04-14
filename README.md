@@ -14,11 +14,22 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 
 - guided onboarding at `http://127.0.0.1:8765/start`
 - local admin console at `http://127.0.0.1:8765/admin`
+- local dashboard at `http://127.0.0.1:8765/dashboard`
 - persistent local profile in `data/profile.json`
 - deterministic filtering before any LLM review
 - optional constrained LLM decision step
-- persistent dashboard with fresh, saved, and hidden jobs
+- persistent dashboard with fresh, kept-earlier, and hidden jobs
+- dashboard filtering for score, posting age, work mode, and salary-target state
 - local review tracking for opened, hidden, and applied roles
+
+## Match Score Bands
+
+- `Strong fit`: `80-100`
+- `Good fit`: `65-79`
+- `Borderline`: `50-64`
+- `Low fit`: `0-49`
+
+The score is built from title match, full-description review result, content-filter pass, fit-evidence bullets, freshness, location match, work mode, salary signal, watchout penalties, and whether the role has already been viewed. Each card now also shows a short inline score summary so you can see the main drivers without opening the full breakdown.
 
 ## Product Model
 
@@ -52,6 +63,8 @@ Run the job-source connector:
 python run_jobs.py
 ```
 
+This is the main refresh command. Use it when you want fresh job results and a rebuilt dashboard.
+
 Compatibility entry point:
 
 ```powershell
@@ -75,6 +88,13 @@ Run the daily local agent once:
 ```powershell
 python agent_runner.py
 ```
+
+This is the orchestration layer. It can run the connector, rebuild the dashboard, create a digest, and send notifications.
+
+Most users should think of it like this:
+
+- `python run_jobs.py` = refresh jobs and dashboard
+- `python agent_runner.py` = optional automation wrapper around the refresh flow
 
 Run the daily local agent in loop mode:
 
@@ -138,6 +158,7 @@ The first daily agent layer is now local-first:
 - `agent_runner.py` runs the current connector, rebuilds the dashboard, and creates a compact digest
 - email delivery uses SMTP settings from local `data/agent_settings.json`
 - Telegram delivery uses a bot token plus chat id from local `data/agent_settings.json`
+- Telegram messages arrive in the user's private chat with their bot, not from their personal Telegram identity
 - the digest is also written locally to `output/agent_last_summary.txt`
 
 Recommended beta setup:

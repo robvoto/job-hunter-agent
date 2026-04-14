@@ -43,8 +43,11 @@ DEFAULT_AGENT_SETTINGS = {
     "telegram": {
         "enabled": False,
         "bot_token": "",
+        "bot_username": "",
         "chat_id": "",
         "disable_link_preview": False,
+        "last_update_id": 0,
+        "subscribers": [],
     },
 }
 
@@ -90,11 +93,31 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
     }
 
     telegram = settings.get("telegram", {})
+    subscribers = telegram.get("subscribers", [])
+    normalized_subscribers = []
+    if isinstance(subscribers, list):
+        for item in subscribers:
+            if not isinstance(item, dict):
+                continue
+            chat_id = str(item.get("chat_id") or "").strip()
+            if not chat_id:
+                continue
+            normalized_subscribers.append({
+                "chat_id": chat_id,
+                "username": str(item.get("username") or "").strip(),
+                "first_name": str(item.get("first_name") or "").strip(),
+                "last_name": str(item.get("last_name") or "").strip(),
+                "connected_at": str(item.get("connected_at") or "").strip(),
+                "last_seen_at": str(item.get("last_seen_at") or "").strip(),
+            })
     settings["telegram"] = {
         "enabled": bool(telegram.get("enabled", False)),
         "bot_token": str(telegram.get("bot_token") or "").strip(),
+        "bot_username": str(telegram.get("bot_username") or "").strip().lstrip("@"),
         "chat_id": str(telegram.get("chat_id") or "").strip(),
         "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
+        "last_update_id": max(0, int(telegram.get("last_update_id", 0) or 0)),
+        "subscribers": normalized_subscribers,
     }
     return settings
 

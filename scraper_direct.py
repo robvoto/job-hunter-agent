@@ -17,15 +17,20 @@ import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright
 
 from config import MAX_PAGES_CAP, OUTPUT_HTML, SEEK_URL
-from filters import passes_content_filters, passes_title_filters
-from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider
-from profile_store import get_search_settings, load_profile
+from filters import passes_content_filters, passes_quick_card_filters, passes_title_filters
+from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
+from profile_store import (
+    get_evidence_tier_weights,
+    get_evidence_tiers,
+    get_search_settings,
+    load_profile,
+)
 from review_insights import build_review_data, extract_detected_skills
 from utils import (
     extract_salary,
@@ -53,6 +58,20 @@ MAX_LLM_CHARS = 3000
 ARCHIVE_STALE_AFTER_DAYS = 15
 HIDDEN_REVIEW_DAYS = 30
 AUTO_REFRESH_SECONDS = 60
+CLI_FLAGS = set(sys.argv[1:])
+TEST_DASHBOARD_MODE = "--test-dashboard-mode" in CLI_FLAGS
+TEST_SCRAPE_MODE = "--test-scrape-mode" in CLI_FLAGS
+TEST_ANY_MODE = TEST_DASHBOARD_MODE or TEST_SCRAPE_MODE
+TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = (
+    "--reset-new-to-you" in CLI_FLAGS or TEST_ANY_MODE
+)
+SKIP_QUICK_CARD_GATE_FOR_TESTING = TEST_SCRAPE_MODE
+TEST_SCRAPE_DATE_RANGE_DAYS = 7
+TEST_SCRAPE_MAX_PAGES_CAP = 6
+SHOW_SCORING_DEBUG = TEST_ANY_MODE
+SHOW_BORDERLINE_BY_DEFAULT = TEST_ANY_MODE
+DASHBOARD_MIN_SCORE = 35 if TEST_ANY_MODE else 50
+DEFAULT_SCORE_FILTER_MIN = 35 if TEST_ANY_MODE else (50 if SHOW_BORDERLINE_BY_DEFAULT else 65)
 LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
 DEBUG_JSON_PATH = OUTPUT_DIR / "seek_results.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
@@ -73,8 +92,14 @@ KEEP_SNAPSHOT_FIELDS = (
     "title_reason",
     "content_reason",
     "llm_decision",
+    "llm_fit_grade",
     "search_location",
     "search_keywords",
+    "role_snapshot",
+    "fit_highlights",
+    "fit_watchouts",
+    "fit_watchout_meta",
+    "competitive_signals",
 )
 
 
@@ -147,12 +172,12 @@ def save_json(path: Path, payload) -> None:
     )
 
 
-def load_llm_cache() -> Dict[str, str]:
+def load_llm_cache() -> Dict[str, Any]:
     raw = load_json_dict(LLM_CACHE_PATH)
-    return {str(k): str(v) for k, v in raw.items()}
+    return {str(k): v for k, v in raw.items()}
 
 
-def save_llm_cache(cache: Dict[str, str]) -> None:
+def save_llm_cache(cache: Dict[str, Any]) -> None:
     save_json(LLM_CACHE_PATH, cache)
 
 
@@ -192,6 +217,973 @@ def dedupe_preserve_order(values: List[str]) -> List[str]:
         seen.add(normalized)
         result.append(normalized)
     return result
+
+
+def compact_whitespace(value: Optional[str]) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def split_text_snippets(text: str) -> List[str]:
+    snippets: List[str] = []
+    for raw_line in re.split(r"[\r\n]+", text or ""):
+        cleaned = compact_whitespace(raw_line.strip(" -•\t"))
+        if len(cleaned) >= 24:
+            snippets.append(cleaned)
+    if snippets:
+        return dedupe_preserve_order(snippets)
+
+    compact = compact_whitespace(text)
+    if not compact:
+        return []
+    sentence_like = [
+        compact_whitespace(part)
+        for part in re.split(r"(?<=[.!?])\s+", compact)
+        if len(compact_whitespace(part)) >= 24
+    ]
+    return dedupe_preserve_order(sentence_like)
+
+
+def list_to_phrase(items: List[str]) -> str:
+    cleaned = [compact_whitespace(item) for item in items if compact_whitespace(item)]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
+
+
+def _is_generic_summary_text(text: str) -> bool:
+    lowered = compact_whitespace(text).lower()
+    generic_phrases = (
+        "opportunity to join",
+        "fast-paced environment",
+        "leading company",
+        "great opportunity",
+        "asap",
+        "urgent",
+        "must be based in australia",
+        "full working rights",
+    )
+    return any(phrase in lowered for phrase in generic_phrases)
+
+
+def score_summary_snippet(snippet: str) -> int:
+    lowered = snippet.lower()
+    score = 0
+    summary_keywords = (
+        "looking for",
+        "seeking",
+        "you will",
+        "responsible for",
+        "lead",
+        "deliver",
+        "support",
+        "requirements",
+        "stakeholder",
+        "workshop",
+        "process",
+        "integration",
+        "data",
+        "implementation",
+    )
+    score += sum(2 for keyword in summary_keywords if keyword in lowered)
+    if len(snippet) < 60:
+        score -= 1
+    if _is_generic_summary_text(snippet):
+        score -= 3
+    if re.search(r"\$\d", lowered):
+        score -= 2
+    return score
+
+
+def synthesize_role_snapshot(record: dict) -> str:
+    title = compact_whitespace(record.get("title") or "")
+    location = compact_whitespace(record.get("location") or "")
+    work_type = compact_whitespace(record.get("work_type") or "")
+    teaser = compact_whitespace(record.get("teaser") or "")
+
+    domain_focus = ""
+    if " - " in title:
+        domain_focus = compact_whitespace(title.split(" - ", 1)[1])
+    elif "(" in title and ")" in title:
+        domain_focus = compact_whitespace(re.sub(r"^[^(]*\((.*?)\).*$", r"\1", title))
+
+    summary = ""
+    if title and domain_focus and work_type and location and work_type != "N/A" and location != "N/A":
+        summary = f"{title} role focused on {domain_focus.lower()} work in {location} on a {work_type.lower()} basis."
+    elif title and location and location != "N/A":
+        summary = f"{title} role based in {location}."
+    elif title:
+        summary = f"{title} role."
+
+    if teaser and teaser != "N/A" and not _is_generic_summary_text(teaser):
+        summary = f"{summary} {teaser}".strip()
+
+    return summarize_snippet(summary, max_length=220) if summary else "Role summary not available."
+
+
+def build_role_snapshot(details_text: str, teaser: Optional[str]) -> str:
+    teaser_text = compact_whitespace(teaser)
+    detail_snippets = split_text_snippets(details_text)
+    if teaser_text and teaser_text.lower() != "n/a" and not _is_generic_summary_text(teaser_text):
+        if len(teaser_text) <= 240:
+            return teaser_text
+    if detail_snippets:
+        ranked = sorted(
+            detail_snippets,
+            key=lambda item: (-score_summary_snippet(item), len(item)),
+        )
+        best = ranked[0]
+        if len(best) <= 260:
+            return best
+        return best[:257].rstrip() + "..."
+    return teaser_text or "Role summary not available."
+
+
+def summarize_snippet(snippet: str, max_length: int = 180) -> str:
+    cleaned = compact_whitespace(snippet)
+    if len(cleaned) <= max_length:
+        return cleaned
+    return cleaned[: max_length - 3].rstrip() + "..."
+
+
+def infer_employer_type(record: dict, details_text: str) -> str:
+    company = compact_whitespace(record.get("company") or "").lower()
+    combined = f"{company}\n{compact_whitespace(details_text).lower()}"
+
+    if any(term in combined for term in ("government", "department", "agency", "aps", "public sector", "ministry", "council")):
+        return "Government agency"
+    if any(term in company for term in ("recruitment", "sourcing", "talent", "peoplebank", "randstad", "hays", "ignite")):
+        return "Recruitment-led role"
+    if any(term in company for term in ("consulting", "consult", "advisory", "services")):
+        return "Consulting firm"
+    return "Private sector employer"
+
+
+def infer_ba_style(record: dict, details_text: str) -> str:
+    title = compact_whitespace(record.get("title") or "").lower()
+    lowered = compact_whitespace(details_text).lower()
+
+    if "technical business analyst" in title:
+        return "technical BA"
+    if "systems analyst" in title:
+        return "systems-focused BA"
+    if "process analyst" in title or "process business analyst" in title:
+        return "process-focused BA"
+    if "delivery" in title and "business analyst" in title:
+        return "delivery BA"
+
+    process_score = sum(
+        1 for term in ("bpmn", "process mapping", "process modelling", "workflow", "as-is", "to-be")
+        if text_contains_term(lowered, term)
+    )
+    technical_score = sum(
+        1 for term in ("api", "apis", "integration", "data mapping", "sql", "technical", "system", "platform")
+        if text_contains_term(lowered, term) or text_contains_term(title, term)
+    )
+    delivery_score = sum(
+        1 for term in ("agile", "user stories", "acceptance criteria", "backlog", "sprint", "delivery", "implementation")
+        if text_contains_term(lowered, term) or text_contains_term(title, term)
+    )
+
+    if technical_score >= 2 and delivery_score >= 2:
+        return "technical delivery BA"
+    if process_score >= 2:
+        return "process-focused BA"
+    if technical_score >= 2:
+        return "technical BA"
+    if delivery_score >= 2:
+        return "delivery BA"
+    return "generalist BA"
+
+
+def role_text_bundle(record: dict, details_text: str) -> str:
+    return "\n".join(
+        compact_whitespace(part)
+        for part in [
+            record.get("title"),
+            record.get("company"),
+            record.get("teaser"),
+            details_text,
+        ]
+        if compact_whitespace(part)
+    )
+
+
+def infer_role_themes(record: dict, details_text: str) -> List[str]:
+    lowered = role_text_bundle(record, details_text).lower()
+    themes: List[str] = []
+    theme_rules = [
+        ("digital delivery", ("digital", "delivery", "implementation", "transformation", "ict")),
+        ("process analysis", ("bpmn", "process mapping", "process modelling", "workflow", "as-is", "to-be")),
+        ("requirements shaping", ("requirements", "business rules", "elicitation", "functional specification", "functional specs")),
+        ("stakeholder workshops", ("stakeholder", "stakeholders", "workshop", "workshops", "facilitate")),
+        ("agile documentation", ("agile", "scrum", "user stories", "acceptance criteria", "backlog", "gherkin")),
+        ("data / integration analysis", ("sql", "data mapping", "integration", "api", "apis", "validation", "system interactions")),
+        ("systems improvement", ("system", "platform", "solution", "improvement", "modernisation", "uplift")),
+    ]
+    for label, terms in theme_rules:
+        if any(text_contains_term(lowered, term) for term in terms):
+            themes.append(label)
+    return dedupe_preserve_order(themes)[:4]
+
+
+def infer_role_context_clause(record: dict, details_text: str) -> str:
+    lowered = role_text_bundle(record, details_text).lower()
+
+    context_rules = [
+        ("in an energy trading environment", ("energy trading", "nem", "wholesale energy")),
+        ("on a government ICT delivery program", ("aps", "government", "department", "agency", "cio", "ict")),
+        ("for a finance or treasury change program", ("treasury", "core banking", "loan systems", "financial management")),
+        ("for an ERP or operating-model change program", ("erp", "vendor evaluation", "vendor selection", "supply chain", "commercial functions")),
+        ("on a health or public-service program", ("health", "ehealth", "aged care", "ambulance")),
+        ("on a systems and integration program", ("integration", "integrations", "api", "apis", "data mapping", "system interactions")),
+    ]
+    for clause, terms in context_rules:
+        if any(text_contains_term(lowered, term) for term in terms):
+            return clause
+    return ""
+
+
+def build_role_summary(record: dict, details_text: str, profile: Optional[dict] = None) -> str:
+    employer_type = infer_employer_type(record, details_text)
+    ba_style = infer_ba_style(record, details_text)
+    themes = infer_role_themes(record, details_text)
+    context_clause = infer_role_context_clause(record, details_text)
+
+    if employer_type == "Government agency":
+        intro = f"Government agency looking for a {ba_style}"
+    elif employer_type == "Consulting firm":
+        intro = f"Consulting firm looking for a {ba_style}"
+    elif employer_type == "Recruitment-led role":
+        intro = f"Recruitment-led role for a {ba_style}"
+    else:
+        intro = f"Private sector role for a {ba_style}"
+
+    if themes:
+        if context_clause and "government ict" in context_clause and employer_type == "Government agency":
+            summary = f"{intro} to support {list_to_phrase(themes[:3])}."
+        elif context_clause:
+            summary = f"{intro} {context_clause} to support {list_to_phrase(themes[:3])}."
+        else:
+            summary = f"{intro} to support {list_to_phrase(themes[:3])}."
+    elif context_clause:
+        summary = f"{intro} {context_clause}."
+    else:
+        summary = f"{intro}."
+    return summarize_snippet(summary, max_length=180)
+
+
+def friendly_capability_label(name: str) -> str:
+    labels = {
+        "business analysis delivery": "requirements shaping and BA delivery",
+        "api and integration": "APIs and integrations",
+        "data analysis and validation": "data analysis and validation",
+        "stakeholder management": "stakeholder management",
+        "bpmn and process modelling": "process mapping and BPMN",
+        "agile delivery": "Agile delivery",
+        "system and technical analysis": "technical analysis",
+        "cloud and infrastructure": "cloud or infrastructure context",
+        "ai innovation and automation": "automation and AI experimentation",
+        "advanced data analytics and bi": "heavy BI or analytics work",
+        "hr and workforce management": "HR or workforce systems",
+        "crm platform administration": "CRM platform administration",
+        "cyber and security": "cyber or security work",
+    }
+    normalized = compact_whitespace(name).lower()
+    return labels.get(normalized, compact_whitespace(name))
+
+
+def text_contains_term(text: str, term: str) -> bool:
+    cleaned_text = compact_whitespace(text).lower()
+    cleaned_term = compact_whitespace(term).lower()
+    if not cleaned_text or not cleaned_term:
+        return False
+    pattern = rf"(?<!\w){re.escape(cleaned_term)}(?!\w)"
+    return re.search(pattern, cleaned_text) is not None
+
+
+def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
+    lowered = compact_whitespace(details_text).lower()
+    matched_core: List[str] = []
+    matched_supporting: List[str] = []
+    matched_low_fit: List[str] = []
+    matched_must_not: List[str] = []
+
+    for rule in profile.get("capability_profile_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        name = str(rule.get("name") or "").strip()
+        fit = str(rule.get("fit") or "").strip().lower()
+        level = str(rule.get("level") or "").strip().lower()
+        aliases = [
+            str(alias).strip().lower()
+            for alias in [rule.get("name"), *(rule.get("aliases") or [])]
+            if str(alias).strip()
+        ]
+        if not aliases:
+            continue
+        if not any(text_contains_term(lowered, alias) for alias in aliases):
+            continue
+        label = friendly_capability_label(name)
+        if fit in {"core", "supporting"} and level in {"strong", "working", "basic"}:
+            if fit == "core":
+                matched_core.append(label)
+            else:
+                matched_supporting.append(label)
+        elif fit == "avoid" or level in {"low", "none"}:
+            matched_low_fit.append(label)
+
+    for skill in profile.get("must_not_require_skills", []):
+        cleaned_skill = str(skill).strip().lower()
+        if cleaned_skill and text_contains_term(lowered, cleaned_skill):
+            matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
+
+    return {
+        "core": dedupe_preserve_order(matched_core),
+        "supporting": dedupe_preserve_order(matched_supporting),
+        "low_fit": dedupe_preserve_order(matched_low_fit),
+        "must_not": dedupe_preserve_order(matched_must_not),
+    }
+
+
+def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[str]:
+    snippets = split_text_snippets(details_text)
+    if not snippets:
+        return []
+
+    target_terms: Set[str] = set()
+    for strength in profile.get("strengths", []):
+        cleaned = str(strength).strip().lower()
+        if cleaned:
+            target_terms.add(cleaned)
+    for rule in profile.get("capability_profile_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        fit = str(rule.get("fit") or "").strip().lower()
+        level = str(rule.get("level") or "").strip().lower()
+        if fit in {"core", "supporting"} and level in {"strong", "working", "basic"}:
+            name = str(rule.get("name") or "").strip().lower()
+            if name:
+                target_terms.add(name)
+            for alias in rule.get("aliases", []):
+                cleaned_alias = str(alias).strip().lower()
+                if cleaned_alias:
+                    target_terms.add(cleaned_alias)
+
+    generic_positive_terms = {
+        "business analysis",
+        "requirements",
+        "requirement",
+        "stakeholder",
+        "stakeholders",
+        "workshop",
+        "workshops",
+        "discovery",
+        "process",
+        "workflow",
+        "delivery",
+        "backlog",
+        "user stories",
+        "agile",
+        "implementation",
+        "transformation",
+        "change",
+        "mapping",
+        "analysis",
+        "analyst",
+    }
+
+    scored: List[tuple[int, str]] = []
+    for snippet in snippets:
+        lowered = snippet.lower()
+        target_matches = sum(1 for term in target_terms if text_contains_term(lowered, term))
+        positive_matches = sum(1 for term in generic_positive_terms if text_contains_term(lowered, term))
+        if target_matches > 0 or positive_matches > 0:
+            score = (target_matches * 3) + positive_matches
+            if any(token in lowered for token in ("experience in", "responsible for", "working with", "will")):
+                score += 1
+            scored.append((score, summarize_snippet(snippet)))
+    scored.sort(key=lambda item: (-item[0], len(item[1])))
+    return dedupe_preserve_order([snippet for _, snippet in scored[:3]])
+
+
+def fit_highlight_for_profile_area(area: str) -> Optional[str]:
+    mapping = {
+        "requirements shaping and BA delivery": "Requirements elicitation and BA delivery",
+        "stakeholder management": "Workshops and stakeholder facilitation",
+        "process mapping and BPMN": "BPMN and process modelling",
+        "Agile delivery": "User stories and acceptance criteria",
+        "data analysis and validation": "Data mapping and validation",
+        "technical analysis": "Technical and systems analysis",
+        "APIs and integrations": "APIs and integration context",
+        "cloud or infrastructure context": "Infrastructure and platform context",
+        "automation and AI experimentation": "Automation and AI experimentation",
+    }
+    return mapping.get(area)
+
+
+def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
+    highlights: List[str] = [
+        compact_whitespace(item)
+        for item in (record.get("fit_highlights") or [])
+        if compact_whitespace(item)
+    ]
+    active_profile = profile or load_profile()
+    role_bundle = role_text_bundle(record, details_text)
+    lowered = role_bundle.lower()
+    capability_matches = find_profile_capability_matches(role_bundle, active_profile)
+    title_lower = compact_whitespace(record.get("title") or "").lower()
+
+    matched_profile_areas = capability_matches["core"][:3] + capability_matches["supporting"][:2]
+    for area in matched_profile_areas:
+        label = fit_highlight_for_profile_area(area)
+        if label:
+            highlights.append(label)
+
+    if (
+        not highlights
+        and sum(text_contains_term(lowered, term) for term in ("requirements", "workshop", "stakeholder", "business rules", "elicitation")) >= 2
+    ):
+        highlights.append("Requirements elicitation and BA delivery")
+
+    if "technical business analyst" in title_lower and not any("Technical and systems analysis" in item for item in highlights):
+        highlights.append("Technical and systems analysis")
+    elif "business analyst" in title_lower and not any("BA delivery" in item or "Business Analyst scope" in item for item in highlights):
+        highlights.append("Core Business Analyst scope")
+
+    if any(text_contains_term(lowered, term) for term in ("government", "department", "agency", "aps", "public sector", "federal", "state")):
+        highlights.append("Government context")
+
+    contract_months = extract_contract_months(details_text)
+    if contract_months and contract_months >= 12:
+        highlights.append("12+ month contract")
+    elif compact_whitespace(record.get("work_type") or "").lower() in {"full time", "full-time", "permanent"}:
+        highlights.append("Permanent role")
+
+    if compact_whitespace(record.get("work_mode") or "").lower() == "remote" and "canberra" in compact_whitespace(record.get("location") or "").lower():
+        highlights.append("Canberra role with remote setup")
+    elif "sydney" in compact_whitespace(record.get("location") or "").lower():
+        highlights.append("Sydney-based role")
+
+    highlights.extend(competitive_fit_highlights(record, active_profile))
+    return dedupe_preserve_order(highlights)[:4]
+
+
+def build_watchout_entries(
+    details_text: str,
+    title_reason: Optional[str],
+    profile: dict,
+    existing_entries: Optional[List[dict]] = None,
+    competitive_signals: Optional[List[dict]] = None,
+) -> List[dict]:
+    entries: List[dict] = []
+    lowered = compact_whitespace(details_text).lower()
+    capability_matches = find_profile_capability_matches(details_text, profile)
+
+    def add_entry(
+        text: str,
+        severity: str = "medium",
+        kind: str = "watchout",
+        category: str = "",
+    ) -> None:
+        cleaned = compact_whitespace(text)
+        if not cleaned:
+            return
+        entries.append({"text": cleaned, "severity": severity, "kind": kind, "category": category})
+
+    if title_reason == "TITLE_POTENTIAL_MATCH":
+        add_entry("Systems Analyst title rather than direct BA title", "medium", category="adjacent_title")
+
+    handled_must_not: Set[str] = set()
+    d365_aliases = ["d365", "dynamics 365", "power platform", "power apps", "power automate"]
+    d365_strength = find_requirement_strength(details_text, d365_aliases)
+    if d365_strength:
+        add_entry(
+            "Dynamics 365 / Power Platform not evidenced",
+            severity_from_requirement_strength(d365_strength, "medium"),
+            category="d365_power_platform",
+        )
+        handled_must_not.update({"d365", "dynamics 365"})
+
+    erp_aliases = ["erp", "vendor evaluation", "vendor selection", "supply chain", "commercial functions"]
+    erp_strength = find_requirement_strength(details_text, erp_aliases)
+    if any(text_contains_term(lowered, alias) for alias in erp_aliases):
+        erp_severity = recency_adjusted_severity(
+            profile,
+            ["erp", "vendor evaluation", "vendor selection", "supply chain", "commercial functions", "salesforce"],
+            severity_from_requirement_strength(erp_strength or "mentioned", "high"),
+        )
+        add_entry("ERP strategy / vendor selection depth may be limited", erp_severity, category="erp_platform")
+
+    data_ml_aliases = ["data science", "machine learning", "predictive modelling", "advanced analytics", "ml"]
+    data_ml_strength = find_requirement_strength(details_text, data_ml_aliases)
+    if any(text_contains_term(lowered, alias) for alias in data_ml_aliases):
+        add_entry(
+            "Data / ML depth is not strongly evidenced",
+            severity_from_requirement_strength(data_ml_strength or "desirable", "light"),
+            category="data_ml",
+        )
+
+    filtered = [item for item in capability_matches["must_not"] if item.lower() not in handled_must_not] if capability_matches["must_not"] else []
+    if filtered:
+        add_entry(f"{list_to_phrase(filtered[:2])} not evidenced", "high", category="must_not_platform")
+
+    if capability_matches["low_fit"]:
+        add_entry(
+            f"{list_to_phrase(capability_matches['low_fit'][:2])} looks niche for your background",
+            "medium",
+            category="low_fit_specialist",
+        )
+
+    if "energy trading" in lowered or "knowledge of the nem" in lowered:
+        add_entry("Energy trading domain experience not evidenced", "medium", category="energy_trading")
+    if "treasury" in lowered or "core banking" in lowered or "loan systems" in lowered:
+        treasury_severity = recency_adjusted_severity(
+            profile,
+            ["treasury", "banking", "core banking", "loan systems", "financial management"],
+            "medium",
+        )
+        add_entry("Treasury / banking domain depth may be limited", treasury_severity, category="finance_treasury")
+    if text_contains_term(lowered, "guidewire"):
+        old_year = find_profile_experience_year(profile, ["guidewire"])
+        if old_year:
+            add_entry(f"Guidewire exposure is older from {old_year}", "light", category="insurance_platform")
+    if text_contains_term(lowered, "sap") or text_contains_term(lowered, "edi"):
+        old_year = find_profile_experience_year(profile, ["sap", "edi"])
+        if old_year:
+            add_entry(f"SAP / EDI exposure is older from {old_year}", "light", category="erp_platform")
+    if re.search(r"\bmust be based in canberra\b|\bmust reside in canberra\b|\bonsite in canberra\b", lowered):
+        add_entry("Canberra onsite requirement needs checking", "high", category="canberra_travel")
+    elif re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", lowered):
+        add_entry("Canberra onsite pattern looks heavier than preferred", "medium", category="canberra_travel")
+
+    for existing in existing_entries or []:
+        if not isinstance(existing, dict):
+            continue
+        add_entry(
+            str(existing.get("text") or ""),
+            str(existing.get("severity") or "medium"),
+            str(existing.get("kind") or "watchout"),
+            str(existing.get("category") or ""),
+        )
+
+    signal_record = {"fit_source_text": details_text, "competitive_signals": competitive_signals or []}
+    for competitive_entry in competitive_gap_watchouts(signal_record, profile):
+        add_entry(
+            competitive_entry["text"],
+            competitive_entry["severity"],
+            str(competitive_entry.get("kind") or "competitive_signal"),
+            str(competitive_entry.get("category") or ""),
+        )
+
+    severity_rank = {"light": 1, "medium": 2, "high": 3}
+    best_by_key: Dict[str, dict] = {}
+    ordered_keys: List[str] = []
+    for entry in entries:
+        text_key = str(entry.get("text") or "").strip().lower()
+        category_key = normalize_watchout_category(
+            str(entry.get("category") or ""),
+            str(entry.get("text") or ""),
+        )
+        dedupe_key = category_key or text_key
+        if not dedupe_key:
+            continue
+        existing = best_by_key.get(dedupe_key)
+        if existing is None:
+            best_by_key[dedupe_key] = entry
+            ordered_keys.append(dedupe_key)
+            continue
+        existing_rank = severity_rank.get(str(existing.get("severity") or "medium").lower(), 2)
+        current_rank = severity_rank.get(str(entry.get("severity") or "medium").lower(), 2)
+        if current_rank > existing_rank or (
+            current_rank == existing_rank
+            and len(str(entry.get("text") or "")) < len(str(existing.get("text") or ""))
+        ):
+            best_by_key[dedupe_key] = entry
+
+    deduped = [best_by_key[key] for key in ordered_keys if key in best_by_key]
+    return deduped[:4]
+
+
+def build_watchout_lines(details_text: str, title_reason: Optional[str], profile: dict) -> List[str]:
+    return [entry["text"] for entry in build_watchout_entries(details_text, title_reason, profile)]
+
+
+def normalize_watchout_category(category: str, text: str) -> str:
+    lowered = f"{compact_whitespace(category).lower()} {compact_whitespace(text).lower()}".strip()
+    if any(token in lowered for token in ("erp", "vendor selection", "vendor evaluation", "sap", "edi", "platform implementation", "netsuite", "oracle")):
+        return "erp_platform"
+    if any(token in lowered for token in ("finance", "treasury", "banking", "accounting", "general ledger", "accounts payable", "accounts receivable", "reconciliation")):
+        return "finance_treasury"
+    if any(token in lowered for token in ("data / ml", "data ml", "analytics", "machine learning", "predictive", "bi", "business intelligence", "reporting")):
+        return "data_analytics"
+    if any(token in lowered for token in ("dynamics 365", "d365", "power platform", "power apps", "power automate")):
+        return "d365_power_platform"
+    if any(token in lowered for token in ("salesforce", "crm")):
+        return "crm_platform"
+    if any(token in lowered for token in ("insurance", "guidewire", "policycenter", "claimcenter", "underwriting", "claims")):
+        return "insurance_platform"
+    if any(token in lowered for token in ("canberra", "travel", "onsite")):
+        return "canberra_travel"
+    if any(token in lowered for token in ("energy trading", "nem")):
+        return "energy_trading"
+    return compact_whitespace(category).lower() or compact_whitespace(text).lower()
+
+
+def _normalized_aliases(values: List[str]) -> List[str]:
+    return dedupe_preserve_order(
+        [compact_whitespace(str(value)).lower() for value in values if compact_whitespace(str(value))]
+    )
+
+
+def _profile_text_blob(profile: dict) -> str:
+    parts = [
+        profile.get("candidate_summary"),
+        " ".join(str(item).strip() for item in profile.get("strengths", []) if str(item).strip()),
+        profile.get("llm_profile_brief"),
+        profile.get("star_evidence_text"),
+        profile.get("cv_text"),
+    ]
+    return "\n".join(compact_whitespace(part).lower() for part in parts if compact_whitespace(part))
+
+
+def _profile_auxiliary_text(profile: dict) -> str:
+    parts = [
+        profile.get("candidate_summary"),
+        " ".join(str(item).strip() for item in profile.get("strengths", []) if str(item).strip()),
+        profile.get("llm_profile_brief"),
+        profile.get("star_evidence_text"),
+    ]
+    return "\n".join(compact_whitespace(part).lower() for part in parts if compact_whitespace(part))
+
+
+def find_profile_experience_year_in_text(source_text: str, aliases: List[str]) -> Optional[int]:
+    text = str(source_text or "")
+    if not text.strip():
+        return None
+
+    current_year = datetime.now().year
+    most_recent_year: Optional[int] = None
+    section_year: Optional[int] = None
+
+    for raw_line in text.splitlines():
+        line = compact_whitespace(raw_line)
+        if not line:
+            continue
+        updated_year = _line_year_context(line, current_year)
+        if updated_year:
+            section_year = updated_year
+        lowered_line = line.lower()
+        if any(text_contains_term(lowered_line, alias) for alias in aliases if str(alias).strip()):
+            candidate_year = updated_year or section_year
+            if candidate_year and (most_recent_year is None or candidate_year > most_recent_year):
+                most_recent_year = candidate_year
+    return most_recent_year
+
+
+def evidence_tier_alignment_score(profile: dict, aliases: List[str]) -> float:
+    evidence_tiers = get_evidence_tiers(profile)
+    evidence_weights = get_evidence_tier_weights(profile)
+    tier_order = (
+        "primary_current_evidence",
+        "secondary_older_evidence",
+        "background_optional_evidence",
+    )
+    best_score = 0.0
+
+    for tier_name in tier_order:
+        tier_text = compact_whitespace(evidence_tiers.get(tier_name) or "").lower()
+        if not tier_text:
+            continue
+        alias_hits = [alias for alias in aliases if text_contains_term(tier_text, alias)]
+        if not alias_hits:
+            continue
+        hit_count = len(alias_hits)
+        base_strength = min(0.42 + (0.18 * min(hit_count - 1, 3)), 1.0)
+        tier_weight = float(evidence_weights.get(tier_name, 0.0) or 0.0)
+        recent_year = find_profile_experience_year_in_text(tier_text, aliases)
+        if recent_year:
+            years_ago = max(datetime.now().year - int(recent_year), 0)
+            if years_ago <= 5:
+                recency_multiplier = 1.0
+            elif years_ago <= 10:
+                recency_multiplier = 0.6
+            else:
+                recency_multiplier = 0.3
+        elif tier_name == "primary_current_evidence":
+            recency_multiplier = 1.0
+        elif tier_name == "secondary_older_evidence":
+            recency_multiplier = 0.6
+        else:
+            recency_multiplier = 0.35
+
+        best_score = max(best_score, base_strength * tier_weight * recency_multiplier)
+
+    auxiliary_text = _profile_auxiliary_text(profile)
+    auxiliary_hits = sum(1 for alias in aliases if text_contains_term(auxiliary_text, alias))
+    if auxiliary_hits:
+        best_score = max(best_score, min(0.12 + (0.05 * min(auxiliary_hits - 1, 2)), 0.22))
+
+    return min(best_score, 1.0)
+
+
+def _capability_rule_strength(rule: dict) -> float:
+    level = compact_whitespace(rule.get("level") or "").lower()
+    fit = compact_whitespace(rule.get("fit") or "").lower()
+    level_map = {
+        "strong": 1.0,
+        "working": 0.72,
+        "basic": 0.55,
+        "low": 0.22,
+        "none": 0.0,
+    }
+    fit_bonus = {
+        "core": 0.08,
+        "supporting": 0.0,
+        "contextual": -0.06,
+        "avoid": -0.18,
+    }
+    return max(min(level_map.get(level, 0.45) + fit_bonus.get(fit, 0.0), 1.05), 0.0)
+
+
+def detect_competitive_signals(details_text: str, profile: Optional[dict] = None) -> List[dict]:
+    active_profile = profile or load_profile()
+    source_text = compact_whitespace(details_text).lower()
+    snippets = [snippet.lower() for snippet in split_text_snippets(details_text)]
+    if not source_text:
+        return []
+
+    detected: List[dict] = []
+    for raw_cluster in active_profile.get("dominant_signal_clusters", []):
+        if not isinstance(raw_cluster, dict):
+            continue
+        aliases = _normalized_aliases(list(raw_cluster.get("aliases") or []))
+        if len(aliases) < 2:
+            continue
+
+        matched_aliases = [alias for alias in aliases if text_contains_term(source_text, alias)]
+        if len(matched_aliases) < int(raw_cluster.get("min_alias_hits", 2) or 2):
+            continue
+
+        snippet_hits = 0
+        for snippet in snippets:
+            if any(text_contains_term(snippet, alias) for alias in matched_aliases):
+                snippet_hits += 1
+        if snippet_hits < int(raw_cluster.get("min_snippet_hits", 2) or 2):
+            continue
+
+        dominance_level = 1
+        if len(matched_aliases) >= 3:
+            dominance_level += 1
+        if snippet_hits >= 3:
+            dominance_level += 1
+
+        detected.append(
+            {
+                "name": compact_whitespace(raw_cluster.get("name") or "domain specialist track"),
+                "fit_label": compact_whitespace(raw_cluster.get("fit_label") or ""),
+                "watchout_label": compact_whitespace(raw_cluster.get("watchout_label") or ""),
+                "aliases": matched_aliases,
+                "alias_hits": len(matched_aliases),
+                "snippet_hits": snippet_hits,
+                "dominance_level": min(dominance_level, 3),
+            }
+        )
+
+    detected.sort(key=lambda item: (-int(item.get("dominance_level", 0)), -int(item.get("alias_hits", 0)), item.get("name", "")))
+    return detected[:3]
+
+
+def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
+    aliases = _normalized_aliases(list(signal.get("aliases") or []))
+    capability_best = 0.0
+
+    for rule in profile.get("capability_profile_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        rule_aliases = _normalized_aliases(
+            [str(rule.get("name") or "")] + list(rule.get("aliases") or [])
+        )
+        if not rule_aliases:
+            continue
+        overlap = sum(1 for alias in aliases if alias in rule_aliases or any(alias in rule_alias or rule_alias in alias for rule_alias in rule_aliases))
+        if overlap <= 0:
+            continue
+        rule_strength = _capability_rule_strength(rule)
+        capability_best = max(capability_best, min(rule_strength + (0.05 * min(overlap - 1, 2)), 1.05))
+
+    tiered_evidence_score = evidence_tier_alignment_score(profile, aliases)
+    recency_multiplier = profile_recency_multiplier(profile, aliases)
+    if recency_multiplier == 0.0 and capability_best >= 0.9:
+        recency_multiplier = 0.75
+
+    dominant_alignment_score = max(
+        capability_best * (recency_multiplier or 1.0),
+        tiered_evidence_score,
+    )
+
+    dominance_level = int(signal.get("dominance_level", 1) or 1)
+    positive_bonus = int(signal.get("positive_bonus", min(1 + dominance_level, 3)) or min(1 + dominance_level, 3))
+    partial_penalty = int(signal.get("partial_penalty", 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
+    weak_penalty = int(signal.get("weak_penalty", 6 + (dominance_level * 2)) or 6 + (dominance_level * 2))
+    if dominant_alignment_score >= 0.78:
+        adjustment = positive_bonus
+        alignment = "strong"
+    elif dominant_alignment_score >= 0.42:
+        adjustment = -partial_penalty
+        alignment = "partial"
+    else:
+        adjustment = -weak_penalty
+        alignment = "weak"
+
+    return {
+        "name": signal.get("name") or "domain specialist track",
+        "fit_label": signal.get("fit_label") or signal.get("name") or "specialist context",
+        "watchout_label": signal.get("watchout_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
+        "aliases": aliases,
+        "dominance_level": dominance_level,
+        "alignment": alignment,
+        "adjustment": adjustment,
+    }
+
+
+def competitive_signal_assessments(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    existing = record.get("competitive_signals")
+    if isinstance(existing, list) and existing:
+        sanitized: List[dict] = []
+        for item in existing:
+            if not isinstance(item, dict):
+                continue
+            sanitized.append(
+                {
+                    "name": compact_whitespace(item.get("name") or "domain specialist track"),
+                    "fit_label": compact_whitespace(item.get("fit_label") or item.get("name") or ""),
+                    "watchout_label": compact_whitespace(item.get("watchout_label") or ""),
+                    "aliases": _normalized_aliases(list(item.get("aliases") or [])),
+                    "dominance_level": int(item.get("dominance_level", 1) or 1),
+                    "alignment": compact_whitespace(item.get("alignment") or "partial").lower(),
+                    "adjustment": int(item.get("adjustment", 0) or 0),
+                }
+            )
+        if sanitized:
+            return sanitized
+
+    active_profile = profile or load_profile()
+    details_text = build_fit_source_text(record, include_watchouts=False)
+    signals = detect_competitive_signals(details_text, active_profile)
+    return [evaluate_competitive_signal_alignment(signal, active_profile) for signal in signals]
+
+
+def competitive_fit_highlights(record: dict, profile: Optional[dict] = None) -> List[str]:
+    highlights: List[str] = []
+    for signal in competitive_signal_assessments(record, profile):
+        if int(signal.get("adjustment", 0)) > 0:
+            fit_label = compact_whitespace(signal.get("fit_label") or signal.get("name") or "")
+            if fit_label:
+                highlights.append(f"{fit_label} \u2713")
+    return dedupe_preserve_order(highlights)[:2]
+
+
+def competitive_gap_watchouts(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    watchouts: List[dict] = []
+    for signal in competitive_signal_assessments(record, profile):
+        if int(signal.get("adjustment", 0)) >= 0:
+            continue
+        alignment = compact_whitespace(signal.get("alignment") or "").lower()
+        severity = "medium" if alignment == "partial" else "high"
+        label = compact_whitespace(signal.get("watchout_label") or signal.get("name") or "")
+        category = (
+            compact_whitespace(signal.get("name") or "")
+            .lower()
+            .replace(" and ", "_")
+            .replace(" ", "_")
+        )
+        if label:
+            watchouts.append({
+                "text": label,
+                "severity": severity,
+                "kind": "competitive_signal",
+                "category": category,
+            })
+    return watchouts[:2]
+
+
+def salary_fit_label(record: dict, profile: Optional[dict] = None) -> str:
+    salary_text = str(record.get("salary") or "").strip()
+    if not salary_text or salary_text == "N/A":
+        return "missing"
+
+    salary_adjustment = salary_fit_adjustment(record, profile)
+    if salary_adjustment >= 4:
+        return "meets"
+    if salary_adjustment < 0:
+        return "below"
+    return "listed"
+
+
+def score_to_tone_class(score: int) -> str:
+    if score >= 80:
+        return "tone-strong"
+    if score >= 65:
+        return "tone-good"
+    if score >= 50:
+        return "tone-borderline"
+    return "tone-low"
+
+
+def compact_score_label(label: str) -> str:
+    direct_map = {
+        "Direct target title match": "Title",
+        "Adjacent title match": "Title",
+        "Description fit is excellent": "Description",
+        "Description fit is strong": "Description",
+        "Description fit is solid": "Description",
+        "Description fit is mixed": "Description",
+        "Description fit is weak": "Description",
+        "Description fit is a mismatch": "Description",
+        "Passed content filters": "Filters",
+        "Fit evidence bullets": "Evidence",
+        "Salary/rate signal": "Salary",
+        "Salary/rate below target": "Salary",
+        "Watchouts or specialist gaps": "Watchouts",
+        "Already viewed by you": "Viewed",
+    }
+    if label in direct_map:
+        return direct_map[label]
+    if label.startswith("Posted within") or label == "Still relatively recent":
+        return "Freshness"
+    if label.startswith("Sydney location") or label.startswith("Canberra role") or label.startswith("Location"):
+        return "Location"
+    if label.startswith("Competitive signal"):
+        return "Competitive"
+    if "contract" in label.lower() or "permanent" in label.lower():
+        return "Engagement"
+    if "government" in label.lower():
+        return "Government"
+    if "remote" in label.lower() or "hybrid" in label.lower() or label == "On-site role":
+        return "Work mode"
+    return label
+
+
+def format_score_breakdown_for_console(breakdown: List[dict]) -> str:
+    return " | ".join(
+        f"{compact_score_label(str(item.get('label', '')))} {int(item.get('value', 0)):+d}"
+        for item in breakdown
+    )
+
+
+def render_badge(label: str, class_name: str, explanation: str) -> str:
+    return (
+        f'<span class="badge {safe_html(class_name)}" title="{safe_html(explanation)}" '
+        f'aria-label="{safe_html(explanation)}">{safe_html(label)}</span>'
+    )
+
+
+def viewed_badge_html() -> str:
+    return render_badge("Viewed", "badge-viewed", "You have already opened this role from the dashboard.")
 
 
 def extract_work_type(card_text: str) -> str:
@@ -353,32 +1345,314 @@ def format_posted_date_label(posted_text: Optional[str], posted_age_days: Option
         return "Unknown"
 
 
-def location_fit_score(record: dict) -> int:
-    search_location = str(record.get("search_location") or "").lower()
-    location = str(record.get("location") or "").lower()
-    if not search_location or not location or location == "n/a":
-        return 0
+def get_match_preferences(profile: Optional[dict] = None) -> dict:
+    active_profile = profile or load_profile()
+    defaults = {
+        "home_location": "Sydney NSW",
+        "secondary_location": "Canberra ACT",
+        "prefer_government": True,
+        "prefer_permanent": True,
+        "preferred_contract_months": 12,
+        "short_contract_months": 6,
+    }
+    preferences = active_profile.get("match_preferences", {})
+    if isinstance(preferences, dict):
+        defaults.update(preferences)
+    return defaults
 
-    city_tokens = [
-        ("sydney", "nsw"),
-        ("canberra", "act"),
-        ("melbourne", "vic"),
-        ("brisbane", "qld"),
+
+def build_fit_source_text(record: dict, include_watchouts: bool = True) -> str:
+    explicit_source = compact_whitespace(record.get("fit_source_text") or "")
+    if explicit_source:
+        return explicit_source
+    source_parts: List[str] = []
+    values = [
+        record.get("title"),
+        record.get("role_snapshot"),
+        record.get("teaser"),
+        *(record.get("fit_highlights", []) or []),
     ]
-    for city, state in city_tokens:
-        if city in search_location and city in location:
-            return 6
-        if city in search_location and state in location:
-            return 4
-    return 0
+    if include_watchouts:
+        values.extend(record.get("fit_watchouts", []) or [])
+    for value in values:
+        cleaned = compact_whitespace(value)
+        if cleaned and cleaned != "N/A":
+            source_parts.append(cleaned)
+    return "\n".join(dedupe_preserve_order(source_parts))
+
+
+def find_requirement_strength(details_text: str, aliases: List[str]) -> str:
+    lowered = compact_whitespace(details_text).lower()
+    if not lowered:
+        return ""
+
+    essential_terms = r"(required|essential|must have|mandatory|strong experience|proven experience)"
+    desirable_terms = r"(desirable|nice to have|preferred|bonus)"
+
+    for alias in aliases:
+        cleaned = str(alias).strip().lower()
+        if not cleaned:
+            continue
+        escaped = re.escape(cleaned)
+        if re.search(rf"{essential_terms}.{{0,60}}{escaped}|{escaped}.{{0,60}}{essential_terms}", lowered):
+            return "essential"
+    for alias in aliases:
+        cleaned = str(alias).strip().lower()
+        if not cleaned:
+            continue
+        escaped = re.escape(cleaned)
+        if re.search(rf"{desirable_terms}.{{0,60}}{escaped}|{escaped}.{{0,60}}{desirable_terms}", lowered):
+            return "desirable"
+    if any(str(alias).strip().lower() in lowered for alias in aliases if str(alias).strip()):
+        return "mentioned"
+    return ""
+
+
+def extract_contract_months(details_text: str) -> Optional[int]:
+    lowered = compact_whitespace(details_text).lower()
+    matches = [int(value) for value in re.findall(r"\b(\d{1,2})\s*[-‑– ]?(?:month|months|mth)\b", lowered)]
+    if not matches:
+        return None
+    return max(matches)
+
+
+def find_old_experience_year(profile: dict, aliases: List[str]) -> Optional[int]:
+    cv_text = compact_whitespace(profile.get("cv_text") or "").lower()
+    if not cv_text:
+        return None
+    for alias in aliases:
+        cleaned = str(alias).strip().lower()
+        if not cleaned:
+            continue
+        match = re.search(rf"{re.escape(cleaned)}.{{0,90}}old from (\d{{4}})", cv_text)
+        if match:
+            try:
+                return int(match.group(1))
+            except Exception:
+                return None
+    return None
+
+
+def _line_year_context(line: str, current_year: int) -> Optional[int]:
+    lowered = compact_whitespace(line).lower()
+    if not lowered:
+        return None
+
+    patterns = [
+        r"(20\d{2})\s*[-–]\s*(present|current|ongoing|20\d{2})",
+        r"from\s+(20\d{2})\s+to\s+(20\d{2})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, lowered)
+        if not match:
+            continue
+        end_value = match.group(2)
+        if end_value in {"present", "current", "ongoing"}:
+            return current_year
+        try:
+            return int(end_value)
+        except Exception:
+            continue
+    return None
+
+
+def find_profile_experience_year(profile: dict, aliases: List[str]) -> Optional[int]:
+    explicit_old_year = find_old_experience_year(profile, aliases)
+    if explicit_old_year:
+        return explicit_old_year
+
+    evidence_tiers = get_evidence_tiers(profile)
+    candidate_years = [
+        find_profile_experience_year_in_text(evidence_tiers.get("primary_current_evidence", ""), aliases),
+        find_profile_experience_year_in_text(evidence_tiers.get("secondary_older_evidence", ""), aliases),
+        find_profile_experience_year_in_text(evidence_tiers.get("background_optional_evidence", ""), aliases),
+        find_profile_experience_year_in_text(str(profile.get("cv_text") or ""), aliases),
+    ]
+    candidate_years = [year for year in candidate_years if year]
+    if not candidate_years:
+        return None
+    return max(candidate_years)
+
+
+def profile_recency_multiplier(profile: dict, aliases: List[str]) -> float:
+    most_recent_year = find_profile_experience_year(profile, aliases)
+    if not most_recent_year:
+        return 0.0
+    years_ago = max(datetime.now().year - int(most_recent_year), 0)
+    if years_ago <= 5:
+        return 1.0
+    if years_ago <= 10:
+        return 0.6
+    return 0.3
+
+
+def lower_severity(severity: str) -> str:
+    order = ["light", "medium", "high"]
+    if severity not in order:
+        return severity
+    index = max(order.index(severity) - 1, 0)
+    return order[index]
+
+
+def raise_severity(severity: str) -> str:
+    order = ["light", "medium", "high"]
+    if severity not in order:
+        return severity
+    index = min(order.index(severity) + 1, len(order) - 1)
+    return order[index]
+
+
+def severity_from_requirement_strength(strength: str, default: str = "medium") -> str:
+    normalized = compact_whitespace(strength).lower()
+    if normalized == "essential":
+        return "high"
+    if normalized == "desirable":
+        return "light"
+    if normalized == "mentioned":
+        return default
+    return default
+
+
+def recency_adjusted_severity(profile: dict, aliases: List[str], base_severity: str) -> str:
+    multiplier = profile_recency_multiplier(profile, aliases)
+    if multiplier >= 1.0:
+        return lower_severity(base_severity)
+    if 0.0 < multiplier < 0.6:
+        return base_severity
+    if multiplier == 0.0 and base_severity == "medium":
+        return raise_severity(base_severity)
+    return base_severity
+
+
+def llm_description_fit_entry(record: dict) -> dict:
+    grade = str(record.get("llm_fit_grade") or "").strip().upper()
+    decision = str(record.get("llm_decision") or "").strip().upper()
+    if not grade:
+        fallback_map = {
+            "KEEP": "STRONG",
+            "MAYBE": "SOLID",
+            "REJECT": "MISMATCH",
+        }
+        grade = fallback_map.get(decision, "SOLID")
+
+    grade_map = {
+        "EXCELLENT": ("Description fit is excellent", 20),
+        "STRONG": ("Description fit is strong", 16),
+        "SOLID": ("Description fit is solid", 12),
+        "WEAK": ("Description fit is mixed", 6),
+        "POOR": ("Description fit is weak", 0),
+        "MISMATCH": ("Description fit is a mismatch", -10),
+    }
+    label, value = grade_map.get(grade, grade_map["SOLID"])
+    return {"label": label, "value": value}
+
+
+def deterministic_review_outcome(record: dict, fit_highlights: List[str], fit_watchout_meta: List[dict]) -> Optional[dict]:
+    title_reason = str(record.get("title_reason") or "")
+    high_watchouts = sum(1 for item in fit_watchout_meta if str(item.get("severity") or "").lower() == "high")
+    medium_watchouts = sum(1 for item in fit_watchout_meta if str(item.get("severity") or "").lower() == "medium")
+    strong_signal_count = len(fit_highlights)
+
+    if high_watchouts >= 2 and strong_signal_count <= 1:
+        return {"decision": "REJECT", "grade": "MISMATCH"}
+    if title_reason == "TITLE_POTENTIAL_MATCH" and high_watchouts >= 1 and strong_signal_count <= 1:
+        return {"decision": "REJECT", "grade": "POOR"}
+    if title_reason == "OK" and strong_signal_count >= 4 and high_watchouts == 0:
+        return {"decision": "KEEP", "grade": "STRONG"}
+    if title_reason == "OK" and strong_signal_count >= 3 and high_watchouts == 0 and medium_watchouts <= 1:
+        return {"decision": "KEEP", "grade": "SOLID"}
+    return None
+
+
+def assess_location_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
+    active_profile = profile or load_profile()
+    preferences = get_match_preferences(active_profile)
+    source_text = build_fit_source_text(record).lower()
+    location = compact_whitespace(record.get("location") or "").lower()
+    work_mode = compact_whitespace(record.get("work_mode") or "").lower()
+
+    if not location or location == "n/a":
+        return None
+
+    home_location = str(preferences.get("home_location") or "").lower()
+    secondary_location = str(preferences.get("secondary_location") or "").lower()
+
+    if "sydney" in location and "sydney" in home_location:
+        return {"label": "Sydney-based role", "value": 4}
+
+    if "canberra" in location and "canberra" in secondary_location:
+        if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
+            return {"label": "Canberra role with remote setup", "value": 2}
+        if re.search(r"\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\b", source_text):
+            return {"label": "Canberra role with lighter travel", "value": 0}
+        if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
+            return {"label": "Canberra onsite pattern is heavier", "value": -3}
+        if re.search(r"\bmust be based in canberra\b|\bmust reside in canberra\b|\bonsite in canberra\b", source_text):
+            return {"label": "Canberra onsite attendance is required", "value": -6}
+        return {"label": "Canberra role may involve travel", "value": -1}
+
+    return None
+
+
+def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
+    active_profile = profile or load_profile()
+    preferences = get_match_preferences(active_profile)
+    source_text = build_fit_source_text(record)
+    work_type = compact_whitespace(record.get("work_type") or "").lower()
+    preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
+    short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
+
+    if "full time" in work_type or "permanent" in work_type:
+        return {"label": "Permanent role", "value": 7}
+
+    if "contract" not in work_type:
+        return None
+
+    contract_months = extract_contract_months(source_text)
+    if contract_months is None:
+        return None
+    if contract_months >= preferred_contract_months:
+        if "extension" in source_text.lower():
+            return {"label": "12+ month contract with extension potential", "value": 6}
+        return {"label": "12+ month contract", "value": 5}
+    if contract_months >= short_contract_months:
+        return {"label": "6-12 month contract", "value": 2}
+    return {"label": "Contract is shorter than preferred", "value": -4}
+
+
+def assess_government_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
+    active_profile = profile or load_profile()
+    preferences = get_match_preferences(active_profile)
+    if not preferences.get("prefer_government", True):
+        return None
+
+    title = compact_whitespace(record.get("title") or "").lower()
+    company = compact_whitespace(record.get("company") or "").lower()
+    source_text = build_fit_source_text(record).lower()
+    government_terms = (
+        "government",
+        "department",
+        "agency",
+        "public sector",
+        "aps",
+        "ministerial",
+        "federal",
+        "state",
+    )
+    combined = "\n".join([title, company, source_text])
+    if any(term in combined for term in government_terms):
+        return {"label": "Government context", "value": 4}
+    return None
 
 
 def score_to_match_label(score: int) -> str:
-    if score >= 76:
-        return "High"
-    if score >= 52:
-        return "Medium"
-    return "Borderline"
+    if score >= 80:
+        return "Strong fit"
+    if score >= 65:
+        return "Good fit"
+    if score >= 50:
+        return "Borderline"
+    return "Low fit"
 
 
 def humanize_reject_reason(reason: Optional[str]) -> str:
@@ -424,60 +1698,193 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Excluded description pattern: {cleaned_detail}"
     if prefix == "TITLE_POTENTIAL_MATCH":
         return "Adjacent title match"
+    if prefix == "CARD_SPECIALIST" and cleaned_detail:
+        return f"Rejected early from card metadata: {cleaned_detail}"
 
     fallback = raw.replace("_", " ").lower()
     return fallback[:1].upper() + fallback[1:]
 
 
-def fit_score(record: dict) -> int:
-    score = 0
+def watchout_penalty(record: dict, profile: Optional[dict] = None) -> int:
+    watchout_meta = record.get("fit_watchout_meta") or []
+    if isinstance(watchout_meta, list) and watchout_meta:
+        severity_points = {"light": 2, "medium": 5, "high": 8}
+        penalty = 0
+        for entry in watchout_meta[:4]:
+            if str((entry or {}).get("kind") or "").strip().lower() == "competitive_signal":
+                continue
+            severity = str((entry or {}).get("severity") or "medium").strip().lower()
+            penalty += severity_points.get(severity, 5)
+        return min(penalty, 14)
+
+    watchouts = [
+        str(item).strip().lower()
+        for item in record.get("fit_watchouts", [])
+        if str(item).strip()
+    ]
+    if not watchouts:
+        return 0
+
+    active_profile = profile or load_profile()
+    strong_keywords = {
+        "energy trading",
+        "trading experience",
+        "treasury",
+        "erp",
+        "vendor evaluation",
+        "vendor selection",
+        "supply chain",
+        "commercial functions",
+        "machine learning",
+        "data science",
+    }
+    low_fit_aliases: Set[str] = set()
+    for rule in active_profile.get("capability_profile_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        level = str(rule.get("level") or "").strip().lower()
+        fit = str(rule.get("fit") or "").strip().lower()
+        if fit == "avoid" or level in {"low", "none"}:
+            name = str(rule.get("name") or "").strip().lower()
+            if name:
+                low_fit_aliases.add(name)
+            for alias in rule.get("aliases", []):
+                alias_text = str(alias).strip().lower()
+                if alias_text:
+                    low_fit_aliases.add(alias_text)
+
+    penalty = 0
+    for item in watchouts[:4]:
+        penalty += 4
+        matched_keywords = [keyword for keyword in strong_keywords if keyword in item]
+        if matched_keywords:
+            penalty += 2 + min(len(matched_keywords), 3)
+        if any(alias in item for alias in low_fit_aliases):
+            penalty += 3
+        if "desirable" in item or "preferred" in item or "bonus" in item:
+            penalty = max(penalty - 1, 1)
+    return min(penalty, 14)
+
+
+def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    entries: List[dict] = []
+    for signal in competitive_signal_assessments(record, profile):
+        adjustment = int(signal.get("adjustment", 0) or 0)
+        label_base = compact_whitespace(signal.get("fit_label") or signal.get("name") or "competitive signal")
+        if not label_base or adjustment == 0:
+            continue
+        if adjustment > 0:
+            label = f"Competitive signal aligns: {label_base}"
+        else:
+            label = f"Competitive signal leans elsewhere: {label_base}"
+        entries.append({"label": label, "value": adjustment})
+    entries.sort(key=lambda item: (abs(int(item.get("value", 0))), item.get("label", "")), reverse=True)
+    return entries[:2]
+
+
+def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
+    salary_text = str(record.get("salary") or "").strip()
+    if not salary_text or salary_text == "N/A":
+        return 0
+
+    active_profile = profile or load_profile()
+    salary_preferences = active_profile.get("salary_preferences", {})
+    minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
+    minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
+    parsed_value = salary_sort_value(salary_text)
+    lowered = salary_text.lower()
+    is_daily = "per day" in lowered or "daily rate" in lowered or "/day" in lowered
+
+    if is_daily:
+        if minimum_daily_rate <= 0 or parsed_value <= 0:
+            return 0
+        if parsed_value >= minimum_daily_rate:
+            return 3
+        return -6
+
+    if minimum_salary_yearly <= 0 or parsed_value <= 0:
+        return 0
+    if parsed_value >= minimum_salary_yearly:
+        return 3
+    return -6
+
+
+def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    breakdown: List[dict] = []
     title_reason = str(record.get("title_reason") or "")
-    llm_decision = str(record.get("llm_decision") or "").upper()
     content_reason = str(record.get("content_reason") or "")
     posted_age_days = record.get("posted_age_days")
     work_mode = str(record.get("work_mode") or "").lower()
+    fit_highlights = [item for item in record.get("fit_highlights", []) if str(item).strip()]
 
     if title_reason == "OK":
-        score += 24
+        breakdown.append({"label": "Direct target title match", "value": 14})
     elif title_reason == "TITLE_POTENTIAL_MATCH":
-        score += 12
+        breakdown.append({"label": "Adjacent title match", "value": 4})
 
-    if llm_decision == "KEEP":
-        score += 20
-    elif llm_decision == "MAYBE":
-        score += 11
+    breakdown.append(llm_description_fit_entry(record))
 
     if content_reason == "OK":
-        score += 5
+        breakdown.append({"label": "Passed content filters", "value": 8})
+
+    evidence_score = min(len(fit_highlights) * 3, 12)
+    if evidence_score:
+        breakdown.append({"label": "Fit evidence bullets", "value": evidence_score})
+
+    breakdown.extend(competitive_signal_breakdown(record, profile))
 
     if posted_age_days is not None:
         if posted_age_days <= (1 / 24):
-            score += 14
+            breakdown.append({"label": "Posted within the last hour", "value": 12})
         elif posted_age_days <= 1:
-            score += 11
+            breakdown.append({"label": "Posted within the last day", "value": 9})
         elif posted_age_days <= 3:
-            score += 8
+            breakdown.append({"label": "Posted within the last 3 days", "value": 6})
         elif posted_age_days <= 7:
-            score += 4
+            breakdown.append({"label": "Posted within the last week", "value": 3})
         elif posted_age_days <= 15:
-            score += 1
+            breakdown.append({"label": "Still relatively recent", "value": 1})
 
-    score += location_fit_score(record)
+    location_item = assess_location_preference(record, profile)
+    if location_item:
+        breakdown.append(location_item)
+
+    contract_item = assess_contract_preference(record, profile)
+    if contract_item:
+        breakdown.append(contract_item)
+
+    government_item = assess_government_preference(record, profile)
+    if government_item:
+        breakdown.append(government_item)
 
     if work_mode == "hybrid":
-        score += 4
+        breakdown.append({"label": "Hybrid work available", "value": 1})
     elif work_mode == "remote":
-        score += 3
-    elif work_mode == "on-site":
-        score += 1
+        breakdown.append({"label": "Remote work available", "value": 2})
 
-    if record.get("salary") not in (None, "", "N/A"):
-        score += 2
+    salary_score = salary_fit_adjustment(record, profile)
+    if salary_score > 0:
+        breakdown.append({"label": "Salary/rate signal", "value": salary_score})
+    elif salary_score < 0:
+        breakdown.append({"label": "Salary/rate below target", "value": salary_score})
+
+    watchout_score = watchout_penalty(record, profile)
+    if watchout_score > 0:
+        breakdown.append({"label": "Watchouts or specialist gaps", "value": -watchout_score})
 
     if viewed_by_user(record):
-        score -= 3
+        breakdown.append({"label": "Already viewed by you", "value": -3})
 
+    return breakdown
+
+
+def fit_score(record: dict, profile: Optional[dict] = None) -> int:
+    score = sum(item["value"] for item in fit_score_breakdown(record, profile))
     return max(min(score, 100), 0)
+
+
+def is_dashboard_eligible(record: dict, profile: Optional[dict] = None) -> bool:
+    return fit_score(record, profile) >= DASHBOARD_MIN_SCORE
 
 
 def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
@@ -543,9 +1950,20 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["work_mode"] = snapshot.get("work_mode") or "N/A"
     if record.get("work_type") in {None, "", "N/A"}:
         record["work_type"] = snapshot.get("work_type") or "N/A"
+    if record.get("role_snapshot") in {None, "", "N/A"}:
+        record["role_snapshot"] = snapshot.get("role_snapshot") or "N/A"
+    if not record.get("fit_highlights"):
+        record["fit_highlights"] = snapshot.get("fit_highlights") or []
+    if not record.get("fit_watchouts"):
+        record["fit_watchouts"] = snapshot.get("fit_watchouts") or []
+    if not record.get("fit_watchout_meta"):
+        record["fit_watchout_meta"] = snapshot.get("fit_watchout_meta") or []
+    if not record.get("competitive_signals"):
+        record["competitive_signals"] = snapshot.get("competitive_signals") or []
 
     record["content_reason"] = snapshot.get("content_reason")
     record["llm_decision"] = snapshot.get("llm_decision")
+    record["llm_fit_grade"] = snapshot.get("llm_fit_grade")
     record["decision"] = "KEEP"
     record["details_length"] = 0
     record["reused_history"] = True
@@ -553,6 +1971,8 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
 
 
 def viewed_by_user(record: dict) -> bool:
+    if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
+        return False
     return int(record.get("times_viewed", 0) or 0) > 0
 
 
@@ -628,8 +2048,14 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "title_reason": snapshot.get("title_reason"),
         "content_reason": snapshot.get("content_reason"),
         "llm_decision": snapshot.get("llm_decision"),
+        "llm_fit_grade": snapshot.get("llm_fit_grade"),
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
+        "role_snapshot": snapshot.get("role_snapshot") or "N/A",
+        "fit_highlights": snapshot.get("fit_highlights") or [],
+        "fit_watchouts": snapshot.get("fit_watchouts") or [],
+        "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
+        "competitive_signals": snapshot.get("competitive_signals") or [],
         "seen_before": True,
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
         "times_kept": int(entry.get("times_kept", 0) or 0),
@@ -690,9 +2116,15 @@ def build_hidden_dashboard_record(job_key: str, entry: dict, run_started_at: dat
         "work_mode": snapshot.get("work_mode") or "N/A",
         "work_type": snapshot.get("work_type") or "N/A",
         "teaser": snapshot.get("teaser") or "N/A",
+        "role_snapshot": snapshot.get("role_snapshot") or "N/A",
         "title_reason": snapshot.get("title_reason"),
         "content_reason": snapshot.get("content_reason"),
         "llm_decision": snapshot.get("llm_decision"),
+        "llm_fit_grade": snapshot.get("llm_fit_grade"),
+        "fit_highlights": snapshot.get("fit_highlights") or [],
+        "fit_watchouts": snapshot.get("fit_watchouts") or [],
+        "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
+        "competitive_signals": snapshot.get("competitive_signals") or [],
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
@@ -731,19 +2163,167 @@ def build_hidden_records(
     return records
 
 
-def render_job_card(record: dict) -> str:
+def build_applied_dashboard_record(job_key: str, entry: dict, run_started_at: datetime) -> dict:
+    snapshot = entry.get("last_kept_snapshot")
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+
+    applied_at = entry.get("last_applied_at") or entry.get("first_applied_at")
+    applied_age_days = days_since(applied_at, run_started_at) if applied_at else None
+    return {
+        "job_key": job_key,
+        "title": snapshot.get("title") or entry.get("title") or f"Applied job {job_key}",
+        "company": snapshot.get("company") or entry.get("company") or "N/A",
+        "url": snapshot.get("url") or entry.get("url") or "#",
+        "posted": snapshot.get("posted") or "N/A",
+        "posted_age_days": snapshot.get("posted_age_days"),
+        "salary": snapshot.get("salary") or "N/A",
+        "location": snapshot.get("location") or "N/A",
+        "work_mode": snapshot.get("work_mode") or "N/A",
+        "work_type": snapshot.get("work_type") or "N/A",
+        "teaser": snapshot.get("teaser") or "N/A",
+        "role_snapshot": snapshot.get("role_snapshot") or "N/A",
+        "title_reason": snapshot.get("title_reason"),
+        "content_reason": snapshot.get("content_reason"),
+        "llm_decision": snapshot.get("llm_decision"),
+        "llm_fit_grade": snapshot.get("llm_fit_grade"),
+        "fit_highlights": snapshot.get("fit_highlights") or [],
+        "fit_watchouts": snapshot.get("fit_watchouts") or [],
+        "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
+        "competitive_signals": snapshot.get("competitive_signals") or [],
+        "search_location": snapshot.get("search_location") or "N/A",
+        "search_keywords": snapshot.get("search_keywords") or "",
+        "times_viewed": int(entry.get("times_viewed", 0) or 0),
+        "first_seen_at": entry.get("first_seen_at"),
+        "last_seen_at": entry.get("last_seen_at"),
+        "first_viewed_at": entry.get("first_viewed_at"),
+        "last_viewed_at": entry.get("last_viewed_at"),
+        "first_applied_at": entry.get("first_applied_at"),
+        "last_applied_at": entry.get("last_applied_at"),
+        "applied_age_days": applied_age_days,
+        "applied": True,
+    }
+
+
+def build_applied_records(
+    applied_job_keys: Set[str],
+    history: Dict[str, dict],
+    run_started_at: datetime,
+) -> List[dict]:
+    records: List[dict] = []
+    for job_key in applied_job_keys:
+        records.append(build_applied_dashboard_record(job_key, history.get(job_key, {}), run_started_at))
+
+    records.sort(
+        key=lambda item: (
+            parse_timestamp(item.get("last_applied_at")) or datetime.min,
+            parse_timestamp(item.get("last_seen_at")) or datetime.min,
+        ),
+        reverse=True,
+    )
+    return records
+
+
+def build_dashboard_record_sets(
+    kept_records: List[dict],
+    job_history: Dict[str, dict],
+    applied_job_keys: Set[str],
+    hidden_job_keys: Set[str],
+    reference_time: datetime,
+    scoring_profile: Optional[dict] = None,
+) -> Dict[str, List[dict]]:
+    profile = scoring_profile or load_profile()
+    curated_kept_records = [record for record in kept_records if is_dashboard_eligible(record, profile)]
+    current_records = sorted(
+        curated_kept_records,
+        key=lambda record: (
+            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+            -fit_score(record, profile),
+            -(1 if not viewed_by_user(record) else 0),
+        ),
+    )
+    current_run_keys = {
+        normalize_job_key(str(record.get("job_key") or ""))
+        for record in curated_kept_records
+        if normalize_job_key(str(record.get("job_key") or ""))
+    }
+    archive_records = build_archive_records(
+        job_history,
+        current_run_keys,
+        applied_job_keys,
+        hidden_job_keys,
+        reference_time,
+    )
+    applied_records = build_applied_records(applied_job_keys, job_history, reference_time)
+    hidden_records = build_hidden_records(hidden_job_keys, job_history, reference_time)
+    recent_archive_records = sorted(
+        [record for record in archive_records if not record.get("is_stale") and is_dashboard_eligible(record, profile)],
+        key=lambda record: (
+            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+            -(fit_score(record, profile)),
+            -(parse_timestamp(record.get("last_kept_at")) or datetime.min).timestamp()
+            if parse_timestamp(record.get("last_kept_at"))
+            else float("-inf"),
+        ),
+    )
+    stale_archive_records = sorted(
+        [record for record in archive_records if record.get("is_stale") and is_dashboard_eligible(record, profile)],
+        key=lambda record: (
+            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+            -(fit_score(record, profile)),
+            -(parse_timestamp(record.get("last_kept_at")) or datetime.min).timestamp()
+            if parse_timestamp(record.get("last_kept_at"))
+            else float("-inf"),
+        ),
+    )
+    return {
+        "current_records": current_records,
+        "archive_records": archive_records,
+        "recent_archive_records": recent_archive_records,
+        "stale_archive_records": stale_archive_records,
+        "applied_records": applied_records,
+        "hidden_records": hidden_records,
+    }
+
+
+def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str:
+    active_profile = scoring_profile or load_profile()
+    display_record = dict(record)
     title = safe_html(record.get("title", "Untitled"))
     company = safe_html(record.get("company", "N/A"))
     url = safe_html(record.get("url", "#"))
     job_key = safe_html(str(record.get("job_key") or ""))
-    teaser = record.get("teaser", "N/A")
     title_reason = record.get("title_reason")
+    applied_record = bool(record.get("applied"))
     archived = bool(record.get("archived"))
     hidden_record = bool(record.get("hidden"))
     is_stale = bool(record.get("is_stale"))
     seen_by_you = viewed_by_user(record)
-    fit_points = fit_score(record)
+    stored_snapshot = compact_whitespace(record.get("role_snapshot") or record.get("teaser") or "N/A")
+    if stored_snapshot in {"", "N/A"}:
+        stored_snapshot = synthesize_role_snapshot(record)
+    fit_source_text = build_fit_source_text(display_record, include_watchouts=False) or stored_snapshot
+    watchout_source_text = build_fit_source_text(display_record, include_watchouts=True) or fit_source_text
+    display_record["fit_source_text"] = watchout_source_text
+    role_summary = build_role_summary(record, fit_source_text, active_profile)
+    display_record["role_snapshot"] = role_summary
+    display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
+    fit_highlights = build_fit_highlights(record, fit_source_text, active_profile)
+    fit_watchout_meta = build_watchout_entries(
+        watchout_source_text,
+        title_reason,
+        active_profile,
+        existing_entries=record.get("fit_watchout_meta") if isinstance(record.get("fit_watchout_meta"), list) else None,
+        competitive_signals=display_record.get("competitive_signals") if isinstance(display_record.get("competitive_signals"), list) else None,
+    )
+    fit_watchouts = [entry["text"] for entry in fit_watchout_meta]
+    display_record["fit_highlights"] = fit_highlights
+    display_record["fit_watchouts"] = fit_watchouts
+    display_record["fit_watchout_meta"] = fit_watchout_meta
+    fit_points = fit_score(display_record, scoring_profile)
     fit_label = score_to_match_label(fit_points)
+    fit_tone_class = score_to_tone_class(fit_points)
+    score_breakdown = fit_score_breakdown(display_record, scoring_profile)
     posted_text = normalize_posted_text(record.get("posted"))
     posted_date_label = format_posted_date_label(
         posted_text,
@@ -753,24 +2333,27 @@ def render_job_card(record: dict) -> str:
     work_mode = str(record.get("work_mode") or "N/A")
     posted_age_days = record.get("posted_age_days")
     salary_value = salary_sort_value(str(record.get("salary") or ""))
-    record_kind = "hidden" if hidden_record else ("saved" if archived else "current")
+    salary_fit_state = salary_fit_label(record, scoring_profile)
+    record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
 
     badges = []
-    if hidden_record:
-        badges.append('<span class="badge badge-hidden">Hidden</span>')
+    if applied_record:
+        badges.append(render_badge("Applied", "badge-viewed", "You already applied for this role."))
+    elif hidden_record:
+        badges.append(render_badge("Hidden", "badge-hidden", "You hid this role for now."))
     elif archived:
-        badges.append('<span class="badge badge-archive">Saved For Later</span>')
-    else:
-        badges.append('<span class="badge badge-new">New Job</span>')
+        badges.append(render_badge("Previously Kept", "badge-archive", "This role was kept in an earlier run and carried forward into the dashboard."))
+    if not applied_record and not seen_by_you:
+        badges.append(render_badge("New To You", "badge-new", "You have not opened this role from the dashboard yet."))
     if is_stale:
-        badges.append('<span class="badge badge-stale">15+ Days Old</span>')
-    if seen_by_you:
-        badges.append('<span class="badge badge-viewed">Opened By You</span>')
+        badges.append(render_badge("15+ Days Old", "badge-stale", "This role is older, but still saved for reference."))
+    elif seen_by_you:
+        badges.append(viewed_badge_html())
 
     score_html = (
-        '<div class="match-score">'
+        f'<div class="match-score {fit_tone_class}">'
         f'<span class="match-score-number">{fit_points}/100</span>'
-        f'<span class="match-score-label">{safe_html(fit_label)} fit</span>'
+        f'<span class="match-score-label">{safe_html(fit_label)}</span>'
         "</div>"
     )
 
@@ -794,25 +2377,68 @@ def render_job_card(record: dict) -> str:
                 f'<span class="chip"><strong>{safe_html(label)}:</strong> {safe_html(str(value))}</span>'
             )
     context_bits = []
-    if record.get("search_location") not in (None, "", "N/A"):
-        context_bits.append(f"Search: {record.get('search_location')}")
-    if title_reason == "TITLE_POTENTIAL_MATCH":
-        context_bits.append("Adjacent title match, kept because the description still looked relevant")
+    if salary_fit_state == "below":
+        fit_watchouts = dedupe_preserve_order([
+            *fit_watchouts,
+            "Salary is below target range",
+        ])
+    contract_item = assess_contract_preference(record, scoring_profile)
+    if contract_item and int(contract_item.get("value", 0)) < 0:
+        fit_watchouts = dedupe_preserve_order([
+            *fit_watchouts,
+            "Contract length is shorter than preferred",
+        ])
     if seen_by_you and record.get("last_viewed_at"):
         context_bits.append(f"Opened by you {format_timestamp_label(record.get('last_viewed_at'))}")
+    if applied_record and record.get("last_applied_at"):
+        context_bits.append(f"Applied {format_timestamp_label(record.get('last_applied_at'))}")
     if hidden_record and record.get("last_hidden_at"):
         context_bits.append(f"Hidden {format_timestamp_label(record.get('last_hidden_at'))}")
     elif archived and record.get("last_kept_at"):
-        context_bits.append(f"Saved from an earlier run {format_timestamp_label(record.get('last_kept_at'))}")
+        context_bits.append(f"Kept from an earlier run {format_timestamp_label(record.get('last_kept_at'))}")
     context_html = (
         f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>'
         if context_bits
         else ""
     )
 
-    teaser_html = (
-        f'<p class="job-teaser">{safe_html(teaser)}</p>'
-        if teaser and teaser != "N/A"
+    summary_html = (
+        f'<p class="job-summary">{safe_html(role_summary)}</p>'
+        if role_summary and role_summary != "N/A"
+        else ""
+    )
+    insight_sections = []
+    if fit_highlights:
+        insight_sections.append(
+            '<div class="job-insight-group">'
+            '<strong>Why it fits</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in fit_highlights)}</ul>'
+            '</div>'
+        )
+    if fit_watchouts:
+        insight_sections.append(
+            '<div class="job-insight-group">'
+            '<strong>Possible gaps</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in fit_watchouts)}</ul>'
+            '</div>'
+        )
+    if SHOW_SCORING_DEBUG and score_breakdown:
+        score_breakdown_html = "".join(
+            f"<li>{safe_html(str(item['label']))}: {int(item['value']):+d}</li>"
+            for item in score_breakdown
+        )
+        insight_sections.append(
+            '<div class="job-insight-group is-secondary">'
+            '<strong>Score details</strong>'
+            f'<ul>{score_breakdown_html}</ul>'
+            '</div>'
+        )
+    insight_html = (
+        '<details class="job-insights">'
+        '<summary>Fit breakdown</summary>'
+        f'{"".join(insight_sections)}'
+        '</details>'
+        if insight_sections
         else ""
     )
 
@@ -823,7 +2449,7 @@ def render_job_card(record: dict) -> str:
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
-    else:
+    elif not applied_record:
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-applied" type="button" data-review-action="applied" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">Applied</button>'
@@ -831,15 +2457,18 @@ def render_job_card(record: dict) -> str:
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
+    else:
+        actions_html = ""
 
     return (
-        f'<article class="job-card" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}">'
+        f'<article class="job-card" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         f'<div class="job-company">{company}</div>'
         f"{score_html}"
         f'<div class="job-meta">{"".join(chips)}</div>'
-        f"{teaser_html}"
+        f"{summary_html}"
+        f"{insight_html}"
         f"{context_html}"
         f"{actions_html}"
         "</article>"
@@ -851,14 +2480,14 @@ def section_dom_id(title: str) -> str:
     return slug or "matches"
 
 
-def render_section(title: str, records: List[dict], empty_message: str) -> str:
+def render_section(title: str, records: List[dict], empty_message: str, scoring_profile: Optional[dict] = None) -> str:
     if not records:
         return (
             f'<section class="section"><h2>{safe_html(title)}</h2>'
             f'<p class="empty-state">{safe_html(empty_message)}</p></section>'
         )
     dom_id = section_dom_id(title)
-    cards = "".join(render_job_card(record) for record in records)
+    cards = "".join(render_job_card(record, scoring_profile) for record in records)
     return (
         f'<section class="section job-section" data-section-id="{safe_html(dom_id)}">'
         '<div class="section-head">'
@@ -897,6 +2526,7 @@ def build_run_stats(
     audit_rows: List[dict],
     kept_records: List[dict],
     run_started_at: datetime,
+    run_finished_at: datetime,
     date_range_days: int,
     sort_newest_first: bool,
     max_pages_cap: int,
@@ -929,6 +2559,7 @@ def build_run_stats(
 
     return {
         "run_started_at": run_started_at.isoformat(timespec="seconds"),
+        "run_finished_at": run_finished_at.isoformat(timespec="seconds"),
         "search_window_days": date_range_days,
         "sort_newest_first": sort_newest_first,
         "max_pages_cap": max_pages_cap,
@@ -959,60 +2590,73 @@ def render_html(
     dashboard_reference_at: Optional[datetime] = None,
 ) -> None:
     reference_time = dashboard_reference_at or run_started_at
-    current_records = sorted(
+    scoring_profile = load_profile()
+    dashboard_records = build_dashboard_record_sets(
         kept_records,
-        key=lambda record: (
-            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
-            -fit_score(record),
-            -(1 if not viewed_by_user(record) else 0),
-        ),
-    )
-    current_run_keys = {
-        normalize_job_key(str(record.get("job_key") or ""))
-        for record in kept_records
-        if normalize_job_key(str(record.get("job_key") or ""))
-    }
-    archive_records = build_archive_records(
         job_history,
-        current_run_keys,
         applied_job_keys,
         hidden_job_keys,
         reference_time,
+        scoring_profile,
     )
-    hidden_records = build_hidden_records(hidden_job_keys, job_history, reference_time)
-    recent_archive_records = sorted(
-        [record for record in archive_records if not record.get("is_stale")],
-        key=lambda record: (
-            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
-            -(fit_score(record)),
-            -(parse_timestamp(record.get("last_kept_at")) or datetime.min).timestamp()
-            if parse_timestamp(record.get("last_kept_at"))
-            else float("-inf"),
-        ),
-    )
-    stale_archive_records = sorted(
-        [record for record in archive_records if record.get("is_stale")],
-        key=lambda record: (
-            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
-            -(fit_score(record)),
-            -(parse_timestamp(record.get("last_kept_at")) or datetime.min).timestamp()
-            if parse_timestamp(record.get("last_kept_at"))
-            else float("-inf"),
-        ),
-    )
+    current_records = dashboard_records["current_records"]
+    recent_archive_records = dashboard_records["recent_archive_records"]
+    stale_archive_records = dashboard_records["stale_archive_records"]
+    applied_records = dashboard_records["applied_records"]
+    hidden_records = dashboard_records["hidden_records"]
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
     target_summaries = []
     for location, pages in (run_stats.get("search_targets") or {}).items():
         page_label = ", ".join(str(page) for page in pages) if pages else "none"
         target_summaries.append(f"{location}: pages {page_label}")
+    testing_mode_note = ""
+    if TEST_SCRAPE_MODE:
+        testing_mode_note = (
+            f" Scrape test mode is on, so the dashboard keeps roles scoring {DASHBOARD_MIN_SCORE}+,"
+            f" widens the live search to at least {TEST_SCRAPE_DATE_RANGE_DAYS} days and"
+            f" {TEST_SCRAPE_MAX_PAGES_CAP} pages, skips the quick card gate, and treats"
+            f" every role as New To You."
+        )
+    elif TEST_DASHBOARD_MODE:
+        testing_mode_note = (
+            f" Dashboard test mode is on, so the shortlist keeps roles scoring {DASHBOARD_MIN_SCORE}+"
+            f" and treats every role as New To You without running a fresh scrape."
+        )
+    elif TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
+        testing_mode_note = " New To You has been reset for testing, so all roles are shown as unseen."
+    search_window_label = f"Last {date_range_days} day" + ("" if date_range_days == 1 else "s")
+    sort_order_label = "Newest first" if sort_newest_first else "Source relevance"
+    mode_label = "Test mode ON" if TEST_ANY_MODE else "Normal mode"
+    snapshot_helper = (
+        f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and treats all roles as New To You."
+        if TEST_ANY_MODE
+        else f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and preserves your viewed history."
+    )
+    snapshot_stats = [
+        ("summary-primary", len(current_records), "Matches This Run", "roles worth reviewing"),
+        ("summary-primary", sum(1 for record in current_records if not viewed_by_user(record)), "New To You", "not viewed yet"),
+        ("summary-secondary", sum(1 for record in current_records if viewed_by_user(record)), "Opened By You", "you've opened these"),
+        ("summary-secondary", len(recent_archive_records), "Previously Kept", "carried forward from earlier runs"),
+        ("summary-tertiary", len(applied_records), "Applied Jobs", "already applied"),
+        ("summary-tertiary", len(hidden_records), "Hidden Jobs", "not relevant right now"),
+        ("summary-tertiary", len(stale_archive_records), "Older Previously Kept", "older carried-forward roles"),
+        ("summary-tertiary", run_stats.get("page_count", 0), "Pages Crawled", "search pages checked"),
+        ("summary-tertiary", run_stats.get("cards_seen", 0), "Cards Seen", "roles scanned"),
+        ("summary-tertiary", run_stats.get("detail_fetches", 0), "Detail Pages Opened", "full ads reviewed"),
+        ("summary-tertiary", f"{round(float(run_stats.get('keep_rate', 0.0)) * 100, 1)}%", "Keep Rate", "roles kept after review"),
+    ]
+    snapshot_cards_html = "".join(
+        f'<div class="summary-card {safe_html(card_class)}"><strong>{safe_html(str(value))}</strong>'
+        f'<span>{safe_html(label)}</span><small>{safe_html(helper)}</small></div>'
+        for card_class, value, label, helper in snapshot_stats
+    )
 
     html = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="{AUTO_REFRESH_SECONDS}">
-  <title>SEEK Filtered Results</title>
+  <title>Role Match Dashboard</title>
   <style>
     :root {{
       --bg: #f4efe7;
@@ -1093,14 +2737,7 @@ def render_html(
     .side-panel summary {{
       list-style: none;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 16px 18px;
-      font-size: 1rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+      padding: 14px 16px;
     }}
     .side-panel summary::-webkit-details-marker {{
       display: none;
@@ -1108,8 +2745,32 @@ def render_html(
     .side-panel[open] summary {{
       border-bottom: 1px solid var(--line);
     }}
+    .side-panel-summary-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }}
+    .side-panel-title-wrap {{
+      min-width: 0;
+    }}
+    .side-panel-title {{
+      display: block;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }}
+    .side-panel-subtitle {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      line-height: 1.35;
+    }}
     .side-panel-body {{
-      padding: 18px;
+      padding: 14px 16px 16px;
     }}
     .side-panel-copy {{
       margin: 0 0 14px;
@@ -1121,15 +2782,20 @@ def render_html(
     }}
     .side-panel-summary-grid {{
       display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }}
     .side-toggle-hint {{
-      color: var(--muted);
-      font-size: 0.82rem;
+      color: var(--cool);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(29, 78, 216, 0.12);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.72rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+      white-space: nowrap;
     }}
     .summary-grid {{
       display: grid;
@@ -1138,19 +2804,84 @@ def render_html(
       margin: 20px 0 0;
     }}
     .summary-card {{
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(214, 200, 180, 0.65);
+      border-radius: 16px;
+      padding: 12px 13px 11px;
+      min-height: 88px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }}
+    .summary-card.summary-primary {{
+      border-color: rgba(20, 83, 45, 0.18);
+      background: linear-gradient(180deg, #fffefb, #f5fbf6);
+    }}
+    .summary-card.summary-secondary {{
+      background: linear-gradient(180deg, #fffefc, #fbf8f3);
+    }}
+    .summary-card.summary-tertiary {{
+      background: rgba(255, 255, 255, 0.92);
     }}
     .summary-card strong {{
       display: block;
-      font-size: 1.75rem;
-      margin-bottom: 6px;
+      font-size: 1.8rem;
+      line-height: 1;
+      margin-bottom: 5px;
+      letter-spacing: -0.03em;
+    }}
+    .summary-card.summary-primary strong {{
+      font-size: 2.05rem;
     }}
     .summary-card span {{
       color: var(--muted);
-      font-size: 0.95rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }}
+    .summary-card small {{
+      display: block;
+      margin-top: 3px;
+      color: #7b8390;
+      font-size: 0.72rem;
+      line-height: 1.35;
+    }}
+    .snapshot-meta {{
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+    }}
+    .snapshot-meta-row {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(230, 220, 205, 0.65);
+    }}
+    .snapshot-meta-row:last-child {{
+      padding-bottom: 0;
+      border-bottom: 0;
+    }}
+    .snapshot-meta-label {{
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }}
+    .snapshot-meta-value {{
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-align: right;
+      line-height: 1.35;
+    }}
+    .snapshot-helper {{
+      margin: 0 0 12px;
+      color: #6b7280;
+      font-size: 0.78rem;
+      line-height: 1.4;
     }}
     .section {{
       margin-top: 28px;
@@ -1186,6 +2917,7 @@ def render_html(
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+      cursor: help;
     }}
     .badge-new {{ background: var(--accent-soft); color: var(--accent); }}
     .badge-potential {{ background: var(--warm-soft); color: var(--warm); }}
@@ -1288,20 +3020,45 @@ def render_html(
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }}
     .match-score-number {{
       font-size: 1.25rem;
       font-weight: 800;
-      color: var(--accent);
     }}
     .match-score-label {{
       padding: 6px 10px;
       border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
       font-size: 0.9rem;
       font-weight: 700;
+    }}
+    .match-score.tone-strong .match-score-number {{
+      color: #166534;
+    }}
+    .match-score.tone-strong .match-score-label {{
+      background: #dcfce7;
+      color: #166534;
+    }}
+    .match-score.tone-good .match-score-number {{
+      color: #15803d;
+    }}
+    .match-score.tone-good .match-score-label {{
+      background: #dcfce7;
+      color: #15803d;
+    }}
+    .match-score.tone-borderline .match-score-number {{
+      color: #9a6700;
+    }}
+    .match-score.tone-borderline .match-score-label {{
+      background: #fef3c7;
+      color: #9a6700;
+    }}
+    .match-score.tone-low .match-score-number {{
+      color: #991b1b;
+    }}
+    .match-score.tone-low .match-score-label {{
+      background: #f3f4f6;
+      color: #991b1b;
     }}
     .match-score-stars {{
       display: inline-flex;
@@ -1337,10 +3094,47 @@ def render_html(
       background: #eefbf3;
       border-color: #ccebd7;
     }}
-    .job-teaser {{
+    .job-summary {{
       margin: 0 0 10px;
       color: var(--ink);
       line-height: 1.45;
+    }}
+    .job-insights {{
+      margin: 0 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 250, 242, 0.7);
+      padding: 0 14px 12px;
+    }}
+    .job-insights summary {{
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--cool);
+      padding: 12px 0;
+    }}
+    .job-insight-group {{
+      margin-top: 6px;
+    }}
+    .job-insight-group strong {{
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.92rem;
+    }}
+    .job-insight-group.is-secondary strong {{
+      color: var(--muted);
+    }}
+    .job-insight-group ul {{
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.45;
+    }}
+    .job-insight-group.is-secondary ul {{
+      color: #6b7280;
+      font-size: 0.92rem;
+    }}
+    .job-insight-group li {{
+      margin: 4px 0;
     }}
     .job-context {{
       margin: 0 0 14px;
@@ -1431,7 +3225,7 @@ def render_html(
         position: static;
       }}
       .side-panel-summary-grid {{
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: 1fr;
       }}
     }}
   </style>
@@ -1441,14 +3235,14 @@ def render_html(
     <div class="dashboard-layout">
       <div class="dashboard-main">
         <section class="hero">
-          <h1>Personal SEEK Dashboard</h1>
-          <p class="hero-note">Your shortlist stays front and center here. The run stats, latest-run explanation, and efficiency notes are tucked into the side panel so they are there when you want them, but out of the way when you are focused on jobs.</p>
+          <h1>Role Match Dashboard</h1>
+          <p class="hero-note">Your shortlist stays front and center here. The run stats, score explanation, and efficiency notes are tucked into the side panel so they are there when you want them, but out of the way when you are focused on deciding what deserves your time.</p>
         </section>
         <section class="section filter-panel">
           <div class="section-head">
             <h2>Match Controls</h2>
           </div>
-          <p class="section-copy">Fresh matches are jobs kept in the latest scrape. Saved jobs are earlier strong matches you may still want to revisit. Hide removes a job from future runs; Applied also removes it, but files it under jobs you acted on.</p>
+          <p class="section-copy">Matches from this run are kept roles that also clear the current dashboard threshold. Kept from earlier runs means the role was shortlisted in a previous run and is still being carried forward into this dashboard. New to you means you have not opened that job from this dashboard yet. Hidden jobs stay in review for up to {HIDDEN_REVIEW_DAYS} days. Applied jobs are stored in their own section so you can review them later. Roles scoring below {DASHBOARD_MIN_SCORE} stay in logs and analytics, not in the main shortlist.{safe_html(testing_mode_note)}</p>
           <div class="filter-grid">
             <label class="filter-field">
               <span>Sort</span>
@@ -1472,8 +3266,9 @@ def render_html(
               <span>Show</span>
               <select id="scope_filter">
                 <option value="all">All matches</option>
-                <option value="current">Fresh this run</option>
-                <option value="saved">Saved from earlier</option>
+                <option value="current">Matches this run</option>
+                <option value="saved">Kept from earlier runs</option>
+                <option value="applied">Applied jobs</option>
                 <option value="hidden">Hidden jobs</option>
                 <option value="unseen">Not opened by me</option>
                 <option value="viewed">Opened by me</option>
@@ -1487,6 +3282,7 @@ def render_html(
                 <option value="3">Last 3 days</option>
                 <option value="7">Last 7 days</option>
                 <option value="15">Last 15 days</option>
+                <option value="30">Last 30 days</option>
               </select>
             </label>
             <label class="filter-field">
@@ -1502,54 +3298,68 @@ def render_html(
               <span>Match score</span>
               <select id="score_filter">
                 <option value="all">Any</option>
-                <option value="85">85+ only</option>
-                <option value="70">70+ only</option>
-                <option value="55">55+ only</option>
+                <option value="80" {"selected" if DEFAULT_SCORE_FILTER_MIN == 80 else ""}>80+ only</option>
+                <option value="65" {"selected" if DEFAULT_SCORE_FILTER_MIN == 65 else ""}>65+ only</option>
+                <option value="35" {"selected" if DEFAULT_SCORE_FILTER_MIN == 35 else ""}>35+ only</option>
+                <option value="50" {"selected" if DEFAULT_SCORE_FILTER_MIN == 50 else ""}>50+ only</option>
+              </select>
+            </label>
+            <label class="filter-field">
+              <span>Salary</span>
+              <select id="salary_filter">
+                <option value="all">Any</option>
+                <option value="listed">Salary listed</option>
+                <option value="meets">Meets my target</option>
+                <option value="below">Below my target</option>
+                <option value="missing">No salary shown</option>
               </select>
             </label>
           </div>
         </section>
-        {render_section("Fresh Matches", current_records, "No fresh kept roles this run.")}
-        {render_section("Saved From Earlier Runs", recent_archive_records, "No saved matches from earlier runs right now.")}
-        {render_section("Hidden Jobs", hidden_records, "No hidden jobs right now.")}
+        {render_section("Matches From This Run", current_records, "No kept roles from the latest run right now.", scoring_profile)}
+        {render_section("Kept From Earlier Runs", recent_archive_records, "No roles from earlier runs are being carried forward right now.", scoring_profile)}
+        {render_section("Applied Jobs", applied_records, "No applied jobs saved yet.", scoring_profile)}
+        {render_section("Hidden Jobs", hidden_records, "No hidden jobs right now.", scoring_profile)}
         <section class="section job-section" data-section-id="older-saved">
           <div class="section-head">
-            <h2>Older Saved Jobs</h2>
+            <h2>Older Previously Kept Jobs</h2>
             <div class="section-tools">
               <span class="pagination-label"></span>
               <button class="pagination-button" type="button" data-page-direction="prev">Prev</button>
               <button class="pagination-button" type="button" data-page-direction="next">Next</button>
-              <button class="toggle-button" type="button" data-toggle-target="older-archive" {'disabled' if not stale_archive_records else ''}>{'Show' if stale_archive_records else 'No'} Older Saved Jobs ({len(stale_archive_records)})</button>
+              <button class="toggle-button" type="button" data-toggle-target="older-archive" {'disabled' if not stale_archive_records else ''}>{'Show' if stale_archive_records else 'No'} Older Previously Kept Jobs ({len(stale_archive_records)})</button>
             </div>
           </div>
-          <p class="section-copy">Saved jobs older than {ARCHIVE_STALE_AFTER_DAYS} days since their last keep are hidden by default so the dashboard stays focused. Open this when you want to revisit older strong roles.</p>
+          <p class="section-copy">Roles kept from earlier runs are collapsed here once they are more than {ARCHIVE_STALE_AFTER_DAYS} days past their last keep, so the dashboard stays focused.</p>
           <div id="older-archive" hidden>
             <div class="job-grid">
-              {''.join(render_job_card(record) for record in stale_archive_records)}
+              {''.join(render_job_card(record, scoring_profile) for record in stale_archive_records)}
             </div>
           </div>
-          {'' if stale_archive_records else '<p class="empty-state">No older saved matches right now.</p>'}
+          {'' if stale_archive_records else '<p class="empty-state">No older previously kept roles right now.</p>'}
         </section>
       </div>
       <aside class="dashboard-sidebar">
         <details class="side-panel" open>
           <summary>
-            <span>Run Snapshot</span>
-            <span class="side-toggle-hint">Show / hide</span>
+            <div class="side-panel-summary-head">
+              <div class="side-panel-title-wrap">
+                <span class="side-panel-title">Run Snapshot</span>
+                <span class="side-panel-subtitle">Latest scrape summary and shortlist activity</span>
+              </div>
+              <span class="side-toggle-hint">Show / hide</span>
+            </div>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Latest run: {safe_html(run_label)}. Search window: roles published within the last {date_range_days} day(s). Result order: {"newest jobs first" if sort_newest_first else "source default relevance"}. This page rebuilds from the latest scrape plus your local keep history, so strong roles stay visible even after they fall outside the live SEEK date window. The page auto-refreshes every {AUTO_REFRESH_SECONDS} seconds so it picks up later runs without a manual browser reload.</p>
+            <div class="snapshot-meta">
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Last run</span><span class="snapshot-meta-value">{safe_html(run_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Search window</span><span class="snapshot-meta-value">{safe_html(search_window_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Sort order</span><span class="snapshot-meta-value">{safe_html(sort_order_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Mode</span><span class="snapshot-meta-value">{safe_html(mode_label)}</span></div>
+            </div>
+            <p class="snapshot-helper">{safe_html(snapshot_helper)}</p>
             <div class="side-panel-summary-grid">
-              <div class="summary-card"><strong>{len(kept_records)}</strong><span>Fresh Matches</span></div>
-              <div class="summary-card"><strong>{sum(1 for record in current_records if not record.get("seen_before"))}</strong><span>New Jobs</span></div>
-              <div class="summary-card"><strong>{sum(1 for record in current_records if viewed_by_user(record))}</strong><span>Opened By You</span></div>
-              <div class="summary-card"><strong>{len(recent_archive_records)}</strong><span>Saved For Later</span></div>
-              <div class="summary-card"><strong>{len(hidden_records)}</strong><span>Hidden Jobs</span></div>
-              <div class="summary-card"><strong>{len(stale_archive_records)}</strong><span>Older Saved</span></div>
-              <div class="summary-card"><strong>{run_stats.get("page_count", 0)}</strong><span>Pages Crawled</span></div>
-              <div class="summary-card"><strong>{run_stats.get("cards_seen", 0)}</strong><span>Cards Seen</span></div>
-              <div class="summary-card"><strong>{run_stats.get("detail_fetches", 0)}</strong><span>Detail Pages Opened</span></div>
-              <div class="summary-card"><strong>{round(float(run_stats.get("keep_rate", 0.0)) * 100, 1)}%</strong><span>Keep Rate</span></div>
+              {snapshot_cards_html}
             </div>
           </div>
         </details>
@@ -1565,17 +3375,40 @@ def render_html(
             </div>
           </div>
         </details>
+        <details class="side-panel">
+          <summary>
+            <span>How Match Score Works</span>
+            <span class="side-toggle-hint">Show / hide</span>
+          </summary>
+          <div class="side-panel-body">
+            <p class="side-panel-copy">The score is a guide, not a final verdict. Full-description fit carries more weight than title alone, and the ranking now also checks for dominant signals that suggest the employer may favour a more specialist background. Strong and good fits are shown first by default, borderline roles can be included when you lower the score filter, and roles below {DASHBOARD_MIN_SCORE} stay out of the main view unless you deliberately widen the shortlist.</p>
+            <div class="job-meta">
+              <span class="chip"><strong>Strong fit:</strong> 80-100</span>
+              <span class="chip"><strong>Good fit:</strong> 65-79</span>
+              <span class="chip"><strong>Borderline:</strong> 50-64</span>
+              <span class="chip"><strong>Low fit:</strong> 0-49</span>
+              <span class="chip"><strong>Title match:</strong> +14 direct, +4 adjacent</span>
+              <span class="chip"><strong>Description review:</strong> +20 excellent, +16 strong, +12 solid, +6 weak, 0 poor, -10 mismatch</span>
+              <span class="chip"><strong>Competitive signals:</strong> specialist bias can add a small boost or a moderate penalty</span>
+              <span class="chip"><strong>Freshness:</strong> newer roles score higher</span>
+              <span class="chip"><strong>Preferences:</strong> pay, engagement shape, Sydney, Canberra travel, and government context can move ranking</span>
+              <span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>
+            </div>
+          </div>
+        </details>
       </aside>
     </div>
   </main>
   <script>
     const REVIEW_API_URL = 'http://127.0.0.1:8765/api/review';
+    const JOB_HISTORY_API_URL = 'http://127.0.0.1:8765/api/job-history';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
     const scopeFilter = document.getElementById('scope_filter');
     const postedFilter = document.getElementById('posted_filter');
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
+    const salaryFilter = document.getElementById('salary_filter');
     const paginationState = {{}};
 
     function getVisibleCards() {{
@@ -1635,6 +3468,7 @@ def render_html(
       const postedLimit = postedFilter?.value || 'all';
       const workMode = workModeFilter?.value || 'all';
       const scoreMode = scoreFilter?.value || 'all';
+      const salaryMode = salaryFilter?.value || 'all';
 
       for (const card of getVisibleCards()) {{
         const cardScope = card.dataset.recordKind || 'current';
@@ -1642,16 +3476,22 @@ def render_html(
         const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
         const cardScore = Number(card.dataset.fitScore || 0);
         const postedAge = Number(card.dataset.postedAge || 9999);
+        const salaryState = (card.dataset.salaryFit || 'missing').toLowerCase();
 
         let visible = true;
         if (scopeMode === 'current' && cardScope !== 'current') visible = false;
         if (scopeMode === 'saved' && cardScope !== 'saved') visible = false;
+        if (scopeMode === 'applied' && cardScope !== 'applied') visible = false;
         if (scopeMode === 'hidden' && cardScope !== 'hidden') visible = false;
         if (scopeMode === 'unseen' && viewed) visible = false;
         if (scopeMode === 'viewed' && !viewed) visible = false;
         if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
         if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
         if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
+        if (salaryMode === 'listed' && salaryState === 'missing') visible = false;
+        if (salaryMode === 'meets' && salaryState !== 'meets') visible = false;
+        if (salaryMode === 'below' && salaryState !== 'below') visible = false;
+        if (salaryMode === 'missing' && salaryState !== 'missing') visible = false;
 
         card.dataset.matchesFilters = visible ? '1' : '0';
       }}
@@ -1687,16 +3527,46 @@ def render_html(
       const card = link.closest('.job-card');
       if (!card) return;
       card.dataset.viewed = '1';
+      const badges = card.querySelector('.job-badges');
+      const newBadge = badges?.querySelector('.badge-new');
+      if (newBadge) {{
+        newBadge.remove();
+      }}
       if (!card.querySelector('.badge-viewed')) {{
-        const badges = card.querySelector('.job-badges');
         if (badges) {{
-          const badge = document.createElement('span');
-          badge.className = 'badge badge-viewed';
-          badge.textContent = 'Opened By You';
-          badges.appendChild(badge);
+          badges.insertAdjacentHTML('beforeend', {json.dumps(viewed_badge_html())});
         }}
       }}
       applyDashboardControls();
+    }}
+
+    async function hydrateViewedState() {{
+      try {{
+        const response = await fetch(JOB_HISTORY_API_URL, {{ method: 'GET' }});
+        if (!response.ok) {{
+          return;
+        }}
+        const payload = await response.json().catch(() => ({{}}));
+        const jobs = payload?.jobs || {{}};
+        for (const card of getVisibleCards()) {{
+          const link = card.querySelector('.job-link');
+          const jobKey = link?.dataset.jobKey || '';
+          if (!jobKey || !jobs[jobKey] || Number(jobs[jobKey].times_viewed || 0) <= 0) {{
+            continue;
+          }}
+          card.dataset.viewed = '1';
+          const badges = card.querySelector('.job-badges');
+          const newBadge = badges?.querySelector('.badge-new');
+          if (newBadge) {{
+            newBadge.remove();
+          }}
+          if (!card.querySelector('.badge-viewed') && badges) {{
+            badges.insertAdjacentHTML('beforeend', {json.dumps(viewed_badge_html())});
+          }}
+        }}
+        applyDashboardControls();
+      }} catch (error) {{
+      }}
     }}
 
     function sendViewedBeacon(link) {{
@@ -1809,7 +3679,7 @@ def render_html(
       saveReviewAction(button);
     }});
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, scoreFilter]) {{
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, scoreFilter, salaryFilter]) {{
       control?.addEventListener('change', () => {{
         resetPagination();
         applyDashboardControls();
@@ -1817,6 +3687,7 @@ def render_html(
     }}
 
     applyDashboardControls();
+    hydrateViewedState();
   </script>
 </body>
 </html>
@@ -1832,9 +3703,14 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
     configure_console_output()
 
     profile = load_profile()
+    previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
+    previous_run_stats = load_json_dict(RUN_STATS_PATH)
     search_settings = get_search_settings(profile)
     configured_max_pages = int(search_settings.get("max_pages_cap", max_pages_cap) or max_pages_cap)
     configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
+    if TEST_SCRAPE_MODE:
+        configured_max_pages = max(configured_max_pages, TEST_SCRAPE_MAX_PAGES_CAP)
+        configured_date_range = max(configured_date_range, TEST_SCRAPE_DATE_RANGE_DAYS)
     enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", True))
     sort_newest_first = bool(search_settings.get("sort_newest_first", True))
     search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
@@ -1842,7 +3718,7 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
 
     run_started_at = datetime.now().astimezone()
     run_iso = run_started_at.isoformat(timespec="seconds")
-    llm_cache: Dict[str, str] = load_llm_cache()
+    llm_cache: Dict[str, Any] = load_llm_cache()
     job_history = load_job_history()
     audit_rows: List[dict] = []
     kept_records: List[dict] = []
@@ -1912,6 +3788,12 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                             "title_reason": None,
                             "content_reason": None,
                             "llm_decision": None,
+                            "llm_fit_grade": None,
+                            "role_snapshot": "N/A",
+                            "fit_highlights": [],
+                            "fit_watchouts": [],
+                            "fit_watchout_meta": [],
+                            "competitive_signals": [],
                             "details_length": 0,
                         }
 
@@ -1996,6 +3878,22 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                                 continue
                             seen_urls.add(full_url)
 
+                            if not SKIP_QUICK_CARD_GATE_FOR_TESTING:
+                                ok_card, card_reason = passes_quick_card_filters(
+                                    title=title,
+                                    teaser=card_meta["teaser"],
+                                    company=company,
+                                    location=record["location"],
+                                    work_mode=record["work_mode"],
+                                    work_type=record["work_type"],
+                                    salary=card_meta["card_salary"],
+                                )
+                                if not ok_card:
+                                    print(f"REJECTED (card gate) [{card_reason}] {title} @ {company}")
+                                    record["reject_reason"] = card_reason
+                                    finalize_record(job_history, audit_rows, record, run_iso)
+                                    continue
+
                             history_entry = job_history.get(record["job_key"] or "", {})
                             if can_reuse_kept_job(history_entry, record):
                                 record = apply_kept_job_reuse(record, history_entry)
@@ -2034,27 +3932,6 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            llm_input_text = details_text[:MAX_LLM_CHARS]
-                            llm_fp = build_llm_cache_key(llm_input_text)
-
-                            if not llm_is_enabled():
-                                llm_decision = "MAYBE"
-                                print(f"[LLM][DISABLED] {llm_decision} {title} @ {company}")
-                            elif llm_fp in llm_cache:
-                                llm_decision = llm_cache[llm_fp]
-                                print(f"[LLM][CACHE] {llm_decision} {title} @ {company}")
-                            else:
-                                llm_decision = llm_should_consider(llm_input_text)
-                                llm_cache[llm_fp] = llm_decision
-                                print(f"[LLM] {llm_decision} {title} @ {company}")
-
-                            record["llm_decision"] = llm_decision
-                            if llm_decision == "REJECT":
-                                print(f"REJECTED (llm) [LLM_REJECT] {title} @ {company}")
-                                record["reject_reason"] = "LLM_REJECT"
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
                             salary = extract_salary(details_text)
                             if salary == "N/A":
                                 salary = card_meta["card_salary"]
@@ -2062,6 +3939,57 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                             detail_work_mode = extract_work_mode(details_text)
                             if detail_work_mode != "N/A":
                                 record["work_mode"] = detail_work_mode
+                            record["competitive_signals"] = [
+                                evaluate_competitive_signal_alignment(signal, profile)
+                                for signal in detect_competitive_signals(details_text, profile)
+                            ]
+                            record["role_snapshot"] = build_role_summary(record, details_text, profile)
+                            record["fit_highlights"] = build_fit_highlights(record, details_text, profile)
+                            record["fit_watchout_meta"] = build_watchout_entries(
+                                details_text,
+                                title_reason,
+                                profile,
+                                competitive_signals=record.get("competitive_signals") if isinstance(record.get("competitive_signals"), list) else None,
+                            )
+                            record["fit_watchouts"] = [entry["text"] for entry in record["fit_watchout_meta"]]
+
+                            deterministic_review = deterministic_review_outcome(
+                                record,
+                                record["fit_highlights"],
+                                record["fit_watchout_meta"],
+                            )
+                            if deterministic_review is not None:
+                                llm_review = deterministic_review
+                                print(f"[LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                            else:
+                                llm_input_text = details_text[:MAX_LLM_CHARS]
+                                llm_fp = build_llm_cache_key(llm_input_text)
+
+                                if not llm_is_enabled():
+                                    llm_review = normalize_llm_review(None)
+                                    print(f"[LLM][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                elif llm_fp in llm_cache:
+                                    llm_review = normalize_llm_review(llm_cache[llm_fp])
+                                    print(f"[LLM][CACHE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                else:
+                                    llm_review = normalize_llm_review(llm_should_consider(llm_input_text))
+                                    llm_cache[llm_fp] = llm_review
+                                    print(f"[LLM] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+
+                            record["llm_decision"] = llm_review["decision"]
+                            record["llm_fit_grade"] = llm_review["grade"]
+                            if TEST_SCRAPE_MODE:
+                                test_score_breakdown = fit_score_breakdown(record, profile)
+                                print(
+                                    f"[TEST][SCORE] {title} @ {company} | "
+                                    f"{fit_score(record, profile)}/100 | "
+                                    f"{format_score_breakdown_for_console(test_score_breakdown)}"
+                                )
+                            if llm_review["decision"] == "REJECT":
+                                print(f"REJECTED (llm) [LLM_REJECT] {title} @ {company}")
+                                record["reject_reason"] = "LLM_REJECT"
+                                finalize_record(job_history, audit_rows, record, run_iso)
+                                continue
                             record["decision"] = "KEEP"
 
                             finalize_record(job_history, audit_rows, record, run_iso)
@@ -2085,10 +4013,31 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
 
                     current_page_num += 1
 
+            if not audit_rows and previous_audit_rows:
+                render_html(
+                    OUTPUT_HTML,
+                    load_last_kept_records(),
+                    parse_timestamp(previous_run_stats.get("run_started_at")) or run_started_at,
+                    configured_date_range,
+                    sort_newest_first,
+                    previous_run_stats or {},
+                    job_history,
+                    applied_job_keys,
+                    hidden_job_keys,
+                    datetime.now().astimezone(),
+                )
+                save_llm_cache(llm_cache)
+                save_job_history(job_history)
+                print("\nNo fresh cards were captured in this run, so the previous dashboard state was preserved.")
+                print(f"Dashboard preserved at {OUTPUT_HTML}")
+                return OUTPUT_HTML
+
+            run_finished_at = datetime.now().astimezone()
             run_stats = build_run_stats(
                 audit_rows,
                 kept_records,
                 run_started_at,
+                run_finished_at,
                 configured_date_range,
                 sort_newest_first,
                 configured_max_pages,
@@ -2146,6 +4095,13 @@ def rebuild_html_dashboard() -> str:
         hidden_job_keys,
         reference_time,
     )
+    print(f"Dashboard rebuilt at {OUTPUT_HTML}")
+    if TEST_DASHBOARD_MODE:
+        print("Mode: dashboard test mode")
+    elif TEST_SCRAPE_MODE:
+        print("Mode: scrape test mode")
+    if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
+        print("New To You has been reset for testing.")
     return OUTPUT_HTML
 
 

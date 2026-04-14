@@ -8,7 +8,12 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text
-from profile_store import DEFAULT_PROFILE, load_profile, patch_profile
+from profile_store import (
+    DEFAULT_PROFILE,
+    build_evidence_tiers_from_sections,
+    load_profile,
+    patch_profile,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -236,6 +241,7 @@ def _build_profile_import_result(
 ) -> dict[str, Any]:
     patch = build_learning_patch(combined_text)
     patch["cv_text"] = combined_text
+    patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections or [])
 
     existing_profile = load_profile()
 

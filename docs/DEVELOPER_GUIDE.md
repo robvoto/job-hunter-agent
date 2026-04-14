@@ -56,6 +56,17 @@ Do not rename major files casually unless there is time to clean the whole proje
 4. The source pack is imported into `data/profile.json`
 5. Admin is then used to refine the runtime profile
 
+## Current Runner Split
+
+- `run_jobs.py`
+  Preferred explicit entry point for refreshing source data and rebuilding outputs.
+
+- `main.py`
+  Compatibility wrapper that forwards to `run_jobs.py`.
+
+- `agent_runner.py`
+  Orchestration layer for refresh plus digest plus notifications.
+
 ## Current Product Boundary
 
 Current implemented source:

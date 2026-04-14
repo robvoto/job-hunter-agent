@@ -2,9 +2,12 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from agent_settings import load_agent_settings, save_agent_settings
 from config import OUTPUT_HTML
+from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
+from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from review_insights import apply_skill_review_decisions
 from source_documents import (
     build_llm_profile_brief,
@@ -152,6 +155,7 @@ ADMIN_HTML = """<!doctype html>
       gap: 10px;
       flex-wrap: wrap;
       margin-top: 18px;
+      align-items: center;
     }
     button {
       border: 0;
@@ -160,6 +164,10 @@ ADMIN_HTML = """<!doctype html>
       font: inherit;
       font-weight: 700;
       cursor: pointer;
+    }
+    button[disabled] {
+      opacity: 0.7;
+      cursor: progress;
     }
     .primary {
       background: var(--accent);
@@ -185,6 +193,26 @@ ADMIN_HTML = """<!doctype html>
     .status.error {
       display: block;
       background: #fff0e6;
+      color: #9a3412;
+    }
+    .inline-status {
+      display: none;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    .inline-status.loading,
+    .inline-status.ok,
+    .inline-status.error {
+      display: inline-flex;
+      align-items: center;
+    }
+    .inline-status.loading {
+      color: var(--muted);
+    }
+    .inline-status.ok {
+      color: #14532d;
+    }
+    .inline-status.error {
       color: #9a3412;
     }
     .review-list {
@@ -286,11 +314,11 @@ ADMIN_HTML = """<!doctype html>
       <div class="grid">
       <section class="panel">
         <h2>Source Documents</h2>
-        <p class="help">Normal users should start from the guided onboarding flow. The system keeps an internal local source pack so you do not need to manage file-path plumbing here.</p>
+        <p class="help">Normal users should start from the guided onboarding flow. The app stores your uploaded source documents as a local source pack so it can rebuild your profile later without asking you to upload everything again.</p>
         <div id="source_documents_summary" class="help">No source pack connected yet. Start with onboarding.</div>
         <div class="panel-actions">
           <button class="primary" id="open_onboarding" type="button">Open Onboarding</button>
-          <button class="secondary" id="import_source_materials">Rebuild Profile From Source Pack</button>
+          <button class="secondary" id="import_source_materials">Refresh Profile From Saved Source Documents</button>
         </div>
       </section>
 
@@ -302,11 +330,19 @@ ADMIN_HTML = """<!doctype html>
 
         <label for="llm_profile_brief">AI fit brief</label>
         <textarea id="llm_profile_brief"></textarea>
-        <div class="help">This is the compact structured brief the AI uses first. It should summarize strengths, positioning, important capability signals, and practical fit boundaries without repeating every detail from the full background text.</div>
+        <div class="help">This is the compact structured brief the AI reads first before the longer background text. It is usually auto-generated when you import source documents or learning updates. If it is empty, the app can still work, but the AI has less clean summary context.</div>
 
         <label for="strengths">Strengths</label>
         <textarea id="strengths"></textarea>
         <div class="help">Starts from the initial import. Keep one strength per line and edit as you learn what should be emphasized.</div>
+
+        <label for="minimum_salary_yearly">Minimum annual salary (optional)</label>
+        <input id="minimum_salary_yearly" type="number" min="0" step="1000">
+        <div class="help">Used as a light scoring signal when a role lists an annual salary. Leave blank or 0 to ignore.</div>
+
+        <label for="minimum_daily_rate">Minimum daily rate (optional)</label>
+        <input id="minimum_daily_rate" type="number" min="0" step="50">
+        <div class="help">Used as a light scoring signal when a role lists a contract day rate. Leave blank or 0 to ignore.</div>
 
         <label for="cv_text">CV / background text</label>
         <textarea id="cv_text"></textarea>
@@ -318,9 +354,10 @@ ADMIN_HTML = """<!doctype html>
 
         <label for="star_evidence_text">STAR / evidence notes</label>
         <textarea id="star_evidence_text"></textarea>
-        <div class="help">Optional deeper examples, impact stories, or evidence snippets. This should contain richer proof points, not general profile summary text.</div>
+        <div class="help">Optional deeper examples, impact stories, or evidence snippets. This is where a STAR document belongs. It only fills automatically if you imported a source document whose label clearly looks like STAR, achievements, examples, or selection criteria. Otherwise you can paste or maintain it here manually.</div>
         <div class="panel-actions">
           <button class="primary" id="save_profile">Save Profile</button>
+          <span class="inline-status" id="save_profile_status" aria-live="polite"></span>
         </div>
       </section>
 
@@ -380,7 +417,7 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel" data-tab-panel="review">
       <h2 class="group-title">Review</h2>
-      <p class="group-copy">Use this area to teach the system about new skills and manage review lists without mixing that work into your search settings.</p>
+      <p class="group-copy">Use this area to teach the system about new skills and manage the jobs you have acted on or never want to see again.</p>
       <div class="grid">
       <section class="panel">
         <h2>Review Controls</h2>
@@ -416,6 +453,42 @@ ADMIN_HTML = """<!doctype html>
       </section>
 
       <section class="panel">
+        <h2>Alerts</h2>
+        <label for="telegram_enabled">Telegram alerts enabled</label>
+        <select id="telegram_enabled">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+
+        <label for="telegram_bot_token">Telegram bot token</label>
+        <input id="telegram_bot_token" type="password" placeholder="123456:ABC...">
+        <div class="help">Only you paste the bot token here. End users never need to see chat ids.</div>
+
+        <label for="telegram_bot_username">Telegram bot username</label>
+        <input id="telegram_bot_username" type="text" placeholder="JobNotifierBot">
+        <div class="help">This is used to build the one-tap connect link. Leave off the @ symbol.</div>
+
+        <label for="telegram_disable_link_preview">Disable dashboard link preview</label>
+        <select id="telegram_disable_link_preview">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+
+        <div id="telegram_connect_panel" class="help">Save Telegram settings to generate a one-tap connect link.</div>
+        <div id="telegram_subscribers_panel" class="help">No Telegram subscribers synced yet.</div>
+
+        <label for="telegram_test_message">Telegram test message</label>
+        <textarea id="telegram_test_message">Job Hunter test message.</textarea>
+
+        <div class="panel-actions">
+          <button class="primary" id="save_alerts">Save Alert Settings</button>
+          <button class="secondary" id="open_telegram_connect" type="button">Open Connect Link</button>
+          <button class="secondary" id="sync_telegram_subscribers" type="button">Sync Telegram Subscribers</button>
+          <button class="secondary" id="send_telegram_test" type="button">Send Telegram Test</button>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2>Rejected Samples</h2>
         <div id="rejections_panel" class="help">Rejected roles grouped by reason will appear here after a run.</div>
         <div class="panel-actions">
@@ -431,8 +504,11 @@ ADMIN_HTML = """<!doctype html>
 
   <script>
     const statusEl = document.getElementById('status');
+    const saveProfileButton = document.getElementById('save_profile');
+    const saveProfileStatusEl = document.getElementById('save_profile_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+    let telegramConnectLink = '';
 
     const listTextAreas = [
       'locations',
@@ -457,6 +533,14 @@ ADMIN_HTML = """<!doctype html>
     function showStatus(message, kind) {
       statusEl.textContent = message;
       statusEl.className = `status ${kind}`;
+    }
+
+    function showInlineStatus(element, message, kind) {
+      if (!element) {
+        return;
+      }
+      element.textContent = message;
+      element.className = `inline-status ${kind}`;
     }
 
     function setActiveTab(tabName) {
@@ -522,6 +606,8 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
       document.getElementById('candidate_summary').value = profile.candidate_summary || '';
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
+      document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly || '');
+      document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate || '');
       document.getElementById('cv_text').value = profile.cv_text || '';
       document.getElementById('star_evidence_text').value = profile.star_evidence_text || '';
       document.getElementById('capability_profile_rules').value = capabilityRulesToText(profile.capability_profile_rules);
@@ -538,6 +624,54 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('hidden_job_keys').value = (profile.review_controls?.hidden_job_keys || []).join('\\n');
     }
 
+    function renderTelegramSubscribers(subscribers) {
+      const panel = document.getElementById('telegram_subscribers_panel');
+      if (!subscribers || !subscribers.length) {
+        panel.innerHTML = 'No Telegram subscribers synced yet.';
+        return;
+      }
+      panel.innerHTML = `
+        <p><strong>Connected Telegram users:</strong> ${subscribers.length}</p>
+        <ul>
+          ${subscribers.map(item => `
+            <li>
+              ${escapeHtml(item.first_name || item.username || item.chat_id || 'Telegram user')}
+              ${item.username ? ` (@${escapeHtml(item.username)})` : ''}
+            </li>
+          `).join('')}
+        </ul>
+      `;
+    }
+
+    function renderTelegramConnectPanel(settings) {
+      const panel = document.getElementById('telegram_connect_panel');
+      if (!settings?.telegram?.bot_token_present) {
+        telegramConnectLink = '';
+        panel.innerHTML = 'Save Telegram settings to generate a one-tap connect link.';
+        return;
+      }
+      if (!telegramConnectLink) {
+        panel.innerHTML = 'Bot token saved. Use Open Connect Link to generate the one-tap Telegram join link.';
+        return;
+      }
+      panel.innerHTML = `
+        <p><strong>One-tap connect link:</strong></p>
+        <p><a href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer">${escapeHtml(telegramConnectLink)}</a></p>
+        <p>Share that link with users. They just tap it and press Start in Telegram once.</p>
+      `;
+    }
+
+    function fillAgentSettings(settings) {
+      const telegram = settings?.telegram || {};
+      document.getElementById('telegram_enabled').value = String(Boolean(telegram.enabled));
+      document.getElementById('telegram_bot_token').value = '';
+      document.getElementById('telegram_bot_username').value = telegram.bot_username || '';
+      document.getElementById('telegram_disable_link_preview').value = String(Boolean(telegram.disable_link_preview));
+      telegramConnectLink = telegram.bot_username ? `https://t.me/${telegram.bot_username}?start=connect` : telegramConnectLink;
+      renderTelegramSubscribers(telegram.subscribers || []);
+      renderTelegramConnectPanel(settings);
+    }
+
     function fillSourceMaterials(materials) {
       const panel = document.getElementById('source_documents_summary');
       const sources = materials.profile_sources || [];
@@ -547,9 +681,9 @@ ADMIN_HTML = """<!doctype html>
       }
       const sourceHtml = sources.map(item => `<li><strong>${escapeHtml(item.label || 'Source document')}</strong></li>`).join('');
       panel.innerHTML = `
-        <p><strong>Connected source pack:</strong> ${sources.length} item(s)</p>
+        <p><strong>Saved source documents:</strong> ${sources.length} item(s)</p>
         <ul>${sourceHtml}</ul>
-        <p>${escapeHtml(materials.notes || 'Stored locally for profile generation and later application work.')}</p>
+        <p>${escapeHtml(materials.notes || 'Stored locally so the app can rebuild your profile and later application outputs from the same source material.')}</p>
       `;
     }
 
@@ -570,6 +704,81 @@ ADMIN_HTML = """<!doctype html>
       }
       const materials = await response.json();
       fillSourceMaterials(materials);
+    }
+
+    function collectAgentSettings() {
+      return {
+        telegram: {
+          enabled: document.getElementById('telegram_enabled').value === 'true',
+          bot_token: document.getElementById('telegram_bot_token').value.trim(),
+          bot_username: document.getElementById('telegram_bot_username').value.trim().replace(/^@+/, ''),
+          disable_link_preview: document.getElementById('telegram_disable_link_preview').value === 'true',
+        }
+      };
+    }
+
+    async function loadAgentSettings() {
+      const response = await fetch('/api/agent-settings');
+      if (!response.ok) {
+        throw new Error('Could not load alert settings');
+      }
+      const settings = await response.json();
+      fillAgentSettings(settings);
+    }
+
+    async function saveAgentSettings() {
+      const response = await fetch('/api/agent-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(collectAgentSettings()),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not save alert settings');
+      }
+      fillAgentSettings(payload);
+      showStatus('Alert settings saved.', 'ok');
+      return payload;
+    }
+
+    async function loadTelegramConnectLink() {
+      const response = await fetch('/api/telegram/connect-link');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not build Telegram connect link');
+      }
+      telegramConnectLink = payload.connect_link || '';
+      renderTelegramConnectPanel({ telegram: { bot_token_present: true } });
+      return payload;
+    }
+
+    async function syncTelegramSubscribers() {
+      const response = await fetch('/api/telegram/sync', { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not sync Telegram subscribers');
+      }
+      fillAgentSettings(payload.settings || {});
+      if (payload.result?.bot_username) {
+        telegramConnectLink = `https://t.me/${payload.result.bot_username}?start=connect`;
+      }
+      renderTelegramConnectPanel(payload.settings || {});
+      showStatus(payload.message || 'Telegram subscribers synced.', 'ok');
+      return payload;
+    }
+
+    async function sendTelegramTestMessage() {
+      const response = await fetch('/api/telegram/test-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: document.getElementById('telegram_test_message').value.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not send Telegram test message');
+      }
+      showStatus(payload.message || 'Telegram test message sent.', 'ok');
+      return payload;
     }
 
     function renderRunStats(stats) {
@@ -761,6 +970,10 @@ ADMIN_HTML = """<!doctype html>
           enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
           sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
         },
+        salary_preferences: {
+          minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value || 0),
+          minimum_daily_rate: Number(document.getElementById('minimum_daily_rate').value || 0),
+        },
         review_controls: {
           applied_job_keys: toLines(document.getElementById('applied_job_keys').value),
           hidden_job_keys: toLines(document.getElementById('hidden_job_keys').value),
@@ -812,6 +1025,7 @@ ADMIN_HTML = """<!doctype html>
         {
           candidate_summary: profile.candidate_summary,
           llm_profile_brief: profile.llm_profile_brief,
+          salary_preferences: profile.salary_preferences,
           strengths: profile.strengths,
           cv_text: profile.cv_text,
           star_evidence_text: profile.star_evidence_text,
@@ -871,11 +1085,20 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
-    document.getElementById('save_profile').addEventListener('click', async () => {
+    saveProfileButton.addEventListener('click', async () => {
+      const originalLabel = saveProfileButton.textContent;
+      saveProfileButton.disabled = true;
+      saveProfileButton.textContent = 'Saving...';
+      showInlineStatus(saveProfileStatusEl, 'Saving profile...', 'loading');
       try {
         await saveProfileSection();
+        showInlineStatus(saveProfileStatusEl, 'Profile saved to profile.json.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
+        showInlineStatus(saveProfileStatusEl, error.message, 'error');
+      } finally {
+        saveProfileButton.disabled = false;
+        saveProfileButton.textContent = originalLabel;
       }
     });
 
@@ -935,6 +1158,45 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
+    document.getElementById('save_alerts').addEventListener('click', async () => {
+      try {
+        await saveAgentSettings();
+        await loadTelegramConnectLink().catch(() => ({}));
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('open_telegram_connect').addEventListener('click', async () => {
+      try {
+        if (!telegramConnectLink) {
+          await loadTelegramConnectLink();
+        }
+        if (!telegramConnectLink) {
+          throw new Error('No Telegram connect link available yet.');
+        }
+        window.open(telegramConnectLink, '_blank', 'noopener');
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('sync_telegram_subscribers').addEventListener('click', async () => {
+      try {
+        await syncTelegramSubscribers();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('send_telegram_test').addEventListener('click', async () => {
+      try {
+        await sendTelegramTestMessage();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
     document.getElementById('apply_skill_reviews').addEventListener('click', async () => {
       try {
         await applySkillReviews();
@@ -957,6 +1219,7 @@ ADMIN_HTML = """<!doctype html>
 
     Promise.all([
       loadProfile(),
+      loadAgentSettings(),
       loadSourceMaterials(),
       loadRunStats(),
       loadReviewData(),
@@ -1294,6 +1557,22 @@ class AdminHandler(BaseHTTPRequestHandler):
         merged_cv_text = AdminHandler._combine_text_sections(current.get("cv_text", ""), raw_text)
         if merged_cv_text:
             merged_patch["cv_text"] = merged_cv_text
+            current_tiers = get_evidence_tiers(current)
+            inferred_tiers = build_evidence_tiers_from_sections([{"label": "Admin Input", "text": raw_text}])
+            merged_patch["evidence_tiers"] = {
+                "primary_current_evidence": AdminHandler._combine_text_sections(
+                    current_tiers.get("primary_current_evidence", ""),
+                    inferred_tiers.get("primary_current_evidence", ""),
+                ),
+                "secondary_older_evidence": AdminHandler._combine_text_sections(
+                    current_tiers.get("secondary_older_evidence", ""),
+                    inferred_tiers.get("secondary_older_evidence", ""),
+                ),
+                "background_optional_evidence": AdminHandler._combine_text_sections(
+                    current_tiers.get("background_optional_evidence", ""),
+                    inferred_tiers.get("background_optional_evidence", ""),
+                ),
+            }
 
         final_summary = str(
             merged_patch.get("candidate_summary")
@@ -1356,6 +1635,13 @@ class AdminHandler(BaseHTTPRequestHandler):
 
         if "star_evidence_text" in normalized:
             normalized["star_evidence_text"] = str(normalized.get("star_evidence_text") or "").strip()
+        if "cv_text" in normalized and "evidence_tiers" not in normalized:
+            inferred_tiers = build_evidence_tiers_from_sections([{
+                "label": "Primary CV",
+                "text": str(normalized.get("cv_text") or "").strip(),
+            }])
+            if any(inferred_tiers.values()):
+                normalized["evidence_tiers"] = inferred_tiers
         return normalized
 
     @staticmethod
@@ -1393,6 +1679,34 @@ class AdminHandler(BaseHTTPRequestHandler):
             "ok": True,
             "message": "Learning update applied to profile.json.",
             "profile": profile,
+        }
+
+    @staticmethod
+    def _sanitize_agent_settings_payload(payload: dict) -> dict:
+        telegram = payload.get("telegram", {}) if isinstance(payload, dict) else {}
+        return {
+            "telegram": {
+                "enabled": bool(telegram.get("enabled", False)),
+                "bot_token": str(telegram.get("bot_token") or "").strip(),
+                "bot_username": str(telegram.get("bot_username") or "").strip().lstrip("@"),
+                "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
+            }
+        }
+
+    @staticmethod
+    def _public_agent_settings_payload(settings: dict) -> dict:
+        telegram = settings.get("telegram", {}) if isinstance(settings, dict) else {}
+        subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
+        return {
+            "telegram": {
+                "enabled": bool(telegram.get("enabled", False)),
+                "bot_token_present": bool(str(telegram.get("bot_token") or "").strip()),
+                "bot_username": str(telegram.get("bot_username") or "").strip(),
+                "chat_id_present": bool(str(telegram.get("chat_id") or "").strip()),
+                "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
+                "subscriber_count": len(subscribers) if isinstance(subscribers, list) else 0,
+                "subscribers": subscribers if isinstance(subscribers, list) else [],
+            }
         }
 
     @staticmethod
@@ -1617,8 +1931,41 @@ class AdminHandler(BaseHTTPRequestHandler):
                     pass
             self._send_json(200, {})
             return
+        if self.path == "/api/job-history":
+            history = self._load_job_history()
+            slim_history: dict[str, dict] = {}
+            for job_key, entry in history.items():
+                if not isinstance(entry, dict):
+                    continue
+                slim_history[str(job_key)] = {
+                    "times_viewed": int(entry.get("times_viewed", 0) or 0),
+                    "first_viewed_at": entry.get("first_viewed_at"),
+                    "last_viewed_at": entry.get("last_viewed_at"),
+                }
+            self._send_json(200, {"jobs": slim_history})
+            return
         if self.path == "/api/profile":
             self._send_json(200, load_profile())
+            return
+        if self.path == "/api/agent-settings":
+            self._send_json(200, self._public_agent_settings_payload(load_agent_settings(create_if_missing=True)))
+            return
+        if self.path == "/api/telegram/connect-link":
+            try:
+                settings = load_agent_settings(create_if_missing=True)
+                link = build_telegram_connect_link(settings["telegram"])
+                save_agent_settings(settings)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "connect_link": link,
+                    "bot_username": str(settings["telegram"].get("bot_username") or "").strip(),
+                },
+            )
             return
         if self.path == "/api/source-materials":
             self._send_json(200, load_source_materials(create_if_missing=True))
@@ -1626,6 +1973,20 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_PATCH(self) -> None:
+        if self.path == "/api/agent-settings":
+            try:
+                current = load_agent_settings(create_if_missing=True)
+                patch = self._sanitize_agent_settings_payload(self._read_json_body())
+                telegram_patch = patch.get("telegram", {})
+                if not str(telegram_patch.get("bot_token") or "").strip():
+                    telegram_patch.pop("bot_token", None)
+                current.setdefault("telegram", {}).update(telegram_patch)
+                updated = save_agent_settings(current)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, self._public_agent_settings_payload(updated))
+            return
         if self.path != "/api/profile":
             self._send_json(404, {"error": "Not found"})
             return
@@ -1722,6 +2083,42 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "message": "Skill review decisions applied to profile.json.",
                     "profile": updated,
+                },
+            )
+            return
+        if self.path == "/api/telegram/sync":
+            try:
+                settings = load_agent_settings(create_if_missing=True)
+                result = sync_telegram_subscribers(settings["telegram"])
+                updated = save_agent_settings(settings)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "message": f"Telegram sync complete. {result['total_subscribers']} subscriber(s) available.",
+                    "result": result,
+                    "settings": self._public_agent_settings_payload(updated),
+                },
+            )
+            return
+        if self.path == "/api/telegram/test-message":
+            try:
+                payload = self._read_json_body()
+                settings = load_agent_settings(create_if_missing=True)
+                message_text = str(payload.get("message") or "").strip() or "Job Hunter test message."
+                result = send_telegram_notification(message_text, "", settings["telegram"])
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "message": "Telegram test message sent.",
+                    "result": result,
                 },
             )
             return

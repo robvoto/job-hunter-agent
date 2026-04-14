@@ -1,0 +1,102 @@
+JOB HUNTER AGENT - QUICK RUN COMMANDS
+=====================================
+
+Open this file anytime when you forget what to run.
+
+
+MAIN COMMANDS
+-------------
+
+1. Dashboard-only test refresh
+
+Command:
+python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
+
+What it does:
+- does NOT scrape SEEK
+- does NOT run the LLM
+- rebuilds the dashboard from jobs already saved locally
+- resets "New To You" for testing
+- shows a broader shortlist for testing (35+ score)
+
+Use this when:
+- you want a longer list quickly
+- you want to test the dashboard UI
+- you do not need fresh jobs
+
+
+2. Fresh test scrape
+
+Command:
+python scraper_direct.py --test-scrape-mode
+
+What it does:
+- does a real scrape
+- runs the normal scoring pipeline
+- can run LLM review where needed
+- uses a practical wider net for testing
+- resets "New To You" for testing
+- uses at least 7 days and 6 pages
+- skips the quick card metadata gate for testing
+- shows a broader shortlist for testing (35+ score)
+
+Use this when:
+- you need fresh jobs
+- you need fresh LLM-reviewed results
+- you want more results than the normal run
+
+
+3. Normal scrape
+
+Command:
+python scraper_direct.py
+
+What it does:
+- runs the normal scrape
+- uses your normal search settings from profile.json
+- keeps the quick card gate on
+- keeps the normal shortlist threshold
+
+Use this when:
+- you want the normal production-style shortlist
+
+
+OUTPUT FILE
+-----------
+
+Dashboard HTML:
+output/seek_results.html
+
+Open this file in a browser after a rebuild or scrape.
+
+
+WHAT "NEW TO YOU" MEANS
+-----------------------
+
+Normal run:
+- a job is "New To You" if you have not opened it from the dashboard before
+
+Test dashboard mode / test scrape mode:
+- everything is treated as "New To You" for testing
+
+
+WHICH ONE SHOULD I USE?
+-----------------------
+
+If you just want to see a longer dashboard quickly:
+python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
+
+If you need fresh jobs and fresh scoring:
+python scraper_direct.py --test-scrape-mode
+
+If you want the normal real shortlist:
+python scraper_direct.py
+
+
+OPTIONAL EXTRA
+--------------
+
+If you only want to reset "New To You" without using a full test mode:
+python scraper_direct.py --rebuild-dashboard --reset-new-to-you
+
+This only resets the viewed state for the dashboard display. It does not fetch new jobs.

@@ -88,6 +88,12 @@ Think of admin as the maintenance surface for your profile, not the place where 
 - for example domain preferences, known gaps, role boundaries, and honest exclusions
 - starts from imported material and can be refined later
 
+`Minimum annual salary` / `Minimum daily rate`
+
+- optional salary targets used as light fit signals
+- if a role lists pay, the dashboard can show whether it meets your target
+- these targets also power the salary filter in the dashboard
+
 ## Running A Job Review
 
 Run the current source connector:
@@ -98,7 +104,21 @@ python run_jobs.py
 
 Then open the dashboard at:
 
-- `output/seek_results.html`
+- `http://127.0.0.1:8765/dashboard`
+
+The dashboard groups jobs into:
+
+- `Fresh Matches`
+- `Kept From Earlier Runs`
+- `Hidden Jobs`
+- `Older Kept Jobs`
+
+The dashboard can filter by:
+
+- match score
+- posted age
+- work mode
+- salary state
 
 ## LLM Use
 
@@ -112,6 +132,24 @@ Current behavior:
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
 
 If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
+
+## Which Command Does What
+
+`python run_jobs.py`
+
+- refreshes jobs
+- rebuilds the dashboard
+- updates local run outputs
+
+`python agent_runner.py`
+
+- runs the refresh flow and then creates a digest
+- can also send that digest by email or Telegram if configured
+
+Simple rule:
+
+- if you just want fresh jobs, run `python run_jobs.py`
+- if you want automation and notifications, use `python agent_runner.py`
 
 ## Local Files To Keep
 
