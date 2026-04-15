@@ -53,9 +53,13 @@ DEFAULT_SEARCH_SETTINGS = {
     "max_pages_cap": 10,
     "enforce_posted_age_limit": True,
     "sort_newest_first": True,
+    "linkedin_hours_old": 24,
+    "linkedin_results_per_search": 25,
+    "linkedin_easy_apply_only": None,
 }
 
 DEFAULT_PROFILE = {
+    "enabled_sources": ["seek"],
     "search_settings": {
         **DEFAULT_SEARCH_SETTINGS,
     },

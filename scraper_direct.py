@@ -32,24 +32,25 @@ from profile_store import (
     load_profile,
 )
 from review_insights import build_review_data, extract_detected_skills
+from scraper_seek import (
+    SELECTOR_CARDS,
+    SELECTOR_COMPANY,
+    SELECTOR_POSTED,
+    SELECTOR_TITLE,
+    build_seek_search_targets,
+    extract_card_metadata,
+    extract_posted_text_from_card,
+    fetch_job_details_text,
+    stable_job_key,
+)
 from utils import (
     extract_salary,
     extract_work_mode,
     parse_seek_posted_age_days,
     safe_html,
     set_page_param,
-    set_query_param,
 )
 
-
-SELECTOR_CARDS = 'article[data-automation="normalJob"], article[data-automation="premiumJob"]'
-SELECTOR_TITLE = '[data-automation="jobTitle"]'
-SELECTOR_COMPANY = '[data-automation="jobCompany"]'
-SELECTOR_POSTED = '[data-automation="jobListingDate"]'
-SELECTOR_LOCATION = '[data-automation="jobLocation"]'
-SELECTOR_CARD_SALARY = '[data-automation="jobSalary"]'
-SELECTOR_SHORT_DESCRIPTION = '[data-automation="jobShortDescription"]'
-SELECTOR_DETAILS = '[data-automation="jobAdDetails"]'
 
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
@@ -77,7 +78,6 @@ DEBUG_JSON_PATH = OUTPUT_DIR / "seek_results.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
-SEEK_JOBS_BASE_URL = "https://www.seek.com.au/jobs"
 KEEP_SNAPSHOT_FIELDS = (
     "title",
     "company",
@@ -121,18 +121,6 @@ def normalize_posted_text(value: Optional[str]) -> str:
     if not text:
         return "N/A"
     return re.sub(r"^\s*posted\s+", "", text, flags=re.IGNORECASE).strip()
-
-
-def extract_posted_text_from_card(card_text: str) -> str:
-    text = normalize_posted_text(card_text)
-    match = re.search(
-        r"\b(today|yesterday|\d+\s*[mhdy](?:\s*ago)?)\b",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if match:
-        return normalize_posted_text(match.group(1))
-    return "N/A"
 
 
 def configure_console_output() -> None:
@@ -1186,115 +1174,6 @@ def viewed_badge_html() -> str:
     return render_badge("Viewed", "badge-viewed", "You have already opened this role from the dashboard.")
 
 
-def extract_work_type(card_text: str) -> str:
-    match = re.search(r"This is a ([^\n]+?) job", card_text, flags=re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
-    return "N/A"
-
-
-def extract_card_metadata(card) -> dict:
-    location_values = [
-        (element.inner_text() or "").strip()
-        for element in card.query_selector_all(SELECTOR_LOCATION)
-    ]
-    salary_el = card.query_selector(SELECTOR_CARD_SALARY)
-    teaser_el = card.query_selector(SELECTOR_SHORT_DESCRIPTION)
-    salary_text = salary_el.inner_text().strip() if salary_el else ""
-    teaser_text = teaser_el.inner_text().strip() if teaser_el else ""
-    card_text = (card.inner_text() or "").strip()
-
-    return {
-        "location": ", ".join(dedupe_preserve_order(location_values)) or "N/A",
-        "work_type": extract_work_type(card_text),
-        "work_mode": extract_work_mode("\n".join([card_text, teaser_text, salary_text])),
-        "card_salary": salary_text or "N/A",
-        "teaser": teaser_text or "N/A",
-    }
-
-
-def build_seek_search_targets(profile: dict, configured_date_range: int, sort_newest_first: bool) -> List[dict]:
-    search_settings = get_search_settings(profile)
-    keywords = str(search_settings.get("keywords") or "").strip()
-    locations = dedupe_preserve_order(
-        [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
-    ) or list(get_search_settings({}).get("locations", []))
-    classification_ids = dedupe_preserve_order(
-        [str(value).strip() for value in search_settings.get("classification_ids", []) if str(value).strip()]
-    )
-
-    targets: List[dict] = []
-    for location in locations:
-        search_url = SEEK_JOBS_BASE_URL
-        search_url = set_query_param(search_url, "keywords", keywords)
-        search_url = set_query_param(search_url, "where", location)
-        if classification_ids:
-            search_url = set_query_param(search_url, "classification", ",".join(classification_ids))
-        search_url = set_query_param(search_url, "daterange", configured_date_range)
-        if sort_newest_first:
-            search_url = set_query_param(search_url, "sortMode", "ListedDate")
-        targets.append(
-            {
-                "keywords": keywords,
-                "location": location,
-                "classification_ids": classification_ids,
-                "url": search_url,
-            }
-        )
-    return targets
-
-
-def fetch_job_details_text(detail_page, full_url: str) -> str:
-    try:
-        detail_page.goto(full_url, wait_until="domcontentloaded")
-    except Exception:
-        return ""
-
-    for selector in [
-        'button:has-text("Show more")',
-        'button:has-text("Read more")',
-        'button:has-text("More")',
-        '[aria-expanded="false"]',
-    ]:
-        try:
-            locator = detail_page.locator(selector)
-            max_clicks = min(locator.count(), 5)
-            for index in range(max_clicks):
-                try:
-                    locator.nth(index).click(timeout=700)
-                except Exception:
-                    continue
-        except Exception:
-            continue
-
-    try:
-        detail_page.wait_for_selector(SELECTOR_DETAILS, timeout=8000)
-        details_text = (detail_page.text_content(SELECTOR_DETAILS) or "").strip()
-        if details_text:
-            return details_text
-    except Exception:
-        pass
-
-    try:
-        detail_page.wait_for_load_state("networkidle", timeout=4000)
-    except Exception:
-        pass
-
-    try:
-        return (detail_page.text_content("body") or "").strip()
-    except Exception:
-        return ""
-
-
-def stable_job_key(full_url: Optional[str]) -> Optional[str]:
-    if not full_url:
-        return None
-    match = re.search(r"/job/(\d+)", full_url)
-    if match:
-        return match.group(1)
-    return full_url.split("#", 1)[0]
-
-
 def normalize_job_key(raw: str) -> str:
     value = (raw or "").strip()
     if not value:
@@ -2035,6 +1914,7 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
     archived_age_days = days_since(entry.get("last_kept_at"), run_started_at)
     record = {
         "job_key": job_key,
+        "source": "linkedin" if str(job_key).startswith("linkedin:") else "seek",
         "title": snapshot.get("title") or entry.get("title") or "Untitled",
         "company": snapshot.get("company") or entry.get("company") or "N/A",
         "url": snapshot.get("url") or entry.get("url") or "#",
@@ -2106,6 +1986,7 @@ def build_hidden_dashboard_record(job_key: str, entry: dict, run_started_at: dat
     hidden_age_days = days_since(hidden_at, run_started_at) if hidden_at else None
     return {
         "job_key": job_key,
+        "source": "linkedin" if str(job_key).startswith("linkedin:") else "seek",
         "title": snapshot.get("title") or entry.get("title") or f"Hidden job {job_key}",
         "company": snapshot.get("company") or entry.get("company") or "N/A",
         "url": snapshot.get("url") or entry.get("url") or "#",
@@ -2336,6 +2217,9 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     salary_fit_state = salary_fit_label(record, scoring_profile)
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
 
+    source = str(record.get("source") or "seek").lower().strip()
+    source_label = {"linkedin": "LinkedIn", "seek": "SEEK"}.get(source, source.upper())
+
     badges = []
     if applied_record:
         badges.append(render_badge("Applied", "badge-viewed", "You already applied for this role."))
@@ -2349,6 +2233,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         badges.append(render_badge("15+ Days Old", "badge-stale", "This role is older, but still saved for reference."))
     elif seen_by_you:
         badges.append(viewed_badge_html())
+    badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
 
     score_html = (
         f'<div class="match-score {fit_tone_class}">'
@@ -2461,7 +2346,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         actions_html = ""
 
     return (
-        f'<article class="job-card" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}">'
+        f'<article class="job-card" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}" data-source="{safe_html(source)}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         f'<div class="job-company">{company}</div>'
@@ -2622,8 +2507,8 @@ def render_html(
             f" Dashboard test mode is on, so the shortlist keeps roles scoring {DASHBOARD_MIN_SCORE}+"
             f" and treats every role as New To You without running a fresh scrape."
         )
-    elif TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
-        testing_mode_note = " New To You has been reset for testing, so all roles are shown as unseen."
+    elif "--reset-new-to-you" in CLI_FLAGS:
+        testing_mode_note = " Viewed history has been reset for this dashboard rebuild, so all roles are shown as unseen."
     search_window_label = f"Last {date_range_days} day" + ("" if date_range_days == 1 else "s")
     sort_order_label = "Newest first" if sort_newest_first else "Source relevance"
     mode_label = "Test mode ON" if TEST_ANY_MODE else "Normal mode"
@@ -2925,6 +2810,8 @@ def render_html(
     .badge-hidden {{ background: #fee2e2; color: #991b1b; }}
     .badge-stale {{ background: #f3f4f6; color: #4b5563; }}
     .badge-viewed {{ background: #fef3c7; color: #92400e; }}
+    .badge-source-seek {{ background: #e0f2fe; color: #0c4a6e; }}
+    .badge-source-linkedin {{ background: #dbeafe; color: #1e3a5f; }}
     .badge-fit-high {{ background: #dcfce7; color: #166534; }}
     .badge-fit-medium {{ background: #fef3c7; color: #92400e; }}
     .badge-fit-borderline {{ background: #e5e7eb; color: #374151; }}
@@ -3699,31 +3586,24 @@ def render_html(
     output_file.write_text(html, encoding="utf-8")
 
 
-def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
-    configure_console_output()
-    if TEST_SCRAPE_MODE:
-        print("Mode: test scrape run")
-    else:
-        print("Mode: real scrape run (default)")
+def _seek_scrape_to_records(
+    profile: dict,
+    search_targets: List[dict],
+    job_history: Dict[str, dict],
+    llm_cache: Dict[str, Any],
+    applied_job_keys: Set[str],
+    hidden_job_keys: Set[str],
+    run_iso: str,
+    configured_date_range: int,
+    enforce_posted_age_limit: bool,
+    configured_max_pages: int,
+    headless: bool,
+) -> tuple:
+    """Run the SEEK Playwright scraping loop.
 
-    profile = load_profile()
-    previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
-    previous_run_stats = load_json_dict(RUN_STATS_PATH)
-    search_settings = get_search_settings(profile)
-    configured_max_pages = int(search_settings.get("max_pages_cap", max_pages_cap) or max_pages_cap)
-    configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
-    if TEST_SCRAPE_MODE:
-        configured_max_pages = max(configured_max_pages, TEST_SCRAPE_MAX_PAGES_CAP)
-        configured_date_range = max(configured_date_range, TEST_SCRAPE_DATE_RANGE_DAYS)
-    enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", True))
-    sort_newest_first = bool(search_settings.get("sort_newest_first", True))
-    search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
-    applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
-
-    run_started_at = datetime.now().astimezone()
-    run_iso = run_started_at.isoformat(timespec="seconds")
-    llm_cache: Dict[str, Any] = load_llm_cache()
-    job_history = load_job_history()
+    Returns (kept_records, audit_rows, skill_observations).
+    Shared state objects (job_history, llm_cache) are mutated in-place.
+    """
     audit_rows: List[dict] = []
     kept_records: List[dict] = []
     skill_observations: List[dict] = []
@@ -3776,6 +3656,7 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
                             "search_keywords": search_keywords,
                             "search_classifications": classification_ids,
                             "page": current_page_num,
+                            "source": "seek",
                             "job_key": None,
                             "title": "",
                             "company": company,
@@ -4017,62 +3898,160 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
 
                     current_page_num += 1
 
-            if not audit_rows and previous_audit_rows:
-                render_html(
-                    OUTPUT_HTML,
-                    load_last_kept_records(),
-                    parse_timestamp(previous_run_stats.get("run_started_at")) or run_started_at,
-                    configured_date_range,
-                    sort_newest_first,
-                    previous_run_stats or {},
-                    job_history,
-                    applied_job_keys,
-                    hidden_job_keys,
-                    datetime.now().astimezone(),
-                )
-                save_llm_cache(llm_cache)
-                save_job_history(job_history)
-                print("\nNo fresh cards were captured in this run, so the previous dashboard state was preserved.")
-                print(f"Dashboard preserved at {OUTPUT_HTML}")
-                return OUTPUT_HTML
-
-            run_finished_at = datetime.now().astimezone()
-            run_stats = build_run_stats(
-                audit_rows,
-                kept_records,
-                run_started_at,
-                run_finished_at,
-                configured_date_range,
-                sort_newest_first,
-                configured_max_pages,
-            )
-
-            render_html(
-                OUTPUT_HTML,
-                kept_records,
-                run_started_at,
-                configured_date_range,
-                sort_newest_first,
-                run_stats,
-                job_history,
-                applied_job_keys,
-                hidden_job_keys,
-                run_started_at,
-            )
-            save_llm_cache(llm_cache)
-            save_job_history(job_history)
-            write_debug_json(audit_rows)
-            write_run_stats(run_stats)
-            write_review_data(build_review_data(audit_rows, skill_observations, profile))
-            print(f"\nSaved {len(kept_records)} jobs to {OUTPUT_HTML}")
-            print(f"Saved {len(audit_rows)} audit rows to {DEBUG_JSON_PATH}")
-            print(f"Saved run stats to {RUN_STATS_PATH}")
-            print(f"Saved review data to {REVIEW_DATA_PATH}")
-            print(f"Saved history for {len(job_history)} jobs to {JOB_HISTORY_PATH}")
-            return OUTPUT_HTML
-
         finally:
             browser.close()
+
+    return kept_records, audit_rows, skill_observations
+
+
+def _deduplicate_across_sources(records: List[dict]) -> List[dict]:
+    """Remove cross-source duplicates. SEEK record wins over LinkedIn."""
+
+    def _norm(text: str) -> str:
+        return re.sub(r"\s+", " ", (text or "").lower()).strip()
+
+    def _are_same_job(a: dict, b: dict) -> bool:
+        co_a = _norm(a.get("company", ""))
+        co_b = _norm(b.get("company", ""))
+        if not co_a or co_a != co_b:
+            return False
+        words_a = set(_norm(a.get("title", "")).split())
+        words_b = set(_norm(b.get("title", "")).split())
+        if not words_a or not words_b:
+            return False
+        return len(words_a & words_b) / len(words_a | words_b) >= 0.8
+
+    seen: List[dict] = []
+    for record in records:
+        if not any(_are_same_job(record, kept) for kept in seen):
+            seen.append(record)
+    return seen
+
+
+def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
+    configure_console_output()
+    if TEST_SCRAPE_MODE:
+        print("Mode: test scrape run")
+    else:
+        print("Mode: real scrape run (default)")
+
+    profile = load_profile()
+    previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
+    previous_run_stats = load_json_dict(RUN_STATS_PATH)
+    search_settings = get_search_settings(profile)
+    configured_max_pages = int(search_settings.get("max_pages_cap", max_pages_cap) or max_pages_cap)
+    configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
+    if TEST_SCRAPE_MODE:
+        configured_max_pages = max(configured_max_pages, TEST_SCRAPE_MAX_PAGES_CAP)
+        configured_date_range = max(configured_date_range, TEST_SCRAPE_DATE_RANGE_DAYS)
+    enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", True))
+    sort_newest_first = bool(search_settings.get("sort_newest_first", True))
+    search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
+    applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
+
+    run_started_at = datetime.now().astimezone()
+    run_iso = run_started_at.isoformat(timespec="seconds")
+    llm_cache: Dict[str, Any] = load_llm_cache()
+    job_history = load_job_history()
+
+    enabled_sources = [s.lower().strip() for s in (profile.get("enabled_sources") or ["seek"])]
+
+    kept_records: List[dict] = []
+    audit_rows: List[dict] = []
+    skill_observations: List[dict] = []
+
+    # --- SEEK ---
+    if "seek" in enabled_sources:
+        s_kept, s_audit, s_skills = _seek_scrape_to_records(
+            profile=profile,
+            search_targets=search_targets,
+            job_history=job_history,
+            llm_cache=llm_cache,
+            applied_job_keys=applied_job_keys,
+            hidden_job_keys=hidden_job_keys,
+            run_iso=run_iso,
+            configured_date_range=configured_date_range,
+            enforce_posted_age_limit=enforce_posted_age_limit,
+            configured_max_pages=configured_max_pages,
+            headless=headless,
+        )
+        kept_records.extend(s_kept)
+        audit_rows.extend(s_audit)
+        skill_observations.extend(s_skills)
+
+    # --- LinkedIn ---
+    if "linkedin" in enabled_sources:
+        from scraper_linkedin import LinkedInScraper  # noqa: PLC0415
+        try:
+            li = LinkedInScraper(
+                profile=profile,
+                llm_cache=llm_cache,
+                job_history=job_history,
+                applied_job_keys=applied_job_keys,
+                hidden_job_keys=hidden_job_keys,
+                run_iso=run_iso,
+            )
+            li_kept, li_audit, li_skills = li.scrape()
+            kept_records = _deduplicate_across_sources(kept_records + li_kept)
+            audit_rows.extend(li_audit)
+            skill_observations.extend(li_skills)
+        except Exception as exc:
+            print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
+
+    # --- Finalize ---
+    if not audit_rows and previous_audit_rows:
+        render_html(
+            OUTPUT_HTML,
+            load_last_kept_records(),
+            parse_timestamp(previous_run_stats.get("run_started_at")) or run_started_at,
+            configured_date_range,
+            sort_newest_first,
+            previous_run_stats or {},
+            job_history,
+            applied_job_keys,
+            hidden_job_keys,
+            datetime.now().astimezone(),
+        )
+        save_llm_cache(llm_cache)
+        save_job_history(job_history)
+        print("\nNo fresh cards were captured in this run, so the previous dashboard state was preserved.")
+        print(f"Dashboard preserved at {OUTPUT_HTML}")
+        return OUTPUT_HTML
+
+    run_finished_at = datetime.now().astimezone()
+    run_stats = build_run_stats(
+        audit_rows,
+        kept_records,
+        run_started_at,
+        run_finished_at,
+        configured_date_range,
+        sort_newest_first,
+        configured_max_pages,
+    )
+
+    render_html(
+        OUTPUT_HTML,
+        kept_records,
+        run_started_at,
+        configured_date_range,
+        sort_newest_first,
+        run_stats,
+        job_history,
+        applied_job_keys,
+        hidden_job_keys,
+        run_started_at,
+    )
+    save_llm_cache(llm_cache)
+    save_job_history(job_history)
+    write_debug_json(audit_rows)
+    write_run_stats(run_stats)
+    write_review_data(build_review_data(audit_rows, skill_observations, profile))
+    print(f"\nSaved {len(kept_records)} jobs to {OUTPUT_HTML}")
+    print(f"Saved {len(audit_rows)} audit rows to {DEBUG_JSON_PATH}")
+    print(f"Saved run stats to {RUN_STATS_PATH}")
+    print(f"Saved review data to {REVIEW_DATA_PATH}")
+    print(f"Saved history for {len(job_history)} jobs to {JOB_HISTORY_PATH}")
+    return OUTPUT_HTML
 
 
 def rebuild_html_dashboard() -> str:
@@ -4107,8 +4086,10 @@ def rebuild_html_dashboard() -> str:
         reference_time,
     )
     print(f"Dashboard rebuilt at {OUTPUT_HTML}")
-    if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
+    if TEST_ANY_MODE:
         print("New To You has been reset for testing.")
+    elif "--reset-new-to-you" in CLI_FLAGS:
+        print("Viewed history has been reset for this dashboard rebuild.")
     return OUTPUT_HTML
 
 

@@ -67,6 +67,11 @@ python scraper_direct.py
 
 Use this by default when you want fresh job results and a rebuilt dashboard.
 
+Search design note:
+
+- keep search keywords broad enough to capture relevant roles
+- use title rules, metadata gates, content filters, capability logic, and optional AI review to tighten fit afterward
+
 Rebuild the dashboard from saved local state:
 
 ```powershell

@@ -8,7 +8,7 @@ from notifiers.telegram_notifier import build_telegram_connect_link, send_telegr
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
-from review_insights import apply_skill_review_decisions
+from review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from source_documents import (
     build_llm_profile_brief,
     import_source_materials_to_profile,
@@ -417,11 +417,65 @@ ADMIN_HTML = """<!doctype html>
       display: grid;
       gap: 12px;
     }
+    .tuning-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .tuning-summary-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 12px;
+    }
+    .tuning-summary-card strong {
+      display: block;
+      font-size: 1.35rem;
+      margin-bottom: 4px;
+    }
+    .tuning-summary-card span {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .tuning-group + .tuning-group {
+      margin-top: 16px;
+    }
+    .tuning-group h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+    .tuning-group-copy {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .suggestion-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .suggestion-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(244, 239, 231, 0.9);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
     @media (max-width: 1180px) {
       .profile-shell {
         grid-template-columns: 1fr;
       }
       .advanced-grid {
+        grid-template-columns: 1fr;
+      }
+      .tuning-summary {
         grid-template-columns: 1fr;
       }
     }
@@ -482,21 +536,26 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel active" data-tab-panel="search">
       <h2 class="group-title">Search</h2>
-      <p class="group-copy">This controls what the current live job source gets asked for before we fetch any roles.</p>
+      <p class="group-copy">Use this tab for broad search capture. Fit is refined later by title matching, capability rules, exclusions, and optional AI review.</p>
       <div class="grid">
       <section class="panel">
-        <h2>Search Setup</h2>
-        <label for="keywords">Keywords</label>
+        <h2>Search Capture</h2>
+        <label for="keywords">Search keywords</label>
         <input id="keywords" type="text">
-        <div class="help">Use the same words you would search with in the current job source.</div>
+        <div class="help">Keep this broad. Use capture terms, not detailed fit logic.</div>
+
+        <details class="help-drawer">
+          <summary>How search and fit work</summary>
+          <p>The search box should cast a wide enough net to collect relevant BA roles. Tight fit judgement happens later through title rules, cheap metadata gates, full-description filters, capability logic, and optional AI review.</p>
+        </details>
 
         <label for="locations">Locations</label>
         <textarea id="locations"></textarea>
-        <div class="help">One source-specific location per line. For the current SEEK connector this should include values such as <code>All Sydney NSW</code> and <code>All Canberra ACT</code>.</div>
+        <div class="help">One source-specific location per line, such as <code>All Sydney NSW</code> and <code>All Canberra ACT</code>.</div>
 
         <label for="classification_ids">Classification ids</label>
         <textarea id="classification_ids"></textarea>
-        <div class="help">One classification id per line for the current connector. This is a useful pre-filter because it reduces how many roles we ever need to inspect.</div>
+        <div class="help">One classification id per line. Use this as a broad pre-filter before fit logic kicks in.</div>
 
         <label for="date_range_days">How far back to search</label>
         <select id="date_range_days">
@@ -506,27 +565,52 @@ ADMIN_HTML = """<!doctype html>
           <option value="14">Last 14 days</option>
           <option value="30">Last 30 days</option>
         </select>
-        <div class="help">This updates the source-side date filter before collection starts.</div>
+        <div class="help">This sets the source-side date window before collection starts.</div>
 
         <label for="max_pages_cap">Max pages to check</label>
         <input id="max_pages_cap" type="number" min="1" max="25">
-        <div class="help">Safety limit for broad searches. Keep this low so a loose search does not fan out into huge result sets. The app enforces a hard cap of 25 pages even if a larger value is saved elsewhere.</div>
+        <div class="help">Safety limit for broad searches. The app still enforces a hard cap of 25 pages.</div>
 
         <label for="enforce_posted_age_limit">Strictly reject older ads</label>
         <select id="enforce_posted_age_limit">
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, roles older than the selected date window are skipped even if the source still returns them.</div>
+        <div class="help">If enabled, ads older than the selected date window are skipped even if the source still returns them.</div>
 
         <label for="sort_newest_first">Prefer newest jobs first</label>
         <select id="sort_newest_first">
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, searches ask the current job source to order results by newest posting date first. This is important for broad searches because the app only checks a limited number of pages.</div>
+        <div class="help">If enabled, the source is asked for newest jobs first.</div>
         <div class="panel-actions">
           <button class="primary" id="save_search">Save Search Settings</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>LinkedIn Settings</h2>
+        <p class="panel-copy">These settings apply only when <code>linkedin</code> is listed in <strong>enabled_sources</strong>.</p>
+
+        <label for="linkedin_hours_old">How far back to search (hours)</label>
+        <input id="linkedin_hours_old" type="number" min="1" max="168">
+        <div class="help">LinkedIn-specific look-back window. 24 = last day, 72 = last 3 days. Keep low to avoid noise.</div>
+
+        <label for="linkedin_results_per_search">Results per search</label>
+        <input id="linkedin_results_per_search" type="number" min="5" max="100">
+        <div class="help">Max results fetched per keyword + location pair. 25 is a safe default.</div>
+
+        <label for="linkedin_easy_apply_only">Easy Apply filter</label>
+        <select id="linkedin_easy_apply_only">
+          <option value="">Both (no filter)</option>
+          <option value="true">Easy Apply only</option>
+          <option value="false">Non-Easy Apply only</option>
+        </select>
+        <div class="help">Filter LinkedIn listings by Easy Apply. "Both" shows all.</div>
+
+        <div class="panel-actions">
+          <button class="primary" id="save_linkedin">Save LinkedIn Settings</button>
         </div>
       </section>
       </div>
@@ -728,7 +812,7 @@ ADMIN_HTML = """<!doctype html>
 
     <section class="group tab-panel" data-tab-panel="review">
       <h2 class="group-title">Review</h2>
-      <p class="group-copy">Use this area to teach the system about new skills and manage the jobs you have acted on or never want to see again.</p>
+      <p class="group-copy">Manage review state here, then act on repeated tuning signals from viable roles and filtered noise.</p>
       <div class="grid">
       <section class="panel">
         <h2>Review Controls</h2>
@@ -745,10 +829,13 @@ ADMIN_HTML = """<!doctype html>
       </section>
 
       <section class="panel">
-        <h2>Unknown Skills Review</h2>
-        <div id="unknown_skills_panel" class="help">Run the job source connector to see unclassified skills from recent job descriptions.</div>
+        <h2>Suggested Tuning</h2>
+        <div id="tuning_suggestions_panel" class="help">Run the job source connector to see capability suggestions and repeated junk-role signals.</div>
         <div class="panel-actions">
-          <button class="secondary" id="apply_skill_reviews">Apply Skill Decisions</button>
+          <button class="secondary" id="refresh_review_data">Refresh Suggestions</button>
+          <button class="secondary" id="reload_profile">Reload Profile</button>
+          <button class="primary" id="apply_tuning_suggestions">Apply Capability Suggestions</button>
+          <span class="inline-status" id="tuning_status" aria-live="polite"></span>
         </div>
       </section>
       </div>
@@ -761,6 +848,10 @@ ADMIN_HTML = """<!doctype html>
       <section class="panel">
         <h2>Latest Run Stats</h2>
         <div id="run_stats_panel" class="help">No run stats loaded yet.</div>
+        <div class="panel-actions">
+          <button class="secondary" id="refresh_review">Refresh Admin Data</button>
+          <button class="secondary" id="reload">Reload Profile</button>
+        </div>
       </section>
 
       <section class="panel">
@@ -799,14 +890,6 @@ ADMIN_HTML = """<!doctype html>
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Rejected Samples</h2>
-        <div id="rejections_panel" class="help">Rejected roles grouped by reason will appear here after a run.</div>
-        <div class="panel-actions">
-          <button class="secondary" id="refresh_review">Refresh Test Data</button>
-          <button class="secondary" id="reload">Reload Profile</button>
-        </div>
-      </section>
       </div>
     </section>
 
@@ -826,6 +909,8 @@ ADMIN_HTML = """<!doctype html>
     const applyLearningButton = document.getElementById('apply_learning');
     const importKnowledgeFileButton = document.getElementById('import_knowledge_file');
     const learningStatusEl = document.getElementById('learning_status');
+    const applyTuningSuggestionsButton = document.getElementById('apply_tuning_suggestions');
+    const tuningStatusEl = document.getElementById('tuning_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     let telegramConnectLink = '';
@@ -942,6 +1027,10 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('max_pages_cap').value = String(profile.search_settings?.max_pages_cap ?? '');
       document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
+      document.getElementById('linkedin_hours_old').value = String(profile.search_settings?.linkedin_hours_old ?? 24);
+      document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search ?? 25);
+      const _liEasyApply = profile.search_settings?.linkedin_easy_apply_only;
+      document.getElementById('linkedin_easy_apply_only').value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
       document.getElementById('candidate_summary').value = profile.candidate_summary || '';
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
       document.getElementById('llm_profile_brief_manual_override').checked = (profile.llm_profile_brief_mode || 'auto') === 'manual';
@@ -1179,77 +1268,141 @@ ADMIN_HTML = """<!doctype html>
       }).join('');
     }
 
-    function renderUnknownSkills(items) {
-      const panel = document.getElementById('unknown_skills_panel');
-      if (!items || !items.length) {
-        panel.innerHTML = '<p>No unknown skills from recent runs. That means the profile already knows the repeated concepts it has been seeing.</p>';
-        return;
-      }
+    function buildLegacySuggestedTuning(payload) {
+      const capabilitySuggestions = (payload.unknown_skills || []).map(item => ({
+        kind: 'capability',
+        skill: item.skill,
+        count: Number(item.count || 0),
+        headline: `Classify ${item.skill} as a known capability signal`,
+        detail: `Seen in ${Number(item.count || 0)} recent role description(s) and still unclassified.`,
+        target: 'Capability matrix',
+        recommended_choice: Number(item.count || 0) >= 3 ? 'working_knowledge' : 'not_core_but_acceptable',
+        recommended_label: Number(item.count || 0) >= 3 ? 'Working knowledge' : 'Not core but acceptable',
+        current_treatment: 'Unclassified',
+        examples: item.examples || [],
+      }));
+      const ruleSuggestions = (payload.rejections_by_reason || []).slice(0, 4).map(item => ({
+        kind: 'rule',
+        reason: item.reason,
+        count: Number(item.count || 0),
+        headline: item.reason,
+        detail: `${Number(item.count || 0)} role(s) were filtered for this reason.`,
+        target: 'Matching rules',
+        recommendation: 'Review this signal and decide whether the matching rules need refinement.',
+        samples: item.samples || [],
+      }));
+      return {
+        summary: {
+          capability_count: capabilitySuggestions.length,
+          rule_count: ruleSuggestions.length,
+        },
+        capability_suggestions: capabilitySuggestions,
+        rule_suggestions: ruleSuggestions,
+      };
+    }
 
-      panel.innerHTML = `
-        <div class="review-list">
+    function suggestionExamplesMarkup(items, emptyLabel) {
+      if (!items || !items.length) {
+        return `<p>${escapeHtml(emptyLabel)}</p>`;
+      }
+      return `
+        <ul>
           ${items.map(item => `
-            <div class="review-card">
-              <h3>${escapeHtml(item.skill)}</h3>
-              <p>Seen ${Number(item.count || 0)} time(s) in recent descriptions.</p>
-              <label>How should we treat this?</label>
-              <select class="skill-choice" data-skill="${escapeHtml(item.skill)}">
-                ${reviewOptionMarkup('')}
-              </select>
-              <p>Examples:</p>
-              <ul>
-                ${(item.examples || []).map(example => `
-                  <li>
-                    <a href="${escapeHtml(example.url || '#')}" target="_blank" rel="noreferrer">${escapeHtml(example.title || 'Untitled role')}</a>
-                    ${example.company ? ` - ${escapeHtml(example.company)}` : ''}
-                    ${example.search_location ? ` (${escapeHtml(example.search_location)})` : ''}
-                  </li>
-                `).join('')}
-              </ul>
-            </div>
+            <li>
+              <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noreferrer">${escapeHtml(item.title || 'Untitled role')}</a>
+              ${item.company ? ` - ${escapeHtml(item.company)}` : ''}
+              ${item.search_location ? ` (${escapeHtml(item.search_location)})` : ''}
+            </li>
           `).join('')}
-        </div>
+        </ul>
       `;
     }
 
-    function renderRejections(items) {
-      const panel = document.getElementById('rejections_panel');
-      if (!items || !items.length) {
-        panel.innerHTML = '<p>No rejected sample data yet. Run the current job-source connector and then refresh review data.</p>';
+    function renderSuggestedTuning(suggestions) {
+      const panel = document.getElementById('tuning_suggestions_panel');
+      const capabilitySuggestions = suggestions.capability_suggestions || [];
+      const ruleSuggestions = suggestions.rule_suggestions || [];
+      const summary = suggestions.summary || {};
+
+      applyTuningSuggestionsButton.disabled = capabilitySuggestions.length === 0;
+
+      if (!capabilitySuggestions.length && !ruleSuggestions.length) {
+        panel.innerHTML = '<p>No tuning suggestions yet. Once the current run sees repeated useful signals or repeat junk patterns, they will show up here.</p>';
         return;
       }
 
-      panel.innerHTML = `
-        <div class="review-list">
-          ${items.map(item => `
-            <div class="review-card">
-              <h3>${escapeHtml(item.reason)}</h3>
-              <p>${Number(item.count || 0)} job(s) rejected for this reason.</p>
-              <ul>
-                ${(item.samples || []).map(sample => `
-                  <li>
-                    <a href="${escapeHtml(sample.url || '#')}" target="_blank" rel="noreferrer">${escapeHtml(sample.title || 'Untitled role')}</a>
-                    ${sample.company ? ` - ${escapeHtml(sample.company)}` : ''}
-                    ${sample.search_location ? ` (${escapeHtml(sample.search_location)})` : ''}
-                  </li>
-                `).join('')}
-              </ul>
-            </div>
-          `).join('')}
+      const capabilityHtml = capabilitySuggestions.length ? `
+        <div class="tuning-group">
+          <h3>Capability signals from viable roles</h3>
+          <p class="tuning-group-copy">Repeated concepts from kept roles that are worth classifying or upgrading.</p>
+          <div class="review-list">
+            ${capabilitySuggestions.map(item => `
+              <div class="review-card">
+                <h3>${escapeHtml(item.headline || item.skill || 'Capability signal')}</h3>
+                <p>${escapeHtml(item.detail || '')}</p>
+                <div class="suggestion-meta">
+                  <span class="suggestion-chip">Target: ${escapeHtml(item.target || 'Capability matrix')}</span>
+                  <span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span>
+                  <span class="suggestion-chip">Current: ${escapeHtml(item.current_treatment || 'Unclassified')}</span>
+                </div>
+                <label>Recommended classification</label>
+                <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">
+                  ${reviewOptionMarkup(item.recommended_choice || '')}
+                </select>
+                <p>Examples from kept roles:</p>
+                ${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this signal yet.')}
+              </div>
+            `).join('')}
+          </div>
         </div>
+      ` : '';
+
+      const ruleHtml = ruleSuggestions.length ? `
+        <div class="tuning-group">
+          <h3>Repeated junk-role signals</h3>
+          <p class="tuning-group-copy">Patterns from rejects that are worth keeping, strengthening, or watching before you touch search keywords.</p>
+          <div class="review-list">
+            ${ruleSuggestions.map(item => `
+              <div class="review-card">
+                <h3>${escapeHtml(item.headline || item.reason || 'Rule signal')}</h3>
+                <p>${escapeHtml(item.detail || '')}</p>
+                <div class="suggestion-meta">
+                  <span class="suggestion-chip">Target: ${escapeHtml(item.target || 'Matching rules')}</span>
+                  <span class="suggestion-chip">Count: ${escapeHtml(String(item.count || 0))}</span>
+                </div>
+                <p><strong>Suggested action:</strong> ${escapeHtml(item.recommendation || 'Review this signal and decide whether the matching rules need refinement.')}</p>
+                <p>Examples:</p>
+                ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this signal yet.')}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      panel.innerHTML = `
+        <div class="tuning-summary">
+          <div class="tuning-summary-card">
+            <strong>${escapeHtml(String(summary.capability_count || capabilitySuggestions.length || 0))}</strong>
+            <span>Capability suggestions</span>
+          </div>
+          <div class="tuning-summary-card">
+            <strong>${escapeHtml(String(summary.rule_count || ruleSuggestions.length || 0))}</strong>
+            <span>Rule signals to review</span>
+          </div>
+        </div>
+        ${capabilityHtml}
+        ${ruleHtml}
       `;
     }
 
     async function loadReviewData() {
       const response = await fetch('/api/review-data');
       if (!response.ok) {
-        renderUnknownSkills([]);
-        renderRejections([]);
+        renderSuggestedTuning({ capability_suggestions: [], rule_suggestions: [], summary: {} });
         return;
       }
       const payload = await response.json();
-      renderUnknownSkills(payload.unknown_skills || []);
-      renderRejections(payload.rejections_by_reason || []);
+      renderSuggestedTuning(payload.suggested_tuning || buildLegacySuggestedTuning(payload));
     }
 
     async function applyLearningUpdate() {
@@ -1267,6 +1420,7 @@ ADMIN_HTML = """<!doctype html>
         throw new Error(payload.error || 'Could not apply learning update');
       }
       fillForm(payload.profile || {});
+      await loadReviewData();
       document.getElementById('learning_update_text').value = '';
       showStatus(payload.message || 'Learning update applied.', 'ok');
     }
@@ -1280,6 +1434,7 @@ ADMIN_HTML = """<!doctype html>
         throw new Error(payload.error || 'Could not import knowledge file');
       }
       fillForm(payload.profile || {});
+      await loadReviewData();
       showStatus(payload.message || 'Knowledge file imported.', 'ok');
     }
 
@@ -1293,6 +1448,7 @@ ADMIN_HTML = """<!doctype html>
       }
       fillSourceMaterials(payload.materials || {});
       fillForm(payload.profile || {});
+      await loadReviewData();
       const importedCount = Number((payload.imported_sources || []).length || 0);
       const missingCount = Number((payload.missing_sources || []).length || 0);
       const suffix = missingCount ? ` Imported ${importedCount}, skipped ${missingCount}.` : '';
@@ -1309,6 +1465,9 @@ ADMIN_HTML = """<!doctype html>
           max_pages_cap: Number(document.getElementById('max_pages_cap').value),
           enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
           sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
+          linkedin_hours_old: Number(document.getElementById('linkedin_hours_old').value) || 24,
+          linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
+          linkedin_easy_apply_only: (() => { const v = document.getElementById('linkedin_easy_apply_only').value; return v === '' ? null : v === 'true'; })(),
         },
         salary_preferences: {
           minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value || 0),
@@ -1395,7 +1554,7 @@ ADMIN_HTML = """<!doctype html>
       );
     }
 
-    async function applySkillReviews() {
+    async function applyTuningSuggestions() {
       const decisions = Array.from(document.querySelectorAll('.skill-choice'))
         .map(element => ({
           skill: element.dataset.skill || '',
@@ -1404,24 +1563,32 @@ ADMIN_HTML = """<!doctype html>
         .filter(item => item.skill && item.choice);
 
       if (!decisions.length) {
-        throw new Error('Choose at least one skill decision first.');
+        throw new Error('No capability suggestions are ready to apply yet.');
       }
 
-      const response = await fetch('/api/skill-decisions', {
+      const response = await fetch('/api/tuning-decisions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decisions }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.error || 'Could not apply skill decisions');
+        throw new Error(payload.error || 'Could not apply capability suggestions');
       }
       fillForm(payload.profile || {});
       await loadReviewData();
-      showStatus(payload.message || 'Skill decisions applied to profile.json.', 'ok');
+      showStatus(payload.message || 'Capability suggestions applied to profile.json.', 'ok');
     }
 
     document.getElementById('save_search').addEventListener('click', async () => {
+      try {
+        await saveSearchSettings();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('save_linkedin').addEventListener('click', async () => {
       try {
         await saveSearchSettings();
       } catch (error) {
@@ -1436,6 +1603,7 @@ ADMIN_HTML = """<!doctype html>
       showInlineStatus(saveProfileStatusEl, 'Saving profile...', 'loading');
       try {
         await saveProfileSection();
+        await loadReviewData();
         showInlineStatus(saveProfileStatusEl, 'Profile saved to profile.json.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
@@ -1504,6 +1672,27 @@ ADMIN_HTML = """<!doctype html>
       window.location.href = '/start';
     });
 
+    document.getElementById('reload_profile').addEventListener('click', async () => {
+      try {
+        await Promise.all([
+          loadProfile(),
+          loadReviewData(),
+        ]);
+        showStatus('Profile and tuning suggestions reloaded.', 'ok');
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('refresh_review_data').addEventListener('click', async () => {
+      try {
+        await loadReviewData();
+        showStatus('Suggested tuning refreshed.', 'ok');
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
     document.getElementById('reload').addEventListener('click', async () => {
       try {
         await loadProfile();
@@ -1563,11 +1752,17 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
-    document.getElementById('apply_skill_reviews').addEventListener('click', async () => {
+    document.getElementById('apply_tuning_suggestions').addEventListener('click', async () => {
+      applyTuningSuggestionsButton.disabled = true;
+      showInlineStatus(tuningStatusEl, 'Applying capability suggestions...', 'loading');
       try {
-        await applySkillReviews();
+        await applyTuningSuggestions();
+        showInlineStatus(tuningStatusEl, 'Capability suggestions applied.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
+        showInlineStatus(tuningStatusEl, error.message, 'error');
+      } finally {
+        applyTuningSuggestionsButton.disabled = document.querySelectorAll('.skill-choice').length === 0;
       }
     });
 
@@ -2068,6 +2263,9 @@ class AdminHandler(BaseHTTPRequestHandler):
             return ""
         import re
 
+        # Pass through pre-namespaced keys (e.g. 'linkedin:4056789012')
+        if re.match(r"^(seek|linkedin|indeed|glassdoor):[^\s]+$", raw):
+            return raw
         match = re.search(r"/job/(\d+)", raw)
         if match:
             return match.group(1)
@@ -2277,6 +2475,10 @@ class AdminHandler(BaseHTTPRequestHandler):
                 try:
                     payload = json.loads(REVIEW_DATA_PATH.read_text(encoding="utf-8"))
                     if isinstance(payload, dict):
+                        payload["suggested_tuning"] = build_suggested_tuning_from_saved_review(
+                            payload,
+                            load_profile(),
+                        )
                         self._send_json(200, payload)
                         return
                 except Exception:
@@ -2417,14 +2619,14 @@ class AdminHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(200, result)
             return
-        if self.path == "/api/skill-decisions":
+        if self.path in {"/api/tuning-decisions", "/api/skill-decisions"}:
             try:
                 payload = self._read_json_body()
                 decisions = payload.get("decisions", [])
                 if not isinstance(decisions, list):
                     raise ValueError("decisions must be a list")
                 profile = load_profile()
-                updated = apply_skill_review_decisions(profile, decisions)
+                updated = apply_capability_tuning_decisions(profile, decisions)
                 save_profile(updated)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
@@ -2433,7 +2635,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "ok": True,
-                    "message": "Skill review decisions applied to profile.json.",
+                    "message": "Capability tuning suggestions applied to profile.json.",
                     "profile": updated,
                 },
             )
