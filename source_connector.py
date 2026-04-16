@@ -720,6 +720,7 @@ def build_risk_and_missing_evidence(
         if int(signal.get("adjustment", 0)) < 0:
             alignment = compact_whitespace(signal.get("alignment") or "").lower()
             label = compact_whitespace(signal.get("watchout_label") or signal.get("name") or "")
+            label = compact_whitespace(signal.get("risk_label") or signal.get("name") or "")
             if label:
                 if alignment == "weak":
                     missing.append(f"{label} required but weakly evidenced")
@@ -890,6 +891,7 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
                 "name": compact_whitespace(raw_cluster.get("name") or "domain specialist track"),
                 "fit_label": compact_whitespace(raw_cluster.get("fit_label") or ""),
                 "watchout_label": compact_whitespace(raw_cluster.get("watchout_label") or ""),
+                "risk_label": compact_whitespace(raw_cluster.get("risk_label") or raw_cluster.get("watchout_label") or ""),
                 "aliases": matched_aliases,
                 "alias_hits": len(matched_aliases),
                 "snippet_hits": snippet_hits,
@@ -947,6 +949,7 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
         "name": signal.get("name") or "domain specialist track",
         "fit_label": signal.get("fit_label") or signal.get("name") or "specialist context",
         "watchout_label": signal.get("watchout_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
+        "risk_label": signal.get("risk_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
         "aliases": aliases,
         "dominance_level": dominance_level,
         "alignment": alignment,
@@ -966,6 +969,7 @@ def competitive_signal_assessments(record: dict, profile: Optional[dict] = None)
                     "name": compact_whitespace(item.get("name") or "domain specialist track"),
                     "fit_label": compact_whitespace(item.get("fit_label") or item.get("name") or ""),
                     "watchout_label": compact_whitespace(item.get("watchout_label") or ""),
+                    "risk_label": compact_whitespace(item.get("risk_label") or item.get("watchout_label") or ""),
                     "aliases": _normalized_aliases(list(item.get("aliases") or [])),
                     "dominance_level": int(item.get("dominance_level", 1) or 1),
                     "alignment": compact_whitespace(item.get("alignment") or "partial").lower(),
@@ -1025,6 +1029,7 @@ def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dic
         text = compact_whitespace(
             cluster.get("hard_block_label")
             or assessment.get("watchout_label")
+            or assessment.get("risk_label")
             or assessment.get("name")
             or ""
         )
@@ -3228,6 +3233,7 @@ def render_html(
     }}
     .block-confirm {{
       margin-top: 8px;
+      margin-bottom: 12px;
       border: 1px solid rgba(29, 78, 216, 0.14);
       border-radius: 16px;
       background: rgba(237, 243, 255, 0.75);
@@ -3524,6 +3530,7 @@ def render_html(
               <span class="chip"><strong>Freshness:</strong> newer roles score higher</span>
               <span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can now be dialed up or down</span>
               <span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>
+              <span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>
             </div>
           </div>
         </details>
