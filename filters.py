@@ -6,6 +6,52 @@ from typing import Tuple
 from profile_store import load_profile
 
 
+REJECTION_CATEGORIES: dict[str, list[str]] = {
+    "domain": [
+        "insurance",
+        "banking",
+        "wealth",
+        "superannuation",
+        "healthcare",
+        "telco",
+    ],
+    "role_type": [
+        "developer",
+        "data engineer",
+        "data scientist",
+        "tester",
+        "project manager",
+    ],
+    "seniority": [
+        "junior",
+        "graduate",
+        "principal",
+        "architect",
+    ],
+    "skills": [
+        "underwriting",
+        "claims",
+        "actuarial",
+    ],
+}
+
+
+def detect_rejection_signals(text: str) -> dict[str, list[str]]:
+    """Scan description text for rejection signals by category.
+
+    Returns only categories that have at least one match.
+    No regex, no AI — plain substring matching on lowercased text.
+    NOT called during scraping; intended for post-hoc "Not for me" feedback.
+    """
+    lowered = text.lower()
+    result: dict[str, list[str]] = {}
+    for category, keywords in REJECTION_CATEGORIES.items():
+        hits = [kw for kw in keywords if kw in lowered]
+        if hits:
+            result[category] = hits
+    return result
+
+
 GENERIC_TITLE_BLOCK_WORDS = {
     "a",
     "an",

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from agent_settings import load_agent_settings, save_agent_settings
 from config import OUTPUT_HTML
-from filters import build_title_block_rule, normalize_title_block_phrase, suggest_title_block_phrase
+from filters import build_title_block_rule, detect_rejection_signals, normalize_title_block_phrase, suggest_title_block_phrase
 from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
@@ -2901,6 +2901,18 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_POST(self) -> None:
+        if self.path == "/api/detect-signals":
+            try:
+                payload = self._read_json_body()
+                description = str(payload.get("description") or "").strip()
+                if not description:
+                    raise ValueError("description is required")
+                signals = detect_rejection_signals(description)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, signals)
+            return
         if self.path == "/api/learning":
             try:
                 payload = self._read_json_body()
