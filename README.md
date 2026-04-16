@@ -62,7 +62,7 @@ Run the job-source connector:
 Canonical refresh command:
 
 ```powershell
-python scraper_direct.py
+python source_connector.py
 ```
 
 Use this by default when you want fresh job results and a rebuilt dashboard.
@@ -75,7 +75,7 @@ Search design note:
 Rebuild the dashboard from saved local state:
 
 ```powershell
-python scraper_direct.py --rebuild-dashboard
+python source_connector.py --rebuild-dashboard
 ```
 
 Run the local web UI:
@@ -94,7 +94,7 @@ This is the orchestration layer. It can run the connector, rebuild the dashboard
 
 Most users should think of it like this:
 
-- `python scraper_direct.py` = canonical refresh command
+- `python source_connector.py` = canonical refresh command
 - `python agent_runner.py` = optional automation wrapper around the refresh flow
 
 Run the daily local agent in loop mode:
@@ -124,12 +124,12 @@ Then open:
 - `data/agent_settings.template.json`
   Starter template for daily-agent scheduling and notification delivery.
 
-- `output/seek_results.html`
-  Persistent shortlist dashboard generated from the latest run plus local history.
+- `output/dashboard.html`
+  Persistent shortlist dashboard from the latest run plus local history.
 
-- `output/seek_results.json`
-- `output/seek_run_stats.json`
-- `output/seek_review_data.json`
+- `output/audit_records.json`
+- `output/run_stats.json`
+- `output/review_data.json`
   Debugging and tuning outputs.
 
 ## Local-Only State

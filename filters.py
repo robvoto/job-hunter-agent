@@ -6,8 +6,120 @@ from typing import Tuple
 from profile_store import load_profile
 
 
+GENERIC_TITLE_BLOCK_WORDS = {
+    "a",
+    "an",
+    "and",
+    "analyst",
+    "analytics",
+    "apps",
+    "associate",
+    "architect",
+    "assistant",
+    "ba",
+    "business",
+    "change",
+    "consultant",
+    "contract",
+    "delivery",
+    "digital",
+    "enterprise",
+    "functional",
+    "government",
+    "graduate",
+    "implementation",
+    "intermediate",
+    "intern",
+    "junior",
+    "lead",
+    "manager",
+    "mid",
+    "midlevel",
+    "multiple",
+    "owner",
+    "permanent",
+    "principal",
+    "product",
+    "program",
+    "project",
+    "role",
+    "roles",
+    "senior",
+    "solution",
+    "specialist",
+    "support",
+    "system",
+    "systems",
+    "technical",
+    "temp",
+    "temporary",
+    "transformation",
+}
+
+
 def _matches_any(text: str, patterns: list[str]) -> bool:
     return any(re.search(pattern, text) for pattern in patterns if pattern)
+
+
+def normalize_title_block_phrase(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
+    if not cleaned:
+        return ""
+    tokens = [token for token in cleaned.split() if token]
+    if not tokens:
+        return ""
+    return " ".join(tokens[:3])
+
+
+def _phrase_from_segment(segment: str) -> str:
+    cleaned = normalize_title_block_phrase(segment)
+    if not cleaned:
+        return ""
+
+    tokens = [
+        token
+        for token in cleaned.split()
+        if token not in GENERIC_TITLE_BLOCK_WORDS and len(token) >= 2 and not token.isdigit()
+    ]
+    if not tokens:
+        return ""
+    return " ".join(tokens[:3])
+
+
+def suggest_title_block_phrase(title: str) -> str:
+    raw_title = (title or "").strip()
+    if not raw_title:
+        return ""
+
+    normalized = re.sub(r"\s+", " ", raw_title)
+    segments = [
+        segment.strip()
+        for segment in re.split(r"\s[-–—|:/]\s|[(),\[\]]", normalized)
+        if segment and segment.strip()
+    ]
+
+    for segment in segments[1:]:
+        phrase = _phrase_from_segment(segment)
+        if phrase:
+            return phrase
+
+    return _phrase_from_segment(normalized)
+
+
+def build_title_block_rule(phrase: str) -> dict[str, str]:
+    normalized = normalize_title_block_phrase(phrase)
+    if not normalized:
+        raise ValueError("Title block phrase is required")
+
+    tokens = [token for token in normalized.split() if token]
+    if not tokens:
+        raise ValueError("Title block phrase is required")
+
+    pattern = r"\b" + r"\s+".join(re.escape(token) for token in tokens) + r"\b"
+    return {
+        "pattern": pattern,
+        "reason": f"TITLE_BAD_KEYWORD:{normalized}",
+    }
 
 
 def _has_numeric_title_level(text: str) -> bool:

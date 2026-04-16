@@ -32,10 +32,10 @@ class LinkedInScraper(BaseJobScraper):
         Returns:
             (kept_records, audit_rows, skill_observations)
         """
-        # Lazy import to avoid circular dependency with scraper_direct.py
-        # (scraper_direct imports LinkedInScraper; scraper_linkedin needs
-        # enrichment functions defined in scraper_direct)
-        from scraper_direct import (  # noqa: PLC0415
+        # Lazy import to avoid circular dependency with source_connector.py
+        # (source_connector imports LinkedInScraper; scraper_linkedin needs
+        # enrichment functions defined in source_connector)
+        from source_connector import (  # noqa: PLC0415
             MAX_LLM_CHARS,
             build_fit_highlights,
             build_role_summary,

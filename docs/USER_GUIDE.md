@@ -98,7 +98,7 @@ Think of admin as the maintenance surface for your profile, not the place where 
 Run the current source connector:
 
 ```powershell
-python scraper_direct.py
+python source_connector.py
 ```
 
 Then open the dashboard at:
@@ -133,18 +133,18 @@ If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
 
 ## Which Command Does What
 
-`python scraper_direct.py`
+`python source_connector.py`
 
 - refreshes jobs
 - rebuilds the dashboard
 - updates local run outputs
 
-`python scraper_direct.py --rebuild-dashboard`
+`python source_connector.py --rebuild-dashboard`
 
 - rebuilds the dashboard from saved local state only
 - useful when UI behavior changed and you want the latest HTML without a fresh scrape
 
-`python scraper_direct.py --test-scrape-mode`
+`python source_connector.py --test-scrape-mode`
 
 - runs a wider scrape test mode
 - widens both SEEK and LinkedIn source windows
@@ -156,7 +156,7 @@ Important:
 - some specialist-domain requirements can now hard-block a role entirely
 - if a source page comes back as a challenge or invalid detail page, the app rejects it instead of scoring it from bad text
 
-`python scraper_direct.py --rebuild-dashboard --test-dashboard-mode`
+`python source_connector.py --rebuild-dashboard --test-dashboard-mode`
 
 - rebuilds the dashboard in test view only
 - shows raw score numbers on cards for tuning
@@ -169,7 +169,7 @@ Important:
 
 Simple rule:
 
-- if you just want fresh jobs, run `python scraper_direct.py`
+- if you just want fresh jobs, run `python source_connector.py`
 - if you want automation and notifications, use `python agent_runner.py`
 
 ## Local Files To Keep

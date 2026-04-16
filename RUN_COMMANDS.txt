@@ -1,3 +1,8 @@
+ONLY 2 PAGE SCRAP
+=================
+
+python source_connector.py --max-pages 2 --no-llm
+
 JOB HUNTER AGENT - QUICK RUN COMMANDS
 =====================================
 
@@ -8,7 +13,7 @@ CANONICAL COMMAND
 -----------------
 
 Default command:
-python scraper_direct.py
+python source_connector.py
 
 This is the one canonical run command for the job-hunter agent.
 
@@ -21,7 +26,7 @@ MAIN COMMANDS
 1. Default run
 
 Command:
-python scraper_direct.py
+python source_connector.py
 
 What it does:
 - runs the normal scrape
@@ -40,7 +45,7 @@ Use this when:
 2. Dashboard-only test refresh
 
 Command:
-python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
+python source_connector.py --rebuild-dashboard --test-dashboard-mode
 
 What it does:
 - does NOT scrape SEEK
@@ -59,7 +64,7 @@ Use this when:
 3. Fresh test scrape
 
 Command:
-python scraper_direct.py --test-scrape-mode
+python source_connector.py --test-scrape-mode
 
 What it does:
 - does a real scrape
@@ -80,7 +85,7 @@ Use this when:
 4. Reset viewed state only
 
 Command:
-python scraper_direct.py --rebuild-dashboard --reset-new-to-you
+python source_connector.py --rebuild-dashboard --reset-new-to-you
 
 What it does:
 - does NOT scrape SEEK
@@ -110,7 +115,7 @@ OUTPUT FILE
 -----------
 
 Dashboard HTML:
-output/seek_results.html
+output/dashboard.html
 
 Open this file in a browser after a rebuild or scrape.
 
@@ -132,27 +137,27 @@ WHICH ONE SHOULD I USE?
 -----------------------
 
 If you are unsure, always use:
-python scraper_direct.py
+python source_connector.py
 
 This is the canonical command.
 
 Only use the others when you intentionally want a special workflow.
 
 If you want a clean first-look dashboard from current saved results:
-python scraper_direct.py --rebuild-dashboard --reset-new-to-you
+python source_connector.py --rebuild-dashboard --reset-new-to-you
 
 If you want to test the dashboard UI without scraping:
-python scraper_direct.py --rebuild-dashboard --test-dashboard-mode
+python source_connector.py --rebuild-dashboard --test-dashboard-mode
 
 If you need fresh jobs and a wider test run:
-python scraper_direct.py --test-scrape-mode
+python source_connector.py --test-scrape-mode
 
 
 QUICK NOTES
 -----------
 
 - If the right panel says `Test mode ON`, you are looking at a test-mode dashboard.
-- Run `python scraper_direct.py` to get back to a normal dashboard.
+- Run `python source_connector.py` to get back to a normal dashboard.
 - Console logs now show whether a run is `real` or `test`.
 - If you save profile changes in admin, the next scrape will use them.
 - If admin save feedback does not look right, restart the admin server with `python admin_api.py`.

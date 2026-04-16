@@ -1,15 +1,13 @@
-"""Current direct-page job-source connector and dashboard builder.
+"""Main job-source connector and dashboard builder.
 
 Main goals:
-- fetch current job listings from the active source implementation
+- fetch current job listings from all enabled source implementations
 - apply deterministic filtering and optional LLM fit review
 - persist audit data, run stats, review insights, and dashboard HTML
 
 Notes:
-- this filename is historical; in product and documentation language we prefer
-  "source connector" over "scraper"
-- the current implementation is SEEK-specific, but the normalized record shape
-  is intended to be reusable for additional sources later
+- this file orchestrates individual source connectors (e.g. SEEK, LinkedIn)
+- the normalized record shape is intended to be reusable for additional sources
 """
 
 import json
@@ -23,8 +21,13 @@ from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright
 
-from config import MAX_PAGES_CAP, OUTPUT_HTML, SEEK_URL
-from filters import passes_content_filters, passes_quick_card_filters, passes_title_filters
+from config import MAX_PAGES_CAP, OUTPUT_HTML
+from filters import (
+    passes_content_filters,
+    passes_quick_card_filters,
+    passes_title_filters,
+    suggest_title_block_phrase,
+)
 from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from profile_store import (
     get_evidence_tier_weights,
@@ -44,6 +47,7 @@ from scraper_seek import (
     extract_posted_text_from_card,
     fetch_job_details_payload,
     stable_job_key,
+    build_full_seek_url,
 )
 from utils import (
     extract_salary,
@@ -62,6 +66,9 @@ ARCHIVE_STALE_AFTER_DAYS = 15
 HIDDEN_REVIEW_DAYS = 30
 AUTO_REFRESH_SECONDS = 60
 CLI_FLAGS = set(sys.argv[1:])
+_max_pages_arg = next((sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--max-pages"), None)
+CLI_MAX_PAGES_CAP = int(_max_pages_arg) if _max_pages_arg and _max_pages_arg.isdigit() else None
+NO_LLM_MODE = "--no-llm" in CLI_FLAGS
 TEST_DASHBOARD_MODE = "--test-dashboard-mode" in CLI_FLAGS
 TEST_SCRAPE_MODE = "--test-scrape-mode" in CLI_FLAGS
 TEST_ANY_MODE = TEST_DASHBOARD_MODE or TEST_SCRAPE_MODE
@@ -76,10 +83,10 @@ SHOW_BORDERLINE_BY_DEFAULT = TEST_ANY_MODE
 DASHBOARD_MIN_SCORE = 35 if TEST_ANY_MODE else 50
 DEFAULT_SCORE_FILTER_MIN = 35 if TEST_ANY_MODE else (50 if SHOW_BORDERLINE_BY_DEFAULT else 65)
 LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
-DEBUG_JSON_PATH = OUTPUT_DIR / "seek_results.json"
+DEBUG_JSON_PATH = OUTPUT_DIR / "audit_records.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
-RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
-REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
+RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
+REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 KEEP_SNAPSHOT_FIELDS = (
     "title",
     "company",
@@ -211,12 +218,6 @@ def write_run_stats(payload: dict) -> None:
 
 def write_review_data(payload: dict) -> None:
     save_json(REVIEW_DATA_PATH, payload)
-
-
-def build_full_url(relative_or_full_url: Optional[str]) -> Optional[str]:
-    if not relative_or_full_url:
-        return None
-    return urljoin("https://www.seek.com.au", relative_or_full_url)
 
 
 def dedupe_preserve_order(values: List[str]) -> List[str]:
@@ -1903,6 +1904,9 @@ def fit_score(record: dict, profile: Optional[dict] = None) -> int:
 
 
 def is_dashboard_eligible(record: dict, profile: Optional[dict] = None) -> bool:
+    ok_title, _ = passes_title_filters(str(record.get("title") or ""))
+    if not ok_title:
+        return False
     return fit_score(record, profile) >= DASHBOARD_MIN_SCORE
 
 
@@ -2377,8 +2381,18 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     salary_value = salary_sort_value(str(record.get("salary") or ""))
     salary_fit_state = salary_fit_label(record, scoring_profile)
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
+    company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
+    teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
+    block_phrase = safe_html(suggest_title_block_phrase(str(record.get("title") or "")))
+    button_data_attrs = (
+        f'data-job-key="{job_key}" '
+        f'data-job-url="{url}" '
+        f'data-job-title="{title}" '
+        f'data-job-company="{company_attr}" '
+        f'data-job-teaser="{teaser_attr}"'
+    )
 
-    source = str(record.get("source") or "seek").lower().strip()
+    source = str(record.get("source") or "unknown").lower().strip()
     source_label = {"linkedin": "LinkedIn", "seek": "SEEK"}.get(source, source.upper())
 
     badges = []
@@ -2501,15 +2515,15 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     if hidden_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-unhide" type="button" data-review-action="unhide" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">Unhide</button>'
+            f'<button class="review-button review-unhide" type="button" data-review-action="unhide" {button_data_attrs}>Unhide</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
     elif not applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-applied" type="button" data-review-action="applied" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">Applied</button>'
-            f'<button class="review-button review-hide" type="button" data-review-action="hidden" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}" title="Hides this role and teaches the engine to filter similar ones">Not for me</button>'
+            f'<button class="review-button review-applied" type="button" data-review-action="applied" {button_data_attrs}>Applied</button>'
+            f'<button class="review-button review-not-for-me" type="button" data-review-action="not_for_me" {button_data_attrs} title="Marks this role as not a fit and stores it as learning feedback">Not For Me</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -2522,7 +2536,18 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         '<div class="job-header-row">'
         '<div class="job-header-copy">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
-        f'<div class="job-company">{company}</div>'
+        + (
+            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" {button_data_attrs} title="Block similar titles from appearing in future results">Block similar titles</button>'
+            '<div class="block-confirm" data-block-confirm hidden>'
+            '<span class="block-confirm-copy">Block similar titles based on: <strong data-block-phrase-preview></strong>. This will remove similar roles in future searches.</span>'
+            '<div class="block-confirm-actions">'
+            '<button class="mini-button mini-button-primary" type="button" data-confirm-block>Confirm</button>'
+            '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
+            '</div>'
+            '</div>'
+            if not applied_record and not hidden_record else ""
+        )
+        + f'<div class="job-company">{company}</div>'
         '</div>'
         f"{score_html}"
         '</div>'
@@ -3020,6 +3045,38 @@ def render_html(
       padding: 20px 22px;
       box-shadow: var(--shadow);
     }}
+    .results-helper {{
+      margin-top: 18px;
+      background: rgba(255, 252, 246, 0.96);
+      border: 1px solid rgba(233, 221, 207, 0.95);
+      border-radius: 20px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }}
+    .results-helper[hidden] {{
+      display: none !important;
+    }}
+    .results-helper-copy {{
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }}
+    .results-helper-dismiss {{
+      border: 1px solid rgba(29, 78, 216, 0.18);
+      border-radius: 999px;
+      background: white;
+      color: var(--cool);
+      font: inherit;
+      font-weight: 700;
+      padding: 8px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }}
     .filter-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -3293,10 +3350,27 @@ def render_html(
       color: white;
       box-shadow: 0 10px 18px rgba(20, 83, 45, 0.18);
     }}
-    .review-hide {{
+    .review-not-for-me {{
       background: white;
       color: var(--warm);
       border: 1px solid rgba(154, 52, 18, 0.22);
+    }}
+    .title-block-btn {{
+      display: inline-block;
+      background: none;
+      border: none;
+      padding: 0 0 0 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      opacity: 0.6;
+      vertical-align: middle;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }}
+    .title-block-btn:hover {{
+      opacity: 1;
+      color: var(--warm);
     }}
     .review-unhide {{
       background: var(--cool);
@@ -3312,6 +3386,44 @@ def render_html(
       color: var(--muted);
       font-size: 0.9rem;
       min-height: 1.2rem;
+    }}
+    .block-confirm {{
+      margin-top: 8px;
+      border: 1px solid rgba(29, 78, 216, 0.14);
+      border-radius: 16px;
+      background: rgba(237, 243, 255, 0.75);
+      padding: 12px 14px;
+      display: grid;
+      gap: 10px;
+    }}
+    .block-confirm-copy {{
+      color: #334155;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }}
+    .block-confirm-actions {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .mini-button {{
+      border: 1px solid rgba(29, 78, 216, 0.18);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: white;
+      color: var(--cool);
+    }}
+    .mini-button-primary {{
+      background: var(--cool);
+      color: white;
+      border-color: transparent;
+    }}
+    .mini-button[disabled] {{
+      opacity: 0.6;
+      cursor: progress;
     }}
     .job-card.is-reviewed {{
       opacity: 0.55;
@@ -3451,6 +3563,10 @@ def render_html(
               </label>
             </div>
           </section>
+          <div class="results-helper" id="results_helper" hidden>
+            <p class="results-helper-copy">Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar titles directly from the title. This helps remove repeated noise from future results.</p>
+            <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">Dismiss</button>
+          </div>
           {render_section("Matches From This Run", current_records, "No kept roles from the latest run right now.", scoring_profile)}
           {render_section("Kept From Earlier Runs", recent_archive_records, "No roles from earlier runs are being carried forward right now.", scoring_profile)}
           <section class="section job-section" data-section-id="older-saved">
@@ -3560,6 +3676,7 @@ def render_html(
   <script>
     const REVIEW_API_URL = 'http://127.0.0.1:8765/api/review';
     const JOB_HISTORY_API_URL = 'http://127.0.0.1:8765/api/job-history';
+    const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
     const scopeFilter = document.getElementById('scope_filter');
@@ -3567,9 +3684,34 @@ def render_html(
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
+    const resultsHelper = document.getElementById('results_helper');
+    const dismissResultsHelperButton = document.getElementById('dismiss_results_helper');
     const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
     const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
     const paginationState = {{}};
+
+    function showResultsHelperIfNeeded() {{
+      if (!resultsHelper) {{
+        return;
+      }}
+      try {{
+        if (window.localStorage.getItem(RESULTS_HELPER_DISMISSED_KEY) === '1') {{
+          return;
+        }}
+      }} catch (error) {{
+      }}
+      resultsHelper.hidden = false;
+    }}
+
+    function dismissResultsHelper() {{
+      if (resultsHelper) {{
+        resultsHelper.hidden = true;
+      }}
+      try {{
+        window.localStorage.setItem(RESULTS_HELPER_DISMISSED_KEY, '1');
+      }} catch (error) {{
+      }}
+    }}
 
     function getActiveWorkspace() {{
       return workspaceTabs.find(tab => tab.classList.contains('is-active'))?.dataset.workspaceTarget || 'potential';
@@ -3671,6 +3813,7 @@ def render_html(
         const salaryState = (card.dataset.salaryFit || 'missing').toLowerCase();
 
         let visible = true;
+        if (card.dataset.reviewDismissed === '1') visible = false;
         if (activeWorkspace === 'potential') {{
           if (!['current', 'saved'].includes(cardScope)) visible = false;
           if (scopeMode === 'current' && cardScope !== 'current') visible = false;
@@ -3781,34 +3924,124 @@ def render_html(
       }}
     }}
 
-    async function saveReviewAction(button) {{
+    function hideBlockConfirm(card) {{
+      const confirm = card?.querySelector('[data-block-confirm]');
+      if (confirm) {{
+        confirm.hidden = true;
+      }}
+    }}
+
+    function escapeRegExp(value) {{
+      return String(value || '').replace(/[.*+?^${{}}()|[\]\\]/g, '\\$&');
+    }}
+
+    function dismissCardsByTitlePhrase(phrase) {{
+      const normalized = String(phrase || '').trim().toLowerCase();
+      if (!normalized) {{
+        return;
+      }}
+      const tokens = normalized.split(/\s+/).filter(Boolean);
+      if (!tokens.length) {{
+        return;
+      }}
+      const matcher = new RegExp(`\\\\b${{tokens.map(token => escapeRegExp(token)).join('\\\\s+')}}\\\\b`, 'i');
+      for (const card of getVisibleCards()) {{
+        const scope = card.dataset.recordKind || 'current';
+        if (!['current', 'saved'].includes(scope)) {{
+          continue;
+        }}
+        if (matcher.test(card.dataset.titleSearch || '')) {{
+          card.dataset.reviewDismissed = '1';
+          card.classList.add('is-reviewed');
+        }}
+      }}
+      applyDashboardControls();
+    }}
+
+    function openBlockConfirm(button) {{
+      const card = button.closest('.job-card');
+      if (!card) {{
+        return;
+      }}
+      const confirm = card.querySelector('[data-block-confirm]');
+      const status = card.querySelector('.review-status');
+      const phrase = (button.dataset.blockPhrase || '').trim();
+      for (const panel of Array.from(document.querySelectorAll('[data-block-confirm]'))) {{
+        if (panel !== confirm) {{
+          panel.hidden = true;
+        }}
+      }}
+      if (!confirm || !status) {{
+        return;
+      }}
+      if (!phrase) {{
+        status.textContent = 'Could not suggest a title keyword for this role yet.';
+        confirm.hidden = true;
+        return;
+      }}
+      const preview = confirm.querySelector('[data-block-phrase-preview]');
+      const confirmButton = confirm.querySelector('[data-confirm-block]');
+      if (preview) {{
+        preview.textContent = phrase;
+      }}
+      if (confirmButton) {{
+        confirmButton.dataset.blockPhrase = phrase;
+        confirmButton.dataset.jobKey = button.dataset.jobKey || '';
+        confirmButton.dataset.jobUrl = button.dataset.jobUrl || '';
+        confirmButton.dataset.jobTitle = button.dataset.jobTitle || '';
+        confirmButton.dataset.jobCompany = button.dataset.jobCompany || '';
+        confirmButton.dataset.jobTeaser = button.dataset.jobTeaser || '';
+      }}
+      status.textContent = '';
+      confirm.hidden = false;
+    }}
+
+    function reviewSavingMessage(action) {{
+      if (action === 'applied') return 'Saving as applied...';
+      if (action === 'unhide') return 'Removing from hidden jobs...';
+      if (action === 'not_for_me') return 'Saving Not For Me feedback...';
+      if (action === 'block_similar') return 'Saving title block...';
+      return 'Saving review action...';
+    }}
+
+    function reviewSuccessMessage(action, payload) {{
+      if (payload?.message) {{
+        return payload.message;
+      }}
+      if (action === 'applied') return 'Saved to Applied jobs. It will be hidden in future runs.';
+      if (action === 'unhide') return 'Removed from Hidden jobs. It can appear again in future runs.';
+      if (action === 'not_for_me') return 'Saved as Not For Me. We will learn from this without blocking similar titles yet.';
+      if (action === 'block_similar') return 'Saved. Similar jobs will be blocked by title in future runs.';
+      return 'Review action saved.';
+    }}
+
+    async function saveReviewAction(button, extraPayload = {{}}) {{
       const card = button.closest('.job-card');
       const status = card?.querySelector('.review-status');
-      const action = button.dataset.reviewAction;
-      const jobKey = button.dataset.jobKey || '';
-      const jobUrl = button.dataset.jobUrl || '';
+      const action = button.dataset.reviewAction || extraPayload.action || '';
+      const requestPayload = {{
+        action,
+        job_key: button.dataset.jobKey || '',
+        url: button.dataset.jobUrl || '',
+        title: button.dataset.jobTitle || '',
+        company: button.dataset.jobCompany || '',
+        teaser: button.dataset.jobTeaser || '',
+        ...extraPayload,
+      }};
 
       if (!status) {{
         return;
       }}
 
-      const buttons = card.querySelectorAll('.review-button');
+      const buttons = card.querySelectorAll('button');
       buttons.forEach(item => item.disabled = true);
-      status.textContent = action === 'applied'
-        ? 'Saving as applied...'
-        : action === 'unhide'
-          ? 'Removing from hidden jobs...'
-          : 'Saving hidden job...';
+      status.textContent = reviewSavingMessage(action);
 
       try {{
         const response = await fetch(REVIEW_API_URL, {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{
-            action,
-            job_key: jobKey,
-            url: jobUrl
-          }})
+          body: JSON.stringify(requestPayload)
         }});
 
         const payload = await response.json().catch(() => ({{}}));
@@ -3816,22 +4049,23 @@ def render_html(
           throw new Error(payload.error || 'Could not save review action');
         }}
 
+        hideBlockConfirm(card);
         card.classList.add('is-reviewed');
-        status.textContent = action === 'applied'
-          ? 'Saved to Applied jobs. It will be hidden in future runs.'
-          : action === 'unhide'
-            ? 'Removed from Hidden jobs. It can appear again in future runs.'
-            : 'Saved to Hidden jobs. It will stay out of future runs.';
+        status.textContent = reviewSuccessMessage(action, payload);
         window.setTimeout(() => {{
-          card.style.display = 'none';
-        }}, 900);
+          card.dataset.reviewDismissed = '1';
+          applyDashboardControls();
+          if (action === 'block_similar') {{
+            dismissCardsByTitlePhrase(payload.block_phrase || requestPayload.block_phrase || '');
+          }}
+        }}, 700);
       }} catch (error) {{
         buttons.forEach(item => item.disabled = false);
         status.textContent = error.message || 'Could not save review action.';
       }}
     }}
 
-    document.addEventListener('click', event => {{
+    document.addEventListener('click', async event => {{
       const toggle = event.target.closest('[data-toggle-target]');
       if (toggle) {{
         const target = document.getElementById(toggle.dataset.toggleTarget || '');
@@ -3869,6 +4103,28 @@ def render_html(
         return;
       }}
 
+      const dismissHelper = event.target.closest('#dismiss_results_helper');
+      if (dismissHelper) {{
+        dismissResultsHelper();
+        return;
+      }}
+
+      const cancelBlock = event.target.closest('[data-cancel-block]');
+      if (cancelBlock) {{
+        const card = cancelBlock.closest('.job-card');
+        hideBlockConfirm(card);
+        return;
+      }}
+
+      const confirmBlock = event.target.closest('[data-confirm-block]');
+      if (confirmBlock) {{
+        await saveReviewAction(confirmBlock, {{
+          action: 'block_similar',
+          block_phrase: confirmBlock.dataset.blockPhrase || '',
+        }});
+        return;
+      }}
+
       const button = event.target.closest('.review-button');
       if (!button) {{
         const workspaceTab = event.target.closest('[data-workspace-target]');
@@ -3878,6 +4134,11 @@ def render_html(
         setActiveWorkspace(workspaceTab.dataset.workspaceTarget || 'potential');
         return;
       }}
+      if ((button.dataset.reviewAction || '') === 'block_similar') {{
+        openBlockConfirm(button);
+        return;
+      }}
+      hideBlockConfirm(button.closest('.job-card'));
       saveReviewAction(button);
     }});
 
@@ -3889,6 +4150,7 @@ def render_html(
     }}
 
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
+    showResultsHelperIfNeeded();
     hydrateViewedState();
   </script>
 </body>
@@ -4034,7 +4296,7 @@ def _seek_scrape_to_records(
                                 continue
 
                             relative_url = title_el.get_attribute("href") if title_el else None
-                            full_url = build_full_url(relative_url)
+                            full_url = build_full_seek_url(relative_url)
                             record["url"] = full_url
                             record["job_key"] = stable_job_key(full_url)
                             if not full_url:
@@ -4194,7 +4456,10 @@ def _seek_scrape_to_records(
                                 llm_input_text = details_text[:MAX_LLM_CHARS]
                                 llm_fp = build_llm_cache_key(llm_input_text)
 
-                                if not llm_is_enabled():
+                                if NO_LLM_MODE:
+                                    llm_review = normalize_llm_review(None)
+                                    print(f"[LLM][SKIPPED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                elif not llm_is_enabled():
                                     llm_review = normalize_llm_review(None)
                                     print(f"[LLM][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
                                 elif llm_fp in llm_cache:
@@ -4272,7 +4537,7 @@ def _deduplicate_across_sources(records: List[dict]) -> List[dict]:
     return seen
 
 
-def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
+def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
     configure_console_output()
     if TEST_SCRAPE_MODE:
         print("Mode: test scrape run")
@@ -4285,12 +4550,14 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
     search_settings = get_search_settings(profile)
     configured_max_pages = int(search_settings.get("max_pages_cap", max_pages_cap) or max_pages_cap)
     configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
-    if TEST_SCRAPE_MODE:
+    if CLI_MAX_PAGES_CAP is not None:
+        configured_max_pages = CLI_MAX_PAGES_CAP
+    elif TEST_SCRAPE_MODE:
         configured_max_pages = max(configured_max_pages, TEST_SCRAPE_MAX_PAGES_CAP)
+    if TEST_SCRAPE_MODE:
         configured_date_range = max(configured_date_range, TEST_SCRAPE_DATE_RANGE_DAYS)
     enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", True))
     sort_newest_first = bool(search_settings.get("sort_newest_first", True))
-    search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
 
     run_started_at = datetime.now().astimezone()
@@ -4306,6 +4573,7 @@ def scrape_seek_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool =
 
     # --- SEEK ---
     if "seek" in enabled_sources:
+        search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
         s_kept, s_audit, s_skills = _seek_scrape_to_records(
             profile=profile,
             search_targets=search_targets,
@@ -4441,4 +4709,4 @@ if __name__ == "__main__":
     if "--rebuild-dashboard" in sys.argv:
         rebuild_html_dashboard()
     else:
-        scrape_seek_jobs_direct()
+        scrape_jobs_direct()

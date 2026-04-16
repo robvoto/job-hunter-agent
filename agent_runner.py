@@ -26,7 +26,7 @@ from notifiers.email_notifier import send_email_notification
 from notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
 from agent_settings import save_agent_settings
 from profile_store import load_profile
-from scraper_direct import (
+from source_connector import (
     RUN_STATS_PATH,
     build_dashboard_record_sets,
     fit_score,
@@ -36,7 +36,7 @@ from scraper_direct import (
     load_last_kept_records,
     parse_timestamp,
     rebuild_html_dashboard,
-    scrape_seek_jobs_direct,
+    scrape_jobs_direct,
     viewed_by_user,
 )
 
@@ -255,7 +255,7 @@ def run_agent_once(skip_collection: bool = False, notify: bool = True) -> dict[s
         rebuild_html_dashboard()
     else:
         print("Starting job collection...")
-        scrape_seek_jobs_direct()
+        scrape_jobs_direct()
         print("Job collection finished.")
 
     current_records = load_last_kept_records()

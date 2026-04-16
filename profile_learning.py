@@ -329,33 +329,6 @@ def _parse_strengths(source_text: str) -> list[str]:
     return result[:20]
 
 
-def _parse_notes(source_text: str) -> list[str]:
-    notes: list[str] = []
-    for heading in [
-        "DELIVERY CONTEXT STRENGTH",
-        "HOW TO POSITION (FOR AI)",
-        "HARD RULES FOR AI",
-        "CONFIDENCE SUMMARY",
-    ]:
-        section = _extract_section(source_text, heading)
-        notes.extend(_extract_bullets(section))
-    extra_lines = []
-    for label in ["KNOWN RISK:", "LIMITS:", "WEAKER FIT:"]:
-        for match in re.findall(rf"{re.escape(label)}\s*(.+)", source_text, flags=re.IGNORECASE):
-            extra_lines.append(_clean_sentence(match))
-    notes.extend(extra_lines)
-
-    seen = set()
-    result = []
-    for item in notes:
-        cleaned = _clean_sentence(item)
-        normalized = cleaned.lower()
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            result.append(cleaned)
-    return result[:25]
-
-
 def build_learning_patch(text: str) -> dict[str, Any]:
     source_text = repair_text(text)
     if not source_text:
@@ -376,10 +349,6 @@ def build_learning_patch(text: str) -> dict[str, Any]:
     capability_rules = _parse_capabilities(source_text)
     if capability_rules:
         patch["capability_profile_rules"] = capability_rules
-
-    notes = _parse_notes(source_text)
-    if notes:
-        patch["llm_prompt_notes"] = notes
 
     return patch
 

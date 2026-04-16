@@ -21,7 +21,8 @@ from profile_store import (
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = ROOT_DIR / "output"
-REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
+REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
+RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
 APPLICATION_INPUTS_DIR = DATA_DIR / "application_inputs"
 SOURCE_PACK_DIR = APPLICATION_INPUTS_DIR / "source_pack"
 SOURCE_MATERIALS_PATH = DATA_DIR / "application_materials.json"
@@ -35,7 +36,6 @@ ONBOARDING_RESET_FIELDS = (
     "strengths",
     "capability_profile_rules",
     "candidate_summary",
-    "llm_prompt_notes",
     "cv_text",
     "evidence_tiers",
     "llm_profile_brief",
@@ -327,9 +327,6 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
             learned["capability_profile_rules"],
         )
 
-    if learned.get("llm_prompt_notes"):
-        patch["llm_prompt_notes"] = learned["llm_prompt_notes"][:30]
-
     star_text = "\n\n".join(
         str(s.get("text") or "").strip()
         for s in source_sections
@@ -362,13 +359,14 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
 
     profile = patch_profile(patch)
 
-    # Reset review data so stale tuning suggestions don't persist after a full rebuild.
-    try:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        REVIEW_DATA_PATH.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
-        print("[ONBOARDING] seek_review_data.json reset")
-    except Exception as exc:
-        print(f"[ONBOARDING] Could not reset seek_review_data.json: {exc}")
+    # Reset stale output files so tuning suggestions and run stats don't persist after a full rebuild.
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for reset_path, label in ((REVIEW_DATA_PATH, "review_data.json"), (RUN_STATS_PATH, "run_stats.json")):
+        try:
+            reset_path.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
+            print(f"[ONBOARDING] {label} reset")
+        except Exception as exc:
+            print(f"[ONBOARDING] Could not reset {label}: {exc}")
 
     return {
         "ok": True,

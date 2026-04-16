@@ -1,8 +1,6 @@
 # config.py
 
-SEEK_URL = "https://www.seek.com.au/business-analyst-jobs/in-All-Sydney-NSW?classification=6076%2C1209%2C6123%2C6281%2C1223&daterange=3"
-
-OUTPUT_HTML = "output/seek_results.html"
+OUTPUT_HTML = "output/dashboard.html"
 
 # Scrape tuning
 MAX_PAGES_CAP = 10

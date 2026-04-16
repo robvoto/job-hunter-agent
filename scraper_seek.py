@@ -1,7 +1,7 @@
 """SEEK-specific connector helpers.
 
-These functions are extracted from scraper_direct.py to keep SEEK-specific
-I/O logic separate from the shared pipeline. Imported back into scraper_direct.py.
+These functions are extracted from source_connector.py to keep SEEK-specific
+I/O logic separate from the shared pipeline. Imported back into source_connector.py.
 """
 
 import re

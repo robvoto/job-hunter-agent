@@ -26,7 +26,7 @@ The current implemented job source is SEEK.
 Important note:
 
 - the product is broader than SEEK
-- the current connector code lives in `scraper_direct.py` for historical reasons
+- the current connector code lives in `source_connector.py` for historical reasons
 - do not treat that filename as the intended long-term product naming model
 
 ## Local Setup
@@ -43,13 +43,13 @@ python -m playwright install chromium
 Run the current source connector:
 
 ```powershell
-python scraper_direct.py
+python source_connector.py
 ```
 
 Rebuild the dashboard from saved local state:
 
 ```powershell
-python scraper_direct.py --rebuild-dashboard
+python source_connector.py --rebuild-dashboard
 ```
 
 Run the local UI:
@@ -60,7 +60,7 @@ python admin_api.py
 
 ## Dashboard Model
 
-`output/seek_results.html` is a persistent local shortlist.
+`output/dashboard.html` is a persistent local shortlist.
 
 It currently supports:
 
@@ -74,10 +74,10 @@ It currently supports:
 
 ## Files That Can Be Rebuilt
 
-- `output/seek_results.html`
-- `output/seek_results.json`
-- `output/seek_run_stats.json`
-- `output/seek_review_data.json`
+- `output/dashboard.html`
+- `output/audit_records.json`
+- `output/run_stats.json`
+- `output/review_data.json`
 
 ## Files That Should Usually Be Kept
 
@@ -124,7 +124,7 @@ If `OPENAI_API_KEY` is missing, the app runs without live LLM review.
 
 ## Runner Split
 
-- `python scraper_direct.py`
+- `python source_connector.py`
   Canonical direct run for refreshing jobs and rebuilding the dashboard.
 
 - `python agent_runner.py`

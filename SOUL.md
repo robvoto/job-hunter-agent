@@ -31,7 +31,7 @@ The project is past the initial prototype stage.
 
 ### What works now
 
-- SEEK scraping uses the direct-page approach in `scraper_direct.py`
+- SEEK scraping uses the direct-page approach in `source_connector.py`
 - deterministic filtering happens before any LLM call
 - LLM fallback is constrained to `KEEP`, `REJECT`, or `MAYBE`
 - search settings are configurable from the local admin UI
@@ -112,7 +112,7 @@ Do not move the project back to pane-based scraping unless there is a very stron
 
 | Path | Purpose |
 |------|---------|
-| `scraper_direct.py` | Main SEEK scraper using direct job pages |
+| `source_connector.py` | Main job-source connector and dashboard builder |
 | `filters.py` | Deterministic title and content filtering |
 | `llm_gate.py` | Optional constrained LLM decision step |
 | `admin_api.py` | Local admin console and profile/review API |
@@ -130,10 +130,10 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `data/agent_settings.template.json` | Starter template for local agent scheduling and notifier config |
 | `data/job_history.json` | Seen/applied/hidden history support |
 | `data/llm_cache.json` | Cached LLM decisions |
-| `output/seek_results.html` | Human-readable shortlist |
-| `output/seek_results.json` | Full audit/debug output |
-| `output/seek_run_stats.json` | Latest run metrics |
-| `output/seek_review_data.json` | Unknown skills and reject-sample review data |
+| `output/dashboard.html` | Human-readable shortlist |
+| `output/audit_records.json` | Full audit/debug output |
+| `output/run_stats.json` | Latest run metrics |
+| `output/review_data.json` | Unknown skills and reject-sample review data |
 | `output/agent_last_summary.txt` | Latest plain-text agent digest |
 | `legacy/` | Older scraper drafts kept for reference only |
 | `docs/OPERATIONS.md` | Persistence and runtime behavior notes |

@@ -26,8 +26,8 @@ Core runtime pieces:
 - `profile_learning.py`
   Text-to-profile extraction helpers.
 
-- `scraper_direct.py`
-  Current SEEK source connector and dashboard renderer. The filename is historical.
+- `source_connector.py`
+  Current source connector and dashboard renderer for SEEK and LinkedIn.
 
 - `filters.py`
   Deterministic title and content filtering.
@@ -37,7 +37,7 @@ Core runtime pieces:
 
 ## Naming Note
 
-The code still uses terms like `scraper` and `seek_results.html` because that is how the project evolved.
+The code still uses terms like `scraper` because that is how the project evolved.
 
 For product-level docs and future architecture, prefer:
 
@@ -58,7 +58,7 @@ Do not rename major files casually unless there is time to clean the whole proje
 
 ## Current Runner Split
 
-- `scraper_direct.py`
+- `source_connector.py`
   Canonical direct entry point for refreshing source data and rebuilding outputs.
 
 - `agent_runner.py`

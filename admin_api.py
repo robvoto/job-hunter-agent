@@ -1,9 +1,11 @@
 import json
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from agent_settings import load_agent_settings, save_agent_settings
 from config import OUTPUT_HTML
+from filters import build_title_block_rule, normalize_title_block_phrase, suggest_title_block_phrase
 from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
@@ -25,8 +27,8 @@ PORT = 8765
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = ROOT_DIR / "output"
-RUN_STATS_PATH = OUTPUT_DIR / "seek_run_stats.json"
-REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
+RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
+REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 SHOWCASE_PATH = ROOT_DIR / "docs" / "SHOWCASE.html"
 DASHBOARD_PATH = ROOT_DIR / OUTPUT_HTML
@@ -838,8 +840,9 @@ ADMIN_HTML = """<!doctype html>
             <div class="field-help">One possible-match regex per line.</div>
 
             <label for="reject_title_rules">Reject title rules</label>
+            <div id="reject_title_rules_chips" class="rule-chips" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:6px;"></div>
             <textarea id="reject_title_rules"></textarea>
-            <div class="field-help">Format: <code>pattern || reason</code>.</div>
+            <div class="field-help">Format: <code>pattern || reason</code>. Rules added via the dashboard appear above automatically.</div>
           </section>
 
           <section class="subpanel">
@@ -1118,7 +1121,51 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('os_max_adjacent').value = String(os.max_adjacent_patterns ?? 6);
 
       syncLlmProfileBriefMode();
+      renderTitleBlockChips(profile.reject_title_rules || []);
     }
+
+    function renderTitleBlockChips(rules) {
+      const container = document.getElementById('reject_title_rules_chips');
+      if (!container) return;
+      if (!rules.length) {
+        container.innerHTML = '<span style="color:var(--muted);font-size:0.85rem;">No title blocks yet. Rules added from the dashboard appear here.</span>';
+        return;
+      }
+      container.innerHTML = rules.map(rule => {
+        const reason = (rule.reason || '').replace('TITLE_BAD_KEYWORD:', '');
+        const pattern = escapeHtml(rule.pattern || '');
+        return `<span class="rule-chip" style="display:inline-flex;align-items:center;gap:6px;background:rgba(154,52,18,0.07);border:1px solid rgba(154,52,18,0.18);border-radius:999px;padding:4px 10px;font-size:0.83rem;">
+          <span title="${pattern}">${escapeHtml(reason || pattern)}</span>
+          <button type="button" data-delete-title-block="${pattern}" title="Remove this title block" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;line-height:1;padding:0;">×</button>
+        </span>`;
+      }).join('');
+    }
+
+    document.addEventListener('click', async e => {
+      const deleteBtn = e.target.closest('[data-delete-title-block]');
+      if (!deleteBtn) return;
+      const pattern = deleteBtn.dataset.deleteTitleBlock;
+      if (!pattern) return;
+      deleteBtn.disabled = true;
+      try {
+        const resp = await fetch('/api/rule/title-block', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pattern }),
+        });
+        const payload = await resp.json();
+        if (payload.ok) {
+          renderTitleBlockChips(payload.reject_title_rules || []);
+          const ta = document.getElementById('reject_title_rules');
+          if (ta) ta.value = rulesToText(payload.reject_title_rules, 'pattern');
+        } else {
+          alert(payload.error || 'Could not remove rule.');
+          deleteBtn.disabled = false;
+        }
+      } catch {
+        deleteBtn.disabled = false;
+      }
+    });
 
     function renderTelegramSubscribers(subscribers) {
       const panel = document.getElementById('telegram_subscribers_panel');
@@ -2365,18 +2412,77 @@ class AdminHandler(BaseHTTPRequestHandler):
         return raw.split("#", 1)[0]
 
     @classmethod
-    def _persist_review_event(cls, action: str, job_key: str, url: str = "", title: str = "") -> None:
+    def _append_review_event(
+        cls,
+        entry: dict,
+        action: str,
+        job_key: str,
+        occurred_at: str,
+        title: str = "",
+        company: str = "",
+        url: str = "",
+        teaser: str = "",
+        extra: dict | None = None,
+    ) -> None:
+        snapshot = entry.get("last_kept_snapshot")
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+
+        event = {
+            "action": action,
+            "job_key": job_key,
+            "timestamp": occurred_at,
+        }
+        resolved_title = title or entry.get("title") or snapshot.get("title") or ""
+        resolved_company = company or entry.get("company") or snapshot.get("company") or ""
+        resolved_url = url or entry.get("url") or snapshot.get("url") or ""
+        resolved_teaser = teaser or snapshot.get("teaser") or entry.get("teaser") or ""
+
+        if resolved_title:
+            event["title"] = resolved_title
+        if resolved_company:
+            event["company"] = resolved_company
+        if resolved_url:
+            event["url"] = resolved_url
+        if resolved_teaser:
+            event["teaser"] = resolved_teaser
+
+        if isinstance(extra, dict):
+            for key, value in extra.items():
+                if value in (None, "", [], {}):
+                    continue
+                event[key] = value
+
+        events = entry.get("review_events")
+        if not isinstance(events, list):
+            events = []
+        events.append(event)
+        entry["review_events"] = events[-50:]
+
+    @classmethod
+    def _persist_review_event(
+        cls,
+        action: str,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+        extra: dict | None = None,
+    ) -> None:
         normalized = cls._normalize_job_key(job_key or url)
         if not normalized:
             return
 
         history = cls._load_job_history()
         entry = history.get(normalized, {})
-        now_iso = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
+        now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 
         entry["job_key"] = normalized
-        if title and not entry.get("title"):
+        if title:
             entry["title"] = title
+        if company:
+            entry["company"] = company
         if url:
             entry["url"] = url
 
@@ -2392,12 +2498,38 @@ class AdminHandler(BaseHTTPRequestHandler):
             if not entry.get("first_applied_at"):
                 entry["first_applied_at"] = now_iso
             entry["last_applied_at"] = now_iso
+        elif action == "not_for_me":
+            entry["last_not_for_me_at"] = now_iso
+            entry["times_not_for_me"] = int(entry.get("times_not_for_me", 0) or 0) + 1
+        elif action in ("block_similar", "block_title"):
+            entry["last_block_title_at"] = now_iso
+            entry["times_block_title"] = int(entry.get("times_block_title", 0) or 0) + 1
+
+        cls._append_review_event(
+            entry,
+            action,
+            normalized,
+            now_iso,
+            title=title,
+            company=company,
+            url=url,
+            teaser=teaser,
+            extra=extra,
+        )
 
         history[normalized] = entry
         cls._save_job_history(history)
 
     @classmethod
-    def _append_review_key(cls, action: str, job_key: str, url: str = "", title: str = "") -> dict:
+    def _append_review_key(
+        cls,
+        action: str,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+    ) -> dict:
         normalized = cls._normalize_job_key(job_key)
         if not normalized:
             raise ValueError("Missing job key")
@@ -2421,7 +2553,14 @@ class AdminHandler(BaseHTTPRequestHandler):
             existing.append(normalized)
         review_controls[list_name] = existing
         save_profile(profile)
-        cls._persist_review_event(action, normalized, url=url, title=title)
+        cls._persist_review_event(
+            action,
+            normalized,
+            url=url,
+            title=title,
+            company=company,
+            teaser=teaser,
+        )
         return {
             "ok": True,
             "action": action,
@@ -2430,7 +2569,15 @@ class AdminHandler(BaseHTTPRequestHandler):
         }
 
     @classmethod
-    def _remove_review_key(cls, action: str, job_key: str, url: str = "", title: str = "") -> dict:
+    def _remove_review_key(
+        cls,
+        action: str,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+    ) -> dict:
         normalized = cls._normalize_job_key(job_key)
         if not normalized:
             raise ValueError("Missing job key")
@@ -2452,12 +2599,102 @@ class AdminHandler(BaseHTTPRequestHandler):
         updated = [value for value in existing if value != normalized]
         review_controls[list_name] = updated
         save_profile(profile)
-        cls._persist_review_event(action, normalized, url=url, title=title)
+        cls._persist_review_event(
+            action,
+            normalized,
+            url=url,
+            title=title,
+            company=company,
+            teaser=teaser,
+        )
         return {
             "ok": True,
             "action": action,
             "job_key": normalized,
             "saved_count": len(updated),
+        }
+
+    @classmethod
+    def _save_not_for_me_feedback(
+        cls,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+    ) -> dict:
+        normalized = cls._normalize_job_key(job_key or url)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        cls._persist_review_event(
+            "not_for_me",
+            normalized,
+            url=url,
+            title=title,
+            company=company,
+            teaser=teaser,
+        )
+        return {
+            "ok": True,
+            "action": "not_for_me",
+            "job_key": normalized,
+            "message": "Saved as Not For Me. This is stored as learning feedback, not a permanent title block.",
+        }
+
+    @classmethod
+    def _save_block_similar_feedback(
+        cls,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+        block_phrase: str = "",
+    ) -> dict:
+        normalized = cls._normalize_job_key(job_key or url)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        phrase = normalize_title_block_phrase(block_phrase) or suggest_title_block_phrase(title)
+        if not phrase:
+            raise ValueError("Could not suggest a title keyword to block from this title yet")
+
+        rule = build_title_block_rule(phrase)
+        profile = load_profile()
+        existing = list(profile.get("reject_title_rules", []))
+        rule_exists = any(str(item.get("pattern") or "").strip() == rule["pattern"] for item in existing)
+        if not rule_exists:
+            existing.append(rule)
+            profile["reject_title_rules"] = existing
+            save_profile(profile)
+
+        cls._persist_review_event(
+            "block_title",
+            normalized,
+            url=url,
+            title=title,
+            company=company,
+            teaser=teaser,
+            extra={
+                "extracted_phrase": phrase,
+                "reject_title_pattern": rule["pattern"],
+                "reject_title_reason": rule["reason"],
+                "rule_added": not rule_exists,
+            },
+        )
+        return {
+            "ok": True,
+            "action": "block_similar",
+            "job_key": normalized,
+            "block_phrase": phrase,
+            "rule": rule,
+            "rule_added": not rule_exists,
+            "message": (
+                f"Added title block for '{phrase}'. Similar jobs will be filtered in future runs."
+                if not rule_exists
+                else f"Title block for '{phrase}' already existed."
+            ),
         }
 
     @classmethod
@@ -2816,30 +3053,78 @@ class AdminHandler(BaseHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             action = str(payload.get("action", "")).strip().lower()
+            job_key = str(payload.get("job_key") or payload.get("url") or "").strip()
+            url = str(payload.get("url") or "").strip()
+            title = str(payload.get("title") or "").strip()
+            company = str(payload.get("company") or "").strip()
+            teaser = str(payload.get("teaser") or "").strip()
             if action == "viewed":
                 result = self._record_job_view(
-                    str(payload.get("job_key") or payload.get("url") or "").strip(),
-                    str(payload.get("url") or "").strip(),
-                    str(payload.get("title") or "").strip(),
+                    job_key,
+                    url,
+                    title,
+                )
+            elif action == "not_for_me":
+                result = self._save_not_for_me_feedback(
+                    job_key,
+                    url,
+                    title,
+                    company,
+                    teaser,
+                )
+            elif action == "block_similar":
+                result = self._save_block_similar_feedback(
+                    job_key,
+                    url,
+                    title,
+                    company,
+                    teaser,
+                    str(payload.get("block_phrase") or "").strip(),
                 )
             elif action == "unhide":
                 result = self._remove_review_key(
                     action,
-                    str(payload.get("job_key") or payload.get("url") or "").strip(),
-                    str(payload.get("url") or "").strip(),
-                    str(payload.get("title") or "").strip(),
+                    job_key,
+                    url,
+                    title,
+                    company,
+                    teaser,
                 )
             else:
                 result = self._append_review_key(
                     action,
-                    str(payload.get("job_key") or payload.get("url") or "").strip(),
-                    str(payload.get("url") or "").strip(),
-                    str(payload.get("title") or "").strip(),
+                    job_key,
+                    url,
+                    title,
+                    company,
+                    teaser,
                 )
         except Exception as exc:
             self._send_json(400, {"error": str(exc)})
             return
         self._send_json(200, result)
+
+    def do_DELETE(self) -> None:
+        if self.path == "/api/rule/title-block":
+            try:
+                payload = self._read_json_body()
+                pattern = str(payload.get("pattern") or "").strip()
+                if not pattern:
+                    raise ValueError("pattern is required")
+                profile = load_profile()
+                existing = list(profile.get("reject_title_rules", []))
+                updated_rules = [r for r in existing if str(r.get("pattern") or "").strip() != pattern]
+                if len(updated_rules) == len(existing):
+                    self._send_json(404, {"error": "Rule not found"})
+                    return
+                profile["reject_title_rules"] = updated_rules
+                saved = save_profile(profile)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, {"ok": True, "reject_title_rules": saved.get("reject_title_rules", [])})
+            return
+        self._send_json(404, {"error": "Not found"})
 
     def log_message(self, format: str, *args) -> None:
         return
