@@ -9,7 +9,7 @@ import re
 import sys
 from typing import List, Set
 
-from filters import passes_content_filters, passes_quick_card_filters, passes_title_filters
+from filters import passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules, passes_title_filters
 from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from profile_store import get_search_settings
 from review_insights import extract_detected_skills
@@ -184,6 +184,13 @@ class LinkedInScraper(BaseJobScraper):
                 if not ok_desc:
                     print(f"[LinkedIn] REJECTED (content) [{desc_reason}] {title} @ {company}")
                     record["reject_reason"] = desc_reason
+                    finalize_record(self.job_history, audit_rows, record, self.run_iso)
+                    continue
+                ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
+                if not ok_learned:
+                    record["content_reason"] = learned_reason
+                    record["reject_reason"] = learned_reason
+                    print(f"[LinkedIn] REJECTED (learned rule) [{learned_reason}] {title} @ {company}")
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from agent_settings import load_agent_settings, save_agent_settings
 from config import OUTPUT_HTML
-from filters import build_title_block_rule, detect_rejection_signals, normalize_title_block_phrase, suggest_title_block_phrase
+from filters import build_title_block_rule, detect_rejection_signals, extract_rejection_suggestions, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
@@ -32,6 +32,7 @@ REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 SHOWCASE_PATH = ROOT_DIR / "docs" / "SHOWCASE.html"
 DASHBOARD_PATH = ROOT_DIR / OUTPUT_HTML
+REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
 
 ADMIN_HTML = """<!doctype html>
 <html lang="en">
@@ -2614,6 +2615,54 @@ class AdminHandler(BaseHTTPRequestHandler):
             "saved_count": len(updated),
         }
 
+
+    # ------------------------------------------------------------------
+    # Rejection-learning helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _load_rejection_rules() -> list:
+        if not REJECTION_RULES_PATH.exists():
+            return []
+        try:
+            data = json.loads(REJECTION_RULES_PATH.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    @staticmethod
+    def _save_rejection_rules_list(rules: list) -> None:
+        REJECTION_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REJECTION_RULES_PATH.write_text(
+            json.dumps(rules, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @classmethod
+    def _get_job_description(cls, job_id: str) -> str:
+        """Return the full description text for a job_id, or empty string."""
+        history = cls._load_job_history()
+        for key in [job_id, f"linkedin:{job_id}"]:
+            entry = history.get(key) if isinstance(history, dict) else None
+            if not isinstance(entry, dict):
+                continue
+            snap = entry.get("last_kept_snapshot") or {}
+            if isinstance(snap, dict):
+                desc = snap.get("full_description") or snap.get("fit_source_text") or ""
+                if desc:
+                    return desc
+        seek_path = OUTPUT_DIR / "seek_results.json"
+        if seek_path.exists():
+            try:
+                rows = json.loads(seek_path.read_text(encoding="utf-8"))
+                if isinstance(rows, list):
+                    for row in rows:
+                        if str(row.get("job_key") or "") == str(job_id):
+                            return row.get("full_description") or row.get("fit_source_text") or ""
+            except Exception:
+                pass
+        return ""
+
     @classmethod
     def _save_not_for_me_feedback(
         cls,
@@ -2852,6 +2901,24 @@ class AdminHandler(BaseHTTPRequestHandler):
         if self.path == "/api/source-materials":
             self._send_json(200, load_source_materials(create_if_missing=True))
             return
+        # Rejection-learning: suggestions endpoint
+        import re as _re
+        if _re.match(r'^/api/rejection-suggestions', self.path):
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            job_id = (params.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self._send_json(400, {"error": "job_id is required"})
+                return
+            description = self._get_job_description(job_id)
+            if not description:
+                self._send_json(200, {})
+                return
+            suggestions = extract_rejection_suggestions(description)
+            self._send_json(200, suggestions)
+            return
+
         self._send_json(404, {"error": "Not found"})
 
     def do_PATCH(self) -> None:
@@ -3059,6 +3126,52 @@ class AdminHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path == "/api/rejection-rules":
+            _VALID_CATEGORIES = {
+                "domain", "mandatory_experience", "mandatory_skill",
+                "role_type", "seniority", "work_arrangement",
+                "industry_platform", "clearance_or_regulation", "other",
+            }
+            _JUNK_VALUES = {"no", "bad", "not me", "yes", "ok", "good", "n/a"}
+            try:
+                payload = self._read_json_body()
+                job_id = str(payload.get("job_id") or "").strip()
+                job_title = str(payload.get("job_title") or "").strip()
+                raw_rules = payload.get("rules")
+                if not isinstance(raw_rules, list):
+                    raise ValueError("rules must be a list")
+                validated = []
+                now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                for i, r in enumerate(raw_rules):
+                    value = str(r.get("value") or "").strip()
+                    category = str(r.get("category") or "other").strip()
+                    if not value or len(value) < 3:
+                        continue
+                    if value.lower() in _JUNK_VALUES:
+                        continue
+                    if category not in _VALID_CATEGORIES:
+                        category = "other"
+                    validated.append({
+                        "id": f"{job_id}_{now_iso}_{i}",
+                        "job_id": job_id,
+                        "job_title": job_title,
+                        "value": value,
+                        "category": category,
+                        "source": str(r.get("source") or "user_selected"),
+                        "active": True,
+                        "created_at": now_iso,
+                    })
+                if not validated:
+                    raise ValueError("No valid rules provided (check minimum length >= 3)")
+                existing = self._load_rejection_rules()
+                existing.extend(validated)
+                self._save_rejection_rules_list(existing)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, {"ok": True, "saved": len(validated)})
+            return
+
         if self.path != "/api/review":
             self._send_json(404, {"error": "Not found"})
             return

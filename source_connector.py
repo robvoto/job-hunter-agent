@@ -25,6 +25,7 @@ from config import MAX_PAGES_CAP, OUTPUT_HTML
 from filters import (
     passes_content_filters,
     passes_quick_card_filters,
+    passes_saved_rejection_rules,
     passes_title_filters,
     suggest_title_block_phrase,
 )
@@ -3023,9 +3024,11 @@ def render_html(
       margin-bottom: 6px;
     }}
     .job-link:hover {{ text-decoration: underline; }}
-    .job-company {{
-      color: var(--muted);
-      font-size: 1.02rem;
+    .job-company {{ 
+      color: #374151;
+      font-size: 1.12rem;
+      font-weight: 500;
+      margin-top: 4px;}
     }}
     .match-tile {{
       min-width: 108px;
@@ -3193,6 +3196,200 @@ def render_html(
       background: white;
       color: var(--warm);
       border: 1px solid rgba(154, 52, 18, 0.22);
+    }}
+    /* ── Rejection-learning panel ─────────────────────────────────── */
+    .rejection-overlay {{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 900;
+    }}
+    .rejection-panel {{
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 901;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      width: min(520px, 94vw);
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 0.9rem;
+    }}
+    .rejection-panel[hidden],
+    .rejection-overlay[hidden] {{
+      display: none;
+    }}
+    .rejection-panel-header {{
+      padding: 16px 18px 10px;
+      border-bottom: 1px solid var(--line);
+    }}
+    .rejection-panel-header h3 {{
+      margin: 0 0 3px;
+      font-size: 1rem;
+      color: var(--ink);
+    }}
+    .rejection-panel-header p {{
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }}
+    .rejection-panel-body {{
+      padding: 12px 18px;
+      overflow-y: auto;
+      flex: 1;
+    }}
+    .rejection-panel-body.is-loading {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      min-height: 80px;
+    }}
+    .rejection-group {{
+      margin-bottom: 12px;
+    }}
+    .rejection-group-label {{
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }}
+    .rejection-chips {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }}
+    .rejection-chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      font-size: 0.82rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s, border-color 0.12s;
+    }}
+    .rejection-chip input[type=checkbox] {{
+      margin: 0;
+      accent-color: var(--accent);
+    }}
+    .rejection-chip:has(input:checked) {{
+      background: #dcfce7;
+      border-color: var(--accent);
+    }}
+    .rejection-other {{
+      padding: 10px 18px 12px;
+      border-top: 1px solid var(--line);
+    }}
+    .rejection-other-label {{
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }}
+    .rejection-other-row {{
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }}
+    .rejection-other-row input[type=text] {{
+      flex: 1;
+      min-width: 0;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      font-size: 0.84rem;
+      background: var(--bg);
+    }}
+    .rejection-other-row select {{
+      padding: 5px 6px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      font-size: 0.82rem;
+      background: var(--bg);
+    }}
+    .rejection-other-row button {{
+      padding: 5px 12px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }}
+    .rejection-custom-list {{
+      margin-top: 7px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }}
+    .rejection-custom-chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: #dcfce7;
+      border: 1px solid var(--accent);
+      font-size: 0.8rem;
+    }}
+    .rejection-custom-chip button {{
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-size: 0.85rem;
+      line-height: 1;
+      color: var(--muted);
+    }}
+    .rejection-panel-footer {{
+      padding: 10px 18px 14px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
+    .rejection-btn-save {{
+      flex: 1;
+      padding: 8px 14px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      cursor: pointer;
+    }}
+    .rejection-btn-save:disabled {{
+      opacity: 0.55;
+      cursor: default;
+    }}
+    .rejection-btn-skip {{
+      padding: 8px 14px;
+      background: white;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 0.84rem;
+      cursor: pointer;
+    }}
+    .rejection-btn-cancel {{
+      padding: 8px 12px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 0.84rem;
+      cursor: pointer;
     }}
     .title-block-btn {{
       display: inline-block;
@@ -3997,7 +4194,11 @@ def render_html(
         return;
       }}
       hideBlockConfirm(button.closest('.job-card'));
-      saveReviewAction(button);
+      if (button.dataset.reviewAction === 'not_for_me') {{
+        openRejectionPanel(button);
+      }} else {{
+        saveReviewAction(button);
+      }}
     }});
 
     for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, scoreFilter, salaryFilter]) {{
@@ -4010,7 +4211,178 @@ def render_html(
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
     showResultsHelperIfNeeded();
     hydrateViewedState();
+    // ── Rejection-learning panel ──────────────────────────────────────────
+    let _rejectionPendingButton = null;
+    let _rejectionCustomTerms = [];
+
+    function openRejectionPanel(button) {{
+      _rejectionPendingButton = button;
+      _rejectionCustomTerms = [];
+      const jobTitle = button.dataset.jobTitle || 'this role';
+      document.getElementById('rejection-panel-title').textContent =
+        `Why isn\u2019t "${{jobTitle}}" for you?`;
+      const body = document.getElementById('rejection-panel-body');
+      body.className = 'rejection-panel-body is-loading';
+      body.textContent = 'Loading suggestions\u2026';
+      document.getElementById('rejection-custom-list').innerHTML = '';
+      document.getElementById('rejection-other-input').value = '';
+      document.getElementById('rejection-btn-save').disabled = true;
+      document.getElementById('rejection-panel').removeAttribute('hidden');
+      document.getElementById('rejection-overlay').removeAttribute('hidden');
+      const jobKey = button.dataset.jobKey || '';
+      fetch(`/api/rejection-suggestions?job_id=${{encodeURIComponent(jobKey)}}`)
+        .then(r => r.json())
+        .catch(() => ({{}}))
+        .then(data => _rejRenderSuggestions(data));
+    }}
+
+    const _rejCatLabels = {{
+      mandatory_skill: 'Required Skills',
+      mandatory_experience: 'Required Experience',
+      domain: 'Domain / Sector',
+      clearance_or_regulation: 'Clearance / Compliance',
+      industry_platform: 'Platform / Tool',
+      location: 'Location',
+      work_mode: 'Work Mode',
+      contract_type: 'Contract Type',
+      other: 'Other',
+    }};
+
+    function _rejRenderSuggestions(groups) {{
+      const body = document.getElementById('rejection-panel-body');
+      body.className = 'rejection-panel-body';
+      const entries = Object.entries(groups || {{}}).filter(([, terms]) => terms.length > 0);
+      if (entries.length === 0) {{
+        body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No suggestions found. Use the field below to add your own terms.</p>';
+        return;
+      }}
+      body.innerHTML = entries.map(([cat, terms]) =>
+        `<div class="rejection-group">` +
+        `<div class="rejection-group-label">${{_rejCatLabels[cat] || cat}}</div>` +
+        `<div class="rejection-chips">${{terms.map(t =>
+          `<label class="rejection-chip">` +
+          `<input type="checkbox" data-cat="${{cat}}" data-value="${{t.replace(/"/g, '&quot;')}}" />` +
+          `${{t}}</label>`
+        ).join('')}}</div></div>`
+      ).join('');
+      body.querySelectorAll('input[type=checkbox]').forEach(cb => {{
+        cb.addEventListener('change', _rejUpdateSaveBtn);
+      }});
+    }}
+
+    function _rejUpdateSaveBtn() {{
+      const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox]:checked');
+      document.getElementById('rejection-btn-save').disabled =
+        !anyChecked && _rejectionCustomTerms.length === 0;
+    }}
+
+    function closeRejectionPanel() {{
+      document.getElementById('rejection-panel').setAttribute('hidden', '');
+      document.getElementById('rejection-overlay').setAttribute('hidden', '');
+      _rejectionPendingButton = null;
+      _rejectionCustomTerms = [];
+    }}
+
+    async function _rejSaveAndContinue() {{
+      const button = _rejectionPendingButton;
+      const jobKey = button?.dataset.jobKey || '';
+      const jobTitle = button?.dataset.jobTitle || '';
+      const rules = [];
+      document.querySelectorAll('#rejection-panel-body input[type=checkbox]:checked')
+        .forEach(cb => rules.push({{ value: cb.dataset.value, category: cb.dataset.cat, source: 'suggestion' }}));
+      _rejectionCustomTerms.forEach(t => rules.push({{ value: t.value, category: t.category, source: 'manual' }}));
+      if (rules.length > 0) {{
+        await fetch('/api/rejection-rules', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ job_id: jobKey, job_title: jobTitle, rules }}),
+        }}).catch(() => {{}});
+      }}
+      closeRejectionPanel();
+      if (button) saveReviewAction(button);
+    }}
+
+    function _rejRenderCustomChips() {{
+      const list = document.getElementById('rejection-custom-list');
+      list.innerHTML = _rejectionCustomTerms.map((t, i) =>
+        `<span class="rejection-custom-chip">${{t.value}}` +
+        `<button type="button" data-idx="${{i}}" aria-label="Remove">&times;</button></span>`
+      ).join('');
+      list.querySelectorAll('button').forEach(btn => {{
+        btn.addEventListener('click', () => {{
+          _rejectionCustomTerms.splice(+btn.dataset.idx, 1);
+          _rejRenderCustomChips();
+          _rejUpdateSaveBtn();
+        }});
+      }});
+    }}
+
+    document.getElementById('rejection-other-add').addEventListener('click', () => {{
+      const input = document.getElementById('rejection-other-input');
+      const cat = document.getElementById('rejection-other-cat').value;
+      const val = input.value.trim();
+      if (!val || val.length < 2) return;
+      _rejectionCustomTerms.push({{ value: val, category: cat }});
+      input.value = '';
+      _rejRenderCustomChips();
+      _rejUpdateSaveBtn();
+    }});
+
+    document.getElementById('rejection-other-input').addEventListener('keydown', e => {{
+      if (e.key === 'Enter') document.getElementById('rejection-other-add').click();
+    }});
+
+    document.getElementById('rejection-btn-save').addEventListener('click', _rejSaveAndContinue);
+
+    document.getElementById('rejection-btn-skip').addEventListener('click', () => {{
+      const btn = _rejectionPendingButton;
+      closeRejectionPanel();
+      if (btn) saveReviewAction(btn);
+    }});
+
+    document.getElementById('rejection-btn-cancel').addEventListener('click', () => {{
+      const card = _rejectionPendingButton?.closest('.job-card');
+      if (card) {{ card.querySelectorAll('button').forEach(b => b.disabled = false); }}
+      closeRejectionPanel();
+    }});
+
+    document.getElementById('rejection-overlay').addEventListener('click', () => {{
+      document.getElementById('rejection-btn-cancel').click();
+    }});
+    // ── end rejection-learning panel ──────────────────────────────────────
   </script>
+  <div class="rejection-overlay" id="rejection-overlay" hidden></div>
+  <div class="rejection-panel" id="rejection-panel" hidden>
+    <div class="rejection-panel-header">
+      <h3 id="rejection-panel-title">Why isn&#39;t this role for you?</h3>
+      <p>Select terms that turned you off this job. We&#39;ll save them as learning signals.</p>
+    </div>
+    <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
+    <div class="rejection-other">
+      <div class="rejection-other-label">Add your own term</div>
+      <div class="rejection-other-row">
+        <input type="text" id="rejection-other-input" placeholder="e.g. Salesforce" maxlength="80" />
+        <select id="rejection-other-cat">
+          <option value="mandatory_skill">Skill</option>
+          <option value="mandatory_experience">Experience</option>
+          <option value="domain">Domain</option>
+          <option value="clearance_or_regulation">Clearance</option>
+          <option value="industry_platform">Platform</option>
+          <option value="location">Location</option>
+          <option value="work_mode">Work mode</option>
+          <option value="contract_type">Contract type</option>
+          <option value="other">Other</option>
+        </select>
+        <button type="button" id="rejection-other-add">Add</button>
+      </div>
+      <div class="rejection-custom-list" id="rejection-custom-list"></div>
+    </div>
+    <div class="rejection-panel-footer">
+      <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
+      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button">Skip learning</button>
+      <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
+    </div>
+  </div>
 </body>
 </html>
 """
@@ -4264,6 +4636,13 @@ def _seek_scrape_to_records(
                             if not ok_desc:
                                 print(f"REJECTED (content) [{desc_reason}] {title} @ {company}")
                                 record["reject_reason"] = desc_reason
+                                finalize_record(job_history, audit_rows, record, run_iso)
+                                continue
+                            ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
+                            if not ok_learned:
+                                record["content_reason"] = learned_reason
+                                record["reject_reason"] = learned_reason
+                                print(f"REJECTED (learned rule) [{learned_reason}] {title} @ {company}")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
