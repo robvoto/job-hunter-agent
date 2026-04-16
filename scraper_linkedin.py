@@ -38,8 +38,8 @@ class LinkedInScraper(BaseJobScraper):
         from source_connector import (  # noqa: PLC0415
             MAX_LLM_CHARS,
             build_fit_highlights,
+            build_risk_and_missing_evidence,
             build_role_summary,
-            build_watchout_entries,
             can_reuse_kept_job,
             apply_kept_job_reuse,
             compact_whitespace,
@@ -159,6 +159,9 @@ class LinkedInScraper(BaseJobScraper):
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
                 record["fit_source_text"] = details_text
+                record["full_description"] = details_text
+                record["description_source"] = "linkedin_full_description"
+                record["fit_confidence"] = "HIGH"
                 record["details_status"] = "ok"
 
                 # Skill observations
@@ -214,17 +217,20 @@ class LinkedInScraper(BaseJobScraper):
                     continue
                 record["role_snapshot"] = build_role_summary(record, details_text, self.profile)
                 record["fit_highlights"] = build_fit_highlights(record, details_text, self.profile)
-                record["fit_watchout_meta"] = build_watchout_entries(
+                soft_risk_reasons, missing_evidence = build_risk_and_missing_evidence(
                     details_text,
                     record.get("title_reason"),
                     self.profile,
                     competitive_signals=record.get("competitive_signals"),
                 )
-                record["fit_watchouts"] = [e["text"] for e in record["fit_watchout_meta"]]
+                record["soft_risk_reasons"] = soft_risk_reasons
+                record["missing_evidence"] = missing_evidence
+                record["fit_watchout_meta"] = []
+                record["fit_watchouts"] = []
 
                 # LLM gate
                 deterministic_review = deterministic_review_outcome(
-                    record, record["fit_highlights"], record["fit_watchout_meta"]
+                    record, record["fit_highlights"], missing_evidence, soft_risk_reasons
                 )
                 if deterministic_review is not None:
                     llm_review = deterministic_review

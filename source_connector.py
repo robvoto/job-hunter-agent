@@ -87,6 +87,9 @@ DEBUG_JSON_PATH = OUTPUT_DIR / "audit_records.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
+MIN_TRUSTED_DESCRIPTION_LENGTH = 600
+TRUSTED_DESCRIPTION_SOURCES = frozenset({"jobaddetails", "body", "linkedin_full_description"})
+
 KEEP_SNAPSHOT_FIELDS = (
     "title",
     "company",
@@ -105,6 +108,8 @@ KEEP_SNAPSHOT_FIELDS = (
     "search_location",
     "search_keywords",
     "fit_source_text",
+    "full_description",
+    "fit_confidence",
     "details_status",
     "description_source",
     "role_snapshot",
@@ -1198,6 +1203,7 @@ def weighted_points(value: int, weight: float) -> int:
 
 
 def build_fit_source_text(record: dict, include_risks: bool = True) -> str:
+    # WARNING: Must NOT be used for fit evaluation. For display/debug only.
     explicit_source = compact_whitespace(record.get("fit_source_text") or "")
     if explicit_source:
         return explicit_source
@@ -1726,6 +1732,10 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["role_snapshot"] = snapshot.get("role_snapshot") or "N/A"
     if not compact_whitespace(record.get("fit_source_text") or ""):
         record["fit_source_text"] = snapshot.get("fit_source_text") or ""
+    if not compact_whitespace(record.get("full_description") or ""):
+        record["full_description"] = snapshot.get("full_description") or ""
+    if not record.get("fit_confidence"):
+        record["fit_confidence"] = snapshot.get("fit_confidence") or ""
     if not record.get("fit_highlights"):
         record["fit_highlights"] = snapshot.get("fit_highlights") or []
     if not record.get("fit_watchouts"):
@@ -1760,10 +1770,39 @@ def viewed_by_user(record: dict) -> bool:
     return int(record.get("times_viewed", 0) or 0) > 0
 
 
-def is_description_trusted(record: dict) -> bool:
-    """Return True when fit_source_text came from the full job ad, not a card teaser fallback."""
+def get_trusted_full_description(record: dict) -> str:
+    """Return the trusted full description text, or empty string if not available.
+
+    Prefers the canonical ``full_description`` field. Falls back to
+    ``fit_source_text`` only when ``description_source`` is trusted and the
+    text meets the minimum length threshold (backward-compat for records
+    scraped before ``full_description`` was introduced).
+    """
+    full = compact_whitespace(record.get("full_description") or "")
+    if full:
+        return full
     source = str(record.get("description_source") or "").strip().lower()
-    return source in {"jobaddetails", "body"}
+    if source in TRUSTED_DESCRIPTION_SOURCES:
+        legacy = compact_whitespace(record.get("fit_source_text") or "")
+        if len(legacy) >= MIN_TRUSTED_DESCRIPTION_LENGTH:
+            return legacy
+    return ""
+
+
+def full_description_confidence(record: dict) -> str:
+    """Return 'HIGH' if a trusted full description is available, else 'LOW'.
+
+    Prefers the explicit ``fit_confidence`` field when already stored.
+    """
+    stored = str(record.get("fit_confidence") or "").strip().upper()
+    if stored in {"HIGH", "LOW"}:
+        return stored
+    return "HIGH" if get_trusted_full_description(record) else "LOW"
+
+
+def is_description_trusted(record: dict) -> bool:
+    """Return True when a trusted full description is available for this record."""
+    return full_description_confidence(record) == "HIGH"
 
 
 def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> None:
@@ -1843,6 +1882,8 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
         "fit_source_text": snapshot.get("fit_source_text") or "",
+        "full_description": snapshot.get("full_description") or "",
+        "fit_confidence": snapshot.get("fit_confidence") or "",
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "role_snapshot": snapshot.get("role_snapshot") or "N/A",
@@ -1920,6 +1961,8 @@ def build_hidden_dashboard_record(job_key: str, entry: dict, run_started_at: dat
         "llm_decision": snapshot.get("llm_decision"),
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
         "fit_source_text": snapshot.get("fit_source_text") or "",
+        "full_description": snapshot.get("full_description") or "",
+        "fit_confidence": snapshot.get("fit_confidence") or "",
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
@@ -1992,6 +2035,8 @@ def build_applied_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "llm_decision": snapshot.get("llm_decision"),
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
         "fit_source_text": snapshot.get("fit_source_text") or "",
+        "full_description": snapshot.get("full_description") or "",
+        "fit_confidence": snapshot.get("fit_confidence") or "",
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
@@ -2112,17 +2157,16 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     stored_snapshot = compact_whitespace(record.get("role_snapshot") or record.get("teaser") or "N/A")
     if stored_snapshot in {"", "N/A"}:
         stored_snapshot = synthesize_role_snapshot(record)
-    description_trusted = is_description_trusted(record)
-    fit_source_text = build_fit_source_text(display_record, include_risks=False) or stored_snapshot
-    risk_source_text = build_fit_source_text(display_record, include_risks=True) or fit_source_text
-    display_record["fit_source_text"] = risk_source_text
-    role_summary = build_role_summary(record, fit_source_text, active_profile)
-    display_record["role_snapshot"] = role_summary
-    display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
-    fit_highlights = build_fit_highlights(record, fit_source_text, active_profile)
-    if description_trusted:
+    fit_confidence_level = full_description_confidence(record)
+    trusted_desc = get_trusted_full_description(record)
+
+    if fit_confidence_level == "HIGH" and trusted_desc:
+        display_record["fit_source_text"] = trusted_desc
+        role_summary = build_role_summary(record, trusted_desc, active_profile)
+        display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
+        fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
         soft_risk_reasons, missing_evidence = build_risk_and_missing_evidence(
-            risk_source_text,
+            trusted_desc,
             title_reason,
             active_profile,
             competitive_signals=display_record.get("competitive_signals") if isinstance(display_record.get("competitive_signals"), list) else None,
@@ -2131,12 +2175,17 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         if blocking_reasons:
             missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
     else:
-        soft_risk_reasons = []
-        missing_evidence = []
+        display_record["fit_source_text"] = ""
+        role_summary = stored_snapshot
+        display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
+        fit_highlights = list(record.get("fit_highlights") or [])
+        soft_risk_reasons = list(record.get("soft_risk_reasons") or [])
+        missing_evidence = list(record.get("missing_evidence") or [])
         blocking_reasons = hard_block_reasons(display_record, active_profile)
         if blocking_reasons:
-            missing_evidence = dedupe_preserve_order([*blocking_reasons])
+            missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
     display_record["hard_block_reasons"] = blocking_reasons
+    display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
     display_record["missing_evidence"] = missing_evidence
@@ -2277,7 +2326,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in soft_risk_reasons)}</ul>'
             '</div>'
         )
-    elif not description_trusted:
+    elif fit_confidence_level == "LOW":
         insight_sections.append(
             '<div class="job-insight-group job-insight-unavailable">'
             '<strong>Risks & missing evidence</strong>'
@@ -4206,6 +4255,8 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             record["fit_source_text"] = details_text
+                            record["full_description"] = details_text
+                            record["fit_confidence"] = "HIGH"
                             record["description_source"] = details_payload.get("source") or "jobAdDetails"
 
                             for skill in extract_detected_skills(details_text):
