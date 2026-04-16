@@ -173,8 +173,6 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
         "llm_fit_grade": None,
         "role_snapshot": "N/A",
         "fit_highlights": [],
-        "fit_watchouts": [],
-        "fit_watchout_meta": [],
         "competitive_signals": [],
     }
 

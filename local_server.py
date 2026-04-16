@@ -685,7 +685,7 @@ ADMIN_HTML = """<!doctype html>
                 <option value="1.5">High</option>
                 <option value="2">Very high</option>
               </select>
-              <div class="field-help">Scales title fit, description fit, evidence, specialist signals, and watchout penalties.</div>
+              <div class="field-help">Scales title fit, description fit, evidence, competitive signals, hard blockers, and missing evidence.</div>
             </div>
             <div class="field-block">
               <label for="salary_weight">Salary</label>

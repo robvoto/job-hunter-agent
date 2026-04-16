@@ -225,8 +225,6 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 record["soft_risk_reasons"] = soft_risk_reasons
                 record["missing_evidence"] = missing_evidence
-                record["fit_watchout_meta"] = []
-                record["fit_watchouts"] = []
 
                 # LLM gate
                 deterministic_review = deterministic_review_outcome(

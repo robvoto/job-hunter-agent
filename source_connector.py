@@ -114,8 +114,6 @@ KEEP_SNAPSHOT_FIELDS = (
     "description_source",
     "role_snapshot",
     "fit_highlights",
-    "fit_watchouts",
-    "fit_watchout_meta",
     "soft_risk_reasons",
     "missing_evidence",
     "competitive_signals",
@@ -1217,7 +1215,6 @@ def build_fit_source_text(record: dict, include_risks: bool = True) -> str:
     if include_risks:
         values.extend(record.get("missing_evidence", []) or [])
         values.extend(record.get("soft_risk_reasons", []) or [])
-        values.extend(record.get("fit_watchouts", []) or [])
     for value in values:
         cleaned = compact_whitespace(value)
         if cleaned and cleaned != "N/A":
@@ -1738,10 +1735,6 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["fit_confidence"] = snapshot.get("fit_confidence") or ""
     if not record.get("fit_highlights"):
         record["fit_highlights"] = snapshot.get("fit_highlights") or []
-    if not record.get("fit_watchouts"):
-        record["fit_watchouts"] = snapshot.get("fit_watchouts") or []
-    if not record.get("fit_watchout_meta"):
-        record["fit_watchout_meta"] = snapshot.get("fit_watchout_meta") or []
     if not record.get("soft_risk_reasons"):
         record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []
     if not record.get("missing_evidence"):
@@ -1888,8 +1881,6 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "description_source": snapshot.get("description_source") or "",
         "role_snapshot": snapshot.get("role_snapshot") or "N/A",
         "fit_highlights": snapshot.get("fit_highlights") or [],
-        "fit_watchouts": snapshot.get("fit_watchouts") or [],
-        "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
         "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
@@ -1966,8 +1957,6 @@ def build_hidden_dashboard_record(job_key: str, entry: dict, run_started_at: dat
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
-        "fit_watchouts": snapshot.get("fit_watchouts") or [],
-        "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
         "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
@@ -2040,8 +2029,6 @@ def build_applied_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
-        "fit_watchouts": snapshot.get("fit_watchouts") or [],
-        "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
         "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
@@ -2189,8 +2176,6 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
     display_record["missing_evidence"] = missing_evidence
-    display_record["fit_watchouts"] = []
-    display_record["fit_watchout_meta"] = []
     fit_points = fit_score(display_record, scoring_profile)
     fit_label = score_to_match_label(fit_points)
     fit_tone_class = score_to_tone_class(fit_points)
@@ -4122,8 +4107,6 @@ def _seek_scrape_to_records(
                             "llm_fit_grade": None,
                             "role_snapshot": "N/A",
                             "fit_highlights": [],
-                            "fit_watchouts": [],
-                            "fit_watchout_meta": [],
                             "soft_risk_reasons": [],
                             "missing_evidence": [],
                             "competitive_signals": [],
