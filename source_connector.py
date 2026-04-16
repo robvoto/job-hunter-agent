@@ -3028,7 +3028,7 @@ def render_html(
       color: #374151;
       font-size: 1.12rem;
       font-weight: 500;
-      margin-top: 4px;}
+      margin-top: 4px;
     }}
     .match-tile {{
       min-width: 108px;
