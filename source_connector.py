@@ -4259,21 +4259,12 @@ def _seek_scrape_to_records(
                                 record["work_mode"] = detail_work_mode
                             record["role_snapshot"] = build_role_summary(record, details_text, profile)
                             record["fit_highlights"] = build_fit_highlights(record, details_text, profile)
-                            record["fit_watchout_meta"] = build_watchout_entries(
-                                details_text,
-                                title_reason,
-                                profile,
-                                competitive_signals=record.get("competitive_signals") if isinstance(record.get("competitive_signals"), list) else None,
-                            )
-                            record["fit_watchouts"] = [entry["text"] for entry in record["fit_watchout_meta"]]
                             record["soft_risk_reasons"], record["missing_evidence"] = build_risk_and_missing_evidence(
                                 details_text,
                                 title_reason,
                                 profile,
                                 competitive_signals=record.get("competitive_signals") if isinstance(record.get("competitive_signals"), list) else None,
                             )
-                            record["fit_watchout_meta"] = []
-                            record["fit_watchouts"] = []
 
                             deterministic_review = deterministic_review_outcome(
                                 record,
