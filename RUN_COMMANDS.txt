@@ -4,19 +4,32 @@ JOB HUNTER AGENT - QUICK RUN COMMANDS
 Open this file anytime when you forget what to run.
 
 
-CANONICAL COMMAND
------------------
+MANUAL REFRESH COMMAND
+----------------------
 
-Default command:
+Default manual command:
 python source_connector.py
 
-This is the one canonical run command for the job-hunter agent.
+This is the canonical command for running a manual job refresh.
 
-Use it by default unless you specifically need a testing or rebuild-only workflow.
+Use it by default when you want to trigger a scrape and see the results immediately.
 
 
-MAIN COMMANDS
--------------
+AGENT RUNNER
+------------
+
+Automated run command:
+python agent_runner.py
+
+This is the orchestration layer. It runs the refresh, builds a digest, and can send notifications.
+
+Use `python agent_runner.py` for a single automated run.
+Use `python agent_runner.py --loop` to run the agent on a daily schedule.
+Use `python agent_runner.py --no-notify` to test the digest without sending alerts.
+
+
+MAIN REFRESH COMMANDS
+---------------------
 
 1. Default run
 
@@ -43,7 +56,7 @@ Command:
 python source_connector.py --rebuild-dashboard --test-dashboard-mode
 
 What it does:
-- does NOT scrape SEEK
+- does NOT scrape SEEK or LinkedIn
 - does NOT run the LLM
 - rebuilds the dashboard from jobs already saved locally
 - resets `New To You` for testing
@@ -76,22 +89,22 @@ Use this when:
 - you need fresh LLM-reviewed results
 - you want more results than the normal run
 
+MODIFIER FLAGS
+--------------
 
-4. Reset viewed state only
+You can add these flags to other commands to change their behavior for a single run.
 
-Command:
-python source_connector.py --rebuild-dashboard --reset-new-to-you
+--no-llm
+    Forces the run to skip the LLM review step, even if an API key is configured.
 
-What it does:
-- does NOT scrape SEEK
-- does NOT run the LLM
-- rebuilds the dashboard from current saved results
-- resets `Viewed / New To You` for display
-- does NOT switch the dashboard into test mode
+--max-pages <number>
+    Overrides the 'Max pages to check' setting from your profile for this run only.
+    Example: python source_connector.py --max-pages 1
 
-Use this when:
-- you want the current dashboard to feel like a first look again
-- you want clean feedback on the current results without a new scrape
+--reset-new-to-you
+    Resets the 'Viewed / New To You' state for all jobs on the dashboard.
+    Useful for getting a "first look" feel on the current dashboard without a fresh scrape.
+    Example: python source_connector.py --rebuild-dashboard --reset-new-to-you
 
 
 LOCAL SERVER
@@ -131,20 +144,16 @@ Reset viewed state only:
 WHICH ONE SHOULD I USE?
 -----------------------
 
-If you are unsure, always use:
+For a manual refresh:
 python source_connector.py
 
-This is the canonical command.
+For automated daily runs:
+python agent_runner.py
 
-Only use the others when you intentionally want a special workflow.
-
-If you want a clean first-look dashboard from current saved results:
-python source_connector.py --rebuild-dashboard --reset-new-to-you
-
-If you want to test the dashboard UI without scraping:
+For testing the dashboard UI without scraping:
 python source_connector.py --rebuild-dashboard --test-dashboard-mode
 
-If you need fresh jobs and a wider test run:
+For a wider test scrape with fresh jobs:
 python source_connector.py --test-scrape-mode
 
 
@@ -155,4 +164,4 @@ QUICK NOTES
 - Run `python source_connector.py` to get back to a normal dashboard.
 - Console logs now show whether a run is `real` or `test`.
 - If you save profile changes in admin, the next scrape will use them.
-- If admin save feedback does not look right, restart the admin server with `python admin_api.py`.
+- If admin save feedback does not look right, restart the local server with `python local_server.py`.

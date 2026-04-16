@@ -134,24 +134,34 @@ def _phrase_from_segment(segment: str) -> str:
     return " ".join(tokens[:3])
 
 
-def suggest_title_block_phrase(title: str) -> str:
+def suggest_title_block_phrases(title: str) -> list[str]:
+    """Return all non-empty block-phrase candidates from every title segment."""
     raw_title = (title or "").strip()
     if not raw_title:
-        return ""
-
+        return []
     normalized = re.sub(r"\s+", " ", raw_title)
+    # | handled with or without surrounding spaces; - / : only when space-bounded
     segments = [
-        segment.strip()
-        for segment in re.split(r"\s[-–—|:/]\s|[(),\[\]]", normalized)
-        if segment and segment.strip()
+        s.strip()
+        for s in re.split(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]", normalized)
+        if s and s.strip()
     ]
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for seg in segments:
+        phrase = _phrase_from_segment(seg)
+        if phrase and phrase not in seen:
+            seen.add(phrase)
+            candidates.append(phrase)
+    return candidates
 
-    for segment in segments[1:]:
-        phrase = _phrase_from_segment(segment)
-        if phrase:
-            return phrase
 
-    return _phrase_from_segment(normalized)
+def suggest_title_block_phrase(title: str) -> str:
+    """Return the single best block phrase (first non-generic segment, backward compat)."""
+    candidates = suggest_title_block_phrases(title)
+    if candidates:
+        return candidates[0]
+    return _phrase_from_segment(re.sub(r"\s+", " ", (title or "").strip()))
 
 
 def build_title_block_rule(phrase: str) -> dict[str, str]:

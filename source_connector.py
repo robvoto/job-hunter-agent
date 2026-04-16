@@ -28,6 +28,7 @@ from filters import (
     passes_saved_rejection_rules,
     passes_title_filters,
     suggest_title_block_phrase,
+    suggest_title_block_phrases,
 )
 from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from profile_store import (
@@ -2196,7 +2197,9 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
     company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
-    block_phrase = safe_html(suggest_title_block_phrase(str(record.get("title") or "")))
+    _block_phrases_list = suggest_title_block_phrases(str(record.get("title") or ""))
+    block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
+    block_phrases_json = safe_html(json.dumps(_block_phrases_list))
     button_data_attrs = (
         f'data-job-key="{job_key}" '
         f'data-job-url="{url}" '
@@ -2366,12 +2369,14 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         '<div class="job-header-copy">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         + (
-            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" {button_data_attrs} title="Block similar titles from appearing in future results">Block similar titles</button>'
+            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Block similar titles from appearing in future results">Block similar titles</button>'
             '<div class="block-confirm" data-block-confirm hidden>'
-            '<p class="block-confirm-copy">Block similar titles based on: <strong data-block-phrase-preview></strong></p>'
+            '<p class="block-confirm-copy">Block similar titles based on:</p>'
+            '<div class="block-phrase-chips" data-block-phrase-chips></div>'
             '<p class="block-confirm-sub">This will remove similar roles in future searches.</p>'
+            '<p class="block-admin-tip">Manage all blocked patterns in the <a href="http://127.0.0.1:8765" target="_blank" rel="noopener">Admin panel</a>.</p>'
             '<div class="block-confirm-actions">'
-            '<button class="mini-button mini-button-primary" type="button" data-confirm-block>Confirm Block</button>'
+            '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Confirm Block</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
             '</div>'
             '</div>'
@@ -3482,6 +3487,35 @@ def render_html(
       opacity: 0.6;
       cursor: progress;
     }}
+    .block-phrase-chips {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }}
+    .block-phrase-chip {{
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(29, 78, 216, 0.25);
+      background: white;
+      color: var(--cool);
+      font-size: 0.82rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s;
+    }}
+    .block-phrase-chip.is-active {{
+      background: var(--cool);
+      color: white;
+      border-color: transparent;
+    }}
+    .block-admin-tip {{
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin: 0;
+    }}
+    .block-admin-tip a {{
+      color: var(--cool);
+    }}
     .job-card.is-reviewed {{
       opacity: 0.55;
     }}
@@ -3731,7 +3765,41 @@ def render_html(
       </aside>
     </div>
   </main>
-  <script>
+
+  <div class="rejection-overlay" id="rejection-overlay" hidden></div>
+  <div class="rejection-panel" id="rejection-panel" hidden>
+    <div class="rejection-panel-header">
+      <h3 id="rejection-panel-title">Why isn&#39;t this role for you?</h3>
+      <p>Select terms that turned you off this job. We&#39;ll save them as learning signals.</p>
+    </div>
+    <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
+    <div class="rejection-other">
+      <div class="rejection-other-label">Add your own term</div>
+      <div class="rejection-other-row">
+        <input type="text" id="rejection-other-input" placeholder="e.g. Salesforce" maxlength="80" />
+        <select id="rejection-other-cat">
+          <option value="mandatory_skill">Skill</option>
+          <option value="mandatory_experience">Experience</option>
+          <option value="domain">Domain</option>
+          <option value="clearance_or_regulation">Clearance</option>
+          <option value="industry_platform">Platform</option>
+          <option value="location">Location</option>
+          <option value="work_mode">Work mode</option>
+          <option value="contract_type">Contract type</option>
+          <option value="other">Other</option>
+        </select>
+        <button type="button" id="rejection-other-add">Add</button>
+      </div>
+      <div class="rejection-custom-list" id="rejection-custom-list"></div>
+    </div>
+    <div class="rejection-panel-footer">
+      <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
+      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button">Just Hide</button>
+      <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
+      <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="http://127.0.0.1:8765" target="_blank" rel="noopener">Admin panel</a>.</p>
+    </div>
+  </div>
+    <script>
     const REVIEW_API_URL = 'http://127.0.0.1:8765/api/review';
     const JOB_HISTORY_API_URL = 'http://127.0.0.1:8765/api/job-history';
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
@@ -4021,7 +4089,6 @@ def render_html(
       if (!card) return;
       const confirm = card.querySelector('[data-block-confirm]');
       const blockStatus = card.querySelector('.block-status');
-      const phrase = (button.dataset.blockPhrase || '').trim();
       for (const panel of Array.from(document.querySelectorAll('[data-block-confirm]'))) {{
         if (panel !== confirm) panel.hidden = true;
       }}
@@ -4029,16 +4096,38 @@ def render_html(
         if (s !== blockStatus) s.textContent = '';
       }}
       if (!confirm) return;
-      if (!phrase) {{
+
+      let phrases = [];
+      try {{ phrases = JSON.parse(button.dataset.blockPhrases || '[]'); }} catch(e) {{}}
+      if (!phrases.length && button.dataset.blockPhrase) phrases = [button.dataset.blockPhrase.trim()].filter(Boolean);
+
+      if (!phrases.length) {{
         if (blockStatus) blockStatus.textContent = 'We couldn\u2019t identify a clear title pattern to block for this role.';
         confirm.hidden = true;
         return;
       }}
-      const preview = confirm.querySelector('[data-block-phrase-preview]');
+
+      const chipsContainer = confirm.querySelector('[data-block-phrase-chips]');
       const confirmButton = confirm.querySelector('[data-confirm-block]');
-      if (preview) preview.textContent = phrase;
+      let selectedPhrase = phrases[0];
+
+      if (chipsContainer) {{
+        chipsContainer.innerHTML = phrases.map((p, i) =>
+          `<button class="block-phrase-chip${{i === 0 ? ' is-active' : ''}}" type="button" data-phrase="${{p}}">${{p}}</button>`
+        ).join('');
+        chipsContainer.querySelectorAll('.block-phrase-chip').forEach(chip => {{
+          chip.addEventListener('click', () => {{
+            chipsContainer.querySelectorAll('.block-phrase-chip').forEach(c => c.classList.remove('is-active'));
+            chip.classList.add('is-active');
+            selectedPhrase = chip.dataset.phrase;
+            if (confirmButton) confirmButton.dataset.blockPhrase = selectedPhrase;
+          }});
+        }});
+      }}
+
       if (confirmButton) {{
-        confirmButton.dataset.blockPhrase = phrase;
+        confirmButton.dataset.blockPhrase = selectedPhrase;
+        confirmButton.disabled = false;
         confirmButton.dataset.jobKey = button.dataset.jobKey || '';
         confirmButton.dataset.jobUrl = button.dataset.jobUrl || '';
         confirmButton.dataset.jobTitle = button.dataset.jobTitle || '';
@@ -4337,7 +4426,14 @@ def render_html(
     document.getElementById('rejection-btn-skip').addEventListener('click', () => {{
       const btn = _rejectionPendingButton;
       closeRejectionPanel();
-      if (btn) saveReviewAction(btn);
+      if (!btn) return;
+
+      const card = btn.closest('.job-card');
+      if (card) {{
+        card.dataset.reviewDismissed = '1';
+        card.classList.add('is-reviewed');
+        applyDashboardControls();
+      }}
     }});
 
     document.getElementById('rejection-btn-cancel').addEventListener('click', () => {{
@@ -4351,38 +4447,6 @@ def render_html(
     }});
     // ── end rejection-learning panel ──────────────────────────────────────
   </script>
-  <div class="rejection-overlay" id="rejection-overlay" hidden></div>
-  <div class="rejection-panel" id="rejection-panel" hidden>
-    <div class="rejection-panel-header">
-      <h3 id="rejection-panel-title">Why isn&#39;t this role for you?</h3>
-      <p>Select terms that turned you off this job. We&#39;ll save them as learning signals.</p>
-    </div>
-    <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
-    <div class="rejection-other">
-      <div class="rejection-other-label">Add your own term</div>
-      <div class="rejection-other-row">
-        <input type="text" id="rejection-other-input" placeholder="e.g. Salesforce" maxlength="80" />
-        <select id="rejection-other-cat">
-          <option value="mandatory_skill">Skill</option>
-          <option value="mandatory_experience">Experience</option>
-          <option value="domain">Domain</option>
-          <option value="clearance_or_regulation">Clearance</option>
-          <option value="industry_platform">Platform</option>
-          <option value="location">Location</option>
-          <option value="work_mode">Work mode</option>
-          <option value="contract_type">Contract type</option>
-          <option value="other">Other</option>
-        </select>
-        <button type="button" id="rejection-other-add">Add</button>
-      </div>
-      <div class="rejection-custom-list" id="rejection-custom-list"></div>
-    </div>
-    <div class="rejection-panel-footer">
-      <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
-      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button">Skip learning</button>
-      <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
-    </div>
-  </div>
 </body>
 </html>
 """

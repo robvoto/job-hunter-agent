@@ -49,6 +49,9 @@ DEFAULT_AGENT_SETTINGS = {
         "last_update_id": 0,
         "subscribers": [],
     },
+    "llm": {
+        "model": "gpt-4.1-mini",
+    },
 }
 
 

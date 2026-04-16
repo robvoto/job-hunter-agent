@@ -12,11 +12,63 @@ Notes:
 
 import hashlib
 import os
+import sys
 from typing import Any, Dict
 
 from openai import OpenAI
 
-from profile_store import get_evidence_tiers, get_evidence_tier_weights, load_profile
+from agent_settings import load_agent_settings
+from profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
+
+# Token budgets — keep fit decisions tight; extraction can be generous
+MAX_TOKENS_FIT_DECISION = 20
+MAX_TOKENS_CV_EXTRACTION = 500
+
+# Test-mode flag: mirrors the same argv check in source_connector
+_TEST_SCRAPE_MODE = "--test-scrape-mode" in sys.argv
+
+_PROFILE_PATH = DATA_DIR / "profile.json"
+_profile_fingerprint_cache: str | None = None
+
+
+def _profile_fingerprint() -> str:
+    """Cheap fingerprint of the profile file — mtime + size, no read/parse.
+    Cached for the lifetime of the process so repeated cache-key lookups in a
+    single scraping run are O(1) after the first call.
+    """
+    global _profile_fingerprint_cache
+    if _profile_fingerprint_cache is not None:
+        return _profile_fingerprint_cache
+    try:
+        st = _PROFILE_PATH.stat()
+        raw = f"{st.st_mtime_ns}:{st.st_size}"
+    except OSError:
+        raw = "no-profile"
+    _profile_fingerprint_cache = hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return _profile_fingerprint_cache
+
+
+def _get_llm_model() -> str:
+    """Return the configured model, falling back to gpt-4.1-mini.
+    In test-scrape mode uses gpt-4o-mini to reduce cost during testing.
+    """
+    if _TEST_SCRAPE_MODE:
+        return "gpt-4o-mini"
+    return load_agent_settings().get("llm", {}).get("model", "gpt-4.1-mini")
+
+
+_llm_model_logged = False
+
+
+def _log_llm_model_once() -> str:
+    """Print the active model to the terminal on first use. Returns the model string."""
+    global _llm_model_logged
+    model = _get_llm_model()
+    if not _llm_model_logged:
+        source = "test-scrape override" if _TEST_SCRAPE_MODE else "agent_settings.json"
+        print(f"[LLM] Model: {model}  (source: {source})")
+        _llm_model_logged = True
+    return model
 
 
 _api_key = os.environ.get("OPENAI_API_KEY")
@@ -126,8 +178,8 @@ def build_system_prompt() -> str:
 
 
 def build_llm_cache_key(job_description_text: str) -> str:
-    payload = build_system_prompt() + "\n\nJob description:\n" + str(job_description_text or "")
-    return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()
+    desc_hash = hashlib.sha256(str(job_description_text or "").encode("utf-8", errors="ignore")).hexdigest()
+    return f"{_profile_fingerprint()}:{desc_hash}"
 
 
 def normalize_llm_review(value: Any) -> Dict[str, str]:
@@ -168,8 +220,9 @@ def extract_strengths_from_cv(cv_text: str) -> list[str]:
     )
     try:
         resp = client.responses.create(
-            model="gpt-4.1-mini",
+            model=_get_llm_model(),
             input=[{"role": "user", "content": prompt}],
+            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
         )
         import json as _json
         raw = (resp.output_text or "").strip()
@@ -226,8 +279,9 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
     )
     try:
         resp = client.responses.create(
-            model="gpt-4.1-mini",
+            model=_get_llm_model(),
             input=[{"role": "user", "content": prompt}],
+            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
         )
         import json as _json
         raw = (resp.output_text or "").strip()
@@ -255,11 +309,12 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
     try:
         resp = client.responses.create(
-            model="gpt-5.2",
+            model=_log_llm_model_once(),
             input=[
                 {"role": "system", "content": build_system_prompt()},
                 {"role": "user", "content": "Job description:\n" + job_description_text},
             ],
+            max_output_tokens=MAX_TOKENS_FIT_DECISION,
         )
     except Exception as exc:
         print(f"[LLM][ERROR] {exc}")

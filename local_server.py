@@ -942,6 +942,21 @@ ADMIN_HTML = """<!doctype html>
         </div>
       </section>
 
+      <section class="panel">
+        <h2>AI / LLM</h2>
+        <label for="llm_model">Model</label>
+        <select id="llm_model">
+          <option value="gpt-4.1-mini">gpt-4.1-mini — default, fast &amp; cheap</option>
+          <option value="gpt-4.1">gpt-4.1 — higher quality, more expensive</option>
+          <option value="gpt-4o-mini">gpt-4o-mini — good for testing</option>
+          <option value="gpt-4o">gpt-4o — premium</option>
+        </select>
+        <div class="help">Used for fit decisions and CV extraction. <strong>Test-scrape mode always uses gpt-4o-mini</strong> regardless of this setting.</div>
+        <div class="panel-actions">
+          <button class="primary" id="save_llm_settings">Save AI Settings</button>
+        </div>
+      </section>
+
       </div>
     </section>
 
@@ -1214,6 +1229,8 @@ ADMIN_HTML = """<!doctype html>
       telegramConnectLink = telegram.bot_username ? `https://t.me/${telegram.bot_username}?start=connect` : telegramConnectLink;
       renderTelegramSubscribers(telegram.subscribers || []);
       renderTelegramConnectPanel(settings);
+      const llm = settings?.llm || {};
+      if (llm.model) document.getElementById('llm_model').value = llm.model;
     }
 
     function fillSourceMaterials(materials) {
@@ -1257,7 +1274,10 @@ ADMIN_HTML = """<!doctype html>
           bot_token: document.getElementById('telegram_bot_token').value.trim(),
           bot_username: document.getElementById('telegram_bot_username').value.trim().replace(/^@+/, ''),
           disable_link_preview: document.getElementById('telegram_disable_link_preview').value === 'true',
-        }
+        },
+        llm: {
+          model: document.getElementById('llm_model').value.trim(),
+        },
       };
     }
 
@@ -1822,6 +1842,15 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
+    document.getElementById('save_llm_settings').addEventListener('click', async () => {
+      try {
+        await saveAgentSettings();
+        showStatus('AI settings saved.', 'ok');
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+
     document.getElementById('open_telegram_connect').addEventListener('click', async () => {
       try {
         if (!telegramConnectLink) {
@@ -2370,18 +2399,25 @@ class AdminHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _sanitize_agent_settings_payload(payload: dict) -> dict:
         telegram = payload.get("telegram", {}) if isinstance(payload, dict) else {}
+        llm = payload.get("llm", {}) if isinstance(payload, dict) else {}
+        _allowed_models = {"gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o"}
+        model = str(llm.get("model") or "").strip()
         return {
             "telegram": {
                 "enabled": bool(telegram.get("enabled", False)),
                 "bot_token": str(telegram.get("bot_token") or "").strip(),
                 "bot_username": str(telegram.get("bot_username") or "").strip().lstrip("@"),
                 "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
-            }
+            },
+            "llm": {
+                "model": model if model in _allowed_models else "gpt-4.1-mini",
+            },
         }
 
     @staticmethod
     def _public_agent_settings_payload(settings: dict) -> dict:
         telegram = settings.get("telegram", {}) if isinstance(settings, dict) else {}
+        llm = settings.get("llm", {}) if isinstance(settings, dict) else {}
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
             "telegram": {
@@ -2392,7 +2428,10 @@ class AdminHandler(BaseHTTPRequestHandler):
                 "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
                 "subscriber_count": len(subscribers) if isinstance(subscribers, list) else 0,
                 "subscribers": subscribers if isinstance(subscribers, list) else [],
-            }
+            },
+            "llm": {
+                "model": str(llm.get("model") or "gpt-4.1-mini").strip(),
+            },
         }
 
     @staticmethod
