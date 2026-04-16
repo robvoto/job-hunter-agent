@@ -10,6 +10,29 @@ def _matches_any(text: str, patterns: list[str]) -> bool:
     return any(re.search(pattern, text) for pattern in patterns if pattern)
 
 
+def _has_numeric_title_level(text: str) -> bool:
+    if not re.search(r"\b(?:\d+|ii|iii|iv|v)\b", text):
+        return False
+
+    role_phrases = [
+        r"business analyst",
+        r"technical business analyst",
+        r"senior business analyst",
+        r"lead business analyst",
+        r"principal business analyst",
+        r"digital business analyst",
+        r"payments business analyst",
+        r"government business analyst",
+        r"business systems analyst",
+        r"business process analyst",
+        r"senior ba",
+        r"lead ba",
+        r"tech(?:nical)?\s+ba",
+    ]
+    numeric_suffix = r"[\W_]{0,5}(?:\b(?:level|grade)\b[\W_]{0,5})?(?:\d+(?:st|nd|rd|th)?|ii|iii|iv|v)\b"
+    return any(re.search(rf"{phrase}\b{numeric_suffix}", text) for phrase in role_phrases)
+
+
 def _normalize_reason_token(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower())
     return cleaned.strip("_") or "unknown"
@@ -160,6 +183,9 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
     if not is_direct_match and not is_adjacent_match:
         return False, "TITLE_NOT_TARGET"
 
+    if is_direct_match and _has_numeric_title_level(title_lower):
+        return True, "TITLE_POTENTIAL_MATCH"
+
     for rule in profile.get("reject_title_rules", []):
         pattern = rule.get("pattern", "")
         reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
@@ -210,11 +236,6 @@ def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[
             continue
         if _matches_missing_skill_requirement(description_lower, skill_lower):
             return False, f"DESC_MANDATORY_SKILL:{_normalize_reason_token(skill_lower)}"
-
-    if "canberra" in card_location_lower and "sydney" not in card_location_lower:
-        for pattern in profile.get("canberra_only_description_patterns", []):
-            if pattern and re.search(pattern, description_lower):
-                return False, "DESC_LOCATION:canberra_only"
 
     return True, "OK"
 

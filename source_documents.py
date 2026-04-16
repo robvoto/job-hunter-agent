@@ -1,4 +1,5 @@
 import base64
+import copy
 import json
 import re
 import zipfile
@@ -9,6 +10,7 @@ from xml.etree import ElementTree as ET
 
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text
 from profile_store import (
+    DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
     build_evidence_tiers_from_sections,
     load_profile,
@@ -18,10 +20,27 @@ from profile_store import (
 
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
+OUTPUT_DIR = ROOT_DIR / "output"
+REVIEW_DATA_PATH = OUTPUT_DIR / "seek_review_data.json"
 APPLICATION_INPUTS_DIR = DATA_DIR / "application_inputs"
 SOURCE_PACK_DIR = APPLICATION_INPUTS_DIR / "source_pack"
 SOURCE_MATERIALS_PATH = DATA_DIR / "application_materials.json"
 SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json"
+
+# Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
+ONBOARDING_RESET_FIELDS = (
+    "target_title_patterns",
+    "adjacent_title_patterns",
+    "reject_title_rules",
+    "strengths",
+    "capability_profile_rules",
+    "candidate_summary",
+    "llm_prompt_notes",
+    "cv_text",
+    "evidence_tiers",
+    "llm_profile_brief",
+    "star_evidence_text",
+)
 
 DEFAULT_SOURCE_MATERIALS = {
     "profile_sources": [],
@@ -188,12 +207,15 @@ def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text
         content_base64 = str(item.get("content_base64") or "").strip()
         if not filename or not content_base64:
             continue
-        raw_bytes = base64.b64decode(content_base64)
-        suffix = Path(filename).suffix.lower() or ".txt"
-        slot_name = UPLOAD_SLOT_MAP.get(label.lower(), _slugify_filename(label))
-        target_name = f"{slot_name}{suffix}"
-        target_path = SOURCE_PACK_DIR / target_name
-        target_path.write_bytes(raw_bytes)
+        try:
+            raw_bytes = base64.b64decode(content_base64)
+            suffix = Path(filename).suffix.lower() or ".txt"
+            slot_name = UPLOAD_SLOT_MAP.get(label.lower(), _slugify_filename(label))
+            target_name = f"{slot_name}{suffix}"
+            target_path = SOURCE_PACK_DIR / target_name
+            target_path.write_bytes(raw_bytes)
+        except Exception:
+            continue
         profile_sources.append({
             "label": label,
             "path": str(target_path.relative_to(ROOT_DIR)),
@@ -234,85 +256,123 @@ def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     return [item for item in sources if item.get("label") and item.get("path")]
 
 
-def _build_profile_import_result(
-    imported_sources: list[dict[str, Any]],
-    missing_sources: list[str],
-    combined_text: str,
-    source_sections: list[dict[str, str]] | None = None,
-) -> dict[str, Any]:
-    patch = build_learning_patch(combined_text)
+def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
+    """Collect source documents, reset onboarding fields, re-extract everything, save.
+
+    This is the single shared path for both initial onboarding and the Danger Rebuild.
+    Non-onboarding fields (search settings, salary, preferences, review controls, etc.)
+    are preserved unchanged.
+    """
+    resolved = normalize_source_materials(source_materials or load_source_materials(create_if_missing=True))
+    import_sources = _collect_import_sources(resolved)
+    if not import_sources:
+        raise ValueError("No profile source documents configured yet.")
+
+    imported_sources: list[dict[str, Any]] = []
+    combined_sections: list[str] = []
+    source_sections: list[dict[str, str]] = []
+    missing_sources: list[str] = []
+
+    for source in import_sources:
+        label = str(source.get("label") or "").strip()
+        path = str(source.get("path") or "").strip()
+        if not label or not path:
+            continue
+        try:
+            text = read_source_document(path)
+        except Exception:
+            missing_sources.append(path)
+            continue
+        if not text:
+            missing_sources.append(path)
+            continue
+        imported_sources.append({"label": label, "path": path, "characters": len(text)})
+        combined_sections.append(f"## {label}\n{text}")
+        source_sections.append({"label": label, "text": text})
+
+    if not combined_sections:
+        raise ValueError("Could not read any configured source documents.")
+
+    combined_text = "\n\n".join(combined_sections).strip()
+
+    # Load current profile to preserve non-onboarding fields and read onboarding_settings.
+    current_profile = load_profile()
+    onboarding_settings = current_profile.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
+
+    # --- Reset: start with DEFAULT_PROFILE values for all onboarding-owned fields ---
+    patch: dict[str, Any] = {
+        field: copy.deepcopy(DEFAULT_PROFILE[field])
+        for field in ONBOARDING_RESET_FIELDS
+        if field in DEFAULT_PROFILE
+    }
+
+    # --- Extract fresh from combined_text ---
     patch["cv_text"] = combined_text
-    patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections or [])
+    patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
-    existing_profile = load_profile()
+    learned = build_learning_patch(combined_text)
 
-    imported_summary = patch.get("candidate_summary") or _extract_summary_from_text(combined_text)
-    existing_summary = str(existing_profile.get("candidate_summary") or "").strip()
-    default_summary = str(DEFAULT_PROFILE.get("candidate_summary") or "").strip()
-    if imported_summary and (not existing_summary or existing_summary == default_summary):
+    imported_summary = learned.get("candidate_summary") or _extract_summary_from_text(combined_text)
+    if imported_summary:
         patch["candidate_summary"] = imported_summary
-    else:
-        patch.pop("candidate_summary", None)
 
     imported_strengths = _extract_strengths_from_text(combined_text)
-    merged_strengths = list(dict.fromkeys([
-        *existing_profile.get("strengths", []),
-        *patch.get("strengths", []),
-        *imported_strengths,
-    ]))
-    if merged_strengths:
-        patch["strengths"] = merged_strengths[:20]
+    all_strengths = list(dict.fromkeys([*learned.get("strengths", []), *imported_strengths]))
+    if all_strengths:
+        patch["strengths"] = all_strengths[:20]
 
-    merged_capability_rules = existing_profile.get("capability_profile_rules", [])
-    if patch.get("capability_profile_rules"):
-        merged_capability_rules = merge_capability_rules(
-            merge_capability_rules(
-                DEFAULT_PROFILE.get("capability_profile_rules", []),
-                existing_profile.get("capability_profile_rules", []),
-            ),
-            patch.get("capability_profile_rules", []),
+    if learned.get("capability_profile_rules"):
+        patch["capability_profile_rules"] = merge_capability_rules(
+            copy.deepcopy(DEFAULT_PROFILE.get("capability_profile_rules", [])),
+            learned["capability_profile_rules"],
         )
-        patch["capability_profile_rules"] = merged_capability_rules
 
-    merged_notes = existing_profile.get("llm_prompt_notes", [])
-    if patch.get("llm_prompt_notes"):
-        merged_notes = list(dict.fromkeys([
-            *existing_profile.get("llm_prompt_notes", []),
-            *patch.get("llm_prompt_notes", []),
-        ]))[:30]
-        patch["llm_prompt_notes"] = merged_notes
+    if learned.get("llm_prompt_notes"):
+        patch["llm_prompt_notes"] = learned["llm_prompt_notes"][:30]
 
-    final_summary = str(patch.get("candidate_summary") or existing_profile.get("candidate_summary") or "").strip()
-    final_strengths = patch.get("strengths") or existing_profile.get("strengths", [])
-    final_rules = patch.get("capability_profile_rules") or merged_capability_rules
-    final_notes = patch.get("llm_prompt_notes") or merged_notes
+    star_text = "\n\n".join(
+        str(s.get("text") or "").strip()
+        for s in source_sections
+        if any(kw in str(s.get("label") or "").lower() for kw in STAR_LABEL_KEYWORDS)
+        and str(s.get("text") or "").strip()
+    ).strip()
+    if star_text:
+        patch["star_evidence_text"] = star_text[:5000]
 
-    llm_profile_brief = build_llm_profile_brief(
-        summary=final_summary,
-        strengths=final_strengths,
-        capability_rules=final_rules,
-        notes=final_notes,
+    brief = build_llm_profile_brief(
+        strengths=patch.get("strengths") or DEFAULT_PROFILE["strengths"],
+        capability_rules=patch.get("capability_profile_rules") or [],
     )
-    if llm_profile_brief:
-        patch["llm_profile_brief"] = llm_profile_brief
+    if brief:
+        patch["llm_profile_brief"] = brief
 
-    star_sections = []
-    for section in source_sections or []:
-        label = str(section.get("label") or "").lower()
-        if any(keyword in label for keyword in STAR_LABEL_KEYWORDS):
-            star_sections.append(str(section.get("text") or "").strip())
-    imported_star_text = "\n\n".join(item for item in star_sections if item).strip()
-    if imported_star_text:
-        existing_star_text = str(existing_profile.get("star_evidence_text") or "").strip()
-        merged_star_text = "\n\n".join(
-            item for item in [existing_star_text, imported_star_text] if item
-        ).strip()
-        patch["star_evidence_text"] = merged_star_text[:5000]
+    # Title patterns — always re-extracted during onboarding (no guard needed here)
+    try:
+        from llm_gate import extract_title_patterns_from_cv
+        suggestion = extract_title_patterns_from_cv(combined_text, onboarding_settings)
+        if suggestion.get("target_title_patterns"):
+            patch["target_title_patterns"] = suggestion["target_title_patterns"]
+            if suggestion.get("adjacent_title_patterns"):
+                patch["adjacent_title_patterns"] = suggestion["adjacent_title_patterns"]
+            print(f"[TITLE_PATTERNS] Saved {len(suggestion['target_title_patterns'])} target and {len(suggestion.get('adjacent_title_patterns', []))} adjacent patterns")
+        else:
+            print("[TITLE_PATTERNS] LLM returned no target patterns — skipping")
+    except Exception as exc:
+        print(f"[TITLE_PATTERNS] Import/call failed: {exc}")
 
     profile = patch_profile(patch)
+
+    # Reset review data so stale tuning suggestions don't persist after a full rebuild.
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        REVIEW_DATA_PATH.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
+        print("[ONBOARDING] seek_review_data.json reset")
+    except Exception as exc:
+        print(f"[ONBOARDING] Could not reset seek_review_data.json: {exc}")
+
     return {
         "ok": True,
-        "message": f"Imported {len(imported_sources)} source document(s) into profile.json.",
+        "message": f"Onboarding complete. Imported {len(imported_sources)} source document(s) into profile.json.",
         "profile": profile,
         "imported_sources": imported_sources,
         "missing_sources": missing_sources,
@@ -355,15 +415,10 @@ def _extract_strengths_from_text(text: str) -> list[str]:
 
 
 def build_llm_profile_brief(
-    summary: str,
     strengths: list[str],
     capability_rules: list[dict[str, Any]],
-    notes: list[str],
 ) -> str:
     lines: list[str] = []
-    cleaned_summary = str(summary or "").strip()
-    if cleaned_summary:
-        lines.append(f"Candidate summary: {cleaned_summary}")
 
     cleaned_strengths = [str(item).strip() for item in strengths or [] if str(item).strip()]
     if cleaned_strengths:
@@ -390,51 +445,14 @@ def build_llm_profile_brief(
     if avoid_rules:
         lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:6]))
 
-    cleaned_notes = [str(item).strip() for item in notes or [] if str(item).strip()]
-    if cleaned_notes:
-        lines.append("Fit notes: " + " | ".join(cleaned_notes[:8]))
-
     return "\n".join(lines).strip()[:3000]
 
 
 def import_source_materials_to_profile(materials: dict[str, Any] | None = None) -> dict[str, Any]:
-    resolved_materials = normalize_source_materials(materials or load_source_materials(create_if_missing=True))
-    import_sources = _collect_import_sources(resolved_materials)
-    if not import_sources:
-        raise ValueError("No profile source documents configured yet.")
-
-    imported_sources: list[dict[str, Any]] = []
-    combined_sections: list[str] = []
-    source_sections: list[dict[str, str]] = []
-    missing_sources: list[str] = []
-
-    for source in import_sources:
-        label = str(source.get("label") or "").strip()
-        path = str(source.get("path") or "").strip()
-        if not label or not path:
-            continue
-        try:
-            text = read_source_document(path)
-        except Exception:
-            missing_sources.append(path)
-            continue
-        if not text:
-            missing_sources.append(path)
-            continue
-        imported_sources.append({
-            "label": label,
-            "path": path,
-            "characters": len(text),
-        })
-        combined_sections.append(f"## {label}\n{text}")
-        source_sections.append({"label": label, "text": text})
-
-    if not combined_sections:
-        raise ValueError("Could not read any configured source documents.")
-
-    combined_text = "\n\n".join(combined_sections).strip()
-    result = _build_profile_import_result(imported_sources, missing_sources, combined_text, source_sections)
-    result["materials"] = resolved_materials
+    """Thin wrapper — normalises materials then delegates to run_onboarding."""
+    resolved = normalize_source_materials(materials or load_source_materials(create_if_missing=True))
+    result = run_onboarding(resolved)
+    result["materials"] = resolved
     return result
 
 

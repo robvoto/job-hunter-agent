@@ -32,14 +32,12 @@ def llm_is_enabled() -> bool:
 
 def build_profile_prompt_context() -> str:
     profile = load_profile()
-    summary = str(profile.get("candidate_summary") or "").strip()
     strengths = [str(item).strip() for item in profile.get("strengths", []) if str(item).strip()]
     llm_profile_brief = str(profile.get("llm_profile_brief") or "").strip()
     star_evidence_text = str(profile.get("star_evidence_text") or "").strip()
     evidence_tiers = get_evidence_tiers(profile)
     evidence_weights = get_evidence_tier_weights(profile)
     capability_rules = profile.get("capability_profile_rules", [])
-    notes = [str(item).strip() for item in profile.get("llm_prompt_notes", []) if str(item).strip()]
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = profile.get("match_preferences", {}) if isinstance(profile.get("match_preferences", {}), dict) else {}
 
@@ -47,12 +45,8 @@ def build_profile_prompt_context() -> str:
     if llm_profile_brief:
         parts.append("Candidate fit brief:")
         parts.append(llm_profile_brief[:2500])
-    else:
-        if summary:
-            parts.append("Candidate summary:")
-            parts.append(summary)
-        if strengths:
-            parts.append("Core strengths: " + ", ".join(strengths[:12]) + ".")
+    elif strengths:
+        parts.append("Core strengths: " + ", ".join(strengths[:12]) + ".")
 
     if capability_rules:
         parts.append("Capability levels:")
@@ -65,10 +59,6 @@ def build_profile_prompt_context() -> str:
                 fit_text = f", {fit}" if fit else ""
                 parts.append(f"- {name}: {level}{fit_text}" + (f" ({aliases})" if aliases else ""))
 
-    if notes:
-        parts.append("Important fit notes:")
-        parts.extend(f"- {note}" for note in notes[:12])
-
     preference_lines = []
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
@@ -78,8 +68,6 @@ def build_profile_prompt_context() -> str:
         )
     if match_preferences.get("home_location"):
         preference_lines.append(f"Home base: {match_preferences.get('home_location')}.")
-    if match_preferences.get("prefer_government"):
-        preference_lines.append("Government and regulated-environment roles are a positive signal.")
     if match_preferences.get("prefer_permanent"):
         preference_lines.append("Prefer permanent roles first, then 12+ month contracts with extensions, then shorter contracts.")
     if preference_lines:
@@ -164,6 +152,101 @@ def normalize_llm_review(value: Any) -> Dict[str, str]:
             return {"decision": text, "grade": legacy_grade_map[text]}
 
     return dict(DEFAULT_LLM_REVIEW)
+
+
+def extract_strengths_from_cv(cv_text: str) -> list[str]:
+    """Call LLM to extract skill/strength keywords from CV text. Returns [] if LLM unavailable."""
+    if client is None or not str(cv_text or "").strip():
+        return []
+    prompt = (
+        "Extract the candidate's core professional strengths from the CV below. "
+        "Rules: only include a skill if (1) used for 2 or more years total, "
+        "(2) used within the last 7 years, and (3) was a core responsibility not a side tool. "
+        "Return a JSON array of short keyword phrases (1-4 words each), maximum 20 items, "
+        "ordered by relevance. Only return the JSON array, no explanation.\n\nCV:\n"
+        + str(cv_text)[:4000]
+    )
+    try:
+        resp = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[{"role": "user", "content": prompt}],
+        )
+        import json as _json
+        raw = (resp.output_text or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        items = _json.loads(raw)
+        if isinstance(items, list):
+            return [str(item).strip().lower() for item in items if str(item).strip()][:20]
+    except Exception:
+        pass
+    return []
+
+
+def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | None = None) -> dict:
+    """Call LLM to extract title/search patterns from CV work history.
+
+    Returns {"target_title_patterns": [...], "adjacent_title_patterns": [...], "suggested_search_keywords": [...]}
+    or empty lists if LLM is unavailable or extraction fails.
+    """
+    if client is None:
+        print("[TITLE_PATTERNS] Skipped — LLM client is None (no OPENAI_API_KEY?)")
+        return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
+    if not str(cv_text or "").strip():
+        print("[TITLE_PATTERNS] Skipped — cv_text is empty")
+        return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
+
+    settings = onboarding_settings or {}
+    lookback_years = max(1, int(settings.get("title_extraction_lookback_years") or 8))
+    min_months = max(1, int(settings.get("title_extraction_min_months") or 6))
+    max_target = max(1, int(settings.get("max_target_patterns") or 8))
+    max_adjacent = max(1, int(settings.get("max_adjacent_patterns") or 6))
+
+    print(f"[TITLE_PATTERNS] Calling LLM with {len(cv_text)} chars of CV text (lookback={lookback_years}y, min={min_months}mo, max_target={max_target}, max_adjacent={max_adjacent})")
+    prompt = (
+        "You are reading a candidate's CV. Extract job search targeting patterns from their work history.\n\n"
+        "Return a JSON object with exactly three keys:\n"
+        f"- \"target_title_patterns\": regex patterns (case-insensitive, matched against lowercase job titles) "
+        f"for roles the candidate directly targets. Use \\\\b word-boundary anchors. Up to {max_target} patterns.\n"
+        f"- \"adjacent_title_patterns\": regex patterns for roles the candidate could step into based on their experience. Up to {max_adjacent} patterns.\n"
+        "- \"suggested_search_keywords\": broad job-title search terms for a job board like Seek. 2-4 keywords.\n\n"
+        "Rules for target_title_patterns:\n"
+        f"- Only include roles the candidate actually held for more than {min_months} months.\n"
+        f"- Only include roles that ended within the last {lookback_years} years (today is 2026-04-16).\n"
+        "- Base patterns on real job titles from the CV work history — not skills, tools, or certifications.\n"
+        "- If uncertain whether a role qualifies, exclude it. Fewer accurate patterns beat many noisy ones.\n\n"
+        "Rules for adjacent_title_patterns:\n"
+        "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
+        "- Do NOT include tool or platform names as adjacent titles (SAP, Salesforce, Guidewire, Workday etc. are tools, not job titles).\n\n"
+        "Rules for suggested_search_keywords:\n"
+        "- Must be a broad job title phrase of 2-3 words maximum (e.g. 'business analyst', 'product owner').\n"
+        "- Do NOT use tool names, certifications, or domain terms as keywords.\n\n"
+        "Use lowercase for all patterns and keywords. Only return the JSON object, no explanation.\n\nCV:\n"
+        + str(cv_text)[:4000]
+    )
+    try:
+        resp = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[{"role": "user", "content": prompt}],
+        )
+        import json as _json
+        raw = (resp.output_text or "").strip()
+        print(f"[TITLE_PATTERNS] Raw LLM response: {raw[:300]}")
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        data = _json.loads(raw)
+        if isinstance(data, dict):
+            result = {
+                "target_title_patterns": [str(p).strip() for p in data.get("target_title_patterns", []) if str(p).strip()][:max_target],
+                "adjacent_title_patterns": [str(p).strip() for p in data.get("adjacent_title_patterns", []) if str(p).strip()][:max_adjacent],
+                "suggested_search_keywords": [str(p).strip() for p in data.get("suggested_search_keywords", []) if str(p).strip()][:5],
+            }
+            print(f"[TITLE_PATTERNS] Extracted: {len(result['target_title_patterns'])} target, {len(result['adjacent_title_patterns'])} adjacent, {len(result['suggested_search_keywords'])} keywords")
+            return result
+        print(f"[TITLE_PATTERNS] LLM returned non-dict: {type(data)}")
+    except Exception as exc:
+        print(f"[TITLE_PATTERNS] Exception: {exc}")
+    return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
 
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:

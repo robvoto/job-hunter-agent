@@ -13,6 +13,7 @@ Notes:
 """
 
 import json
+import math
 import re
 import sys
 from datetime import datetime, timedelta
@@ -28,6 +29,7 @@ from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, n
 from profile_store import (
     get_evidence_tier_weights,
     get_evidence_tiers,
+    get_preference_weights,
     get_search_settings,
     load_profile,
 )
@@ -40,7 +42,7 @@ from scraper_seek import (
     build_seek_search_targets,
     extract_card_metadata,
     extract_posted_text_from_card,
-    fetch_job_details_text,
+    fetch_job_details_payload,
     stable_job_key,
 )
 from utils import (
@@ -95,15 +97,19 @@ KEEP_SNAPSHOT_FIELDS = (
     "llm_fit_grade",
     "search_location",
     "search_keywords",
+    "fit_source_text",
+    "details_status",
     "role_snapshot",
     "fit_highlights",
     "fit_watchouts",
     "fit_watchout_meta",
     "competitive_signals",
+    "hard_block_reasons",
 )
 
 
 def salary_sort_value(value: str) -> float:
+    """Return a single numeric value for sorting (uses the lower bound of ranges)."""
     if not value or value == "N/A":
         return 0.0
     text = value.lower().replace(",", "").strip()
@@ -113,6 +119,24 @@ def salary_sort_value(value: str) -> float:
     match = re.search(r"\$(\d+(?:\.\d+)?)", text)
     if match:
         return float(match.group(1))
+    return 0.0
+
+
+def _salary_max_value(value: str) -> float:
+    """Return the upper bound of a salary range for minimum-target comparisons.
+
+    For '$450 - $700 per day' returns 700; for '$130k–$145k p.a.' returns 145000.
+    Falls back to salary_sort_value when only one figure is present.
+    """
+    if not value or value == "N/A":
+        return 0.0
+    text = value.lower().replace(",", "").strip()
+    k_vals = [float(m) * 1000 for m in re.findall(r"(\d+(?:\.\d+)?)\s*k", text)]
+    if k_vals:
+        return max(k_vals)
+    dollar_vals = [float(m) for m in re.findall(r"\$(\d+(?:\.\d+)?)", text)]
+    if dollar_vals:
+        return max(dollar_vals)
     return 0.0
 
 
@@ -735,6 +759,13 @@ def build_watchout_entries(
             "medium",
         )
         add_entry("Treasury / banking domain depth may be limited", treasury_severity, category="finance_treasury")
+    if "banking" in lowered or "transaction banking" in lowered:
+        banking_severity = recency_adjusted_severity(
+            profile,
+            ["banking", "transaction banking", "payments", "savings", "investments"],
+            "medium",
+        )
+        add_entry("Banking domain depth may be limited", banking_severity, category="banking_domain")
     if text_contains_term(lowered, "guidewire"):
         old_year = find_profile_experience_year(profile, ["guidewire"])
         if old_year:
@@ -829,7 +860,6 @@ def _normalized_aliases(values: List[str]) -> List[str]:
 
 def _profile_text_blob(profile: dict) -> str:
     parts = [
-        profile.get("candidate_summary"),
         " ".join(str(item).strip() for item in profile.get("strengths", []) if str(item).strip()),
         profile.get("llm_profile_brief"),
         profile.get("star_evidence_text"),
@@ -840,7 +870,6 @@ def _profile_text_blob(profile: dict) -> str:
 
 def _profile_auxiliary_text(profile: dict) -> str:
     parts = [
-        profile.get("candidate_summary"),
         " ".join(str(item).strip() for item in profile.get("strengths", []) if str(item).strip()),
         profile.get("llm_profile_brief"),
         profile.get("star_evidence_text"),
@@ -957,10 +986,20 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
             continue
 
         snippet_hits = 0
+        max_aliases_in_snippet = 0
         for snippet in snippets:
-            if any(text_contains_term(snippet, alias) for alias in matched_aliases):
+            alias_hits_in_snippet = sum(1 for alias in matched_aliases if text_contains_term(snippet, alias))
+            max_aliases_in_snippet = max(max_aliases_in_snippet, alias_hits_in_snippet)
+            if alias_hits_in_snippet > 0:
                 snippet_hits += 1
-        if snippet_hits < int(raw_cluster.get("min_snippet_hits", 2) or 2):
+        min_snippet_hits = int(raw_cluster.get("min_snippet_hits", 2) or 2)
+        dense_snippet_alias_hits = int(
+            raw_cluster.get("dense_snippet_alias_hits", max(int(raw_cluster.get("min_alias_hits", 2) or 2) + 2, 4))
+            or max(int(raw_cluster.get("min_alias_hits", 2) or 2) + 2, 4)
+        )
+        if snippet_hits < min_snippet_hits and max_aliases_in_snippet >= dense_snippet_alias_hits:
+            snippet_hits = min_snippet_hits
+        if snippet_hits < min_snippet_hits:
             continue
 
         dominance_level = 1
@@ -1097,6 +1136,68 @@ def competitive_gap_watchouts(record: dict, profile: Optional[dict] = None) -> L
                 "category": category,
             })
     return watchouts[:2]
+
+
+def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    existing = [
+        compact_whitespace(item)
+        for item in (record.get("hard_block_reasons") or [])
+        if compact_whitespace(item)
+    ]
+    if existing:
+        return [{"text": item, "category": ""} for item in dedupe_preserve_order(existing)[:3]]
+
+    active_profile = profile or load_profile()
+    cluster_by_name = {
+        compact_whitespace(str(cluster.get("name") or "")).lower(): cluster
+        for cluster in active_profile.get("dominant_signal_clusters", [])
+        if isinstance(cluster, dict) and compact_whitespace(str(cluster.get("name") or ""))
+    }
+
+    entries: List[dict] = []
+    for assessment in competitive_signal_assessments(record, active_profile):
+        cluster = cluster_by_name.get(compact_whitespace(str(assessment.get("name") or "")).lower())
+        if not isinstance(cluster, dict) or not bool(cluster.get("hard_block_on_mismatch")):
+            continue
+
+        allowed_alignments = {
+            compact_whitespace(str(value)).lower()
+            for value in (cluster.get("hard_block_alignment_levels") or ["partial", "weak"])
+            if compact_whitespace(str(value))
+        } or {"partial", "weak"}
+        alignment = compact_whitespace(str(assessment.get("alignment") or "")).lower()
+        if alignment not in allowed_alignments:
+            continue
+
+        text = compact_whitespace(
+            cluster.get("hard_block_label")
+            or assessment.get("watchout_label")
+            or assessment.get("name")
+            or ""
+        )
+        if not text:
+            continue
+        category = (
+            compact_whitespace(str(cluster.get("name") or ""))
+            .lower()
+            .replace(" and ", "_")
+            .replace(" ", "_")
+        )
+        entries.append({"text": text, "category": category})
+
+    deduped: List[dict] = []
+    seen_keys: Set[str] = set()
+    for entry in entries:
+        key = compact_whitespace(str(entry.get("category") or entry.get("text") or "")).lower()
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(entry)
+    return deduped[:3]
+
+
+def hard_block_reasons(record: dict, profile: Optional[dict] = None) -> List[str]:
+    return [entry["text"] for entry in hard_block_entries(record, profile)]
 
 
 def salary_fit_label(record: dict, profile: Optional[dict] = None) -> str:
@@ -1238,6 +1339,13 @@ def get_match_preferences(profile: Optional[dict] = None) -> dict:
     if isinstance(preferences, dict):
         defaults.update(preferences)
     return defaults
+
+
+def weighted_points(value: int, weight: float) -> int:
+    scaled = float(value) * float(weight)
+    if scaled >= 0:
+        return int(math.floor(scaled + 0.5))
+    return -int(math.floor(abs(scaled) + 0.5))
 
 
 def build_fit_source_text(record: dict, include_watchouts: bool = True) -> str:
@@ -1526,12 +1634,12 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
 
 def score_to_match_label(score: int) -> str:
     if score >= 80:
-        return "Strong fit"
+        return "Strong match"
     if score >= 65:
-        return "Good fit"
+        return "Good match"
     if score >= 50:
-        return "Borderline"
-    return "Low fit"
+        return "Worth a look"
+    return "Stretch"
 
 
 def humanize_reject_reason(reason: Optional[str]) -> str:
@@ -1542,6 +1650,9 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
     direct_map = {
         "TITLE_NOT_TARGET": "Title outside target role family",
         "NO_DETAILS": "Could not read full job details",
+        "DETAILS_CHALLENGE_PAGE": "Blocked by SEEK challenge page",
+        "DETAILS_BLOCKED_PAGE": "Blocked from reading job details",
+        "DETAILS_NAVIGATION_ERROR": "Could not open the job ad page",
         "LLM_REJECT": "AI fit review rejected",
         "DUPLICATE_URL": "Duplicate listing removed",
         "ALREADY_APPLIED": "Already marked as applied",
@@ -1569,6 +1680,8 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"ERP or finance-specialist workflow: {cleaned_detail}"
     if prefix == "DESC_CAPABILITY_LOW" and cleaned_detail:
         return f"Low-fit specialist area: {cleaned_detail}"
+    if prefix == "DESC_HARD_BLOCK" and cleaned_detail:
+        return f"Hard blocker mismatch: {cleaned_detail}"
     if prefix == "CARD_EXCEPTION" and cleaned_detail:
         return f"Collection error: {cleaned_detail}"
     if prefix == "DESC_BAD_PHRASE" and cleaned_detail:
@@ -1670,7 +1783,7 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
     salary_preferences = active_profile.get("salary_preferences", {})
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
-    parsed_value = salary_sort_value(salary_text)
+    parsed_value = _salary_max_value(salary_text)
     lowered = salary_text.lower()
     is_daily = "per day" in lowered or "daily rate" in lowered or "/day" in lowered
 
@@ -1679,13 +1792,23 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
             return 0
         if parsed_value >= minimum_daily_rate:
             return 3
-        return -6
+        ratio = parsed_value / minimum_daily_rate
+        if ratio >= 0.80:
+            return -2
+        if ratio >= 0.60:
+            return -4
+        return -5
 
     if minimum_salary_yearly <= 0 or parsed_value <= 0:
         return 0
     if parsed_value >= minimum_salary_yearly:
         return 3
-    return -6
+    ratio = parsed_value / minimum_salary_yearly
+    if ratio >= 0.80:
+        return -2
+    if ratio >= 0.60:
+        return -4
+    return -5
 
 
 def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -1695,63 +1818,80 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     posted_age_days = record.get("posted_age_days")
     work_mode = str(record.get("work_mode") or "").lower()
     fit_highlights = [item for item in record.get("fit_highlights", []) if str(item).strip()]
+    active_profile = profile or load_profile()
+    weights = get_preference_weights(active_profile)
+    hard_block_labels = hard_block_reasons(record, active_profile)
+
+    if hard_block_labels:
+        return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": -100}]
 
     if title_reason == "OK":
-        breakdown.append({"label": "Direct target title match", "value": 14})
+        breakdown.append({"label": "Direct target title match", "value": weighted_points(14, weights["fit"])})
     elif title_reason == "TITLE_POTENTIAL_MATCH":
-        breakdown.append({"label": "Adjacent title match", "value": 4})
+        breakdown.append({"label": "Adjacent title match", "value": weighted_points(4, weights["fit"])})
 
-    breakdown.append(llm_description_fit_entry(record))
+    llm_entry = llm_description_fit_entry(record)
+    breakdown.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"])})
 
     if content_reason == "OK":
-        breakdown.append({"label": "Passed content filters", "value": 8})
+        breakdown.append({"label": "Passed content filters", "value": weighted_points(8, weights["fit"])})
 
     evidence_score = min(len(fit_highlights) * 3, 12)
     if evidence_score:
-        breakdown.append({"label": "Fit evidence bullets", "value": evidence_score})
+        breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
 
-    breakdown.extend(competitive_signal_breakdown(record, profile))
+    for item in competitive_signal_breakdown(record, active_profile):
+        breakdown.append({"label": item["label"], "value": weighted_points(int(item["value"]), weights["fit"])})
 
     if posted_age_days is not None:
         if posted_age_days <= (1 / 24):
-            breakdown.append({"label": "Posted within the last hour", "value": 12})
+            breakdown.append({"label": "Posted within the last hour", "value": weighted_points(12, weights["freshness"])})
         elif posted_age_days <= 1:
-            breakdown.append({"label": "Posted within the last day", "value": 9})
+            breakdown.append({"label": "Posted within the last day", "value": weighted_points(9, weights["freshness"])})
         elif posted_age_days <= 3:
-            breakdown.append({"label": "Posted within the last 3 days", "value": 6})
+            breakdown.append({"label": "Posted within the last 3 days", "value": weighted_points(6, weights["freshness"])})
         elif posted_age_days <= 7:
-            breakdown.append({"label": "Posted within the last week", "value": 3})
+            breakdown.append({"label": "Posted within the last week", "value": weighted_points(3, weights["freshness"])})
         elif posted_age_days <= 15:
-            breakdown.append({"label": "Still relatively recent", "value": 1})
+            breakdown.append({"label": "Still relatively recent", "value": weighted_points(1, weights["freshness"])})
 
-    location_item = assess_location_preference(record, profile)
+    location_item = assess_location_preference(record, active_profile)
     if location_item:
-        breakdown.append(location_item)
+        breakdown.append({
+            "label": location_item["label"],
+            "value": weighted_points(int(location_item["value"]), weights["location"]),
+        })
 
-    contract_item = assess_contract_preference(record, profile)
+    contract_item = assess_contract_preference(record, active_profile)
     if contract_item:
-        breakdown.append(contract_item)
+        breakdown.append({
+            "label": contract_item["label"],
+            "value": weighted_points(int(contract_item["value"]), weights["contract"]),
+        })
 
-    government_item = assess_government_preference(record, profile)
+    government_item = assess_government_preference(record, active_profile)
     if government_item:
-        breakdown.append(government_item)
+        breakdown.append({
+            "label": government_item["label"],
+            "value": weighted_points(int(government_item["value"]), weights["government"]),
+        })
 
     if work_mode == "hybrid":
-        breakdown.append({"label": "Hybrid work available", "value": 1})
+        breakdown.append({"label": "Hybrid work available", "value": weighted_points(1, weights["work_mode"])})
     elif work_mode == "remote":
-        breakdown.append({"label": "Remote work available", "value": 2})
+        breakdown.append({"label": "Remote work available", "value": weighted_points(2, weights["work_mode"])})
 
-    salary_score = salary_fit_adjustment(record, profile)
+    salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
         breakdown.append({"label": "Salary/rate signal", "value": salary_score})
     elif salary_score < 0:
         breakdown.append({"label": "Salary/rate below target", "value": salary_score})
 
-    watchout_score = watchout_penalty(record, profile)
+    watchout_score = weighted_points(watchout_penalty(record, active_profile), weights["fit"])
     if watchout_score > 0:
         breakdown.append({"label": "Watchouts or specialist gaps", "value": -watchout_score})
 
-    if viewed_by_user(record):
+    if viewed_by_user(record) and not record.get("applied"):
         breakdown.append({"label": "Already viewed by you", "value": -3})
 
     return breakdown
@@ -1793,7 +1933,7 @@ def build_keep_snapshot(record: dict) -> dict:
     return snapshot
 
 
-def can_reuse_kept_job(history_entry: dict, record: dict) -> bool:
+def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict] = None) -> bool:
     if not isinstance(history_entry, dict):
         return False
     if int(history_entry.get("times_kept", 0) or 0) <= 0:
@@ -1806,6 +1946,8 @@ def can_reuse_kept_job(history_entry: dict, record: dict) -> bool:
     previous_url = str(snapshot.get("url") or history_entry.get("url") or "").strip()
     current_url = str(record.get("url") or "").strip()
     if previous_url and current_url and previous_url != current_url:
+        return False
+    if hard_block_reasons(snapshot if isinstance(snapshot, dict) else {}, profile):
         return False
     return True
 
@@ -1831,6 +1973,8 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["work_type"] = snapshot.get("work_type") or "N/A"
     if record.get("role_snapshot") in {None, "", "N/A"}:
         record["role_snapshot"] = snapshot.get("role_snapshot") or "N/A"
+    if not compact_whitespace(record.get("fit_source_text") or ""):
+        record["fit_source_text"] = snapshot.get("fit_source_text") or ""
     if not record.get("fit_highlights"):
         record["fit_highlights"] = snapshot.get("fit_highlights") or []
     if not record.get("fit_watchouts"):
@@ -1839,6 +1983,10 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["fit_watchout_meta"] = snapshot.get("fit_watchout_meta") or []
     if not record.get("competitive_signals"):
         record["competitive_signals"] = snapshot.get("competitive_signals") or []
+    if not record.get("hard_block_reasons"):
+        record["hard_block_reasons"] = snapshot.get("hard_block_reasons") or []
+    if not compact_whitespace(record.get("details_status") or ""):
+        record["details_status"] = snapshot.get("details_status") or ""
 
     record["content_reason"] = snapshot.get("content_reason")
     record["llm_decision"] = snapshot.get("llm_decision")
@@ -1931,11 +2079,14 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
+        "fit_source_text": snapshot.get("fit_source_text") or "",
+        "details_status": snapshot.get("details_status") or "",
         "role_snapshot": snapshot.get("role_snapshot") or "N/A",
         "fit_highlights": snapshot.get("fit_highlights") or [],
         "fit_watchouts": snapshot.get("fit_watchouts") or [],
         "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
+        "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         "seen_before": True,
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
         "times_kept": int(entry.get("times_kept", 0) or 0),
@@ -2002,10 +2153,13 @@ def build_hidden_dashboard_record(job_key: str, entry: dict, run_started_at: dat
         "content_reason": snapshot.get("content_reason"),
         "llm_decision": snapshot.get("llm_decision"),
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
+        "fit_source_text": snapshot.get("fit_source_text") or "",
+        "details_status": snapshot.get("details_status") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
         "fit_watchouts": snapshot.get("fit_watchouts") or [],
         "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
+        "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
@@ -2068,10 +2222,13 @@ def build_applied_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "content_reason": snapshot.get("content_reason"),
         "llm_decision": snapshot.get("llm_decision"),
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
+        "fit_source_text": snapshot.get("fit_source_text") or "",
+        "details_status": snapshot.get("details_status") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
         "fit_watchouts": snapshot.get("fit_watchouts") or [],
         "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
+        "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
@@ -2198,6 +2355,10 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         competitive_signals=display_record.get("competitive_signals") if isinstance(display_record.get("competitive_signals"), list) else None,
     )
     fit_watchouts = [entry["text"] for entry in fit_watchout_meta]
+    blocking_reasons = hard_block_reasons(display_record, active_profile)
+    if blocking_reasons:
+        fit_watchouts = dedupe_preserve_order([*blocking_reasons, *fit_watchouts])
+    display_record["hard_block_reasons"] = blocking_reasons
     display_record["fit_highlights"] = fit_highlights
     display_record["fit_watchouts"] = fit_watchouts
     display_record["fit_watchout_meta"] = fit_watchout_meta
@@ -2236,10 +2397,14 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
 
     score_html = (
-        f'<div class="match-score {fit_tone_class}">'
-        f'<span class="match-score-number">{fit_points}/100</span>'
-        f'<span class="match-score-label">{safe_html(fit_label)}</span>'
-        "</div>"
+        f'<div class="match-tile {fit_tone_class}">'
+        + (
+            f'<span class="match-tile-number">{fit_points}</span>'
+            if TEST_ANY_MODE
+            else ""
+        )
+        + f'<span class="match-tile-label">{safe_html(fit_label)}</span>'
+        + "</div>"
     )
 
     posted_display = posted_text
@@ -2249,7 +2414,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     elif posted_display in ("N/A", "") and posted_date_label != "Unknown":
         posted_display = posted_date_label
 
-    chips = []
+    meta_items = []
     for label, value in [
         ("Posted", posted_display),
         ("Location", record.get("location")),
@@ -2258,8 +2423,8 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         ("Salary", record.get("salary")),
     ]:
         if value and value != "N/A" and value != "Unknown":
-            chips.append(
-                f'<span class="chip"><strong>{safe_html(label)}:</strong> {safe_html(str(value))}</span>'
+            meta_items.append(
+                f'<span class="job-meta-item"><strong>{safe_html(label)}</strong> {safe_html(str(value))}</span>'
             )
     context_bits = []
     if salary_fit_state == "below":
@@ -2281,15 +2446,21 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         context_bits.append(f"Hidden {format_timestamp_label(record.get('last_hidden_at'))}")
     elif archived and record.get("last_kept_at"):
         context_bits.append(f"Kept from an earlier run {format_timestamp_label(record.get('last_kept_at'))}")
-    context_html = (
-        f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>'
-        if context_bits
-        else ""
-    )
+    context_html = f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>' if context_bits else ""
 
     summary_html = (
         f'<p class="job-summary">{safe_html(role_summary)}</p>'
         if role_summary and role_summary != "N/A"
+        else ""
+    )
+    note_bits: List[str] = []
+    if fit_highlights:
+        note_bits.append(f"Strongest fit: {fit_highlights[0]}.")
+    if fit_watchouts:
+        note_bits.append(f"Watchout: {fit_watchouts[0]}.")
+    note_html = (
+        f'<div class="job-note">{safe_html(" ".join(note_bits))}</div>'
+        if note_bits
         else ""
     )
     insight_sections = []
@@ -2338,7 +2509,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-applied" type="button" data-review-action="applied" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">Applied</button>'
-            f'<button class="review-button review-hide" type="button" data-review-action="hidden" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">Hide</button>'
+            f'<button class="review-button review-hide" type="button" data-review-action="hidden" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}" title="Hides this role and teaches the engine to filter similar ones">Not for me</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -2348,11 +2519,16 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     return (
         f'<article class="job-card" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}" data-source="{safe_html(source)}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
+        '<div class="job-header-row">'
+        '<div class="job-header-copy">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         f'<div class="job-company">{company}</div>'
+        '</div>'
         f"{score_html}"
-        f'<div class="job-meta">{"".join(chips)}</div>'
+        '</div>'
         f"{summary_html}"
+        f'<div class="job-meta">{"".join(meta_items)}</div>'
+        f"{note_html}"
         f"{insight_html}"
         f"{context_html}"
         f"{actions_html}"
@@ -2489,6 +2665,7 @@ def render_html(
     stale_archive_records = dashboard_records["stale_archive_records"]
     applied_records = dashboard_records["applied_records"]
     hidden_records = dashboard_records["hidden_records"]
+    shortlist_count = len(current_records) + len(recent_archive_records) + len(stale_archive_records)
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
     target_summaries = []
     for location, pages in (run_stats.get("search_targets") or {}).items():
@@ -2517,23 +2694,34 @@ def render_html(
         if TEST_ANY_MODE
         else f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and preserves your viewed history."
     )
-    snapshot_stats = [
-        ("summary-primary", len(current_records), "Matches This Run", "roles worth reviewing"),
-        ("summary-primary", sum(1 for record in current_records if not viewed_by_user(record)), "New To You", "not viewed yet"),
-        ("summary-secondary", sum(1 for record in current_records if viewed_by_user(record)), "Opened By You", "you've opened these"),
-        ("summary-secondary", len(recent_archive_records), "Previously Kept", "carried forward from earlier runs"),
-        ("summary-tertiary", len(applied_records), "Applied Jobs", "already applied"),
-        ("summary-tertiary", len(hidden_records), "Hidden Jobs", "not relevant right now"),
-        ("summary-tertiary", len(stale_archive_records), "Older Previously Kept", "older carried-forward roles"),
-        ("summary-tertiary", run_stats.get("page_count", 0), "Pages Crawled", "search pages checked"),
-        ("summary-tertiary", run_stats.get("cards_seen", 0), "Cards Seen", "roles scanned"),
-        ("summary-tertiary", run_stats.get("detail_fetches", 0), "Detail Pages Opened", "full ads reviewed"),
-        ("summary-tertiary", f"{round(float(run_stats.get('keep_rate', 0.0)) * 100, 1)}%", "Keep Rate", "roles kept after review"),
-    ]
-    snapshot_cards_html = "".join(
-        f'<div class="summary-card {safe_html(card_class)}"><strong>{safe_html(str(value))}</strong>'
-        f'<span>{safe_html(label)}</span><small>{safe_html(helper)}</small></div>'
-        for card_class, value, label, helper in snapshot_stats
+    hero_summary = (
+        f"Last run {run_label} — {run_stats.get('cards_seen', 0)} cards scanned, "
+        f"{len(current_records)} matches found"
+    )
+    this_run_cards_html = "".join(
+        f'<div class="summary-card"><strong>{safe_html(str(value))}</strong><span>{safe_html(label)}</span></div>'
+        for value, label in [
+            (len(current_records), "Matches"),
+            (sum(1 for record in current_records if not viewed_by_user(record)), "New to you"),
+            (sum(1 for record in current_records if viewed_by_user(record)), "Opened by you"),
+            (len(recent_archive_records), "Previously kept"),
+        ]
+    )
+    crawler_cards_html = "".join(
+        f'<div class="summary-card"><strong>{safe_html(str(value))}</strong><span>{safe_html(label)}</span></div>'
+        for value, label in [
+            (run_stats.get("cards_seen", 0), "Cards seen"),
+            (run_stats.get("detail_fetches", 0), "Ads reviewed"),
+            (run_stats.get("page_count", 0), "Pages crawled"),
+            (f"{round(float(run_stats.get('keep_rate', 0.0)) * 100, 1)}%", "Keep rate"),
+        ]
+    )
+    application_cards_html = "".join(
+        f'<div class="summary-card"><strong>{safe_html(str(value))}</strong><span>{safe_html(label)}</span></div>'
+        for value, label in [
+            (len(applied_records), "Applied"),
+            (len(hidden_records), "Hidden"),
+        ]
     )
 
     html = f"""<!doctype html>
@@ -2544,39 +2732,41 @@ def render_html(
   <title>Role Match Dashboard</title>
   <style>
     :root {{
-      --bg: #f4efe7;
-      --panel: #fffaf2;
-      --card: #ffffff;
-      --ink: #1f2933;
-      --muted: #5b6470;
-      --line: #e6dccd;
+      --bg: #f6f1e8;
+      --panel: #fffdf9;
+      --card: #fffdfa;
+      --ink: #182231;
+      --muted: #667085;
+      --line: #e9ddcf;
       --accent: #14532d;
-      --accent-soft: #e6f4ea;
+      --accent-soft: #e7f7eb;
       --warm: #9a3412;
       --warm-soft: #fff0e6;
       --cool: #1d4ed8;
-      --cool-soft: #e8f0ff;
-      --shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+      --cool-soft: #edf3ff;
+      --shadow: 0 16px 38px rgba(45, 34, 20, 0.08);
+      --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --sans: Aptos, "Trebuchet MS", sans-serif;
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
+      font-family: var(--sans);
       background:
-        radial-gradient(circle at top left, rgba(20, 83, 45, 0.08), transparent 28%),
-        radial-gradient(circle at top right, rgba(154, 52, 18, 0.08), transparent 24%),
+        radial-gradient(circle at top left, rgba(20, 83, 45, 0.07), transparent 28%),
+        radial-gradient(circle at top right, rgba(154, 52, 18, 0.06), transparent 22%),
         var(--bg);
       color: var(--ink);
     }}
     .page {{
-      max-width: 1380px;
+      max-width: 1360px;
       margin: 0 auto;
-      padding: 32px 20px 64px;
+      padding: 40px 22px 72px;
     }}
     .dashboard-layout {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
-      gap: 24px;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 36px;
       align-items: start;
     }}
     .dashboard-main {{
@@ -2584,36 +2774,55 @@ def render_html(
     }}
     .dashboard-sidebar {{
       position: sticky;
-      top: 20px;
+      top: 24px;
       display: grid;
-      gap: 16px;
+      gap: 18px;
     }}
     .hero {{
-      background: linear-gradient(135deg, rgba(255, 250, 242, 0.96), rgba(255, 255, 255, 0.96));
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      padding: 28px;
-      box-shadow: var(--shadow);
-      margin-bottom: 24px;
+      padding: 2px 2px 24px;
+      margin-bottom: 18px;
     }}
     .hero h1 {{
-      margin: 0 0 8px;
-      font-size: clamp(2rem, 4vw, 3.2rem);
-      line-height: 1;
-      letter-spacing: -0.04em;
+      margin: 0 0 10px;
+      font-family: var(--serif);
+      font-size: clamp(2.5rem, 4.8vw, 4rem);
+      font-weight: 500;
+      line-height: 0.96;
+      letter-spacing: -0.03em;
     }}
     .hero p {{
       margin: 0;
       color: var(--muted);
       font-size: 1rem;
+      max-width: 44rem;
+      line-height: 1.5;
     }}
     .hero-note {{
-      margin-top: 12px;
-      max-width: 50rem;
-      line-height: 1.55;
+      margin-top: 0;
+    }}
+    .snapshot-rail {{
+      background: rgba(255, 253, 249, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }}
+    .snapshot-section + .snapshot-section {{
+      border-top: 1px solid rgba(233, 221, 207, 0.9);
+      margin-top: 18px;
+      padding-top: 18px;
+    }}
+    .snapshot-heading {{
+      margin: 0 0 14px;
+      font-family: var(--serif);
+      font-size: 0.98rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7a5f46;
     }}
     .side-panel {{
-      background: rgba(255, 250, 242, 0.96);
+      background: rgba(255, 253, 249, 0.9);
       border: 1px solid var(--line);
       border-radius: 20px;
       box-shadow: var(--shadow);
@@ -2682,46 +2891,35 @@ def render_html(
       letter-spacing: 0.04em;
       white-space: nowrap;
     }}
-    .summary-grid {{
+    .summary-grid,
+    .side-panel-summary-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 14px;
-      margin: 20px 0 0;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }}
     .summary-card {{
-      background: rgba(255, 255, 255, 0.96);
-      border: 1px solid rgba(214, 200, 180, 0.65);
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(233, 221, 207, 0.8);
       border-radius: 16px;
-      padding: 12px 13px 11px;
-      min-height: 88px;
+      padding: 14px 14px 12px;
+      min-height: 92px;
       display: flex;
       flex-direction: column;
       justify-content: center;
     }}
-    .summary-card.summary-primary {{
-      border-color: rgba(20, 83, 45, 0.18);
-      background: linear-gradient(180deg, #fffefb, #f5fbf6);
-    }}
-    .summary-card.summary-secondary {{
-      background: linear-gradient(180deg, #fffefc, #fbf8f3);
-    }}
-    .summary-card.summary-tertiary {{
-      background: rgba(255, 255, 255, 0.92);
-    }}
     .summary-card strong {{
       display: block;
-      font-size: 1.8rem;
+      font-family: var(--serif);
+      font-size: 2rem;
+      font-weight: 500;
       line-height: 1;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       letter-spacing: -0.03em;
-    }}
-    .summary-card.summary-primary strong {{
-      font-size: 2.05rem;
     }}
     .summary-card span {{
       color: var(--muted);
-      font-size: 0.82rem;
-      font-weight: 700;
+      font-size: 0.95rem;
+      font-weight: 500;
       line-height: 1.25;
     }}
     .summary-card small {{
@@ -2769,39 +2967,39 @@ def render_html(
       line-height: 1.4;
     }}
     .section {{
-      margin-top: 28px;
+      margin-top: 30px;
     }}
     .section h2 {{
       margin: 0 0 14px;
-      font-size: 1.35rem;
-      letter-spacing: -0.02em;
+      font-family: var(--serif);
+      font-size: 1.28rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
     }}
     .job-grid {{
       display: grid;
-      gap: 16px;
+      gap: 18px;
     }}
     .job-card {{
-      background: var(--card);
+      background: rgba(255, 253, 250, 0.98);
       border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 18px;
+      border-radius: 24px;
+      padding: 20px 22px 18px;
       box-shadow: var(--shadow);
     }}
     .job-badges {{
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }}
     .badge {{
       display: inline-flex;
       align-items: center;
       border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 0.78rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      padding: 6px 11px;
+      font-size: 0.85rem;
+      font-weight: 500;
       cursor: help;
     }}
     .badge-new {{ background: var(--accent-soft); color: var(--accent); }}
@@ -2816,16 +3014,45 @@ def render_html(
     .badge-fit-medium {{ background: #fef3c7; color: #92400e; }}
     .badge-fit-borderline {{ background: #e5e7eb; color: #374151; }}
     .filter-panel {{
-      background: var(--card);
+      background: rgba(255, 253, 249, 0.96);
       border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 18px;
+      border-radius: 22px;
+      padding: 20px 22px;
       box-shadow: var(--shadow);
     }}
     .filter-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 12px;
+    }}
+    .scope-tabs {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0;
+    }}
+    .scope-tab {{
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 11px 18px;
+      font: inherit;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--ink);
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }}
+    .scope-tab:hover {{
+      transform: translateY(-1px);
+    }}
+    .scope-tab.is-active {{
+      color: var(--accent);
+      border-color: rgba(20, 83, 45, 0.24);
+      box-shadow: 0 10px 18px rgba(20, 83, 45, 0.12);
+      background: linear-gradient(180deg, #fffefb, #f5fbf6);
+    }}
+    .workspace-panel[hidden] {{
+      display: none !important;
     }}
     .filter-field {{
       display: block;
@@ -2834,18 +3061,18 @@ def render_html(
       display: block;
       margin-bottom: 6px;
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: 0.83rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.08em;
     }}
     .filter-field select {{
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 12px;
+      border-radius: 14px;
+      padding: 12px 14px;
       font: inherit;
-      background: white;
+      background: rgba(255, 255, 255, 0.82);
       color: var(--ink);
     }}
     .section-head {{
@@ -2886,86 +3113,89 @@ def render_html(
     .section-copy {{
       margin: 0 0 14px;
       color: var(--muted);
+      line-height: 1.5;
+    }}
+    .job-header-row {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }}
+    .job-header-copy {{
+      min-width: 0;
     }}
     .job-link {{
       display: inline-block;
       color: var(--ink);
       text-decoration: none;
-      font-size: 1.35rem;
-      font-weight: 750;
-      line-height: 1.2;
+      font-family: var(--serif);
+      font-size: 1.6rem;
+      font-weight: 500;
+      line-height: 1.16;
       margin-bottom: 6px;
     }}
     .job-link:hover {{ text-decoration: underline; }}
     .job-company {{
       color: var(--muted);
-      font-size: 1rem;
-      margin-bottom: 10px;
+      font-size: 1.02rem;
     }}
-    .match-score {{
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
+    .match-tile {{
+      min-width: 108px;
+      align-self: flex-start;
+      border-radius: 18px;
+      padding: 12px 14px 10px;
+      text-align: center;
+      background: #eefbf3;
     }}
-    .match-score-number {{
-      font-size: 1.25rem;
-      font-weight: 800;
-    }}
-    .match-score-label {{
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 0.9rem;
-      font-weight: 700;
-    }}
-    .match-score.tone-strong .match-score-number {{
-      color: #166534;
-    }}
-    .match-score.tone-strong .match-score-label {{
-      background: #dcfce7;
-      color: #166534;
-    }}
-    .match-score.tone-good .match-score-number {{
-      color: #15803d;
-    }}
-    .match-score.tone-good .match-score-label {{
-      background: #dcfce7;
-      color: #15803d;
-    }}
-    .match-score.tone-borderline .match-score-number {{
-      color: #9a6700;
-    }}
-    .match-score.tone-borderline .match-score-label {{
-      background: #fef3c7;
-      color: #9a6700;
-    }}
-    .match-score.tone-low .match-score-number {{
-      color: #991b1b;
-    }}
-    .match-score.tone-low .match-score-label {{
-      background: #f3f4f6;
-      color: #991b1b;
-    }}
-    .match-score-stars {{
-      display: inline-flex;
-      gap: 3px;
+    .match-tile-number {{
+      display: block;
+      font-family: var(--serif);
+      font-size: 2rem;
       line-height: 1;
+      margin-bottom: 4px;
     }}
-    .star {{
-      font-size: 1rem;
+    .match-tile-label {{
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 600;
     }}
-    .star-on {{
-      color: #f59e0b;
+    .tone-strong.match-tile {{
+      background: #dbf8e6;
+      color: #166534;
     }}
-    .star-off {{
-      color: #d1d5db;
+    .tone-good.match-tile {{
+      background: #ddf7e2;
+      color: #15803d;
+    }}
+    .tone-borderline.match-tile {{
+      background: #fff0bf;
+      color: #9a6700;
+    }}
+    .tone-low.match-tile {{
+      background: #f3f4f6;
+      color: #7f1d1d;
     }}
     .job-meta {{
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 10px 18px;
+      margin-bottom: 14px;
+    }}
+    .job-meta-item {{
+      position: relative;
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.4;
+    }}
+    .job-meta-item:not(:last-child)::after {{
+      content: "•";
+      margin-left: 18px;
+      color: #b6a795;
+    }}
+    .job-meta-item strong {{
+      color: #495463;
+      font-weight: 600;
     }}
     .chip {{
       display: inline-flex;
@@ -2982,16 +3212,26 @@ def render_html(
       border-color: #ccebd7;
     }}
     .job-summary {{
-      margin: 0 0 10px;
+      margin: 0 0 14px;
       color: var(--ink);
-      line-height: 1.45;
+      font-size: 1.02rem;
+      line-height: 1.55;
+    }}
+    .job-note {{
+      margin: 0 0 14px;
+      border: 1px solid rgba(233, 221, 207, 0.9);
+      border-radius: 16px;
+      background: rgba(249, 244, 237, 0.72);
+      padding: 14px 16px;
+      color: #5f6775;
+      line-height: 1.55;
     }}
     .job-insights {{
       margin: 0 0 12px;
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 18px;
       background: rgba(255, 250, 242, 0.7);
-      padding: 0 14px 12px;
+      padding: 0 16px 12px;
     }}
     .job-insights summary {{
       cursor: pointer;
@@ -3100,9 +3340,12 @@ def render_html(
     }}
     @media (max-width: 700px) {{
       .page {{ padding: 20px 14px 40px; }}
-      .hero {{ padding: 22px 18px; }}
+      .hero {{ padding: 0 0 18px; }}
       .job-card {{ padding: 16px; }}
-      .job-link {{ font-size: 1.15rem; }}
+      .job-link {{ font-size: 1.2rem; }}
+      .job-header-row {{ flex-direction: column; }}
+      .match-tile {{ min-width: 0; width: 100%; }}
+      .summary-grid, .side-panel-summary-grid {{ grid-template-columns: 1fr; }}
     }}
     @media (max-width: 1080px) {{
       .dashboard-layout {{
@@ -3122,141 +3365,169 @@ def render_html(
     <div class="dashboard-layout">
       <div class="dashboard-main">
         <section class="hero">
-          <h1>Role Match Dashboard</h1>
-          <p class="hero-note">Your shortlist stays front and center here. The run stats, score explanation, and efficiency notes are tucked into the side panel so they are there when you want them, but out of the way when you are focused on deciding what deserves your time.</p>
+          <h1>Potential Jobs</h1>
+          <p class="hero-note">{safe_html(hero_summary)}</p>
         </section>
         <section class="section filter-panel">
-          <div class="section-head">
-            <h2>Match Controls</h2>
-          </div>
-          <p class="section-copy">Matches from this run are kept roles that also clear the current dashboard threshold. Kept from earlier runs means the role was shortlisted in a previous run and is still being carried forward into this dashboard. New to you means you have not opened that job from this dashboard yet. Hidden jobs stay in review for up to {HIDDEN_REVIEW_DAYS} days. Applied jobs are stored in their own section so you can review them later. Roles scoring below {DASHBOARD_MIN_SCORE} stay in logs and analytics, not in the main shortlist.{safe_html(testing_mode_note)}</p>
-          <div class="filter-grid">
-            <label class="filter-field">
-              <span>Sort</span>
-              <select id="sort_select">
-                <option value="newest">Newest posted first</option>
-                <option value="fit">Best match first</option>
-                <option value="salary">Highest salary first</option>
-                <option value="unseen">Not opened by me first</option>
-              </select>
-            </label>
-            <label class="filter-field">
-              <span>Per page</span>
-              <select id="page_size_select">
-                <option value="12">12</option>
-                <option value="24">24</option>
-                <option value="48">48</option>
-                <option value="96">96</option>
-              </select>
-            </label>
-            <label class="filter-field">
-              <span>Show</span>
-              <select id="scope_filter">
-                <option value="all">All matches</option>
-                <option value="current">Matches this run</option>
-                <option value="saved">Kept from earlier runs</option>
-                <option value="applied">Applied jobs</option>
-                <option value="hidden">Hidden jobs</option>
-                <option value="unseen">Not opened by me</option>
-                <option value="viewed">Opened by me</option>
-              </select>
-            </label>
-            <label class="filter-field">
-              <span>Posted</span>
-              <select id="posted_filter">
-                <option value="all">Any time</option>
-                <option value="1">Today</option>
-                <option value="3">Last 3 days</option>
-                <option value="7">Last 7 days</option>
-                <option value="15">Last 15 days</option>
-                <option value="30">Last 30 days</option>
-              </select>
-            </label>
-            <label class="filter-field">
-              <span>Work mode</span>
-              <select id="work_mode_filter">
-                <option value="all">Any</option>
-                <option value="remote">Remote</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="on-site">On-site</option>
-              </select>
-            </label>
-            <label class="filter-field">
-              <span>Match score</span>
-              <select id="score_filter">
-                <option value="all">Any</option>
-                <option value="80" {"selected" if DEFAULT_SCORE_FILTER_MIN == 80 else ""}>80+ only</option>
-                <option value="65" {"selected" if DEFAULT_SCORE_FILTER_MIN == 65 else ""}>65+ only</option>
-                <option value="35" {"selected" if DEFAULT_SCORE_FILTER_MIN == 35 else ""}>35+ only</option>
-                <option value="50" {"selected" if DEFAULT_SCORE_FILTER_MIN == 50 else ""}>50+ only</option>
-              </select>
-            </label>
-            <label class="filter-field">
-              <span>Salary</span>
-              <select id="salary_filter">
-                <option value="all">Any</option>
-                <option value="listed">Salary listed</option>
-                <option value="meets">Meets my target</option>
-                <option value="below">Below my target</option>
-                <option value="missing">No salary shown</option>
-              </select>
-            </label>
+          <div class="scope-tabs" aria-label="Top-level dashboard views">
+            <button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs ({shortlist_count})</button>
+            <button class="scope-tab" type="button" data-workspace-target="applied">Applied ({len(applied_records)})</button>
+            <button class="scope-tab" type="button" data-workspace-target="hidden">Hidden ({len(hidden_records)})</button>
           </div>
         </section>
-        {render_section("Matches From This Run", current_records, "No kept roles from the latest run right now.", scoring_profile)}
-        {render_section("Kept From Earlier Runs", recent_archive_records, "No roles from earlier runs are being carried forward right now.", scoring_profile)}
-        {render_section("Applied Jobs", applied_records, "No applied jobs saved yet.", scoring_profile)}
-        {render_section("Hidden Jobs", hidden_records, "No hidden jobs right now.", scoring_profile)}
-        <section class="section job-section" data-section-id="older-saved">
-          <div class="section-head">
-            <h2>Older Previously Kept Jobs</h2>
-            <div class="section-tools">
-              <span class="pagination-label"></span>
-              <button class="pagination-button" type="button" data-page-direction="prev">Prev</button>
-              <button class="pagination-button" type="button" data-page-direction="next">Next</button>
-              <button class="toggle-button" type="button" data-toggle-target="older-archive" {'disabled' if not stale_archive_records else ''}>{'Show' if stale_archive_records else 'No'} Older Previously Kept Jobs ({len(stale_archive_records)})</button>
+        <div class="workspace-panel" data-workspace-panel="potential">
+          <section class="section filter-panel">
+            <div class="section-head">
+              <h2>Match Controls</h2>
             </div>
-          </div>
-          <p class="section-copy">Roles kept from earlier runs are collapsed here once they are more than {ARCHIVE_STALE_AFTER_DAYS} days past their last keep, so the dashboard stays focused.</p>
-          <div id="older-archive" hidden>
-            <div class="job-grid">
-              {''.join(render_job_card(record, scoring_profile) for record in stale_archive_records)}
+            <div class="filter-grid">
+              <label class="filter-field">
+                <span>Sort</span>
+                <select id="sort_select">
+                  <option value="newest">Newest posted first</option>
+                  <option value="fit">Best match first</option>
+                  <option value="salary">Highest salary first</option>
+                  <option value="unseen">Not opened by me first</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Per page</span>
+                <select id="page_size_select">
+                  <option value="12">12</option>
+                  <option value="24">24</option>
+                  <option value="48">48</option>
+                  <option value="96">96</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Show</span>
+                <select id="scope_filter">
+                  <option value="all" selected>All potential jobs</option>
+                  <option value="current">Matches this run</option>
+                  <option value="saved">Kept from earlier runs</option>
+                  <option value="unseen">Not opened by me</option>
+                  <option value="viewed">Opened by me</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Posted</span>
+                <select id="posted_filter">
+                  <option value="all">Any time</option>
+                  <option value="1">Today</option>
+                  <option value="3">Last 3 days</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="15">Last 15 days</option>
+                  <option value="30">Last 30 days</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Work mode</span>
+                <select id="work_mode_filter">
+                  <option value="all">Any</option>
+                  <option value="remote">Remote</option>
+                  <option value="hybrid">Hybrid</option>
+                  <option value="on-site">On-site</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Match score</span>
+                <select id="score_filter">
+                  <option value="all">Any</option>
+                  <option value="80" {"selected" if DEFAULT_SCORE_FILTER_MIN == 80 else ""}>80+ only</option>
+                  <option value="65" {"selected" if DEFAULT_SCORE_FILTER_MIN == 65 else ""}>65+ only</option>
+                  <option value="35" {"selected" if DEFAULT_SCORE_FILTER_MIN == 35 else ""}>35+ only</option>
+                  <option value="50" {"selected" if DEFAULT_SCORE_FILTER_MIN == 50 else ""}>50+ only</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Salary</span>
+                <select id="salary_filter">
+                  <option value="all">Any</option>
+                  <option value="listed">Salary listed</option>
+                  <option value="meets">Meets my target</option>
+                  <option value="below">Below my target</option>
+                  <option value="missing">No salary shown</option>
+                </select>
+              </label>
             </div>
-          </div>
-          {'' if stale_archive_records else '<p class="empty-state">No older previously kept roles right now.</p>'}
-        </section>
+          </section>
+          {render_section("Matches From This Run", current_records, "No kept roles from the latest run right now.", scoring_profile)}
+          {render_section("Kept From Earlier Runs", recent_archive_records, "No roles from earlier runs are being carried forward right now.", scoring_profile)}
+          <section class="section job-section" data-section-id="older-saved">
+            <div class="section-head">
+              <h2>Older Previously Kept Jobs</h2>
+              <div class="section-tools">
+                <span class="pagination-label"></span>
+                <button class="pagination-button" type="button" data-page-direction="prev">Prev</button>
+                <button class="pagination-button" type="button" data-page-direction="next">Next</button>
+                <button class="toggle-button" type="button" data-toggle-target="older-archive" {'disabled' if not stale_archive_records else ''}>{'Show' if stale_archive_records else 'No'} Older Previously Kept Jobs ({len(stale_archive_records)})</button>
+              </div>
+            </div>
+            <p class="section-copy">Roles kept from earlier runs are collapsed here once they are more than {ARCHIVE_STALE_AFTER_DAYS} days past their last keep, so the dashboard stays focused.</p>
+            <div id="older-archive" hidden>
+              <div class="job-grid">
+                {''.join(render_job_card(record, scoring_profile) for record in stale_archive_records)}
+              </div>
+            </div>
+            {'' if stale_archive_records else '<p class="empty-state">No older previously kept roles right now.</p>'}
+          </section>
+        </div>
+        <div class="workspace-panel" data-workspace-panel="applied" hidden>
+          <section class="section filter-panel">
+            <div class="section-head">
+              <h2>Applied Jobs</h2>
+            </div>
+            <p class="section-copy">This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.</p>
+          </section>
+          {render_section("Applied Jobs", applied_records, "No applied jobs saved yet.", scoring_profile)}
+        </div>
+        <div class="workspace-panel" data-workspace-panel="hidden" hidden>
+          <section class="section filter-panel">
+            <div class="section-head">
+              <h2>Hidden Jobs</h2>
+            </div>
+            <p class="section-copy">This area keeps roles you have intentionally pushed out of sight for now.</p>
+          </section>
+          {render_section("Hidden Jobs", hidden_records, "No hidden jobs right now.", scoring_profile)}
+        </div>
       </div>
       <aside class="dashboard-sidebar">
-        <details class="side-panel" open>
-          <summary>
-            <div class="side-panel-summary-head">
-              <div class="side-panel-title-wrap">
-                <span class="side-panel-title">Run Snapshot</span>
-                <span class="side-panel-subtitle">Latest scrape summary and shortlist activity</span>
-              </div>
-              <span class="side-toggle-hint">Show / hide</span>
-            </div>
-          </summary>
-          <div class="side-panel-body">
+        <section class="snapshot-rail">
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">Run Snapshot</h2>
             <div class="snapshot-meta">
               <div class="snapshot-meta-row"><span class="snapshot-meta-label">Last run</span><span class="snapshot-meta-value">{safe_html(run_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Search window</span><span class="snapshot-meta-value">{safe_html(search_window_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Sort order</span><span class="snapshot-meta-value">{safe_html(sort_order_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Window</span><span class="snapshot-meta-value">{safe_html(search_window_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Sort</span><span class="snapshot-meta-value">{safe_html(sort_order_label)}</span></div>
               <div class="snapshot-meta-row"><span class="snapshot-meta-label">Mode</span><span class="snapshot-meta-value">{safe_html(mode_label)}</span></div>
             </div>
-            <p class="snapshot-helper">{safe_html(snapshot_helper)}</p>
-            <div class="side-panel-summary-grid">
-              {snapshot_cards_html}
+          </section>
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">This Run</h2>
+            <div class="summary-grid">
+              {this_run_cards_html}
             </div>
-          </div>
-        </details>
+          </section>
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">Crawler Stats</h2>
+            <div class="summary-grid">
+              {crawler_cards_html}
+            </div>
+          </section>
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">Applications</h2>
+            <div class="summary-grid">
+              {application_cards_html}
+            </div>
+          </section>
+        </section>
         <details class="side-panel">
           <summary>
             <span>Run Efficiency</span>
             <span class="side-toggle-hint">Show / hide</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Search targets this run: {safe_html(" | ".join(target_summaries) or "None")}. This is the fastest way to tell whether we stopped early because SEEK ran out of fresh pages or because the current page-check limit was reached.</p>
+            <p class="side-panel-copy">Search targets this run: {safe_html(" | ".join(target_summaries) or "None")}. {safe_html(snapshot_helper)}{safe_html(testing_mode_note)}</p>
             <div class="job-meta">
               {''.join(f'<span class="chip" title="{safe_html(str(item.get("reason", "UNKNOWN")))}"><strong>{safe_html(humanize_reject_reason(str(item.get("reason", "UNKNOWN"))))}:</strong> {safe_html(str(item.get("count", 0)))}</span>' for item in run_stats.get("top_reject_reasons", []))}
             </div>
@@ -3268,17 +3539,17 @@ def render_html(
             <span class="side-toggle-hint">Show / hide</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">The score is a guide, not a final verdict. Full-description fit carries more weight than title alone, and the ranking now also checks for dominant signals that suggest the employer may favour a more specialist background. Strong and good fits are shown first by default, borderline roles can be included when you lower the score filter, and roles below {DASHBOARD_MIN_SCORE} stay out of the main view unless you deliberately widen the shortlist.</p>
+            <p class="side-panel-copy">The score is a guide, not a final verdict. The raw number is kept internally for ranking and is shown on cards only in test mode. Normal mode shows four human-friendly bands instead so the dashboard does not pretend to be more precise than it really is.</p>
             <div class="job-meta">
-              <span class="chip"><strong>Strong fit:</strong> 80-100</span>
-              <span class="chip"><strong>Good fit:</strong> 65-79</span>
-              <span class="chip"><strong>Borderline:</strong> 50-64</span>
-              <span class="chip"><strong>Low fit:</strong> 0-49</span>
+              <span class="chip"><strong>Strong match:</strong> 80-100</span>
+              <span class="chip"><strong>Good match:</strong> 65-79</span>
+              <span class="chip"><strong>Worth a look:</strong> 50-64</span>
+              <span class="chip"><strong>Stretch:</strong> 0-49</span>
               <span class="chip"><strong>Title match:</strong> +14 direct, +4 adjacent</span>
               <span class="chip"><strong>Description review:</strong> +20 excellent, +16 strong, +12 solid, +6 weak, 0 poor, -10 mismatch</span>
               <span class="chip"><strong>Competitive signals:</strong> specialist bias can add a small boost or a moderate penalty</span>
               <span class="chip"><strong>Freshness:</strong> newer roles score higher</span>
-              <span class="chip"><strong>Preferences:</strong> pay, engagement shape, Sydney, Canberra travel, and government context can move ranking</span>
+              <span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can now be dialed up or down</span>
               <span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>
             </div>
           </div>
@@ -3296,7 +3567,40 @@ def render_html(
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
+    const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
+    const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
     const paginationState = {{}};
+
+    function getActiveWorkspace() {{
+      return workspaceTabs.find(tab => tab.classList.contains('is-active'))?.dataset.workspaceTarget || 'potential';
+    }}
+
+    function setActiveWorkspace(workspace, updateHash = true) {{
+      const allowed = new Set(['potential', 'applied', 'hidden']);
+      const nextWorkspace = allowed.has(workspace) ? workspace : 'potential';
+
+      for (const tab of workspaceTabs) {{
+        tab.classList.toggle('is-active', (tab.dataset.workspaceTarget || '') === nextWorkspace);
+      }}
+      for (const panel of workspacePanels) {{
+        const panelWorkspace = panel.dataset.workspacePanel || 'potential';
+        if (panelWorkspace === nextWorkspace) {{
+          panel.removeAttribute('hidden');
+        }} else {{
+          panel.setAttribute('hidden', '');
+        }}
+      }}
+
+      if (updateHash) {{
+        const targetHash = nextWorkspace === 'potential' ? '#potential' : `#${{nextWorkspace}}`;
+        if (window.location.hash !== targetHash) {{
+          window.history.replaceState(null, '', targetHash);
+        }}
+      }}
+
+      resetPagination();
+      applyDashboardControls();
+    }}
 
     function getVisibleCards() {{
       return Array.from(document.querySelectorAll('.job-card'));
@@ -3356,6 +3660,7 @@ def render_html(
       const workMode = workModeFilter?.value || 'all';
       const scoreMode = scoreFilter?.value || 'all';
       const salaryMode = salaryFilter?.value || 'all';
+      const activeWorkspace = getActiveWorkspace();
 
       for (const card of getVisibleCards()) {{
         const cardScope = card.dataset.recordKind || 'current';
@@ -3366,19 +3671,24 @@ def render_html(
         const salaryState = (card.dataset.salaryFit || 'missing').toLowerCase();
 
         let visible = true;
-        if (scopeMode === 'current' && cardScope !== 'current') visible = false;
-        if (scopeMode === 'saved' && cardScope !== 'saved') visible = false;
-        if (scopeMode === 'applied' && cardScope !== 'applied') visible = false;
-        if (scopeMode === 'hidden' && cardScope !== 'hidden') visible = false;
-        if (scopeMode === 'unseen' && viewed) visible = false;
-        if (scopeMode === 'viewed' && !viewed) visible = false;
-        if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
-        if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
-        if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
-        if (salaryMode === 'listed' && salaryState === 'missing') visible = false;
-        if (salaryMode === 'meets' && salaryState !== 'meets') visible = false;
-        if (salaryMode === 'below' && salaryState !== 'below') visible = false;
-        if (salaryMode === 'missing' && salaryState !== 'missing') visible = false;
+        if (activeWorkspace === 'potential') {{
+          if (!['current', 'saved'].includes(cardScope)) visible = false;
+          if (scopeMode === 'current' && cardScope !== 'current') visible = false;
+          if (scopeMode === 'saved' && cardScope !== 'saved') visible = false;
+          if (scopeMode === 'unseen' && viewed) visible = false;
+          if (scopeMode === 'viewed' && !viewed) visible = false;
+          if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
+          if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
+          if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
+          if (salaryMode === 'listed' && salaryState === 'missing') visible = false;
+          if (salaryMode === 'meets' && salaryState !== 'meets') visible = false;
+          if (salaryMode === 'below' && salaryState !== 'below') visible = false;
+          if (salaryMode === 'missing' && salaryState !== 'missing') visible = false;
+        }} else if (activeWorkspace === 'applied') {{
+          if (cardScope !== 'applied') visible = false;
+        }} else if (activeWorkspace === 'hidden') {{
+          if (cardScope !== 'hidden') visible = false;
+        }}
 
         card.dataset.matchesFilters = visible ? '1' : '0';
       }}
@@ -3561,6 +3871,11 @@ def render_html(
 
       const button = event.target.closest('.review-button');
       if (!button) {{
+        const workspaceTab = event.target.closest('[data-workspace-target]');
+        if (!workspaceTab) {{
+          return;
+        }}
+        setActiveWorkspace(workspaceTab.dataset.workspaceTarget || 'potential');
         return;
       }}
       saveReviewAction(button);
@@ -3573,7 +3888,7 @@ def render_html(
       }});
     }}
 
-    applyDashboardControls();
+    setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
     hydrateViewedState();
   </script>
 </body>
@@ -3780,7 +4095,7 @@ def _seek_scrape_to_records(
                                     continue
 
                             history_entry = job_history.get(record["job_key"] or "", {})
-                            if can_reuse_kept_job(history_entry, record):
+                            if can_reuse_kept_job(history_entry, record, profile):
                                 record = apply_kept_job_reuse(record, history_entry)
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 kept_records.append(record)
@@ -3790,13 +4105,23 @@ def _seek_scrape_to_records(
                                 )
                                 continue
 
-                            details_text = fetch_job_details_text(detail_page, full_url)
+                            details_payload = fetch_job_details_payload(detail_page, full_url)
+                            details_text = str(details_payload.get("text") or "")
+                            details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
+                            record["details_status"] = details_status
                             record["details_length"] = len(details_text)
-                            if not details_text:
-                                print(f"REJECTED (details) [NO_DETAILS] {title} @ {company} | {full_url}")
-                                record["reject_reason"] = "NO_DETAILS"
+                            if details_status != "ok" or not details_text:
+                                reject_reason = {
+                                    "challenge_page": "DETAILS_CHALLENGE_PAGE",
+                                    "blocked_page": "DETAILS_BLOCKED_PAGE",
+                                    "navigation_error": "DETAILS_NAVIGATION_ERROR",
+                                    "empty": "NO_DETAILS",
+                                }.get(details_status, "NO_DETAILS")
+                                print(f"REJECTED (details) [{reject_reason}] {title} @ {company} | {full_url}")
+                                record["reject_reason"] = reject_reason
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
+                            record["fit_source_text"] = details_text
 
                             for skill in extract_detected_skills(details_text):
                                 skill_observations.append(
@@ -3817,6 +4142,29 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
+                            record["competitive_signals"] = [
+                                evaluate_competitive_signal_alignment(signal, profile)
+                                for signal in detect_competitive_signals(details_text, profile)
+                            ]
+                            hard_block_matches = hard_block_entries(
+                                {
+                                    "fit_source_text": details_text,
+                                    "competitive_signals": record.get("competitive_signals"),
+                                },
+                                profile,
+                            )
+                            record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
+                            if record["hard_block_reasons"]:
+                                hard_block_category = hard_block_matches[0].get("category") or "hard_block"
+                                record["content_reason"] = f"DESC_HARD_BLOCK:{hard_block_category}"
+                                record["reject_reason"] = record["content_reason"]
+                                print(
+                                    f"REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | "
+                                    f"{'; '.join(record['hard_block_reasons'])}"
+                                )
+                                finalize_record(job_history, audit_rows, record, run_iso)
+                                continue
+
                             salary = extract_salary(details_text)
                             if salary == "N/A":
                                 salary = card_meta["card_salary"]
@@ -3824,10 +4172,6 @@ def _seek_scrape_to_records(
                             detail_work_mode = extract_work_mode(details_text)
                             if detail_work_mode != "N/A":
                                 record["work_mode"] = detail_work_mode
-                            record["competitive_signals"] = [
-                                evaluate_competitive_signal_alignment(signal, profile)
-                                for signal in detect_competitive_signals(details_text, profile)
-                            ]
                             record["role_snapshot"] = build_role_summary(record, details_text, profile)
                             record["fit_highlights"] = build_fit_highlights(record, details_text, profile)
                             record["fit_watchout_meta"] = build_watchout_entries(
@@ -4075,7 +4419,7 @@ def rebuild_html_dashboard() -> str:
 
     render_html(
         OUTPUT_HTML,
-        kept_records,
+        kept_records, 
         run_started_at,
         configured_date_range,
         sort_newest_first,

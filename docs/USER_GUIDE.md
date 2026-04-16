@@ -107,10 +107,9 @@ Then open the dashboard at:
 
 The dashboard groups jobs into:
 
-- `Fresh Matches`
-- `Kept From Earlier Runs`
-- `Hidden Jobs`
-- `Older Kept Jobs`
+- `Potential Jobs`
+- `Applied`
+- `Hidden`
 
 The dashboard can filter by:
 
@@ -139,6 +138,29 @@ If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
 - refreshes jobs
 - rebuilds the dashboard
 - updates local run outputs
+
+`python scraper_direct.py --rebuild-dashboard`
+
+- rebuilds the dashboard from saved local state only
+- useful when UI behavior changed and you want the latest HTML without a fresh scrape
+
+`python scraper_direct.py --test-scrape-mode`
+
+- runs a wider scrape test mode
+- widens both SEEK and LinkedIn source windows
+- lowers the shortlist threshold
+- shows raw score numbers on cards for tuning
+
+Important:
+
+- some specialist-domain requirements can now hard-block a role entirely
+- if a source page comes back as a challenge or invalid detail page, the app rejects it instead of scoring it from bad text
+
+`python scraper_direct.py --rebuild-dashboard --test-dashboard-mode`
+
+- rebuilds the dashboard in test view only
+- shows raw score numbers on cards for tuning
+- does not run a fresh scrape
 
 `python agent_runner.py`
 

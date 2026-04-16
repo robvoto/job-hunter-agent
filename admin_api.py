@@ -9,11 +9,13 @@ from profile_learning import build_learning_patch, merge_capability_rules, repai
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
+from llm_gate import extract_strengths_from_cv
 from source_documents import (
     build_llm_profile_brief,
     import_source_materials_to_profile,
     load_source_materials,
     persist_uploaded_source_pack,
+    run_onboarding,
     save_source_materials,
 )
 
@@ -349,12 +351,10 @@ ADMIN_HTML = """<!doctype html>
       background: #f7f2ea;
       color: #5b6470;
     }
-    #candidate_summary,
     #llm_profile_brief {
       min-height: 170px;
     }
     #strengths,
-    #llm_prompt_notes,
     #star_evidence_text,
     #learning_update_text {
       min-height: 180px;
@@ -370,8 +370,7 @@ ADMIN_HTML = """<!doctype html>
     #reject_title_rules,
     #reject_description_phrase_rules,
     #reject_description_regex_rules,
-    #must_not_require_skills,
-    #canberra_only_description_patterns {
+    #must_not_require_skills {
       min-height: 120px;
     }
     .side-panel {
@@ -531,31 +530,41 @@ ADMIN_HTML = """<!doctype html>
       <button class="tab-button active" data-tab-target="search">Search</button>
       <button class="tab-button" data-tab-target="profile">Candidate Profile</button>
       <button class="tab-button" data-tab-target="review">Review</button>
-      <button class="tab-button" data-tab-target="test">Test</button>
+      <button class="tab-button" data-tab-target="notifications">Notifications</button>
+      <button class="tab-button" data-tab-target="test">Last Run</button>
     </nav>
 
     <section class="group tab-panel active" data-tab-panel="search">
       <h2 class="group-title">Search</h2>
-      <p class="group-copy">Use this tab for broad search capture. Fit is refined later by title matching, capability rules, exclusions, and optional AI review.</p>
+      <p class="group-copy">Configure what to search for and where. Fit scoring is handled separately in the Candidate Profile tab.</p>
       <div class="grid">
+
       <section class="panel">
-        <h2>Search Capture</h2>
+        <h2>Common</h2>
         <label for="keywords">Search keywords</label>
         <input id="keywords" type="text">
-        <div class="help">Keep this broad. Use capture terms, not detailed fit logic.</div>
+        <div class="help">Used by all enabled sources. Keep broad — fit filtering happens later.</div>
 
-        <details class="help-drawer">
-          <summary>How search and fit work</summary>
-          <p>The search box should cast a wide enough net to collect relevant BA roles. Tight fit judgement happens later through title rules, cheap metadata gates, full-description filters, capability logic, and optional AI review.</p>
-        </details>
+        <label for="minimum_salary_yearly">Minimum annual salary</label>
+        <input id="minimum_salary_yearly" type="number" min="0" step="1000">
+        <div class="help">Used when permanent roles list salary. Set 0 to ignore.</div>
+
+        <label for="minimum_daily_rate">Minimum daily rate</label>
+        <input id="minimum_daily_rate" type="number" min="0" step="50">
+        <div class="help">Used when contract roles list a day rate. Set 0 to ignore.</div>
+      </section>
+
+      <section class="panel">
+        <h2>SEEK</h2>
+        <p class="panel-copy">These settings apply only when <code>seek</code> is listed in enabled sources.</p>
 
         <label for="locations">Locations</label>
         <textarea id="locations"></textarea>
-        <div class="help">One source-specific location per line, such as <code>All Sydney NSW</code> and <code>All Canberra ACT</code>.</div>
+        <div class="help">One location per line, e.g. <code>All Sydney NSW</code>.</div>
 
-        <label for="classification_ids">Classification ids</label>
+        <label for="classification_ids">Classification IDs</label>
         <textarea id="classification_ids"></textarea>
-        <div class="help">One classification id per line. Use this as a broad pre-filter before fit logic kicks in.</div>
+        <div class="help">One ID per line. Broad pre-filter before fit logic runs.</div>
 
         <label for="date_range_days">How far back to search</label>
         <select id="date_range_days">
@@ -565,41 +574,35 @@ ADMIN_HTML = """<!doctype html>
           <option value="14">Last 14 days</option>
           <option value="30">Last 30 days</option>
         </select>
-        <div class="help">This sets the source-side date window before collection starts.</div>
 
         <label for="max_pages_cap">Max pages to check</label>
         <input id="max_pages_cap" type="number" min="1" max="25">
-        <div class="help">Safety limit for broad searches. The app still enforces a hard cap of 25 pages.</div>
+        <div class="help">Hard cap of 25 pages is always enforced.</div>
 
         <label for="enforce_posted_age_limit">Strictly reject older ads</label>
         <select id="enforce_posted_age_limit">
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, ads older than the selected date window are skipped even if the source still returns them.</div>
 
         <label for="sort_newest_first">Prefer newest jobs first</label>
         <select id="sort_newest_first">
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
-        <div class="help">If enabled, the source is asked for newest jobs first.</div>
-        <div class="panel-actions">
-          <button class="primary" id="save_search">Save Search Settings</button>
-        </div>
       </section>
 
       <section class="panel">
-        <h2>LinkedIn Settings</h2>
-        <p class="panel-copy">These settings apply only when <code>linkedin</code> is listed in <strong>enabled_sources</strong>.</p>
+        <h2>LinkedIn</h2>
+        <p class="panel-copy">These settings apply only when <code>linkedin</code> is listed in enabled sources.</p>
 
         <label for="linkedin_hours_old">How far back to search (hours)</label>
         <input id="linkedin_hours_old" type="number" min="1" max="168">
-        <div class="help">LinkedIn-specific look-back window. 24 = last day, 72 = last 3 days. Keep low to avoid noise.</div>
+        <div class="help">24 = last day, 72 = last 3 days.</div>
 
         <label for="linkedin_results_per_search">Results per search</label>
         <input id="linkedin_results_per_search" type="number" min="5" max="100">
-        <div class="help">Max results fetched per keyword + location pair. 25 is a safe default.</div>
+        <div class="help">Max results per keyword + location pair.</div>
 
         <label for="linkedin_easy_apply_only">Easy Apply filter</label>
         <select id="linkedin_easy_apply_only">
@@ -607,18 +610,17 @@ ADMIN_HTML = """<!doctype html>
           <option value="true">Easy Apply only</option>
           <option value="false">Non-Easy Apply only</option>
         </select>
-        <div class="help">Filter LinkedIn listings by Easy Apply. "Both" shows all.</div>
-
-        <div class="panel-actions">
-          <button class="primary" id="save_linkedin">Save LinkedIn Settings</button>
-        </div>
       </section>
+
+      </div>
+      <div class="panel-actions" style="padding: 0 0 1.5rem 0;">
+        <button class="primary" id="save_search">Save Search Settings</button>
       </div>
     </section>
 
     <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Candidate Profile</h2>
-      <p class="group-copy">Maintain the core candidate story here, then tune advanced matching rules separately.</p>
+      <p class="group-copy">Upload your CV during onboarding. Refine strengths, notes, and matching rules here.</p>
       <div class="profile-shell">
       <div class="profile-main">
       <section class="panel profile-main-panel">
@@ -626,7 +628,7 @@ ADMIN_HTML = """<!doctype html>
           <div>
             <div class="panel-kicker">Main profile editing</div>
             <h2>Candidate Profile</h2>
-            <p class="panel-copy">This is the primary fit context the engine should use on every run.</p>
+            <p class="panel-copy">Your CV is the source of truth. Strengths and notes here refine how the engine scores fit.</p>
           </div>
           <div class="panel-actions profile-panel-actions">
             <button class="primary" id="save_profile">Save Profile</button>
@@ -634,24 +636,10 @@ ADMIN_HTML = """<!doctype html>
           </div>
         </div>
 
-        <details class="help-drawer">
-          <summary>Editing tips</summary>
-          <p>Keep the summary current, keep strengths concrete, and use the longer source text for detailed evidence. If you want the AI brief rebuilt from the latest summary, clear it and save.</p>
-        </details>
-
         <section class="profile-group">
-          <h3>Profile Summary</h3>
-          <p class="profile-group-copy">Who the candidate is and how the engine should frame them.</p>
-          <div class="profile-fields-grid">
-            <div class="field-block field-span-2">
-              <label for="candidate_summary">Candidate summary</label>
-              <textarea id="candidate_summary"></textarea>
-              <div class="field-help">Top-level positioning in 2-4 sentences.</div>
-            </div>
-          </div>
           <details class="help-drawer">
             <summary>Advanced AI context</summary>
-            <p>The AI fit brief is normally auto-generated from the summary, strengths, notes, and rules. Only turn on manual override if you want to force a custom machine-facing brief.</p>
+            <p>The AI fit brief is normally auto-generated from your CV and strengths. Only turn on manual override if you want to force a custom machine-facing brief.</p>
             <div class="field-grid" style="padding: 0 14px 14px;">
               <div class="field-block field-span-2">
                 <label class="checkbox-row" for="llm_profile_brief_manual_override">
@@ -671,34 +659,97 @@ ADMIN_HTML = """<!doctype html>
 
         <section class="profile-group">
           <h3>Strength Signals</h3>
-          <p class="profile-group-copy">Highlight the signals that should improve fit and the notes that should shape judgement.</p>
+          <p class="profile-group-copy">Auto-extracted from your CV. Add or remove signals to tune how the engine scores fit.</p>
           <div class="profile-fields-grid">
-            <div class="field-block">
+            <div class="field-block field-span-2">
               <label for="strengths">Strengths</label>
               <textarea id="strengths"></textarea>
-              <div class="field-help">One strong signal per line.</div>
-            </div>
-            <div class="field-block">
-              <label for="llm_prompt_notes">Important notes</label>
-              <textarea id="llm_prompt_notes"></textarea>
-              <div class="field-help">One note per line for preferences, boundaries, or honest gaps.</div>
+              <div class="field-help">One signal per line. Re-extracted automatically when CV changes.</div>
             </div>
           </div>
         </section>
 
+
         <section class="profile-group">
-          <h3>Commercial Preferences</h3>
-          <p class="profile-group-copy">Light ranking signals for pay expectations.</p>
+          <h3>Decision Weights</h3>
+          <p class="profile-group-copy">Tell the ranking engine what matters more right now. Leave everything at Normal if you want the default balance.</p>
           <div class="field-grid">
             <div class="field-block">
-              <label for="minimum_salary_yearly">Minimum annual salary</label>
-              <input id="minimum_salary_yearly" type="number" min="0" step="1000">
-              <div class="field-help">Used when permanent roles list salary.</div>
+              <label for="fit_weight">Overall fit</label>
+              <select id="fit_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Scales title fit, description fit, evidence, specialist signals, and watchout penalties.</div>
             </div>
             <div class="field-block">
-              <label for="minimum_daily_rate">Minimum daily rate</label>
-              <input id="minimum_daily_rate" type="number" min="0" step="50">
-              <div class="field-help">Used when contract roles list day rate.</div>
+              <label for="salary_weight">Salary</label>
+              <select id="salary_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Use this when market reality matters more than your ideal pay floor, or the reverse.</div>
+            </div>
+            <div class="field-block">
+              <label for="location_weight">Location / travel</label>
+              <select id="location_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Scales Sydney preference and Canberra travel/on-site penalties.</div>
+            </div>
+            <div class="field-block">
+              <label for="work_mode_weight">Remote / hybrid</label>
+              <select id="work_mode_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Scales the hybrid and remote bonuses.</div>
+            </div>
+            <div class="field-block">
+              <label for="contract_weight">Contract shape</label>
+              <select id="contract_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Scales the permanent bonus and contract-length preference.</div>
+            </div>
+            <div class="field-block">
+              <label for="government_weight">Government context</label>
+              <select id="government_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Use this if government delivery context matters more or less than usual.</div>
+            </div>
+            <div class="field-block">
+              <label for="freshness_weight">Freshness</label>
+              <select id="freshness_weight">
+                <option value="0">Ignore for now</option>
+                <option value="0.5">Light</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">High</option>
+                <option value="2">Very high</option>
+              </select>
+              <div class="field-help">Scales how much newer postings get rewarded over older but still relevant roles.</div>
             </div>
           </div>
         </section>
@@ -734,9 +785,13 @@ ADMIN_HTML = """<!doctype html>
         </details>
         <div class="panel-actions">
           <button class="secondary" id="open_onboarding" type="button">Open Onboarding / Source Pack</button>
-          <button class="secondary" id="import_source_materials">Refresh From Saved Source Documents</button>
           <span class="inline-status" id="source_materials_status" aria-live="polite"></span>
         </div>
+        <details class="help-drawer" style="margin-top:14px;border:1px solid #f9a8a8;border-radius:10px;padding:10px 12px;background:#fff5f5;">
+          <summary style="font-weight:700;color:#9a3412;cursor:pointer;">Danger: Rebuild Profile From Saved Documents</summary>
+          <p style="margin:8px 0 10px;color:#7f1d1d;font-size:0.9rem;">This overwrites your current profile strengths, capability rules, and evidence tiers using the last uploaded source documents. Any manual edits made since onboarding will be replaced. Only use this if you have re-uploaded a new version of your CV.</p>
+          <button class="secondary" id="import_source_materials" style="border-color:#f87171;color:#9a3412;">Rebuild Profile Now</button>
+        </details>
       </section>
 
       <section class="panel side-panel">
@@ -801,9 +856,27 @@ ADMIN_HTML = """<!doctype html>
             <textarea id="must_not_require_skills"></textarea>
             <div class="field-help">One skill per line for essential-skill rejection.</div>
 
-            <label for="canberra_only_description_patterns">Canberra-only description patterns</label>
-            <textarea id="canberra_only_description_patterns"></textarea>
-            <div class="field-help">One regex per line for Canberra-based-only restrictions.</div>
+          </section>
+
+          <section class="subpanel">
+            <h3>Onboarding Settings</h3>
+            <p class="panel-copy" style="font-size:0.88rem;">Controls used when running onboarding or Rebuild Profile. Change these before re-running onboarding if the extracted title patterns were too broad or too narrow.</p>
+
+            <label for="os_lookback_years">Title extraction lookback (years)</label>
+            <input id="os_lookback_years" type="number" min="1" max="20" step="1">
+            <div class="field-help">Only include roles that ended within this many years. Default 8.</div>
+
+            <label for="os_min_months">Minimum role duration (months)</label>
+            <input id="os_min_months" type="number" min="1" max="24" step="1">
+            <div class="field-help">Skip roles held for fewer than this many months. Default 6.</div>
+
+            <label for="os_max_target">Max target title patterns</label>
+            <input id="os_max_target" type="number" min="1" max="20" step="1">
+            <div class="field-help">Cap on target_title_patterns extracted. Default 8.</div>
+
+            <label for="os_max_adjacent">Max adjacent title patterns</label>
+            <input id="os_max_adjacent" type="number" min="1" max="20" step="1">
+            <div class="field-help">Cap on adjacent_title_patterns extracted. Default 6.</div>
           </section>
         </div>
       </section>
@@ -815,44 +888,19 @@ ADMIN_HTML = """<!doctype html>
       <p class="group-copy">Manage review state here, then act on repeated tuning signals from viable roles and filtered noise.</p>
       <div class="grid">
       <section class="panel">
-        <h2>Review Controls</h2>
-        <label for="applied_job_keys">Applied jobs</label>
-        <textarea id="applied_job_keys"></textarea>
-        <div class="help">One job URL or job ID per line. These will be hidden from future runs.</div>
-
-        <label for="hidden_job_keys">Hidden jobs</label>
-        <textarea id="hidden_job_keys"></textarea>
-        <div class="help">One job URL or job ID per line. Use this for anything you never want to see again.</div>
-        <div class="panel-actions">
-          <button class="primary" id="save_review_controls">Save Review Controls</button>
-        </div>
-      </section>
-
-      <section class="panel">
         <h2>Suggested Tuning</h2>
         <div id="tuning_suggestions_panel" class="help">Run the job source connector to see capability suggestions and repeated junk-role signals.</div>
         <div class="panel-actions">
           <button class="secondary" id="refresh_review_data">Refresh Suggestions</button>
-          <button class="secondary" id="reload_profile">Reload Profile</button>
-          <button class="primary" id="apply_tuning_suggestions">Apply Capability Suggestions</button>
-          <span class="inline-status" id="tuning_status" aria-live="polite"></span>
         </div>
       </section>
       </div>
     </section>
 
-    <section class="group tab-panel" data-tab-panel="test">
-      <h2 class="group-title">Test</h2>
-      <p class="group-copy">Use this tab to validate what the current run did and spot false rejects quickly.</p>
+    <section class="group tab-panel" data-tab-panel="notifications">
+      <h2 class="group-title">Notifications</h2>
+      <p class="group-copy">Configure how and when the agent notifies you about new matches.</p>
       <div class="grid">
-      <section class="panel">
-        <h2>Latest Run Stats</h2>
-        <div id="run_stats_panel" class="help">No run stats loaded yet.</div>
-        <div class="panel-actions">
-          <button class="secondary" id="refresh_review">Refresh Admin Data</button>
-          <button class="secondary" id="reload">Reload Profile</button>
-        </div>
-      </section>
 
       <section class="panel">
         <h2>Alerts</h2>
@@ -893,6 +941,21 @@ ADMIN_HTML = """<!doctype html>
       </div>
     </section>
 
+    <section class="group tab-panel" data-tab-panel="test">
+      <h2 class="group-title">Last Run</h2>
+      <p class="group-copy">Latest run stats and false-reject debugging tools.</p>
+      <div class="grid">
+      <section class="panel">
+        <h2>Latest Run Stats</h2>
+        <div id="run_stats_panel" class="help">No run stats loaded yet.</div>
+        <div class="panel-actions">
+          <button class="secondary" id="refresh_review">Refresh Admin Data</button>
+          <button class="secondary" id="reload">Reload Profile</button>
+        </div>
+      </section>
+      </div>
+    </section>
+
     <div class="status" id="status"></div>
   </main>
 
@@ -909,8 +972,6 @@ ADMIN_HTML = """<!doctype html>
     const applyLearningButton = document.getElementById('apply_learning');
     const importKnowledgeFileButton = document.getElementById('import_knowledge_file');
     const learningStatusEl = document.getElementById('learning_status');
-    const applyTuningSuggestionsButton = document.getElementById('apply_tuning_suggestions');
-    const tuningStatusEl = document.getElementById('tuning_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     let telegramConnectLink = '';
@@ -919,14 +980,10 @@ ADMIN_HTML = """<!doctype html>
       'locations',
       'strengths',
       'cv_text',
-      'llm_prompt_notes',
       'target_title_patterns',
       'adjacent_title_patterns',
       'classification_ids',
       'must_not_require_skills',
-      'canberra_only_description_patterns',
-      'applied_job_keys',
-      'hidden_job_keys',
     ];
 
     const ruleTextAreas = [
@@ -1031,16 +1088,22 @@ ADMIN_HTML = """<!doctype html>
       document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search ?? 25);
       const _liEasyApply = profile.search_settings?.linkedin_easy_apply_only;
       document.getElementById('linkedin_easy_apply_only').value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
-      document.getElementById('candidate_summary').value = profile.candidate_summary || '';
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
       document.getElementById('llm_profile_brief_manual_override').checked = (profile.llm_profile_brief_mode || 'auto') === 'manual';
       document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly || '');
       document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate || '');
+      document.getElementById('fit_weight').value = String(profile.preference_weights?.fit ?? 1);
+      document.getElementById('salary_weight').value = String(profile.preference_weights?.salary ?? 1);
+      document.getElementById('location_weight').value = String(profile.preference_weights?.location ?? 1);
+      document.getElementById('work_mode_weight').value = String(profile.preference_weights?.work_mode ?? 1);
+      document.getElementById('contract_weight').value = String(profile.preference_weights?.contract ?? 1);
+      document.getElementById('government_weight').value = String(profile.preference_weights?.government ?? 1);
+      document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness ?? 1);
       document.getElementById('cv_text').value = profile.cv_text || '';
       document.getElementById('star_evidence_text').value = profile.star_evidence_text || '';
       document.getElementById('capability_profile_rules').value = capabilityRulesToText(profile.capability_profile_rules);
 
-      for (const id of ['strengths', 'llm_prompt_notes', 'target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills', 'canberra_only_description_patterns']) {
+      for (const id of ['strengths', 'target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills']) {
         document.getElementById(id).value = (profile[id] || []).join('\\n');
       }
 
@@ -1048,8 +1111,12 @@ ADMIN_HTML = """<!doctype html>
         document.getElementById(id).value = rulesToText(profile[id], key);
       }
 
-      document.getElementById('applied_job_keys').value = (profile.review_controls?.applied_job_keys || []).join('\\n');
-      document.getElementById('hidden_job_keys').value = (profile.review_controls?.hidden_job_keys || []).join('\\n');
+      const os = profile.onboarding_settings || {};
+      document.getElementById('os_lookback_years').value = String(os.title_extraction_lookback_years ?? 8);
+      document.getElementById('os_min_months').value = String(os.title_extraction_min_months ?? 6);
+      document.getElementById('os_max_target').value = String(os.max_target_patterns ?? 8);
+      document.getElementById('os_max_adjacent').value = String(os.max_adjacent_patterns ?? 6);
+
       syncLlmProfileBriefMode();
     }
 
@@ -1324,8 +1391,6 @@ ADMIN_HTML = """<!doctype html>
       const ruleSuggestions = suggestions.rule_suggestions || [];
       const summary = suggestions.summary || {};
 
-      applyTuningSuggestionsButton.disabled = capabilitySuggestions.length === 0;
-
       if (!capabilitySuggestions.length && !ruleSuggestions.length) {
         panel.innerHTML = '<p>No tuning suggestions yet. Once the current run sees repeated useful signals or repeat junk patterns, they will show up here.</p>';
         return;
@@ -1334,7 +1399,7 @@ ADMIN_HTML = """<!doctype html>
       const capabilityHtml = capabilitySuggestions.length ? `
         <div class="tuning-group">
           <h3>Capability signals from viable roles</h3>
-          <p class="tuning-group-copy">Repeated concepts from kept roles that are worth classifying or upgrading.</p>
+          <p class="tuning-group-copy">Repeated concepts from kept roles that are worth classifying or upgrading. <em>Capability Matrix: Skills and tools the engine uses to score how well a job description matches your profile.</em></p>
           <div class="review-list">
             ${capabilitySuggestions.map(item => `
               <div class="review-card">
@@ -1351,31 +1416,51 @@ ADMIN_HTML = """<!doctype html>
                 </select>
                 <p>Examples from kept roles:</p>
                 ${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this signal yet.')}
+                <div class="card-actions" style="margin-top:10px;">
+                  <button class="primary confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">Confirm</button>
+                </div>
               </div>
             `).join('')}
           </div>
         </div>
       ` : '';
 
-      const ruleHtml = ruleSuggestions.length ? `
+      const actionableRules = ruleSuggestions.filter(item => !(item.reason || '').startsWith('TITLE_NOT_TARGET') && !(item.reason || '').startsWith('TITLE_BAD_KEYWORD'));
+      const workingFilters = ruleSuggestions.filter(item => (item.reason || '').startsWith('TITLE_BAD_KEYWORD'));
+
+      function ruleCardMarkup(item) {
+        return `
+          <div class="review-card">
+            <h3>${escapeHtml(item.headline || item.reason || 'Rule signal')}</h3>
+            <p>${escapeHtml(item.detail || '')}</p>
+            <div class="suggestion-meta">
+              <span class="suggestion-chip">Target: ${escapeHtml(item.target || 'Matching rules')}</span>
+              <span class="suggestion-chip">Count: ${escapeHtml(String(item.count || 0))}</span>
+            </div>
+            <p><strong>Suggested action:</strong> ${escapeHtml(item.recommendation || 'Review this signal and decide whether the matching rules need refinement.')}</p>
+            <p>Examples:</p>
+            ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this signal yet.')}
+            ${(item.reason || '').startsWith('DESC_CAPABILITY_LOW') ? `
+            <div class="card-actions" style="margin-top:10px;">
+              <button class="secondary add-phrase-exclusion-btn" data-reason="${escapeHtml(item.reason || '')}" style="font-size:0.9rem;padding:8px 16px;border-color:#f87171;color:#9a3412;">Add to exclusions</button>
+            </div>` : ''}
+            ${(item.reason || '').startsWith('TITLE_BAD_KEYWORD') ? `
+            <div class="card-actions" style="margin-top:10px;">
+              <button class="secondary dismiss-rule-card-btn" style="font-size:0.9rem;padding:8px 16px;">Dismiss</button>
+            </div>` : ''}
+          </div>`;
+      }
+
+      const ruleHtml = (actionableRules.length || workingFilters.length) ? `
         <div class="tuning-group">
           <h3>Repeated junk-role signals</h3>
           <p class="tuning-group-copy">Patterns from rejects that are worth keeping, strengthening, or watching before you touch search keywords.</p>
-          <div class="review-list">
-            ${ruleSuggestions.map(item => `
-              <div class="review-card">
-                <h3>${escapeHtml(item.headline || item.reason || 'Rule signal')}</h3>
-                <p>${escapeHtml(item.detail || '')}</p>
-                <div class="suggestion-meta">
-                  <span class="suggestion-chip">Target: ${escapeHtml(item.target || 'Matching rules')}</span>
-                  <span class="suggestion-chip">Count: ${escapeHtml(String(item.count || 0))}</span>
-                </div>
-                <p><strong>Suggested action:</strong> ${escapeHtml(item.recommendation || 'Review this signal and decide whether the matching rules need refinement.')}</p>
-                <p>Examples:</p>
-                ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this signal yet.')}
-              </div>
-            `).join('')}
-          </div>
+          ${actionableRules.length ? `<div class="review-list">${actionableRules.map(ruleCardMarkup).join('')}</div>` : ''}
+          ${workingFilters.length ? `
+          <details style="margin-top:14px;">
+            <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;">Filters already working correctly (${workingFilters.length})</summary>
+            <div class="review-list" style="margin-top:10px;">${workingFilters.map(ruleCardMarkup).join('')}</div>
+          </details>` : ''}
         </div>
       ` : '';
 
@@ -1473,11 +1558,15 @@ ADMIN_HTML = """<!doctype html>
           minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value || 0),
           minimum_daily_rate: Number(document.getElementById('minimum_daily_rate').value || 0),
         },
-        review_controls: {
-          applied_job_keys: toLines(document.getElementById('applied_job_keys').value),
-          hidden_job_keys: toLines(document.getElementById('hidden_job_keys').value),
+        preference_weights: {
+          fit: Number(document.getElementById('fit_weight').value || 1),
+          salary: Number(document.getElementById('salary_weight').value || 1),
+          location: Number(document.getElementById('location_weight').value || 1),
+          work_mode: Number(document.getElementById('work_mode_weight').value || 1),
+          contract: Number(document.getElementById('contract_weight').value || 1),
+          government: Number(document.getElementById('government_weight').value || 1),
+          freshness: Number(document.getElementById('freshness_weight').value || 1),
         },
-        candidate_summary: document.getElementById('candidate_summary').value.trim(),
         llm_profile_brief_mode: document.getElementById('llm_profile_brief_manual_override').checked ? 'manual' : 'auto',
         llm_profile_brief: document.getElementById('llm_profile_brief_manual_override').checked
           ? document.getElementById('llm_profile_brief').value.trim()
@@ -1486,14 +1575,18 @@ ADMIN_HTML = """<!doctype html>
         cv_text: document.getElementById('cv_text').value.trim(),
         star_evidence_text: document.getElementById('star_evidence_text').value.trim(),
         capability_profile_rules: textToCapabilityRules(document.getElementById('capability_profile_rules').value),
-        llm_prompt_notes: toLines(document.getElementById('llm_prompt_notes').value),
         target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
         adjacent_title_patterns: toLines(document.getElementById('adjacent_title_patterns').value),
         must_not_require_skills: toLines(document.getElementById('must_not_require_skills').value),
-        canberra_only_description_patterns: toLines(document.getElementById('canberra_only_description_patterns').value),
         reject_title_rules: textToRules(document.getElementById('reject_title_rules').value, 'pattern'),
         reject_description_phrase_rules: textToRules(document.getElementById('reject_description_phrase_rules').value, 'phrase'),
         reject_description_regex_rules: textToRules(document.getElementById('reject_description_regex_rules').value, 'pattern'),
+        onboarding_settings: {
+          title_extraction_lookback_years: Number(document.getElementById('os_lookback_years').value || 8),
+          title_extraction_min_months: Number(document.getElementById('os_min_months').value || 6),
+          max_target_patterns: Number(document.getElementById('os_max_target').value || 8),
+          max_adjacent_patterns: Number(document.getElementById('os_max_adjacent').value || 6),
+        },
       };
     }
 
@@ -1516,7 +1609,10 @@ ADMIN_HTML = """<!doctype html>
     async function saveSearchSettings() {
       const profile = collectProfile();
       await patchProfile(
-        { search_settings: profile.search_settings },
+        {
+          search_settings: profile.search_settings,
+          salary_preferences: profile.salary_preferences,
+        },
         'Search settings saved to profile.json.'
       );
     }
@@ -1525,22 +1621,20 @@ ADMIN_HTML = """<!doctype html>
       const profile = collectProfile();
       await patchProfile(
         {
-          candidate_summary: profile.candidate_summary,
           llm_profile_brief_mode: profile.llm_profile_brief_mode,
           llm_profile_brief: profile.llm_profile_brief,
-          salary_preferences: profile.salary_preferences,
+          preference_weights: profile.preference_weights,
           strengths: profile.strengths,
           cv_text: profile.cv_text,
           star_evidence_text: profile.star_evidence_text,
           capability_profile_rules: profile.capability_profile_rules,
-          llm_prompt_notes: profile.llm_prompt_notes,
           target_title_patterns: profile.target_title_patterns,
           adjacent_title_patterns: profile.adjacent_title_patterns,
           must_not_require_skills: profile.must_not_require_skills,
-          canberra_only_description_patterns: profile.canberra_only_description_patterns,
           reject_title_rules: profile.reject_title_rules,
           reject_description_phrase_rules: profile.reject_description_phrase_rules,
           reject_description_regex_rules: profile.reject_description_regex_rules,
+          onboarding_settings: profile.onboarding_settings,
         },
         'Candidate profile saved to profile.json.'
       );
@@ -1554,41 +1648,18 @@ ADMIN_HTML = """<!doctype html>
       );
     }
 
-    async function applyTuningSuggestions() {
-      const decisions = Array.from(document.querySelectorAll('.skill-choice'))
-        .map(element => ({
-          skill: element.dataset.skill || '',
-          choice: element.value || '',
-        }))
-        .filter(item => item.skill && item.choice);
-
-      if (!decisions.length) {
-        throw new Error('No capability suggestions are ready to apply yet.');
-      }
-
+    async function applyOneSkipDecision(skill, choice) {
       const response = await fetch('/api/tuning-decisions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decisions }),
+        body: JSON.stringify({ decisions: [{ skill, choice }] }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || 'Could not apply capability suggestions');
-      }
-      fillForm(payload.profile || {});
-      await loadReviewData();
-      showStatus(payload.message || 'Capability suggestions applied to profile.json.', 'ok');
+      if (!response.ok) throw new Error(payload.error || 'Could not apply');
+      return payload;
     }
 
     document.getElementById('save_search').addEventListener('click', async () => {
-      try {
-        await saveSearchSettings();
-      } catch (error) {
-        showStatus(error.message, 'error');
-      }
-    });
-
-    document.getElementById('save_linkedin').addEventListener('click', async () => {
       try {
         await saveSearchSettings();
       } catch (error) {
@@ -1614,13 +1685,6 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
-    document.getElementById('save_review_controls').addEventListener('click', async () => {
-      try {
-        await saveReviewControls();
-      } catch (error) {
-        showStatus(error.message, 'error');
-      }
-    });
 
     applyLearningButton.addEventListener('click', async () => {
       applyLearningButton.disabled = true;
@@ -1670,18 +1734,6 @@ ADMIN_HTML = """<!doctype html>
 
     document.getElementById('open_onboarding').addEventListener('click', () => {
       window.location.href = '/start';
-    });
-
-    document.getElementById('reload_profile').addEventListener('click', async () => {
-      try {
-        await Promise.all([
-          loadProfile(),
-          loadReviewData(),
-        ]);
-        showStatus('Profile and tuning suggestions reloaded.', 'ok');
-      } catch (error) {
-        showStatus(error.message, 'error');
-      }
     });
 
     document.getElementById('refresh_review_data').addEventListener('click', async () => {
@@ -1752,17 +1804,63 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
-    document.getElementById('apply_tuning_suggestions').addEventListener('click', async () => {
-      applyTuningSuggestionsButton.disabled = true;
-      showInlineStatus(tuningStatusEl, 'Applying capability suggestions...', 'loading');
+    document.getElementById('tuning_suggestions_panel').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.confirm-skill-btn');
+      if (!btn) return;
+      const card = btn.closest('.review-card');
+      const select = card?.querySelector('.skill-choice');
+      const skill = btn.dataset.skill;
+      const choice = select?.value;
+      if (!skill || !choice) return;
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
       try {
-        await applyTuningSuggestions();
-        showInlineStatus(tuningStatusEl, 'Capability suggestions applied.', 'ok');
+        await applyOneSkipDecision(skill, choice);
+        card.style.opacity = '0.4';
+        card.style.pointerEvents = 'none';
+        btn.textContent = 'Applied';
       } catch (error) {
+        btn.disabled = false;
+        btn.textContent = 'Confirm';
         showStatus(error.message, 'error');
-        showInlineStatus(tuningStatusEl, error.message, 'error');
-      } finally {
-        applyTuningSuggestionsButton.disabled = document.querySelectorAll('.skill-choice').length === 0;
+      }
+    });
+
+    document.getElementById('tuning_suggestions_panel').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.add-phrase-exclusion-btn');
+      if (!btn) return;
+      const card = btn.closest('.review-card');
+      const reason = btn.dataset.reason || '';
+      const suffix = reason.split(':').slice(1).join(':').replace(/_/g, ' ').trim().toLowerCase();
+      if (!suffix) return;
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        const response = await fetch('/api/rule/phrase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phrase: suffix, reason: 'low-fit specialist area' }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Could not add rule');
+        card.style.opacity = '0.4';
+        card.style.pointerEvents = 'none';
+        btn.textContent = 'Added';
+      } catch (error) {
+        btn.disabled = false;
+        btn.textContent = 'Add to exclusions';
+        showStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('tuning_suggestions_panel').addEventListener('click', (e) => {
+      const btn = e.target.closest('.dismiss-rule-card-btn');
+      if (!btn) return;
+      const card = btn.closest('.review-card');
+      if (card) {
+        card.style.opacity = '0.4';
+        card.style.pointerEvents = 'none';
+        btn.textContent = 'Dismissed';
       }
     });
 
@@ -2105,11 +2203,6 @@ class AdminHandler(BaseHTTPRequestHandler):
                 merged_patch.get("capability_profile_rules", []),
             )
 
-        if merged_patch.get("llm_prompt_notes"):
-            merged_patch["llm_prompt_notes"] = list(dict.fromkeys([
-                *current.get("llm_prompt_notes", []),
-                *merged_patch.get("llm_prompt_notes", []),
-            ]))[:30]
 
         merged_cv_text = AdminHandler._combine_text_sections(current.get("cv_text", ""), raw_text)
         if merged_cv_text:
@@ -2131,23 +2224,15 @@ class AdminHandler(BaseHTTPRequestHandler):
                 ),
             }
 
-        final_summary = str(
-            merged_patch.get("candidate_summary")
-            or current.get("candidate_summary")
-            or ""
-        ).strip()
         final_strengths = merged_patch.get("strengths") or current.get("strengths", [])
         final_rules = merged_patch.get("capability_profile_rules") or current.get("capability_profile_rules", [])
-        final_notes = merged_patch.get("llm_prompt_notes") or current.get("llm_prompt_notes", [])
         brief_mode = str(
             merged_patch.get("llm_profile_brief_mode", current.get("llm_profile_brief_mode", "auto")) or "auto"
         ).strip().lower()
         if brief_mode != "manual":
             llm_profile_brief = build_llm_profile_brief(
-                summary=final_summary,
                 strengths=final_strengths,
                 capability_rules=final_rules,
-                notes=final_notes,
             )
             if llm_profile_brief:
                 merged_patch["llm_profile_brief"] = llm_profile_brief
@@ -2170,18 +2255,24 @@ class AdminHandler(BaseHTTPRequestHandler):
             normalized["llm_profile_brief"] = str(normalized.get("llm_profile_brief") or "").strip()
         else:
             auto_brief = build_llm_profile_brief(
-                summary=str(normalized.get("candidate_summary", current.get("candidate_summary", "")) or "").strip(),
                 strengths=normalized.get("strengths", current.get("strengths", [])),
                 capability_rules=normalized.get(
                     "capability_profile_rules",
                     current.get("capability_profile_rules", []),
                 ),
-                notes=normalized.get("llm_prompt_notes", current.get("llm_prompt_notes", [])),
             )
             normalized["llm_profile_brief"] = auto_brief
 
         if "star_evidence_text" in normalized:
             normalized["star_evidence_text"] = str(normalized.get("star_evidence_text") or "").strip()
+        if "cv_text" in normalized:
+            new_cv = str(normalized.get("cv_text") or "").strip()
+            if new_cv:
+                extracted = extract_strengths_from_cv(new_cv)
+                if extracted:
+                    existing = current.get("strengths") or []
+                    merged = list(dict.fromkeys([*existing, *extracted]))[:20]
+                    normalized.setdefault("strengths", merged)
         if "cv_text" in normalized and "evidence_tiers" not in normalized:
             inferred_tiers = build_evidence_tiers_from_sections([{
                 "label": "Primary CV",
@@ -2598,7 +2689,8 @@ class AdminHandler(BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
                 materials = save_source_materials(payload) if payload else load_source_materials(create_if_missing=True)
-                result = import_source_materials_to_profile(materials)
+                result = run_onboarding(materials)
+                result["materials"] = materials
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
@@ -2612,12 +2704,34 @@ class AdminHandler(BaseHTTPRequestHandler):
                 if not isinstance(files, list):
                     raise ValueError("files must be a list")
                 materials = persist_uploaded_source_pack(files, extra_text=extra_text)
-                result = import_source_materials_to_profile(materials)
+                result = run_onboarding(materials)
                 result["materials"] = materials
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
             self._send_json(200, result)
+            return
+        if self.path == "/api/onboarding/confirm-title-patterns":
+            try:
+                payload = self._read_json_body()
+                target = [str(p).strip() for p in payload.get("target_title_patterns", []) if str(p).strip()]
+                adjacent = [str(p).strip() for p in payload.get("adjacent_title_patterns", []) if str(p).strip()]
+                keyword = str(payload.get("search_keyword") or "").strip()
+                if not target:
+                    raise ValueError("target_title_patterns must not be empty")
+                profile_patch: dict = {"target_title_patterns": target}
+                if adjacent:
+                    profile_patch["adjacent_title_patterns"] = adjacent
+                if keyword:
+                    current = load_profile()
+                    search_settings = dict(current.get("search_settings", {}))
+                    search_settings["keywords"] = keyword
+                    profile_patch["search_settings"] = search_settings
+                updated = patch_profile(profile_patch)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, {"ok": True, "message": "Title patterns and search keyword saved.", "profile": updated})
             return
         if self.path in {"/api/tuning-decisions", "/api/skill-decisions"}:
             try:
@@ -2639,6 +2753,26 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "profile": updated,
                 },
             )
+            return
+        if self.path == "/api/rule/phrase":
+            try:
+                payload = self._read_json_body()
+                phrase = str(payload.get("phrase") or "").strip().lower()
+                reason = str(payload.get("reason") or "").strip()
+                if not phrase:
+                    raise ValueError("phrase is required")
+                profile = load_profile()
+                existing = list(profile.get("reject_description_phrase_rules", []))
+                if not any(str(r.get("phrase") or "").strip().lower() == phrase for r in existing):
+                    existing.append({"phrase": phrase, "reason": reason or f"DESC_REJECT:{phrase}"})
+                    profile["reject_description_phrase_rules"] = existing
+                    updated = save_profile(profile)
+                else:
+                    updated = profile
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, {"ok": True, "message": f"Phrase rule added: {phrase}", "profile": updated})
             return
         if self.path == "/api/telegram/sync":
             try:

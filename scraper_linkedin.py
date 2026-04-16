@@ -6,6 +6,7 @@ filtering, enrichment, LLM gate, and dashboard rendering pipeline works unchange
 """
 
 import re
+import sys
 from typing import List, Set
 
 from filters import passes_content_filters, passes_quick_card_filters, passes_title_filters
@@ -46,6 +47,8 @@ class LinkedInScraper(BaseJobScraper):
             deterministic_review_outcome,
             evaluate_competitive_signal_alignment,
             finalize_record,
+            hard_block_entries,
+            hard_block_reasons,
         )
 
         kept_records: List[dict] = []
@@ -143,7 +146,7 @@ class LinkedInScraper(BaseJobScraper):
 
                 # History reuse check
                 history_entry = self.job_history.get(job_key, {})
-                if can_reuse_kept_job(history_entry, record):
+                if can_reuse_kept_job(history_entry, record, self.profile):
                     record = apply_kept_job_reuse(record, history_entry)
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     kept_records.append(record)
@@ -155,6 +158,8 @@ class LinkedInScraper(BaseJobScraper):
                     record["reject_reason"] = "NO_DETAILS"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
+                record["fit_source_text"] = details_text
+                record["details_status"] = "ok"
 
                 # Skill observations
                 for skill in extract_detected_skills(details_text):
@@ -189,6 +194,24 @@ class LinkedInScraper(BaseJobScraper):
                 record["competitive_signals"] = [
                     evaluate_competitive_signal_alignment(s, self.profile) for s in raw_signals
                 ]
+                hard_block_matches = hard_block_entries(
+                    {
+                        "fit_source_text": details_text,
+                        "competitive_signals": record.get("competitive_signals"),
+                    },
+                    self.profile,
+                )
+                record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
+                if record["hard_block_reasons"]:
+                    hard_block_category = hard_block_matches[0].get("category") or "hard_block"
+                    record["content_reason"] = f"DESC_HARD_BLOCK:{hard_block_category}"
+                    record["reject_reason"] = record["content_reason"]
+                    print(
+                        f"[LinkedIn] REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | "
+                        f"{'; '.join(record['hard_block_reasons'])}"
+                    )
+                    finalize_record(self.job_history, audit_rows, record, self.run_iso)
+                    continue
                 record["role_snapshot"] = build_role_summary(record, details_text, self.profile)
                 record["fit_highlights"] = build_fit_highlights(record, details_text, self.profile)
                 record["fit_watchout_meta"] = build_watchout_entries(
@@ -259,6 +282,10 @@ class LinkedInScraper(BaseJobScraper):
         hours_old = int(search_settings.get("linkedin_hours_old", 24) or 24)
         results_wanted = int(search_settings.get("linkedin_results_per_search", 25) or 25)
         easy_apply = search_settings.get("linkedin_easy_apply_only")  # None / True / False
+        test_scrape_mode = "--test-scrape-mode" in set(sys.argv[1:])
+        if test_scrape_mode:
+            hours_old = max(hours_old, max(date_range_days, 3) * 24)
+            results_wanted = max(results_wanted, 40)
 
         targets = []
         for raw_loc in locations:

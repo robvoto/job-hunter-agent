@@ -26,6 +26,18 @@ SELECTOR_SHORT_DESCRIPTION = '[data-automation="jobShortDescription"]'
 SELECTOR_DETAILS = '[data-automation="jobAdDetails"]'
 
 SEEK_JOBS_BASE_URL = "https://www.seek.com.au/jobs"
+DETAIL_PAGE_CHALLENGE_MARKERS = (
+    "help us keep seek secure",
+    "enable javascript and cookies to continue",
+    "verification successful. waiting for www.seek.com.au to respond",
+    "__cf_chl",
+    "challenge-error-text",
+)
+DETAIL_PAGE_BLOCK_MARKERS = (
+    "access denied",
+    "temporarily unavailable",
+    "request unsuccessful",
+)
 
 # ---------------------------------------------------------------------------
 # Private helpers (not exported)
@@ -126,12 +138,18 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
     return targets
 
 
-def fetch_job_details_text(detail_page, full_url: str) -> str:
-    try:
-        detail_page.goto(full_url, wait_until="domcontentloaded")
-    except Exception:
-        return ""
+def classify_detail_page_text(text: str) -> str:
+    lowered = re.sub(r"\s+", " ", (text or "").strip().lower())
+    if not lowered:
+        return "empty"
+    if any(marker in lowered for marker in DETAIL_PAGE_CHALLENGE_MARKERS):
+        return "challenge_page"
+    if any(marker in lowered for marker in DETAIL_PAGE_BLOCK_MARKERS):
+        return "blocked_page"
+    return "ok"
 
+
+def _expand_detail_page(detail_page) -> None:
     for selector in [
         'button:has-text("Show more")',
         'button:has-text("Read more")',
@@ -149,23 +167,65 @@ def fetch_job_details_text(detail_page, full_url: str) -> str:
         except Exception:
             continue
 
-    try:
-        detail_page.wait_for_selector(SELECTOR_DETAILS, timeout=8000)
-        details_text = (detail_page.text_content(SELECTOR_DETAILS) or "").strip()
-        if details_text:
-            return details_text
-    except Exception:
-        pass
+
+def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> dict:
+    last_status = "empty"
+    last_text = ""
 
     try:
-        detail_page.wait_for_load_state("networkidle", timeout=4000)
+        detail_page.goto(full_url, wait_until="domcontentloaded")
     except Exception:
-        pass
+        return {"text": "", "status": "navigation_error", "retryable": False}
 
-    try:
-        return (detail_page.text_content("body") or "").strip()
-    except Exception:
-        return ""
+    for attempt_index in range(max(attempts, 1)):
+        _expand_detail_page(detail_page)
+
+        details_text = ""
+        try:
+            detail_page.wait_for_selector(SELECTOR_DETAILS, timeout=8000)
+            details_text = (detail_page.text_content(SELECTOR_DETAILS) or "").strip()
+        except Exception:
+            details_text = ""
+
+        details_status = classify_detail_page_text(details_text)
+        if details_text and details_status == "ok":
+            return {"text": details_text, "status": "ok", "retryable": False}
+
+        try:
+            detail_page.wait_for_load_state("networkidle", timeout=4000)
+        except Exception:
+            pass
+
+        try:
+            body_text = (detail_page.text_content("body") or "").strip()
+        except Exception:
+            body_text = ""
+
+        body_status = classify_detail_page_text(body_text)
+        if body_text and body_status == "ok":
+            return {"text": body_text, "status": "ok", "retryable": False}
+
+        last_text = body_text or details_text or ""
+        last_status = body_status if body_text else details_status
+        should_retry = last_status in {"challenge_page", "blocked_page"} and attempt_index < (attempts - 1)
+        if not should_retry:
+            break
+        try:
+            detail_page.wait_for_timeout(2500 * (attempt_index + 1))
+            detail_page.reload(wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            break
+
+    return {
+        "text": "",
+        "status": last_status,
+        "retryable": last_status in {"challenge_page", "blocked_page"},
+        "raw_text": last_text[:500],
+    }
+
+
+def fetch_job_details_text(detail_page, full_url: str) -> str:
+    return str(fetch_job_details_payload(detail_page, full_url).get("text") or "")
 
 
 def stable_job_key(full_url: Optional[str]) -> Optional[str]:
