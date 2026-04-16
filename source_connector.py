@@ -2167,15 +2167,12 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         if blocking_reasons:
             missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
     else:
-        display_record["fit_source_text"] = ""
         role_summary = stored_snapshot
-        display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
-        fit_highlights = list(record.get("fit_highlights") or [])
-        soft_risk_reasons = list(record.get("soft_risk_reasons") or [])
-        missing_evidence = list(record.get("missing_evidence") or [])
-        blocking_reasons = hard_block_reasons(display_record, active_profile)
-        if blocking_reasons:
-            missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
+        display_record["competitive_signals"] = []
+        fit_highlights = []
+        soft_risk_reasons = []
+        missing_evidence = ["LOW_CONFIDENCE: full job description not captured clearly enough"]
+        blocking_reasons = []
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
@@ -4246,8 +4243,10 @@ def _seek_scrape_to_records(
                                 continue
                             record["fit_source_text"] = details_text
                             record["full_description"] = details_text
-                            record["fit_confidence"] = "HIGH"
                             record["description_source"] = details_payload.get("source") or "jobAdDetails"
+                            source = str(record.get("description_source") or "").strip().lower()
+                            is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+                            record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
 
                             for skill in extract_detected_skills(details_text):
                                 skill_observations.append(

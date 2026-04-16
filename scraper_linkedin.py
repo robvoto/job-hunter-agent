@@ -37,6 +37,8 @@ class LinkedInScraper(BaseJobScraper):
         # enrichment functions defined in source_connector)
         from source_connector import (  # noqa: PLC0415
             MAX_LLM_CHARS,
+            MIN_TRUSTED_DESCRIPTION_LENGTH,
+            TRUSTED_DESCRIPTION_SOURCES,
             build_fit_highlights,
             build_risk_and_missing_evidence,
             build_role_summary,
@@ -161,7 +163,9 @@ class LinkedInScraper(BaseJobScraper):
                 record["fit_source_text"] = details_text
                 record["full_description"] = details_text
                 record["description_source"] = "linkedin_full_description"
-                record["fit_confidence"] = "HIGH"
+                source = str(record.get("description_source") or "").strip().lower()
+                is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+                record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
                 record["details_status"] = "ok"
 
                 # Skill observations
@@ -225,6 +229,8 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 record["soft_risk_reasons"] = soft_risk_reasons
                 record["missing_evidence"] = missing_evidence
+                record["fit_watchout_meta"] = []
+                record["fit_watchouts"] = []
 
                 # LLM gate
                 deterministic_review = deterministic_review_outcome(
