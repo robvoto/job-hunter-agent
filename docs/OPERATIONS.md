@@ -55,7 +55,7 @@ python source_connector.py --rebuild-dashboard
 Run the local UI:
 
 ```powershell
-python admin_api.py
+python local_server.py
 ```
 
 ## Dashboard Model

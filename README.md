@@ -81,7 +81,7 @@ python source_connector.py --rebuild-dashboard
 Run the local web UI:
 
 ```powershell
-python admin_api.py
+python local_server.py
 ```
 
 Run the daily local agent once:

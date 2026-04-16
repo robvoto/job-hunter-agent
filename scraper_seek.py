@@ -189,7 +189,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 
         details_status = classify_detail_page_text(details_text)
         if details_text and details_status == "ok":
-            return {"text": details_text, "status": "ok", "retryable": False}
+            return {"text": details_text, "status": "ok", "source": "jobAdDetails", "retryable": False}
 
         try:
             detail_page.wait_for_load_state("networkidle", timeout=4000)
@@ -203,7 +203,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 
         body_status = classify_detail_page_text(body_text)
         if body_text and body_status == "ok":
-            return {"text": body_text, "status": "ok", "retryable": False}
+            return {"text": body_text, "status": "ok", "source": "body", "retryable": False}
 
         last_text = body_text or details_text or ""
         last_status = body_status if body_text else details_status

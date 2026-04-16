@@ -3132,5 +3132,8 @@ class AdminHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), AdminHandler)
-    print(f"Admin console listening at http://{HOST}:{PORT}/admin")
+    print(f"Local server running at http://{HOST}:{PORT}")
+    print(f"Dashboard: http://{HOST}:{PORT}/dashboard")
+    print(f"Admin: http://{HOST}:{PORT}/admin")
+    print(f"Onboarding: http://{HOST}:{PORT}/start")
     server.serve_forever()

@@ -14,8 +14,8 @@ Use it alongside:
 
 Core runtime pieces:
 
-- `admin_api.py`
-  Local web UI, onboarding route, admin route, and profile/review APIs.
+- `local_server.py`
+  Local web server for the admin console, dashboard, onboarding UI, and API endpoints.
 
 - `source_documents.py`
   Local source-pack persistence and source-document import into `profile.json`.

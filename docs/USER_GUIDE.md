@@ -15,7 +15,7 @@ That is the current source connector, not the final limit of the product.
 1. Start the local web UI:
 
 ```powershell
-python admin_api.py
+python local_server.py
 ```
 
 2. Open:

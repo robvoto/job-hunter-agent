@@ -16,7 +16,7 @@ import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright
@@ -106,10 +106,13 @@ KEEP_SNAPSHOT_FIELDS = (
     "search_keywords",
     "fit_source_text",
     "details_status",
+    "description_source",
     "role_snapshot",
     "fit_highlights",
     "fit_watchouts",
     "fit_watchout_meta",
+    "soft_risk_reasons",
+    "missing_evidence",
     "competitive_signals",
     "hard_block_reasons",
 )
@@ -685,172 +688,42 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     return dedupe_preserve_order(highlights)[:4]
 
 
-def build_watchout_entries(
+def build_risk_and_missing_evidence(
     details_text: str,
     title_reason: Optional[str],
     profile: dict,
-    existing_entries: Optional[List[dict]] = None,
     competitive_signals: Optional[List[dict]] = None,
-) -> List[dict]:
-    entries: List[dict] = []
+) -> Tuple[List[str], List[str]]:
+    risks: List[str] = []
+    missing: List[str] = []
     lowered = compact_whitespace(details_text).lower()
     capability_matches = find_profile_capability_matches(details_text, profile)
 
-    def add_entry(
-        text: str,
-        severity: str = "medium",
-        kind: str = "watchout",
-        category: str = "",
-    ) -> None:
-        cleaned = compact_whitespace(text)
-        if not cleaned:
-            return
-        entries.append({"text": cleaned, "severity": severity, "kind": kind, "category": category})
-
     if title_reason == "TITLE_POTENTIAL_MATCH":
-        add_entry("Systems Analyst title rather than direct BA title", "medium", category="adjacent_title")
+        risks.append("Adjacent title match rather than direct target role")
 
-    handled_must_not: Set[str] = set()
-    d365_aliases = ["d365", "dynamics 365", "power platform", "power apps", "power automate"]
-    d365_strength = find_requirement_strength(details_text, d365_aliases)
-    if d365_strength:
-        add_entry(
-            "Dynamics 365 / Power Platform not evidenced",
-            severity_from_requirement_strength(d365_strength, "medium"),
-            category="d365_power_platform",
-        )
-        handled_must_not.update({"d365", "dynamics 365"})
-
-    erp_aliases = ["erp", "vendor evaluation", "vendor selection", "supply chain", "commercial functions"]
-    erp_strength = find_requirement_strength(details_text, erp_aliases)
-    if any(text_contains_term(lowered, alias) for alias in erp_aliases):
-        erp_severity = recency_adjusted_severity(
-            profile,
-            ["erp", "vendor evaluation", "vendor selection", "supply chain", "commercial functions", "salesforce"],
-            severity_from_requirement_strength(erp_strength or "mentioned", "high"),
-        )
-        add_entry("ERP strategy / vendor selection depth may be limited", erp_severity, category="erp_platform")
-
-    data_ml_aliases = ["data science", "machine learning", "predictive modelling", "advanced analytics", "ml"]
-    data_ml_strength = find_requirement_strength(details_text, data_ml_aliases)
-    if any(text_contains_term(lowered, alias) for alias in data_ml_aliases):
-        add_entry(
-            "Data / ML depth is not strongly evidenced",
-            severity_from_requirement_strength(data_ml_strength or "desirable", "light"),
-            category="data_ml",
-        )
-
-    filtered = [item for item in capability_matches["must_not"] if item.lower() not in handled_must_not] if capability_matches["must_not"] else []
-    if filtered:
-        add_entry(f"{list_to_phrase(filtered[:2])} not evidenced", "high", category="must_not_platform")
+    if capability_matches["must_not"]:
+        missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not evidenced")
 
     if capability_matches["low_fit"]:
-        add_entry(
-            f"{list_to_phrase(capability_matches['low_fit'][:2])} looks niche for your background",
-            "medium",
-            category="low_fit_specialist",
-        )
+        risks.append(f"{list_to_phrase(capability_matches['low_fit'][:2]).capitalize()} looks niche for your background")
 
-    if "energy trading" in lowered or "knowledge of the nem" in lowered:
-        add_entry("Energy trading domain experience not evidenced", "medium", category="energy_trading")
-    if "treasury" in lowered or "core banking" in lowered or "loan systems" in lowered:
-        treasury_severity = recency_adjusted_severity(
-            profile,
-            ["treasury", "banking", "core banking", "loan systems", "financial management"],
-            "medium",
-        )
-        add_entry("Treasury / banking domain depth may be limited", treasury_severity, category="finance_treasury")
-    if "banking" in lowered or "transaction banking" in lowered:
-        banking_severity = recency_adjusted_severity(
-            profile,
-            ["banking", "transaction banking", "payments", "savings", "investments"],
-            "medium",
-        )
-        add_entry("Banking domain depth may be limited", banking_severity, category="banking_domain")
-    if text_contains_term(lowered, "guidewire"):
-        old_year = find_profile_experience_year(profile, ["guidewire"])
-        if old_year:
-            add_entry(f"Guidewire exposure is older from {old_year}", "light", category="insurance_platform")
-    if text_contains_term(lowered, "sap") or text_contains_term(lowered, "edi"):
-        old_year = find_profile_experience_year(profile, ["sap", "edi"])
-        if old_year:
-            add_entry(f"SAP / EDI exposure is older from {old_year}", "light", category="erp_platform")
     if re.search(r"\bmust be based in canberra\b|\bmust reside in canberra\b|\bonsite in canberra\b", lowered):
-        add_entry("Canberra onsite requirement needs checking", "high", category="canberra_travel")
+        missing.append("Canberra onsite attendance is explicitly required")
     elif re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", lowered):
-        add_entry("Canberra onsite pattern looks heavier than preferred", "medium", category="canberra_travel")
+        risks.append("Canberra onsite pattern looks heavier than preferred")
 
-    for existing in existing_entries or []:
-        if not isinstance(existing, dict):
-            continue
-        add_entry(
-            str(existing.get("text") or ""),
-            str(existing.get("severity") or "medium"),
-            str(existing.get("kind") or "watchout"),
-            str(existing.get("category") or ""),
-        )
+    for signal in (competitive_signals or []):
+        if int(signal.get("adjustment", 0)) < 0:
+            alignment = compact_whitespace(signal.get("alignment") or "").lower()
+            label = compact_whitespace(signal.get("watchout_label") or signal.get("name") or "")
+            if label:
+                if alignment == "weak":
+                    missing.append(f"{label} required but weakly evidenced")
+                else:
+                    risks.append(f"{label} required but only partially evidenced")
 
-    signal_record = {"fit_source_text": details_text, "competitive_signals": competitive_signals or []}
-    for competitive_entry in competitive_gap_watchouts(signal_record, profile):
-        add_entry(
-            competitive_entry["text"],
-            competitive_entry["severity"],
-            str(competitive_entry.get("kind") or "competitive_signal"),
-            str(competitive_entry.get("category") or ""),
-        )
-
-    severity_rank = {"light": 1, "medium": 2, "high": 3}
-    best_by_key: Dict[str, dict] = {}
-    ordered_keys: List[str] = []
-    for entry in entries:
-        text_key = str(entry.get("text") or "").strip().lower()
-        category_key = normalize_watchout_category(
-            str(entry.get("category") or ""),
-            str(entry.get("text") or ""),
-        )
-        dedupe_key = category_key or text_key
-        if not dedupe_key:
-            continue
-        existing = best_by_key.get(dedupe_key)
-        if existing is None:
-            best_by_key[dedupe_key] = entry
-            ordered_keys.append(dedupe_key)
-            continue
-        existing_rank = severity_rank.get(str(existing.get("severity") or "medium").lower(), 2)
-        current_rank = severity_rank.get(str(entry.get("severity") or "medium").lower(), 2)
-        if current_rank > existing_rank or (
-            current_rank == existing_rank
-            and len(str(entry.get("text") or "")) < len(str(existing.get("text") or ""))
-        ):
-            best_by_key[dedupe_key] = entry
-
-    deduped = [best_by_key[key] for key in ordered_keys if key in best_by_key]
-    return deduped[:4]
-
-
-def build_watchout_lines(details_text: str, title_reason: Optional[str], profile: dict) -> List[str]:
-    return [entry["text"] for entry in build_watchout_entries(details_text, title_reason, profile)]
-
-
-def normalize_watchout_category(category: str, text: str) -> str:
-    lowered = f"{compact_whitespace(category).lower()} {compact_whitespace(text).lower()}".strip()
-    if any(token in lowered for token in ("erp", "vendor selection", "vendor evaluation", "sap", "edi", "platform implementation", "netsuite", "oracle")):
-        return "erp_platform"
-    if any(token in lowered for token in ("finance", "treasury", "banking", "accounting", "general ledger", "accounts payable", "accounts receivable", "reconciliation")):
-        return "finance_treasury"
-    if any(token in lowered for token in ("data / ml", "data ml", "analytics", "machine learning", "predictive", "bi", "business intelligence", "reporting")):
-        return "data_analytics"
-    if any(token in lowered for token in ("dynamics 365", "d365", "power platform", "power apps", "power automate")):
-        return "d365_power_platform"
-    if any(token in lowered for token in ("salesforce", "crm")):
-        return "crm_platform"
-    if any(token in lowered for token in ("insurance", "guidewire", "policycenter", "claimcenter", "underwriting", "claims")):
-        return "insurance_platform"
-    if any(token in lowered for token in ("canberra", "travel", "onsite")):
-        return "canberra_travel"
-    if any(token in lowered for token in ("energy trading", "nem")):
-        return "energy_trading"
-    return compact_whitespace(category).lower() or compact_whitespace(text).lower()
+    return dedupe_preserve_order(risks)[:4], dedupe_preserve_order(missing)[:4]
 
 
 def _normalized_aliases(values: List[str]) -> List[str]:
@@ -1100,7 +973,7 @@ def competitive_signal_assessments(record: dict, profile: Optional[dict] = None)
             return sanitized
 
     active_profile = profile or load_profile()
-    details_text = build_fit_source_text(record, include_watchouts=False)
+    details_text = build_fit_source_text(record, include_risks=False)
     signals = detect_competitive_signals(details_text, active_profile)
     return [evaluate_competitive_signal_alignment(signal, active_profile) for signal in signals]
 
@@ -1113,30 +986,6 @@ def competitive_fit_highlights(record: dict, profile: Optional[dict] = None) -> 
             if fit_label:
                 highlights.append(f"{fit_label} \u2713")
     return dedupe_preserve_order(highlights)[:2]
-
-
-def competitive_gap_watchouts(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    watchouts: List[dict] = []
-    for signal in competitive_signal_assessments(record, profile):
-        if int(signal.get("adjustment", 0)) >= 0:
-            continue
-        alignment = compact_whitespace(signal.get("alignment") or "").lower()
-        severity = "medium" if alignment == "partial" else "high"
-        label = compact_whitespace(signal.get("watchout_label") or signal.get("name") or "")
-        category = (
-            compact_whitespace(signal.get("name") or "")
-            .lower()
-            .replace(" and ", "_")
-            .replace(" ", "_")
-        )
-        if label:
-            watchouts.append({
-                "text": label,
-                "severity": severity,
-                "kind": "competitive_signal",
-                "category": category,
-            })
-    return watchouts[:2]
 
 
 def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -1238,7 +1087,6 @@ def compact_score_label(label: str) -> str:
         "Fit evidence bullets": "Evidence",
         "Salary/rate signal": "Salary",
         "Salary/rate below target": "Salary",
-        "Watchouts or specialist gaps": "Watchouts",
         "Already viewed by you": "Viewed",
     }
     if label in direct_map:
@@ -1349,7 +1197,7 @@ def weighted_points(value: int, weight: float) -> int:
     return -int(math.floor(abs(scaled) + 0.5))
 
 
-def build_fit_source_text(record: dict, include_watchouts: bool = True) -> str:
+def build_fit_source_text(record: dict, include_risks: bool = True) -> str:
     explicit_source = compact_whitespace(record.get("fit_source_text") or "")
     if explicit_source:
         return explicit_source
@@ -1360,7 +1208,9 @@ def build_fit_source_text(record: dict, include_watchouts: bool = True) -> str:
         record.get("teaser"),
         *(record.get("fit_highlights", []) or []),
     ]
-    if include_watchouts:
+    if include_risks:
+        values.extend(record.get("missing_evidence", []) or [])
+        values.extend(record.get("soft_risk_reasons", []) or [])
         values.extend(record.get("fit_watchouts", []) or [])
     for value in values:
         cleaned = compact_whitespace(value)
@@ -1474,44 +1324,6 @@ def profile_recency_multiplier(profile: dict, aliases: List[str]) -> float:
     return 0.3
 
 
-def lower_severity(severity: str) -> str:
-    order = ["light", "medium", "high"]
-    if severity not in order:
-        return severity
-    index = max(order.index(severity) - 1, 0)
-    return order[index]
-
-
-def raise_severity(severity: str) -> str:
-    order = ["light", "medium", "high"]
-    if severity not in order:
-        return severity
-    index = min(order.index(severity) + 1, len(order) - 1)
-    return order[index]
-
-
-def severity_from_requirement_strength(strength: str, default: str = "medium") -> str:
-    normalized = compact_whitespace(strength).lower()
-    if normalized == "essential":
-        return "high"
-    if normalized == "desirable":
-        return "light"
-    if normalized == "mentioned":
-        return default
-    return default
-
-
-def recency_adjusted_severity(profile: dict, aliases: List[str], base_severity: str) -> str:
-    multiplier = profile_recency_multiplier(profile, aliases)
-    if multiplier >= 1.0:
-        return lower_severity(base_severity)
-    if 0.0 < multiplier < 0.6:
-        return base_severity
-    if multiplier == 0.0 and base_severity == "medium":
-        return raise_severity(base_severity)
-    return base_severity
-
-
 def llm_description_fit_entry(record: dict) -> dict:
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     decision = str(record.get("llm_decision") or "").strip().upper()
@@ -1535,19 +1347,19 @@ def llm_description_fit_entry(record: dict) -> dict:
     return {"label": label, "value": value}
 
 
-def deterministic_review_outcome(record: dict, fit_highlights: List[str], fit_watchout_meta: List[dict]) -> Optional[dict]:
+def deterministic_review_outcome(record: dict, fit_highlights: List[str], missing_evidence: List[str], soft_risk_reasons: List[str]) -> Optional[dict]:
     title_reason = str(record.get("title_reason") or "")
-    high_watchouts = sum(1 for item in fit_watchout_meta if str(item.get("severity") or "").lower() == "high")
-    medium_watchouts = sum(1 for item in fit_watchout_meta if str(item.get("severity") or "").lower() == "medium")
     strong_signal_count = len(fit_highlights)
+    high_risks = len(missing_evidence)
+    medium_risks = len(soft_risk_reasons)
 
-    if high_watchouts >= 2 and strong_signal_count <= 1:
+    if high_risks >= 2 and strong_signal_count <= 1:
         return {"decision": "REJECT", "grade": "MISMATCH"}
-    if title_reason == "TITLE_POTENTIAL_MATCH" and high_watchouts >= 1 and strong_signal_count <= 1:
+    if title_reason == "TITLE_POTENTIAL_MATCH" and high_risks >= 1 and strong_signal_count <= 1:
         return {"decision": "REJECT", "grade": "POOR"}
-    if title_reason == "OK" and strong_signal_count >= 4 and high_watchouts == 0:
+    if title_reason == "OK" and strong_signal_count >= 4 and high_risks == 0:
         return {"decision": "KEEP", "grade": "STRONG"}
-    if title_reason == "OK" and strong_signal_count >= 3 and high_watchouts == 0 and medium_watchouts <= 1:
+    if title_reason == "OK" and strong_signal_count >= 3 and high_risks == 0 and medium_risks <= 1:
         return {"decision": "KEEP", "grade": "SOLID"}
     return None
 
@@ -1698,67 +1510,6 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
     return fallback[:1].upper() + fallback[1:]
 
 
-def watchout_penalty(record: dict, profile: Optional[dict] = None) -> int:
-    watchout_meta = record.get("fit_watchout_meta") or []
-    if isinstance(watchout_meta, list) and watchout_meta:
-        severity_points = {"light": 2, "medium": 5, "high": 8}
-        penalty = 0
-        for entry in watchout_meta[:4]:
-            if str((entry or {}).get("kind") or "").strip().lower() == "competitive_signal":
-                continue
-            severity = str((entry or {}).get("severity") or "medium").strip().lower()
-            penalty += severity_points.get(severity, 5)
-        return min(penalty, 14)
-
-    watchouts = [
-        str(item).strip().lower()
-        for item in record.get("fit_watchouts", [])
-        if str(item).strip()
-    ]
-    if not watchouts:
-        return 0
-
-    active_profile = profile or load_profile()
-    strong_keywords = {
-        "energy trading",
-        "trading experience",
-        "treasury",
-        "erp",
-        "vendor evaluation",
-        "vendor selection",
-        "supply chain",
-        "commercial functions",
-        "machine learning",
-        "data science",
-    }
-    low_fit_aliases: Set[str] = set()
-    for rule in active_profile.get("capability_profile_rules", []):
-        if not isinstance(rule, dict):
-            continue
-        level = str(rule.get("level") or "").strip().lower()
-        fit = str(rule.get("fit") or "").strip().lower()
-        if fit == "avoid" or level in {"low", "none"}:
-            name = str(rule.get("name") or "").strip().lower()
-            if name:
-                low_fit_aliases.add(name)
-            for alias in rule.get("aliases", []):
-                alias_text = str(alias).strip().lower()
-                if alias_text:
-                    low_fit_aliases.add(alias_text)
-
-    penalty = 0
-    for item in watchouts[:4]:
-        penalty += 4
-        matched_keywords = [keyword for keyword in strong_keywords if keyword in item]
-        if matched_keywords:
-            penalty += 2 + min(len(matched_keywords), 3)
-        if any(alias in item for alias in low_fit_aliases):
-            penalty += 3
-        if "desirable" in item or "preferred" in item or "bonus" in item:
-            penalty = max(penalty - 1, 1)
-    return min(penalty, 14)
-
-
 def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
     entries: List[dict] = []
     for signal in competitive_signal_assessments(record, profile):
@@ -1888,10 +1639,6 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     elif salary_score < 0:
         breakdown.append({"label": "Salary/rate below target", "value": salary_score})
 
-    watchout_score = weighted_points(watchout_penalty(record, active_profile), weights["fit"])
-    if watchout_score > 0:
-        breakdown.append({"label": "Watchouts or specialist gaps", "value": -watchout_score})
-
     if viewed_by_user(record) and not record.get("applied"):
         breakdown.append({"label": "Already viewed by you", "value": -3})
 
@@ -1985,12 +1732,18 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["fit_watchouts"] = snapshot.get("fit_watchouts") or []
     if not record.get("fit_watchout_meta"):
         record["fit_watchout_meta"] = snapshot.get("fit_watchout_meta") or []
+    if not record.get("soft_risk_reasons"):
+        record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []
+    if not record.get("missing_evidence"):
+        record["missing_evidence"] = snapshot.get("missing_evidence") or []
     if not record.get("competitive_signals"):
         record["competitive_signals"] = snapshot.get("competitive_signals") or []
     if not record.get("hard_block_reasons"):
         record["hard_block_reasons"] = snapshot.get("hard_block_reasons") or []
     if not compact_whitespace(record.get("details_status") or ""):
         record["details_status"] = snapshot.get("details_status") or ""
+    if not record.get("description_source"):
+        record["description_source"] = snapshot.get("description_source") or ""
 
     record["content_reason"] = snapshot.get("content_reason")
     record["llm_decision"] = snapshot.get("llm_decision")
@@ -2005,6 +1758,12 @@ def viewed_by_user(record: dict) -> bool:
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         return False
     return int(record.get("times_viewed", 0) or 0) > 0
+
+
+def is_description_trusted(record: dict) -> bool:
+    """Return True when fit_source_text came from the full job ad, not a card teaser fallback."""
+    source = str(record.get("description_source") or "").strip().lower()
+    return source in {"jobaddetails", "body"}
 
 
 def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> None:
@@ -2085,10 +1844,13 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "search_keywords": snapshot.get("search_keywords") or "",
         "fit_source_text": snapshot.get("fit_source_text") or "",
         "details_status": snapshot.get("details_status") or "",
+        "description_source": snapshot.get("description_source") or "",
         "role_snapshot": snapshot.get("role_snapshot") or "N/A",
         "fit_highlights": snapshot.get("fit_highlights") or [],
         "fit_watchouts": snapshot.get("fit_watchouts") or [],
         "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
+        "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
+        "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         "seen_before": True,
@@ -2159,9 +1921,12 @@ def build_hidden_dashboard_record(job_key: str, entry: dict, run_started_at: dat
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
         "fit_source_text": snapshot.get("fit_source_text") or "",
         "details_status": snapshot.get("details_status") or "",
+        "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
         "fit_watchouts": snapshot.get("fit_watchouts") or [],
         "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
+        "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
+        "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         "search_location": snapshot.get("search_location") or "N/A",
@@ -2228,9 +1993,12 @@ def build_applied_dashboard_record(job_key: str, entry: dict, run_started_at: da
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
         "fit_source_text": snapshot.get("fit_source_text") or "",
         "details_status": snapshot.get("details_status") or "",
+        "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
         "fit_watchouts": snapshot.get("fit_watchouts") or [],
         "fit_watchout_meta": snapshot.get("fit_watchout_meta") or [],
+        "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
+        "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         "search_location": snapshot.get("search_location") or "N/A",
@@ -2344,28 +2112,36 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     stored_snapshot = compact_whitespace(record.get("role_snapshot") or record.get("teaser") or "N/A")
     if stored_snapshot in {"", "N/A"}:
         stored_snapshot = synthesize_role_snapshot(record)
-    fit_source_text = build_fit_source_text(display_record, include_watchouts=False) or stored_snapshot
-    watchout_source_text = build_fit_source_text(display_record, include_watchouts=True) or fit_source_text
-    display_record["fit_source_text"] = watchout_source_text
+    description_trusted = is_description_trusted(record)
+    fit_source_text = build_fit_source_text(display_record, include_risks=False) or stored_snapshot
+    risk_source_text = build_fit_source_text(display_record, include_risks=True) or fit_source_text
+    display_record["fit_source_text"] = risk_source_text
     role_summary = build_role_summary(record, fit_source_text, active_profile)
     display_record["role_snapshot"] = role_summary
     display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
     fit_highlights = build_fit_highlights(record, fit_source_text, active_profile)
-    fit_watchout_meta = build_watchout_entries(
-        watchout_source_text,
-        title_reason,
-        active_profile,
-        existing_entries=record.get("fit_watchout_meta") if isinstance(record.get("fit_watchout_meta"), list) else None,
-        competitive_signals=display_record.get("competitive_signals") if isinstance(display_record.get("competitive_signals"), list) else None,
-    )
-    fit_watchouts = [entry["text"] for entry in fit_watchout_meta]
-    blocking_reasons = hard_block_reasons(display_record, active_profile)
-    if blocking_reasons:
-        fit_watchouts = dedupe_preserve_order([*blocking_reasons, *fit_watchouts])
+    if description_trusted:
+        soft_risk_reasons, missing_evidence = build_risk_and_missing_evidence(
+            risk_source_text,
+            title_reason,
+            active_profile,
+            competitive_signals=display_record.get("competitive_signals") if isinstance(display_record.get("competitive_signals"), list) else None,
+        )
+        blocking_reasons = hard_block_reasons(display_record, active_profile)
+        if blocking_reasons:
+            missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
+    else:
+        soft_risk_reasons = []
+        missing_evidence = []
+        blocking_reasons = hard_block_reasons(display_record, active_profile)
+        if blocking_reasons:
+            missing_evidence = dedupe_preserve_order([*blocking_reasons])
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["fit_highlights"] = fit_highlights
-    display_record["fit_watchouts"] = fit_watchouts
-    display_record["fit_watchout_meta"] = fit_watchout_meta
+    display_record["soft_risk_reasons"] = soft_risk_reasons
+    display_record["missing_evidence"] = missing_evidence
+    display_record["fit_watchouts"] = []
+    display_record["fit_watchout_meta"] = []
     fit_points = fit_score(display_record, scoring_profile)
     fit_label = score_to_match_label(fit_points)
     fit_tone_class = score_to_tone_class(fit_points)
@@ -2442,14 +2218,14 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             )
     context_bits = []
     if salary_fit_state == "below":
-        fit_watchouts = dedupe_preserve_order([
-            *fit_watchouts,
+        soft_risk_reasons = dedupe_preserve_order([
+            *soft_risk_reasons,
             "Salary is below target range",
         ])
     contract_item = assess_contract_preference(record, scoring_profile)
     if contract_item and int(contract_item.get("value", 0)) < 0:
-        fit_watchouts = dedupe_preserve_order([
-            *fit_watchouts,
+        soft_risk_reasons = dedupe_preserve_order([
+            *soft_risk_reasons,
             "Contract length is shorter than preferred",
         ])
     if seen_by_you and record.get("last_viewed_at"):
@@ -2470,8 +2246,10 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     note_bits: List[str] = []
     if fit_highlights:
         note_bits.append(f"Strongest fit: {fit_highlights[0]}.")
-    if fit_watchouts:
-        note_bits.append(f"Watchout: {fit_watchouts[0]}.")
+    if missing_evidence:
+        note_bits.append(f"Missing evidence: {missing_evidence[0]}.")
+    elif soft_risk_reasons:
+        note_bits.append(f"Risk: {soft_risk_reasons[0]}.")
     note_html = (
         f'<div class="job-note">{safe_html(" ".join(note_bits))}</div>'
         if note_bits
@@ -2485,11 +2263,25 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in fit_highlights)}</ul>'
             '</div>'
         )
-    if fit_watchouts:
+    if missing_evidence:
         insight_sections.append(
             '<div class="job-insight-group">'
-            '<strong>Possible gaps</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in fit_watchouts)}</ul>'
+            '<strong>Missing evidence</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in missing_evidence)}</ul>'
+            '</div>'
+        )
+    if soft_risk_reasons:
+        insight_sections.append(
+            '<div class="job-insight-group">'
+            '<strong>Risks</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in soft_risk_reasons)}</ul>'
+            '</div>'
+        )
+    elif not description_trusted:
+        insight_sections.append(
+            '<div class="job-insight-group job-insight-unavailable">'
+            '<strong>Risks & missing evidence</strong>'
+            '<p class="insight-unavailable-note">Unavailable \u2014 full job description was not captured for this role.</p>'
             '</div>'
         )
     if SHOW_SCORING_DEBUG and score_breakdown:
@@ -2539,12 +2331,14 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         + (
             f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" {button_data_attrs} title="Block similar titles from appearing in future results">Block similar titles</button>'
             '<div class="block-confirm" data-block-confirm hidden>'
-            '<span class="block-confirm-copy">Block similar titles based on: <strong data-block-phrase-preview></strong>. This will remove similar roles in future searches.</span>'
+            '<p class="block-confirm-copy">Block similar titles based on: <strong data-block-phrase-preview></strong></p>'
+            '<p class="block-confirm-sub">This will remove similar roles in future searches.</p>'
             '<div class="block-confirm-actions">'
-            '<button class="mini-button mini-button-primary" type="button" data-confirm-block>Confirm</button>'
+            '<button class="mini-button mini-button-primary" type="button" data-confirm-block>Confirm Block</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
             '</div>'
             '</div>'
+            '<span class="block-status" aria-live="polite"></span>'
             if not applied_record and not hidden_record else ""
         )
         + f'<div class="job-company">{company}</div>'
@@ -3320,6 +3114,15 @@ def render_html(
     .job-insight-group li {{
       margin: 4px 0;
     }}
+    .job-insight-unavailable strong {{
+      color: var(--muted);
+    }}
+    .insight-unavailable-note {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-style: italic;
+    }}
     .job-context {{
       margin: 0 0 14px;
       color: var(--muted);
@@ -3359,18 +3162,20 @@ def render_html(
       display: inline-block;
       background: none;
       border: none;
-      padding: 0 0 0 8px;
+      padding: 2px 0 0 8px;
       font-size: 0.78rem;
-      color: var(--muted);
+      color: var(--cool);
       cursor: pointer;
-      opacity: 0.6;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-decoration-color: rgba(29,78,216,0.45);
       vertical-align: middle;
       white-space: nowrap;
-      transition: opacity 0.15s;
+      transition: color 0.15s, text-decoration-color 0.15s;
     }}
     .title-block-btn:hover {{
-      opacity: 1;
-      color: var(--warm);
+      color: #1d4ed8;
+      text-decoration-color: #1d4ed8;
     }}
     .review-unhide {{
       background: var(--cool);
@@ -3394,12 +3199,30 @@ def render_html(
       background: rgba(237, 243, 255, 0.75);
       padding: 12px 14px;
       display: grid;
-      gap: 10px;
+      gap: 8px;
+    }}
+    .block-confirm[hidden] {{
+      display: none;
     }}
     .block-confirm-copy {{
       color: #334155;
       font-size: 0.92rem;
       line-height: 1.45;
+      margin: 0;
+    }}
+    .block-confirm-sub {{
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin: 0;
+    }}
+    .block-status {{
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }}
+    .block-status:empty {{
+      display: none;
     }}
     .block-confirm-actions {{
       display: flex;
@@ -3926,9 +3749,9 @@ def render_html(
 
     function hideBlockConfirm(card) {{
       const confirm = card?.querySelector('[data-block-confirm]');
-      if (confirm) {{
-        confirm.hidden = true;
-      }}
+      if (confirm) confirm.hidden = true;
+      const blockStatus = card?.querySelector('.block-status');
+      if (blockStatus) blockStatus.textContent = '';
     }}
 
     function escapeRegExp(value) {{
@@ -3960,30 +3783,25 @@ def render_html(
 
     function openBlockConfirm(button) {{
       const card = button.closest('.job-card');
-      if (!card) {{
-        return;
-      }}
+      if (!card) return;
       const confirm = card.querySelector('[data-block-confirm]');
-      const status = card.querySelector('.review-status');
+      const blockStatus = card.querySelector('.block-status');
       const phrase = (button.dataset.blockPhrase || '').trim();
       for (const panel of Array.from(document.querySelectorAll('[data-block-confirm]'))) {{
-        if (panel !== confirm) {{
-          panel.hidden = true;
-        }}
+        if (panel !== confirm) panel.hidden = true;
       }}
-      if (!confirm || !status) {{
-        return;
+      for (const s of Array.from(document.querySelectorAll('.block-status'))) {{
+        if (s !== blockStatus) s.textContent = '';
       }}
+      if (!confirm) return;
       if (!phrase) {{
-        status.textContent = 'Could not suggest a title keyword for this role yet.';
+        if (blockStatus) blockStatus.textContent = 'We couldn\u2019t identify a clear title pattern to block for this role.';
         confirm.hidden = true;
         return;
       }}
       const preview = confirm.querySelector('[data-block-phrase-preview]');
       const confirmButton = confirm.querySelector('[data-confirm-block]');
-      if (preview) {{
-        preview.textContent = phrase;
-      }}
+      if (preview) preview.textContent = phrase;
       if (confirmButton) {{
         confirmButton.dataset.blockPhrase = phrase;
         confirmButton.dataset.jobKey = button.dataset.jobKey || '';
@@ -3992,7 +3810,7 @@ def render_html(
         confirmButton.dataset.jobCompany = button.dataset.jobCompany || '';
         confirmButton.dataset.jobTeaser = button.dataset.jobTeaser || '';
       }}
-      status.textContent = '';
+      if (blockStatus) blockStatus.textContent = '';
       confirm.hidden = false;
     }}
 
@@ -4125,6 +3943,12 @@ def render_html(
         return;
       }}
 
+      const titleBlockBtn = event.target.closest('.title-block-btn');
+      if (titleBlockBtn) {{
+        openBlockConfirm(titleBlockBtn);
+        return;
+      }}
+
       const button = event.target.closest('.review-button');
       if (!button) {{
         const workspaceTab = event.target.closest('[data-workspace-target]');
@@ -4132,10 +3956,6 @@ def render_html(
           return;
         }}
         setActiveWorkspace(workspaceTab.dataset.workspaceTarget || 'potential');
-        return;
-      }}
-      if ((button.dataset.reviewAction || '') === 'block_similar') {{
-        openBlockConfirm(button);
         return;
       }}
       hideBlockConfirm(button.closest('.job-card'));
@@ -4255,6 +4075,8 @@ def _seek_scrape_to_records(
                             "fit_highlights": [],
                             "fit_watchouts": [],
                             "fit_watchout_meta": [],
+                            "soft_risk_reasons": [],
+                            "missing_evidence": [],
                             "competitive_signals": [],
                             "details_length": 0,
                         }
@@ -4384,6 +4206,7 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             record["fit_source_text"] = details_text
+                            record["description_source"] = details_payload.get("source") or "jobAdDetails"
 
                             for skill in extract_detected_skills(details_text):
                                 skill_observations.append(
@@ -4443,11 +4266,20 @@ def _seek_scrape_to_records(
                                 competitive_signals=record.get("competitive_signals") if isinstance(record.get("competitive_signals"), list) else None,
                             )
                             record["fit_watchouts"] = [entry["text"] for entry in record["fit_watchout_meta"]]
+                            record["soft_risk_reasons"], record["missing_evidence"] = build_risk_and_missing_evidence(
+                                details_text,
+                                title_reason,
+                                profile,
+                                competitive_signals=record.get("competitive_signals") if isinstance(record.get("competitive_signals"), list) else None,
+                            )
+                            record["fit_watchout_meta"] = []
+                            record["fit_watchouts"] = []
 
                             deterministic_review = deterministic_review_outcome(
                                 record,
                                 record["fit_highlights"],
-                                record["fit_watchout_meta"],
+                                record["missing_evidence"],
+                                record["soft_risk_reasons"],
                             )
                             if deterministic_review is not None:
                                 llm_review = deterministic_review

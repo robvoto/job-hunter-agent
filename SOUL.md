@@ -115,7 +115,7 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `source_connector.py` | Main job-source connector and dashboard builder |
 | `filters.py` | Deterministic title and content filtering |
 | `llm_gate.py` | Optional constrained LLM decision step |
-| `admin_api.py` | Local admin console and profile/review API |
+| `local_server.py` | Local web server for admin, dashboard, and API endpoints |
 | `agent_runner.py` | Local daily agent runner for collection, digest, and notification delivery |
 | `agent_settings.py` | Local agent settings and state helpers |
 | `profile_store.py` | Runtime profile loading, defaults, and persistence |

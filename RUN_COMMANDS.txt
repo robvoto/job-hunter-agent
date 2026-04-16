@@ -1,8 +1,3 @@
-ONLY 2 PAGE SCRAP
-=================
-
-python source_connector.py --max-pages 2 --no-llm
-
 JOB HUNTER AGENT - QUICK RUN COMMANDS
 =====================================
 
@@ -99,16 +94,16 @@ Use this when:
 - you want clean feedback on the current results without a new scrape
 
 
-ADMIN SERVER
+LOCAL SERVER
 ------------
 
-Start or restart admin:
-python admin_api.py
+Start or restart local server:
+python local_server.py
 
 Use this when:
 - you want to open `http://127.0.0.1:8765/admin`
 - you want to open `http://127.0.0.1:8765/dashboard`
-- you changed admin UI/server code and want the latest behavior
+- you changed the local server code and want the latest behavior
 
 
 OUTPUT FILE

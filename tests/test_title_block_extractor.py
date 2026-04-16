@@ -17,6 +17,7 @@ CASES = [
     # Post-separator discriminators
     ("Senior Business Analyst - Guidewire", "guidewire"),
     ("Senior BA - Payments", "payments"),
+    ("Business Analyst - Banking", "banking"),
     ("Business Analyst - Cyber, Cloud", "cyber"),
     ("Senior BA - ERP", "erp"),
     # Pre-separator token fallback (no separator, leftover non-generic token)
@@ -66,6 +67,9 @@ def test_guidewire():
 
 def test_payments():
     assert suggest_title_block_phrase("Senior BA - Payments") == "payments"
+
+def test_banking():
+    assert suggest_title_block_phrase("Business Analyst - Banking") == "banking"
 
 def test_cyber_first():
     assert suggest_title_block_phrase("Business Analyst - Cyber, Cloud") == "cyber"
