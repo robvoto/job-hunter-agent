@@ -882,6 +882,10 @@ ADMIN_HTML = """<!doctype html>
             <div class="field-help">Cap on adjacent_title_patterns extracted. Default 6.</div>
           </section>
         </div>
+        <div class="panel-actions" style="margin-top:20px;padding-top:18px;border-top:1px solid var(--line);">
+          <button class="primary" id="save_advanced_rules">Save Matching Rules</button>
+          <span class="inline-status" id="save_advanced_rules_status" aria-live="polite"></span>
+        </div>
       </section>
       </div>
     </section>
@@ -1738,6 +1742,38 @@ ADMIN_HTML = """<!doctype html>
       }
     });
 
+
+    document.getElementById('save_advanced_rules').addEventListener('click', async () => {
+      const btn = document.getElementById('save_advanced_rules');
+      const statusEl = document.getElementById('save_advanced_rules_status');
+      const originalLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      showInlineStatus(statusEl, 'Saving...', 'loading');
+      try {
+        const profile = collectProfile();
+        await patchProfile(
+          {
+            capability_profile_rules: profile.capability_profile_rules,
+            target_title_patterns: profile.target_title_patterns,
+            adjacent_title_patterns: profile.adjacent_title_patterns,
+            must_not_require_skills: profile.must_not_require_skills,
+            reject_title_rules: profile.reject_title_rules,
+            reject_description_phrase_rules: profile.reject_description_phrase_rules,
+            reject_description_regex_rules: profile.reject_description_regex_rules,
+            onboarding_settings: profile.onboarding_settings,
+          },
+          'Matching rules saved to profile.json.'
+        );
+        showInlineStatus(statusEl, 'Saved.', 'ok');
+      } catch (error) {
+        showStatus(error.message, 'error');
+        showInlineStatus(statusEl, error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    });
 
     applyLearningButton.addEventListener('click', async () => {
       applyLearningButton.disabled = true;
