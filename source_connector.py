@@ -4846,9 +4846,19 @@ def _deduplicate_across_sources(records: List[dict]) -> List[dict]:
 def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
     configure_console_output()
     if TEST_SCRAPE_MODE:
-        print("Mode: test scrape run")
+        from llm_gate import _get_llm_model
+        print("=" * 60)
+        print("  TEST SCRAPE MODE")
+        print(f"  LLM model  : {_get_llm_model()}  (overrides admin setting)")
+        print(f"  Score floor: {DASHBOARD_MIN_SCORE}  (normal: 50)")
+        print(f"  Date range : at least {TEST_SCRAPE_DATE_RANGE_DAYS} days")
+        print(f"  Max pages  : at least {TEST_SCRAPE_MAX_PAGES_CAP}")
+        print("  Quick card gate: skipped")
+        print("  Raw scores : visible on cards")
+        print("=" * 60)
     else:
-        print("Mode: real scrape run (default)")
+        from llm_gate import _get_llm_model
+        print(f"Mode: normal scrape  |  LLM: {_get_llm_model()}  |  Score floor: {DASHBOARD_MIN_SCORE}")
 
     profile = load_profile()
     previous_audit_rows = load_json_list(DEBUG_JSON_PATH)

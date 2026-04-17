@@ -175,7 +175,6 @@ Simple rule:
 ## Local Files To Keep
 
 - `data/profile.json`
-- `data/capability_profile.txt`
 - `data/job_history.json`
 - `data/llm_cache.json`
 - `TODO.txt`

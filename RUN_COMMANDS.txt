@@ -4,157 +4,80 @@ JOB HUNTER AGENT - QUICK RUN COMMANDS
 Open this file anytime when you forget what to run.
 
 
-MANUAL REFRESH COMMAND
-----------------------
+PRIMARY COMMANDS
+----------------
 
-Default manual command:
-python source_connector.py
+▶ Normal Manual Refresh:
+  python source_connector.py
 
-This is the canonical command for running a manual job refresh.
-
-Use it by default when you want to trigger a scrape and see the results immediately.
-
-
-AGENT RUNNER
-------------
-
-Automated run command:
-python agent_runner.py
-
-This is the orchestration layer. It runs the refresh, builds a digest, and can send notifications.
-
-Use `python agent_runner.py` for a single automated run.
-Use `python agent_runner.py --loop` to run the agent on a daily schedule.
-Use `python agent_runner.py --no-notify` to test the digest without sending alerts.
+  Use this for a standard run. It scrapes fresh jobs using your profile
+  settings and rebuilds the dashboard. This is the main command you will
+  use for manual refreshes.
 
 
-MAIN REFRESH COMMANDS
----------------------
+▶ Automated Agent Run:
+  python agent_runner.py
 
-1. Default run
-
-Command:
-python source_connector.py
-
-What it does:
-- runs the normal scrape
-- uses your normal search settings from `profile.json`
-- keeps the quick card gate on
-- uses the normal shortlist behavior
-- rebuilds the dashboard with the latest normal run
-
-Use this when:
-- you want the real shortlist
-- you want the dashboard out of test mode
-- you want fresh jobs using the current saved profile
-- you are unsure what to run and want the safe default
+  Use this to run the full agent pipeline: refresh jobs, create a digest,
+  and send notifications.
+  - Add `--loop` to run it on a daily schedule.
+  - Add `--no-notify` to test the digest without sending alerts.
 
 
-2. Dashboard-only test refresh
+▶ Local Web Server:
+  python local_server.py
 
-Command:
-python source_connector.py --rebuild-dashboard --test-dashboard-mode
-
-What it does:
-- does NOT scrape SEEK or LinkedIn
-- does NOT run the LLM
-- rebuilds the dashboard from jobs already saved locally
-- resets `New To You` for testing
-- shows a broader shortlist for testing
-- the right panel will say `Test mode ON`
-
-Use this when:
-- you want a longer list quickly
-- you want to test the dashboard UI
-- you do not need fresh jobs
+  Use this to start the web server for the Admin UI and to view the dashboard
+  in your browser.
+  - Admin: http://127.0.0.1:8765/admin
+  - Dashboard: http://127.0.0.1:8765/dashboard
 
 
-3. Fresh test scrape
+COMMON WORKFLOWS & FLAGS
+------------------------
 
-Command:
-python source_connector.py --test-scrape-mode
+You can combine flags with `python source_connector.py` to create specific workflows.
 
-What it does:
-- does a real scrape
-- runs the normal scoring pipeline
-- can run LLM review where needed
-- uses a wider net for testing
-- resets `New To You` for testing
-- skips the quick card metadata gate for testing
-- shows a broader shortlist for testing
-- the right panel will say `Test mode ON`
+---
 
-Use this when:
-- you need fresh jobs
-- you need fresh LLM-reviewed results
-- you want more results than the normal run
+▶ For Fast UI/Dashboard Testing (No Scrape):
+  python source_connector.py --rebuild-dashboard
 
-MODIFIER FLAGS
---------------
+  This is the fastest way to see UI changes. It skips all scraping and
+  AI review, and just rebuilds `dashboard.html` from the last saved run.
 
-You can add these flags to other commands to change their behavior for a single run.
+  Combine with `--test-dashboard-mode` to see more jobs and debug scores:
+  python source_connector.py --rebuild-dashboard --test-dashboard-mode
+
+---
+
+▶ For Quick & Cheap Scrape Testing:
+  python source_connector.py --test-scrape-mode
+
+  This mode is designed for cheaper and faster feedback during development.
+  It does a real scrape, but:
+  - Forces the use of a cheaper LLM model (gpt-4o-mini) to save costs.
+  - Widens the search to find more roles for testing.
+  - Lowers the dashboard score threshold to 35 to show more borderline jobs.
+  - Shows raw scores on job cards for easier tuning.
+
+  For a super-fast check, limit it to one page:
+  python source_connector.py --test-scrape-mode --max-pages 1
+
+---
+
+▶ Other Useful Flags:
 
 --no-llm
-    Forces the run to skip the LLM review step, even if an API key is configured.
+    Skips the AI fit review step entirely, even if an API key is configured.
+    Useful for very fast runs when you only want to test the deterministic filters.
 
 --max-pages <number>
-    Overrides the 'Max pages to check' setting from your profile for this run only.
-    Example: python source_connector.py --max-pages 1
+    Temporarily overrides the 'Max pages to check' setting from your profile.
 
 --reset-new-to-you
-    Resets the 'Viewed / New To You' state for all jobs on the dashboard.
-    Useful for getting a "first look" feel on the current dashboard without a fresh scrape.
-    Example: python source_connector.py --rebuild-dashboard --reset-new-to-you
-
-
-LOCAL SERVER
-------------
-
-Start or restart local server:
-python local_server.py
-
-Use this when:
-- you want to open `http://127.0.0.1:8765/admin`
-- you want to open `http://127.0.0.1:8765/dashboard`
-- you changed the local server code and want the latest behavior
-
-
-OUTPUT FILE
------------
-
-Dashboard HTML:
-output/dashboard.html
-
-Open this file in a browser after a rebuild or scrape.
-
-
-WHAT "NEW TO YOU" MEANS
------------------------
-
-Normal run:
-- a job is `New To You` if you have not opened it from the dashboard before
-
-Test dashboard mode / test scrape mode:
-- everything is treated as `New To You` for testing
-
-Reset viewed state only:
-- current jobs are shown as unseen again, but the dashboard stays in normal mode
-
-
-WHICH ONE SHOULD I USE?
------------------------
-
-For a manual refresh:
-python source_connector.py
-
-For automated daily runs:
-python agent_runner.py
-
-For testing the dashboard UI without scraping:
-python source_connector.py --rebuild-dashboard --test-dashboard-mode
-
-For a wider test scrape with fresh jobs:
-python source_connector.py --test-scrape-mode
+    Resets the 'Viewed' status for all jobs, making the dashboard feel like a
+    first look again. Often used with `--rebuild-dashboard`.
 
 
 QUICK NOTES

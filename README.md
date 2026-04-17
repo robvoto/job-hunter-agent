@@ -115,9 +115,6 @@ Then open:
 - `data/profile.json`
   Runtime source of truth for matching.
 
-- `data/capability_profile.txt`
-  Local human-readable note file used for imports and updates.
-
 - `data/application_materials.template.json`
   Example local-only source-material manifest.
 
@@ -139,7 +136,6 @@ These are intended to stay local and ignored:
 - `.venv/`
 - `TODO.txt`
 - `data/profile.json`
-- `data/capability_profile.txt`
 - `data/job_history.json`
 - `data/llm_cache.json`
 - `data/application_inputs/`

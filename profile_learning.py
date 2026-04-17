@@ -10,6 +10,7 @@ Notes:
 - capability_profile.template.txt is the committed starter template for new users
 """
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -17,28 +18,6 @@ from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
-LOCAL_KNOWLEDGE_FILE = DATA_DIR / "capability_profile.txt"
-KNOWLEDGE_TEMPLATE_FILE = DATA_DIR / "capability_profile.template.txt"
-LEGACY_KNOWLEDGE_FILE = DATA_DIR / "rob_capability_profile.txt"
-DEFAULT_KNOWLEDGE_FILE = LOCAL_KNOWLEDGE_FILE
-
-
-def resolve_knowledge_file(create_if_missing: bool = False) -> Path:
-    for candidate in [LOCAL_KNOWLEDGE_FILE, LEGACY_KNOWLEDGE_FILE]:
-        if candidate.exists():
-            return candidate
-
-    if create_if_missing and KNOWLEDGE_TEMPLATE_FILE.exists():
-        LOCAL_KNOWLEDGE_FILE.write_text(
-            KNOWLEDGE_TEMPLATE_FILE.read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
-        return LOCAL_KNOWLEDGE_FILE
-
-    if KNOWLEDGE_TEMPLATE_FILE.exists():
-        return KNOWLEDGE_TEMPLATE_FILE
-
-    return LOCAL_KNOWLEDGE_FILE
 
 
 def repair_text(text: str) -> str:
@@ -107,189 +86,77 @@ def _clean_sentence(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip(" -\n")
 
 
+_VALID_LEVELS = {"strong", "working", "basic", "low", "none"}
+_VALID_FITS = {"core", "supporting", "contextual", "avoid"}
+
+
 def _parse_capabilities(source_text: str) -> list[dict[str, Any]]:
-    capabilities: list[dict[str, Any]] = []
+    """Extract capability rules from any CV using the LLM.
 
-    mapping = [
-        (
-            "BUSINESS ANALYSIS CAPABILITY (REAL CORE)",
-            {
-                "name": "business analysis delivery",
-                "fit": "core",
-                "aliases": [
-                    "requirements elicitation",
-                    "requirements gathering",
-                    "process mapping",
-                    "stakeholder engagement",
-                    "workshops",
-                    "user stories",
-                    "acceptance criteria",
-                    "business rules",
-                    "workflow",
-                    "workflows",
-                    "uat",
-                ],
-            },
-        ),
-        (
-            "STAKEHOLDER MANAGEMENT",
-            {
-                "name": "stakeholder management",
-                "fit": "core",
-                "aliases": [
-                    "stakeholder engagement",
-                    "stakeholder management",
-                    "workshops",
-                    "executives",
-                    "vendors",
-                    "communication style",
-                ],
-            },
-        ),
-        (
-            "BPMN / PROCESS MODELLING",
-            {
-                "name": "bpmn and process modelling",
-                "fit": "core",
-                "aliases": [
-                    "bpmn",
-                    "process modelling",
-                    "process mapping",
-                    "workflow",
-                    "workflows",
-                    "as-is",
-                    "to-be",
-                ],
-            },
-        ),
-        (
-            "AGILE / DELIVERY",
-            {
-                "name": "agile delivery",
-                "fit": "supporting",
-                "aliases": [
-                    "agile",
-                    "user stories",
-                    "acceptance criteria",
-                    "gherkin",
-                    "backlog refinement",
-                    "sprint",
-                    "uat",
-                ],
-            },
-        ),
-        (
-            "APIs / Integration",
-            {
-                "name": "api and integration",
-                "fit": "supporting",
-                "aliases": [
-                    "api",
-                    "apis",
-                    "rest api",
-                    "json",
-                    "postman",
-                    "integration",
-                    "integrations",
-                    "api payload",
-                ],
-            },
-        ),
-        (
-            "SQL / DATA",
-            {
-                "name": "data analysis and validation",
-                "fit": "supporting",
-                "aliases": [
-                    "sql",
-                    "excel",
-                    "data mapping",
-                    "data validation",
-                    "data migration",
-                    "database queries",
-                    "query databases",
-                ],
-            },
-        ),
-        (
-            "SYSTEM / TECHNICAL UNDERSTANDING",
-            {
-                "name": "system and technical analysis",
-                "fit": "supporting",
-                "aliases": [
-                    "system behaviour",
-                    "validation rules",
-                    "processing logic",
-                    "frontend",
-                    "backend",
-                    "data flows",
-                    "system architecture",
-                ],
-            },
-        ),
-        (
-            "CLOUD / INFRASTRUCTURE",
-            {
-                "name": "cloud and infrastructure",
-                "fit": "contextual",
-                "aliases": [
-                    "aws",
-                    "cloud",
-                    "networking",
-                    "infrastructure",
-                ],
-            },
-        ),
-        (
-            "AI / INNOVATION (DIFFERENTIATOR)",
-            {
-                "name": "ai innovation and automation",
-                "fit": "supporting",
-                "aliases": [
-                    "ai use cases",
-                    "python",
-                    "playwright",
-                    "llm",
-                    "automation",
-                ],
-            },
-        ),
-    ]
+    Works for any profession and CV format — no hardcoded headings.
+    Returns [] if LLM is unavailable (no API key); caller handles the fallback.
+    """
+    from llm_gate import client, _get_llm_model, MAX_TOKENS_CV_EXTRACTION
 
-    for heading, template in mapping:
-        section = _extract_named_section(source_text, heading)
-        if not section:
-            continue
-        rating = _find_rating(section)
-        entry = dict(template)
-        entry["level"] = _level_from_rating(rating)
-        if heading == "APIs / Integration":
-            entry["level"] = "basic"
-            entry["fit"] = "contextual"
-        capabilities.append(entry)
+    if client is None:
+        print("[CAPABILITIES] Skipped — no LLM client (OPENAI_API_KEY not set)")
+        return []
+    if not (source_text or "").strip():
+        return []
 
-    if _extract_named_section(source_text, "SQL / DATA"):
-        capabilities.append(
-            {
-                "name": "advanced data analytics and bi",
-                "level": "low",
-                "fit": "contextual",
-                "aliases": [
-                    "data warehousing",
-                    "etl",
-                    "data modelling",
-                    "power bi",
-                    "tableau",
-                    "snowflake",
-                    "azure data factory",
-                    "data governance",
-                    "data quality",
-                    "data lineage",
-                ],
-            }
+    prompt = (
+        "Read this CV and extract the candidate's professional capabilities.\n\n"
+        "Return a JSON array. Each item must have exactly these keys:\n"
+        '  "name"    — short capability label in lowercase (e.g. "business analysis", "python development")\n'
+        '  "level"   — one of: strong | working | basic | low | none\n'
+        '              (based on recency and depth of use, not just whether it appears)\n'
+        '  "fit"     — one of: core | supporting | contextual | avoid\n'
+        '              core = daily job, supporting = used regularly, contextual = occasionally, avoid = not wanted\n'
+        '  "aliases" — list of 4–10 lowercase phrases a job ad would use for this skill\n\n'
+        "Rules:\n"
+        "- Include 6–15 capabilities that represent the full professional picture\n"
+        "- Aliases must be job-ad language, not CV language (e.g. 'stakeholder management' not 'managed stakeholders')\n"
+        "- Do NOT include soft skills (communication, teamwork) — only professional capabilities\n"
+        "- Only return the JSON array, no explanation\n\n"
+        "CV:\n" + source_text[:5000]
+    )
+
+    try:
+        resp = client.responses.create(
+            model=_get_llm_model(),
+            input=[{"role": "user", "content": prompt}],
+            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
         )
+        raw = (resp.output_text or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        items = json.loads(raw)
+        if not isinstance(items, list):
+            print(f"[CAPABILITIES] LLM returned non-list: {type(items)}")
+            return []
 
-    return capabilities
+        result: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip().lower()
+            level = str(item.get("level") or "").strip().lower()
+            fit = str(item.get("fit") or "").strip().lower()
+            aliases = [
+                str(a).strip().lower()
+                for a in (item.get("aliases") or [])
+                if str(a).strip()
+            ]
+            if not name or level not in _VALID_LEVELS or fit not in _VALID_FITS:
+                continue
+            result.append({"name": name, "level": level, "fit": fit, "aliases": aliases[:10]})
+
+        print(f"[CAPABILITIES] Extracted {len(result)} capability rules via LLM")
+        return result[:15]
+
+    except Exception as exc:
+        print(f"[CAPABILITIES] LLM extraction failed: {exc}")
+        return []
 
 
 def _parse_summary(source_text: str) -> str:
@@ -308,25 +175,40 @@ def _parse_summary(source_text: str) -> str:
     return ". ".join(part.strip(". ") for part in parts if part).strip()
 
 
-def _parse_strengths(source_text: str) -> list[str]:
+def _parse_strengths(source_text: str, capability_rules: list[dict[str, Any]] | None = None) -> list[str]:
+    """Derive strengths from capability rules (if available) or fall back to bullet extraction."""
+    if capability_rules:
+        # Build from LLM-extracted capabilities: core and strong-level items first
+        seen: set[str] = set()
+        result: list[str] = []
+        priority = [r for r in capability_rules if r.get("fit") == "core" or r.get("level") == "strong"]
+        rest = [r for r in capability_rules if r not in priority]
+        for rule in priority + rest:
+            name = str(rule.get("name") or "").strip()
+            if name and name.lower() not in seen:
+                seen.add(name.lower())
+                result.append(name)
+            for alias in (rule.get("aliases") or [])[:2]:
+                a = str(alias).strip()
+                if a and a.lower() not in seen:
+                    seen.add(a.lower())
+                    result.append(a)
+        return result[:20]
+
+    # Fallback: plain bullet extraction from raw text
     strengths: list[str] = []
-    for heading in [
-        "BUSINESS ANALYSIS CAPABILITY (REAL CORE)",
-        "STAKEHOLDER MANAGEMENT",
-        "BPMN / PROCESS MODELLING",
-        "AGILE / DELIVERY",
-    ]:
-        section = _extract_named_section(source_text, heading)
-        strengths.extend(_extract_bullets(section))
-    seen = set()
-    result = []
+    for line in source_text.splitlines():
+        stripped = line.strip().lstrip("-•*").strip()
+        if stripped and len(stripped) > 8:
+            strengths.append(stripped)
+    seen2: set[str] = set()
+    result2: list[str] = []
     for item in strengths:
         cleaned = _clean_sentence(item)
-        normalized = cleaned.lower()
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            result.append(cleaned)
-    return result[:20]
+        if cleaned.lower() not in seen2:
+            seen2.add(cleaned.lower())
+            result2.append(cleaned)
+    return result2[:20]
 
 
 def build_learning_patch(text: str) -> dict[str, Any]:
@@ -342,13 +224,13 @@ def build_learning_patch(text: str) -> dict[str, Any]:
     if summary:
         patch["candidate_summary"] = summary
 
-    strengths = _parse_strengths(source_text)
-    if strengths:
-        patch["strengths"] = strengths
-
     capability_rules = _parse_capabilities(source_text)
     if capability_rules:
         patch["capability_profile_rules"] = capability_rules
+
+    strengths = _parse_strengths(source_text, capability_rules or None)
+    if strengths:
+        patch["strengths"] = strengths
 
     return patch
 

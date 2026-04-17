@@ -2,10 +2,6 @@
 
 ## Runtime Source Of Truth
 
-- `data/profile.json` is the machine-readable runtime profile
-- `data/capability_profile.txt` is the human-readable local note
-- `data/capability_profile.template.txt` is the committed starter template
-
 Filtering, matching, admin editing, and LLM review all depend on `data/profile.json`.
 
 ## Profile Creation Model
@@ -84,7 +80,6 @@ It currently supports:
 - `data/profile.json`
 - `data/job_history.json`
 - `data/llm_cache.json`
-- `data/capability_profile.txt`
 - `data/application_inputs/`
 - `data/application_materials.json`
 - `TODO.txt`
@@ -96,7 +91,6 @@ The code resolves important paths relative to the repo, not the shell working di
 If moving to another machine and you want to preserve local state, bring:
 
 - `data/profile.json`
-- `data/capability_profile.txt`
 - optionally `data/job_history.json`
 - optionally `data/llm_cache.json`
 - optionally `data/application_inputs/`

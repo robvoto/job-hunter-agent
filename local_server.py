@@ -7,7 +7,7 @@ from agent_settings import load_agent_settings, save_agent_settings
 from config import OUTPUT_HTML
 from filters import build_title_block_rule, detect_rejection_signals, extract_rejection_suggestions, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
-from profile_learning import build_learning_patch, merge_capability_rules, repair_text, resolve_knowledge_file
+from profile_learning import build_learning_patch, merge_capability_rules, repair_text
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
@@ -805,8 +805,7 @@ ADMIN_HTML = """<!doctype html>
         <textarea id="learning_update_text"></textarea>
         <div class="field-help">Paste CV text, capability notes, or a focused knowledge update.</div>
         <div class="panel-actions">
-          <button class="secondary" id="apply_learning">Apply Learning Update</button>
-          <button class="secondary" id="import_knowledge_file">Import Local Capability Note</button>
+          <button class="secondary" id="apply_learning">Apply Learning Update to Profile</button>
           <span class="inline-status" id="learning_status" aria-live="polite"></span>
         </div>
       </section>
@@ -989,7 +988,6 @@ ADMIN_HTML = """<!doctype html>
     const importSourceMaterialsButton = document.getElementById('import_source_materials');
     const sourceMaterialsStatusEl = document.getElementById('source_materials_status');
     const applyLearningButton = document.getElementById('apply_learning');
-    const importKnowledgeFileButton = document.getElementById('import_knowledge_file');
     const learningStatusEl = document.getElementById('learning_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
@@ -1578,19 +1576,6 @@ ADMIN_HTML = """<!doctype html>
       showStatus(payload.message || 'Learning update applied.', 'ok');
     }
 
-    async function importKnowledgeFile() {
-      const response = await fetch('/api/import-knowledge-file', {
-        method: 'POST',
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || 'Could not import knowledge file');
-      }
-      fillForm(payload.profile || {});
-      await loadReviewData();
-      showStatus(payload.message || 'Knowledge file imported.', 'ok');
-    }
-
     async function importSourceMaterials() {
       const response = await fetch('/api/import-source-materials', {
         method: 'POST',
@@ -1756,7 +1741,6 @@ ADMIN_HTML = """<!doctype html>
 
     applyLearningButton.addEventListener('click', async () => {
       applyLearningButton.disabled = true;
-      importKnowledgeFileButton.disabled = true;
       showInlineStatus(learningStatusEl, 'Applying learning update...', 'loading');
       try {
         await applyLearningUpdate();
@@ -1766,23 +1750,6 @@ ADMIN_HTML = """<!doctype html>
         showInlineStatus(learningStatusEl, error.message, 'error');
       } finally {
         applyLearningButton.disabled = false;
-        importKnowledgeFileButton.disabled = false;
-      }
-    });
-
-    importKnowledgeFileButton.addEventListener('click', async () => {
-      applyLearningButton.disabled = true;
-      importKnowledgeFileButton.disabled = true;
-      showInlineStatus(learningStatusEl, 'Importing capability note...', 'loading');
-      try {
-        await importKnowledgeFile();
-        showInlineStatus(learningStatusEl, 'Capability note imported.', 'ok');
-      } catch (error) {
-        showStatus(error.message, 'error');
-        showInlineStatus(learningStatusEl, error.message, 'error');
-      } finally {
-        applyLearningButton.disabled = false;
-        importKnowledgeFileButton.disabled = false;
       }
     });
 
@@ -2969,6 +2936,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                 if not str(telegram_patch.get("bot_token") or "").strip():
                     telegram_patch.pop("bot_token", None)
                 current.setdefault("telegram", {}).update(telegram_patch)
+                current.setdefault("llm", {}).update(patch.get("llm", {}))
                 updated = save_agent_settings(current)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
@@ -3023,18 +2991,6 @@ class AdminHandler(BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
                 result = self._apply_learning_text(str(payload.get("text") or ""))
-            except Exception as exc:
-                self._send_json(400, {"error": str(exc)})
-                return
-            self._send_json(200, result)
-            return
-        if self.path == "/api/import-knowledge-file":
-            try:
-                knowledge_file = resolve_knowledge_file(create_if_missing=True)
-                if not knowledge_file.exists():
-                    raise FileNotFoundError(f"Could not find {knowledge_file}")
-                result = self._apply_learning_text(knowledge_file.read_text(encoding="utf-8", errors="ignore"))
-                result["message"] = f"Imported learning from {knowledge_file}."
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return

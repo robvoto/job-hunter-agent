@@ -37,8 +37,6 @@ The project is past the initial prototype stage.
 - search settings are configurable from the local admin UI
 - search supports date window, sort by newest, locations, and classification filters
 - runtime profile is persisted in `data/profile.json`
-- human-editable candidate note lives in local `data/capability_profile.txt`
-- repo-safe starter content lives in `data/capability_profile.template.txt`
 - source documents can now be imported into `data/profile.json` from the admin UI
 - dashboard is now persistent and rebuilds from the latest scrape plus local job history
 - dashboard supports hidden-job review, kept-earlier archive, match filters, salary-target filtering, and pagination
@@ -124,8 +122,6 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `source_documents.py` | Local source-document config, parsing, and profile import |
 | `utils.py` | Shared parsing and URL helpers |
 | `data/profile.json` | Runtime source of truth for the candidate profile |
-| `data/capability_profile.txt` | Local human-readable candidate note used for imports |
-| `data/capability_profile.template.txt` | Repo-safe starter template for new users |
 | `data/application_materials.template.json` | Starter manifest for local-only CV / instructions / application inputs |
 | `data/agent_settings.template.json` | Starter template for local agent scheduling and notifier config |
 | `data/job_history.json` | Seen/applied/hidden history support |
@@ -165,7 +161,7 @@ Do not move the project back to pane-based scraping unless there is a very stron
 
 The exact live fit model is not fully hardcoded. It is driven by:
 - `data/profile.json`
-- the imported capability profile
+- the configured capability rules
 - admin-reviewed unknown skills
 
 ---
@@ -261,8 +257,6 @@ The admin server now also serves the dashboard at:
 ## Persistence rules
 
 - `data/profile.json` is the runtime source of truth
-- `data/capability_profile.txt` is the local human master note
-- `data/capability_profile.template.txt` is the committed starter template
 - local source documents for applications should live under ignored paths such as `data/application_inputs/`
 - generated outputs under `output/` are disposable and can be recreated
 - profile/history/cache under `data/` should be treated as valuable local state
@@ -271,7 +265,6 @@ The admin server now also serves the dashboard at:
 Keep personal and local-only:
 
 - `data/profile.json`
-- `data/capability_profile.txt`
 - `data/job_history.json`
 - `data/agent_settings.json`
 - `data/agent_state.json`
