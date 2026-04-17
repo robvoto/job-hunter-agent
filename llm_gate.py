@@ -291,8 +291,8 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         data = _json.loads(raw)
         if isinstance(data, dict):
             result = {
-                "target_title_patterns": [str(p).strip() for p in data.get("target_title_patterns", []) if str(p).strip()][:max_target],
-                "adjacent_title_patterns": [str(p).strip() for p in data.get("adjacent_title_patterns", []) if str(p).strip()][:max_adjacent],
+                "target_title_patterns": _normalize_pattern_list(data.get("target_title_patterns", []), max_target),
+                "adjacent_title_patterns": _normalize_pattern_list(data.get("adjacent_title_patterns", []), max_adjacent),
                 "suggested_search_keywords": [str(p).strip() for p in data.get("suggested_search_keywords", []) if str(p).strip()][:5],
             }
             print(f"[TITLE_PATTERNS] Extracted: {len(result['target_title_patterns'])} target, {len(result['adjacent_title_patterns'])} adjacent, {len(result['suggested_search_keywords'])} keywords")
@@ -302,6 +302,15 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         print(f"[TITLE_PATTERNS] Exception: {exc}")
     return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
+def _normalize_pattern_list(items: list[Any], limit: int) -> list[str]:
+    normalized: list[str] = []
+    for item in items or []:
+        text = str(item).replace("\\r", "\n")
+        for part in text.split("\n"):
+            value = part.strip()
+            if value:
+                normalized.append(value)
+    return normalized[:limit]
 
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:
     if client is None:
