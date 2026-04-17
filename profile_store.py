@@ -82,8 +82,7 @@ DEFAULT_PROFILE = {
     "review_controls": {
         "applied_job_keys": [],
         "hidden_job_keys": [],
-    },
-    "strengths": [],
+    },    
     "salary_preferences": {
         "minimum_salary_yearly": 0,
         "minimum_daily_rate": 0,

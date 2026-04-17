@@ -108,7 +108,6 @@ class AdminHandler(BaseHTTPRequestHandler):
         ).strip().lower()
         if brief_mode != "manual":
             llm_profile_brief = build_llm_profile_brief(
-                strengths=final_strengths,
                 capability_rules=final_rules,
             )
             if llm_profile_brief:
@@ -132,7 +131,6 @@ class AdminHandler(BaseHTTPRequestHandler):
             normalized["llm_profile_brief"] = str(normalized.get("llm_profile_brief") or "").strip()
         else:
             auto_brief = build_llm_profile_brief(
-                strengths=normalized.get("strengths", current.get("strengths", [])),
                 capability_rules=normalized.get(
                     "capability_profile_rules",
                     current.get("capability_profile_rules", []),

@@ -175,12 +175,12 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 def _choice_label(choice: str) -> str:
     labels = {
-        "no_knowledge": "No knowledge",
-        "basic_only": "Basic only",
-        "working_knowledge": "Working knowledge",
-        "strong": "Strong",
-        "avoid": "Avoid",
-        "not_core_but_acceptable": "Not core but acceptable",
+        "no_knowledge": "Exclude",
+        "basic_only": "Minor exposure",
+        "working_knowledge": "Usable secondary",
+        "strong": "Strong skill",
+        "avoid": "Exclude",
+        "not_core_but_acceptable": "Usable secondary",
     }
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
@@ -259,11 +259,11 @@ def build_capability_tuning_suggestions(
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
         if count >= 5:
-            recommended_choice = "working_knowledge"
+            recommended_choice = "strong"
         else:
             recommended_choice = "not_core_but_acceptable"
         headline = f"Classify {skill} as a known capability signal"
-        detail = f"Seen in {count} kept role(s) and still unclassified."
+        detail = f"Seen in {count} kept role(s)."
 
         suggestions.append(
             {

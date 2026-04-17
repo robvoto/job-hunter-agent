@@ -372,14 +372,9 @@ def _extract_strengths_from_text(text: str) -> list[str]:
 
 
 def build_llm_profile_brief(
-    strengths: list[str],
     capability_rules: list[dict[str, Any]],
 ) -> str:
     lines: list[str] = []
-
-    cleaned_strengths = [str(item).strip() for item in strengths or [] if str(item).strip()]
-    if cleaned_strengths:
-        lines.append("Core strengths: " + ", ".join(cleaned_strengths[:10]))
 
     preferred_rules = []
     avoid_rules = []

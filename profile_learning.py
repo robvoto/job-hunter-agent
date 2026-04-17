@@ -175,40 +175,6 @@ def _parse_summary(source_text: str) -> str:
     return ". ".join(part.strip(". ") for part in parts if part).strip()
 
 
-def _parse_strengths(source_text: str, capability_rules: list[dict[str, Any]] | None = None) -> list[str]:
-    """Derive strengths from capability rules (if available) or fall back to bullet extraction."""
-    if capability_rules:
-        # Build from LLM-extracted capabilities: core and strong-level items first
-        seen: set[str] = set()
-        result: list[str] = []
-        priority = [r for r in capability_rules if r.get("fit") == "core" or r.get("level") == "strong"]
-        rest = [r for r in capability_rules if r not in priority]
-        for rule in priority + rest:
-            name = str(rule.get("name") or "").strip()
-            if name and name.lower() not in seen:
-                seen.add(name.lower())
-                result.append(name)
-            for alias in (rule.get("aliases") or [])[:2]:
-                a = str(alias).strip()
-                if a and a.lower() not in seen:
-                    seen.add(a.lower())
-                    result.append(a)
-        return result[:20]
-
-    # Fallback: plain bullet extraction from raw text
-    strengths: list[str] = []
-    for line in source_text.splitlines():
-        stripped = line.strip().lstrip("-•*").strip()
-        if stripped and len(stripped) > 8:
-            strengths.append(stripped)
-    seen2: set[str] = set()
-    result2: list[str] = []
-    for item in strengths:
-        cleaned = _clean_sentence(item)
-        if cleaned.lower() not in seen2:
-            seen2.add(cleaned.lower())
-            result2.append(cleaned)
-    return result2[:20]
 
 
 def build_learning_patch(text: str) -> dict[str, Any]:
@@ -227,10 +193,6 @@ def build_learning_patch(text: str) -> dict[str, Any]:
     capability_rules = _parse_capabilities(source_text)
     if capability_rules:
         patch["capability_profile_rules"] = capability_rules
-
-    strengths = _parse_strengths(source_text, capability_rules or None)
-    if strengths:
-        patch["strengths"] = strengths
 
     return patch
 
