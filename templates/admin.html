@@ -484,6 +484,57 @@
     .review-card li {
       margin: 4px 0;
     }
+
+    .review-explainer {
+      margin: 10px 0 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(244, 239, 231, 0.55);
+    }
+    .review-explainer strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.92rem;
+    }
+    .review-choice-guide {
+      margin-top: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+      overflow: hidden;
+    }
+    .review-choice-guide summary {
+      cursor: pointer;
+      padding: 10px 14px;
+      font-weight: 700;
+      color: var(--accent-2);
+      list-style: none;
+    }
+    .review-choice-guide summary::-webkit-details-marker {
+      display: none;
+    }
+    .review-choice-guide-body {
+      padding: 0 14px 12px;
+    }
+    .review-choice-guide strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.92rem;
+    }
+    .review-choice-guide p {
+      margin: 0 0 6px;
+      color: var(--ink);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .review-choice-guide p:last-child {
+      margin-bottom: 0;
+    }
+    .review-choice-guide code {
+      font-size: 0.82rem;
+    }
+
   </style>
 </head>
 <body>
@@ -1308,15 +1359,73 @@
         .replace(/'/g, '&#39;');
     }
 
+    function getReviewChoiceMeta(choice) {
+      const meta = {
+        '': {
+          label: 'Choose a decision',
+          summary: 'Pick how the engine should treat this skill when scoring jobs.',
+          useWhen: 'Use the examples below to judge whether this is genuinely part of your profile or just noise from a few ads.',
+          engineEffect: 'Nothing changes until you confirm.'
+        },
+        no_knowledge: {
+          label: 'No knowledge — I do not have this',
+          summary: 'Use this when the term appears in jobs you kept, but it is not actually one of your skills.',
+          useWhen: 'Example: the ad mentions it in a side note, but your CV does not support it.',
+          engineEffect: 'Saved as level = none, fit = avoid.'
+        },
+        basic_only: {
+          label: 'Basic only — exposure, not a selling point',
+          summary: 'Use this when you have touched the skill but would not want it treated as a strong match signal.',
+          useWhen: 'Example: short exposure, light support work, or one-off use.',
+          engineEffect: 'Saved as level = basic, fit = contextual.'
+        },
+        working_knowledge: {
+          label: 'Working knowledge — usable in real projects',
+          summary: 'Use this when you can genuinely work with the skill in delivery, even if it is not your headline strength.',
+          useWhen: 'Example: repeated practical use across projects, but not your main differentiator.',
+          engineEffect: 'Saved as level = working, fit = supporting.'
+        },
+        strong: {
+          label: 'Strong — one of my proven skills',
+          summary: 'Use this when the skill is clearly backed by your CV and you want it to count strongly.',
+          useWhen: 'Example: repeated deep use, ownership, or delivery evidence.',
+          engineEffect: 'Saved as level = strong, fit = supporting.'
+        },
+        avoid: {
+          label: 'Avoid — do not pull me toward roles needing this',
+          summary: 'Use this when jobs with this skill are usually wrong for your target profile.',
+          useWhen: 'Example: specialist platforms or domains you do not want to compete in.',
+          engineEffect: 'Saved as level = none, fit = avoid.'
+        },
+        not_core_but_acceptable: {
+          label: 'Not core but acceptable — relevant, but secondary',
+          summary: 'Use this when the skill is real enough to allow, but should not drive matching.',
+          useWhen: 'Example: adjacent tools or context that sometimes appears in good roles.',
+          engineEffect: 'Saved as level = working, fit = contextual.'
+        },
+      };
+      return meta[choice] || meta[''];
+    }
+
+    function renderReviewChoiceGuide(choice) {
+      const meta = getReviewChoiceMeta(choice);
+      return `
+        <strong>${escapeHtml(meta.label)}</strong>
+        <p>${escapeHtml(meta.summary)}</p>
+        <p><strong>When to use:</strong> ${escapeHtml(meta.useWhen)}</p>
+        <p><strong>Engine effect:</strong> <code>${escapeHtml(meta.engineEffect)}</code></p>
+      `;
+    }
+
     function reviewOptionMarkup(selectedValue) {
       const options = [
-        ['', 'Choose a fit decision'],
-        ['no_knowledge', 'No knowledge'],
-        ['basic_only', 'Basic only'],
-        ['working_knowledge', 'Working knowledge'],
-        ['strong', 'Strong'],
-        ['avoid', 'Avoid'],
-        ['not_core_but_acceptable', 'Not core but acceptable'],
+        ['', 'Choose a decision'],
+        ['no_knowledge', 'No knowledge — I do not have this'],
+        ['basic_only', 'Basic only — exposure, not a selling point'],
+        ['working_knowledge', 'Working knowledge — usable in real projects'],
+        ['strong', 'Strong — one of my proven skills'],
+        ['avoid', 'Avoid — steer away from roles needing this'],
+        ['not_core_but_acceptable', 'Not core but acceptable — secondary only'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -1399,10 +1508,19 @@
                   <span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span>
                   <span class="suggestion-chip">Current: ${escapeHtml(item.current_treatment || 'Unclassified')}</span>
                 </div>
-                <label>Recommended classification</label>
+                <div class="review-explainer">
+                  <strong>Why this is showing up</strong>
+                  Seen in ${escapeHtml(String(item.count || 0))} kept role(s). Use the examples below to decide whether this is a real candidate capability, a secondary adjacent skill, or just noise.
+                </div>
+                <label>Classification decision</label>
+                <div class="field-help">This choice tells the engine how to treat the skill during matching. It does not rewrite your CV.</div>
                 <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">
                   ${reviewOptionMarkup(item.recommended_choice || '')}
                 </select>
+                <details class="review-choice-guide">
+                  <summary>What this choice means</summary>
+                  <div class="review-choice-guide-body">${renderReviewChoiceGuide(item.recommended_choice || '')}</div>
+                </details>
                 <p>Examples from kept roles:</p>
                 ${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this signal yet.')}
                 <div class="card-actions" style="margin-top:10px;">
@@ -1768,6 +1886,15 @@
       } catch (error) {
         showStatus(error.message, 'error');
       }
+    });
+
+    document.getElementById('tuning_suggestions_panel').addEventListener('change', (e) => {
+      const select = e.target.closest('.skill-choice');
+      if (!select) return;
+      const card = select.closest('.review-card');
+      const guideBody = card?.querySelector('.review-choice-guide-body');
+      if (!guideBody) return;
+      guideBody.innerHTML = renderReviewChoiceGuide(select.value || '');
     });
 
     document.getElementById('tuning_suggestions_panel').addEventListener('click', async (e) => {

@@ -131,6 +131,56 @@ def ensure_profile_exists() -> None:
     save_profile(DEFAULT_PROFILE)
 
 
+def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    valid_levels = {"strong", "working", "basic", "low", "none"}
+    valid_fits = {"core", "supporting", "contextual", "avoid"}
+
+    for rule in rules or []:
+        if not isinstance(rule, dict):
+            continue
+
+        name = str(rule.get("name") or "").strip()
+        if not name:
+            continue
+
+        name_norm = re.sub(r"\s+", " ", name).strip().lower()
+        if name_norm in seen_names:
+            continue
+        seen_names.add(name_norm)
+
+        level = str(rule.get("level") or "").strip().lower()
+        fit = str(rule.get("fit") or "").strip().lower()
+        if level not in valid_levels:
+            level = "basic"
+        if fit not in valid_fits:
+            fit = "contextual"
+
+        aliases: list[str] = []
+        seen_aliases: set[str] = set()
+        for alias in rule.get("aliases") or []:
+            cleaned_alias = str(alias or "").strip()
+            if not cleaned_alias:
+                continue
+            alias_norm = re.sub(r"\s+", " ", cleaned_alias).strip().lower()
+            if alias_norm == name_norm:
+                continue
+            if alias_norm in seen_aliases:
+                continue
+            seen_aliases.add(alias_norm)
+            aliases.append(cleaned_alias)
+
+        cleaned.append({
+            "name": name,
+            "level": level,
+            "fit": fit,
+            "aliases": aliases,
+        })
+
+    return cleaned
+
+
 def load_profile() -> dict[str, Any]:
     ensure_profile_exists()
     try:
@@ -150,6 +200,9 @@ def load_profile() -> dict[str, Any]:
             merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
                 merged.get("evidence_tier_weights", {})
             )
+            merged["capability_profile_rules"] = normalize_capability_rules(
+                merged.get("capability_profile_rules", [])
+            )
             return merged
     except Exception:
         pass
@@ -166,6 +219,9 @@ def load_profile() -> dict[str, Any]:
     )
     fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
         fallback.get("evidence_tier_weights", {})
+    )
+    fallback["capability_profile_rules"] = normalize_capability_rules(
+        fallback.get("capability_profile_rules", [])
     )
     return fallback
 
@@ -184,6 +240,9 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
         normalized.get("evidence_tier_weights", {})
+    )
+    normalized["capability_profile_rules"] = normalize_capability_rules(
+        normalized.get("capability_profile_rules", [])
     )
     PROFILE_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),

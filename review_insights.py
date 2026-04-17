@@ -434,6 +434,7 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
         "rejections_by_reason": build_rejection_review(audit_rows),
     }
 
+
 def _default_aliases_for_skill(skill: str) -> list[str]:
     skill_clean = str(skill or "").strip()
     normalized = _normalize_term(skill_clean)
@@ -457,6 +458,7 @@ def _default_aliases_for_skill(skill: str) -> list[str]:
         if cleaned not in deduped:
             deduped.append(cleaned)
     return deduped
+
 
 def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
     capability_rules = list(profile.get("capability_profile_rules", []))
@@ -504,6 +506,7 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
                 *(existing_rule.get("aliases") or []),
                 *_default_aliases_for_skill(skill),
             ]
+
             for alias in alias_candidates:
                 cleaned_alias = str(alias or "").strip()
                 if not cleaned_alias:
