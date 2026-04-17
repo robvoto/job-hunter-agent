@@ -258,7 +258,10 @@ def build_capability_tuning_suggestions(
             # Already classified — skip regardless of level/fit.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
-        recommended_choice = "working_knowledge" if count >= 3 else "not_core_but_acceptable"
+        if count >= 5:
+            recommended_choice = "working_knowledge"
+        else:
+            recommended_choice = "not_core_but_acceptable"
         headline = f"Classify {skill} as a known capability signal"
         detail = f"Seen in {count} kept role(s) and still unclassified."
 
@@ -431,6 +434,29 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
         "rejections_by_reason": build_rejection_review(audit_rows),
     }
 
+def _default_aliases_for_skill(skill: str) -> list[str]:
+    skill_clean = str(skill or "").strip()
+    normalized = _normalize_term(skill_clean)
+
+    alias_map = {
+        "data modelling": ["data modeling", "logical data model"],
+        "power bi": ["powerbi"],
+        "bpmn": ["business process modelling", "process modeling"],
+        "sql server": ["microsoft sql server"],
+        "rest api": ["rest apis", "api integration"],
+    }
+
+    aliases = alias_map.get(normalized, [])
+    deduped: list[str] = []
+    for alias in aliases:
+        cleaned = str(alias).strip()
+        if not cleaned:
+            continue
+        if _normalize_term(cleaned) == normalized:
+            continue
+        if cleaned not in deduped:
+            deduped.append(cleaned)
+    return deduped
 
 def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
     capability_rules = list(profile.get("capability_profile_rules", []))
@@ -465,18 +491,26 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             "name": skill,
             "level": level,
             "fit": fit,
-            "aliases": [],
+            "aliases": _default_aliases_for_skill(skill),
         }
 
         if normalized in existing_index:
             existing_rule = capability_rules[existing_index[normalized]]
             merged_aliases: list[str] = []
-            for alias in [existing_rule.get("name"), *(existing_rule.get("aliases") or []), skill]:
+            canonical_name = str(existing_rule.get("name") or skill).strip() or skill
+            canonical_name_norm = _normalize_term(canonical_name)
+
+            for alias in (existing_rule.get("aliases") or []):
                 cleaned_alias = str(alias or "").strip()
-                if cleaned_alias and cleaned_alias not in merged_aliases:
+                if not cleaned_alias:
+                    continue
+                if _normalize_term(cleaned_alias) == canonical_name_norm:
+                    continue
+                if cleaned_alias not in merged_aliases:
                     merged_aliases.append(cleaned_alias)
+
             capability_rules[existing_index[normalized]] = {
-                "name": str(existing_rule.get("name") or skill).strip() or skill,
+                "name": canonical_name,
                 "level": level,
                 "fit": fit,
                 "aliases": merged_aliases,

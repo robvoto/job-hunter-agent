@@ -949,7 +949,8 @@
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     let telegramConnectLink = '';
-
+    let loadedProfile = null;
+    
     const listTextAreas = [
       'locations',
       'strengths',
