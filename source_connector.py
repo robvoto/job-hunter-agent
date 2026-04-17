@@ -4386,10 +4386,9 @@ def render_html(
       const jobTitle = button?.dataset.jobTitle || '';
       const rules = [];
       document.querySelectorAll('#rejection-panel-body input[type=checkbox]:checked')
-        .forEach(cb => rules.push({{ value: cb.dataset.value, category: cb.dataset.cat, source: 'suggestion' }}));
         .forEach(cb => {{
-          const select = cb.closest('.rejection-chip').querySelector('select');
-          rules.push({{ value: cb.dataset.value, category: select ? select.value : 'other', source: 'suggestion' }});
+          const select = cb.closest('.rejection-chip')?.querySelector('select');
+          rules.push({{ value: cb.dataset.value, category: select ? select.value : (cb.dataset.cat || 'other'), source: 'suggestion' }});
         }});
       _rejectionCustomTerms.forEach(t => rules.push({{ value: t.value, category: t.category, source: 'manual' }}));
       if (rules.length > 0) {{
@@ -4767,7 +4766,7 @@ def _seek_scrape_to_records(
                                 record["missing_evidence"],
                                 record["soft_risk_reasons"],
                             )
-                            if deterministic_review is not None:
+                            if False and deterministic_review is not None:                              
                               llm_review = deterministic_review
                               review_source = "rule"
                               print(f"[REVIEW][RULE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
