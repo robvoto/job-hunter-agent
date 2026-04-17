@@ -255,18 +255,12 @@ def build_capability_tuning_suggestions(
         skill = str(entry["skill"] or normalized).strip()
 
         if current_rule:
-            if current_fit == "supporting" and current_level in {"working", "strong"}:
-                continue
-            recommended_choice = "working_knowledge"
-            headline = f"Upgrade {skill} from background noise to a known signal"
-            detail = (
-                f"Seen in {count} kept role(s). It is currently treated as "
-                f"{_current_rule_label(current_rule).lower()}."
-            )
-        else:
-            recommended_choice = "working_knowledge" if count >= 3 else "not_core_but_acceptable"
-            headline = f"Classify {skill} as a known capability signal"
-            detail = f"Seen in {count} kept role(s) and still unclassified."
+            # Already classified — skip regardless of level/fit.
+            # Once a user confirms a skill, don't keep nudging them to upgrade it.
+            continue
+        recommended_choice = "working_knowledge" if count >= 3 else "not_core_but_acceptable"
+        headline = f"Classify {skill} as a known capability signal"
+        detail = f"Seen in {count} kept role(s) and still unclassified."
 
         suggestions.append(
             {

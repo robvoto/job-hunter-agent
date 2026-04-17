@@ -40,6 +40,10 @@ ONBOARDING_RESET_FIELDS = (
     "evidence_tiers",
     "llm_profile_brief",
     "star_evidence_text",
+    "dominant_signal_clusters",
+    "must_not_require_skills",
+    "cheap_keep_counter_patterns",
+    "cheap_reject_metadata_rules",
 )
 
 DEFAULT_SOURCE_MATERIALS = {
@@ -50,17 +54,6 @@ DEFAULT_SOURCE_MATERIALS = {
     "notes": "",
 }
 
-STRENGTH_KEYWORDS = [
-    ("business analysis", ["business analyst", "business analysis", "requirements elicitation", "requirements gathering"]),
-    ("stakeholder engagement", ["stakeholder engagement", "stakeholder management", "workshops", "facilitated stakeholder workshops"]),
-    ("process mapping", ["process mapping", "process modelling", "bpmn", "workflow", "workflows"]),
-    ("agile delivery", ["agile", "scrum", "user stories", "backlog refinement", "sprint planning"]),
-    ("data analysis", ["sql", "data mapping", "data validation", "data migration", "database"]),
-    ("integration analysis", ["api", "apis", "integration", "integrations", "json", "postman"]),
-    ("testing and uat", ["uat", "user acceptance testing", "testing", "test cases", "acceptance criteria"]),
-    ("government delivery", ["government", "federal", "state government", "public sector", "baseline clearance"]),
-    ("digital transformation", ["digital delivery", "transformation", "service improvement", "change delivery"]),
-]
 STAR_LABEL_KEYWORDS = ("star", "achievement", "example", "selection criteria", "impact")
 
 UPLOAD_SLOT_MAP = {
@@ -404,11 +397,15 @@ def _extract_summary_from_text(text: str) -> str:
 
 
 def _extract_strengths_from_text(text: str) -> list[str]:
-    lowered = text.lower()
+    """Generic noun-phrase fallback extraction if LLM is unavailable."""
+    phrases = re.findall(r"\b(?:[A-Z][a-z]+\s+){1,2}[A-Z][a-z]+\b", text)
+    seen: set[str] = set()
     strengths: list[str] = []
-    for label, keywords in STRENGTH_KEYWORDS:
-        if any(keyword in lowered for keyword in keywords):
-            strengths.append(label)
+    for phrase in phrases:
+        lowered = phrase.lower()
+        if lowered not in seen and len(lowered) > 8:
+            seen.add(lowered)
+            strengths.append(phrase)
     return strengths[:12]
 
 

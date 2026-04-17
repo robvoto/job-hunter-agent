@@ -57,7 +57,6 @@ You can combine flags with `python source_connector.py` to create specific workf
   This mode is designed for cheaper and faster feedback during development.
   It does a real scrape, but:
   - Forces the use of a cheaper LLM model (gpt-4o-mini) to save costs.
-  - Widens the search to find more roles for testing.
   - Lowers the dashboard score threshold to 35 to show more borderline jobs.
   - Shows raw scores on job cards for easier tuning.
 

@@ -544,7 +544,10 @@ class AdminHandler(BaseHTTPRequestHandler):
         if not normalized:
             raise ValueError("Missing job key")
 
-        phrase = normalize_title_block_phrase(block_phrase) or suggest_title_block_phrase(title)
+        if "\n" in block_phrase or "\\n" in block_phrase:
+          raise ValueError("Only one keyword allowed")
+
+        phsrase = normalize_title_block_phrase(block_phrase) or suggest_title_block_phrase(title)
         if not phrase:
             raise ValueError("Could not suggest a title keyword to block from this title yet")
 

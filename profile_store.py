@@ -53,7 +53,7 @@ DEFAULT_ONBOARDING_SETTINGS = {
 }
 
 DEFAULT_SEARCH_SETTINGS = {
-    "keywords": "business analyst",
+    "keywords": "",
     "locations": [
         "All Sydney NSW",
         "All Canberra ACT",
@@ -83,17 +83,7 @@ DEFAULT_PROFILE = {
         "applied_job_keys": [],
         "hidden_job_keys": [],
     },
-    "strengths": [
-        "business analysis",
-        "digital delivery",
-        "discovery",
-        "requirements elicitation",
-        "process mapping",
-        "stakeholder engagement",
-        "workshops",
-        "backlog refinement",
-        "change delivery",
-    ],
+    "strengths": [],
     "salary_preferences": {
         "minimum_salary_yearly": 0,
         "minimum_daily_rate": 0,

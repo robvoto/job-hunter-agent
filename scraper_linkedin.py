@@ -299,10 +299,6 @@ class LinkedInScraper(BaseJobScraper):
         hours_old = int(search_settings.get("linkedin_hours_old", 24) or 24)
         results_wanted = int(search_settings.get("linkedin_results_per_search", 25) or 25)
         easy_apply = search_settings.get("linkedin_easy_apply_only")  # None / True / False
-        test_scrape_mode = "--test-scrape-mode" in set(sys.argv[1:])
-        if test_scrape_mode:
-            hours_old = max(hours_old, max(date_range_days, 3) * 24)
-            results_wanted = max(results_wanted, 40)
 
         targets = []
         for raw_loc in locations:

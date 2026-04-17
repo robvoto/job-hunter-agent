@@ -77,9 +77,7 @@ TEST_ANY_MODE = TEST_DASHBOARD_MODE or TEST_SCRAPE_MODE
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = (
     "--reset-new-to-you" in CLI_FLAGS or TEST_ANY_MODE
 )
-SKIP_QUICK_CARD_GATE_FOR_TESTING = TEST_SCRAPE_MODE
-TEST_SCRAPE_DATE_RANGE_DAYS = 7
-TEST_SCRAPE_MAX_PAGES_CAP = 6
+SKIP_QUICK_CARD_GATE_FOR_TESTING = False
 SHOW_SCORING_DEBUG = TEST_ANY_MODE
 SHOW_BORDERLINE_BY_DEFAULT = TEST_ANY_MODE
 DASHBOARD_MIN_SCORE = 35 if TEST_ANY_MODE else 50
@@ -2536,9 +2534,7 @@ def render_html(
     if TEST_SCRAPE_MODE:
         testing_mode_note = (
             f" Scrape test mode is on, so the dashboard keeps roles scoring {DASHBOARD_MIN_SCORE}+,"
-            f" widens the live search to at least {TEST_SCRAPE_DATE_RANGE_DAYS} days and"
-            f" {TEST_SCRAPE_MAX_PAGES_CAP} pages, skips the quick card gate, and treats"
-            f" every role as New To You."
+            f" shows raw scores, and treats every role as New To You."
         )
     elif TEST_DASHBOARD_MODE:
         testing_mode_note = (
@@ -4870,9 +4866,6 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
         print("  TEST SCRAPE MODE")
         print(f"  LLM model  : {_get_llm_model()}  (overrides admin setting)")
         print(f"  Score floor: {DASHBOARD_MIN_SCORE}  (normal: 50)")
-        print(f"  Date range : at least {TEST_SCRAPE_DATE_RANGE_DAYS} days")
-        print(f"  Max pages  : at least {TEST_SCRAPE_MAX_PAGES_CAP}")
-        print("  Quick card gate: skipped")
         print("  Raw scores : visible on cards")
         print("=" * 60)
     else:
@@ -4887,10 +4880,6 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
     configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
     if CLI_MAX_PAGES_CAP is not None:
         configured_max_pages = CLI_MAX_PAGES_CAP
-    elif TEST_SCRAPE_MODE:
-        configured_max_pages = max(configured_max_pages, TEST_SCRAPE_MAX_PAGES_CAP)
-    if TEST_SCRAPE_MODE:
-        configured_date_range = max(configured_date_range, TEST_SCRAPE_DATE_RANGE_DAYS)
     enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", True))
     sort_newest_first = bool(search_settings.get("sort_newest_first", True))
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)

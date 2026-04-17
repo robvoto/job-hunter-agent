@@ -765,15 +765,23 @@
       </aside>
 
       <section class="panel advanced-shell">
-        <div class="advanced-head">
-          <div class="panel-kicker">Advanced tuning</div>
-          <h2>Advanced Matching Rules</h2>
-          <p class="panel-copy">Engine-tuning controls kept separate from the main candidate profile editor.</p>
+          <div class="advanced-head" style="display:flex; justify-content:space-between; align-items:flex-start;"> 
+          <div>
+            <div class="panel-kicker">Advanced tuning</div>
+            <h2>Advanced Matching Rules</h2>
+            <p class="panel-copy">
+              Engine-tuning controls kept separate from the main candidate profile editor.
+            </p>
+          </div>
+          <div class="panel-actions" style="margin:0;">
+            <button class="primary" id="save_advanced_rules">
+              Save Matching Rules
+            </button>
+          </div>
+
+          </div>
+          <span class="inline-status" id="save_advanced_rules_status" aria-live="polite"></span>
         </div>
-        <details class="help-drawer">
-          <summary>When to edit these rules</summary>
-          <p>Use these controls when the engine is matching too broadly or missing obvious rejects. These are tuning rules, not core profile storytelling fields.</p>
-        </details>
         <div class="advanced-grid">
           <section class="subpanel">
             <h3>Capability Matrix</h3>
@@ -834,10 +842,6 @@
             <input id="os_max_adjacent" type="number" min="1" max="20" step="1">
             <div class="field-help">Cap on adjacent_title_patterns extracted. Default 6.</div>
           </section>
-        </div>
-        <div class="panel-actions" style="margin-top:20px;padding-top:18px;border-top:1px solid var(--line);">
-          <button class="primary" id="save_advanced_rules">Save Matching Rules</button>
-          <span class="inline-status" id="save_advanced_rules_status" aria-live="polite"></span>
         </div>
       </section>
       </div>
@@ -999,7 +1003,7 @@
     }
 
     function capabilityRulesToText(rules) {
-      return (rules || []).map(rule => {
+      return (rules || []).filter(rule => (rule.name || '').trim() && (rule.level || '').trim()).map(rule => {
         const aliases = (rule.aliases || []).join(', ');
         return `${rule.name || ''} || ${rule.level || ''} || ${rule.fit || ''} || ${aliases}`;
       }).join('\\n');
@@ -1025,7 +1029,7 @@
           fit: (parts.length >= 4 ? (parts[2] || '') : '').trim().toLowerCase(),
           aliases: (parts[aliasesIndex] || '').split(',').map(item => item.trim()).filter(Boolean),
         };
-      }).filter(rule => rule.name && rule.level && rule.aliases.length);
+      }).filter(rule => rule.name && rule.level);
     }
 
     function fillForm(profile) {
@@ -1789,10 +1793,14 @@
       btn.disabled = true;
       btn.textContent = 'Saving…';
       try {
-        await applyOneSkipDecision(skill, choice);
+        const result = await applyOneSkipDecision(skill, choice);
         card.style.opacity = '0.4';
         card.style.pointerEvents = 'none';
         btn.textContent = 'Applied';
+        if (result && result.profile) {
+          fillForm(result.profile);
+        }
+        await loadReviewData();
       } catch (error) {
         btn.disabled = false;
         btn.textContent = 'Confirm';
