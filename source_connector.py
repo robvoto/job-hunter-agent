@@ -4345,6 +4345,7 @@ def render_html(
         body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No suggestions found. Use the field below to add your own terms.</p>';
         return;
       }}
+      const catOptions = Object.entries(_rejCatLabels).map(([k, v]) => `<option value="${{k}}">${{v}}</option>`).join('');
       body.innerHTML = entries.map(([cat, terms]) =>
         `<div class="rejection-group">` +
         `<div class="rejection-group-label">${{_rejCatLabels[cat] || cat}}</div>` +
@@ -4352,8 +4353,15 @@ def render_html(
           `<label class="rejection-chip">` +
           `<input type="checkbox" data-cat="${{cat}}" data-value="${{t.replace(/"/g, '&quot;')}}" />` +
           `${{t}}</label>`
+          `<div class="rejection-chip">` +
+          `<label><input type="checkbox" data-value="${{t.replace(/"/g, '&quot;')}}" /> ${{t}}</label>` +
+          `<select class="rejection-chip-select" data-orig="${{cat}}">${{catOptions}}</select>` +
+          `</div>`
         ).join('')}}</div></div>`
       ).join('');
+      body.querySelectorAll('.rejection-chip-select').forEach(sel => {{
+        sel.value = sel.dataset.orig;
+      }});
       body.querySelectorAll('input[type=checkbox]').forEach(cb => {{
         cb.addEventListener('change', _rejUpdateSaveBtn);
       }});
@@ -4379,6 +4387,10 @@ def render_html(
       const rules = [];
       document.querySelectorAll('#rejection-panel-body input[type=checkbox]:checked')
         .forEach(cb => rules.push({{ value: cb.dataset.value, category: cb.dataset.cat, source: 'suggestion' }}));
+        .forEach(cb => {{
+          const select = cb.closest('.rejection-chip').querySelector('select');
+          rules.push({{ value: cb.dataset.value, category: select ? select.value : 'other', source: 'suggestion' }});
+        }});
       _rejectionCustomTerms.forEach(t => rules.push({{ value: t.value, category: t.category, source: 'manual' }}));
       if (rules.length > 0) {{
         await fetch('/api/rejection-rules', {{

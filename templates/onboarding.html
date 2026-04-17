@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Hunter Agent Onboarding</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --card: #fffaf2;
+      --ink: #1f2933;
+      --muted: #5b6470;
+      --line: #e6dccd;
+      --accent: #14532d;
+      --accent-2: #1d4ed8;
+      --shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px 18px 52px;
+    }
+    .hero, .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+    .hero {
+      padding: 26px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      letter-spacing: -0.04em;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .panel {
+      padding: 18px;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+    }
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 700;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      background: white;
+      color: var(--ink);
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .help {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+    button, a.button-link {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+    .secondary, a.button-link.secondary {
+      background: white;
+      color: var(--accent-2);
+      border: 1px solid var(--line);
+    }
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      display: none;
+    }
+    .status.ok {
+      display: block;
+      background: #e6f4ea;
+      color: #14532d;
+    }
+    .status.error {
+      display: block;
+      background: #fff0e6;
+      color: #9a3412;
+    }
+    .summary-box {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: white;
+      display: none;
+    }
+    .summary-box.visible {
+      display: block;
+    }
+    .summary-box h3 {
+      margin: 0 0 8px;
+    }
+    .summary-box p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .summary-box ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Set Up Your Profile</h1>
+      <p>Start with one strong detailed CV. We will turn it into a working profile the job engine can use, and you can refine it later in admin.</p>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Step 1. Primary CV</h2>
+        <label for="primary_cv">Detailed CV</label>
+        <input id="primary_cv" type="file" accept=".docx,.md,.txt">
+        <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
+
+        <label for="extra_notes">Optional extra notes</label>
+        <textarea id="extra_notes" placeholder="Anything important you want the system to know, in plain English."></textarea>
+        <div class="help">You can leave this blank. STAR examples can come later if you want.</div>
+
+        <div class="actions">
+          <button class="primary" id="create_profile" type="button">Create Profile</button>
+          <a class="button-link secondary" href="/admin">Go To Admin</a>
+        </div>
+        <div class="status" id="status"></div>
+      </section>
+
+      <section class="panel">
+        <h2>What Happens Next</h2>
+        <div class="help">
+          1. We read your uploaded document text.<br>
+          2. We build or enrich <code>profile.json</code>.<br>
+          3. You review the generated summary, strengths, and fit notes in admin.<br>
+          4. Then you can run the current job-source connector and use the dashboard.
+        </div>
+        <div class="summary-box" id="summary_box">
+          <h3>Generated Profile Snapshot</h3>
+          <p id="summary_text"></p>
+          <ul id="strengths_list"></ul>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const summaryBox = document.getElementById('summary_box');
+    const summaryText = document.getElementById('summary_text');
+    const strengthsList = document.getElementById('strengths_list');
+
+    function showStatus(message, kind) {
+      statusEl.textContent = message;
+      statusEl.className = `status ${kind}`;
+    }
+
+    async function fileToPayload(file, label) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+        reader.readAsDataURL(file);
+      });
+      const parts = dataUrl.split(',', 2);
+      return {
+        label,
+        filename: file.name,
+        content_base64: parts[1] || '',
+      };
+    }
+
+    function renderProfileSnapshot(profile) {
+      summaryText.textContent = profile.candidate_summary || 'Profile created.';
+      const strengths = (profile.strengths || []).slice(0, 8);
+      strengthsList.innerHTML = strengths.map(item => `<li>${item}</li>`).join('');
+      summaryBox.classList.add('visible');
+    }
+
+    async function createProfile() {
+      const primary = document.getElementById('primary_cv').files[0];
+      const extraNotes = document.getElementById('extra_notes').value.trim();
+
+      if (!primary) {
+        throw new Error('Choose your detailed CV first.');
+      }
+
+      const files = [await fileToPayload(primary, 'Primary CV')];
+
+      const response = await fetch('/api/onboarding/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files,
+          extra_text: extraNotes,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not create profile');
+      }
+      renderProfileSnapshot(payload.profile || {});
+      showStatus(payload.message || 'Profile created.', 'ok');
+    }
+
+    document.getElementById('create_profile').addEventListener('click', async () => {
+      try {
+        await createProfile();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

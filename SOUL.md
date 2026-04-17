@@ -317,6 +317,21 @@ The code now resolves these files relative to the repo location, not the shell w
 
 ---
 
+## Parked Decisions
+
+These are intentional choices to defer features. Do not re-add without reading the reason.
+
+### star_evidence_text — parked April 2026
+
+- Field exists in `data/profile.json` and is populated by onboarding/import.
+- Removed from admin UI (no textarea) and excluded from LLM fit-scoring prompt.
+- Reason: adds prompt tokens without meaningfully improving KEEP/REJECT/MAYBE decisions. The evidence tiers already carry the CV substance.
+- Where it belongs: application generation — cover letters, selection criteria responses, tailored CVs. Build that feature, then re-expose this field.
+- Code comment in `llm_gate.py` → `build_profile_prompt_context()` explains the exclusion.
+- Code comment in `local_server.py` HTML and `collectProfile()` explains why the UI field is absent.
+
+---
+
 ## Guardrails for future AI agents
 
 - Do not reintroduce pane-based scraping as the main path.

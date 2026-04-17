@@ -126,9 +126,9 @@ def build_profile_prompt_context() -> str:
         parts.append("Match preferences:")
         parts.extend(f"- {line}" for line in preference_lines)
 
-    if star_evidence_text:
-        parts.append("STAR / evidence examples:")
-        parts.append(star_evidence_text[:1500])
+    # star_evidence_text intentionally excluded from fit-scoring prompt.
+    # Field is preserved in profile.json for future application/CV generation.
+    # See SOUL.md parked decisions.
 
     primary_evidence = str(evidence_tiers.get("primary_current_evidence") or "").strip()
     secondary_evidence = str(evidence_tiers.get("secondary_older_evidence") or "").strip()
