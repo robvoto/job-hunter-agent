@@ -1189,6 +1189,7 @@
         throw new Error('Could not load profile');
       }
       const profile = await response.json();
+      loadedProfile = profile;
       fillForm(profile);
       showStatus('Profile loaded.', 'ok');
     }
@@ -1607,22 +1608,20 @@
 
     async function saveProfileSection() {
       const profile = collectProfile();
+      const payload = {
+        llm_profile_brief_mode: profile.llm_profile_brief_mode,
+        llm_profile_brief: profile.llm_profile_brief,
+        preference_weights: profile.preference_weights,
+        strengths: profile.strengths,
+      };
+
+      const currentCv = (loadedProfile?.cv_text || '').trim();
+      if (profile.cv_text !== currentCv) {
+        payload.cv_text = profile.cv_text;
+      }
+
       await patchProfile(
-        {
-          llm_profile_brief_mode: profile.llm_profile_brief_mode,
-          llm_profile_brief: profile.llm_profile_brief,
-          preference_weights: profile.preference_weights,
-          strengths: profile.strengths,
-          cv_text: profile.cv_text,
-          capability_profile_rules: profile.capability_profile_rules,
-          target_title_patterns: profile.target_title_patterns,
-          adjacent_title_patterns: profile.adjacent_title_patterns,
-          must_not_require_skills: profile.must_not_require_skills,
-          reject_title_rules: profile.reject_title_rules,
-          reject_description_phrase_rules: profile.reject_description_phrase_rules,
-          reject_description_regex_rules: profile.reject_description_regex_rules,
-          onboarding_settings: profile.onboarding_settings,
-        },
+        payload,
         'Candidate profile saved to profile.json.'
       );
     }

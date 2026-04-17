@@ -143,20 +143,22 @@ class AdminHandler(BaseHTTPRequestHandler):
         if "star_evidence_text" in normalized:
             normalized["star_evidence_text"] = str(normalized.get("star_evidence_text") or "").strip()
         if "cv_text" in normalized:
-            new_cv = str(normalized.get("cv_text") or "").strip()
-            if new_cv:
-                extracted = extract_strengths_from_cv(new_cv)
-                if extracted:
-                    existing = current.get("strengths") or []
-                    merged = list(dict.fromkeys([*existing, *extracted]))[:20]
-                    normalized.setdefault("strengths", merged)
-        if "cv_text" in normalized and "evidence_tiers" not in normalized:
-            inferred_tiers = build_evidence_tiers_from_sections([{
-                "label": "Primary CV",
-                "text": str(normalized.get("cv_text") or "").strip(),
-            }])
-            if any(inferred_tiers.values()):
-                normalized["evidence_tiers"] = inferred_tiers
+          new_cv = str(normalized.get("cv_text") or "").strip()
+          current_cv = str(current.get("cv_text") or "").strip()
+          cv_changed = new_cv != current_cv
+
+          if new_cv and cv_changed:
+              extracted = extract_strengths_from_cv(new_cv)
+              if extracted and "strengths" not in normalized:
+                  normalized["strengths"] = extracted
+
+          if cv_changed and "evidence_tiers" not in normalized:
+              inferred_tiers = build_evidence_tiers_from_sections([{
+                  "label": "Primary CV",
+                  "text": new_cv,
+              }])
+              if any(inferred_tiers.values()):
+                  normalized["evidence_tiers"] = inferred_tiers
         return normalized
 
     @staticmethod
@@ -547,7 +549,7 @@ class AdminHandler(BaseHTTPRequestHandler):
         if "\n" in block_phrase or "\\n" in block_phrase:
           raise ValueError("Only one keyword allowed")
 
-        phsrase = normalize_title_block_phrase(block_phrase) or suggest_title_block_phrase(title)
+        phrase = normalize_title_block_phrase(block_phrase) or suggest_title_block_phrase(title)
         if not phrase:
             raise ValueError("Could not suggest a title keyword to block from this title yet")
 

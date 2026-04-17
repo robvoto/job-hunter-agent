@@ -465,7 +465,7 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             "name": skill,
             "level": level,
             "fit": fit,
-            "aliases": [skill],
+            "aliases": [],
         }
 
         if normalized in existing_index:
