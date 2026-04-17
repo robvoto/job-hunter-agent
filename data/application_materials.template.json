@@ -5,8 +5,5 @@
       "path": "data/application_inputs/source_pack/primary_cv.md"
     }
   ],
-  "instructions_file": "",
-  "cv_variants": [],
-  "cover_letter_preferences_file": "",
-  "notes": "Starter local source-pack structure. Normal users should use onboarding rather than editing this file directly."
+  "cv_variants": []
 }

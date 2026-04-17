@@ -48,10 +48,7 @@ ONBOARDING_RESET_FIELDS = (
 
 DEFAULT_SOURCE_MATERIALS = {
     "profile_sources": [],
-    "instructions_file": "",
     "cv_variants": [],
-    "cover_letter_preferences_file": "",
-    "notes": "",
 }
 
 STAR_LABEL_KEYWORDS = ("star", "achievement", "example", "selection criteria", "impact")
@@ -108,10 +105,7 @@ def normalize_source_materials(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return base
     base["profile_sources"] = _normalize_profile_sources(payload.get("profile_sources", []))
-    base["instructions_file"] = str(payload.get("instructions_file") or "").strip()
     base["cv_variants"] = _normalize_cv_variants(payload.get("cv_variants", []))
-    base["cover_letter_preferences_file"] = str(payload.get("cover_letter_preferences_file") or "").strip()
-    base["notes"] = str(payload.get("notes") or "").strip()
     return base
 
 
@@ -214,38 +208,15 @@ def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text
             "path": str(target_path.relative_to(ROOT_DIR)),
         })
 
-    extra_clean = repair_text(extra_text)
-    if extra_clean:
-        notes_path = SOURCE_PACK_DIR / "extra_notes.txt"
-        notes_path.write_text(extra_clean, encoding="utf-8")
-        profile_sources.append({
-            "label": "Extra Notes",
-            "path": str(notes_path.relative_to(ROOT_DIR)),
-        })
-
     materials = {
         "profile_sources": profile_sources,
-        "instructions_file": "",
         "cv_variants": [],
-        "cover_letter_preferences_file": "",
-        "notes": "Managed by onboarding. Internal local evidence pack.",
     }
     return save_source_materials(materials)
 
 
 def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     sources = list(materials.get("profile_sources", []))
-    if materials.get("instructions_file"):
-        sources.append({
-            "label": "Project Instructions",
-            "path": str(materials.get("instructions_file") or "").strip(),
-        })
-    if not sources:
-        for variant in materials.get("cv_variants", []):
-            sources.append({
-                "label": str(variant.get("label") or variant.get("key") or "CV Variant"),
-                "path": str(variant.get("path") or "").strip(),
-            })
     return [item for item in sources if item.get("label") and item.get("path")]
 
 
@@ -319,15 +290,6 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
             copy.deepcopy(DEFAULT_PROFILE.get("capability_profile_rules", [])),
             learned["capability_profile_rules"],
         )
-
-    star_text = "\n\n".join(
-        str(s.get("text") or "").strip()
-        for s in source_sections
-        if any(kw in str(s.get("label") or "").lower() for kw in STAR_LABEL_KEYWORDS)
-        and str(s.get("text") or "").strip()
-    ).strip()
-    if star_text:
-        patch["star_evidence_text"] = star_text[:5000]
 
     brief = build_llm_profile_brief(
         strengths=patch.get("strengths") or DEFAULT_PROFILE["strengths"],
@@ -487,16 +449,6 @@ def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], ex
         })
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
-
-    extra_clean = repair_text(extra_text)
-    if extra_clean:
-        imported_sources.append({
-            "label": "Extra Notes",
-            "path": "pasted_text",
-            "characters": len(extra_clean),
-        })
-        combined_sections.append(f"## Extra Notes\n{extra_clean}")
-        source_sections.append({"label": "Extra Notes", "text": extra_clean})
 
     if not combined_sections:
         raise ValueError("No readable onboarding documents were provided.")
