@@ -500,7 +500,11 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             canonical_name = str(existing_rule.get("name") or skill).strip() or skill
             canonical_name_norm = _normalize_term(canonical_name)
 
-            for alias in (existing_rule.get("aliases") or []):
+            alias_candidates = [
+                *(existing_rule.get("aliases") or []),
+                *_default_aliases_for_skill(skill),
+            ]
+            for alias in alias_candidates:
                 cleaned_alias = str(alias or "").strip()
                 if not cleaned_alias:
                     continue
