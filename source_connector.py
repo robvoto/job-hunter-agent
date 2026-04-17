@@ -4768,26 +4768,34 @@ def _seek_scrape_to_records(
                                 record["soft_risk_reasons"],
                             )
                             if deterministic_review is not None:
-                                llm_review = deterministic_review
-                                print(f"[LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                              llm_review = deterministic_review
+                              review_source = "rule"
+                              print(f"[REVIEW][RULE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
                             else:
-                                llm_input_text = details_text[:MAX_LLM_CHARS]
-                                llm_fp = build_llm_cache_key(llm_input_text)
+                              llm_input_text = details_text[:MAX_LLM_CHARS]
+                              llm_fp = build_llm_cache_key(llm_input_text)
 
-                                if NO_LLM_MODE:
-                                    llm_review = normalize_llm_review(None)
-                                    print(f"[LLM][SKIPPED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                                elif not llm_is_enabled():
-                                    llm_review = normalize_llm_review(None)
-                                    print(f"[LLM][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                                elif llm_fp in llm_cache:
-                                    llm_review = normalize_llm_review(llm_cache[llm_fp])
-                                    print(f"[LLM][CACHE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                                else:
-                                    llm_review = normalize_llm_review(llm_should_consider(llm_input_text))
-                                    llm_cache[llm_fp] = llm_review
-                                    print(f"[LLM] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                              if NO_LLM_MODE:
+                                  llm_review = normalize_llm_review(None)
+                                  review_source = "no_llm_flag"
+                                  print(f"[REVIEW][NO_LLM_FLAG] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                              elif not llm_is_enabled():
+                                  llm_review = normalize_llm_review(None)
+                                  review_source = "disabled"
+                                  print(f"[REVIEW][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                              elif llm_fp in llm_cache:
+                                  llm_review = normalize_llm_review(llm_cache[llm_fp])
+                                  review_source = "cache"
+                                  print(f"[REVIEW][CACHE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                              else:
+                                  llm_review = normalize_llm_review(llm_should_consider(llm_input_text))
+                                  llm_cache[llm_fp] = llm_review
+                                  review_source = "llm"
+                                  print(f"[REVIEW][LLM] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
 
+                            record["llm_decision"] = llm_review["decision"]
+                            record["llm_fit_grade"] = llm_review["grade"]
+                            record["review_source"] = review_source
                             record["llm_decision"] = llm_review["decision"]
                             record["llm_fit_grade"] = llm_review["grade"]
                             if TEST_SCRAPE_MODE:
