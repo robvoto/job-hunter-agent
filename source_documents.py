@@ -9,6 +9,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from cv_pipeline import run_cv_pipeline
+from llm_gate import client as llm_client
 from profile_learning import (
     extract_title_pattern_suggestions,
     repair_text,
@@ -37,7 +38,6 @@ ONBOARDING_RESET_FIELDS = (
     "target_title_patterns",
     "adjacent_title_patterns",
     "reject_title_rules",
-    "evidence_signals",
     "capability_profile_rules",
     "candidate_summary",
     "cv_text",
@@ -286,7 +286,7 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
     patch["cv_text"] = combined_text
     patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
-    patch.update(run_cv_pipeline(combined_text))
+    patch.update(run_cv_pipeline(combined_text, llm_client))
 
     imported_summary = _extract_summary_from_text(combined_text)
     if imported_summary:
@@ -384,21 +384,6 @@ def _extract_summary_from_text(text: str) -> str:
         and not (len(line.split()) <= 8 and line.upper() == line)
     ]
     return " ".join(filtered[:3])[:500].strip()
-
-
-def _extract_evidence_signals_from_text(text: str) -> list[str]:
-    """Generic noun-phrase fallback extraction if LLM is unavailable."""
-    phrases = re.findall(r"\b(?:[A-Z][a-z]+\s+){1,2}[A-Z][a-z]+\b", text)
-    seen: set[str] = set()
-    evidence_signals: list[str] = []
-    for phrase in phrases:
-        lowered = phrase.lower()
-        if lowered not in seen and len(lowered) > 8:
-            seen.add(lowered)
-            evidence_signals.append(phrase)
-    return evidence_signals[:12]
-
-
 def build_llm_profile_brief(
     capability_rules: list[dict[str, Any]],
 ) -> str:

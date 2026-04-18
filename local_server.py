@@ -1,16 +1,20 @@
 import json
+import re
+import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 from agent_settings import load_agent_settings, save_agent_settings
 from config import OUTPUT_HTML
 from filters import build_title_block_rule, extract_rejection_suggestions, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text
-from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
+from profile_store import DEFAULT_PROFILE, load_profile, normalize_search_settings, patch_profile, save_profile
 from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
+from source_connector import scrape_jobs_direct
 from source_documents import (
     build_llm_profile_brief,
     import_source_materials_to_profile,
@@ -35,6 +39,81 @@ DASHBOARD_PATH = ROOT_DIR / OUTPUT_HTML
 REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
 ADMIN_HTML_PATH = ROOT_DIR / "templates" / "admin.html"
 ONBOARDING_HTML_PATH = ROOT_DIR / "templates" / "onboarding.html"
+_run_in_progress = False
+_run_state_lock = threading.Lock()
+
+
+def _set_run_in_progress(value: bool) -> None:
+    global _run_in_progress
+    with _run_state_lock:
+        _run_in_progress = bool(value)
+
+
+def _is_run_in_progress() -> bool:
+    with _run_state_lock:
+        return _run_in_progress
+
+
+def _try_mark_run_started() -> bool:
+    global _run_in_progress
+    with _run_state_lock:
+        if _run_in_progress:
+            return False
+        _run_in_progress = True
+        return True
+
+
+def _parse_locations_override(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [part.strip() for part in re.split(r"[\r\n,]+", text) if part.strip()]
+
+
+def _read_last_run_timestamp() -> str | None:
+    if not RUN_STATS_PATH.exists():
+        return None
+    try:
+        payload = json.loads(RUN_STATS_PATH.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return None
+        return str(payload.get("run_finished_at") or payload.get("run_started_at") or "").strip() or None
+    except Exception:
+        return None
+
+
+def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
+    source = payload if isinstance(payload, dict) else {}
+    if isinstance(source.get("search_settings"), dict):
+        source = source.get("search_settings") or {}
+
+    overrides: dict[str, Any] = {}
+    if "keywords" in source:
+        overrides["keywords"] = str(source.get("keywords") or "").strip()
+    if "locations" in source:
+        overrides["locations"] = _parse_locations_override(source.get("locations"))
+    if "date_range_days" in source or "date_window_days" in source:
+        overrides["date_range_days"] = source.get("date_range_days", source.get("date_window_days"))
+    if "max_pages_cap" in source or "pages_cap" in source:
+        overrides["max_pages_cap"] = source.get("max_pages_cap", source.get("pages_cap"))
+
+    if not overrides:
+        return {}
+
+    current_search_settings = normalize_search_settings(load_profile().get("search_settings", {}))
+    current_search_settings.update(overrides)
+    return normalize_search_settings(current_search_settings)
+
+
+def _run_scrape_job() -> None:
+    try:
+        scrape_jobs_direct()
+    except Exception as exc:
+        print(f"[RUN][ERROR] {type(exc).__name__}: {exc}")
+    finally:
+        _set_run_in_progress(False)
 
 
 
@@ -689,6 +768,16 @@ class AdminHandler(BaseHTTPRequestHandler):
         if self.path == "/api/health":
             self._send_json(200, {"ok": True})
             return
+        if self.path == "/api/run-status":
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "status": "running" if _is_run_in_progress() else "idle",
+                    "last_run_at": _read_last_run_timestamp(),
+                },
+            )
+            return
         if self.path == "/api/run-stats":
             if RUN_STATS_PATH.exists():
                 try:
@@ -822,6 +911,45 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_POST(self) -> None:
+        if self.path == "/api/run":
+            try:
+                payload = self._read_json_body()
+                search_settings = _normalize_search_settings_payload(payload)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+
+            if not _try_mark_run_started():
+                self._send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "status": "running",
+                        "last_run_at": _read_last_run_timestamp(),
+                    },
+                )
+                return
+
+            try:
+                if search_settings:
+                    patch_profile({"search_settings": search_settings})
+                thread = threading.Thread(
+                    target=_run_scrape_job,
+                    daemon=True,
+                )
+                thread.start()
+            except Exception:
+                _set_run_in_progress(False)
+                raise
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "status": "started",
+                    "last_run_at": _read_last_run_timestamp(),
+                },
+            )
+            return
         if self.path == "/api/learning":
             try:
                 payload = self._read_json_body()

@@ -481,7 +481,7 @@ def _parse_capabilities_llm_legacy(source_text: str) -> list[dict[str, Any]]:
     prompt = (
         "Read this CV and extract the candidate's professional capabilities.\n\n"
         "Return a JSON array. Each item must have exactly these keys:\n"
-        '  "name"    — short capability label in lowercase (e.g. "business analysis", "python development")\n'
+        '  "name"    — short capability label in lowercase\n'
         '  "level"   — one of: strong | working | basic | low | none\n'
         '              (based on recency and depth of use, not just whether it appears)\n'
         '  "fit"     — one of: core | supporting | contextual | avoid\n'
@@ -490,10 +490,9 @@ def _parse_capabilities_llm_legacy(source_text: str) -> list[dict[str, Any]]:
         "Rules:\n"
         "- Prefer broad, transferable capability clusters over single tools or platforms\n"
         "- Do NOT include incidental tools mentioned once unless they were a major recurring responsibility\n"
-        "- Good examples: business analysis, stakeholder facilitation, process modelling, requirements definition, data analysis, integration analysis, agile delivery\n"
         "- Include 6–15 capabilities that represent the full professional picture\n"
-        "- Aliases must be job-ad language, not CV language (e.g. 'stakeholder management' not 'managed stakeholders')\n"
-        "- Do NOT include soft skills (communication, teamwork) — only professional capabilities\n"
+        "- Aliases must be job-ad language, not CV phrasing\n"
+        "- Do NOT include soft skills — only professional capabilities\n"
         "- Only return the JSON array, no explanation\n\n"
         "CV:\n" + source_text[:5000]
     )

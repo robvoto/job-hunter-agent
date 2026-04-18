@@ -487,10 +487,6 @@ def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[st
         return []
 
     target_terms: Set[str] = set()
-    for signal in profile.get("evidence_signals", []):
-        cleaned = str(signal).strip().lower()
-        if cleaned:
-            target_terms.add(cleaned)
     for rule in profile.get("capability_profile_rules", []):
         if not isinstance(rule, dict):
             continue
@@ -1349,6 +1345,7 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         "DETAILS_CHALLENGE_PAGE": "Blocked by SEEK challenge page",
         "DETAILS_BLOCKED_PAGE": "Blocked from reading job details",
         "DETAILS_NAVIGATION_ERROR": "Could not open the job ad page",
+        "DET_REJECT": "Deterministic fit gate rejected",
         "LLM_REJECT": "AI fit review rejected",
         "DUPLICATE_URL": "Duplicate listing removed",
         "ALREADY_APPLIED": "Already marked as applied",
@@ -2426,6 +2423,19 @@ def render_html(
     search_window_label = f"Last {date_range_days} day" + ("" if date_range_days == 1 else "s")
     sort_order_label = "Newest first" if sort_newest_first else "Source relevance"
     mode_label = "Test mode ON" if TEST_ANY_MODE else "Normal mode"
+    current_search_settings = get_search_settings(scoring_profile)
+    search_settings_payload = {
+        "keywords": str(current_search_settings.get("keywords") or "").strip(),
+        "locations": [str(value).strip() for value in current_search_settings.get("locations", []) if str(value).strip()],
+        "date_range_days": int(current_search_settings.get("date_range_days", date_range_days) or date_range_days),
+        "max_pages_cap": int(
+            current_search_settings.get("max_pages_cap", run_stats.get("max_pages_cap", MAX_PAGES_CAP))
+            or run_stats.get("max_pages_cap", MAX_PAGES_CAP)
+        ),
+    }
+    search_keywords_label = search_settings_payload["keywords"] or "Not set"
+    search_locations_label = " | ".join(search_settings_payload["locations"]) or "Not set"
+    search_locations_text = "\n".join(search_settings_payload["locations"])
     snapshot_helper = (
         f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and treats all roles as New To You."
         if TEST_ANY_MODE
@@ -2702,6 +2712,139 @@ def render_html(
       color: #6b7280;
       font-size: 0.78rem;
       line-height: 1.4;
+    }}
+    .snapshot-section-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .snapshot-section-head .snapshot-heading {{
+      margin-bottom: 0;
+    }}
+    .search-status-pill {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 82px;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }}
+    .search-status-pill.is-idle {{
+      background: #f3f4f6;
+      color: #4b5563;
+      border-color: #d1d5db;
+    }}
+    .search-status-pill.is-running {{
+      background: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }}
+    .search-settings-readonly .snapshot-meta-value {{
+      max-width: 190px;
+      text-align: right;
+      white-space: normal;
+      word-break: break-word;
+    }}
+    .search-settings-actions {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }}
+    .search-settings-edit {{
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(233, 221, 207, 0.9);
+    }}
+    .search-settings-edit[hidden] {{
+      display: none;
+    }}
+    .search-settings-field {{
+      display: grid;
+      gap: 6px;
+    }}
+    .search-settings-field span {{
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    .search-settings-field input,
+    .search-settings-field textarea {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 11px 12px;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--ink);
+    }}
+    .search-settings-field textarea {{
+      min-height: 84px;
+      resize: vertical;
+    }}
+    .search-settings-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .search-settings-checkbox {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }}
+    .search-settings-checkbox input {{
+      margin: 0;
+      accent-color: var(--accent);
+    }}
+    .search-button {{
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 15px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease;
+    }}
+    .search-button:hover {{
+      transform: translateY(-1px);
+    }}
+    .search-button[disabled] {{
+      opacity: 0.6;
+      cursor: progress;
+      transform: none;
+    }}
+    .search-button-secondary {{
+      background: white;
+      color: var(--cool);
+      border: 1px solid rgba(29, 78, 216, 0.16);
+    }}
+    .search-button-primary {{
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 10px 18px rgba(20, 83, 45, 0.18);
+    }}
+    .search-settings-message {{
+      min-height: 1.2rem;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }}
+    .search-settings-message.is-error {{
+      color: #991b1b;
     }}
     .section {{
       margin-top: 30px;
@@ -3451,6 +3594,8 @@ def render_html(
       .job-header-row {{ flex-direction: column; }}
       .match-tile {{ min-width: 0; width: 100%; }}
       .summary-grid, .side-panel-summary-grid {{ grid-template-columns: 1fr; }}
+      .search-settings-grid {{ grid-template-columns: 1fr; }}
+      .search-settings-actions {{ flex-direction: column; }}
     }}
     @media (max-width: 1080px) {{
       .dashboard-layout {{
@@ -3612,6 +3757,43 @@ def render_html(
             </div>
           </section>
           <section class="snapshot-section">
+            <div class="snapshot-section-head">
+              <h2 class="snapshot-heading">Search Settings</h2>
+              <span class="search-status-pill is-idle" id="run_status_pill">Idle</span>
+            </div>
+            <div class="snapshot-meta search-settings-readonly">
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value" id="search_keywords_current">{safe_html(search_keywords_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value" id="search_locations_current">{safe_html(search_locations_label)}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date window</span><span class="snapshot-meta-value" id="search_date_range_current">{safe_html(str(search_settings_payload["date_range_days"]))} day{"s" if int(search_settings_payload["date_range_days"]) != 1 else ""}</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Pages cap</span><span class="snapshot-meta-value" id="search_max_pages_current">{safe_html(str(search_settings_payload["max_pages_cap"]))}</span></div>
+            </div>
+            <div class="search-settings-actions">
+              <button class="search-button search-button-secondary" type="button" id="search_settings_toggle">Edit</button>
+              <button class="search-button search-button-primary" type="button" id="run_now_button">Run Now</button>
+            </div>
+            <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
+            <div class="search-settings-edit" id="search_settings_edit" hidden>
+              <label class="search-settings-field">
+                <span>Keywords</span>
+                <input type="text" id="search_keywords_input" value="{safe_html(search_settings_payload['keywords'])}" placeholder="Optional keywords">
+              </label>
+              <label class="search-settings-field">
+                <span>Locations</span>
+                <textarea id="search_locations_input" placeholder="One location per line">{safe_html(search_locations_text)}</textarea>
+              </label>
+              <div class="search-settings-grid">
+                <label class="search-settings-field">
+                  <span>Date window</span>
+                  <input type="number" id="search_date_range_input" min="1" max="30" value="{safe_html(str(search_settings_payload['date_range_days']))}">
+                </label>
+                <label class="search-settings-field">
+                  <span>Pages cap</span>
+                  <input type="number" id="search_max_pages_input" min="1" max="25" value="{safe_html(str(search_settings_payload['max_pages_cap']))}">
+                </label>
+              </div>
+            </div>
+          </section>
+          <section class="snapshot-section">
             <h2 class="snapshot-heading">This Run</h2>
             <div class="summary-grid">
               {this_run_cards_html}
@@ -3704,6 +3886,9 @@ def render_html(
     <script>
     const REVIEW_API_URL = 'http://127.0.0.1:8765/api/review';
     const JOB_HISTORY_API_URL = 'http://127.0.0.1:8765/api/job-history';
+    const RUN_API_URL = 'http://127.0.0.1:8765/api/run';
+    const RUN_STATUS_API_URL = 'http://127.0.0.1:8765/api/run-status';
+    const INITIAL_SEARCH_SETTINGS = {json.dumps(search_settings_payload, ensure_ascii=False)};
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
@@ -3716,7 +3901,184 @@ def render_html(
     const dismissResultsHelperButton = document.getElementById('dismiss_results_helper');
     const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
     const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
+    const searchSettingsToggleButton = document.getElementById('search_settings_toggle');
+    const searchSettingsEdit = document.getElementById('search_settings_edit');
+    const searchSettingsMessage = document.getElementById('search_settings_message');
+    const runNowButton = document.getElementById('run_now_button');
+    const runStatusPill = document.getElementById('run_status_pill');
+    const searchKeywordsInput = document.getElementById('search_keywords_input');
+    const searchLocationsInput = document.getElementById('search_locations_input');
+    const searchDateRangeInput = document.getElementById('search_date_range_input');
+    const searchMaxPagesInput = document.getElementById('search_max_pages_input');
+    const searchKeywordsCurrent = document.getElementById('search_keywords_current');
+    const searchLocationsCurrent = document.getElementById('search_locations_current');
+    const searchDateRangeCurrent = document.getElementById('search_date_range_current');
+    const searchMaxPagesCurrent = document.getElementById('search_max_pages_current');
     const paginationState = {{}};
+    let runStatusPollHandle = null;
+    let runStatusWasRunning = false;
+
+    function normalizeSearchSettingsInput(settings) {{
+      const source = settings && typeof settings === 'object' ? settings : {{}};
+      const locations = Array.isArray(source.locations)
+        ? source.locations.map(value => String(value || '').trim()).filter(Boolean)
+        : [];
+      return {{
+        keywords: String(source.keywords || '').trim(),
+        locations,
+        date_range_days: Math.max(1, Math.min(30, Number(source.date_range_days || 3) || 3)),
+        max_pages_cap: Math.max(1, Math.min(25, Number(source.max_pages_cap || 10) || 10)),
+      }};
+    }}
+
+    function setSearchSettingsMessage(message, isError = false) {{
+      if (!searchSettingsMessage) {{
+        return;
+      }}
+      searchSettingsMessage.textContent = message || '';
+      searchSettingsMessage.classList.toggle('is-error', Boolean(isError && message));
+    }}
+
+    function setRunStatusPill(status) {{
+      if (!runStatusPill) {{
+        return;
+      }}
+      const isRunning = status === 'running';
+      runStatusPill.textContent = isRunning ? 'Running...' : 'Idle';
+      runStatusPill.classList.toggle('is-running', isRunning);
+      runStatusPill.classList.toggle('is-idle', !isRunning);
+    }}
+
+    function renderSearchSettingsReadonly(settings) {{
+      const normalized = normalizeSearchSettingsInput(settings);
+      if (searchKeywordsCurrent) {{
+        searchKeywordsCurrent.textContent = normalized.keywords || 'Not set';
+      }}
+      if (searchLocationsCurrent) {{
+        searchLocationsCurrent.textContent = normalized.locations.length ? normalized.locations.join(' | ') : 'Not set';
+      }}
+      if (searchDateRangeCurrent) {{
+        searchDateRangeCurrent.textContent = `${{normalized.date_range_days}} day${{normalized.date_range_days === 1 ? '' : 's'}}`;
+      }}
+      if (searchMaxPagesCurrent) {{
+        searchMaxPagesCurrent.textContent = String(normalized.max_pages_cap);
+      }}
+    }}
+
+    function renderSearchSettingsForm(settings) {{
+      const normalized = normalizeSearchSettingsInput(settings);
+      if (searchKeywordsInput) {{
+        searchKeywordsInput.value = normalized.keywords;
+      }}
+      if (searchLocationsInput) {{
+        searchLocationsInput.value = normalized.locations.join('\\n');
+      }}
+      if (searchDateRangeInput) {{
+        searchDateRangeInput.value = String(normalized.date_range_days);
+      }}
+      if (searchMaxPagesInput) {{
+        searchMaxPagesInput.value = String(normalized.max_pages_cap);
+      }}
+    }}
+
+    function collectSearchSettingsFromForm() {{
+      return normalizeSearchSettingsInput({{
+        keywords: searchKeywordsInput?.value || '',
+        locations: String(searchLocationsInput?.value || '')
+          .split(/[\r\n]+/)
+          .map(value => value.trim())
+          .filter(Boolean),
+        date_range_days: Number(searchDateRangeInput?.value || 3),
+        max_pages_cap: Number(searchMaxPagesInput?.value || 10),
+      }});
+    }}
+
+    function stopRunStatusPolling() {{
+      if (runStatusPollHandle) {{
+        window.clearInterval(runStatusPollHandle);
+        runStatusPollHandle = null;
+      }}
+    }}
+
+    function startRunStatusPolling() {{
+      if (runStatusPollHandle) {{
+        return;
+      }}
+      runStatusPollHandle = window.setInterval(syncRunStatus, 10000);
+    }}
+
+    async function syncRunStatus() {{
+      try {{
+        const response = await fetch(RUN_STATUS_API_URL, {{ method: 'GET' }});
+        if (!response.ok) {{
+          throw new Error('Could not check run status.');
+        }}
+        const payload = await response.json().catch(() => ({{}}));
+        const isRunning = payload?.status === 'running';
+        setRunStatusPill(isRunning ? 'running' : 'idle');
+        if (runNowButton) {{
+          runNowButton.disabled = isRunning;
+        }}
+        if (isRunning) {{
+          runStatusWasRunning = true;
+          startRunStatusPolling();
+          if (!searchSettingsMessage?.textContent) {{
+            setSearchSettingsMessage('Scrape in progress. The dashboard will refresh when it finishes.');
+          }}
+          return;
+        }}
+        stopRunStatusPolling();
+        if (runStatusWasRunning) {{
+          runStatusWasRunning = false;
+          setSearchSettingsMessage('Scrape finished. Reloading dashboard...');
+          window.setTimeout(() => window.location.reload(), 700);
+        }}
+      }} catch (error) {{
+      }}
+    }}
+
+    async function runSearchNow() {{
+      const searchSettings = collectSearchSettingsFromForm();
+      if (runNowButton) {{
+        runNowButton.disabled = true;
+      }}
+      if (searchSettingsToggleButton) {{
+        searchSettingsToggleButton.disabled = true;
+      }}
+      setSearchSettingsMessage('Saving search settings and starting scrape...');
+
+      try {{
+        const response = await fetch(RUN_API_URL, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify(searchSettings),
+        }});
+        const payload = await response.json().catch(() => ({{}}));
+        if (!response.ok) {{
+          throw new Error(payload.error || 'Could not start scrape.');
+        }}
+
+        renderSearchSettingsReadonly(searchSettings);
+        setRunStatusPill('running');
+        runStatusWasRunning = true;
+        startRunStatusPolling();
+        if (payload?.status === 'running') {{
+          setSearchSettingsMessage('A scrape is already running. The dashboard will reload when it finishes.');
+        }} else {{
+          setSearchSettingsMessage('Scrape started. The dashboard will reload when it finishes.');
+        }}
+      }} catch (error) {{
+        setRunStatusPill('idle');
+        setSearchSettingsMessage(error.message || 'Could not start scrape.', true);
+      }} finally {{
+        if (searchSettingsToggleButton) {{
+          searchSettingsToggleButton.disabled = false;
+        }}
+        if (runNowButton && !runStatusWasRunning) {{
+          runNowButton.disabled = false;
+        }}
+      }}
+    }}
 
     function showResultsHelperIfNeeded() {{
       if (!resultsHelper) {{
@@ -4143,6 +4505,28 @@ def render_html(
     }}
 
     document.addEventListener('click', async event => {{
+      const searchToggle = event.target.closest('#search_settings_toggle');
+      if (searchToggle) {{
+        if (!searchSettingsEdit) {{
+          return;
+        }}
+        const isHidden = searchSettingsEdit.hasAttribute('hidden');
+        if (isHidden) {{
+          searchSettingsEdit.removeAttribute('hidden');
+          searchToggle.textContent = 'Close';
+        }} else {{
+          searchSettingsEdit.setAttribute('hidden', '');
+          searchToggle.textContent = 'Edit';
+        }}
+        return;
+      }}
+
+      const runNowTrigger = event.target.closest('#run_now_button');
+      if (runNowTrigger) {{
+        await runSearchNow();
+        return;
+      }}
+
       const toggle = event.target.closest('[data-toggle-target]');
       if (toggle) {{
         const target = document.getElementById(toggle.dataset.toggleTarget || '');
@@ -4243,6 +4627,10 @@ def render_html(
       }});
     }}
 
+    renderSearchSettingsReadonly(INITIAL_SEARCH_SETTINGS);
+    renderSearchSettingsForm(INITIAL_SEARCH_SETTINGS);
+    setRunStatusPill('idle');
+    syncRunStatus();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
     showResultsHelperIfNeeded();
     hydrateViewedState();
@@ -4712,31 +5100,31 @@ def _seek_scrape_to_records(
                                 record["missing_evidence"],
                                 record["soft_risk_reasons"],
                             )
-                            if False and deterministic_review is not None:                              
-                              llm_review = deterministic_review
-                              review_source = "rule"
-                              print(f"[REVIEW][RULE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                            if deterministic_review is not None:
+                                llm_review = deterministic_review
+                                review_source = "rule"
+                                print(f"[REVIEW][RULE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
                             else:
-                              llm_input_text = details_text[:MAX_LLM_CHARS]
-                              llm_fp = build_llm_cache_key(llm_input_text)
+                                llm_input_text = details_text[:MAX_LLM_CHARS]
+                                llm_fp = build_llm_cache_key(llm_input_text)
 
-                              if NO_LLM_MODE:
-                                  llm_review = normalize_llm_review(None)
-                                  review_source = "no_llm_flag"
-                                  print(f"[REVIEW][NO_LLM_FLAG] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                              elif not llm_is_enabled():
-                                  llm_review = normalize_llm_review(None)
-                                  review_source = "disabled"
-                                  print(f"[REVIEW][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                              elif llm_fp in llm_cache:
-                                  llm_review = normalize_llm_review(llm_cache[llm_fp])
-                                  review_source = "cache"
-                                  print(f"[REVIEW][CACHE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                              else:
-                                  llm_review = normalize_llm_review(llm_should_consider(llm_input_text))
-                                  llm_cache[llm_fp] = llm_review
-                                  review_source = "llm"
-                                  print(f"[REVIEW][LLM] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                if NO_LLM_MODE:
+                                    llm_review = normalize_llm_review(None)
+                                    review_source = "no_llm_flag"
+                                    print(f"[REVIEW][NO_LLM_FLAG] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                elif not llm_is_enabled():
+                                    llm_review = normalize_llm_review(None)
+                                    review_source = "disabled"
+                                    print(f"[REVIEW][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                elif llm_fp in llm_cache:
+                                    llm_review = normalize_llm_review(llm_cache[llm_fp])
+                                    review_source = "cache"
+                                    print(f"[REVIEW][CACHE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                                else:
+                                    llm_review = normalize_llm_review(llm_should_consider(llm_input_text))
+                                    llm_cache[llm_fp] = llm_review
+                                    review_source = "llm"
+                                    print(f"[REVIEW][LLM] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
 
                             record["llm_decision"] = llm_review["decision"]
                             record["llm_fit_grade"] = llm_review["grade"]
@@ -4750,9 +5138,9 @@ def _seek_scrape_to_records(
                                     f"{fit_score(record, profile)}/100 | "
                                     f"{format_score_breakdown_for_console(test_score_breakdown)}"
                                 )
-                            if llm_review["decision"] == "REJECT":
-                                print(f"REJECTED (llm) [LLM_REJECT] {title} @ {company}")
-                                record["reject_reason"] = "LLM_REJECT"
+                            if review_source == "rule" and llm_review["decision"] == "REJECT":
+                                print(f"REJECTED (deterministic) [DET_REJECT] {title} @ {company}")
+                                record["reject_reason"] = "DET_REJECT"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             record["decision"] = "KEEP"

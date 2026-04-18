@@ -1,18 +1,16 @@
-"""CV analysis pipeline — deterministic extraction followed by one focused LLM call.
+"""CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
 
-Produces 5 profile fields from raw CV text:
-  capability_profile_rules, dominant_signal_clusters, evidence_signals,
-  must_not_require_skills, and search_settings.keywords (via caller).
+Produces 3 profile fields from raw CV text:
+  capability_profile_rules, dominant_signal_clusters, and must_not_require_skills.
 
 Layers:
-  A — parse_roles: extract structured role list
-  B — extract_phrases: bigrams/trigrams from bullets
-  C — cluster_phrases: Jaccard-based phrase grouping
-  D — score_and_promote: threshold scoring into level/fit
-  LLM — label only (no invention, ~400 in / 350 out tokens)
+  A - parse_roles: extract structured role list
+  B - extract_phrases: bigrams/trigrams from bullets
+  C - cluster_phrases: Jaccard-based phrase grouping
+  D - score_and_promote: score clusters into level/fit bands
+  LLM - rename top cluster seeds only
 """
 
-import json
 import re
 from collections import defaultdict
 from typing import Any
@@ -44,276 +42,257 @@ _ACTION_VERBS = {
 }
 
 
-# ─── Layer A ────────────────────────────────────────────────────
-
 def parse_roles(cv_text: str) -> list[dict[str, Any]]:
-    result = []
+    roles: list[dict[str, Any]] = []
     for role in _parse_role_entries(cv_text):
         end_year = int(role.get("end_year") or 0)
-        result.append({
+        roles.append({
             "title": role.get("title", ""),
             "start_year": role.get("start_year"),
             "end_year": end_year,
             "is_recent": end_year >= _RECENT_CUTOFF,
             "bullets": role.get("bullets", []),
         })
-    return result
+    return roles
 
-
-# ─── Layer B ────────────────────────────────────────────────────
 
 def _has_action_verb(text: str) -> bool:
-    tokens = {t.lower() for t in re.findall(r"[a-zA-Z]+", text)}
+    tokens = {token.lower() for token in re.findall(r"[a-zA-Z]+", text)}
     return bool(tokens & _ACTION_VERBS)
 
 
 def _ngrams(text: str) -> list[str]:
     tokens = [
-        t.lower()
-        for t in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
-        if t.lower() not in _GENERIC_PHRASE_STOPWORDS
+        token.lower()
+        for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
+        if token.lower() not in _GENERIC_PHRASE_STOPWORDS
     ]
-    phrases = []
+    phrases: list[str] = []
     for size in (3, 2):
-        for i in range(len(tokens) - size + 1):
-            norm = _normalize_phrase(" ".join(tokens[i : i + size]))
-            if norm and _is_quality_phrase(norm) and not _is_generic_title_phrase(norm):
-                phrases.append(norm)
+        for index in range(len(tokens) - size + 1):
+            phrase = _normalize_phrase(" ".join(tokens[index:index + size]))
+            if phrase and _is_quality_phrase(phrase) and not _is_generic_title_phrase(phrase):
+                phrases.append(phrase)
     return list(dict.fromkeys(phrases))
 
 
 def extract_phrases(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    items = []
+    phrase_items: list[dict[str, Any]] = []
     for role in roles:
         title = role.get("title", "")
         is_recent = bool(role.get("is_recent"))
         for bullet in role.get("bullets", []):
-            has_av = _has_action_verb(bullet)
+            has_action_verb = _has_action_verb(bullet)
             for phrase in _ngrams(bullet):
-                items.append({
+                phrase_items.append({
                     "phrase": phrase,
                     "role_title": title,
                     "is_recent": is_recent,
-                    "has_action_verb": has_av,
+                    "has_action_verb": has_action_verb,
                 })
-    return items
+    return phrase_items
 
 
-# ─── Layer C ────────────────────────────────────────────────────
-
-def _jaccard(a: set[str], b: set[str]) -> float:
-    union = a | b
-    return len(a & b) / len(union) if union else 0.0
+def _jaccard(left: set[str], right: set[str]) -> float:
+    union = left | right
+    return len(left & right) / len(union) if union else 0.0
 
 
 def cluster_phrases(phrase_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    agg: dict[str, dict] = defaultdict(lambda: {
-        "occ": 0, "roles": set(), "recent": 0, "av": 0,
+    aggregates: dict[str, dict[str, Any]] = defaultdict(lambda: {
+        "occurrences": 0,
+        "_internal_roles": set(),
+        "_internal_recent_hits": 0,
+        "_internal_action_hits": 0,
     })
     for item in phrase_items:
-        d = agg[item["phrase"]]
-        d["occ"] += 1
-        d["roles"].add(item["role_title"])
+        phrase = item["phrase"]
+        aggregate = aggregates[phrase]
+        aggregate["occurrences"] += 1
+        aggregate["_internal_roles"].add(item["role_title"])
         if item["is_recent"]:
-            d["recent"] += 1
+            aggregate["_internal_recent_hits"] += 1
         if item["has_action_verb"]:
-            d["av"] += 1
+            aggregate["_internal_action_hits"] += 1
 
-    sorted_phrases = sorted(agg.items(), key=lambda x: -x[1]["occ"])
+    sorted_phrases = sorted(
+        aggregates.items(),
+        key=lambda item: (-int(item[1]["occurrences"]), item[0]),
+    )
 
-    seeds: list[str] = []
+    clusters: list[dict[str, Any]] = []
     token_sets: list[set[str]] = []
-    internals: list[dict] = []
 
     for phrase, stats in sorted_phrases:
         tokens = set(phrase.split())
-        best_idx, best_j = -1, 0.0
-        for i, tset in enumerate(token_sets):
-            j = _jaccard(tokens, tset)
-            if j >= 0.40 and j > best_j:
-                best_idx, best_j = i, j
+        best_index = -1
+        best_score = 0.0
+        for index, token_set in enumerate(token_sets):
+            score = _jaccard(tokens, token_set)
+            if score >= 0.40 and score > best_score:
+                best_index = index
+                best_score = score
 
-        if best_idx >= 0:
-            c = internals[best_idx]
-            c["aliases"].append(phrase)
-            c["_roles"].update(stats["roles"])
-            c["occ"] += stats["occ"]
-            c["recent"] += stats["recent"]
-            c["av"] += stats["av"]
-        else:
-            seeds.append(phrase)
-            token_sets.append(tokens)
-            internals.append({
-                "aliases": [],
-                "_roles": set(stats["roles"]),
-                "occ": stats["occ"],
-                "recent": stats["recent"],
-                "av": stats["av"],
-            })
-
-    result = []
-    for seed, c in zip(seeds, internals):
-        result.append({
-            "seed": seed,
-            "aliases": c["aliases"],
-            "occurrences": c["occ"],
-            "role_count": len(c["_roles"]),
-            "recent_role_count": c["recent"],
-            "action_verb_count": c["av"],
-        })
-    result.sort(key=lambda x: -x["occurrences"])
-    return result
-
-
-# ─── Layer D ────────────────────────────────────────────────────
-
-def _score(c: dict) -> float:
-    occ = c["occurrences"]
-    recurrence = min(occ / 10.0, 1.0)
-    breadth = min(c["role_count"] / 5.0, 1.0)
-    recency = c["recent_role_count"] / max(occ, 1)
-    av = c["action_verb_count"] / max(occ, 1)
-    return recurrence * 0.35 + breadth * 0.30 + recency * 0.25 + av * 0.10
-
-
-def score_and_promote(clusters: list[dict]) -> list[dict]:
-    candidates = []
-    for c in clusters:
-        s = _score(c)
-        if s < 0.15:
+        if best_index >= 0:
+            cluster = clusters[best_index]
+            cluster["aliases"].append(phrase)
+            cluster["occurrences"] += int(stats["occurrences"])
+            cluster["_internal_roles"].update(stats["_internal_roles"])
+            cluster["_internal_recent_hits"] += int(stats["_internal_recent_hits"])
+            cluster["_internal_action_hits"] += int(stats["_internal_action_hits"])
+            token_sets[best_index].update(tokens)
             continue
-        occ = c["occurrences"]
-        breadth = min(c["role_count"] / 5.0, 1.0)
-        recency_r = c["recent_role_count"] / max(occ, 1)
+
+        clusters.append({
+            "seed": phrase,
+            "aliases": [],
+            "occurrences": int(stats["occurrences"]),
+            "_internal_roles": set(stats["_internal_roles"]),
+            "_internal_recent_hits": int(stats["_internal_recent_hits"]),
+            "_internal_action_hits": int(stats["_internal_action_hits"]),
+        })
+        token_sets.append(tokens)
+
+    for cluster in clusters:
+        cluster["role_count"] = len(cluster["_internal_roles"])
+        cluster["recent_role_count"] = int(cluster["_internal_recent_hits"])
+        cluster["action_verb_count"] = int(cluster["_internal_action_hits"])
+
+    clusters.sort(key=lambda item: (-int(item["occurrences"]), item["seed"]))
+    return clusters
+
+
+def _score(cluster: dict[str, Any]) -> float:
+    occurrences = int(cluster["occurrences"])
+    recurrence = min(occurrences / 10.0, 1.0)
+    breadth = min(int(cluster["role_count"]) / 5.0, 1.0)
+    recency = int(cluster["recent_role_count"]) / max(occurrences, 1)
+    action_ratio = int(cluster["action_verb_count"]) / max(occurrences, 1)
+    return recurrence * 0.35 + breadth * 0.30 + recency * 0.25 + action_ratio * 0.10
+
+
+def score_and_promote(clusters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    scored: list[dict[str, Any]] = []
+    for cluster in clusters:
+        score = _score(cluster)
+        occurrences = int(cluster["occurrences"])
+        breadth = min(int(cluster["role_count"]) / 5.0, 1.0)
+        recency_ratio = int(cluster["recent_role_count"]) / max(occurrences, 1)
 
         level = (
-            "strong" if (s >= 0.65 or occ >= 8)
-            else "working" if (s >= 0.45 or occ >= 4)
+            "strong" if (score >= 0.65 or occurrences >= 8)
+            else "working" if (score >= 0.45 or occurrences >= 4)
             else "basic"
         )
         fit = (
-            "core" if (breadth >= 0.4 and recency_r >= 0.4)
-            else "supporting" if (breadth >= 0.2 or recency_r >= 0.5)
+            "core" if (breadth >= 0.4 and recency_ratio >= 0.4)
+            else "supporting" if (breadth >= 0.2 or recency_ratio >= 0.5)
             else "contextual"
         )
-        candidates.append({
-            **c,
-            "score": round(s, 3),
+
+        scored.append({
+            **cluster,
+            "score": round(score, 3),
             "level": level,
             "fit": fit,
-            "name": c["seed"],
+            "name": cluster["seed"],
             "fit_label": "",
             "watchout_label": "",
+            "_internal_breadth": round(breadth, 3),
+            "_internal_recency_ratio": round(recency_ratio, 3),
         })
 
-    candidates.sort(key=lambda x: -x["score"])
-    return candidates
+    scored.sort(key=lambda item: (-float(item["score"]), item["seed"]))
+    return scored
 
 
-# ─── LLM enrichment ─────────────────────────────────────────────
-
-def _enrich_with_llm(candidates: list[dict]) -> list[dict]:
+def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = None) -> list[dict[str, Any]]:
     try:
-        from llm_gate import client, _get_llm_model
+        from llm_gate import name_capability_clusters
     except ImportError:
         return candidates
-    if not client or not candidates:
+
+    if not candidates:
         return candidates
 
     top = candidates[:15]
-    payload = [
-        {"seed": c["seed"], "aliases": c["aliases"][:4], "level": c["level"]}
-        for c in top
-    ]
-    prompt = (
-        "Label pre-detected CV capability clusters. Do not invent or remove clusters.\n"
-        "Rules: same order as input; 1-4 word lowercase label; "
-        "fit_label = 3-6 word role type that benefits; "
-        "watchout_label = 4-8 word risk or caveat.\n"
-        'Return JSON array only: [{"seed":"...","label":"...","fit_label":"...","watchout_label":"..."}]\n\n'
-        "Clusters:\n" + json.dumps(payload, ensure_ascii=False)
-    )
-
     try:
-        resp = client.responses.create(
-            model=_get_llm_model(),
-            input=[{"role": "user", "content": prompt}],
-            max_output_tokens=350,
-        )
-        raw = (resp.output_text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1].lstrip("json").strip()
-        enriched = json.loads(raw)
-        if not isinstance(enriched, list):
+        labels = name_capability_clusters([
+            {"name": item["seed"], "aliases": item["aliases"][:6]}
+            for item in top
+        ], llm_client=llm_client)
+        if not labels:
             return candidates
-
-        seed_map = {item.get("seed", ""): item for item in enriched if isinstance(item, dict)}
-        result = []
-        for c in top:
-            llm = seed_map.get(c["seed"], {})
-            c = dict(c)
-            if llm.get("label"):
-                c["name"] = str(llm["label"]).strip().lower()
-            c["fit_label"] = str(llm.get("fit_label") or "").strip()
-            c["watchout_label"] = str(llm.get("watchout_label") or "").strip()
-            result.append(c)
-        return result + candidates[15:]
     except Exception as exc:
         print(f"[CV_PIPELINE] LLM enrichment failed: {exc}")
         return candidates
 
+    renamed_top: list[dict[str, Any]] = []
+    for index, item in enumerate(top):
+        renamed = dict(item)
+        if index < len(labels):
+            label = _normalize_phrase(labels[index])
+            if label and _is_quality_phrase(label) and not _is_generic_title_phrase(label):
+                renamed["name"] = label
+        renamed_top.append(renamed)
+    return renamed_top + candidates[len(top):]
 
-# ─── Output assembly ─────────────────────────────────────────────
 
-def _build_output(candidates: list[dict]) -> dict[str, Any]:
-    cap_rules = []
-    dom_clusters = []
-    evidence: list[str] = []
-    must_not: list[str] = []
+def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    capability_rules: list[dict[str, Any]] = []
+    dominant_signal_clusters: list[dict[str, Any]] = []
+    must_not_require_skills: list[str] = []
 
-    for c in candidates:
-        s = c["score"]
+    for candidate in candidates:
+        score = float(candidate["score"])
 
-        if s >= 0.25:
-            cap_rules.append({
-                "name": c["name"],
-                "level": c["level"],
-                "fit": c["fit"],
-                "aliases": c["aliases"][:6],
+        if score >= 0.25:
+            capability_rules.append({
+                "name": candidate["name"],
+                "level": candidate["level"],
+                "fit": candidate["fit"],
+                "aliases": candidate["aliases"][:6],
             })
 
-        if s >= 0.20:
-            dom_clusters.append({
-                "name": c["name"],
-                "aliases": [c["seed"]] + c["aliases"][:8],
-                "fit_label": c["fit_label"],
-                "watchout_label": c["watchout_label"],
+        if score >= 0.20:
+            dominant_signal_clusters.append({
+                "name": candidate["name"],
+                "aliases": [candidate["seed"], *candidate["aliases"][:8]],
+                "fit_label": candidate["fit_label"],
+                "watchout_label": candidate["watchout_label"],
                 "min_alias_hits": 2,
                 "min_snippet_hits": 2,
-                "dense_snippet_alias_hits": max(len(c["aliases"]) // 2 + 2, 4),
+                "dense_snippet_alias_hits": max(len(candidate["aliases"]) // 2 + 2, 4),
             })
-            evidence.append(c["name"])
-            evidence.extend(c["aliases"][:2])
 
         if (
-            s < 0.10
-            and c["recent_role_count"] == 0
-            and c["action_verb_count"] == 0
-            and c["occurrences"] <= 2
+            score < 0.10
+            and int(candidate["recent_role_count"]) == 0
+            and int(candidate["action_verb_count"]) == 0
+            and int(candidate["occurrences"]) <= 2
         ):
-            must_not.append(c["seed"])
+            must_not_require_skills.append(candidate["seed"])
 
     return {
-        "capability_profile_rules": normalize_capability_rules(cap_rules[:15]),
-        "dominant_signal_clusters": dom_clusters[:8],
-        "evidence_signals": list(dict.fromkeys(evidence))[:20],
-        "must_not_require_skills": must_not[:8],
+        "capability_profile_rules": normalize_capability_rules(capability_rules[:15]),
+        "dominant_signal_clusters": dominant_signal_clusters[:8],
+        "must_not_require_skills": list(dict.fromkeys(must_not_require_skills))[:8],
     }
 
 
-# ─── Public entry point ──────────────────────────────────────────
+def _strip_internal_keys(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_internal_keys(item)
+            for key, item in value.items()
+            if not str(key).startswith("_internal")
+        }
+    if isinstance(value, list):
+        return [_strip_internal_keys(item) for item in value]
+    return value
 
-def run_cv_pipeline(cv_text: str) -> dict[str, Any]:
+
+def run_cv_pipeline(cv_text: str, llm_client: Any = None) -> dict[str, Any]:
     text = repair_text(cv_text)
     if not text:
         return {}
@@ -322,13 +301,13 @@ def run_cv_pipeline(cv_text: str) -> dict[str, Any]:
     phrase_items = extract_phrases(roles)
     clusters = cluster_phrases(phrase_items)
     candidates = score_and_promote(clusters)
-    enriched = _enrich_with_llm(candidates)
-    output = _build_output(enriched)
+    renamed = _rename_top_clusters(candidates, llm_client=llm_client)
+    output = _build_output(renamed)
 
     print(
-        f"[CV_PIPELINE] {len(roles)} roles → {len(phrase_items)} phrases → "
-        f"{len(clusters)} clusters → {len(candidates)} candidates → "
+        f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "
+        f"{len(clusters)} clusters -> {len(candidates)} candidates -> "
         f"{len(output.get('capability_profile_rules', []))} cap rules, "
         f"{len(output.get('dominant_signal_clusters', []))} dominant clusters"
     )
-    return output
+    return _strip_internal_keys(output)

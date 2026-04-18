@@ -262,7 +262,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         f"- \"target_title_patterns\": regex patterns (case-insensitive, matched against lowercase job titles) "
         f"for roles the candidate directly targets. Use \\\\b word-boundary anchors. Up to {max_target} patterns.\n"
         f"- \"adjacent_title_patterns\": regex patterns for roles the candidate could step into based on their experience. Up to {max_adjacent} patterns.\n"
-        "- \"suggested_search_keywords\": broad job-title search terms for a job board like Seek. 2-4 keywords.\n\n"
+        "- \"suggested_search_keywords\": broad job-title search terms. 2-4 keywords.\n\n"
         "Rules for target_title_patterns:\n"
         f"- Only include roles the candidate actually held for more than {min_months} months.\n"
         f"- Only include roles that ended within the last {lookback_years} years (today is 2026-04-16).\n"
@@ -270,7 +270,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         "- If uncertain whether a role qualifies, exclude it. Fewer accurate patterns beat many noisy ones.\n\n"
         "Rules for adjacent_title_patterns:\n"
         "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
-        "- Do NOT include tool or platform names as adjacent titles (SAP, Salesforce, Guidewire, Workday etc. are tools, not job titles).\n\n"
+        "- Do NOT include tool or platform names as adjacent titles.\n\n"
         "Rules for suggested_search_keywords:\n"
         "- Must be a broad job title phrase of 2-3 words maximum.\n"
         "- Do NOT use tool names, certifications, or domain terms as keywords.\n\n"
@@ -303,9 +303,10 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
     return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
 
-def name_capability_clusters(clusters: list[dict[str, Any]]) -> list[str]:
+def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
     """Use the LLM only to label pre-selected deterministic capability clusters."""
-    if client is None or not clusters:
+    active_client = llm_client or client
+    if active_client is None or not clusters:
         return []
 
     payload: list[dict[str, Any]] = []
@@ -340,7 +341,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]]) -> list[str]:
     import json as _json
 
     try:
-        resp = client.responses.create(
+        resp = active_client.responses.create(
             model=_get_llm_model(),
             input=[{"role": "user", "content": prompt + _json.dumps(payload, ensure_ascii=False)}],
             max_output_tokens=MAX_TOKENS_CV_EXTRACTION,

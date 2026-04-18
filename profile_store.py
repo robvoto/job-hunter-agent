@@ -100,7 +100,6 @@ DEFAULT_PROFILE = {
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
     "candidate_summary": "",
-    "evidence_signals": [],
     "star_evidence_text": "",
     "cv_text": "",
     "evidence_tiers": {
@@ -154,58 +153,6 @@ def normalize_multiline_string_list(values: Any) -> list[str]:
             cleaned.append(value)
 
     return cleaned
-
-
-def normalize_evidence_signals(values: Any) -> list[str]:
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    business_words = {
-        "analysis",
-        "analyst",
-        "business",
-        "process",
-        "data",
-        "project",
-        "sql",
-        "api",
-        "agile",
-        "bpmn",
-        "product",
-        "delivery",
-        "requirements",
-        "integration",
-        "stakeholder",
-        "testing",
-        "azure",
-        "java",
-        "python",
-    }
-
-    for item in normalize_multiline_string_list(values):
-        value = re.sub(r"\s+", " ", item).strip(" -")
-        if not value:
-            continue
-        if value.startswith("#"):
-            continue
-        if value.upper() == value and len(value.split()) > 1:
-            continue
-        if len(value.split()) > 8:
-            continue
-        if len(value) > 60 or "," in value:
-            continue
-        if re.search(r"\b(?:19|20)\d{2}\b", value):
-            continue
-        words = value.split()
-        if 2 <= len(words) <= 4 and all(re.fullmatch(r"[A-Z][a-z]+", word) for word in words):
-            if not any(word.lower() in business_words for word in words):
-                continue
-        normalized = value.lower()
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        cleaned.append(value)
-
-    return cleaned[:20]
 
 
 def normalize_candidate_summary(value: Any) -> str:
@@ -299,9 +246,7 @@ def load_profile() -> dict[str, Any]:
                 merged.get("evidence_tier_weights", {})
             )
             merged["candidate_summary"] = normalize_candidate_summary(merged.get("candidate_summary", ""))
-            merged["evidence_signals"] = normalize_evidence_signals(
-                merged.get("evidence_signals", merged.get("strengths", []))
-            )
+            merged.pop("evidence_signals", None)
             merged.pop("strengths", None)
             merged["capability_profile_rules"] = normalize_capability_rules(
                 merged.get("capability_profile_rules", [])
@@ -333,9 +278,7 @@ def load_profile() -> dict[str, Any]:
         fallback.get("evidence_tier_weights", {})
     )
     fallback["candidate_summary"] = normalize_candidate_summary(fallback.get("candidate_summary", ""))
-    fallback["evidence_signals"] = normalize_evidence_signals(
-        fallback.get("evidence_signals", fallback.get("strengths", []))
-    )
+    fallback.pop("evidence_signals", None)
     fallback.pop("strengths", None)
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
@@ -368,9 +311,7 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
         normalized.get("evidence_tier_weights", {})
     )
     normalized["candidate_summary"] = normalize_candidate_summary(normalized.get("candidate_summary", ""))
-    normalized["evidence_signals"] = normalize_evidence_signals(
-        normalized.get("evidence_signals", normalized.get("strengths", []))
-    )
+    normalized.pop("evidence_signals", None)
     normalized.pop("strengths", None)
     normalized["capability_profile_rules"] = normalize_capability_rules(
         normalized.get("capability_profile_rules", [])
