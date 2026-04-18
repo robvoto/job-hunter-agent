@@ -262,7 +262,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         f"- \"target_title_patterns\": regex patterns (case-insensitive, matched against lowercase job titles) "
         f"for roles the candidate directly targets. Use \\\\b word-boundary anchors. Up to {max_target} patterns.\n"
         f"- \"adjacent_title_patterns\": regex patterns for roles the candidate could step into based on their experience. Up to {max_adjacent} patterns.\n"
-        "- \"suggested_search_keywords\": broad job-title search terms. 2-4 keywords.\n\n"
+        "- \"suggested_search_keywords\": broad search terms. 2-4 keywords.\n\n"
         "Rules for target_title_patterns:\n"
         f"- Only include roles the candidate actually held for more than {min_months} months.\n"
         f"- Only include roles that ended within the last {lookback_years} years (today is 2026-04-16).\n"
@@ -272,7 +272,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
         "- Do NOT include tool or platform names as adjacent titles.\n\n"
         "Rules for suggested_search_keywords:\n"
-        "- Must be a broad job title phrase of 2-3 words maximum.\n"
+        "- Must be a broad search phrase of 2-3 words maximum.\n"
         "- Do NOT use tool names, certifications, or domain terms as keywords.\n\n"
         "Use lowercase for all patterns and keywords. Only return the JSON object, no explanation.\n\nCV:\n"
         + str(cv_text)[:4000]
