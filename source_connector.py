@@ -381,43 +381,6 @@ def infer_employer_type(record: dict, details_text: str) -> str:
     return "Private sector employer"
 
 
-def infer_ba_style(record: dict, details_text: str) -> str:
-    title = compact_whitespace(record.get("title") or "").lower()
-    lowered = compact_whitespace(details_text).lower()
-
-    if "technical business analyst" in title:
-        return "technical BA"
-    if "systems analyst" in title:
-        return "systems-focused BA"
-    if "process analyst" in title or "process business analyst" in title:
-        return "process-focused BA"
-    if "delivery" in title and "business analyst" in title:
-        return "delivery BA"
-
-    process_score = sum(
-        1 for term in ("bpmn", "process mapping", "process modelling", "workflow", "as-is", "to-be")
-        if text_contains_term(lowered, term)
-    )
-    technical_score = sum(
-        1 for term in ("api", "apis", "integration", "data mapping", "sql", "technical", "system", "platform")
-        if text_contains_term(lowered, term) or text_contains_term(title, term)
-    )
-    delivery_score = sum(
-        1 for term in ("agile", "user stories", "acceptance criteria", "backlog", "sprint", "delivery", "implementation")
-        if text_contains_term(lowered, term) or text_contains_term(title, term)
-    )
-
-    if technical_score >= 2 and delivery_score >= 2:
-        return "technical delivery BA"
-    if process_score >= 2:
-        return "process-focused BA"
-    if technical_score >= 2:
-        return "technical BA"
-    if delivery_score >= 2:
-        return "delivery BA"
-    return "generalist BA"
-
-
 def role_text_bundle(record: dict, details_text: str) -> str:
     return "\n".join(
         compact_whitespace(part)
@@ -431,88 +394,38 @@ def role_text_bundle(record: dict, details_text: str) -> str:
     )
 
 
-def infer_role_themes(record: dict, details_text: str) -> List[str]:
-    lowered = role_text_bundle(record, details_text).lower()
-    themes: List[str] = []
-    theme_rules = [
-        ("digital delivery", ("digital", "delivery", "implementation", "transformation", "ict")),
-        ("process analysis", ("bpmn", "process mapping", "process modelling", "workflow", "as-is", "to-be")),
-        ("requirements shaping", ("requirements", "business rules", "elicitation", "functional specification", "functional specs")),
-        ("stakeholder workshops", ("stakeholder", "stakeholders", "workshop", "workshops", "facilitate")),
-        ("agile documentation", ("agile", "scrum", "user stories", "acceptance criteria", "backlog", "gherkin")),
-        ("data / integration analysis", ("sql", "data mapping", "integration", "api", "apis", "validation", "system interactions")),
-        ("systems improvement", ("system", "platform", "solution", "improvement", "modernisation", "uplift")),
-    ]
-    for label, terms in theme_rules:
-        if any(text_contains_term(lowered, term) for term in terms):
-            themes.append(label)
-    return dedupe_preserve_order(themes)[:4]
-
-
-def infer_role_context_clause(record: dict, details_text: str) -> str:
-    lowered = role_text_bundle(record, details_text).lower()
-
-    context_rules = [
-        ("in an energy trading environment", ("energy trading", "nem", "wholesale energy")),
-        ("on a government ICT delivery program", ("aps", "government", "department", "agency", "cio", "ict")),
-        ("for a finance or treasury change program", ("treasury", "core banking", "loan systems", "financial management")),
-        ("for an ERP or operating-model change program", ("erp", "vendor evaluation", "vendor selection", "supply chain", "commercial functions")),
-        ("on a health or public-service program", ("health", "ehealth", "aged care", "ambulance")),
-        ("on a systems and integration program", ("integration", "integrations", "api", "apis", "data mapping", "system interactions")),
-    ]
-    for clause, terms in context_rules:
-        if any(text_contains_term(lowered, term) for term in terms):
-            return clause
-    return ""
-
-
 def build_role_summary(record: dict, details_text: str, profile: Optional[dict] = None) -> str:
     employer_type = infer_employer_type(record, details_text)
-    ba_style = infer_ba_style(record, details_text)
-    themes = infer_role_themes(record, details_text)
-    context_clause = infer_role_context_clause(record, details_text)
+    title = compact_whitespace(record.get("title") or "")
+
+    domain_focus = ""
+    if " - " in title:
+        domain_focus = compact_whitespace(title.split(" - ", 1)[1])
+    elif "(" in title and ")" in title:
+        domain_focus = compact_whitespace(re.sub(r"^[^(]*\((.*?)\).*$", r"\1", title))
+
+    base_role = title.split(" - ")[0].split("(")[0].strip() if domain_focus else title
 
     if employer_type == "Government agency":
-        intro = f"Government agency looking for a {ba_style}"
+        intro = f"Government agency looking for a {base_role}"
     elif employer_type == "Consulting firm":
-        intro = f"Consulting firm looking for a {ba_style}"
+        intro = f"Consulting firm looking for a {base_role}"
     elif employer_type == "Recruitment-led role":
-        intro = f"Recruitment-led role for a {ba_style}"
+        intro = f"Recruitment-led role for a {base_role}"
     else:
-        intro = f"Private sector role for a {ba_style}"
+        intro = f"Private sector role for a {base_role}"
 
-    if themes:
-        if context_clause and "government ict" in context_clause and employer_type == "Government agency":
-            summary = f"{intro} to support {list_to_phrase(themes[:3])}."
-        elif context_clause:
-            summary = f"{intro} {context_clause} to support {list_to_phrase(themes[:3])}."
-        else:
-            summary = f"{intro} to support {list_to_phrase(themes[:3])}."
-    elif context_clause:
-        summary = f"{intro} {context_clause}."
+    if domain_focus:
+        summary = f"{intro} focused on {domain_focus}."
     else:
         summary = f"{intro}."
+
     return summarize_snippet(summary, max_length=180)
 
 
 def friendly_capability_label(name: str) -> str:
-    labels = {
-        "business analysis delivery": "requirements shaping and BA delivery",
-        "api and integration": "APIs and integrations",
-        "data analysis and validation": "data analysis and validation",
-        "stakeholder management": "stakeholder management",
-        "bpmn and process modelling": "process mapping and BPMN",
-        "agile delivery": "Agile delivery",
-        "system and technical analysis": "technical analysis",
-        "cloud and infrastructure": "cloud or infrastructure context",
-        "ai innovation and automation": "automation and AI experimentation",
-        "advanced data analytics and bi": "heavy BI or analytics work",
-        "hr and workforce management": "HR or workforce systems",
-        "crm platform administration": "CRM platform administration",
-        "cyber and security": "cyber or security work",
-    }
     normalized = compact_whitespace(name).lower()
-    return labels.get(normalized, compact_whitespace(name))
+    return normalized[:1].upper() + normalized[1:] if normalized else ""
 
 
 def text_contains_term(text: str, term: str) -> bool:
@@ -574,8 +487,8 @@ def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[st
         return []
 
     target_terms: Set[str] = set()
-    for strength in profile.get("strengths", []):
-        cleaned = str(strength).strip().lower()
+    for signal in profile.get("evidence_signals", []):
+        cleaned = str(signal).strip().lower()
         if cleaned:
             target_terms.add(cleaned)
     for rule in profile.get("capability_profile_rules", []):
@@ -593,26 +506,16 @@ def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[st
                     target_terms.add(cleaned_alias)
 
     generic_positive_terms = {
-        "business analysis",
-        "requirements",
-        "requirement",
-        "stakeholder",
-        "stakeholders",
-        "workshop",
-        "workshops",
-        "discovery",
-        "process",
-        "workflow",
         "delivery",
-        "backlog",
-        "user stories",
-        "agile",
         "implementation",
         "transformation",
         "change",
-        "mapping",
-        "analysis",
-        "analyst",
+        "strategy",
+        "project",
+        "initiative",
+        "lead",
+        "manage",
+        "ownership",
     }
 
     scored: List[tuple[int, str]] = []
@@ -629,21 +532,6 @@ def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[st
     return dedupe_preserve_order([snippet for _, snippet in scored[:3]])
 
 
-def fit_highlight_for_profile_area(area: str) -> Optional[str]:
-    mapping = {
-        "requirements shaping and BA delivery": "Requirements elicitation and BA delivery",
-        "stakeholder management": "Workshops and stakeholder facilitation",
-        "process mapping and BPMN": "BPMN and process modelling",
-        "Agile delivery": "User stories and acceptance criteria",
-        "data analysis and validation": "Data mapping and validation",
-        "technical analysis": "Technical and systems analysis",
-        "APIs and integrations": "APIs and integration context",
-        "cloud or infrastructure context": "Infrastructure and platform context",
-        "automation and AI experimentation": "Automation and AI experimentation",
-    }
-    return mapping.get(area)
-
-
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
     highlights: List[str] = [
         compact_whitespace(item)
@@ -658,20 +546,9 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
 
     matched_profile_areas = capability_matches["core"][:3] + capability_matches["supporting"][:2]
     for area in matched_profile_areas:
-        label = fit_highlight_for_profile_area(area)
-        if label:
-            highlights.append(label)
-
-    if (
-        not highlights
-        and sum(text_contains_term(lowered, term) for term in ("requirements", "workshop", "stakeholder", "business rules", "elicitation")) >= 2
-    ):
-        highlights.append("Requirements elicitation and BA delivery")
-
-    if "technical business analyst" in title_lower and not any("Technical and systems analysis" in item for item in highlights):
-        highlights.append("Technical and systems analysis")
-    elif "business analyst" in title_lower and not any("BA delivery" in item or "Business Analyst scope" in item for item in highlights):
-        highlights.append("Core Business Analyst scope")
+        label = friendly_capability_label(area)
+        if label and f"Strong capability match: {label}" not in highlights:
+            highlights.append(f"Strong capability match: {label}")
 
     if any(text_contains_term(lowered, term) for term in ("government", "department", "agency", "aps", "public sector", "federal", "state")):
         highlights.append("Government context")
@@ -738,7 +615,6 @@ def _normalized_aliases(values: List[str]) -> List[str]:
 
 def _profile_text_blob(profile: dict) -> str:
     parts = [
-        " ".join(str(item).strip() for item in profile.get("strengths", []) if str(item).strip()),
         profile.get("llm_profile_brief"),
         profile.get("star_evidence_text"),
         profile.get("cv_text"),
@@ -748,7 +624,6 @@ def _profile_text_blob(profile: dict) -> str:
 
 def _profile_auxiliary_text(profile: dict) -> str:
     parts = [
-        " ".join(str(item).strip() for item in profile.get("strengths", []) if str(item).strip()),
         profile.get("llm_profile_brief"),
         profile.get("star_evidence_text"),
     ]
@@ -2369,8 +2244,13 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         + (
             f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Block similar titles from appearing in future results">Block similar titles</button>'
             '<div class="block-confirm" data-block-confirm hidden>'
-            '<p class="block-confirm-copy">Block similar titles based on:</p>'
-            '<div class="block-phrase-chips" data-block-phrase-chips></div>'
+            '<p class="block-confirm-copy">Block titles containing:</p>'
+            '<div class="block-phrase-checks" data-block-phrase-checks></div>'
+            '<div class="block-manual-row">'
+            '<span class="block-manual-label">Add phrase (comma-separated):</span>'
+            '<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. project manager">'
+            '</div>'
+            '<p class="block-impact" data-block-impact></p>'
             '<p class="block-confirm-sub">This will remove similar roles in future searches.</p>'
             '<p class="block-admin-tip">Manage all blocked patterns in the <a href="http://127.0.0.1:8765" target="_blank" rel="noopener">Admin panel</a>.</p>'
             '<div class="block-confirm-actions">'
@@ -3483,26 +3363,52 @@ def render_html(
       opacity: 0.6;
       cursor: progress;
     }}
-    .block-phrase-chips {{
+    .block-phrase-checks {{
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
+      flex-direction: column;
+      gap: 5px;
     }}
-    .block-phrase-chip {{
-      padding: 4px 10px;
-      border-radius: 20px;
-      border: 1px solid rgba(29, 78, 216, 0.25);
-      background: white;
-      color: var(--cool);
-      font-size: 0.82rem;
-      font-family: inherit;
+    .block-phrase-check-row {{
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.86rem;
+      color: #334155;
       cursor: pointer;
-      transition: background 0.1s, border-color 0.1s;
     }}
-    .block-phrase-chip.is-active {{
-      background: var(--cool);
-      color: white;
-      border-color: transparent;
+    .block-phrase-checkbox {{
+      accent-color: var(--cool);
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }}
+    .block-manual-row {{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }}
+    .block-manual-label {{
+      font-size: 0.8rem;
+      color: var(--muted);
+    }}
+    .block-manual-input {{
+      border: 1px solid rgba(29, 78, 216, 0.2);
+      border-radius: 8px;
+      padding: 5px 9px;
+      font: inherit;
+      font-size: 0.84rem;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+    }}
+    .block-manual-input:focus {{
+      border-color: var(--cool);
+    }}
+    .block-impact {{
+      font-size: 0.82rem;
+      color: var(--cool);
+      margin: 0;
+      min-height: 1.2em;
     }}
     .block-admin-tip {{
       font-size: 0.78rem;
@@ -4103,33 +4009,64 @@ def render_html(
         return;
       }}
 
-      const chipsContainer = confirm.querySelector('[data-block-phrase-chips]');
+      const checksContainer = confirm.querySelector('[data-block-phrase-checks]');
+      const manualInput = confirm.querySelector('[data-block-manual-input]');
+      const impactEl = confirm.querySelector('[data-block-impact]');
       const confirmButton = confirm.querySelector('[data-confirm-block]');
-      let selectedPhrase = phrases[0];
-
-      if (chipsContainer) {{
-        chipsContainer.innerHTML = phrases.map((p, i) =>
-          `<button class="block-phrase-chip${{i === 0 ? ' is-active' : ''}}" type="button" data-phrase="${{p}}">${{p}}</button>`
-        ).join('');
-        chipsContainer.querySelectorAll('.block-phrase-chip').forEach(chip => {{
-          chip.addEventListener('click', () => {{
-            chipsContainer.querySelectorAll('.block-phrase-chip').forEach(c => c.classList.remove('is-active'));
-            chip.classList.add('is-active');
-            selectedPhrase = chip.dataset.phrase;
-            if (confirmButton) confirmButton.dataset.blockPhrase = selectedPhrase;
-          }});
-        }});
-      }}
 
       if (confirmButton) {{
-        confirmButton.dataset.blockPhrase = selectedPhrase;
-        confirmButton.disabled = false;
         confirmButton.dataset.jobKey = button.dataset.jobKey || '';
         confirmButton.dataset.jobUrl = button.dataset.jobUrl || '';
         confirmButton.dataset.jobTitle = button.dataset.jobTitle || '';
         confirmButton.dataset.jobCompany = button.dataset.jobCompany || '';
         confirmButton.dataset.jobTeaser = button.dataset.jobTeaser || '';
       }}
+
+      if (checksContainer) {{
+        checksContainer.innerHTML = phrases.map(p =>
+          `<label class="block-phrase-check-row"><input class="block-phrase-checkbox" type="checkbox" value="${{p}}" checked> ${{p}}</label>`
+        ).join('');
+      }}
+      if (manualInput) manualInput.value = '';
+
+      function getSelectedPhrases() {{
+        const checked = Array.from(
+          (checksContainer || document.createElement('div')).querySelectorAll('.block-phrase-checkbox:checked')
+        ).map(cb => cb.value.trim()).filter(Boolean);
+        const manual = (manualInput ? manualInput.value : '').split(',')
+          .map(p => p.trim()).filter(Boolean);
+        return [...new Set([...checked, ...manual])];
+      }}
+
+      async function updateImpact() {{
+        const selected = getSelectedPhrases();
+        if (confirmButton) confirmButton.disabled = !selected.length;
+        if (!impactEl) return;
+        if (!selected.length) {{ impactEl.textContent = ''; return; }}
+        impactEl.textContent = 'Checking impact\u2026';
+        try {{
+          const resp = await fetch('http://127.0.0.1:8765/api/title-block-preview', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ phrases: selected }}),
+          }});
+          if (!resp.ok) {{ impactEl.textContent = ''; return; }}
+          const data = await resp.json();
+          const total = data.total || 0;
+          impactEl.textContent = total > 0
+            ? `Would hide ${{total}} visible job${{total === 1 ? '' : 's'}} matching these patterns.`
+            : 'No current visible jobs match these patterns.';
+        }} catch(e) {{ impactEl.textContent = ''; }}
+      }}
+
+      if (checksContainer) {{
+        checksContainer.querySelectorAll('.block-phrase-checkbox').forEach(cb => {{
+          cb.addEventListener('change', updateImpact);
+        }});
+      }}
+      if (manualInput) manualInput.addEventListener('input', updateImpact);
+
+      updateImpact();
       if (blockStatus) blockStatus.textContent = '';
       confirm.hidden = false;
     }}
@@ -4194,7 +4131,9 @@ def render_html(
           card.dataset.reviewDismissed = '1';
           applyDashboardControls();
           if (action === 'block_similar') {{
-            dismissCardsByTitlePhrase(payload.block_phrase || requestPayload.block_phrase || '');
+            const phrasesToDismiss = payload.block_phrases || (requestPayload.block_phrases) ||
+              [(payload.block_phrase || requestPayload.block_phrase || '')];
+            phrasesToDismiss.filter(Boolean).forEach(p => dismissCardsByTitlePhrase(p));
           }}
         }}, 700);
       }} catch (error) {{
@@ -4256,9 +4195,20 @@ def render_html(
 
       const confirmBlock = event.target.closest('[data-confirm-block]');
       if (confirmBlock) {{
+        const blockCard = confirmBlock.closest('.job-card');
+        const blockConfirmEl = blockCard?.querySelector('[data-block-confirm]');
+        const checksContainer = blockConfirmEl?.querySelector('[data-block-phrase-checks]');
+        const manualInput = blockConfirmEl?.querySelector('[data-block-manual-input]');
+        const checked = Array.from(
+          (checksContainer || document.createElement('div')).querySelectorAll('.block-phrase-checkbox:checked')
+        ).map(cb => cb.value.trim()).filter(Boolean);
+        const manual = (manualInput ? manualInput.value : '').split(',')
+          .map(p => p.trim()).filter(Boolean);
+        const blockPhrases = [...new Set([...checked, ...manual])].filter(Boolean);
         await saveReviewAction(confirmBlock, {{
           action: 'block_similar',
-          block_phrase: confirmBlock.dataset.blockPhrase || '',
+          block_phrases: blockPhrases,
+          block_phrase: blockPhrases[0] || '',
         }});
         return;
       }}

@@ -20,7 +20,6 @@ GENERIC_TITLE_BLOCK_WORDS = {
     "associate",
     "architect",
     "assistant",
-    "ba",
     "business",
     "change",
     "consultant",
@@ -140,23 +139,8 @@ def _has_numeric_title_level(text: str) -> bool:
     if not re.search(r"\b(?:\d+|ii|iii|iv|v)\b", text):
         return False
 
-    role_phrases = [
-        r"business analyst",
-        r"technical business analyst",
-        r"senior business analyst",
-        r"lead business analyst",
-        r"principal business analyst",
-        r"digital business analyst",
-        r"payments business analyst",
-        r"government business analyst",
-        r"business systems analyst",
-        r"business process analyst",
-        r"senior ba",
-        r"lead ba",
-        r"tech(?:nical)?\s+ba",
-    ]
-    numeric_suffix = r"[\W_]{0,5}(?:\b(?:level|grade)\b[\W_]{0,5})?(?:\d+(?:st|nd|rd|th)?|ii|iii|iv|v)\b"
-    return any(re.search(rf"{phrase}\b{numeric_suffix}", text) for phrase in role_phrases)
+    numeric_suffix = r"[\W_]{0,5}(?:\b(?:level|grade|tier|band|class)\b[\W_]{0,5})?(?:\d+(?:st|nd|rd|th)?|ii|iii|iv|v)\b"
+    return bool(re.search(numeric_suffix, text))
 
 
 def _normalize_reason_token(value: str) -> str:
@@ -334,22 +318,17 @@ def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[
     profile = load_profile()
     description_lower = details_text.lower()
     card_location_lower = (card_location or "").lower()
-    soft_domain_prefixes = ("DESC_TREASURY", "DESC_ERP_FIN")
 
     for rule in profile.get("reject_description_phrase_rules", []):
         phrase = (rule.get("phrase") or "").strip().lower()
         reason = rule.get("reason", f"DESC_REJECT:{phrase}")
         if phrase and phrase in description_lower:
-            if any(reason.startswith(prefix) for prefix in soft_domain_prefixes):
-                continue
             return False, reason
 
     for rule in profile.get("reject_description_regex_rules", []):
         pattern = rule.get("pattern", "")
         reason = rule.get("reason", f"DESC_REJECT:{pattern}")
         if pattern and re.search(pattern, description_lower):
-            if any(reason.startswith(prefix) for prefix in soft_domain_prefixes):
-                continue
             return False, reason
 
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)

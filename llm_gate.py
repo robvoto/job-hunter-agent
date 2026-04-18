@@ -84,7 +84,6 @@ def llm_is_enabled() -> bool:
 
 def build_profile_prompt_context() -> str:
     profile = load_profile()
-    strengths = [str(item).strip() for item in profile.get("strengths", []) if str(item).strip()]
     llm_profile_brief = str(profile.get("llm_profile_brief") or "").strip()
     star_evidence_text = str(profile.get("star_evidence_text") or "").strip()
     evidence_tiers = get_evidence_tiers(profile)
@@ -97,8 +96,6 @@ def build_profile_prompt_context() -> str:
     if llm_profile_brief:
         parts.append("Candidate fit brief:")
         parts.append(llm_profile_brief[:2500])
-    elif strengths:
-        parts.append("Core strengths: " + ", ".join(strengths[:12]) + ".")
 
     if capability_rules:
         parts.append("Capability levels:")
@@ -206,12 +203,12 @@ def normalize_llm_review(value: Any) -> Dict[str, str]:
     return dict(DEFAULT_LLM_REVIEW)
 
 
-def extract_strengths_from_cv(cv_text: str) -> list[str]:
-    """Call LLM to extract skill/strength keywords from CV text. Returns [] if LLM unavailable."""
+def extract_evidence_signals_from_cv(cv_text: str) -> list[str]:
+    """Call LLM to extract raw evidence signals from CV text. Returns [] if LLM unavailable."""
     if client is None or not str(cv_text or "").strip():
         return []
     prompt = (
-        "Extract the candidate's core professional strengths from the CV below. "
+        "Extract the candidate's raw professional evidence signals from the CV below. "
         "Rules: only include a skill if (1) used for 2 or more years total, "
         "(2) used within the last 7 years, and (3) was a core responsibility not a side tool. "
         "Return a JSON array of short keyword phrases (1-4 words each), maximum 20 items, "
@@ -234,6 +231,10 @@ def extract_strengths_from_cv(cv_text: str) -> list[str]:
     except Exception:
         pass
     return []
+
+
+def extract_strengths_from_cv(cv_text: str) -> list[str]:
+    return extract_evidence_signals_from_cv(cv_text)
 
 
 def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | None = None) -> dict:
@@ -302,13 +303,76 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         print(f"[TITLE_PATTERNS] Exception: {exc}")
     return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
+
+def name_capability_clusters(clusters: list[dict[str, Any]]) -> list[str]:
+    """Use the LLM only to label pre-selected deterministic capability clusters."""
+    if client is None or not clusters:
+        return []
+
+    payload: list[dict[str, Any]] = []
+    for item in clusters:
+        seed = str(item.get("name") or "").strip().lower()
+        aliases = [
+            str(alias).strip().lower()
+            for alias in (item.get("aliases") or [])
+            if str(alias).strip()
+        ]
+        if not seed:
+            continue
+        payload.append({
+            "seed": seed,
+            "aliases": aliases[:6],
+        })
+    if not payload:
+        return []
+
+    prompt = (
+        "You are renaming already-detected professional capability clusters.\n\n"
+        "Important rules:\n"
+        "- The clusters already exist. Do not decide whether they are valid.\n"
+        "- Your job is only to produce a cleaner 1-4 word lowercase capability label for each cluster.\n"
+        "- Prefer broad transferable capability names over raw task fragments.\n"
+        "- Do not invent new evidence.\n"
+        "- Do not output tools unless the cluster is clearly about that tool.\n"
+        "- Keep the same order as input.\n"
+        "- Return a JSON array of strings only, one label per input cluster.\n\n"
+        "Clusters:\n"
+    )
+    import json as _json
+
+    try:
+        resp = client.responses.create(
+            model=_get_llm_model(),
+            input=[{"role": "user", "content": prompt + _json.dumps(payload, ensure_ascii=False)}],
+            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
+        )
+        raw = (resp.output_text or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        labels = _json.loads(raw)
+        if not isinstance(labels, list):
+            return []
+        return [str(label).strip().lower() for label in labels[: len(payload)]]
+    except Exception:
+        return []
+
 def _normalize_pattern_list(items: list[Any], limit: int) -> list[str]:
     normalized: list[str] = []
+    seen: set[str] = set()
     for item in items or []:
-        text = str(item).replace("\\r", "\n")
+        text = (
+            str(item)
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\\r", "\n")
+        )
         for part in text.split("\n"):
             value = part.strip()
-            if value:
+            key = value.lower()
+            if value and key not in seen:
+                seen.add(key)
                 normalized.append(value)
     return normalized[:limit]
 

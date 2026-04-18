@@ -99,6 +99,8 @@ DEFAULT_PROFILE = {
     },
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
+    "candidate_summary": "",
+    "evidence_signals": [],
     "star_evidence_text": "",
     "cv_text": "",
     "evidence_tiers": {
@@ -121,6 +123,93 @@ DEFAULT_PROFILE = {
         **DEFAULT_ONBOARDING_SETTINGS,
     },
 }
+
+
+def _decode_escaped_newlines(value: Any) -> str:
+    text = str(value or "")
+    return (
+        text
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\r", "\n")
+    )
+
+
+def normalize_multiline_string_list(values: Any) -> list[str]:
+    source = values if isinstance(values, list) else [values]
+    cleaned: list[str] = []
+    seen: set[str] = set()
+
+    for item in source or []:
+        for part in _decode_escaped_newlines(item).split("\n"):
+            value = part.strip()
+            if not value:
+                continue
+            normalized = re.sub(r"\s+", " ", value).strip().lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            cleaned.append(value)
+
+    return cleaned
+
+
+def normalize_evidence_signals(values: Any) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    business_words = {
+        "analysis",
+        "analyst",
+        "business",
+        "process",
+        "data",
+        "project",
+        "sql",
+        "api",
+        "agile",
+        "bpmn",
+        "product",
+        "delivery",
+        "requirements",
+        "integration",
+        "stakeholder",
+        "testing",
+        "azure",
+        "java",
+        "python",
+    }
+
+    for item in normalize_multiline_string_list(values):
+        value = re.sub(r"\s+", " ", item).strip(" -")
+        if not value:
+            continue
+        if value.startswith("#"):
+            continue
+        if value.upper() == value and len(value.split()) > 1:
+            continue
+        if len(value.split()) > 8:
+            continue
+        if len(value) > 60 or "," in value:
+            continue
+        if re.search(r"\b(?:19|20)\d{2}\b", value):
+            continue
+        words = value.split()
+        if 2 <= len(words) <= 4 and all(re.fullmatch(r"[A-Z][a-z]+", word) for word in words):
+            if not any(word.lower() in business_words for word in words):
+                continue
+        normalized = value.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(value)
+
+    return cleaned[:20]
+
+
+def normalize_candidate_summary(value: Any) -> str:
+    return re.sub(r"\s+", " ", _decode_escaped_newlines(value)).strip()[:500]
 
 
 def ensure_profile_exists() -> None:
@@ -156,9 +245,19 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
         if fit not in valid_fits:
             fit = "contextual"
 
+        raw_aliases = rule.get("aliases")
+        if isinstance(raw_aliases, str):
+            alias_items = [
+                part.strip()
+                for part in re.split(r"[\n,]", _decode_escaped_newlines(raw_aliases))
+                if part.strip()
+            ]
+        else:
+            alias_items = list(raw_aliases or [])
+
         aliases: list[str] = []
         seen_aliases: set[str] = set()
-        for alias in rule.get("aliases") or []:
+        for alias in alias_items:
             cleaned_alias = str(alias or "").strip()
             if not cleaned_alias:
                 continue
@@ -199,8 +298,22 @@ def load_profile() -> dict[str, Any]:
             merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
                 merged.get("evidence_tier_weights", {})
             )
+            merged["candidate_summary"] = normalize_candidate_summary(merged.get("candidate_summary", ""))
+            merged["evidence_signals"] = normalize_evidence_signals(
+                merged.get("evidence_signals", merged.get("strengths", []))
+            )
+            merged.pop("strengths", None)
             merged["capability_profile_rules"] = normalize_capability_rules(
                 merged.get("capability_profile_rules", [])
+            )
+            merged["target_title_patterns"] = normalize_multiline_string_list(
+                merged.get("target_title_patterns", [])
+            )
+            merged["adjacent_title_patterns"] = normalize_multiline_string_list(
+                merged.get("adjacent_title_patterns", [])
+            )
+            merged["must_not_require_skills"] = normalize_multiline_string_list(
+                merged.get("must_not_require_skills", [])
             )
             return merged
     except Exception:
@@ -219,8 +332,22 @@ def load_profile() -> dict[str, Any]:
     fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
         fallback.get("evidence_tier_weights", {})
     )
+    fallback["candidate_summary"] = normalize_candidate_summary(fallback.get("candidate_summary", ""))
+    fallback["evidence_signals"] = normalize_evidence_signals(
+        fallback.get("evidence_signals", fallback.get("strengths", []))
+    )
+    fallback.pop("strengths", None)
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
+    )
+    fallback["target_title_patterns"] = normalize_multiline_string_list(
+        fallback.get("target_title_patterns", [])
+    )
+    fallback["adjacent_title_patterns"] = normalize_multiline_string_list(
+        fallback.get("adjacent_title_patterns", [])
+    )
+    fallback["must_not_require_skills"] = normalize_multiline_string_list(
+        fallback.get("must_not_require_skills", [])
     )
     return fallback
 
@@ -240,8 +367,22 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
         normalized.get("evidence_tier_weights", {})
     )
+    normalized["candidate_summary"] = normalize_candidate_summary(normalized.get("candidate_summary", ""))
+    normalized["evidence_signals"] = normalize_evidence_signals(
+        normalized.get("evidence_signals", normalized.get("strengths", []))
+    )
+    normalized.pop("strengths", None)
     normalized["capability_profile_rules"] = normalize_capability_rules(
         normalized.get("capability_profile_rules", [])
+    )
+    normalized["target_title_patterns"] = normalize_multiline_string_list(
+        normalized.get("target_title_patterns", [])
+    )
+    normalized["adjacent_title_patterns"] = normalize_multiline_string_list(
+        normalized.get("adjacent_title_patterns", [])
+    )
+    normalized["must_not_require_skills"] = normalize_multiline_string_list(
+        normalized.get("must_not_require_skills", [])
     )
     PROFILE_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),

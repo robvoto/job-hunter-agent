@@ -1,48 +1,6 @@
 import re
 from typing import Any
-
-
-SKILL_CATALOG = [
-    "Salesforce",
-    "HubSpot",
-    "HubSpot CRM",
-    "ServiceNow",
-    "Workday",
-    "SAP",
-    "Oracle",
-    "Pega",
-    "D365",
-    "Dynamics 365",
-    "Snowflake",
-    "Azure Data Factory",
-    "SQL",
-    "SQL Server",
-    "Power BI",
-    "Tableau",
-    "ETL",
-    "Data governance",
-    "Data lineage",
-    "Data quality",
-    "Data warehousing",
-    "Data modelling",
-    "Workforce management",
-    "Payroll",
-    "HCM",
-    "Human resources",
-    "HR",
-    "API",
-    "REST API",
-    "Postman",
-    "AWS",
-    "Azure",
-    "GCP",
-    "BPMN",
-    "Jira",
-    "Confluence",
-    "SharePoint",
-    "UAT",
-    "Gherkin",
-]
+from filters import extract_rejection_suggestions
 
 
 def _normalize_term(value: str) -> str:
@@ -68,17 +26,13 @@ def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
 
 
 def extract_detected_skills(details_text: str) -> list[str]:
-    text = details_text or ""
-    found = []
-    lowered = text.lower()
-    for term in SKILL_CATALOG:
-        normalized_term = _normalize_term(term)
-        if not normalized_term:
-            continue
-        pattern = rf"(?<!\w){re.escape(normalized_term)}(?!\w)"
-        if re.search(pattern, _normalize_term(lowered)):
-            found.append(term)
-    return sorted(set(found), key=lambda item: item.lower())
+    suggestions = extract_rejection_suggestions(details_text)
+    found = set()
+    for cat in ["mandatory_skill", "industry_platform", "mandatory_experience", "domain"]:
+        for term in suggestions.get(cat, []):
+            if len(term) > 2:
+                found.add(term)
+    return sorted(list(found), key=lambda item: item.lower())
 
 
 def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str, Any]) -> list[dict]:
@@ -175,12 +129,12 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 def _choice_label(choice: str) -> str:
     labels = {
-        "no_knowledge": "Exclude",
-        "basic_only": "Minor exposure",
-        "working_knowledge": "Usable secondary",
-        "strong": "Strong skill",
-        "avoid": "Exclude",
-        "not_core_but_acceptable": "Usable secondary",
+        "no_knowledge": "No knowledge",
+        "basic_only": "Basic only",
+        "working_knowledge": "Working knowledge",
+        "strong": "Strong",
+        "avoid": "Avoid",
+        "not_core_but_acceptable": "Not core but acceptable",
     }
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
@@ -259,11 +213,11 @@ def build_capability_tuning_suggestions(
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
         if count >= 5:
-            recommended_choice = "strong"
+            recommended_choice = "working_knowledge"
         else:
             recommended_choice = "not_core_but_acceptable"
         headline = f"Classify {skill} as a known capability signal"
-        detail = f"Seen in {count} kept role(s)."
+        detail = f"Seen in {count} kept role(s) and still unclassified."
 
         suggestions.append(
             {
@@ -435,31 +389,6 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
     }
 
 
-def _default_aliases_for_skill(skill: str) -> list[str]:
-    skill_clean = str(skill or "").strip()
-    normalized = _normalize_term(skill_clean)
-
-    alias_map = {
-        "data modelling": ["data modeling", "logical data model"],
-        "power bi": ["powerbi"],
-        "bpmn": ["business process modelling", "process modeling"],
-        "sql server": ["microsoft sql server"],
-        "rest api": ["rest apis", "api integration"],
-    }
-
-    aliases = alias_map.get(normalized, [])
-    deduped: list[str] = []
-    for alias in aliases:
-        cleaned = str(alias).strip()
-        if not cleaned:
-            continue
-        if _normalize_term(cleaned) == normalized:
-            continue
-        if cleaned not in deduped:
-            deduped.append(cleaned)
-    return deduped
-
-
 def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
     capability_rules = list(profile.get("capability_profile_rules", []))
     existing_index = _capability_rule_index_lookup(capability_rules)
@@ -493,7 +422,7 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             "name": skill,
             "level": level,
             "fit": fit,
-            "aliases": _default_aliases_for_skill(skill),
+            "aliases": [],
         }
 
         if normalized in existing_index:
@@ -504,7 +433,6 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
 
             alias_candidates = [
                 *(existing_rule.get("aliases") or []),
-                *_default_aliases_for_skill(skill),
             ]
 
             for alias in alias_candidates:

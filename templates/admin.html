@@ -321,15 +321,11 @@
     #llm_profile_brief {
       min-height: 170px;
     }
-    #strengths,
     #star_evidence_text,
     #learning_update_text {
       min-height: 180px;
     }
-    #cv_text {
-      min-height: 460px;
-    }
-    #capability_profile_rules {
+#capability_profile_rules {
       min-height: 180px;
     }
     #target_title_patterns,
@@ -635,7 +631,7 @@
 
     <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Candidate Profile</h2>
-      <p class="group-copy">Upload your CV during onboarding. Refine strengths, notes, and matching rules here.</p>
+      <p class="group-copy">Upload your CV during onboarding. Refine evidence, notes, and matching rules here.</p>
       <div class="profile-shell">
       <div class="profile-main">
       <section class="panel profile-main-panel">
@@ -643,7 +639,7 @@
           <div>
             <div class="panel-kicker">Main profile editing</div>
             <h2>Candidate Profile</h2>
-            <p class="panel-copy">Your CV is the source of truth. Strengths and notes here refine how the engine scores fit.</p>
+            <p class="panel-copy">Your CV is the source of truth. Evidence and notes support profile review while capability rules drive scoring.</p>
           </div>
           <div class="panel-actions profile-panel-actions">
             <button class="primary" id="save_profile">Save Profile</button>
@@ -654,28 +650,17 @@
         <section class="profile-group">
           <details class="help-drawer">
             <summary>Advanced AI context (auto-generated)</summary>
-            <p>This is what the LLM sees when scoring each job. It is auto-generated from your Strengths and Capability Matrix. To change it, edit those fields — this preview rebuilds automatically on save.</p>
+            <p>This is what the LLM sees when scoring each job. It is auto-generated from your Capability Matrix. To change it, edit that field so this preview rebuilds automatically on save.</p>
             <div class="field-grid" style="padding: 0 14px 14px;">
               <div class="field-block field-span-2">
                 <label for="llm_profile_brief">AI fit brief preview</label>
                 <textarea id="llm_profile_brief" readonly class="is-readonly"></textarea>
-                <div class="field-help">Read-only. Regenerates from your Strengths and Capability Matrix every time you save the profile.</div>
+                <div class="field-help">Read-only. Regenerates from your Capability Matrix every time you save the profile.</div>
               </div>
             </div>
           </details>
         </section>
 
-        <section class="profile-group">
-          <h3>Strength Signals</h3>
-          <p class="profile-group-copy">Auto-extracted from your CV. Add or remove signals to tune how the engine scores fit.</p>
-          <div class="profile-fields-grid">
-            <div class="field-block field-span-2">
-              <label for="strengths">Strengths</label>
-              <textarea id="strengths"></textarea>
-              <div class="field-help">One signal per line. Re-extracted automatically when CV changes.</div>
-            </div>
-          </div>
-        </section>
 
 
         <section class="profile-group">
@@ -762,44 +747,25 @@
           </div>
         </section>
 
-        <section class="profile-group">
-          <h3>Core Source Text</h3>
-          <p class="profile-group-copy">Main evidence the engine can draw from during matching and AI review.</p>
-          <div class="profile-fields-grid">
-            <div class="field-block field-span-2">
-              <label for="cv_text">CV / background text</label>
-              <textarea id="cv_text"></textarea>
-              <div class="field-help">Primary source material used for matching, specialist-fit checks, and AI review.</div>
-            </div>
-            <!-- star_evidence_text removed from UI — field preserved in profile.json for future CV/application generation. See SOUL.md parked decisions. -->
-          </div>
-        </section>
       </section>
       </div>
 
       <aside class="profile-side">
-      <section class="panel side-panel">
-        <div class="panel-kicker">Recovery</div>
-        <h2>Re-Onboarding</h2>
-        <p class="panel-copy">Use this if you want to upload a new CV or replace the saved onboarding source pack.</p>
-        <div class="panel-actions">
-          <button class="secondary" id="open_onboarding" type="button">Open Onboarding / Source Pack</button>
-          <span class="inline-status" id="onboarding_status" aria-live="polite"></span>
-        </div>
-      </section>
-
       <section class="panel side-panel" style="border-color:#f9a8a8;background:#fff8f8;">
         <div class="panel-kicker" style="color:#9a3412;">Reset</div>
         <h2>Reset Profile</h2>
-        <p class="panel-copy">Use this only if the current profile is wrong and you want to rebuild it from the saved onboarding documents.</p>
+        <p class="panel-copy">Paste a new CV to rebuild the profile from scratch. Do not reset without a new CV — it will not produce a meaningful result.</p>
+
+        <label for="reset_cv_text" style="margin-top:12px;display:block;">New CV text</label>
+        <textarea id="reset_cv_text" style="min-height:120px;" placeholder="Paste your updated CV here before resetting..."></textarea>
 
         <details class="help-drawer" style="margin-top:12px;border:1px solid #f9a8a8;background:#fff5f5;">
-          <summary style="font-weight:700;color:#9a3412;">Danger: Rebuild Profile From Saved Documents</summary>
-          <p>This overwrites strengths, capability rules, title patterns, and extracted signals using the last uploaded CV.</p>
+          <summary style="font-weight:700;color:#9a3412;">Danger: Rebuild Profile From This CV</summary>
+          <p>This overwrites capability rules, title patterns, and extracted signals. The profile will be rebuilt entirely from the CV you paste above.</p>
           <div class="panel-actions">
-            <button class="secondary" id="import_source_materials" style="border-color:#f87171;color:#9a3412;">Reset And Rebuild Profile</button>
-            <span class="inline-status" id="source_materials_status" aria-live="polite"></span>
+            <button class="secondary" id="import_source_materials" style="border-color:#f87171;color:#9a3412;">Reset and Rebuild Profile</button>
           </div>
+          <span class="inline-status" id="source_materials_status" aria-live="polite" style="display:block;margin-top:10px;"></span>
         </details>
       </section>
 
@@ -997,7 +963,6 @@
     const saveProfileStatusEl = document.getElementById('save_profile_status');
     const importSourceMaterialsButton = document.getElementById('import_source_materials');
     const sourceMaterialsStatusEl = document.getElementById('source_materials_status');
-    const onboardingStatusEl = document.getElementById('onboarding_status');
     const applyLearningButton = document.getElementById('apply_learning');
     const learningStatusEl = document.getElementById('learning_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
@@ -1007,8 +972,6 @@
     
     const listTextAreas = [
       'locations',
-      'strengths',
-      'cv_text',
       'target_title_patterns',
       'adjacent_title_patterns',
       'classification_ids',
@@ -1050,18 +1013,18 @@
     }
 
     function toLines(value) {
-      return value.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean);
+      return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     }
 
     function rulesToText(rules, key) {
-      return (rules || []).map(rule => `${rule[key] || ''} || ${rule.reason || ''}`).join('\\n');
+      return (rules || []).map(rule => `${rule[key] || ''} || ${rule.reason || ''}`).join('\n');
     }
 
     function capabilityRulesToText(rules) {
       return (rules || []).filter(rule => (rule.name || '').trim() && (rule.level || '').trim()).map(rule => {
         const aliases = (rule.aliases || []).join(', ');
         return `${rule.name || ''} || ${rule.level || ''} || ${rule.fit || ''} || ${aliases}`;
-      }).join('\\n');
+      }).join('\n');
     }
 
     function textToRules(value, key) {
@@ -1089,8 +1052,8 @@
 
     function fillForm(profile) {
       document.getElementById('keywords').value = profile.search_settings?.keywords || '';
-      document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\\n');
-      document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\\n');
+      document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\n');
+      document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
       document.getElementById('date_range_days').value = String(profile.search_settings?.date_range_days ?? '');
       document.getElementById('max_pages_cap').value = String(profile.search_settings?.max_pages_cap ?? '');
       document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
@@ -1110,11 +1073,10 @@
       document.getElementById('contract_weight').value = String(profile.preference_weights?.contract ?? 1);
       document.getElementById('government_weight').value = String(profile.preference_weights?.government ?? 1);
       document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness ?? 1);
-      document.getElementById('cv_text').value = profile.cv_text || '';
       document.getElementById('capability_profile_rules').value = capabilityRulesToText(profile.capability_profile_rules);
 
-      for (const id of ['strengths', 'target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills']) {
-        document.getElementById(id).value = (profile[id] || []).join('\\n');
+      for (const id of ['target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills']) {
+        document.getElementById(id).value = (profile[id] || []).join('\n');
       }
 
       for (const [id, key] of ruleTextAreas) {
@@ -1599,19 +1561,22 @@
 
 
     async function importSourceMaterials() {
-      const response = await fetch('/api/import-source-materials', {
+      const cvText = (document.getElementById('reset_cv_text').value || '').trim();
+      if (!cvText) {
+        throw new Error('Paste a new CV above before resetting the profile.');
+      }
+      const response = await fetch('/api/onboarding/import', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: [], extra_text: cvText }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.error || 'Could not import source documents');
+        throw new Error(payload.error || 'Could not reset profile');
       }
       fillForm(payload.profile || {});
       await loadReviewData();
-      const importedCount = Number((payload.imported_sources || []).length || 0);
-      const missingCount = Number((payload.missing_sources || []).length || 0);
-      const suffix = missingCount ? ` Imported ${importedCount}, skipped ${missingCount}.` : '';
-      showStatus((payload.message || 'Source documents imported.') + suffix, 'ok');
+      showStatus(payload.message || 'Profile rebuilt from new CV.', 'ok');
     }
 
 
@@ -1644,9 +1609,6 @@
         },
         llm_profile_brief_mode: 'auto',
         llm_profile_brief: '',
-        strengths: toLines(document.getElementById('strengths').value),
-        cv_text: document.getElementById('cv_text').value.trim(),
-        // star_evidence_text intentionally omitted — not collected from UI, preserved in profile.json
         capability_profile_rules: textToCapabilityRules(document.getElementById('capability_profile_rules').value),
         target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
         adjacent_title_patterns: toLines(document.getElementById('adjacent_title_patterns').value),
@@ -1692,20 +1654,12 @@
 
     async function saveProfileSection() {
       const profile = collectProfile();
-      const payload = {
-        llm_profile_brief_mode: profile.llm_profile_brief_mode,
-        llm_profile_brief: profile.llm_profile_brief,
-        preference_weights: profile.preference_weights,
-        strengths: profile.strengths,
-      };
-
-      const currentCv = (loadedProfile?.cv_text || '').trim();
-      if (profile.cv_text !== currentCv) {
-        payload.cv_text = profile.cv_text;
-      }
-
       await patchProfile(
-        payload,
+        {
+          llm_profile_brief_mode: profile.llm_profile_brief_mode,
+          llm_profile_brief: profile.llm_profile_brief,
+          preference_weights: profile.preference_weights,
+        },
         'Candidate profile saved to profile.json.'
       );
     }
@@ -1774,21 +1728,16 @@
 
     importSourceMaterialsButton.addEventListener('click', async () => {
       importSourceMaterialsButton.disabled = true;
-      showInlineStatus(sourceMaterialsStatusEl, 'Refreshing profile from source documents...', 'loading');
+      showInlineStatus(sourceMaterialsStatusEl, 'Rebuilding profile from new CV...', 'loading');
       try {
         await importSourceMaterials();
-        showInlineStatus(sourceMaterialsStatusEl, 'Profile refreshed from saved source documents.', 'ok');
+        showInlineStatus(sourceMaterialsStatusEl, 'Profile rebuilt from new CV.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
         showInlineStatus(sourceMaterialsStatusEl, error.message, 'error');
       } finally {
         importSourceMaterialsButton.disabled = false;
       }
-    });
-
-    document.getElementById('open_onboarding').addEventListener('click', () => {
-      showInlineStatus(onboardingStatusEl, 'Opening onboarding...', 'loading');
-      window.location.href = '/start';
     });
 
     document.getElementById('refresh_review_data').addEventListener('click', async () => {

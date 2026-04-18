@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from profile_learning import build_learning_patch, merge_capability_rules, repair_text
+from profile_learning import (
+    build_learning_patch,
+    extract_title_pattern_suggestions,
+    merge_capability_rules,
+    repair_text,
+)
 from profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
@@ -33,7 +38,7 @@ ONBOARDING_RESET_FIELDS = (
     "target_title_patterns",
     "adjacent_title_patterns",
     "reject_title_rules",
-    "strengths",
+    "evidence_signals",
     "capability_profile_rules",
     "candidate_summary",
     "cv_text",
@@ -220,7 +225,7 @@ def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     return [item for item in sources if item.get("label") and item.get("path")]
 
 
-def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
+def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> dict[str, Any]:
     """Collect source documents, reset onboarding fields, re-extract everything, save.
 
     This is the single shared path for both initial onboarding and the Danger Rebuild.
@@ -229,8 +234,9 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
     """
     resolved = normalize_source_materials(source_materials or load_source_materials(create_if_missing=True))
     import_sources = _collect_import_sources(resolved)
-    if not import_sources:
-        raise ValueError("No profile source documents configured yet.")
+    pasted_text = repair_text(extra_text)
+    if not import_sources and not pasted_text:
+        raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile source documents first.")
 
     imported_sources: list[dict[str, Any]] = []
     combined_sections: list[str] = []
@@ -254,8 +260,15 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
 
+    if pasted_text:
+        imported_sources.append({"label": "Pasted CV", "path": "(pasted text)", "characters": len(pasted_text)})
+        combined_sections.append(f"## Pasted CV\n{pasted_text}")
+        source_sections.append({"label": "Pasted CV", "text": pasted_text})
+
     if not combined_sections:
-        raise ValueError("Could not read any configured source documents.")
+        if import_sources:
+            raise ValueError("Could not read any configured source documents.")
+        raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile source documents first.")
 
     combined_text = "\n\n".join(combined_sections).strip()
 
@@ -280,10 +293,16 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
     if imported_summary:
         patch["candidate_summary"] = imported_summary
 
-    imported_strengths = _extract_strengths_from_text(combined_text)
-    all_strengths = list(dict.fromkeys([*learned.get("strengths", []), *imported_strengths]))
-    if all_strengths:
-        patch["strengths"] = all_strengths[:20]
+    imported_evidence_signals = _normalize_evidence_signal_candidates(
+        learned.get("evidence_signals", learned.get("strengths", []))
+    )
+    if not imported_evidence_signals:
+        imported_evidence_signals = _normalize_evidence_signal_candidates(
+            _extract_evidence_signals_from_text(combined_text)
+        )
+    all_evidence_signals = list(dict.fromkeys(imported_evidence_signals))
+    if all_evidence_signals:
+        patch["evidence_signals"] = all_evidence_signals[:20]
 
     if learned.get("capability_profile_rules"):
         patch["capability_profile_rules"] = merge_capability_rules(
@@ -292,7 +311,6 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
         )
 
     brief = build_llm_profile_brief(
-        strengths=patch.get("strengths") or DEFAULT_PROFILE["strengths"],
         capability_rules=patch.get("capability_profile_rules") or [],
     )
     if brief:
@@ -300,17 +318,16 @@ def run_onboarding(source_materials: dict[str, Any]) -> dict[str, Any]:
 
     # Title patterns — always re-extracted during onboarding (no guard needed here)
     try:
-        from llm_gate import extract_title_patterns_from_cv
-        suggestion = extract_title_patterns_from_cv(combined_text, onboarding_settings)
+        suggestion = extract_title_pattern_suggestions(combined_text, onboarding_settings)
         if suggestion.get("target_title_patterns"):
             patch["target_title_patterns"] = suggestion["target_title_patterns"]
             if suggestion.get("adjacent_title_patterns"):
                 patch["adjacent_title_patterns"] = suggestion["adjacent_title_patterns"]
             print(f"[TITLE_PATTERNS] Saved {len(suggestion['target_title_patterns'])} target and {len(suggestion.get('adjacent_title_patterns', []))} adjacent patterns")
         else:
-            print("[TITLE_PATTERNS] LLM returned no target patterns — skipping")
+            print("[TITLE_PATTERNS] Deterministic parser returned no target patterns")
     except Exception as exc:
-        print(f"[TITLE_PATTERNS] Import/call failed: {exc}")
+        print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
 
     profile = patch_profile(patch)
 
@@ -355,20 +372,46 @@ def _extract_summary_from_text(text: str) -> str:
                     break
             if parts:
                 return " ".join(parts)[:500].strip()
-    return " ".join(lines[:4])[:500].strip()
+
+    titles: list[str] = []
+    seen_titles: set[str] = set()
+    for line in lines:
+        match = re.search(r"-\s*([A-Za-z][A-Za-z /&-]{2,80}?)\s*\((?:19|20)\d{2}", line)
+        if not match:
+            continue
+        title = re.sub(r"\s+", " ", match.group(1)).strip(" -")
+        normalized = title.lower()
+        if normalized in seen_titles:
+            continue
+        seen_titles.add(normalized)
+        titles.append(title)
+        if len(titles) >= 3:
+            break
+    if titles:
+        if len(titles) == 1:
+            return f"Recent experience in {titles[0]} roles."
+        return f"Recent experience in {titles[0]} and {titles[1]} roles."
+
+    filtered = [
+        line
+        for line in lines
+        if not line.startswith("##")
+        and not (len(line.split()) <= 8 and line.upper() == line)
+    ]
+    return " ".join(filtered[:3])[:500].strip()
 
 
-def _extract_strengths_from_text(text: str) -> list[str]:
+def _extract_evidence_signals_from_text(text: str) -> list[str]:
     """Generic noun-phrase fallback extraction if LLM is unavailable."""
     phrases = re.findall(r"\b(?:[A-Z][a-z]+\s+){1,2}[A-Z][a-z]+\b", text)
     seen: set[str] = set()
-    strengths: list[str] = []
+    evidence_signals: list[str] = []
     for phrase in phrases:
         lowered = phrase.lower()
         if lowered not in seen and len(lowered) > 8:
             seen.add(lowered)
-            strengths.append(phrase)
-    return strengths[:12]
+            evidence_signals.append(phrase)
+    return evidence_signals[:12]
 
 
 def build_llm_profile_brief(
@@ -398,6 +441,65 @@ def build_llm_profile_brief(
         lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:6]))
 
     return "\n".join(lines).strip()[:3000]
+
+
+def _normalize_evidence_signal_candidates(items: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    business_words = {
+        "analysis",
+        "analyst",
+        "business",
+        "process",
+        "data",
+        "project",
+        "sql",
+        "api",
+        "agile",
+        "bpmn",
+        "product",
+        "delivery",
+        "requirements",
+        "integration",
+        "stakeholder",
+        "testing",
+        "azure",
+        "java",
+        "python",
+    }
+    for item in items or []:
+        text = (
+            str(item or "")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\\r", "\n")
+        )
+        for part in text.split("\n"):
+            value = re.sub(r"\s+", " ", part).strip(" -")
+            if not value:
+                continue
+            if value.startswith("#"):
+                continue
+            if value.upper() == value and len(value.split()) > 1:
+                continue
+            if len(value.split()) > 8:
+                continue
+            if len(value) > 60 or "," in value:
+                continue
+            if re.search(r"\b(?:19|20)\d{2}\b", value):
+                continue
+            words = value.split()
+            if 2 <= len(words) <= 4 and all(re.fullmatch(r"[A-Z][a-z]+", word) for word in words):
+                if not any(word.lower() in business_words for word in words):
+                    continue
+            normalized = value.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            cleaned.append(value)
+    return cleaned[:20]
 
 
 def import_source_materials_to_profile(materials: dict[str, Any] | None = None) -> dict[str, Any]:

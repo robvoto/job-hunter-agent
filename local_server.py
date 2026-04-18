@@ -11,7 +11,6 @@ from profile_learning import build_learning_patch, merge_capability_rules, repai
 from profile_store import DEFAULT_PROFILE, load_profile, patch_profile, save_profile
 from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
-from llm_gate import extract_strengths_from_cv
 from source_documents import (
     build_llm_profile_brief,
     import_source_materials_to_profile,
@@ -27,6 +26,7 @@ PORT = 8765
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = ROOT_DIR / "output"
+AUDIT_RECORDS_PATH = OUTPUT_DIR / "audit_records.json"
 RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
@@ -65,12 +65,6 @@ class AdminHandler(BaseHTTPRequestHandler):
         if imported_summary and existing_summary and existing_summary != default_summary:
             merged_patch.pop("candidate_summary", None)
 
-        if merged_patch.get("strengths"):
-            merged_patch["strengths"] = list(dict.fromkeys([
-                *current.get("strengths", []),
-                *merged_patch.get("strengths", []),
-            ]))[:20]
-
         if merged_patch.get("capability_profile_rules"):
             merged_patch["capability_profile_rules"] = merge_capability_rules(
                 merge_capability_rules(
@@ -101,7 +95,6 @@ class AdminHandler(BaseHTTPRequestHandler):
                 ),
             }
 
-        final_strengths = merged_patch.get("strengths") or current.get("strengths", [])
         final_rules = merged_patch.get("capability_profile_rules") or current.get("capability_profile_rules", [])
         brief_mode = str(
             merged_patch.get("llm_profile_brief_mode", current.get("llm_profile_brief_mode", "auto")) or "auto"
@@ -144,11 +137,6 @@ class AdminHandler(BaseHTTPRequestHandler):
           new_cv = str(normalized.get("cv_text") or "").strip()
           current_cv = str(current.get("cv_text") or "").strip()
           cv_changed = new_cv != current_cv
-
-          if new_cv and cv_changed:
-              extracted = extract_strengths_from_cv(new_cv)
-              if extracted and "strengths" not in normalized:
-                  normalized["strengths"] = extracted
 
           if cv_changed and "evidence_tiers" not in normalized:
               inferred_tiers = build_evidence_tiers_from_sections([{
@@ -538,25 +526,38 @@ class AdminHandler(BaseHTTPRequestHandler):
         title: str = "",
         company: str = "",
         teaser: str = "",
-        block_phrase: str = "",
+        block_phrases: list[str] | None = None,
     ) -> dict:
         normalized = cls._normalize_job_key(job_key or url)
         if not normalized:
             raise ValueError("Missing job key")
 
-        if "\n" in block_phrase or "\\n" in block_phrase:
-          raise ValueError("Only one keyword allowed")
+        # Resolve phrases: normalise each candidate, fall back to title suggestion
+        raw_phrases = [p for p in (block_phrases or []) if str(p).strip()]
+        resolved: list[str] = [normalize_title_block_phrase(p) for p in raw_phrases]
+        resolved = [p for p in resolved if p]
+        if not resolved:
+            fallback = suggest_title_block_phrase(title)
+            if not fallback:
+                raise ValueError("Could not suggest a title keyword to block from this title yet")
+            resolved = [fallback]
 
-        phrase = normalize_title_block_phrase(block_phrase) or suggest_title_block_phrase(title)
-        if not phrase:
-            raise ValueError("Could not suggest a title keyword to block from this title yet")
-
-        rule = build_title_block_rule(phrase)
         profile = load_profile()
         existing = list(profile.get("reject_title_rules", []))
-        rule_exists = any(str(item.get("pattern") or "").strip() == rule["pattern"] for item in existing)
-        if not rule_exists:
-            existing.append(rule)
+        existing_patterns = {str(item.get("pattern") or "").strip() for item in existing}
+
+        added_rules: list[dict] = []
+        skipped_phrases: list[str] = []
+        for phrase in resolved:
+            rule = build_title_block_rule(phrase)
+            if rule["pattern"] not in existing_patterns:
+                existing.append(rule)
+                existing_patterns.add(rule["pattern"])
+                added_rules.append(rule)
+            else:
+                skipped_phrases.append(phrase)
+
+        if added_rules:
             profile["reject_title_rules"] = existing
             save_profile(profile)
 
@@ -568,24 +569,28 @@ class AdminHandler(BaseHTTPRequestHandler):
             company=company,
             teaser=teaser,
             extra={
-                "extracted_phrase": phrase,
-                "reject_title_pattern": rule["pattern"],
-                "reject_title_reason": rule["reason"],
-                "rule_added": not rule_exists,
+                "extracted_phrases": resolved,
+                "rules_added": [r["pattern"] for r in added_rules],
+                "rules_skipped": skipped_phrases,
             },
         )
+
+        added_labels = "', '".join(r["reason"].split("'")[1] if "'" in r["reason"] else r["pattern"] for r in added_rules)
+        if added_rules and skipped_phrases:
+            message = f"Blocked '{added_labels}'. {len(skipped_phrases)} pattern(s) already existed."
+        elif added_rules:
+            message = f"Blocked {len(added_rules)} pattern(s). Similar jobs will be filtered in future runs."
+        else:
+            message = "All selected patterns already existed as title block rules."
+
         return {
             "ok": True,
             "action": "block_similar",
             "job_key": normalized,
-            "block_phrase": phrase,
-            "rule": rule,
-            "rule_added": not rule_exists,
-            "message": (
-                f"Added title block for '{phrase}'. Similar jobs will be filtered in future runs."
-                if not rule_exists
-                else f"Title block for '{phrase}' already existed."
-            ),
+            "block_phrase": resolved[0],
+            "block_phrases": resolved,
+            "rules_added": added_rules,
+            "message": message,
         }
 
     @classmethod
@@ -844,8 +849,12 @@ class AdminHandler(BaseHTTPRequestHandler):
                 extra_text = str(payload.get("extra_text") or "")
                 if not isinstance(files, list):
                     raise ValueError("files must be a list")
-                materials = persist_uploaded_source_pack(files, extra_text=extra_text)
-                result = run_onboarding(materials)
+                materials = (
+                    persist_uploaded_source_pack(files, extra_text=extra_text)
+                    if files
+                    else load_source_materials(create_if_missing=True)
+                )
+                result = run_onboarding(materials, extra_text=extra_text)
                 result["materials"] = materials
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
@@ -997,6 +1006,44 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "saved": len(validated)})
             return
 
+        if self.path == "/api/title-block-preview":
+            try:
+                import re as _re
+                payload = self._read_json_body()
+                phrases = [str(p).strip() for p in (payload.get("phrases") or []) if str(p).strip()]
+                titles: list[str] = []
+                if AUDIT_RECORDS_PATH.exists():
+                    try:
+                        rows = json.loads(AUDIT_RECORDS_PATH.read_text(encoding="utf-8"))
+                        if isinstance(rows, list):
+                            titles = [str(r.get("title") or "").lower() for r in rows if r.get("title")]
+                    except Exception:
+                        pass
+                counts: dict[str, int] = {}
+                for phrase in phrases:
+                    norm = _re.sub(r"[^a-z0-9]+", " ", phrase.lower()).strip()
+                    tokens = [t for t in norm.split() if t]
+                    if not tokens:
+                        counts[phrase] = 0
+                        continue
+                    pattern = r"\b" + r"\s+".join(_re.escape(t) for t in tokens[:3]) + r"\b"
+                    counts[phrase] = sum(1 for t in titles if _re.search(pattern, t))
+                matched_titles: set[str] = set()
+                for phrase in phrases:
+                    norm = _re.sub(r"[^a-z0-9]+", " ", phrase.lower()).strip()
+                    tokens = [t for t in norm.split() if t]
+                    if not tokens:
+                        continue
+                    pattern = r"\b" + r"\s+".join(_re.escape(t) for t in tokens[:3]) + r"\b"
+                    for t in titles:
+                        if _re.search(pattern, t):
+                            matched_titles.add(t)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, {"counts": counts, "total": len(matched_titles)})
+            return
+
         if self.path != "/api/review":
             self._send_json(404, {"error": "Not found"})
             return
@@ -1023,13 +1070,19 @@ class AdminHandler(BaseHTTPRequestHandler):
                     teaser,
                 )
             elif action == "block_similar":
+                raw = payload.get("block_phrases")
+                if isinstance(raw, list) and raw:
+                    phrases_arg = [str(p).strip() for p in raw if str(p).strip()]
+                else:
+                    single = str(payload.get("block_phrase") or "").strip()
+                    phrases_arg = [single] if single else []
                 result = self._save_block_similar_feedback(
                     job_key,
                     url,
                     title,
                     company,
                     teaser,
-                    str(payload.get("block_phrase") or "").strip(),
+                    block_phrases=phrases_arg or None,
                 )
             elif action == "unhide":
                 result = self._remove_review_key(
