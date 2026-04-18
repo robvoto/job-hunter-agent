@@ -472,14 +472,6 @@ def _normalize_evidence_signal_candidates(items: list[str] | None) -> list[str]:
     return cleaned[:20]
 
 
-def import_source_materials_to_profile(materials: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Thin wrapper — normalises materials then delegates to run_onboarding."""
-    resolved = normalize_source_materials(materials or load_source_materials(create_if_missing=True))
-    result = run_onboarding(resolved)
-    result["materials"] = resolved
-    return result
-
-
 def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:
     imported_sources: list[dict[str, Any]] = []
     missing_sources: list[str] = []

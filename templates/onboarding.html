@@ -146,23 +146,44 @@
       color: var(--muted);
       line-height: 1.5;
     }
-    .summary-box ul {
-      margin: 8px 0 0 18px;
-      padding: 0;
-      color: var(--muted);
+    .summary-box code {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      color: var(--ink);
     }
   </style>
 </head>
 <body>
   <main class="page">
     <section class="hero">
-      <h1>Set Up Your Profile</h1>
-      <p>Start with one strong detailed CV. We will turn it into a working profile the job engine can use, and you can refine it later in admin.</p>
+      <h1 id="hero_title">Set Up Your Profile</h1>
+      <p id="hero_copy">Answer a few onboarding questions, then upload one strong detailed CV. We will turn it into a working profile the job engine can use.</p>
     </section>
 
     <div class="grid">
       <section class="panel">
-        <h2>Step 1. Primary CV</h2>
+        <h2 id="form_title">Step 0. Onboarding Settings</h2>
+        <label for="os_lookback_years">Title extraction lookback (years)</label>
+        <input id="os_lookback_years" type="number" min="1" max="20" step="1" value="8">
+        <div class="help">How far back we can look when turning past roles into target title patterns.</div>
+
+        <label for="os_min_months">Minimum role duration (months)</label>
+        <input id="os_min_months" type="number" min="1" max="24" step="1" value="6">
+        <div class="help">Shorter roles than this are ignored when we build title patterns.</div>
+
+        <label for="os_max_target">Max target title patterns</label>
+        <input id="os_max_target" type="number" min="1" max="20" step="1" value="8">
+        <div class="help">How many direct-match target titles we should keep.</div>
+
+        <label for="os_max_adjacent">Max adjacent title patterns</label>
+        <input id="os_max_adjacent" type="number" min="1" max="20" step="1" value="6">
+        <div class="help">How many adjacent-but-credible title patterns we should keep.</div>
+
+        <h2 style="margin-top:22px;">Step 1. Primary CV</h2>
         <label for="primary_cv">Detailed CV</label>
         <input id="primary_cv" type="file" accept=".docx,.md,.txt">
         <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
@@ -173,7 +194,7 @@
 
         <div class="actions">
           <button class="primary" id="create_profile" type="button">Create Profile</button>
-          <a class="button-link secondary" href="/admin">Go To Admin</a>
+          <a class="button-link secondary" id="workspace_link" href="/admin">Open Workspace</a>
         </div>
         <div class="status" id="status"></div>
       </section>
@@ -181,15 +202,15 @@
       <section class="panel">
         <h2>What Happens Next</h2>
         <div class="help">
-          1. We read your uploaded document text.<br>
-          2. We build or enrich <code>profile.json</code>.<br>
-          3. You review the generated summary, strengths, and fit notes in admin.<br>
-          4. Then you can run the current job-source connector and use the dashboard.
+          1. We save your onboarding answers into <code>profile.json</code>.<br>
+          2. We read your uploaded document text.<br>
+          3. We rebuild the profile from that source material.<br>
+          4. You review results, search, and profile settings in the workspace.
         </div>
         <div class="summary-box" id="summary_box">
           <h3>Generated Profile Snapshot</h3>
           <p id="summary_text"></p>
-          <ul id="strengths_list"></ul>
+          <code id="patterns_text"></code>
         </div>
       </section>
     </div>
@@ -199,7 +220,9 @@
     const statusEl = document.getElementById('status');
     const summaryBox = document.getElementById('summary_box');
     const summaryText = document.getElementById('summary_text');
-    const strengthsList = document.getElementById('strengths_list');
+    const patternsText = document.getElementById('patterns_text');
+    const urlParams = new URLSearchParams(window.location.search);
+    const isRebuildMode = urlParams.get('mode') === 'rebuild';
 
     function showStatus(message, kind) {
       statusEl.textContent = message;
@@ -221,10 +244,27 @@
       };
     }
 
+    function onboardingSettingsPayload() {
+      return {
+        title_extraction_lookback_years: Number(document.getElementById('os_lookback_years').value || 8),
+        title_extraction_min_months: Number(document.getElementById('os_min_months').value || 6),
+        max_target_patterns: Number(document.getElementById('os_max_target').value || 8),
+        max_adjacent_patterns: Number(document.getElementById('os_max_adjacent').value || 6),
+      };
+    }
+
+    function applyProfileDefaults(profile) {
+      const onboarding = profile?.onboarding_settings || {};
+      document.getElementById('os_lookback_years').value = String(onboarding.title_extraction_lookback_years ?? 8);
+      document.getElementById('os_min_months').value = String(onboarding.title_extraction_min_months ?? 6);
+      document.getElementById('os_max_target').value = String(onboarding.max_target_patterns ?? 8);
+      document.getElementById('os_max_adjacent').value = String(onboarding.max_adjacent_patterns ?? 6);
+    }
+
     function renderProfileSnapshot(profile) {
       summaryText.textContent = profile.candidate_summary || 'Profile created.';
-      const strengths = (profile.strengths || []).slice(0, 8);
-      strengthsList.innerHTML = strengths.map(item => `<li>${item}</li>`).join('');
+      const targets = (profile.target_title_patterns || []).slice(0, 3);
+      patternsText.textContent = targets.length ? `Target titles: ${targets.join(' | ')}` : 'Target titles will appear here after extraction.';
       summaryBox.classList.add('visible');
     }
 
@@ -244,6 +284,7 @@
         body: JSON.stringify({
           files,
           extra_text: extraNotes,
+          onboarding_settings: onboardingSettingsPayload(),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -254,6 +295,22 @@
       showStatus(payload.message || 'Profile created.', 'ok');
     }
 
+    async function loadProfileDefaults() {
+      const response = await fetch('/api/profile');
+      if (!response.ok) {
+        return;
+      }
+      const profile = await response.json().catch(() => ({}));
+      applyProfileDefaults(profile || {});
+    }
+
+    if (isRebuildMode) {
+      document.title = 'Job Hunter Agent Rebuild';
+      document.getElementById('hero_title').textContent = 'Rebuild Your Profile';
+      document.getElementById('hero_copy').textContent = 'Answer the onboarding questions again, upload a fresh CV, and rebuild the profile from scratch.';
+      document.getElementById('create_profile').textContent = 'Rebuild Profile';
+    }
+
     document.getElementById('create_profile').addEventListener('click', async () => {
       try {
         await createProfile();
@@ -261,6 +318,8 @@
         showStatus(error.message, 'error');
       }
     });
+
+    loadProfileDefaults().catch(() => {});
   </script>
 </body>
 </html>

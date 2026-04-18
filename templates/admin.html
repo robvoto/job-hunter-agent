@@ -126,6 +126,51 @@
       margin-top: 18px;
       align-items: center;
     }
+    .run-toolbar {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--muted);
+    }
+    .status-pill.running {
+      background: #ecfdf5;
+      border-color: #86efac;
+      color: #166534;
+    }
+    .status-pill.idle {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #475569;
+    }
+    .results-frame {
+      width: 100%;
+      min-height: 72vh;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+    }
+    .results-frame[hidden] {
+      display: none;
+    }
+    .results-empty {
+      padding: 18px;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--muted);
+    }
     button {
       border: 0;
       border-radius: 999px;
@@ -533,22 +578,53 @@
 <body>
   <main class="page">
     <section class="hero">
-      <h1>Job Hunter Admin</h1>
-      <p>Use this workspace to tune search, maintain the candidate profile, review what the system has learned, and check the health of the latest run.</p>
+      <h1>Job Hunter Workspace</h1>
+      <p>Use one workspace to review results, adjust search, maintain the profile, and rebuild onboarding when the source CV changes.</p>
     </section>
 
-    <nav class="tabs" aria-label="Admin sections">
-      <button class="tab-button active" data-tab-target="search">Search</button>
-      <button class="tab-button" data-tab-target="profile">Candidate Profile</button>
-      <button class="tab-button" data-tab-target="review">Review</button>
-      <button class="tab-button" data-tab-target="notifications">Notifications</button>
-      <button class="tab-button" data-tab-target="test">Last Run</button>
+    <nav class="tabs" aria-label="Workspace sections">
+      <button class="tab-button active" data-tab-target="results">Results</button>
+      <button class="tab-button" data-tab-target="search">Search</button>
+      <button class="tab-button" data-tab-target="profile">Profile</button>
     </nav>
 
-    <section class="group tab-panel active" data-tab-panel="search">
+    <section class="group tab-panel active" data-tab-panel="results">
+      <h2 class="group-title">Results</h2>
+      <p class="group-copy">Current dashboard cards, kept in sync with the latest background run.</p>
+      <section class="panel">
+        <div class="run-toolbar">
+          <div>
+            <h2 style="margin-bottom:6px;">Current Dashboard</h2>
+            <div class="help" id="results_frame_status">Dashboard will refresh automatically when a run finishes.</div>
+          </div>
+          <div class="panel-actions" style="margin-top:0;">
+            <button class="secondary" id="refresh_results" type="button">Refresh Results</button>
+          </div>
+        </div>
+        <div class="results-empty" id="results_fallback" hidden>Run the search once to build the dashboard cards.</div>
+        <iframe id="results_frame" class="results-frame" src="/dashboard" title="Job results dashboard"></iframe>
+      </section>
+    </section>
+
+    <section class="group tab-panel" data-tab-panel="search">
       <h2 class="group-title">Search</h2>
-      <p class="group-copy">Configure what to search for and where. Fit scoring is handled separately in the Candidate Profile tab.</p>
+      <p class="group-copy">Adjust search settings here, then launch a background run from the same tab.</p>
       <div class="grid">
+
+      <section class="panel">
+        <h2>Run Search</h2>
+        <p class="panel-copy">Runs use the current <code>search_settings</code> saved in <code>profile.json</code>.</p>
+        <div class="run-toolbar" style="margin-top:14px;">
+          <div>
+            <span class="status-pill idle" id="run_status_pill">Idle</span>
+            <div class="help" id="run_last_run">Last run: none yet.</div>
+          </div>
+          <div class="panel-actions" style="margin-top:0;">
+            <button class="primary" id="run_now" type="button">Run Now</button>
+            <button class="secondary" id="save_search" type="button">Save Search Settings</button>
+          </div>
+        </div>
+      </section>
 
       <section class="panel">
         <h2>Common</h2>
@@ -622,10 +698,6 @@
           <option value="false">Non-Easy Apply only</option>
         </select>
       </section>
-
-      </div>
-      <div class="panel-actions" style="padding: 0 0 1.5rem 0;">
-        <button class="primary" id="save_search">Save Search Settings</button>
       </div>
     </section>
 
@@ -750,23 +822,14 @@
       </section>
       </div>
 
-      <aside class="profile-side">
+<aside class="profile-side">
       <section class="panel side-panel" style="border-color:#f9a8a8;background:#fff8f8;">
-        <div class="panel-kicker" style="color:#9a3412;">Reset</div>
-        <h2>Reset Profile</h2>
-        <p class="panel-copy">Paste a new CV to rebuild the profile from scratch. Do not reset without a new CV — it will not produce a meaningful result.</p>
-
-        <label for="reset_cv_text" style="margin-top:12px;display:block;">New CV text</label>
-        <textarea id="reset_cv_text" style="min-height:120px;" placeholder="Paste your updated CV here before resetting..."></textarea>
-
-        <details class="help-drawer" style="margin-top:12px;border:1px solid #f9a8a8;background:#fff5f5;">
-          <summary style="font-weight:700;color:#9a3412;">Danger: Rebuild Profile From This CV</summary>
-          <p>This overwrites capability rules, title patterns, and extracted signals. The profile will be rebuilt entirely from the CV you paste above.</p>
-          <div class="panel-actions">
-            <button class="secondary" id="import_source_materials" style="border-color:#f87171;color:#9a3412;">Reset and Rebuild Profile</button>
-          </div>
-          <span class="inline-status" id="source_materials_status" aria-live="polite" style="display:block;margin-top:10px;"></span>
-        </details>
+        <div class="panel-kicker" style="color:#9a3412;">Rebuild</div>
+        <h2>Rebuild Profile</h2>
+        <p class="panel-copy">Launch the mini-wizard to answer the onboarding questions again and upload a fresh CV before rebuilding.</p>
+        <div class="panel-actions">
+          <button class="secondary" id="rebuild_profile" type="button" style="border-color:#f87171;color:#9a3412;">Open Rebuild Wizard</button>
+        </div>
       </section>
 
       <section class="panel side-panel">
@@ -841,32 +904,12 @@
 
           </section>
 
-          <section class="subpanel">
-            <h3>Onboarding Settings</h3>
-            <p class="panel-copy" style="font-size:0.88rem;">Controls used when running onboarding or Rebuild Profile. Change these before re-running onboarding if the extracted title patterns were too broad or too narrow.</p>
-
-            <label for="os_lookback_years">Title extraction lookback (years)</label>
-            <input id="os_lookback_years" type="number" min="1" max="20" step="1">
-            <div class="field-help">Only include roles that ended within this many years. Default 8.</div>
-
-            <label for="os_min_months">Minimum role duration (months)</label>
-            <input id="os_min_months" type="number" min="1" max="24" step="1">
-            <div class="field-help">Skip roles held for fewer than this many months. Default 6.</div>
-
-            <label for="os_max_target">Max target title patterns</label>
-            <input id="os_max_target" type="number" min="1" max="20" step="1">
-            <div class="field-help">Cap on target_title_patterns extracted. Default 8.</div>
-
-            <label for="os_max_adjacent">Max adjacent title patterns</label>
-            <input id="os_max_adjacent" type="number" min="1" max="20" step="1">
-            <div class="field-help">Cap on adjacent_title_patterns extracted. Default 6.</div>
-          </section>
         </div>
       </section>
       </div>
     </section>
 
-    <section class="group tab-panel" data-tab-panel="review">
+    <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Review</h2>
       <p class="group-copy">Manage review state here, then act on repeated tuning signals from viable roles and filtered noise.</p>
       <div class="grid">
@@ -880,7 +923,7 @@
       </div>
     </section>
 
-    <section class="group tab-panel" data-tab-panel="notifications">
+    <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Notifications</h2>
       <p class="group-copy">Configure how and when the agent notifies you about new matches.</p>
       <div class="grid">
@@ -939,7 +982,7 @@
       </div>
     </section>
 
-    <section class="group tab-panel" data-tab-panel="test">
+    <section class="group tab-panel" data-tab-panel="profile">
       <h2 class="group-title">Last Run</h2>
       <p class="group-copy">Latest run stats and false-reject debugging tools.</p>
       <div class="grid">
@@ -961,14 +1004,21 @@
     const statusEl = document.getElementById('status');
     const saveProfileButton = document.getElementById('save_profile');
     const saveProfileStatusEl = document.getElementById('save_profile_status');
-    const importSourceMaterialsButton = document.getElementById('import_source_materials');
-    const sourceMaterialsStatusEl = document.getElementById('source_materials_status');
+    const runStatusPillEl = document.getElementById('run_status_pill');
+    const runLastRunEl = document.getElementById('run_last_run');
+    const runNowButton = document.getElementById('run_now');
+    const rebuildProfileButton = document.getElementById('rebuild_profile');
+    const resultsFrame = document.getElementById('results_frame');
+    const resultsFallback = document.getElementById('results_fallback');
+    const resultsFrameStatusEl = document.getElementById('results_frame_status');
     const applyLearningButton = document.getElementById('apply_learning');
     const learningStatusEl = document.getElementById('learning_status');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     let telegramConnectLink = '';
     let loadedProfile = null;
+    let runStatusPollHandle = null;
+    let lastObservedRunStatus = 'idle';
     
     const listTextAreas = [
       'locations',
@@ -999,7 +1049,7 @@
 
     function setActiveTab(tabName) {
       const tabExists = tabButtons.some(button => button.dataset.tabTarget === tabName);
-      const resolvedTab = tabExists ? tabName : 'search';
+      const resolvedTab = tabExists ? tabName : 'results';
       for (const button of tabButtons) {
         button.classList.toggle('active', button.dataset.tabTarget === resolvedTab);
       }
@@ -1082,12 +1132,6 @@
       for (const [id, key] of ruleTextAreas) {
         document.getElementById(id).value = rulesToText(profile[id], key);
       }
-
-      const os = profile.onboarding_settings || {};
-      document.getElementById('os_lookback_years').value = String(os.title_extraction_lookback_years ?? 8);
-      document.getElementById('os_min_months').value = String(os.title_extraction_min_months ?? 6);
-      document.getElementById('os_max_target').value = String(os.max_target_patterns ?? 8);
-      document.getElementById('os_max_adjacent').value = String(os.max_adjacent_patterns ?? 6);
 
       renderTitleBlockChips(profile.reject_title_rules || []);
     }
@@ -1307,6 +1351,54 @@
       }
       const stats = await response.json();
       renderRunStats(stats);
+    }
+
+    function setRunStatus(status, lastRunAt) {
+      const normalized = status === 'running' ? 'running' : 'idle';
+      runStatusPillEl.textContent = normalized === 'running' ? 'Running...' : 'Idle';
+      runStatusPillEl.className = `status-pill ${normalized}`;
+      runLastRunEl.textContent = lastRunAt ? `Last run: ${lastRunAt}` : 'Last run: none yet.';
+      lastObservedRunStatus = normalized;
+    }
+
+    function ensureRunStatusPolling(shouldPoll) {
+      if (shouldPoll) {
+        if (runStatusPollHandle) {
+          return;
+        }
+        runStatusPollHandle = window.setInterval(() => {
+          loadRunStatus().catch(() => {});
+        }, 10000);
+        return;
+      }
+      if (runStatusPollHandle) {
+        window.clearInterval(runStatusPollHandle);
+        runStatusPollHandle = null;
+      }
+    }
+
+    function refreshResultsFrame() {
+      if (!resultsFrame) {
+        return;
+      }
+      resultsFrame.src = `/dashboard?_=${Date.now()}`;
+    }
+
+    async function loadRunStatus() {
+      const previousStatus = lastObservedRunStatus;
+      const response = await fetch('/api/run-status');
+      if (!response.ok) {
+        throw new Error('Could not load run status');
+      }
+      const payload = await response.json();
+      const status = payload.status === 'running' ? 'running' : 'idle';
+      setRunStatus(status, payload.last_run_at || '');
+      ensureRunStatusPolling(status === 'running');
+      if (previousStatus === 'running' && status === 'idle') {
+        refreshResultsFrame();
+        await loadRunStats().catch(() => {});
+      }
+      return payload;
     }
 
     function escapeHtml(value) {
@@ -1559,27 +1651,6 @@
       showStatus(payload.message || 'Learning update applied.', 'ok');
     }
 
-
-    async function importSourceMaterials() {
-      const cvText = (document.getElementById('reset_cv_text').value || '').trim();
-      if (!cvText) {
-        throw new Error('Paste a new CV above before resetting the profile.');
-      }
-      const response = await fetch('/api/onboarding/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: [], extra_text: cvText }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || 'Could not reset profile');
-      }
-      fillForm(payload.profile || {});
-      await loadReviewData();
-      showStatus(payload.message || 'Profile rebuilt from new CV.', 'ok');
-    }
-
-
     function collectProfile() {
       return {
         search_settings: {
@@ -1616,12 +1687,6 @@
         reject_title_rules: textToRules(document.getElementById('reject_title_rules').value, 'pattern'),
         reject_description_phrase_rules: textToRules(document.getElementById('reject_description_phrase_rules').value, 'phrase'),
         reject_description_regex_rules: textToRules(document.getElementById('reject_description_regex_rules').value, 'pattern'),
-        onboarding_settings: {
-          title_extraction_lookback_years: Number(document.getElementById('os_lookback_years').value || 8),
-          title_extraction_min_months: Number(document.getElementById('os_min_months').value || 6),
-          max_target_patterns: Number(document.getElementById('os_max_target').value || 8),
-          max_adjacent_patterns: Number(document.getElementById('os_max_adjacent').value || 6),
-        },
       };
     }
 
@@ -1664,12 +1729,28 @@
       );
     }
 
-    async function saveReviewControls() {
+    async function runSearchNow() {
       const profile = collectProfile();
       await patchProfile(
-        { review_controls: profile.review_controls },
-        'Review controls saved to profile.json.'
+        {
+          search_settings: profile.search_settings,
+          salary_preferences: profile.salary_preferences,
+        },
+        'Search settings saved to profile.json.'
       );
+      const response = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search_settings: profile.search_settings }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not start run');
+      }
+      setRunStatus(payload.status === 'running' ? 'running' : 'running', payload.last_run_at || '');
+      ensureRunStatusPolling(true);
+      showStatus('Background run started.', 'ok');
+      return payload;
     }
 
     async function applyOneSkipDecision(skill, choice) {
@@ -1689,6 +1770,28 @@
       } catch (error) {
         showStatus(error.message, 'error');
       }
+    });
+
+    runNowButton.addEventListener('click', async () => {
+      const originalLabel = runNowButton.textContent;
+      runNowButton.disabled = true;
+      runNowButton.textContent = 'Starting...';
+      try {
+        await runSearchNow();
+      } catch (error) {
+        showStatus(error.message, 'error');
+      } finally {
+        runNowButton.disabled = false;
+        runNowButton.textContent = originalLabel;
+      }
+    });
+
+    rebuildProfileButton.addEventListener('click', () => {
+      window.location.href = '/start?mode=rebuild';
+    });
+
+    document.getElementById('refresh_results').addEventListener('click', () => {
+      refreshResultsFrame();
     });
 
     saveProfileButton.addEventListener('click', async () => {
@@ -1725,20 +1828,6 @@
     });
 
 
-
-    importSourceMaterialsButton.addEventListener('click', async () => {
-      importSourceMaterialsButton.disabled = true;
-      showInlineStatus(sourceMaterialsStatusEl, 'Rebuilding profile from new CV...', 'loading');
-      try {
-        await importSourceMaterials();
-        showInlineStatus(sourceMaterialsStatusEl, 'Profile rebuilt from new CV.', 'ok');
-      } catch (error) {
-        showStatus(error.message, 'error');
-        showInlineStatus(sourceMaterialsStatusEl, error.message, 'error');
-      } finally {
-        importSourceMaterialsButton.disabled = false;
-      }
-    });
 
     document.getElementById('refresh_review_data').addEventListener('click', async () => {
       try {
@@ -1908,7 +1997,6 @@
             reject_title_rules: profile.reject_title_rules,
             reject_description_phrase_rules: profile.reject_description_phrase_rules,
             reject_description_regex_rules: profile.reject_description_regex_rules,
-            onboarding_settings: profile.onboarding_settings,
           },
           'Matching rules saved to profile.json.'
         );
@@ -1934,11 +2022,22 @@
     } catch (error) {
     }
 
+    resultsFrame.addEventListener('load', () => {
+      const text = resultsFrame.contentDocument?.body?.textContent || '';
+      const isPlaceholder = /Dashboard not found yet/i.test(text);
+      resultsFallback.hidden = !isPlaceholder;
+      resultsFrame.hidden = isPlaceholder;
+      resultsFrameStatusEl.textContent = isPlaceholder
+        ? 'Run the search once to build the dashboard cards.'
+        : 'Dashboard will refresh automatically when a run finishes.';
+    });
+
     Promise.all([
       loadProfile(),
       loadAgentSettings(),
       loadRunStats(),
       loadReviewData(),
+      loadRunStatus(),
     ]).catch(error => showStatus(error.message, 'error'));
   </script>
 </body>

@@ -11,13 +11,12 @@ from config import OUTPUT_HTML
 from filters import build_title_block_rule, extract_rejection_suggestions, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from profile_learning import build_learning_patch, merge_capability_rules, repair_text
-from profile_store import DEFAULT_PROFILE, load_profile, normalize_search_settings, patch_profile, save_profile
+from profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_search_settings, patch_profile, save_profile
 from profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from source_connector import scrape_jobs_direct
 from source_documents import (
     build_llm_profile_brief,
-    import_source_materials_to_profile,
     load_source_materials,
     persist_uploaded_source_pack,
     run_onboarding,
@@ -105,6 +104,54 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
     current_search_settings = normalize_search_settings(load_profile().get("search_settings", {}))
     current_search_settings.update(overrides)
     return normalize_search_settings(current_search_settings)
+
+
+def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        resolved = int(value)
+    except Exception:
+        resolved = default
+    return max(minimum, min(maximum, resolved))
+
+
+def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, int]:
+    source = payload if isinstance(payload, dict) else {}
+    if isinstance(source.get("onboarding_settings"), dict):
+        source = source.get("onboarding_settings") or {}
+
+    if not source:
+        current = load_profile().get("onboarding_settings")
+        if isinstance(current, dict) and current:
+            source = current
+        else:
+            return dict(DEFAULT_ONBOARDING_SETTINGS)
+
+    normalized = dict(DEFAULT_ONBOARDING_SETTINGS)
+    normalized["title_extraction_lookback_years"] = _coerce_int(
+        source.get("title_extraction_lookback_years"),
+        DEFAULT_ONBOARDING_SETTINGS["title_extraction_lookback_years"],
+        1,
+        20,
+    )
+    normalized["title_extraction_min_months"] = _coerce_int(
+        source.get("title_extraction_min_months"),
+        DEFAULT_ONBOARDING_SETTINGS["title_extraction_min_months"],
+        1,
+        24,
+    )
+    normalized["max_target_patterns"] = _coerce_int(
+        source.get("max_target_patterns"),
+        DEFAULT_ONBOARDING_SETTINGS["max_target_patterns"],
+        1,
+        20,
+    )
+    normalized["max_adjacent_patterns"] = _coerce_int(
+        source.get("max_adjacent_patterns"),
+        DEFAULT_ONBOARDING_SETTINGS["max_adjacent_patterns"],
+        1,
+        20,
+    )
+    return normalized
 
 
 def _run_scrape_job() -> None:
@@ -959,22 +1006,12 @@ class AdminHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(200, result)
             return
-        if self.path == "/api/import-source-materials":
-            try:
-                payload = self._read_json_body()
-                materials = save_source_materials(payload) if payload else load_source_materials(create_if_missing=True)
-                result = run_onboarding(materials)
-                result["materials"] = materials
-            except Exception as exc:
-                self._send_json(400, {"error": str(exc)})
-                return
-            self._send_json(200, result)
-            return
         if self.path == "/api/onboarding/import":
             try:
                 payload = self._read_json_body()
                 files = payload.get("files", [])
                 extra_text = str(payload.get("extra_text") or "")
+                onboarding_settings = _normalize_onboarding_settings_payload(payload.get("onboarding_settings"))
                 if not isinstance(files, list):
                     raise ValueError("files must be a list")
                 materials = (
@@ -982,6 +1019,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     if files
                     else load_source_materials(create_if_missing=True)
                 )
+                patch_profile({"onboarding_settings": onboarding_settings})
                 result = run_onboarding(materials, extra_text=extra_text)
                 result["materials"] = materials
             except Exception as exc:
@@ -1264,7 +1302,7 @@ class AdminHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), AdminHandler)
     print(f"Local server running at http://{HOST}:{PORT}")
-    print(f"Dashboard: http://{HOST}:{PORT}/dashboard")
-    print(f"Admin: http://{HOST}:{PORT}/admin")
+    print(f"Workspace: http://{HOST}:{PORT}/admin")
+    print(f"Results source: http://{HOST}:{PORT}/dashboard")
     print(f"Onboarding: http://{HOST}:{PORT}/start")
     server.serve_forever()
