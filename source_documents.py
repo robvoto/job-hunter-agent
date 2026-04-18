@@ -8,10 +8,9 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
+from cv_pipeline import run_cv_pipeline
 from profile_learning import (
-    build_learning_patch,
     extract_title_pattern_suggestions,
-    merge_capability_rules,
     repair_text,
 )
 from profile_store import (
@@ -287,32 +286,13 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
     patch["cv_text"] = combined_text
     patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
-    learned = build_learning_patch(combined_text)
+    patch.update(run_cv_pipeline(combined_text))
 
-    imported_summary = learned.get("candidate_summary") or _extract_summary_from_text(combined_text)
+    imported_summary = _extract_summary_from_text(combined_text)
     if imported_summary:
         patch["candidate_summary"] = imported_summary
 
-    imported_evidence_signals = _normalize_evidence_signal_candidates(
-        learned.get("evidence_signals", learned.get("strengths", []))
-    )
-    if not imported_evidence_signals:
-        imported_evidence_signals = _normalize_evidence_signal_candidates(
-            _extract_evidence_signals_from_text(combined_text)
-        )
-    all_evidence_signals = list(dict.fromkeys(imported_evidence_signals))
-    if all_evidence_signals:
-        patch["evidence_signals"] = all_evidence_signals[:20]
-
-    if learned.get("capability_profile_rules"):
-        patch["capability_profile_rules"] = merge_capability_rules(
-            copy.deepcopy(DEFAULT_PROFILE.get("capability_profile_rules", [])),
-            learned["capability_profile_rules"],
-        )
-
-    brief = build_llm_profile_brief(
-        capability_rules=patch.get("capability_profile_rules") or [],
-    )
+    brief = build_llm_profile_brief(capability_rules=patch.get("capability_profile_rules") or [])
     if brief:
         patch["llm_profile_brief"] = brief
 
@@ -326,6 +306,11 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
             print(f"[TITLE_PATTERNS] Saved {len(suggestion['target_title_patterns'])} target and {len(suggestion.get('adjacent_title_patterns', []))} adjacent patterns")
         else:
             print("[TITLE_PATTERNS] Deterministic parser returned no target patterns")
+        if suggestion.get("suggested_search_keywords"):
+            current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
+            if not current_kw:
+                patch["search_settings"] = {"keywords": " ".join(suggestion["suggested_search_keywords"])}
+                print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
 

@@ -157,10 +157,9 @@ def build_system_prompt() -> str:
         "Be honest about gaps. Adjacent titles can still fit when responsibilities match the candidate background.",
         "Recent directly relevant experience matters more than older exposure from many years ago.",
         "Treat primary current evidence as strongest proof. Treat older evidence as weaker, and background-only context such as certifications, broad industry mentions, or optional supporting history as weakest.",
+        "Use capability levels and aliases from the candidate profile context as supporting evidence when responsibilities align.",
         "Treat desirable or nice-to-have gaps as softer concerns than essential or mandatory gaps.",
         "Grade the full description fit, not just keyword overlap.",
-        "Do not reject only because finance, treasury, or ERP terms appear if the core work still reads like generalist business analysis.",
-        "Reward roles that match BPMN, workshops, user stories, stakeholder alignment, discovery, process mapping, and government delivery context.",
         build_profile_prompt_context(),
     ]
     parts.append(
@@ -273,7 +272,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
         "- Do NOT include tool or platform names as adjacent titles (SAP, Salesforce, Guidewire, Workday etc. are tools, not job titles).\n\n"
         "Rules for suggested_search_keywords:\n"
-        "- Must be a broad job title phrase of 2-3 words maximum (e.g. 'business analyst', 'product owner').\n"
+        "- Must be a broad job title phrase of 2-3 words maximum.\n"
         "- Do NOT use tool names, certifications, or domain terms as keywords.\n\n"
         "Use lowercase for all patterns and keywords. Only return the JSON object, no explanation.\n\nCV:\n"
         + str(cv_text)[:4000]
