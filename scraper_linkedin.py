@@ -179,7 +179,11 @@ class LinkedInScraper(BaseJobScraper):
                     })
 
                 # Content filter
-                ok_desc, desc_reason = passes_content_filters(details_text, record.get("location", ""))
+                ok_desc, desc_reason = passes_content_filters(
+                    details_text,
+                    record.get("location", ""),
+                    record.get("title_reason", ""),
+                )
                 record["content_reason"] = desc_reason
                 if not ok_desc:
                     print(f"[LinkedIn] REJECTED (content) [{desc_reason}] {title} @ {company}")
@@ -332,15 +336,9 @@ class LinkedInScraper(BaseJobScraper):
 
 
 def _normalize_location_for_jobspy(seek_location: str) -> str:
-    """Convert SEEK-style location strings to jobspy-friendly city strings.
-
-    Examples:
-        'All Sydney NSW'  → 'Sydney, Australia'
-        'All Canberra ACT' → 'Canberra, Australia'
-        'Sydney NSW'      → 'Sydney, Australia'
-    """
+    """Convert source-style location strings to jobspy-friendly city strings."""
     text = re.sub(r"^all\s+", "", seek_location.strip(), flags=re.IGNORECASE)
-    # Strip trailing state abbreviation if present (e.g. "Sydney NSW" → "Sydney")
+    # Strip a trailing region abbreviation when present.
     text = re.sub(r"\s+[A-Z]{2,3}$", "", text.strip())
     text = text.strip()
     if text and not text.lower().endswith("australia"):

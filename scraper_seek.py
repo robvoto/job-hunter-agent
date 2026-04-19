@@ -112,7 +112,7 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
     keywords = str(search_settings.get("keywords") or "").strip()
     locations = _dedupe_preserve_order(
         [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
-    ) or list(get_search_settings({}).get("locations", []))
+    ) or [""]
     classification_ids = _dedupe_preserve_order(
         [str(value).strip() for value in search_settings.get("classification_ids", []) if str(value).strip()]
     )
@@ -121,7 +121,8 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
     for location in locations:
         search_url = SEEK_JOBS_BASE_URL
         search_url = set_query_param(search_url, "keywords", keywords)
-        search_url = set_query_param(search_url, "where", location)
+        if location:
+            search_url = set_query_param(search_url, "where", location)
         if classification_ids:
             search_url = set_query_param(search_url, "classification", ",".join(classification_ids))
         search_url = set_query_param(search_url, "daterange", configured_date_range)

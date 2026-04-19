@@ -155,6 +155,15 @@
       border: 1px solid var(--line);
       color: var(--ink);
     }
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .checkbox-grid label {
+      margin: 0; font-weight: normal; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -166,31 +175,52 @@
 
     <div class="grid">
       <section class="panel">
-        <h2 id="form_title">Step 0. Onboarding Settings</h2>
-        <label for="os_lookback_years">Title extraction lookback (years)</label>
-        <input id="os_lookback_years" type="number" min="1" max="20" step="1" value="8">
-        <div class="help">How far back we can look when turning past roles into target title patterns.</div>
+        <h2 id="form_title">Step 1. Onboarding Settings</h2>
+        <label for="os_lookback_years">Extraction lookback (years)</label>
+        <input id="os_lookback_years" type="number" min="1" max="20" step="1">
+        <div class="help">How far back we can look when extracting role-based signals and patterns.</div>
 
         <label for="os_min_months">Minimum role duration (months)</label>
-        <input id="os_min_months" type="number" min="1" max="24" step="1" value="6">
+        <input id="os_min_months" type="number" min="1" max="24" step="1">
         <div class="help">Shorter roles than this are ignored when we build title patterns.</div>
 
         <label for="os_max_target">Max target title patterns</label>
-        <input id="os_max_target" type="number" min="1" max="20" step="1" value="8">
+        <input id="os_max_target" type="number" min="1" max="20" step="1">
         <div class="help">How many direct-match target titles we should keep.</div>
 
         <label for="os_max_adjacent">Max adjacent title patterns</label>
-        <input id="os_max_adjacent" type="number" min="1" max="20" step="1" value="6">
+        <input id="os_max_adjacent" type="number" min="1" max="20" step="1">
         <div class="help">How many adjacent-but-credible title patterns we should keep.</div>
 
-        <h2 style="margin-top:22px;">Step 1. Primary CV</h2>
+        <h2 style="margin-top:22px;">Step 2. Search Preferences</h2>
+        <label for="search_keywords">Target Keywords</label>
+        <input id="search_keywords" type="text" placeholder="e.g. Project Manager, DevOps" required>
+        <div class="help">Required. Main terms used to find jobs.</div>
+
+        <label>Target Locations</label>
+        <div class="checkbox-grid" id="location_checkboxes">
+          <label><input type="checkbox" value="NSW"> NSW</label>
+          <label><input type="checkbox" value="VIC"> VIC</label>
+          <label><input type="checkbox" value="QLD"> QLD</label>
+          <label><input type="checkbox" value="WA"> WA</label>
+          <label><input type="checkbox" value="SA"> SA</label>
+          <label><input type="checkbox" value="TAS"> TAS</label>
+          <label><input type="checkbox" value="ACT"> ACT</label>
+          <label><input type="checkbox" value="NT"> NT</label>
+        </div>
+        <div class="help">Required. Select at least one region to search.</div>
+
+        <label>Engagement Preference</label>
+        <div class="checkbox-row" style="margin-top: 5px; font-weight: normal; gap: 15px;">
+          <label style="margin:0; font-weight: normal;"><input type="radio" name="engagement_pref" value="both" checked> Both</label>
+          <label style="margin:0; font-weight: normal;"><input type="radio" name="engagement_pref" value="permanent"> Permanent</label>
+          <label style="margin:0; font-weight: normal;"><input type="radio" name="engagement_pref" value="contract"> Contract</label>
+        </div>
+
+        <h2 style="margin-top:22px;">Step 3. Primary CV</h2>
         <label for="primary_cv">Detailed CV</label>
         <input id="primary_cv" type="file" accept=".docx,.md,.txt">
         <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
-
-        <label for="extra_notes">Optional extra notes</label>
-        <textarea id="extra_notes" placeholder="Anything important you want the system to know, in plain English."></textarea>
-        <div class="help">You can leave this blank. STAR examples can come later if you want.</div>
 
         <div class="actions">
           <button class="primary" id="create_profile" type="button">Create Profile</button>
@@ -245,20 +275,41 @@
     }
 
     function onboardingSettingsPayload() {
+      const lookbackYears = document.getElementById('os_lookback_years').value.trim();
+      const minMonths = document.getElementById('os_min_months').value.trim();
+      const maxTarget = document.getElementById('os_max_target').value.trim();
+      const maxAdjacent = document.getElementById('os_max_adjacent').value.trim();
       return {
-        title_extraction_lookback_years: Number(document.getElementById('os_lookback_years').value || 8),
-        title_extraction_min_months: Number(document.getElementById('os_min_months').value || 6),
-        max_target_patterns: Number(document.getElementById('os_max_target').value || 8),
-        max_adjacent_patterns: Number(document.getElementById('os_max_adjacent').value || 6),
+        extraction_lookback_years: lookbackYears ? Number(lookbackYears) : undefined,
+        title_extraction_min_months: minMonths ? Number(minMonths) : undefined,
+        max_target_patterns: maxTarget ? Number(maxTarget) : undefined,
+        max_adjacent_patterns: maxAdjacent ? Number(maxAdjacent) : undefined,
+      };
+    }
+
+    function searchPreferencesPayload() {
+      const locations = Array.from(document.querySelectorAll('#location_checkboxes input:checked')).map(cb => cb.value);
+      return {
+        keywords: document.getElementById('search_keywords').value.trim(),
+        locations: locations,
+        engagement_type: document.querySelector('input[name="engagement_pref"]:checked').value
       };
     }
 
     function applyProfileDefaults(profile) {
       const onboarding = profile?.onboarding_settings || {};
-      document.getElementById('os_lookback_years').value = String(onboarding.title_extraction_lookback_years ?? 8);
-      document.getElementById('os_min_months').value = String(onboarding.title_extraction_min_months ?? 6);
-      document.getElementById('os_max_target').value = String(onboarding.max_target_patterns ?? 8);
-      document.getElementById('os_max_adjacent').value = String(onboarding.max_adjacent_patterns ?? 6);
+      document.getElementById('os_lookback_years').value = String(onboarding.extraction_lookback_years ?? onboarding.title_extraction_lookback_years ?? '');
+      document.getElementById('os_min_months').value = String(onboarding.title_extraction_min_months ?? '');
+      document.getElementById('os_max_target').value = String(onboarding.max_target_patterns ?? '');
+      document.getElementById('os_max_adjacent').value = String(onboarding.max_adjacent_patterns ?? '');
+
+      const search = profile?.search_settings || {};
+      document.getElementById('search_keywords').value = search.keywords || '';
+      
+      const savedLocations = new Set(search.locations || []);
+      document.querySelectorAll('#location_checkboxes input').forEach(cb => {
+        cb.checked = savedLocations.has(cb.value);
+      });
     }
 
     function renderProfileSnapshot(profile) {
@@ -270,10 +321,23 @@
 
     async function createProfile() {
       const primary = document.getElementById('primary_cv').files[0];
-      const extraNotes = document.getElementById('extra_notes').value.trim();
+      const searchPrefs = searchPreferencesPayload();
 
       if (!primary) {
         throw new Error('Choose your detailed CV first.');
+      }
+      if (!searchPrefs.keywords) {
+        throw new Error('Please enter at least one target keyword.');
+      }
+      if (searchPrefs.locations.length === 0) {
+        throw new Error('Please select at least one location.');
+      }
+
+      if (isRebuildMode) {
+        const confirmed = window.confirm("FINAL CHECK: Are you absolutely sure you want to rebuild? \n\n" +
+                                         "This will overwrite your current machine-learned profile (strengths, capabilities, and evidence tiers) " +
+                                         "with new data from this document. Manual edits will be lost.");
+        if (!confirmed) return;
       }
 
       const files = [await fileToPayload(primary, 'Primary CV')];
@@ -283,8 +347,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files,
-          extra_text: extraNotes,
           onboarding_settings: onboardingSettingsPayload(),
+          search_preferences: searchPreferencesPayload(),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -293,6 +357,9 @@
       }
       renderProfileSnapshot(payload.profile || {});
       showStatus(payload.message || 'Profile created.', 'ok');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 800);
     }
 
     async function loadProfileDefaults() {

@@ -555,10 +555,9 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     elif compact_whitespace(record.get("work_type") or "").lower() in {"full time", "full-time", "permanent"}:
         highlights.append("Permanent role")
 
-    if compact_whitespace(record.get("work_mode") or "").lower() == "remote" and "canberra" in compact_whitespace(record.get("location") or "").lower():
-        highlights.append("Canberra role with remote setup")
-    elif "sydney" in compact_whitespace(record.get("location") or "").lower():
-        highlights.append("Sydney-based role")
+    location_signal = assess_location_preference(record, active_profile)
+    if location_signal and int(location_signal.get("value", 0) or 0) > 0:
+        highlights.append(str(location_signal.get("label") or "Location preference match"))
 
     highlights.extend(competitive_fit_highlights(record, active_profile))
     return dedupe_preserve_order(highlights)[:4]
@@ -583,11 +582,6 @@ def build_risk_and_missing_evidence(
 
     if capability_matches["low_fit"]:
         risks.append(f"{list_to_phrase(capability_matches['low_fit'][:2]).capitalize()} looks niche for your background")
-
-    if re.search(r"\bmust be based in canberra\b|\bmust reside in canberra\b|\bonsite in canberra\b", lowered):
-        missing.append("Canberra onsite attendance is explicitly required")
-    elif re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", lowered):
-        risks.append("Canberra onsite pattern looks heavier than preferred")
 
     for signal in (competitive_signals or []):
         if int(signal.get("adjustment", 0)) < 0:
@@ -972,7 +966,7 @@ def compact_score_label(label: str) -> str:
         return direct_map[label]
     if label.startswith("Posted within") or label == "Still relatively recent":
         return "Freshness"
-    if label.startswith("Sydney location") or label.startswith("Canberra role") or label.startswith("Location"):
+    if "location" in label.lower() or "onsite" in label.lower() or "travel" in label.lower():
         return "Location"
     if label.startswith("Competitive signal"):
         return "Competitive"
@@ -1056,10 +1050,10 @@ def format_posted_date_label(posted_text: Optional[str], posted_age_days: Option
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
     active_profile = profile or load_profile()
     defaults = {
-        "home_location": "Sydney NSW",
-        "secondary_location": "Canberra ACT",
-        "prefer_government": True,
-        "prefer_permanent": True,
+        "home_location": "",
+        "secondary_location": "",
+        "prefer_government": False,
+        "prefer_permanent": False,
         "preferred_contract_months": 12,
         "short_contract_months": 6,
     }
@@ -1253,22 +1247,45 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
     if not location or location == "n/a":
         return None
 
-    home_location = str(preferences.get("home_location") or "").lower()
-    secondary_location = str(preferences.get("secondary_location") or "").lower()
+    def _location_variants(value: str) -> list[str]:
+        cleaned = compact_whitespace(value).lower()
+        if not cleaned:
+            return []
+        variants = [cleaned]
+        no_prefix = re.sub(r"^all\s+", "", cleaned).strip()
+        if no_prefix and no_prefix not in variants:
+            variants.append(no_prefix)
+        no_region = re.sub(r"\s+[a-z]{2,3}$", "", no_prefix).strip()
+        if no_region and no_region not in variants:
+            variants.append(no_region)
+        return variants
 
-    if "sydney" in location and "sydney" in home_location:
-        return {"label": "Sydney-based role", "value": 4}
+    def _matches_location(preference: str) -> bool:
+        return any(variant and variant in location for variant in _location_variants(preference))
 
-    if "canberra" in location and "canberra" in secondary_location:
+    home_location = str(preferences.get("home_location") or "")
+    secondary_location = str(preferences.get("secondary_location") or "")
+
+    if home_location and _matches_location(home_location):
+        label_target = compact_whitespace(home_location)
+        return {"label": f"Location matches primary preference: {label_target}", "value": 4}
+
+    if secondary_location and _matches_location(secondary_location):
+        label_target = compact_whitespace(secondary_location)
         if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
-            return {"label": "Canberra role with remote setup", "value": 2}
+            return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": 2}
         if re.search(r"\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\b", source_text):
-            return {"label": "Canberra role with lighter travel", "value": 0}
+            return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": 0}
         if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
-            return {"label": "Canberra onsite pattern is heavier", "value": -3}
-        if re.search(r"\bmust be based in canberra\b|\bmust reside in canberra\b|\bonsite in canberra\b", source_text):
-            return {"label": "Canberra onsite attendance is required", "value": -6}
-        return {"label": "Canberra role may involve travel", "value": -1}
+            return {"label": f"Secondary location requires regular onsite attendance: {label_target}", "value": -3}
+
+        secondary_terms = [re.escape(value) for value in _location_variants(secondary_location) if value]
+        if secondary_terms and re.search(
+            rf"\b(must be based in|must reside in|onsite in)\s+(?:{'|'.join(secondary_terms)})\b",
+            source_text,
+        ):
+            return {"label": f"Secondary location requires local onsite attendance: {label_target}", "value": -6}
+        return {"label": f"Location matches secondary preference: {label_target}", "value": -1}
 
     return None
 
@@ -1280,12 +1297,21 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     work_type = compact_whitespace(record.get("work_type") or "").lower()
     preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
     short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
+    eng_pref = preferences.get("engagement_type", "both")
 
-    if "full time" in work_type or "permanent" in work_type:
+    is_perm = "full time" in work_type or "permanent" in work_type
+    is_contract = "contract" in work_type
+
+    if is_perm:
+        if eng_pref == "contract":
+            return {"label": "Permanent role (preference is Contract)", "value": -4}
         return {"label": "Permanent role", "value": 7}
 
-    if "contract" not in work_type:
+    if not is_contract:
         return None
+
+    if eng_pref == "permanent":
+        return {"label": "Contract role (preference is Permanent)", "value": -4}
 
     contract_months = extract_contract_months(source_text)
     if contract_months is None:
@@ -1645,17 +1671,16 @@ def get_trusted_full_description(record: dict) -> str:
 
     Prefers the canonical ``full_description`` field. Falls back to
     ``fit_source_text`` only when ``description_source`` is trusted and the
-    text meets the minimum length threshold (backward-compat for records
-    scraped before ``full_description`` was introduced).
+    text meets the minimum length threshold.
     """
     full = compact_whitespace(record.get("full_description") or "")
     if full:
         return full
     source = str(record.get("description_source") or "").strip().lower()
     if source in TRUSTED_DESCRIPTION_SOURCES:
-        legacy = compact_whitespace(record.get("fit_source_text") or "")
-        if len(legacy) >= MIN_TRUSTED_DESCRIPTION_LENGTH:
-            return legacy
+        fallback_text = compact_whitespace(record.get("fit_source_text") or "")
+        if len(fallback_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH:
+            return fallback_text
     return ""
 
 
@@ -5040,7 +5065,11 @@ def _seek_scrape_to_records(
                                     }
                                 )
 
-                            ok_desc, desc_reason = passes_content_filters(details_text, record["location"])
+                            ok_desc, desc_reason = passes_content_filters(
+                                details_text,
+                                record["location"],
+                                record.get("title_reason", ""),
+                            )
                             record["content_reason"] = desc_reason
                             if not ok_desc:
                                 print(f"REJECTED (content) [{desc_reason}] {title} @ {company}")

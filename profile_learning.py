@@ -2,7 +2,7 @@
 
 Main goals:
 - repair imported text
-- extract summaries, evidence signals, notes, and capability rules from human material
+- extract summaries, notes, and capability rules from human material
 - provide a local knowledge-note fallback for profile enrichment
 
 Notes:
@@ -15,6 +15,8 @@ from datetime import datetime
 import re
 from pathlib import Path
 from typing import Any
+
+from profile_store import DEFAULT_ONBOARDING_SETTINGS
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -40,6 +42,33 @@ def repair_text(text: str) -> str:
     for source, target in replacements.items():
         repaired = repaired.replace(source, target)
     return repaired.strip()
+
+
+def _resolve_onboarding_int(
+    onboarding_settings: dict[str, Any] | None,
+    key: str,
+    *,
+    minimum: int = 1,
+    legacy_keys: list[str] | None = None,
+) -> int:
+    settings = onboarding_settings or {}
+    for candidate_key in [key, *(legacy_keys or [])]:
+        value = settings.get(candidate_key)
+        if value in (None, ""):
+            continue
+        try:
+            return max(minimum, int(value))
+        except Exception:
+            continue
+    return max(minimum, int(DEFAULT_ONBOARDING_SETTINGS[key]))
+
+
+def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | None = None) -> int:
+    return _resolve_onboarding_int(
+        onboarding_settings,
+        "extraction_lookback_years",
+        legacy_keys=["title_extraction_lookback_years"],
+    )
 
 
 def _find_rating(text: str) -> float | None:
@@ -112,6 +141,12 @@ _GENERIC_ROLE_NOUNS = {
     "analyst", "manager", "coordinator", "consultant", "specialist", "developer", "engineer",
     "architect", "officer", "director", "administrator", "owner", "lead", "executive",
     "head", "staff", "project", "business",
+}
+_EMPLOYER_MARKERS = {
+    "bank", "group", "consulting", "services", "solutions", "systems", "technology", "technologies",
+    "university", "college", "school", "council", "government", "department", "agency", "institute",
+    "pty", "ltd", "llc", "inc", "corp", "corporation", "company", "limited", "holdings", "partners",
+    "association", "authority", "commission", "office", "hospital", "health", "care", "trust",
 }
 
 
@@ -186,6 +221,79 @@ def _looks_like_title(text: str) -> bool:
     return True
 
 
+def _title_signal_score(text: str) -> int:
+    cleaned = _clean_line(text)
+    tokens = [_normalize_token(token) for token in cleaned.split()]
+    if not cleaned:
+        return 0
+    score = 0
+    if _looks_like_title(cleaned):
+        score += 1
+    score += sum(2 for token in tokens if token in _GENERIC_ROLE_NOUNS)
+    score += sum(1 for token in tokens if token in _TITLE_MODIFIERS)
+    if len(tokens) <= 6:
+        score += 1
+    if re.search(r"[,&/]", cleaned):
+        score += 1
+    return score
+
+
+def _employer_signal_score(text: str) -> int:
+    cleaned = _clean_line(text)
+    tokens = [_normalize_token(token) for token in cleaned.split()]
+    if not cleaned:
+        return 0
+    score = 0
+    score += sum(2 for token in tokens if token in _EMPLOYER_MARKERS)
+    if cleaned.isupper() and len(tokens) <= 5:
+        score += 1
+    if "&" in cleaned:
+        score += 1
+    return score
+
+
+def _pick_role_title_and_employer(candidate_lines: list[str], prefer_prefix_order: bool = False) -> tuple[str, str]:
+    if not candidate_lines:
+        return "", ""
+    if len(candidate_lines) == 1:
+        only = candidate_lines[0]
+        return (only, "") if _looks_like_title(only) else ("", only)
+
+    first = candidate_lines[0]
+    second = candidate_lines[1]
+    first_title_score = _title_signal_score(first)
+    second_title_score = _title_signal_score(second)
+    first_employer_score = _employer_signal_score(first)
+    second_employer_score = _employer_signal_score(second)
+
+    first_beats_second = (
+        first_title_score > second_title_score and second_employer_score >= first_employer_score
+    )
+    second_beats_first = (
+        second_title_score > first_title_score and first_employer_score >= second_employer_score
+    )
+
+    if first_beats_second:
+        return first, second
+    if second_beats_first:
+        return second, first
+
+    if first_title_score > second_title_score:
+        return first, ""
+    if second_title_score > first_title_score:
+        return second, ""
+
+    if prefer_prefix_order and _looks_like_title(first):
+        return first, second
+    if _looks_like_title(second) and not _looks_like_title(first):
+        return second, first
+    if _looks_like_title(first):
+        return first, ""
+    if _looks_like_title(second):
+        return second, ""
+    return "", ""
+
+
 def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
     lines = source_text.splitlines()
     roles: list[dict[str, Any]] = []
@@ -230,7 +338,22 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             i += 1
             continue
 
-        candidate_lines: list[str] = []
+        prefix_candidate_lines: list[str] = []
+        k = i - 1
+        while k >= 0 and len(prefix_candidate_lines) < 3:
+            look_back_raw = lines[k].strip()
+            look_back = _clean_line(look_back_raw)
+            if not look_back:
+                break
+            if look_back_raw.lstrip().startswith("#") or look_back_raw.lstrip().startswith(("-", "*")):
+                break
+            if _extract_year_range(look_back):
+                break
+            prefix_candidate_lines.append(look_back)
+            k -= 1
+        prefix_candidate_lines.reverse()
+
+        candidate_lines: list[str] = list(prefix_candidate_lines)
         bullets: list[str] = []
         j = i + 1
         while j < len(lines):
@@ -249,12 +372,8 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                 candidate_lines.append(look)
             j += 1
 
-        employer = candidate_lines[0] if candidate_lines else ""
-        title = ""
-        if len(candidate_lines) >= 2 and _looks_like_title(candidate_lines[1]):
-            title = candidate_lines[1]
-        elif candidate_lines and _looks_like_title(candidate_lines[0]):
-            title = candidate_lines[0]
+        using_prefix_fallback = bool(prefix_candidate_lines) and candidate_lines[:len(prefix_candidate_lines)] == prefix_candidate_lines
+        title, employer = _pick_role_title_and_employer(candidate_lines, prefer_prefix_order=using_prefix_fallback)
 
         if title:
             roles.append(
@@ -339,7 +458,11 @@ def _phrase_variants_from_text(text: str) -> list[str]:
     return list(dict.fromkeys(variants))
 
 
-def _collect_phrase_stats(source_text: str, roles: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _collect_phrase_stats(
+    source_text: str,
+    roles: list[dict[str, Any]],
+    onboarding_settings: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
     stats: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "score": 0.0,
@@ -349,10 +472,11 @@ def _collect_phrase_stats(source_text: str, roles: list[dict[str, Any]]) -> dict
             "source_types": set(),
         }
     )
+    recent_cutoff = _CURRENT_YEAR - _resolve_extraction_lookback_years(onboarding_settings)
 
     for role in roles:
         role_key = f"{role.get('title','')}|{role.get('start_year','')}"
-        recent = int(role.get("end_year", 0) or 0) >= (_CURRENT_YEAR - 5)
+        recent = int(role.get("end_year", 0) or 0) >= recent_cutoff
         for phrase in _phrase_variants_from_text(role.get("title", "")):
             entry = stats[phrase]
             entry["score"] += 2.2
@@ -413,13 +537,16 @@ def _rank_phrase_items(stats: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
     return ranked
 
 
-def _parse_capabilities(source_text: str) -> list[dict[str, Any]]:
+def _parse_capabilities(
+    source_text: str,
+    onboarding_settings: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     source_text = repair_text(source_text)
     if not source_text:
         return []
 
     roles = _parse_role_entries(source_text)
-    ranked = _rank_phrase_items(_collect_phrase_stats(source_text, roles))
+    ranked = _rank_phrase_items(_collect_phrase_stats(source_text, roles, onboarding_settings=onboarding_settings))
     capabilities: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -459,80 +586,9 @@ def _parse_capabilities(source_text: str) -> list[dict[str, Any]]:
                 "aliases": aliases,
             }
         )
-        if len(capabilities) >= 12:
+        if len(capabilities) >= 20:
             break
     return _apply_llm_capability_names(capabilities)
-
-
-def _parse_capabilities_llm_legacy(source_text: str) -> list[dict[str, Any]]:
-    """Extract capability rules from any CV using the LLM.
-
-    Works for any profession and CV format — no hardcoded headings.
-    Returns [] if LLM is unavailable (no API key); caller handles the fallback.
-    """
-    from llm_gate import client, _get_llm_model, MAX_TOKENS_CV_EXTRACTION
-
-    if client is None:
-        print("[CAPABILITIES] Skipped — no LLM client (OPENAI_API_KEY not set)")
-        return []
-    if not (source_text or "").strip():
-        return []
-
-    prompt = (
-        "Read this CV and extract the candidate's professional capabilities.\n\n"
-        "Return a JSON array. Each item must have exactly these keys:\n"
-        '  "name"    — short capability label in lowercase\n'
-        '  "level"   — one of: strong | working | basic | low | none\n'
-        '              (based on recency and depth of use, not just whether it appears)\n'
-        '  "fit"     — one of: core | supporting | contextual | avoid\n'
-        '              core = daily job, supporting = used regularly, contextual = occasionally, avoid = not wanted\n'
-        '  "aliases" — list of 4–10 lowercase phrases a job ad would use for this skill\n\n'
-        "Rules:\n"
-        "- Prefer broad, transferable capability clusters over single tools or platforms\n"
-        "- Do NOT include incidental tools mentioned once unless they were a major recurring responsibility\n"
-        "- Include 6–15 capabilities that represent the full professional picture\n"
-        "- Aliases must be job-ad language, not CV phrasing\n"
-        "- Do NOT include soft skills — only professional capabilities\n"
-        "- Only return the JSON array, no explanation\n\n"
-        "CV:\n" + source_text[:5000]
-    )
-
-    try:
-        resp = client.responses.create(
-            model=_get_llm_model(),
-            input=[{"role": "user", "content": prompt}],
-            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
-        )
-        raw = (resp.output_text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1].lstrip("json").strip()
-        items = json.loads(raw)
-        if not isinstance(items, list):
-            print(f"[CAPABILITIES] LLM returned non-list: {type(items)}")
-            return []
-
-        result: list[dict[str, Any]] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or "").strip().lower()
-            level = str(item.get("level") or "").strip().lower()
-            fit = str(item.get("fit") or "").strip().lower()
-            aliases = [
-                str(a).strip().lower()
-                for a in (item.get("aliases") or [])
-                if str(a).strip()
-            ]
-            if not name or level not in _VALID_LEVELS or fit not in _VALID_FITS:
-                continue
-            result.append({"name": name, "level": level, "fit": fit, "aliases": aliases[:10]})
-
-        print(f"[CAPABILITIES] Extracted {len(result)} capability rules via LLM")
-        return result[:15]
-
-    except Exception as exc:
-        print(f"[CAPABILITIES] LLM extraction failed: {exc}")
-        return []
 
 
 def _apply_llm_capability_names(capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -579,18 +635,31 @@ def _parse_summary(source_text: str) -> str:
     experience = _extract_section(source_text, "EXPERIENCE SUMMARY (REALITY BASELINE)")
     roles = _extract_bullets(_extract_section(source_text, "EXPERIENCE SUMMARY (REALITY BASELINE)"))
     primary_strength_match = re.search(r"Primary strength:\s*(.+)", _extract_section(source_text, "CORE STRENGTH IDENTITY"), flags=re.IGNORECASE)
-    years_match = re.search(r"Years in IT:\s*([^\n]+)", experience, flags=re.IGNORECASE)
+    years_match = re.search(
+        r"(?P<label>Years in [^:\n]+|Experience):\s*(?P<value>[^\n]+)",
+        experience,
+        flags=re.IGNORECASE,
+    )
 
     parts = []
     if years_match:
-        parts.append(f"{_clean_sentence(years_match.group(1))} in IT")
+        label = _clean_sentence(years_match.group("label"))
+        value = _clean_sentence(years_match.group("value"))
+        if label.lower().startswith("years in "):
+            parts.append(f"{value} in {_clean_sentence(label[9:])}")
+        else:
+            parts.append(value)
     if roles:
         parts.append("Primary roles: " + ", ".join(roles[:3]))
     if primary_strength_match:
         parts.append(_clean_sentence(primary_strength_match.group(1)).replace("->", "").replace(">", ""))
+
+    if not parts and experience:
+        parts.append(experience)
+
     summary = ". ".join(part.strip(". ") for part in parts if part).strip()
     if summary:
-        return summary
+        return summary[:1500]
 
     lines = [line.strip() for line in source_text.splitlines() if line.strip()]
     headers = {
@@ -614,16 +683,46 @@ def _parse_summary(source_text: str) -> str:
             if len(normalized.split()) <= 8 and normalized.upper() == normalized:
                 break
             collected.append(normalized)
-            if len(" ".join(collected)) >= 420:
+            if len(" ".join(collected)) >= 1400:
                 break
         if collected:
-            return " ".join(collected)[:500].strip()
+            return " ".join(collected)[:1500].strip()
     return ""
 
 
 
 
-def build_learning_patch(text: str) -> dict[str, Any]:
+def _extract_match_preferences(text: str) -> dict[str, Any]:
+    """Extract candidate preferences/warnings from the source text."""
+    prefs = {}
+    lowered = text.lower()
+
+    # Engagement Preference
+    if re.search(r"\b(permanent only|no contracts|prefer permanent)\b", lowered):
+        prefs["prefer_permanent"] = True
+
+    # Location hint (e.g., "Based in Melbourne" or "Home base: Sydney")
+    loc_match = re.search(r"(?i)\b(?:based in|home base|location|reside in):\s*([A-Za-z\s,]+)(?=\n|\.|$)", text)
+    if loc_match:
+        loc = loc_match.group(1).strip()
+        if 2 < len(loc) < 60:
+            prefs["home_location"] = loc
+
+    return prefs
+
+
+def extract_location_hint(text: str) -> str:
+    """Extract a home location hint from text (e.g. 'Based in Melbourne')."""
+    match = re.search(r"(?i)\b(?:based in|location|reside in|lives in|home base):\s*([A-Za-z\s,]+)(?=\n|\.|$)", text)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+def build_learning_patch(
+    text: str,
+    onboarding_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     source_text = repair_text(text)
     if not source_text:
         return {}
@@ -636,50 +735,24 @@ def build_learning_patch(text: str) -> dict[str, Any]:
     if summary:
         patch["candidate_summary"] = summary
 
-    evidence_signals = derive_evidence_signals(source_text)
-    if evidence_signals:
-        patch["evidence_signals"] = evidence_signals
-
-    capability_rules = _parse_capabilities(source_text)
+    capability_rules = _parse_capabilities(source_text, onboarding_settings=onboarding_settings)
     if capability_rules:
         patch["capability_profile_rules"] = capability_rules
 
+    match_prefs = _extract_match_preferences(source_text)
+    if match_prefs:
+        patch["match_preferences"] = match_prefs
+
     return patch
-
-
-def derive_evidence_signals(source_text: str) -> list[str]:
-    source_text = repair_text(source_text)
-    if not source_text:
-        return []
-    roles = _parse_role_entries(source_text)
-    ranked = _rank_phrase_items(_collect_phrase_stats(source_text, roles))
-    signals: list[str] = []
-    seen: set[str] = set()
-
-    for role in roles:
-        title = _normalize_phrase(role.get("title", ""))
-        if title and title not in seen:
-            seen.add(title)
-            signals.append(title)
-
-    for item in ranked:
-        phrase = item["phrase"]
-        if phrase in seen or item["score"] < 2.0:
-            continue
-        seen.add(phrase)
-        signals.append(phrase)
-        if len(signals) >= 20:
-            break
-    return signals[:20]
 
 
 def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dict | None = None) -> dict[str, list[str]]:
     source_text = repair_text(source_text)
     settings = onboarding_settings or {}
-    lookback_years = max(1, int(settings.get("title_extraction_lookback_years") or 8))
-    min_months = max(1, int(settings.get("title_extraction_min_months") or 6))
-    max_target = max(1, int(settings.get("max_target_patterns") or 8))
-    max_adjacent = max(1, int(settings.get("max_adjacent_patterns") or 6))
+    lookback_years = _resolve_extraction_lookback_years(settings)
+    min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
+    max_target = _resolve_onboarding_int(settings, "max_target_patterns")
+    max_adjacent = _resolve_onboarding_int(settings, "max_adjacent_patterns")
     roles = _parse_role_entries(source_text)
 
     target_titles: list[str] = []
@@ -692,18 +765,22 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
         if not title:
             continue
         simplified = _simplify_title(title)
+        normalized_title = _normalize_phrase(title)
         end_year = int(role.get("end_year", 0) or 0)
         duration_months = int(role.get("duration_months", 0) or 0)
-        recent_enough = end_year >= recent_cutoff and duration_months >= min_months
+        in_lookback = end_year >= recent_cutoff
 
-        if recent_enough:
+        if not in_lookback:
+            continue
+
+        if duration_months >= min_months:
             target_titles.append(title)
-            if simplified and simplified != _normalize_phrase(title):
+            if simplified and simplified != normalized_title and not _is_generic_title_phrase(simplified):
                 target_titles.append(simplified)
-            suggested_keywords.append(simplified or _normalize_phrase(title))
+            suggested_keywords.append(simplified if simplified and not _is_generic_title_phrase(simplified) else normalized_title)
         else:
             adjacent_titles.append(title)
-            if simplified:
+            if simplified and not _is_generic_title_phrase(simplified):
                 adjacent_titles.append(simplified)
 
     def _dedupe_patterns(titles: list[str], limit: int) -> list[str]:

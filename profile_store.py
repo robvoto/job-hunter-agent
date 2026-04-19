@@ -46,7 +46,7 @@ DEFAULT_PREFERENCE_WEIGHTS = {
 DEFAULT_LLM_PROFILE_BRIEF_MODE = "auto"
 
 DEFAULT_ONBOARDING_SETTINGS = {
-    "title_extraction_lookback_years": 8,
+    "extraction_lookback_years": 8,
     "title_extraction_min_months": 6,
     "max_target_patterns": 8,
     "max_adjacent_patterns": 6,
@@ -54,17 +54,8 @@ DEFAULT_ONBOARDING_SETTINGS = {
 
 DEFAULT_SEARCH_SETTINGS = {
     "keywords": "",
-    "locations": [
-        "All Sydney NSW",
-        "All Canberra ACT",
-    ],
-    "classification_ids": [
-        "6076",
-        "1209",
-        "6123",
-        "6281",
-        "1223",
-    ],
+    "locations": [],
+    "classification_ids": [],
     "date_range_days": 3,
     "max_pages_cap": 10,
     "enforce_posted_age_limit": True,
@@ -91,9 +82,11 @@ DEFAULT_PROFILE = {
         **DEFAULT_PREFERENCE_WEIGHTS,
     },
     "match_preferences": {
-        "home_location": "Sydney NSW",
-        "secondary_location": "Canberra ACT",
-        "prefer_permanent": True,
+        "home_location": "",
+        "secondary_location": "",
+        "prefer_government": False,
+        "prefer_permanent": False,
+        "engagement_type": "both",
         "preferred_contract_months": 12,
         "short_contract_months": 6,
     },
@@ -156,7 +149,7 @@ def normalize_multiline_string_list(values: Any) -> list[str]:
 
 
 def normalize_candidate_summary(value: Any) -> str:
-    return re.sub(r"\s+", " ", _decode_escaped_newlines(value)).strip()[:500]
+    return re.sub(r"\s+", " ", _decode_escaped_newlines(value)).strip()[:1500]
 
 
 def ensure_profile_exists() -> None:
@@ -246,7 +239,6 @@ def load_profile() -> dict[str, Any]:
                 merged.get("evidence_tier_weights", {})
             )
             merged["candidate_summary"] = normalize_candidate_summary(merged.get("candidate_summary", ""))
-            merged.pop("evidence_signals", None)
             merged.pop("strengths", None)
             merged["capability_profile_rules"] = normalize_capability_rules(
                 merged.get("capability_profile_rules", [])
@@ -278,7 +270,6 @@ def load_profile() -> dict[str, Any]:
         fallback.get("evidence_tier_weights", {})
     )
     fallback["candidate_summary"] = normalize_candidate_summary(fallback.get("candidate_summary", ""))
-    fallback.pop("evidence_signals", None)
     fallback.pop("strengths", None)
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
@@ -311,7 +302,6 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
         normalized.get("evidence_tier_weights", {})
     )
     normalized["candidate_summary"] = normalize_candidate_summary(normalized.get("candidate_summary", ""))
-    normalized.pop("evidence_signals", None)
     normalized.pop("strengths", None)
     normalized["capability_profile_rules"] = normalize_capability_rules(
         normalized.get("capability_profile_rules", [])

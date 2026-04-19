@@ -26,8 +26,15 @@ Core runtime pieces:
 - `profile_learning.py`
   Text-to-profile extraction helpers.
 
+.\.venv\Scripts\python.exe -m pytest
+- `cv_pipeline.py`
+  Heuristic and LLM-assisted CV analysis and capability mapping.
+
 - `source_connector.py`
   Current source connector and dashboard renderer for SEEK and LinkedIn.
+
+- `scraper_seek.py` / `scraper_linkedin.py`
+  Source-specific extraction logic.
 
 - `filters.py`
   Deterministic title and content filtering.
@@ -122,3 +129,13 @@ Do not accidentally commit:
 - `data/application_materials.json`
 - `TODO.txt`
 - `.venv/`
+
+## Testing Workflow
+
+Use the repo test runner for repeatable local validation:
+
+```powershell
+python test_runner.py
+```
+
+The runner resolves the local virtualenv automatically when present and forwards normal pytest selectors such as `-k` and `-m`.

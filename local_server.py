@@ -36,7 +36,8 @@ JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
 SHOWCASE_PATH = ROOT_DIR / "docs" / "SHOWCASE.html"
 DASHBOARD_PATH = ROOT_DIR / OUTPUT_HTML
 REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
-ADMIN_HTML_PATH = ROOT_DIR / "templates" / "admin.html"
+WORKSPACE_HTML_PATH = ROOT_DIR / "templates" / "workspace.html"
+SETTINGS_HTML_PATH = ROOT_DIR / "templates" / "settings.html"
 ONBOARDING_HTML_PATH = ROOT_DIR / "templates" / "onboarding.html"
 _run_in_progress = False
 _run_state_lock = threading.Lock()
@@ -127,9 +128,9 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
             return dict(DEFAULT_ONBOARDING_SETTINGS)
 
     normalized = dict(DEFAULT_ONBOARDING_SETTINGS)
-    normalized["title_extraction_lookback_years"] = _coerce_int(
-        source.get("title_extraction_lookback_years"),
-        DEFAULT_ONBOARDING_SETTINGS["title_extraction_lookback_years"],
+    normalized["extraction_lookback_years"] = _coerce_int(
+        source.get("extraction_lookback_years", source.get("title_extraction_lookback_years")),
+        DEFAULT_ONBOARDING_SETTINGS["extraction_lookback_years"],
         1,
         20,
     )
@@ -298,10 +299,11 @@ class AdminHandler(BaseHTTPRequestHandler):
         cleaned = repair_text(text)
         if not cleaned:
             raise ValueError("No learning text provided")
-        patch = build_learning_patch(cleaned)
+        current = load_profile()
+        onboarding_settings = current.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
+        patch = build_learning_patch(cleaned, onboarding_settings=onboarding_settings)
         if not patch:
             raise ValueError("Could not extract structured learning from that text")
-        current = load_profile()
         patch = AdminHandler._merge_profile_learning_patch(current, patch, cleaned)
         profile = patch_profile(patch)
         return {
@@ -785,37 +787,68 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     def do_GET(self) -> None:
-        if self.path in {"/", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard"}:
-            if self.path == "/profile":
-                self._redirect("/admin")
+        from urllib.parse import urlparse as _urlparse
+        _path = _urlparse(self.path).path
+        if _path in {"/", "/workspace", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard", "/settings"}:
+            if _path in {"/admin", "/profile"}:
+                self._redirect("/settings")
                 return
-            if self.path in {"/start", "/onboarding"}:
+            if _path == "/dashboard":
+                self._redirect("/")
+                return
+            if _path in {"/start", "/onboarding"}:
                 if ONBOARDING_HTML_PATH.exists():
                     self._send_html(ONBOARDING_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
                 else:
                     self._send_html("<h1>Template missing</h1><p>Missing templates/onboarding.html</p>")
                 return
-            if self.path == "/dashboard":
-                if DASHBOARD_PATH.exists():
-                    self._send_html(DASHBOARD_PATH.read_text(encoding="utf-8", errors="ignore"))
-                    return
-                self._send_html("<h1>Dashboard not found yet</h1><p>Run the current job-source connector first.</p>")
-                return
-            if self.path == "/demo":
+            if _path == "/demo":
                 if SHOWCASE_PATH.exists():
                     self._send_html(SHOWCASE_PATH.read_text(encoding="utf-8", errors="ignore"))
                     return
                 self._send_html("<h1>Demo page not found</h1>")
                 return
-            if ADMIN_HTML_PATH.exists():
-                self._send_html(ADMIN_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
+            if _path == "/settings":
+                if SETTINGS_HTML_PATH.exists():
+                    self._send_html(SETTINGS_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
+                else:
+                    self._send_html("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
+                return
+            if WORKSPACE_HTML_PATH.exists():
+                self._send_html(WORKSPACE_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
             else:
-                self._send_html("<h1>Template missing</h1><p>Missing templates/admin.html</p>")
+                self._send_html("<h1>Template missing</h1><p>Missing templates/workspace.html</p>")
             return
-        if self.path == "/api/health":
+        if _path == "/api/results-html":
+            if not DASHBOARD_PATH.exists():
+                body = b'<div style="padding:64px 24px;color:#667085;text-align:center;font-family:sans-serif;">No results yet \u2014 run a search first.</div>'
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            try:
+                import re as _re
+                full_html = DASHBOARD_PATH.read_text(encoding="utf-8", errors="ignore")
+                style_match = _re.search(r"<style>(.*?)</style>", full_html, _re.DOTALL)
+                style = f"<style>{style_match.group(1)}</style>" if style_match else ""
+                body_match = _re.search(r"<body>(.*?)</body>", full_html, _re.DOTALL)
+                body_content = body_match.group(1) if body_match else full_html
+                fragment = (style + body_content).encode("utf-8")
+            except Exception as exc:
+                self._send_json(500, {"error": str(exc)})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(fragment)))
+            self.end_headers()
+            self.wfile.write(fragment)
+            return
+        if _path == "/api/health":
             self._send_json(200, {"ok": True})
             return
-        if self.path == "/api/run-status":
+        if _path == "/api/run-status":
             self._send_json(
                 200,
                 {
@@ -825,7 +858,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if self.path == "/api/run-stats":
+        if _path == "/api/run-stats":
             if RUN_STATS_PATH.exists():
                 try:
                     payload = json.loads(RUN_STATS_PATH.read_text(encoding="utf-8"))
@@ -836,7 +869,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     pass
             self._send_json(200, {})
             return
-        if self.path == "/api/review-data":
+        if _path == "/api/review-data":
             if REVIEW_DATA_PATH.exists():
                 try:
                     payload = json.loads(REVIEW_DATA_PATH.read_text(encoding="utf-8"))
@@ -851,7 +884,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     pass
             self._send_json(200, {})
             return
-        if self.path == "/api/job-history":
+        if _path == "/api/job-history":
             history = self._load_job_history()
             slim_history: dict[str, dict] = {}
             for job_key, entry in history.items():
@@ -864,13 +897,17 @@ class AdminHandler(BaseHTTPRequestHandler):
                 }
             self._send_json(200, {"jobs": slim_history})
             return
-        if self.path == "/api/profile":
+        if _path == "/api/profile":
             self._send_json(200, load_profile())
             return
-        if self.path == "/api/agent-settings":
+        if _path == "/api/llm-costs":
+            from llm_gate import get_cost_summary
+            self._send_json(200, get_cost_summary())
+            return
+        if _path == "/api/agent-settings":
             self._send_json(200, self._public_agent_settings_payload(load_agent_settings(create_if_missing=True)))
             return
-        if self.path == "/api/telegram/connect-link":
+        if _path == "/api/telegram/connect-link":
             try:
                 settings = load_agent_settings(create_if_missing=True)
                 link = build_telegram_connect_link(settings["telegram"])
@@ -887,12 +924,12 @@ class AdminHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if self.path == "/api/source-materials":
+        if _path == "/api/source-materials":
             self._send_json(200, load_source_materials(create_if_missing=True))
             return
         # Rejection-learning: suggestions endpoint
         import re as _re
-        if _re.match(r'^/api/rejection-suggestions', self.path):
+        if _re.match(r'^/api/rejection-suggestions', _path):
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
@@ -1010,17 +1047,17 @@ class AdminHandler(BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
                 files = payload.get("files", [])
-                extra_text = str(payload.get("extra_text") or "")
+                search_prefs = payload.get("search_preferences", {})
                 onboarding_settings = _normalize_onboarding_settings_payload(payload.get("onboarding_settings"))
                 if not isinstance(files, list):
                     raise ValueError("files must be a list")
                 materials = (
-                    persist_uploaded_source_pack(files, extra_text=extra_text)
+                    persist_uploaded_source_pack(files)
                     if files
                     else load_source_materials(create_if_missing=True)
                 )
                 patch_profile({"onboarding_settings": onboarding_settings})
-                result = run_onboarding(materials, extra_text=extra_text)
+                result = run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
                 result["materials"] = materials
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
@@ -1302,7 +1339,7 @@ class AdminHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), AdminHandler)
     print(f"Local server running at http://{HOST}:{PORT}")
-    print(f"Workspace: http://{HOST}:{PORT}/admin")
-    print(f"Results source: http://{HOST}:{PORT}/dashboard")
+    print(f"Workspace:  http://{HOST}:{PORT}/")
+    print(f"Settings:   http://{HOST}:{PORT}/settings")
     print(f"Onboarding: http://{HOST}:{PORT}/start")
     server.serve_forever()

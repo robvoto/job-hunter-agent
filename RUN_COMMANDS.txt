@@ -1,3 +1,14 @@
+TESTS
+=====
+.\.venv\Scripts\python.exe -m pytest
+
+For the focused checks example:
+.\.venv\Scripts\python.exe -m pytest tests/test_cv_pipeline.py tests/test_profile_learning_parser.py tests/test_title_extraction.py tests/test_source_documents.py
+
+To avoid spending credits on test runs, run them locally from e:\Programming\job-hunter-agent and paste me only the failures if you want help:
+If you want me not to run tests at all, just say “don’t run tests; I’ll verify locally.”
+
+
 JOB HUNTER AGENT - QUICK RUN COMMANDS
 =====================================
 

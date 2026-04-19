@@ -15,24 +15,24 @@ from filters import suggest_title_block_phrase
 CASES = [
     # (title, expected_suggestion_or_None)
     # Post-separator discriminators
-    ("Senior Business Analyst - Guidewire", "guidewire"),
-    ("Senior BA - Payments", "payments"),
-    ("Business Analyst - Banking", "banking"),
-    ("Business Analyst - Cyber, Cloud", "cyber"),
-    ("Senior BA - ERP", "erp"),
+    ("Senior Delivery Manager - Guidewire", "guidewire"),
+    ("Senior Analyst - Payments", "payments"),
+    ("Operations Analyst - Banking", "banking"),
+    ("Operations Analyst - Cyber, Cloud", "cyber"),
+    ("Senior Analyst - ERP", "erp"),
     # Pre-separator token fallback (no separator, leftover non-generic token)
-    ("Wealth Business Analyst", "wealth"),
+    ("Wealth Operations Manager", "wealth"),
     # Two-char tech acronym
-    ("Senior Business Analyst | AI & 365", "ai"),
+    ("Senior Delivery Manager | AI & 365", "ai"),
     # No safe discriminator — all tokens are generic
-    ("Senior Business Analyst", None),
-    ("Senior BA", None),
-    ("Senior Business Digital Analyst", None),
+    ("Senior Delivery Manager", None),
+    ("Senior Analyst", None),
+    ("Senior Delivery Digital Manager", None),
     # Protected positive-fit terms must never be suggested
     ("Multiple Roles - Government", None),
-    ("Business Analyst - Government Digital", None),
+    ("Operations Analyst - Government Digital", None),
     # Numeric-only fragments must be skipped
-    ("Business Analyst - 365", None),
+    ("Operations Analyst - 365", None),
     # ERP preferred over generic post-separator when that's the only fragment
     ("Senior SAP Tester - ERP", "erp"),   # v1: post-separator takes priority
 ]
@@ -58,42 +58,42 @@ def run_tests():
 
 if __name__ == "__main__":
     ok = run_tests()
-    sys.exit(0 if ok else 1)
+    raise SystemExit(0 if ok else 1)
 
 
 # pytest-compatible tests
 def test_guidewire():
-    assert suggest_title_block_phrase("Senior Business Analyst - Guidewire") == "guidewire"
+    assert suggest_title_block_phrase("Senior Delivery Manager - Guidewire") == "guidewire"
 
 def test_payments():
-    assert suggest_title_block_phrase("Senior BA - Payments") == "payments"
+    assert suggest_title_block_phrase("Senior Analyst - Payments") == "payments"
 
 def test_banking():
-    assert suggest_title_block_phrase("Business Analyst - Banking") == "banking"
+    assert suggest_title_block_phrase("Operations Analyst - Banking") == "banking"
 
 def test_cyber_first():
-    assert suggest_title_block_phrase("Business Analyst - Cyber, Cloud") == "cyber"
+    assert suggest_title_block_phrase("Operations Analyst - Cyber, Cloud") == "cyber"
 
 def test_erp():
-    assert suggest_title_block_phrase("Senior BA - ERP") == "erp"
+    assert suggest_title_block_phrase("Senior Analyst - ERP") == "erp"
 
 def test_wealth_fallback():
-    assert suggest_title_block_phrase("Wealth Business Analyst") == "wealth"
+    assert suggest_title_block_phrase("Wealth Operations Manager") == "wealth"
 
 def test_ai_acronym():
-    assert suggest_title_block_phrase("Senior Business Analyst | AI & 365") == "ai"
+    assert suggest_title_block_phrase("Senior Delivery Manager | AI & 365") == "ai"
 
 def test_generic_no_suggestion():
-    assert not suggest_title_block_phrase("Senior Business Analyst")
+    assert not suggest_title_block_phrase("Senior Delivery Manager")
 
-def test_senior_ba_no_suggestion():
-    assert not suggest_title_block_phrase("Senior BA")
+def test_senior_analyst_no_suggestion():
+    assert not suggest_title_block_phrase("Senior Analyst")
 
 def test_fully_generic_no_suggestion():
-    assert not suggest_title_block_phrase("Senior Business Digital Analyst")
+    assert not suggest_title_block_phrase("Senior Delivery Digital Manager")
 
 def test_government_protected():
     assert not suggest_title_block_phrase("Multiple Roles - Government")
 
 def test_numeric_fragment_skipped():
-    assert not suggest_title_block_phrase("Business Analyst - 365")
+    assert not suggest_title_block_phrase("Operations Analyst - 365")

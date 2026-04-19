@@ -7,6 +7,7 @@ This app helps a candidate build a profile once, review jobs against that profil
 Current live job source:
 
 - SEEK
+- LinkedIn
 
 That is the current source connector, not the final limit of the product.
 
@@ -42,10 +43,11 @@ The onboarding flow creates a runtime profile from your source documents.
 That profile includes:
 
 - candidate summary
-- strengths
+- fit brief
 - CV/background text
+- evidence tiers
 - capability rules
-- fit notes
+- title targeting hints
 
 You can then refine those fields from admin.
 
@@ -56,7 +58,7 @@ Use the admin UI to maintain the runtime profile and review controls.
 Tabs:
 
 - `Search`: controls the current job-source query
-- `Candidate Profile`: profile summary, strengths, background text, fit notes, and rules
+- `Candidate Profile`: profile summary, fit brief, evidence text, search preferences, and rules
 - `Review`: hidden jobs, applied jobs, and skill-review decisions
 - `Test`: latest run stats and rejected samples
 
@@ -69,11 +71,10 @@ Think of admin as the maintenance surface for your profile, not the place where 
 - the short top-level positioning statement
 - created from onboarding, then edited over time
 
-`Strengths`
+`Fit brief`
 
-- important things the app should emphasize when evaluating fit
-- initially created from imported source material
-- can be refined later as you learn what should stand out
+- the short machine-facing positioning brief used by the LLM prompt
+- can be generated automatically from profile rules or edited manually
 
 `CV / background text`
 
@@ -81,11 +82,20 @@ Think of admin as the maintenance surface for your profile, not the place where 
 - this should reflect what you uploaded during onboarding
 - you can edit it, but it should stay consistent with your real experience
 
-`Important fit notes`
+`Evidence tiers`
 
-- high-signal rules or context
-- for example domain preferences, known gaps, role boundaries, and honest exclusions
-- starts from imported material and can be refined later
+- primary, secondary, and background evidence blocks used for matching and LLM review
+- lets the profile weight recent direct evidence above older or optional context
+
+`Capability rules`
+
+- structured capability names with level, fit, and aliases
+- used by deterministic filtering and the LLM prompt
+
+`Title targeting`
+
+- target and adjacent title patterns plus search keywords
+- used to keep role targeting configurable per candidate instead of hardcoded in code
 
 `Minimum annual salary` / `Minimum daily rate`
 
@@ -130,6 +140,20 @@ Current behavior:
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
 
 If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
+
+## Testing
+
+Install development dependencies:
+
+```powershell
+pip install -r requirements-dev.txt
+```
+
+Run the local test suite:
+
+```powershell
+python test_runner.py
+```
 
 ## Which Command Does What
 

@@ -7,6 +7,7 @@ The product goal is simple: a user gives the app strong source material about th
 Current implemented job source:
 
 - SEEK
+- LinkedIn
 
 The architecture is intentionally broader than a single site. SEEK is the current source connector, not the long-term boundary of the product.
 
@@ -24,10 +25,10 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 
 ## Match Score Bands
 
-- `Strong fit`: `80-100`
-- `Good fit`: `65-79`
-- `Borderline`: `50-64`
-- `Low fit`: `0-49`
+- `Strong match`: `80-100`
+- `Good match`: `65-79`
+- `Worth a look`: `50-64`
+- `Stretch`: `0-49`
 
 The score is built from title match, full-description review result, content-filter pass, fit-evidence bullets, freshness, location match, work mode, salary signal, watchout penalties, and whether the role has already been viewed. Each card now also shows a short inline score summary so you can see the main drivers without opening the full breakdown.
 
@@ -53,7 +54,7 @@ Set up the environment:
 ```powershell
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 python -m playwright install chromium
 ```
 
@@ -101,6 +102,18 @@ Run the daily local agent in loop mode:
 
 ```powershell
 python agent_runner.py --loop
+```
+
+Run the automated test suite:
+
+```powershell
+python test_runner.py
+```
+
+You can pass normal pytest selectors through the runner, for example:
+
+```powershell
+python test_runner.py -k profile_learning -v
 ```
 
 Then open:

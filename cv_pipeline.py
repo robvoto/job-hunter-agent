@@ -22,11 +22,10 @@ from profile_learning import (
     _is_quality_phrase,
     _normalize_phrase,
     _parse_role_entries,
+    _resolve_extraction_lookback_years,
     repair_text,
 )
 from profile_store import normalize_capability_rules
-
-_RECENT_CUTOFF = _CURRENT_YEAR - 5
 
 _ACTION_VERBS = {
     "led", "lead", "managed", "manage", "delivered", "deliver",
@@ -42,15 +41,19 @@ _ACTION_VERBS = {
 }
 
 
-def parse_roles(cv_text: str) -> list[dict[str, Any]]:
+def parse_roles(
+    cv_text: str,
+    onboarding_settings: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     roles: list[dict[str, Any]] = []
+    recent_cutoff = _CURRENT_YEAR - _resolve_extraction_lookback_years(onboarding_settings)
     for role in _parse_role_entries(cv_text):
         end_year = int(role.get("end_year") or 0)
         roles.append({
             "title": role.get("title", ""),
             "start_year": role.get("start_year"),
             "end_year": end_year,
-            "is_recent": end_year >= _RECENT_CUTOFF,
+            "is_recent": end_year >= recent_cutoff,
             "bullets": role.get("bullets", []),
         })
     return roles
@@ -215,7 +218,7 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
     if not candidates:
         return candidates
 
-    top = candidates[:15]
+    top = candidates[:20]
     try:
         labels = name_capability_clusters([
             {"name": item["seed"], "aliases": item["aliases"][:6]}
@@ -231,8 +234,11 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
     for index, item in enumerate(top):
         renamed = dict(item)
         if index < len(labels):
-            label = _normalize_phrase(labels[index])
-            if label and _is_quality_phrase(label) and not _is_generic_title_phrase(label):
+            # Use raw LLM label (lowercased only) — don't normalize/stem it
+            label = str(labels[index]).strip().lower()
+            # Basic length check; _is_quality_phrase would over-stem the label
+            words = label.split()
+            if label and 1 <= len(words) <= 5 and not _is_generic_title_phrase(_normalize_phrase(label)):
                 renamed["name"] = label
         renamed_top.append(renamed)
     return renamed_top + candidates[len(top):]
@@ -265,18 +271,10 @@ def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
                 "dense_snippet_alias_hits": max(len(candidate["aliases"]) // 2 + 2, 4),
             })
 
-        if (
-            score < 0.10
-            and int(candidate["recent_role_count"]) == 0
-            and int(candidate["action_verb_count"]) == 0
-            and int(candidate["occurrences"]) <= 2
-        ):
-            must_not_require_skills.append(candidate["seed"])
-
     return {
-        "capability_profile_rules": normalize_capability_rules(capability_rules[:15]),
+        "capability_profile_rules": normalize_capability_rules(capability_rules[:20]),
         "dominant_signal_clusters": dominant_signal_clusters[:8],
-        "must_not_require_skills": list(dict.fromkeys(must_not_require_skills))[:8],
+        "must_not_require_skills": [],
     }
 
 
@@ -292,12 +290,16 @@ def _strip_internal_keys(value: Any) -> Any:
     return value
 
 
-def run_cv_pipeline(cv_text: str, llm_client: Any = None) -> dict[str, Any]:
+def run_cv_pipeline(
+    cv_text: str,
+    llm_client: Any = None,
+    onboarding_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     text = repair_text(cv_text)
     if not text:
         return {}
 
-    roles = parse_roles(text)
+    roles = parse_roles(text, onboarding_settings=onboarding_settings)
     phrase_items = extract_phrases(roles)
     clusters = cluster_phrases(phrase_items)
     candidates = score_and_promote(clusters)

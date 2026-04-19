@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Hunter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #f6f1e8; }
+
+    .ws-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 54px;
+      background: #fffdf9;
+      border-bottom: 1px solid #e9ddcf;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    .ws-brand {
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #182231;
+      white-space: nowrap;
+    }
+    .ws-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ws-btn {
+      border-radius: 999px;
+      padding: 8px 16px;
+      font: inherit;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid #e9ddcf;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      transition: opacity 120ms;
+    }
+    .ws-btn-primary {
+      background: #14532d;
+      color: white !important;
+      border-color: #14532d;
+    }
+    .ws-btn-secondary {
+      background: white;
+      color: #1d4ed8 !important;
+    }
+    .ws-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .ws-status-pill {
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      color: #4b5563;
+      background: #f3f4f6;
+      white-space: nowrap;
+    }
+    .ws-status-pill.is-running {
+      background: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }
+
+    /* Results mount */
+    #results-mount { min-height: calc(100vh - 54px); }
+    #results-loading {
+      padding: 64px 24px;
+      color: #667085;
+      text-align: center;
+      font-size: 0.95rem;
+    }
+
+    #results-mount .page { max-width: none !important; padding: 16px 22px 56px !important; }
+    #results-mount .dashboard-layout { display: grid !important; }
+  </style>
+</head>
+<body>
+  <header class="ws-header">
+    <span class="ws-brand">Job Hunter</span>
+    <div class="ws-header-actions">
+      <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
+      <span class="ws-status-pill" id="ws_status_pill">Loading…</span>
+      <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
+    </div>
+  </header>
+  <div id="results-mount">
+    <div id="results-loading">Loading results…</div>
+  </div>
+
+  <script>
+    const wsStatusPill = document.getElementById('ws_status_pill');
+    const wsRunBtn = document.getElementById('ws_run_btn');
+    const resultsMount = document.getElementById('results-mount');
+    let runPollHandle = null;
+    let runWasRunning = false;
+
+    function updateStatusPill(status, lastRunAt) {
+      if (status === 'running') {
+        wsStatusPill.textContent = '\u25cf Running\u2026';
+        wsStatusPill.className = 'ws-status-pill is-running';
+      } else {
+        const label = lastRunAt
+          ? 'Last run: ' + new Date(lastRunAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+          : 'Never run';
+        wsStatusPill.textContent = label;
+        wsStatusPill.className = 'ws-status-pill';
+      }
+    }
+
+    async function checkRunStatus() {
+      try {
+        const resp = await fetch('/api/run-status');
+        const data = await resp.json();
+        updateStatusPill(data.status, data.last_run_at);
+        return data.status;
+      } catch {
+        return 'idle';
+      }
+    }
+
+    async function loadResults() {
+      try {
+        const resp = await fetch('/api/results-html');
+        if (!resp.ok) {
+          resultsMount.innerHTML = '<div style="padding:64px 24px;color:#667085;text-align:center;">Run a search first to see results.</div>';
+          return;
+        }
+        const html = await resp.text();
+        resultsMount.innerHTML = '';
+        const range = document.createRange();
+        const frag = range.createContextualFragment(html);
+        resultsMount.appendChild(frag);
+      } catch {
+        resultsMount.innerHTML = '<div style="padding:64px 24px;color:#667085;text-align:center;">Could not load results. Try refreshing the page.</div>';
+      }
+    }
+
+    function startRunPolling() {
+      if (runPollHandle) return;
+      runWasRunning = false;
+      runPollHandle = setInterval(async () => {
+        const status = await checkRunStatus();
+        if (status === 'running') {
+          runWasRunning = true;
+          wsRunBtn.disabled = true;
+          wsRunBtn.textContent = '\u25cf Running\u2026';
+        } else if (runWasRunning) {
+          clearInterval(runPollHandle);
+          runPollHandle = null;
+          wsRunBtn.disabled = false;
+          wsRunBtn.textContent = '\u25b6 Run Search';
+          window.location.reload();
+        }
+      }, 10000);
+    }
+
+    wsRunBtn.addEventListener('click', async () => {
+      wsRunBtn.disabled = true;
+      wsRunBtn.textContent = 'Starting\u2026';
+      try {
+        const resp = await fetch('/api/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const data = await resp.json();
+        updateStatusPill('running', data.last_run_at);
+        wsRunBtn.textContent = '\u25cf Running\u2026';
+        startRunPolling();
+      } catch {
+        wsRunBtn.disabled = false;
+        wsRunBtn.textContent = '\u25b6 Run Search';
+      }
+    });
+
+    (async () => {
+      const status = await checkRunStatus();
+      if (status === 'running') {
+        wsRunBtn.disabled = true;
+        wsRunBtn.textContent = '\u25cf Running\u2026';
+        startRunPolling();
+      }
+      await loadResults();
+      setInterval(checkRunStatus, 30000);
+    })();
+  </script>
+</body>
+</html>

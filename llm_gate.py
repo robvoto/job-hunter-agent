@@ -11,13 +11,16 @@ Notes:
 """
 
 import hashlib
+import json as _json_mod
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from openai import OpenAI
 
 from agent_settings import load_agent_settings
+from profile_learning import _resolve_extraction_lookback_years, _resolve_onboarding_int
 from profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
 
 # Token budgets — keep fit decisions tight; extraction can be generous
@@ -29,6 +32,49 @@ _TEST_SCRAPE_MODE = "--test-scrape-mode" in sys.argv
 
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
+
+# ── Cost logging ──────────────────────────────────────────────────────────────
+_LLM_COSTS_PATH = DATA_DIR / "llm_costs.jsonl"
+_PRICING_PER_1M: dict[str, dict[str, float]] = {
+    "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
+    "gpt-4o-mini-2024-07-18":  {"input": 0.15,  "output": 0.60},
+    "gpt-4o":                   {"input": 2.50,  "output": 10.00},
+    "gpt-4o-2024-08-06":       {"input": 2.50,  "output": 10.00},
+}
+_session_cost_usd: float = 0.0
+
+
+def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
+    global _session_cost_usd
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return
+    # Responses API uses input_tokens/output_tokens; Chat uses prompt_tokens/completion_tokens
+    tok_in  = getattr(usage, "input_tokens",  None) or getattr(usage, "prompt_tokens",     0) or 0
+    tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens",  0) or 0
+    prices  = _PRICING_PER_1M.get(model, {"input": 2.50, "output": 10.00})
+    cost    = (tok_in * prices["input"] + tok_out * prices["output"]) / 1_000_000
+    _session_cost_usd += cost
+
+    entry = {
+        "ts":          datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "purpose":     purpose,
+        "model":       model,
+        "tok_in":      tok_in,
+        "tok_out":     tok_out,
+        "cost_usd":    round(cost, 6),
+        "session_usd": round(_session_cost_usd, 6),
+    }
+    try:
+        with open(_LLM_COSTS_PATH, "a", encoding="utf-8") as fh:
+            fh.write(_json_mod.dumps(entry) + "\n")
+    except Exception:
+        pass
+    print(
+        f"[LLM] {purpose} | {model} | "
+        f"in={tok_in} out={tok_out} | "
+        f"${cost:.6f} | session=${_session_cost_usd:.6f}"
+    )
 
 
 def _profile_fingerprint() -> str:
@@ -97,13 +143,17 @@ def build_profile_prompt_context() -> str:
         parts.append("Candidate fit brief:")
         parts.append(llm_profile_brief[:2500])
 
-    if capability_rules:
+    if isinstance(capability_rules, list) and capability_rules:
         parts.append("Capability levels:")
-        for rule in capability_rules[:12]:
+        for rule in capability_rules[:20]:
+            if not isinstance(rule, dict):
+                continue
             name = str(rule.get("name") or "").strip()
             level = str(rule.get("level") or "").strip()
             fit = str(rule.get("fit") or "").strip()
-            aliases = ", ".join(str(alias).strip() for alias in rule.get("aliases", [])[:8] if str(alias).strip())
+            raw_aliases = rule.get("aliases", [])
+            aliases_list = raw_aliases if isinstance(raw_aliases, list) else []
+            aliases = ", ".join(str(alias).strip() for alias in aliases_list[:8] if str(alias).strip())
             if name and level:
                 fit_text = f", {fit}" if fit else ""
                 parts.append(f"- {name}: {level}{fit_text}" + (f" ({aliases})" if aliases else ""))
@@ -191,49 +241,8 @@ def normalize_llm_review(value: Any) -> Dict[str, str]:
             decision, _, grade = text.partition("|")
             if decision in ALLOWED_DECISIONS and grade in ALLOWED_GRADES:
                 return {"decision": decision, "grade": grade}
-        if text in ALLOWED_DECISIONS:
-            legacy_grade_map = {
-                "KEEP": "STRONG",
-                "MAYBE": "SOLID",
-                "REJECT": "MISMATCH",
-            }
-            return {"decision": text, "grade": legacy_grade_map[text]}
 
     return dict(DEFAULT_LLM_REVIEW)
-
-
-def extract_evidence_signals_from_cv(cv_text: str) -> list[str]:
-    """Call LLM to extract raw evidence signals from CV text. Returns [] if LLM unavailable."""
-    if client is None or not str(cv_text or "").strip():
-        return []
-    prompt = (
-        "Extract the candidate's raw professional evidence signals from the CV below. "
-        "Rules: only include a skill if (1) used for 2 or more years total, "
-        "(2) used within the last 7 years, and (3) was a core responsibility not a side tool. "
-        "Return a JSON array of short keyword phrases (1-4 words each), maximum 20 items, "
-        "ordered by relevance. Only return the JSON array, no explanation.\n\nCV:\n"
-        + str(cv_text)[:4000]
-    )
-    try:
-        resp = client.responses.create(
-            model=_get_llm_model(),
-            input=[{"role": "user", "content": prompt}],
-            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
-        )
-        import json as _json
-        raw = (resp.output_text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1].lstrip("json").strip()
-        items = _json.loads(raw)
-        if isinstance(items, list):
-            return [str(item).strip().lower() for item in items if str(item).strip()][:20]
-    except Exception:
-        pass
-    return []
-
-
-def extract_strengths_from_cv(cv_text: str) -> list[str]:
-    return extract_evidence_signals_from_cv(cv_text)
 
 
 def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | None = None) -> dict:
@@ -250,10 +259,10 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
     settings = onboarding_settings or {}
-    lookback_years = max(1, int(settings.get("title_extraction_lookback_years") or 8))
-    min_months = max(1, int(settings.get("title_extraction_min_months") or 6))
-    max_target = max(1, int(settings.get("max_target_patterns") or 8))
-    max_adjacent = max(1, int(settings.get("max_adjacent_patterns") or 6))
+    lookback_years = _resolve_extraction_lookback_years(settings)
+    min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
+    max_target = _resolve_onboarding_int(settings, "max_target_patterns")
+    max_adjacent = _resolve_onboarding_int(settings, "max_adjacent_patterns")
 
     print(f"[TITLE_PATTERNS] Calling LLM with {len(cv_text)} chars of CV text (lookback={lookback_years}y, min={min_months}mo, max_target={max_target}, max_adjacent={max_adjacent})")
     prompt = (
@@ -278,11 +287,13 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         + str(cv_text)[:4000]
     )
     try:
+        _model = _get_llm_model()
         resp = client.responses.create(
-            model=_get_llm_model(),
+            model=_model,
             input=[{"role": "user", "content": prompt}],
             max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
         )
+        _log_llm_call(resp, "title_patterns", _model)
         import json as _json
         raw = (resp.output_text or "").strip()
         print(f"[TITLE_PATTERNS] Raw LLM response: {raw[:300]}")
@@ -341,11 +352,13 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
     import json as _json
 
     try:
+        _model = _get_llm_model()
         resp = active_client.responses.create(
-            model=_get_llm_model(),
+            model=_model,
             input=[{"role": "user", "content": prompt + _json.dumps(payload, ensure_ascii=False)}],
             max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
         )
+        _log_llm_call(resp, "capability_naming", _model)
         raw = (resp.output_text or "").strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
@@ -381,14 +394,16 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
         return dict(DEFAULT_LLM_REVIEW)
 
     try:
+        _model = _log_llm_model_once()
         resp = client.responses.create(
-            model=_log_llm_model_once(),
+            model=_model,
             input=[
                 {"role": "system", "content": build_system_prompt()},
                 {"role": "user", "content": "Job description:\n" + job_description_text},
             ],
             max_output_tokens=MAX_TOKENS_FIT_DECISION,
         )
+        _log_llm_call(resp, "job_review", _model)
     except Exception as exc:
         print(f"[LLM][ERROR] {exc}")
         return dict(DEFAULT_LLM_REVIEW)
@@ -397,3 +412,23 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
     if normalized == DEFAULT_LLM_REVIEW and (resp.output_text or "").strip():
         print(f"[LLM][UNEXPECTED] {(resp.output_text or '').strip()}")
     return normalized
+
+
+def get_cost_summary() -> dict[str, Any]:
+    """Read llm_costs.jsonl and return totals by purpose — useful for debugging."""
+    totals: dict[str, dict[str, Any]] = {}
+    try:
+        with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:
+            for line in fh:
+                entry = _json_mod.loads(line)
+                p = entry.get("purpose", "unknown")
+                if p not in totals:
+                    totals[p] = {"calls": 0, "tok_in": 0, "tok_out": 0, "cost_usd": 0.0}
+                totals[p]["calls"]    += 1
+                totals[p]["tok_in"]   += entry.get("tok_in", 0)
+                totals[p]["tok_out"]  += entry.get("tok_out", 0)
+                totals[p]["cost_usd"] += entry.get("cost_usd", 0.0)
+    except FileNotFoundError:
+        pass
+    grand = sum(v["cost_usd"] for v in totals.values())
+    return {"by_purpose": totals, "grand_total_usd": round(grand, 6)}

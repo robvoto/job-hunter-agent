@@ -20,6 +20,7 @@ GENERIC_TITLE_BLOCK_WORDS = {
     "associate",
     "architect",
     "assistant",
+    "ba",
     "business",
     "change",
     "consultant",
@@ -40,6 +41,7 @@ GENERIC_TITLE_BLOCK_WORDS = {
     "midlevel",
     "multiple",
     "owner",
+    "operations",
     "permanent",
     "principal",
     "product",
@@ -90,7 +92,7 @@ def _phrase_from_segment(segment: str) -> str:
 
 
 def suggest_title_block_phrases(title: str) -> list[str]:
-    """Return all non-empty block-phrase candidates from every title segment."""
+    """Return ranked non-empty block-phrase candidates from every title segment."""
     raw_title = (title or "").strip()
     if not raw_title:
         return []
@@ -101,18 +103,18 @@ def suggest_title_block_phrases(title: str) -> list[str]:
         for s in re.split(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]", normalized)
         if s and s.strip()
     ]
+    ranked_groups: list[list[str]] = [[], []]
     seen: set[str] = set()
-    candidates: list[str] = []
-    for seg in segments:
+    for index, seg in enumerate(segments):
         phrase = _phrase_from_segment(seg)
         if phrase and phrase not in seen:
             seen.add(phrase)
-            candidates.append(phrase)
-    return candidates
+            ranked_groups[0 if index > 0 else 1].append(phrase)
+    return ranked_groups[0] + ranked_groups[1]
 
 
 def suggest_title_block_phrase(title: str) -> str:
-    """Return the single best block phrase (first non-generic segment, backward compat)."""
+    """Return the single best block phrase."""
     candidates = suggest_title_block_phrases(title)
     if candidates:
         return candidates[0]
@@ -274,6 +276,104 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
     return True, "OK"
 
 
+def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple[int, int]:
+    proof_hits = 0
+    mention_hits = 0
+
+    for rule in profile.get("capability_profile_rules", []):
+        name = str(rule.get("name") or "").strip()
+        level = _normalize_level(str(rule.get("level") or "basic"))
+        fit = _normalize_fit(str(rule.get("fit") or ""), level)
+        if not name or fit == "avoid" or level == "none":
+            continue
+
+        aliases = [name, *[str(alias).strip() for alias in rule.get("aliases", []) if str(alias).strip()]]
+        deduped_aliases: list[str] = []
+        seen_aliases: set[str] = set()
+        for alias in aliases:
+            alias_lower = alias.lower()
+            if alias_lower in seen_aliases:
+                continue
+            seen_aliases.add(alias_lower)
+            deduped_aliases.append(alias)
+
+        total_hits, distinct_hits = _count_alias_hits(description_lower, deduped_aliases)
+        hard_requirement_match = any(_matches_hard_requirement(description_lower, alias) for alias in deduped_aliases)
+        soft_requirement_match = any(_matches_soft_requirement(description_lower, alias) for alias in deduped_aliases)
+
+        if distinct_hits > 0:
+            mention_hits += 1
+        if hard_requirement_match or soft_requirement_match or distinct_hits >= 2:
+            proof_hits += 1
+
+    return proof_hits, mention_hits
+
+
+def _evaluate_description_confidence(details_text: str, description_lower: str, title_reason: str, profile: dict) -> Tuple[bool, str]:
+    normalized_text = re.sub(r"\s+", " ", details_text).strip()
+    text_length = len(normalized_text)
+    section_score = sum(
+        1
+        for pattern in (
+            r"\bresponsibilities\b",
+            r"\brequirements\b",
+            r"\byou will\b",
+            r"\bkey duties\b",
+            r"\babout the role\b",
+            r"\bexperience with\b",
+            r"\bmust have\b",
+            r"\bessential\b",
+        )
+        if re.search(pattern, description_lower)
+    )
+    bullet_score = len(re.findall(r"(?m)^\s*[-*•]", details_text))
+    generic_score = sum(
+        1
+        for phrase in (
+            "great opportunity",
+            "fast-paced environment",
+            "dynamic team",
+            "leading organisation",
+            "excellent communication skills",
+            "must be based in australia",
+            "full working rights",
+        )
+        if phrase in description_lower
+    )
+    coordination_score = sum(
+        1
+        for token in (
+            "coordination",
+            "coordinating",
+            "reporting",
+            "liaise",
+            "liaison",
+            "administration",
+            "scheduling",
+        )
+        if token in description_lower
+    )
+    proof_hits, mention_hits = _count_capability_role_proof(description_lower, profile)
+    has_capability_rules = any(
+        str(rule.get("name") or "").strip() and (rule.get("aliases") or rule.get("name"))
+        for rule in profile.get("capability_profile_rules", [])
+    )
+    structurally_thin = text_length < 500 and section_score < 2 and bullet_score < 3
+
+    if title_reason == "TITLE_POTENTIAL_MATCH":
+        if has_capability_rules and proof_hits == 0 and mention_hits == 0:
+            return False, "DESC_ROLE_PROOF_MISSING"
+        if proof_hits == 0 and mention_hits < 2 and (structurally_thin or generic_score >= 2 or coordination_score >= 3):
+            return False, "DESC_ROLE_PROOF_MISSING"
+        if proof_hits <= 1 and structurally_thin and mention_hits == 0:
+            return False, "DESC_ROLE_PROOF_WEAK"
+
+    if title_reason == "OK" and proof_hits == 0 and structurally_thin and generic_score >= 2:
+        return False, "DESC_VAGUE_TARGET_ROLE"
+
+    return True, "OK"
+
+
 def passes_title_filters(title: str) -> Tuple[bool, str]:
     """
     Title-based gatekeeping.
@@ -307,7 +407,7 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
     return True, "TITLE_POTENTIAL_MATCH"
 
 
-def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[bool, str]:
+def passes_content_filters(details_text: str, card_location: str = "", title_reason: str = "") -> Tuple[bool, str]:
     """
     Description-based filtering.
     Returns (True, "OK") if description fits, else (False, "REASON").
@@ -334,6 +434,10 @@ def passes_content_filters(details_text: str, card_location: str = "") -> Tuple[
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
     if not ok_capability:
         return False, capability_reason
+
+    ok_confidence, confidence_reason = _evaluate_description_confidence(details_text, description_lower, title_reason, profile)
+    if not ok_confidence:
+        return False, confidence_reason
 
     for skill in profile.get("must_not_require_skills", []):
         skill_lower = (skill or "").strip().lower()
@@ -371,7 +475,7 @@ def passes_quick_card_filters(
     )
     counter_patterns = profile.get("cheap_keep_counter_patterns", [])
     counter_hits = sum(1 for pattern in counter_patterns if pattern and re.search(pattern, combined))
-    direct_ba_title = bool(re.search(r"\bbusiness analyst\b|\btechnical business analyst\b|\bsenior ba\b|\btech(?:nical)?\s+ba\b", title_lower))
+    direct_target_title = _matches_any(title_lower, profile.get("target_title_patterns", []))
 
     for rule in profile.get("cheap_reject_metadata_rules", []):
         pattern = rule.get("pattern", "")
@@ -389,7 +493,7 @@ def passes_quick_card_filters(
             continue
 
         title_has_specialist_signal = bool(re.search(pattern, title_lower))
-        unusually_strong_counter = direct_ba_title and counter_hits >= 4 and not title_has_specialist_signal
+        unusually_strong_counter = direct_target_title and counter_hits >= 4 and not title_has_specialist_signal
         if unusually_strong_counter:
             continue
         return False, reason

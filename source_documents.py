@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 from cv_pipeline import run_cv_pipeline
 from llm_gate import client as llm_client
 from profile_learning import (
-    extract_title_pattern_suggestions,
+    extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
     repair_text,
 )
 from profile_store import (
@@ -224,7 +224,7 @@ def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     return [item for item in sources if item.get("label") and item.get("path")]
 
 
-def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> dict[str, Any]:
+def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | None = None, onboarding_settings: dict | None = None) -> dict[str, Any]:
     """Collect source documents, reset onboarding fields, re-extract everything, save.
 
     This is the single shared path for both initial onboarding and the Danger Rebuild.
@@ -233,9 +233,9 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
     """
     resolved = normalize_source_materials(source_materials or load_source_materials(create_if_missing=True))
     import_sources = _collect_import_sources(resolved)
-    pasted_text = repair_text(extra_text)
-    if not import_sources and not pasted_text:
-        raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile source documents first.")
+    prefs = search_preferences or {}
+    if not import_sources:
+        raise ValueError("No onboarding input provided. Please upload your CV first.")
 
     imported_sources: list[dict[str, Any]] = []
     combined_sections: list[str] = []
@@ -259,11 +259,6 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
 
-    if pasted_text:
-        imported_sources.append({"label": "Pasted CV", "path": "(pasted text)", "characters": len(pasted_text)})
-        combined_sections.append(f"## Pasted CV\n{pasted_text}")
-        source_sections.append({"label": "Pasted CV", "text": pasted_text})
-
     if not combined_sections:
         if import_sources:
             raise ValueError("Could not read any configured source documents.")
@@ -273,7 +268,7 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
 
     # Load current profile to preserve non-onboarding fields and read onboarding_settings.
     current_profile = load_profile()
-    onboarding_settings = current_profile.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
+    active_onboarding_settings = onboarding_settings or current_profile.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
 
     # --- Reset: start with DEFAULT_PROFILE values for all onboarding-owned fields ---
     patch: dict[str, Any] = {
@@ -286,7 +281,7 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
     patch["cv_text"] = combined_text
     patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
-    patch.update(run_cv_pipeline(combined_text, llm_client))
+    patch.update(run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings))
 
     imported_summary = _extract_summary_from_text(combined_text)
     if imported_summary:
@@ -296,9 +291,43 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
     if brief:
         patch["llm_profile_brief"] = brief
 
+    # --- Apply Search and Engagement Preferences ---
+    search_settings = dict(current_profile.get("search_settings") or {})
+    match_preferences = dict(current_profile.get("match_preferences") or {})
+
+    # 1. Keywords
+    manual_keywords = str(prefs.get("keywords") or "").strip()
+    if manual_keywords:
+        search_settings["keywords"] = manual_keywords
+    
+    # 2. Locations
+    manual_locations = [str(l).strip() for l in prefs.get("locations", []) if str(l).strip()]
+    if manual_locations:
+        search_settings["locations"] = manual_locations
+    else:
+        # Try to default location from CV if not provided manually
+        hint = extract_location_hint(combined_text)
+        if hint and not search_settings.get("locations"):
+            search_settings["locations"] = [hint]
+            match_preferences["home_location"] = hint
+
+    # 3. Engagement
+    eng_type = str(prefs.get("engagement_type") or "both").lower()
+    match_preferences["engagement_type"] = eng_type
+
+    # 4. Merge text-extracted preferences ("Warnings")
+    text_prefs = _extract_match_preferences(combined_text)
+    if text_prefs:
+        match_preferences.update(text_prefs)
+        if text_prefs.get("home_location") and not search_settings.get("locations"):
+            search_settings["locations"] = [text_prefs["home_location"]]
+
+    patch["search_settings"] = search_settings
+    patch["match_preferences"] = match_preferences
+
     # Title patterns — always re-extracted during onboarding (no guard needed here)
     try:
-        suggestion = extract_title_pattern_suggestions(combined_text, onboarding_settings)
+        suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
         if suggestion.get("target_title_patterns"):
             patch["target_title_patterns"] = suggestion["target_title_patterns"]
             if suggestion.get("adjacent_title_patterns"):
@@ -308,8 +337,8 @@ def run_onboarding(source_materials: dict[str, Any], extra_text: str = "") -> di
             print("[TITLE_PATTERNS] Deterministic parser returned no target patterns")
         if suggestion.get("suggested_search_keywords"):
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
-            if not current_kw:
-                patch["search_settings"] = {"keywords": " ".join(suggestion["suggested_search_keywords"])}
+            if not current_kw and not manual_keywords:
+                patch["search_settings"]["keywords"] = " ".join(suggestion["suggested_search_keywords"])
                 print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
@@ -353,10 +382,10 @@ def _extract_summary_from_text(text: str) -> str:
                 if len(normalized.split()) <= 8 and normalized.upper() == normalized:
                     break
                 parts.append(normalized)
-                if len(" ".join(parts)) >= 420:
+                if len(" ".join(parts)) >= 1400:
                     break
             if parts:
-                return " ".join(parts)[:500].strip()
+                return " ".join(parts)[:1500].strip()
 
     titles: list[str] = []
     seen_titles: set[str] = set()
@@ -383,15 +412,16 @@ def _extract_summary_from_text(text: str) -> str:
         if not line.startswith("##")
         and not (len(line.split()) <= 8 and line.upper() == line)
     ]
-    return " ".join(filtered[:3])[:500].strip()
+    return " ".join(filtered[:20])[:1500].strip()
 def build_llm_profile_brief(
-    capability_rules: list[dict[str, Any]],
+    capability_rules: Any,
 ) -> str:
     lines: list[str] = []
 
     preferred_rules = []
     avoid_rules = []
-    for rule in capability_rules or []:
+    rules = capability_rules if isinstance(capability_rules, list) else []
+    for rule in rules:
         if not isinstance(rule, dict):
             continue
         name = str(rule.get("name") or "").strip()
@@ -406,70 +436,11 @@ def build_llm_profile_brief(
             preferred_rules.append(line)
 
     if preferred_rules:
-        lines.append("Capability profile: " + "; ".join(preferred_rules[:8]))
+        lines.append("Capability profile: " + "; ".join(preferred_rules[:20]))
     if avoid_rules:
-        lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:6]))
+        lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:10]))
 
     return "\n".join(lines).strip()[:3000]
-
-
-def _normalize_evidence_signal_candidates(items: list[str] | None) -> list[str]:
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    business_words = {
-        "analysis",
-        "analyst",
-        "business",
-        "process",
-        "data",
-        "project",
-        "sql",
-        "api",
-        "agile",
-        "bpmn",
-        "product",
-        "delivery",
-        "requirements",
-        "integration",
-        "stakeholder",
-        "testing",
-        "azure",
-        "java",
-        "python",
-    }
-    for item in items or []:
-        text = (
-            str(item or "")
-            .replace("\r\n", "\n")
-            .replace("\r", "\n")
-            .replace("\\r\\n", "\n")
-            .replace("\\n", "\n")
-            .replace("\\r", "\n")
-        )
-        for part in text.split("\n"):
-            value = re.sub(r"\s+", " ", part).strip(" -")
-            if not value:
-                continue
-            if value.startswith("#"):
-                continue
-            if value.upper() == value and len(value.split()) > 1:
-                continue
-            if len(value.split()) > 8:
-                continue
-            if len(value) > 60 or "," in value:
-                continue
-            if re.search(r"\b(?:19|20)\d{2}\b", value):
-                continue
-            words = value.split()
-            if 2 <= len(words) <= 4 and all(re.fullmatch(r"[A-Z][a-z]+", word) for word in words):
-                if not any(word.lower() in business_words for word in words):
-                    continue
-            normalized = value.lower()
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            cleaned.append(value)
-    return cleaned[:20]
 
 
 def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:

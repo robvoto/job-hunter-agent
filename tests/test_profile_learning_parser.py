@@ -1,24 +1,26 @@
 import importlib
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import profile_learning
-from profile_learning import build_learning_patch, extract_title_pattern_suggestions
+from profile_learning import (
+    _CURRENT_YEAR,
+    _collect_phrase_stats,
+    _parse_role_entries,
+    build_learning_patch,
+    extract_title_pattern_suggestions,
+)
 
 
 SAMPLE_CV = """
 # Professional Summary
-Senior Business Analyst with experience across payments, process improvement, and delivery support.
+Senior Delivery Lead with experience across payments, process improvement, and delivery support.
 
 # Professional Experience
-Acme Bank - Senior Business Analyst (2022 - Present)
+Acme Bank - Senior Delivery Lead (2022 - Present)
 - Led requirements workshops for payments change initiatives.
 - Produced process maps, user stories, and business requirements for regulatory delivery.
 - Coordinated stakeholders across technology and operations teams.
 
-Northstar Consulting - Business Analyst (2019 - 2022)
+Northstar Consulting - Delivery Analyst (2019 - 2022)
 - Ran stakeholder interviews and backlog refinement for digital transformation programs.
 - Supported test planning, data analysis, and business process improvements.
 
@@ -38,20 +40,69 @@ def test_build_learning_patch_extracts_evidence_and_capabilities():
     patch = build_learning_patch(SAMPLE_CV)
 
     assert patch.get("candidate_summary")
-    assert "evidence_signals" in patch
-    assert any("business analyst" in item for item in patch["evidence_signals"])
+    assert "evidence_signals" not in patch
     assert patch.get("capability_profile_rules")
     assert any(
-        rule["name"] in {"business analysis", "process mapping", "stakeholder engagement"}
+        rule["name"] in {"process mapping", "stakeholder engagement", "requirement workshop"}
         for rule in patch["capability_profile_rules"]
     )
 
 
 def test_extract_title_pattern_suggestions_prefers_recent_roles():
-    suggestion = extract_title_pattern_suggestions(SAMPLE_CV, {"title_extraction_lookback_years": 8})
+    suggestion = extract_title_pattern_suggestions(SAMPLE_CV, {"extraction_lookback_years": 8})
 
     assert suggestion["target_title_patterns"]
-    assert "business analyst" in suggestion["suggested_search_keywords"]
+    assert any("delivery lead" in keyword for keyword in suggestion["suggested_search_keywords"])
+
+
+def test_collect_phrase_stats_uses_configured_lookback_for_recent_roles():
+    cv_text = f"""
+# Professional Experience
+Alpha Co - Process Lead ({_CURRENT_YEAR - 7} - {_CURRENT_YEAR - 7})
+- Led process mapping workshops and process mapping documentation.
+
+Beta Co - Process Analyst ({_CURRENT_YEAR - 11} - {_CURRENT_YEAR - 10})
+- Delivered process mapping improvements and process mapping artefacts.
+"""
+
+    roles = _parse_role_entries(cv_text)
+    short_stats = _collect_phrase_stats(cv_text, roles, {"extraction_lookback_years": 5})
+    long_stats = _collect_phrase_stats(cv_text, roles, {"extraction_lookback_years": 8})
+
+    assert len(short_stats["process lead"]["recent_roles"]) == 0
+    assert len(long_stats["process lead"]["recent_roles"]) == 1
+
+
+def test_parse_role_entries_accepts_title_and_employer_before_dates():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Senior Delivery Lead
+Acme Bank
+2022 - Present
+- Led workshops
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Senior Delivery Lead"
+    assert parsed[0]["employer"] == "Acme Bank"
+
+
+def test_parse_role_entries_does_not_swap_title_and_employer_when_dates_come_first():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+2022 - Present
+Senior Delivery Lead
+Acme Bank
+- Led workshops
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Senior Delivery Lead"
+    assert parsed[0]["employer"] == "Acme Bank"
 
 
 def test_llm_capability_naming_only_renames_selected_clusters():

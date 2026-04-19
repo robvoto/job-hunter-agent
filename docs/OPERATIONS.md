@@ -17,7 +17,7 @@ Current onboarding persists a local source pack under ignored paths and uses tha
 
 ## Current Source Connector
 
-The current implemented job source is SEEK.
+Current implemented job sources are SEEK and LinkedIn.
 
 Important note:
 
@@ -30,7 +30,7 @@ Important note:
 ```powershell
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 python -m playwright install chromium
 ```
 
@@ -109,12 +109,21 @@ Current flow:
 The prompt reads from `data/profile.json`, especially:
 
 - candidate summary
-- strengths
+- candidate fit brief
 - CV/background text
 - capability rules
-- fit notes
+- evidence tiers
+- match preferences
 
 If `OPENAI_API_KEY` is missing, the app runs without live LLM review.
+
+## Testing
+
+Use the repo test runner after changes:
+
+```powershell
+python test_runner.py
+```
 
 ## Runner Split
 

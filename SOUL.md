@@ -9,10 +9,10 @@
 
 ## What this project is
 
-A local-first job-hunting system focused on finding strong-fit Business Analyst roles with as little noise as possible.
+A local-first job-hunting system focused on finding strong-fit roles for any candidate with as little noise as possible.
 
 Near-term goal:
-- reliably scrape and filter BA roles
+- reliably scrape and filter target roles from a configurable candidate profile
 - learn the candidate profile over time
 - produce a clean shortlist with clear reject reasons
 
@@ -46,12 +46,12 @@ The project is past the initial prototype stage.
 - outputs are written to `output/` as HTML, JSON, run stats, and review data
 - history and cache are persisted locally
 - first daily agent runner now exists with email and Telegram notifier hooks
+- LinkedIn scraping is implemented via `python-jobspy`
 
 ### What is still incomplete
 
 - this is not yet a true agent
 - no WhatsApp delivery yet
-- no LinkedIn scraper yet
 - no authenticated SEEK session reuse yet
 - no durable cloud persistence yet
 - filtering still needs ongoing tuning to reduce false positives and false rejects
@@ -118,9 +118,14 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `agent_settings.py` | Local agent settings and state helpers |
 | `profile_store.py` | Runtime profile loading, defaults, and persistence |
 | `profile_learning.py` | Converts free-text knowledge into structured profile updates |
+| `cv_pipeline.py` | Advanced CV parsing and capability clustering |
 | `review_insights.py` | Unknown skill extraction and rejected-sample review data |
 | `source_documents.py` | Local source-document config, parsing, and profile import |
+| `scraper_seek.py` | SEEK-specific scraping and extraction |
+| `scraper_linkedin.py` | LinkedIn scraping via python-jobspy |
+| `scraper_base.py` | Shared base logic for all scrapers |
 | `utils.py` | Shared parsing and URL helpers |
+| `config.py` | Global configuration and scrape tuning |
 | `data/profile.json` | Runtime source of truth for the candidate profile |
 | `data/application_materials.template.json` | Starter manifest for local-only CV / instructions / application inputs |
 | `data/agent_settings.template.json` | Starter template for local agent scheduling and notifier config |
@@ -131,7 +136,6 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `output/run_stats.json` | Latest run metrics |
 | `output/review_data.json` | Unknown skills and reject-sample review data |
 | `output/agent_last_summary.txt` | Latest plain-text agent digest |
-| `legacy/` | Older scraper drafts kept for reference only |
 | `docs/OPERATIONS.md` | Persistence and runtime behavior notes |
 | `docs/USER_GUIDE.md` | End-user setup and usage guide |
 
@@ -149,17 +153,13 @@ Do not move the project back to pane-based scraping unless there is a very stron
 
 ---
 
-## Target job profile
+## Targeting model
 
-- Primary role family: Business Analyst
-- Primary market: Sydney, Australia
-- Secondary market: Canberra, configurable
-- Primary source: SEEK
-- Planned source: LinkedIn
-- Preferred domains: tech, digital delivery, transformation, discovery, process improvement, stakeholder-heavy BA work
-- Avoid domains: cyber/security-heavy roles, specialist platform admin roles, pure finance/banking ops, ERP-heavy roles unless clearly BA-shaped
+- role family, locations, salary targets, and title patterns should come from `data/profile.json`
+- default code paths should stay candidate-agnostic
+- source-specific settings can exist, but candidate fit assumptions belong in the profile, not in code
 
-The exact live fit model is not fully hardcoded. It is driven by:
+The exact live fit model is driven by:
 - `data/profile.json`
 - the configured capability rules
 - admin-reviewed unknown skills
@@ -197,7 +197,7 @@ When applied, new knowledge is written into `data/profile.json` and should then 
 
 Current intended future behavior:
 
-- initial profile fields such as summary, strengths, CV text, capability hints, and fit notes should come from imported source documents
+- initial profile fields such as the fit brief, candidate summary, CV text, evidence tiers, capability hints, and title targeting should come from imported source documents
 - after import, admin becomes the place to refine, correct, and extend them over time
 - a first-pass source-document importer now exists in the `Source Documents` panel of admin
 
@@ -219,11 +219,10 @@ Current behavior:
 
 Profile inputs currently used by the LLM prompt:
 
-- candidate summary
-- strengths
-- CV/background text
+- candidate fit brief
 - capability profile rules
-- important fit notes
+- match preferences such as location and permanent/contract preference
+- evidence tiers with weighted primary, secondary, and background context
 
 Important design note:
 

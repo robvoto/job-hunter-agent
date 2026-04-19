@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from datetime import date, datetime
-from typing import Any, Optional, Set, Tuple
+from typing import Any, Optional, Set
 
 
 class BaseJobScraper(ABC):
@@ -39,32 +39,6 @@ class BaseJobScraper(ABC):
 def make_namespaced_key(source: str, raw_id: str) -> str:
     """Return 'source:raw_id', e.g. 'linkedin:4056789012'."""
     return f"{source}:{raw_id}"
-
-
-def strip_namespace(key: str) -> Tuple[str, str]:
-    """Split 'linkedin:4056789012' into ('linkedin', '4056789012').
-
-    Bare numeric SEEK keys (legacy format) are treated as source='seek'.
-    """
-    if ":" in key:
-        source, raw = key.split(":", 1)
-        return source, raw
-    return "seek", key
-
-
-def resolve_history_key(job_history: dict, namespaced_key: str) -> dict:
-    """Look up job history, falling back to bare key for legacy SEEK entries.
-
-    Existing SEEK history entries have bare keys like '12345678'.
-    New SEEK entries would be 'seek:12345678'; this function handles both.
-    """
-    entry = job_history.get(namespaced_key)
-    if entry:
-        return entry
-    if namespaced_key.startswith("seek:"):
-        bare = namespaced_key[5:]
-        return job_history.get(bare, {})
-    return {}
 
 
 def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str, run_iso: str) -> dict:
