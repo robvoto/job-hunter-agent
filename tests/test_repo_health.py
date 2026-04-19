@@ -1,7 +1,7 @@
-from pathlib import Path
+﻿from pathlib import Path
 import importlib
 
-from profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS
+from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -27,22 +27,23 @@ def test_default_match_preferences_are_neutral():
 
 def test_active_modules_import():
     modules = [
-        "agent_runner",
-        "agent_settings",
-        "config",
-        "cv_pipeline",
-        "filters",
-        "llm_gate",
-        "local_server",
-        "profile_learning",
-        "profile_store",
-        "review_insights",
-        "scraper_base",
-        "scraper_linkedin",
-        "scraper_seek",
-        "source_connector",
-        "source_documents",
-        "utils",
+        "job_hunter_agent.agent_runner",
+        "job_hunter_agent.agent_settings",
+        "job_hunter_agent.config",
+        "job_hunter_agent.cv_pipeline",
+        "job_hunter_agent.filters",
+        "job_hunter_agent.llm_gate",
+        "job_hunter_agent.local_server",
+        "job_hunter_agent.profile_learning",
+        "job_hunter_agent.profile_store",
+        "job_hunter_agent.review_insights",
+        "job_hunter_agent.scrapers.base",
+        "job_hunter_agent.scrapers.linkedin",
+        "job_hunter_agent.scrapers.seek",
+        "job_hunter_agent.source_connector",
+        "job_hunter_agent.source_documents",
+        "job_hunter_agent.utils",
     ]
     for module in modules:
         importlib.import_module(module)
+

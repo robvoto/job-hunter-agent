@@ -1,5 +1,5 @@
-import pytest
-from profile_learning import extract_title_pattern_suggestions, _CURRENT_YEAR
+﻿import pytest
+from job_hunter_agent.profile_learning import extract_title_pattern_suggestions, _CURRENT_YEAR
 
 def test_consistent_lookback_logic():
     # Mock CV text with three roles:
@@ -59,3 +59,4 @@ def test_changing_lookback_affects_both_lists():
     res_long = extract_title_pattern_suggestions(cv_text, long_settings)
     assert len(res_long["target_title_patterns"]) > 0
     assert any("project" in p for p in res_long["target_title_patterns"])
+

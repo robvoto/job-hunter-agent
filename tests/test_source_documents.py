@@ -1,5 +1,5 @@
-import llm_gate
-import source_documents
+﻿from job_hunter_agent import llm_gate
+from job_hunter_agent import source_documents
 
 
 def test_build_llm_profile_brief_ignores_malformed_capability_rules():
@@ -75,3 +75,4 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
 
     assert "process mapping: strong, core (process design)" in context
     assert "stakeholder engagement: working" in context
+

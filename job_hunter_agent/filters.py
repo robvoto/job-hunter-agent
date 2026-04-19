@@ -1,11 +1,11 @@
-# filters.py
+﻿# filters.py
 
 import json
 import re
-from pathlib import Path
 from typing import Tuple
 
-from profile_store import load_profile
+from job_hunter_agent.paths import OUTPUT_DIR
+from job_hunter_agent.profile_store import load_profile
 
 
 
@@ -100,7 +100,7 @@ def suggest_title_block_phrases(title: str) -> list[str]:
     # | handled with or without surrounding spaces; - / : only when space-bounded
     segments = [
         s.strip()
-        for s in re.split(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]", normalized)
+        for s in re.split(r"\s*\|\s*|\s[-â€“â€”/:]\s|[(),\[\]]", normalized)
         if s and s.strip()
     ]
     ranked_groups: list[list[str]] = [[], []]
@@ -326,7 +326,7 @@ def _evaluate_description_confidence(details_text: str, description_lower: str, 
         )
         if re.search(pattern, description_lower)
     )
-    bullet_score = len(re.findall(r"(?m)^\s*[-*•]", details_text))
+    bullet_score = len(re.findall(r"(?m)^\s*[-*â€¢]", details_text))
     generic_score = sum(
         1
         for phrase in (
@@ -505,9 +505,9 @@ def passes_quick_card_filters(
 # Rejection-learning: extraction helpers
 # ---------------------------------------------------------------------------
 
-_REJECTION_RULES_PATH = Path(__file__).resolve().parent / "output" / "rejection_rules.json"
+_REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
 
-# (pattern, category) — each pattern matches a trigger phrase in a job description.
+# (pattern, category) â€” each pattern matches a trigger phrase in a job description.
 # Structural-label patterns (sector, domain, etc.) require a colon so we don't
 # accidentally capture mid-sentence uses like "the insurance sector required...".
 _EXTRACTION_TRIGGERS: list[tuple[str, str]] = [
@@ -540,7 +540,7 @@ _STRIP_LEAD_RE = re.compile(
     r"^(?:a|an|the|strong|extensive|proven|solid|excellent|good|relevant|significant|deep)\s+",
     re.IGNORECASE,
 )
-# Single-word extractions that are part of the trigger vocabulary itself — skip them
+# Single-word extractions that are part of the trigger vocabulary itself â€” skip them
 _SKIP_SINGLE_WORDS = frozenset({
     "required", "essential", "necessary", "important", "knowledge",
     "experience", "skills", "ability", "exposure", "understanding",
@@ -620,3 +620,4 @@ def passes_saved_rejection_rules(text: str) -> Tuple[bool, str]:
             token = re.sub(r"[^a-z0-9]+", "_", value).strip("_")[:30]
             return False, f"LEARNED_REJECT:{category}:{token}"
     return True, "OK"
+

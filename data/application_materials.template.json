@@ -1,9 +1,0 @@
-{
-  "profile_sources": [
-    {
-      "label": "Primary CV",
-      "path": "data/application_inputs/source_pack/primary_cv.md"
-    }
-  ],
-  "cv_variants": []
-}

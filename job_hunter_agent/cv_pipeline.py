@@ -1,4 +1,4 @@
-"""CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
+﻿"""CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
 
 Produces 3 profile fields from raw CV text:
   capability_profile_rules, dominant_signal_clusters, and must_not_require_skills.
@@ -15,7 +15,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-from profile_learning import (
+from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     _GENERIC_PHRASE_STOPWORDS,
     _is_generic_title_phrase,
@@ -25,7 +25,7 @@ from profile_learning import (
     _resolve_extraction_lookback_years,
     repair_text,
 )
-from profile_store import normalize_capability_rules
+from job_hunter_agent.profile_store import normalize_capability_rules
 
 _ACTION_VERBS = {
     "led", "lead", "managed", "manage", "delivered", "deliver",
@@ -211,7 +211,7 @@ def score_and_promote(clusters: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = None) -> list[dict[str, Any]]:
     try:
-        from llm_gate import name_capability_clusters
+        from job_hunter_agent.llm_gate import name_capability_clusters
     except ImportError:
         return candidates
 
@@ -234,7 +234,7 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
     for index, item in enumerate(top):
         renamed = dict(item)
         if index < len(labels):
-            # Use raw LLM label (lowercased only) — don't normalize/stem it
+            # Use raw LLM label (lowercased only) â€” don't normalize/stem it
             label = str(labels[index]).strip().lower()
             # Basic length check; _is_quality_phrase would over-stem the label
             words = label.split()
@@ -313,3 +313,4 @@ def run_cv_pipeline(
         f"{len(output.get('dominant_signal_clusters', []))} dominant clusters"
     )
     return _strip_internal_keys(output)
+

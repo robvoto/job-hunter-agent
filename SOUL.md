@@ -269,6 +269,7 @@ Keep personal and local-only:
 - `data/agent_state.json`
 - `data/llm_cache.json`
 - `data/application_inputs/`
+- `data/llm_costs.jsonl`
 - `data/application_materials.json`
 - `TODO.txt`
 - `.venv/`

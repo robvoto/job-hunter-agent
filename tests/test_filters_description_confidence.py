@@ -1,4 +1,4 @@
-import filters
+from job_hunter_agent import filters
 
 
 def test_adjacent_title_requires_stronger_role_proof(monkeypatch):

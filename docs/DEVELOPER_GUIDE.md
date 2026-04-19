@@ -12,35 +12,51 @@ Use it alongside:
 
 ## Current Architecture
 
-Core runtime pieces:
+Core runtime code now lives under `job_hunter_agent/`.
 
-- `local_server.py`
+Primary modules:
+
+- `job_hunter_agent/local_server.py`
   Local web server for the admin console, dashboard, onboarding UI, and API endpoints.
 
-- `source_documents.py`
+- `job_hunter_agent/source_documents.py`
   Local source-pack persistence and source-document import into `profile.json`.
 
-- `profile_store.py`
+- `job_hunter_agent/profile_store.py`
   Default profile model, load/save, and patch behavior.
 
-- `profile_learning.py`
+- `job_hunter_agent/profile_learning.py`
   Text-to-profile extraction helpers.
 
-.\.venv\Scripts\python.exe -m pytest
-- `cv_pipeline.py`
+- `job_hunter_agent/cv_pipeline.py`
   Heuristic and LLM-assisted CV analysis and capability mapping.
 
-- `source_connector.py`
+- `job_hunter_agent/source_connector.py`
   Current source connector and dashboard renderer for SEEK and LinkedIn.
 
-- `scraper_seek.py` / `scraper_linkedin.py`
+- `job_hunter_agent/scrapers/seek.py` / `job_hunter_agent/scrapers/linkedin.py`
   Source-specific extraction logic.
 
-- `filters.py`
+- `job_hunter_agent/filters.py`
   Deterministic title and content filtering.
 
-- `llm_gate.py`
+- `job_hunter_agent/llm_gate.py`
   Optional constrained LLM decision step.
+
+Compatibility launchers kept at the repo root:
+
+- `local_server.py`
+- `source_connector.py`
+- `agent_runner.py`
+- `test_runner.py`
+
+Standard project folders:
+
+- `job_hunter_agent/` for application code
+- `tests/` for test coverage
+- `templates/` for HTML templates
+- `docs/` for project docs
+- `data/` and `output/` for local runtime state
 
 ## Naming Note
 
@@ -66,10 +82,10 @@ Do not rename major files casually unless there is time to clean the whole proje
 ## Current Runner Split
 
 - `source_connector.py`
-  Canonical direct entry point for refreshing source data and rebuilding outputs.
+  Compatibility launcher for `job_hunter_agent/source_connector.py`.
 
 - `agent_runner.py`
-  Orchestration layer for refresh plus digest plus notifications.
+  Compatibility launcher for `job_hunter_agent/agent_runner.py`.
 
 ## Score Presentation
 
@@ -125,6 +141,9 @@ Do not accidentally commit:
 - `data/job_history.json`
 - `data/llm_cache.json`
 - `data/capability_profile.txt`
+- `data/agent_settings.json`
+- `data/agent_state.json`
+- `data/llm_costs.jsonl`
 - `data/application_inputs/`
 - `data/application_materials.json`
 - `TODO.txt`

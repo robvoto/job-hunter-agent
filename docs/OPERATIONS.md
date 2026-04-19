@@ -22,7 +22,8 @@ Current implemented job sources are SEEK and LinkedIn.
 Important note:
 
 - the product is broader than SEEK
-- the current connector code lives in `source_connector.py` for historical reasons
+- the current connector implementation lives in `job_hunter_agent/source_connector.py`
+- the repo-root `source_connector.py` is kept as a thin launcher for local commands and VS Code
 - do not treat that filename as the intended long-term product naming model
 
 ## Local Setup
@@ -81,6 +82,9 @@ It currently supports:
 - `data/job_history.json`
 - `data/llm_cache.json`
 - `data/application_inputs/`
+- `data/agent_settings.json`
+- `data/agent_state.json`
+- `data/llm_costs.jsonl`
 - `data/application_materials.json`
 - `TODO.txt`
 

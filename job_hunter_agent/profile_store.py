@@ -13,12 +13,12 @@ Notes:
 import copy
 import json
 import re
-from pathlib import Path
 from typing import Any
 
+from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 
-ROOT_DIR = Path(__file__).resolve().parent
-DATA_DIR = ROOT_DIR / "data"
+
+ROOT_DIR = REPO_ROOT
 PROFILE_PATH = DATA_DIR / "profile.json"
 MIN_DATE_RANGE_DAYS = 1
 MAX_DATE_RANGE_DAYS = 30

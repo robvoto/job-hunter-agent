@@ -1,4 +1,4 @@
-"""Tests for the deterministic title block phrase extractor.
+﻿"""Tests for the deterministic title block phrase extractor.
 
 Run with: python -m pytest tests/test_title_block_extractor.py -v
 Or:        python tests/test_title_block_extractor.py
@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from filters import suggest_title_block_phrase
+from job_hunter_agent.filters import suggest_title_block_phrase
 
 
 CASES = [
@@ -24,7 +24,7 @@ CASES = [
     ("Wealth Operations Manager", "wealth"),
     # Two-char tech acronym
     ("Senior Delivery Manager | AI & 365", "ai"),
-    # No safe discriminator — all tokens are generic
+    # No safe discriminator â€” all tokens are generic
     ("Senior Delivery Manager", None),
     ("Senior Analyst", None),
     ("Senior Delivery Digital Manager", None),
@@ -97,3 +97,4 @@ def test_government_protected():
 
 def test_numeric_fragment_skipped():
     assert not suggest_title_block_phrase("Operations Analyst - 365")
+

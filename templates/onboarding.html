@@ -50,7 +50,8 @@
     .grid {
       display: grid;
       gap: 18px;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
     }
     .panel {
       padding: 18px;
@@ -58,6 +59,17 @@
     .panel h2 {
       margin: 0 0 10px;
       font-size: 1.15rem;
+    }
+    .section-copy {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.5;
+    }
+    .support-stack {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 18px;
     }
     label {
       display: block;
@@ -157,12 +169,171 @@
     }
     .checkbox-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
       gap: 10px;
       margin-top: 10px;
     }
-    .checkbox-grid label {
-      margin: 0; font-weight: normal; cursor: pointer;
+    .location-picker {
+      margin-top: 10px;
+    }
+    .location-input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .location-input-row input {
+      flex: 1 1 auto;
+    }
+    .location-add-button {
+      white-space: nowrap;
+      padding: 10px 14px;
+    }
+    .location-suggestions,
+    .location-selected {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .chip-button,
+    .location-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      font: inherit;
+    }
+    .chip-button {
+      cursor: pointer;
+    }
+    .chip-button.is-active {
+      background: #ecfdf3;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+    .location-chip button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+      font: inherit;
+      line-height: 1;
+    }
+    .choice-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .choice-card span {
+      line-height: 1.2;
+    }
+    .choice-card input {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      accent-color: var(--accent-2);
+    }
+    .choice-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .choice-list .choice-card {
+      justify-content: flex-start;
+      gap: 12px;
+      font-weight: 500;
+    }
+    .setting-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 0;
+      border-top: 1px solid rgba(230, 220, 205, 0.8);
+    }
+    .setting-row:first-of-type {
+      border-top: 0;
+      padding-top: 4px;
+    }
+    .setting-copy {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .setting-copy label {
+      margin: 0 0 4px;
+    }
+    .setting-copy .help {
+      margin: 0;
+    }
+    .compact-number {
+      width: 72px;
+      min-width: 72px;
+      padding: 8px 8px;
+      text-align: center;
+      font-weight: 700;
+    }
+    .number-input {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: white;
+    }
+    .number-input span {
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .support-panel {
+      align-self: start;
+    }
+    .support-note {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.7);
+    }
+    .support-note + .support-note {
+      margin-top: 12px;
+    }
+    .support-note h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+    .support-note p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    @media (max-width: 640px) {
+      .setting-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .number-input {
+        align-self: flex-start;
+      }
+      .location-input-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
     }
   </style>
 </head>
@@ -170,57 +341,80 @@
   <main class="page">
     <section class="hero">
       <h1 id="hero_title">Set Up Your Profile</h1>
-      <p id="hero_copy">Answer a few onboarding questions, then upload one strong detailed CV. We will turn it into a working profile the job engine can use.</p>
+      <p id="hero_copy">Choose a few extraction settings, add your search preferences, and upload one detailed CV. We will build a profile you can review and tune in the workspace.</p>
     </section>
 
     <div class="grid">
       <section class="panel">
-        <h2 id="form_title">Step 1. Onboarding Settings</h2>
-        <label for="os_lookback_years">Extraction lookback (years)</label>
-        <input id="os_lookback_years" type="number" min="1" max="20" step="1">
-        <div class="help">How far back we can look when extracting role-based signals and patterns.</div>
+        <h2 id="form_title">Step 1. Profile Setup</h2>
+        <p class="section-copy">Start with the basics. We will keep the more technical pattern limits in Settings.</p>
+        <div class="support-stack">
+          <div class="support-note">
+            <h3 id="side_title">What this does</h3>
+            <p id="side_copy">This builds the working profile the app uses for matching, filtering, and search suggestions.</p>
+          </div>
+          <div class="support-note">
+            <h3 id="side_steps_title">What happens next</h3>
+            <p id="side_steps">We read your CV, extract role signals and title patterns, save your search preferences, and send you back to the workspace to review the result.</p>
+          </div>
+        </div>
 
-        <label for="os_min_months">Minimum role duration (months)</label>
-        <input id="os_min_months" type="number" min="1" max="24" step="1">
-        <div class="help">Shorter roles than this are ignored when we build title patterns.</div>
+        <div class="setting-row">
+          <div class="setting-copy">
+            <label for="os_lookback_years">How far back should we look?</label>
+            <div class="help">We use this when pulling experience signals from older roles.</div>
+          </div>
+          <div class="number-input">
+            <input id="os_lookback_years" class="compact-number" type="number" min="1" max="20" step="1" inputmode="numeric" required>
+            <span>years</span>
+          </div>
+        </div>
 
-        <label for="os_max_target">Max target title patterns</label>
-        <input id="os_max_target" type="number" min="1" max="20" step="1">
-        <div class="help">How many direct-match target titles we should keep.</div>
-
-        <label for="os_max_adjacent">Max adjacent title patterns</label>
-        <input id="os_max_adjacent" type="number" min="1" max="20" step="1">
-        <div class="help">How many adjacent-but-credible title patterns we should keep.</div>
+        <div class="setting-row">
+          <div class="setting-copy">
+            <label for="os_min_months">Ignore very short roles</label>
+            <div class="help">Roles shorter than this are treated as background context instead of main targeting signals.</div>
+          </div>
+          <div class="number-input">
+            <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
+            <span>months</span>
+          </div>
+        </div>
 
         <h2 style="margin-top:22px;">Step 2. Search Preferences</h2>
-        <label for="search_keywords">Target Keywords</label>
-        <input id="search_keywords" type="text" placeholder="e.g. Project Manager, DevOps" required>
-        <div class="help">Required. Main terms used to find jobs.</div>
+        <label for="search_keywords">What kinds of roles should we search for?</label>
+        <input id="search_keywords" type="text" placeholder="e.g. Project Manager, DevOps" maxlength="120" required>
+        <div class="help">Required. Use the main job titles or themes you want to search.</div>
 
-        <label>Target Locations</label>
-        <div class="checkbox-grid" id="location_checkboxes">
-          <label><input type="checkbox" value="NSW"> NSW</label>
-          <label><input type="checkbox" value="VIC"> VIC</label>
-          <label><input type="checkbox" value="QLD"> QLD</label>
-          <label><input type="checkbox" value="WA"> WA</label>
-          <label><input type="checkbox" value="SA"> SA</label>
-          <label><input type="checkbox" value="TAS"> TAS</label>
-          <label><input type="checkbox" value="ACT"> ACT</label>
-          <label><input type="checkbox" value="NT"> NT</label>
+        <label for="location_search">Where should we search?</label>
+        <div class="location-picker">
+          <div class="location-input-row">
+            <input id="location_search" list="location_suggestions" type="text" placeholder="Start typing a city or region" maxlength="80">
+            <button class="secondary location-add-button" id="add_location" type="button">Add location</button>
+          </div>
+          <datalist id="location_suggestions"></datalist>
+          <div class="location-suggestions" id="location_quick_picks"></div>
+          <div class="location-selected" id="location_selected"></div>
         </div>
-        <div class="help">Required. Select at least one region to search.</div>
+        <div class="help">Required. Add at least one city, state, or region.</div>
 
-        <label>Engagement Preference</label>
-        <div class="checkbox-row" style="margin-top: 5px; font-weight: normal; gap: 15px;">
-          <label style="margin:0; font-weight: normal;"><input type="radio" name="engagement_pref" value="both" checked> Both</label>
-          <label style="margin:0; font-weight: normal;"><input type="radio" name="engagement_pref" value="permanent"> Permanent</label>
-          <label style="margin:0; font-weight: normal;"><input type="radio" name="engagement_pref" value="contract"> Contract</label>
+        <label>What type of work are you open to?</label>
+        <div class="choice-list">
+          <label class="choice-card"><input type="radio" name="engagement_pref" value="both" checked><span>Both permanent and contract</span></label>
+          <label class="choice-card"><input type="radio" name="engagement_pref" value="permanent"><span>Permanent only</span></label>
+          <label class="choice-card"><input type="radio" name="engagement_pref" value="contract"><span>Contract only</span></label>
         </div>
 
         <h2 style="margin-top:22px;">Step 3. Primary CV</h2>
         <label for="primary_cv">Detailed CV</label>
-        <input id="primary_cv" type="file" accept=".docx,.md,.txt">
+        <input id="primary_cv" type="file" accept=".docx,.md,.txt" required>
         <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
+
+        <div class="summary-box" id="summary_box">
+          <h3 id="summary_heading">Profile Preview</h3>
+          <p id="summary_text"></p>
+          <code id="patterns_text"></code>
+        </div>
 
         <div class="actions">
           <button class="primary" id="create_profile" type="button">Create Profile</button>
@@ -228,35 +422,122 @@
         </div>
         <div class="status" id="status"></div>
       </section>
-
-      <section class="panel">
-        <h2>What Happens Next</h2>
-        <div class="help">
-          1. We save your onboarding answers into <code>profile.json</code>.<br>
-          2. We read your uploaded document text.<br>
-          3. We rebuild the profile from that source material.<br>
-          4. You review results, search, and profile settings in the workspace.
-        </div>
-        <div class="summary-box" id="summary_box">
-          <h3>Generated Profile Snapshot</h3>
-          <p id="summary_text"></p>
-          <code id="patterns_text"></code>
-        </div>
-      </section>
     </div>
   </main>
 
   <script>
     const statusEl = document.getElementById('status');
     const summaryBox = document.getElementById('summary_box');
+    const summaryHeading = document.getElementById('summary_heading');
     const summaryText = document.getElementById('summary_text');
     const patternsText = document.getElementById('patterns_text');
+    const locationInput = document.getElementById('location_search');
+    const addLocationButton = document.getElementById('add_location');
+    const locationSuggestions = document.getElementById('location_suggestions');
+    const locationQuickPicks = document.getElementById('location_quick_picks');
+    const locationSelected = document.getElementById('location_selected');
     const urlParams = new URLSearchParams(window.location.search);
     const isRebuildMode = urlParams.get('mode') === 'rebuild';
+    const COMMON_LOCATION_OPTIONS = [
+      'Sydney NSW',
+      'Melbourne VIC',
+      'Brisbane QLD',
+      'Perth WA',
+      'Adelaide SA',
+      'Canberra ACT',
+      'Hobart TAS',
+      'Darwin NT',
+      'New South Wales',
+      'Victoria',
+      'Queensland',
+      'Western Australia',
+      'South Australia',
+      'Tasmania',
+      'Australian Capital Territory',
+      'Northern Territory'
+    ];
+    let selectedLocations = [];
 
     function showStatus(message, kind) {
       statusEl.textContent = message;
-      statusEl.className = `status ${kind}`;
+      statusEl.className = message ? `status ${kind}` : 'status';
+    }
+
+    function normalizeLocationValue(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function locationKey(value) {
+      return normalizeLocationValue(value).toLowerCase();
+    }
+
+    function renderLocationSuggestions() {
+      locationSuggestions.innerHTML = COMMON_LOCATION_OPTIONS
+        .map(value => `<option value="${value}"></option>`)
+        .join('');
+
+      locationQuickPicks.innerHTML = COMMON_LOCATION_OPTIONS.slice(0, 8)
+        .map(value => {
+          const activeClass = selectedLocations.some(item => locationKey(item) === locationKey(value)) ? ' is-active' : '';
+          return `<button class="chip-button${activeClass}" type="button" data-location="${value}">${value}</button>`;
+        })
+        .join('');
+    }
+
+    function renderSelectedLocations() {
+      if (!selectedLocations.length) {
+        locationSelected.innerHTML = '';
+        renderLocationSuggestions();
+        return;
+      }
+
+      locationSelected.innerHTML = selectedLocations
+        .map(value => (
+          `<span class="location-chip">${value}<button type="button" data-remove-location="${value}" aria-label="Remove ${value}">×</button></span>`
+        ))
+        .join('');
+      renderLocationSuggestions();
+    }
+
+    function setSelectedLocations(values) {
+      const deduped = [];
+      const seen = new Set();
+      for (const value of values || []) {
+        const normalized = normalizeLocationValue(value);
+        const key = locationKey(normalized);
+        if (!normalized || seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(normalized);
+      }
+      selectedLocations = deduped;
+      renderSelectedLocations();
+    }
+
+    function addLocation(value) {
+      const normalized = normalizeLocationValue(value);
+      if (!normalized) return;
+      if (normalized.length < 2 || normalized.length > 80) {
+        showStatus('Please use a location name between 2 and 80 characters.', 'error');
+        return;
+      }
+      if (!/^[A-Za-z\s,'()-]+$/.test(normalized)) {
+        showStatus('Locations should look like a normal city, state, or region name.', 'error');
+        return;
+      }
+      if (selectedLocations.some(item => locationKey(item) === locationKey(normalized))) {
+        locationInput.value = '';
+        return;
+      }
+      selectedLocations = [...selectedLocations, normalized];
+      locationInput.value = '';
+      showStatus('', '');
+      renderSelectedLocations();
+    }
+
+    function removeLocation(value) {
+      const key = locationKey(value);
+      selectedLocations = selectedLocations.filter(item => locationKey(item) !== key);
+      renderSelectedLocations();
     }
 
     async function fileToPayload(file, label) {
@@ -277,43 +558,81 @@
     function onboardingSettingsPayload() {
       const lookbackYears = document.getElementById('os_lookback_years').value.trim();
       const minMonths = document.getElementById('os_min_months').value.trim();
-      const maxTarget = document.getElementById('os_max_target').value.trim();
-      const maxAdjacent = document.getElementById('os_max_adjacent').value.trim();
       return {
         extraction_lookback_years: lookbackYears ? Number(lookbackYears) : undefined,
         title_extraction_min_months: minMonths ? Number(minMonths) : undefined,
-        max_target_patterns: maxTarget ? Number(maxTarget) : undefined,
-        max_adjacent_patterns: maxAdjacent ? Number(maxAdjacent) : undefined,
       };
     }
 
     function searchPreferencesPayload() {
-      const locations = Array.from(document.querySelectorAll('#location_checkboxes input:checked')).map(cb => cb.value);
       return {
         keywords: document.getElementById('search_keywords').value.trim(),
-        locations: locations,
+        locations: selectedLocations,
         engagement_type: document.querySelector('input[name="engagement_pref"]:checked').value
       };
+    }
+
+    function validateOnboardingSettings(settings) {
+      const lookback = Number(settings.extraction_lookback_years);
+      const minMonths = Number(settings.title_extraction_min_months);
+
+      if (!Number.isInteger(lookback) || lookback < 1 || lookback > 20) {
+        throw new Error('Please enter a lookback between 1 and 20 years.');
+      }
+      if (!Number.isInteger(minMonths) || minMonths < 1 || minMonths > 24) {
+        throw new Error('Please enter a short-role threshold between 1 and 24 months.');
+      }
+    }
+
+    function validateSearchPreferences(searchPrefs) {
+      if (!searchPrefs.keywords) {
+        throw new Error('Please enter at least one target keyword.');
+      }
+      if (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120) {
+        throw new Error('Please keep your target keywords between 2 and 120 characters.');
+      }
+      if (!searchPrefs.locations.length) {
+        throw new Error('Please add at least one search location.');
+      }
+      if (searchPrefs.locations.length > 8) {
+        throw new Error('Please keep your location list to 8 places or fewer.');
+      }
+      for (const location of searchPrefs.locations) {
+        if (location.length < 2 || location.length > 80) {
+          throw new Error('Each location should be between 2 and 80 characters.');
+        }
+        if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
+          throw new Error('Locations should look like normal city, state, or region names.');
+        }
+      }
+      if (!['both', 'permanent', 'contract'].includes(searchPrefs.engagement_type)) {
+        throw new Error('Please choose what type of work you are open to.');
+      }
+    }
+
+    function validatePrimaryFile(file) {
+      if (!file) {
+        throw new Error('Choose your detailed CV first.');
+      }
+      const name = String(file.name || '').toLowerCase();
+      if (!name.endsWith('.docx') && !name.endsWith('.md') && !name.endsWith('.txt')) {
+        throw new Error('Please upload a .docx, .md, or .txt CV file.');
+      }
     }
 
     function applyProfileDefaults(profile) {
       const onboarding = profile?.onboarding_settings || {};
       document.getElementById('os_lookback_years').value = String(onboarding.extraction_lookback_years ?? onboarding.title_extraction_lookback_years ?? '');
       document.getElementById('os_min_months').value = String(onboarding.title_extraction_min_months ?? '');
-      document.getElementById('os_max_target').value = String(onboarding.max_target_patterns ?? '');
-      document.getElementById('os_max_adjacent').value = String(onboarding.max_adjacent_patterns ?? '');
 
       const search = profile?.search_settings || {};
       document.getElementById('search_keywords').value = search.keywords || '';
-      
-      const savedLocations = new Set(search.locations || []);
-      document.querySelectorAll('#location_checkboxes input').forEach(cb => {
-        cb.checked = savedLocations.has(cb.value);
-      });
+      setSelectedLocations(search.locations || []);
     }
 
     function renderProfileSnapshot(profile) {
-      summaryText.textContent = profile.candidate_summary || 'Profile created.';
+      summaryHeading.textContent = isRebuildMode ? 'Updated Profile Preview' : 'Profile Preview';
+      summaryText.textContent = profile.candidate_summary || (isRebuildMode ? 'Profile refreshed.' : 'Profile created.');
       const targets = (profile.target_title_patterns || []).slice(0, 3);
       patternsText.textContent = targets.length ? `Target titles: ${targets.join(' | ')}` : 'Target titles will appear here after extraction.';
       summaryBox.classList.add('visible');
@@ -322,21 +641,18 @@
     async function createProfile() {
       const primary = document.getElementById('primary_cv').files[0];
       const searchPrefs = searchPreferencesPayload();
+      const onboardingSettings = onboardingSettingsPayload();
 
-      if (!primary) {
-        throw new Error('Choose your detailed CV first.');
-      }
-      if (!searchPrefs.keywords) {
-        throw new Error('Please enter at least one target keyword.');
-      }
-      if (searchPrefs.locations.length === 0) {
-        throw new Error('Please select at least one location.');
-      }
+      validatePrimaryFile(primary);
+      validateOnboardingSettings(onboardingSettings);
+      validateSearchPreferences(searchPrefs);
 
       if (isRebuildMode) {
-        const confirmed = window.confirm("FINAL CHECK: Are you absolutely sure you want to rebuild? \n\n" +
-                                         "This will overwrite your current machine-learned profile (strengths, capabilities, and evidence tiers) " +
-                                         "with new data from this document. Manual edits will be lost.");
+        const confirmed = window.confirm(
+          "Refresh your profile using this CV?\n\n" +
+          "We will replace the extracted profile content from your current CV, including summaries, capability rules, title patterns, and evidence tiers.\n\n" +
+          "Other workspace settings stay in place."
+        );
         if (!confirmed) return;
       }
 
@@ -347,8 +663,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files,
-          onboarding_settings: onboardingSettingsPayload(),
-          search_preferences: searchPreferencesPayload(),
+          onboarding_settings: onboardingSettings,
+          search_preferences: searchPrefs,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -356,7 +672,7 @@
         throw new Error(payload.error || 'Could not create profile');
       }
       renderProfileSnapshot(payload.profile || {});
-      showStatus(payload.message || 'Profile created.', 'ok');
+      showStatus(payload.message || (isRebuildMode ? 'Profile refreshed.' : 'Profile created.'), 'ok');
       setTimeout(() => {
         window.location.href = '/';
       }, 800);
@@ -372,10 +688,16 @@
     }
 
     if (isRebuildMode) {
-      document.title = 'Job Hunter Agent Rebuild';
-      document.getElementById('hero_title').textContent = 'Rebuild Your Profile';
-      document.getElementById('hero_copy').textContent = 'Answer the onboarding questions again, upload a fresh CV, and rebuild the profile from scratch.';
-      document.getElementById('create_profile').textContent = 'Rebuild Profile';
+      document.title = 'Job Hunter Agent Profile Refresh';
+      document.getElementById('hero_title').textContent = 'Refresh Your Profile';
+      document.getElementById('hero_copy').textContent = 'Upload an updated CV and we will refresh the extracted profile content while keeping the rest of your workspace in place.';
+      document.getElementById('form_title').textContent = 'Step 1. Refresh Settings';
+      document.getElementById('create_profile').textContent = 'Refresh Profile';
+      document.getElementById('side_title').textContent = 'What refresh updates';
+      document.getElementById('side_copy').textContent = 'Refreshing replaces the profile content generated from your CV.';
+      document.getElementById('side_steps_title').textContent = 'What stays the same';
+      document.getElementById('side_steps').textContent = 'Your wider workspace stays in place. We only refresh extracted profile fields such as summaries, capability rules, title patterns, and evidence tiers.';
+      summaryHeading.textContent = 'Updated Profile Preview';
     }
 
     document.getElementById('create_profile').addEventListener('click', async () => {
@@ -386,6 +708,25 @@
       }
     });
 
+    addLocationButton.addEventListener('click', () => addLocation(locationInput.value));
+    locationInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addLocation(locationInput.value);
+      }
+    });
+    locationQuickPicks.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-location]');
+      if (!button) return;
+      addLocation(button.getAttribute('data-location'));
+    });
+    locationSelected.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-location]');
+      if (!button) return;
+      removeLocation(button.getAttribute('data-remove-location'));
+    });
+
+    renderLocationSuggestions();
     loadProfileDefaults().catch(() => {});
   </script>
 </body>

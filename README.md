@@ -155,6 +155,7 @@ These are intended to stay local and ignored:
 - `data/application_materials.json`
 - `data/agent_settings.json`
 - `data/agent_state.json`
+- `data/llm_costs.jsonl`
 - `output/`
 
 ## LLM Notes
@@ -180,6 +181,10 @@ Recommended beta setup:
 5. Use Windows Task Scheduler for the real daily schedule
 
 ## Docs
+
+- application code lives in `job_hunter_agent/`
+- tests live in `tests/`
+- repo-root scripts like `local_server.py` and `source_connector.py` are compatibility launchers
 
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - [docs/OPERATIONS.md](docs/OPERATIONS.md)

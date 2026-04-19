@@ -1,6 +1,6 @@
-import re
+﻿import re
 from typing import Any
-from filters import extract_rejection_suggestions
+from job_hunter_agent.filters import extract_rejection_suggestions
 
 
 def _normalize_term(value: str) -> str:
@@ -209,7 +209,7 @@ def build_capability_tuning_suggestions(
         skill = str(entry["skill"] or normalized).strip()
 
         if current_rule:
-            # Already classified — skip regardless of level/fit.
+            # Already classified â€” skip regardless of level/fit.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
         if count >= 5:
@@ -460,3 +460,4 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
 
 def apply_skill_review_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
     return apply_capability_tuning_decisions(profile, decisions)
+

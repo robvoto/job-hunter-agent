@@ -1,5 +1,5 @@
-from cv_pipeline import parse_roles
-from profile_learning import _CURRENT_YEAR
+﻿from job_hunter_agent.cv_pipeline import parse_roles
+from job_hunter_agent.profile_learning import _CURRENT_YEAR
 
 
 def test_parse_roles_uses_configured_lookback_years_for_recency():
@@ -29,3 +29,4 @@ Acme Corp - Platform Lead ({_CURRENT_YEAR - 7} - {_CURRENT_YEAR - 7})
 
     assert roles
     assert roles[0]["is_recent"] is True
+

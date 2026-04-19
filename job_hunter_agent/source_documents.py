@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import copy
 import json
 import re
@@ -8,13 +8,14 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from cv_pipeline import run_cv_pipeline
-from llm_gate import client as llm_client
-from profile_learning import (
+from job_hunter_agent.cv_pipeline import run_cv_pipeline
+from job_hunter_agent.llm_gate import client as llm_client
+from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
+from job_hunter_agent.profile_learning import (
     extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
     repair_text,
 )
-from profile_store import (
+from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
     build_evidence_tiers_from_sections,
@@ -23,9 +24,7 @@ from profile_store import (
 )
 
 
-ROOT_DIR = Path(__file__).resolve().parent
-DATA_DIR = ROOT_DIR / "data"
-OUTPUT_DIR = ROOT_DIR / "output"
+ROOT_DIR = REPO_ROOT
 REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
 APPLICATION_INPUTS_DIR = DATA_DIR / "application_inputs"
@@ -325,7 +324,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
 
-    # Title patterns — always re-extracted during onboarding (no guard needed here)
+    # Title patterns â€” always re-extracted during onboarding (no guard needed here)
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
         if suggestion.get("target_title_patterns"):
@@ -485,3 +484,4 @@ def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], ex
 
     combined_text = "\n\n".join(combined_sections).strip()
     return _build_profile_import_result(imported_sources, missing_sources, combined_text, source_sections)
+

@@ -1,4 +1,4 @@
-"""LinkedIn source connector using python-jobspy.
+﻿"""LinkedIn source connector using python-jobspy.
 
 Scrapes LinkedIn public job listings (no login required) via the jobspy library.
 Returns normalized records in the same shape as the SEEK connector so the shared
@@ -9,12 +9,12 @@ import re
 import sys
 from typing import List, Set
 
-from filters import passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules, passes_title_filters
-from llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
-from profile_store import get_search_settings
-from review_insights import extract_detected_skills
-from scraper_base import BaseJobScraper, normalize_jobspy_record
-from utils import extract_salary, extract_work_mode
+from job_hunter_agent.filters import passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules, passes_title_filters
+from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
+from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.review_insights import extract_detected_skills
+from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
+from job_hunter_agent.utils import extract_salary, extract_work_mode
 
 
 class LinkedInScraper(BaseJobScraper):
@@ -35,7 +35,7 @@ class LinkedInScraper(BaseJobScraper):
         # Lazy import to avoid circular dependency with source_connector.py
         # (source_connector imports LinkedInScraper; scraper_linkedin needs
         # enrichment functions defined in source_connector)
-        from source_connector import (  # noqa: PLC0415
+        from job_hunter_agent.source_connector import (  # noqa: PLC0415
             MAX_LLM_CHARS,
             MIN_TRUSTED_DESCRIPTION_LENGTH,
             TRUSTED_DESCRIPTION_SOURCES,
@@ -283,7 +283,7 @@ class LinkedInScraper(BaseJobScraper):
                 )
 
         print(
-            f"\n[LinkedIn] Done — kept {len(kept_records)} / {len(audit_rows)} total records"
+            f"\n[LinkedIn] Done â€” kept {len(kept_records)} / {len(audit_rows)} total records"
         )
         return kept_records, audit_rows, skill_observations
 
@@ -335,12 +335,44 @@ class LinkedInScraper(BaseJobScraper):
         return scrape_jobs(**kwargs)
 
 
+_LOCATION_NORMALIZATION_MAP = {
+    "nsw": "New South Wales, Australia",
+    "new south wales": "New South Wales, Australia",
+    "vic": "Victoria, Australia",
+    "victoria": "Victoria, Australia",
+    "qld": "Queensland, Australia",
+    "queensland": "Queensland, Australia",
+    "wa": "Western Australia, Australia",
+    "western australia": "Western Australia, Australia",
+    "sa": "South Australia, Australia",
+    "south australia": "South Australia, Australia",
+    "tas": "Tasmania, Australia",
+    "tasmania": "Tasmania, Australia",
+    "act": "Australian Capital Territory, Australia",
+    "australian capital territory": "Australian Capital Territory, Australia",
+    "nt": "Northern Territory, Australia",
+    "northern territory": "Northern Territory, Australia",
+    "sydney nsw": "Sydney, Australia",
+    "melbourne vic": "Melbourne, Australia",
+    "brisbane qld": "Brisbane, Australia",
+    "perth wa": "Perth, Australia",
+    "adelaide sa": "Adelaide, Australia",
+    "hobart tas": "Hobart, Australia",
+    "darwin nt": "Darwin, Australia",
+    "canberra act": "Canberra, Australia",
+}
+
+
 def _normalize_location_for_jobspy(seek_location: str) -> str:
     """Convert source-style location strings to jobspy-friendly city strings."""
     text = re.sub(r"^all\s+", "", seek_location.strip(), flags=re.IGNORECASE)
+    normalized_key = re.sub(r"\s+", " ", text.lower()).strip()
+    if normalized_key in _LOCATION_NORMALIZATION_MAP:
+        return _LOCATION_NORMALIZATION_MAP[normalized_key]
     # Strip a trailing region abbreviation when present.
     text = re.sub(r"\s+[A-Z]{2,3}$", "", text.strip())
     text = text.strip()
     if text and not text.lower().endswith("australia"):
         text = f"{text}, Australia"
     return text or seek_location
+

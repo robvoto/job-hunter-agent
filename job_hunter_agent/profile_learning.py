@@ -1,4 +1,4 @@
-"""Profile learning helpers.
+﻿"""Profile learning helpers.
 
 Main goals:
 - repair imported text
@@ -13,24 +13,23 @@ Notes:
 from collections import Counter, defaultdict
 from datetime import datetime
 import re
-from pathlib import Path
 from typing import Any
 
-from profile_store import DEFAULT_ONBOARDING_SETTINGS
+from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
+from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
 
 
-ROOT_DIR = Path(__file__).resolve().parent
-DATA_DIR = ROOT_DIR / "data"
+ROOT_DIR = REPO_ROOT
 
 
 def repair_text(text: str) -> str:
     if not text:
         return ""
     repaired = text.replace("\r\n", "\n")
-    if "â" in repaired or "Ã" in repaired:
+    if "Ã¢" in repaired or "Ãƒ" in repaired:
         try:
             candidate = repaired.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-            if candidate.count("â") < repaired.count("â"):
+            if candidate.count("Ã¢") < repaired.count("Ã¢"):
                 repaired = candidate
         except Exception:
             pass
@@ -188,7 +187,7 @@ def _section_kind(section_name: str) -> str:
 
 def _extract_year_range(text: str) -> dict[str, Any] | None:
     match = re.search(
-        r"(?P<start>(?:19|20)\d{2})\s*(?:-|–|to|/)\s*(?P<end>present|current|now|(?:19|20)\d{2})",
+        r"(?P<start>(?:19|20)\d{2})\s*(?:-|â€“|to|/)\s*(?P<end>present|current|now|(?:19|20)\d{2})",
         str(text or ""),
         flags=re.IGNORECASE,
     )
@@ -595,7 +594,7 @@ def _apply_llm_capability_names(capabilities: list[dict[str, Any]]) -> list[dict
     if not capabilities:
         return []
     try:
-        from llm_gate import name_capability_clusters
+        from job_hunter_agent.llm_gate import name_capability_clusters
 
         labels = name_capability_clusters(capabilities)
     except Exception:
@@ -824,3 +823,4 @@ def merge_capability_rules(existing: list[dict[str, Any]], learned: list[dict[st
         if name:
             merged[name] = dict(rule)
     return list(merged.values())
+

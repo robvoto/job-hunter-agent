@@ -1,7 +1,7 @@
-import importlib
+﻿import importlib
 
-import profile_learning
-from profile_learning import (
+from job_hunter_agent import profile_learning
+from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     _collect_phrase_stats,
     _parse_role_entries,
@@ -106,7 +106,7 @@ Acme Bank
 
 
 def test_llm_capability_naming_only_renames_selected_clusters():
-    llm_gate = importlib.import_module("llm_gate")
+    llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
     original = llm_gate.name_capability_clusters
 
     try:
@@ -126,3 +126,4 @@ def test_llm_capability_naming_only_renames_selected_clusters():
 
     assert renamed[0]["name"] == "process modelling"
     assert "process maps" in renamed[0]["aliases"]
+

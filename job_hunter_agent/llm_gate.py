@@ -1,4 +1,4 @@
-"""LLM fit-decision gateway.
+﻿"""LLM fit-decision gateway.
 
 Main goals:
 - build the compact candidate context sent to the LLM
@@ -19,12 +19,11 @@ from typing import Any, Dict
 
 from openai import OpenAI
 
-from agent_settings import load_agent_settings
-from profile_learning import _resolve_extraction_lookback_years, _resolve_onboarding_int
-from profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
+from job_hunter_agent.agent_settings import load_agent_settings
+from job_hunter_agent.profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
 
-# Token budgets — keep fit decisions tight; extraction can be generous
-MAX_TOKENS_FIT_DECISION = 20
+# Token budgets â€” keep fit decisions tight; extraction can be generous
+MAX_TOKENS_FIT_DECISION = 50
 MAX_TOKENS_CV_EXTRACTION = 500
 
 # Test-mode flag: mirrors the same argv check in source_connector
@@ -33,7 +32,7 @@ _TEST_SCRAPE_MODE = "--test-scrape-mode" in sys.argv
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
 
-# ── Cost logging ──────────────────────────────────────────────────────────────
+# â”€â”€ Cost logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _LLM_COSTS_PATH = DATA_DIR / "llm_costs.jsonl"
 _PRICING_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
@@ -78,7 +77,7 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
 
 
 def _profile_fingerprint() -> str:
-    """Cheap fingerprint of the profile file — mtime + size, no read/parse.
+    """Cheap fingerprint of the profile file â€” mtime + size, no read/parse.
     Cached for the lifetime of the process so repeated cache-key lookups in a
     single scraping run are O(1) after the first call.
     """
@@ -252,17 +251,17 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
     or empty lists if LLM is unavailable or extraction fails.
     """
     if client is None:
-        print("[TITLE_PATTERNS] Skipped — LLM client is None (no OPENAI_API_KEY?)")
+        print("[TITLE_PATTERNS] Skipped â€” LLM client is None (no OPENAI_API_KEY?)")
         return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
     if not str(cv_text or "").strip():
-        print("[TITLE_PATTERNS] Skipped — cv_text is empty")
+        print("[TITLE_PATTERNS] Skipped â€” cv_text is empty")
         return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
     settings = onboarding_settings or {}
-    lookback_years = _resolve_extraction_lookback_years(settings)
-    min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
-    max_target = _resolve_onboarding_int(settings, "max_target_patterns")
-    max_adjacent = _resolve_onboarding_int(settings, "max_adjacent_patterns")
+    lookback_years = max(1, int(settings.get("title_extraction_lookback_years") or 8))
+    min_months = max(1, int(settings.get("title_extraction_min_months") or 6))
+    max_target = max(1, int(settings.get("max_target_patterns") or 8))
+    max_adjacent = max(1, int(settings.get("max_adjacent_patterns") or 6))
 
     print(f"[TITLE_PATTERNS] Calling LLM with {len(cv_text)} chars of CV text (lookback={lookback_years}y, min={min_months}mo, max_target={max_target}, max_adjacent={max_adjacent})")
     prompt = (
@@ -275,7 +274,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         "Rules for target_title_patterns:\n"
         f"- Only include roles the candidate actually held for more than {min_months} months.\n"
         f"- Only include roles that ended within the last {lookback_years} years (today is 2026-04-16).\n"
-        "- Base patterns on real job titles from the CV work history — not skills, tools, or certifications.\n"
+        "- Base patterns on real job titles from the CV work history â€” not skills, tools, or certifications.\n"
         "- If uncertain whether a role qualifies, exclude it. Fewer accurate patterns beat many noisy ones.\n\n"
         "Rules for adjacent_title_patterns:\n"
         "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
@@ -415,7 +414,7 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def get_cost_summary() -> dict[str, Any]:
-    """Read llm_costs.jsonl and return totals by purpose — useful for debugging."""
+    """Read llm_costs.jsonl and return totals by purpose â€” useful for debugging."""
     totals: dict[str, dict[str, Any]] = {}
     try:
         with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:
@@ -432,3 +431,4 @@ def get_cost_summary() -> dict[str, Any]:
         pass
     grand = sum(v["cost_usd"] for v in totals.values())
     return {"by_purpose": totals, "grand_total_usd": round(grand, 6)}
+

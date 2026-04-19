@@ -25,6 +25,7 @@ data/application_inputs/
 data/application_materials.json
 data/agent_settings.json
 data/agent_state.json
+data/llm_costs.jsonl
 TODO.txt
 appData-dontupload.txt
 # ---- OS / IDE ----
