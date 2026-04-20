@@ -638,6 +638,35 @@
       summaryBox.classList.add('visible');
     }
 
+    function buildCompletionRedirectState(payload, searchPrefs) {
+      const profile = payload?.profile || {};
+      const targets = Array.isArray(profile.target_title_patterns)
+        ? profile.target_title_patterns.slice(0, 4).map(value => String(value || '').trim()).filter(Boolean)
+        : [];
+      const locations = Array.isArray(searchPrefs?.locations)
+        ? searchPrefs.locations.map(value => String(value || '').trim()).filter(Boolean)
+        : [];
+      return {
+        kind: isRebuildMode ? 'profile-refresh' : 'onboarding-complete',
+        title: isRebuildMode ? 'Profile refreshed' : 'Profile created',
+        message: payload?.message || (isRebuildMode ? 'Your profile was refreshed from the uploaded CV.' : 'Your profile was created from the uploaded CV.'),
+        summary: String(profile.candidate_summary || '').trim(),
+        target_titles: targets,
+        search_keywords: String(searchPrefs?.keywords || '').trim(),
+        search_locations: locations,
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    function storeCompletionRedirectState(payload, searchPrefs) {
+      try {
+        const redirectState = buildCompletionRedirectState(payload, searchPrefs);
+        window.sessionStorage.setItem('jobHunter.onboardingWelcome', JSON.stringify(redirectState));
+      } catch (error) {
+        console.warn('Could not store onboarding redirect state.', error);
+      }
+    }
+
     async function createProfile() {
       const primary = document.getElementById('primary_cv').files[0];
       const searchPrefs = searchPreferencesPayload();
@@ -672,6 +701,7 @@
         throw new Error(payload.error || 'Could not create profile');
       }
       renderProfileSnapshot(payload.profile || {});
+      storeCompletionRedirectState(payload, searchPrefs);
       showStatus(payload.message || (isRebuildMode ? 'Profile refreshed.' : 'Profile created.'), 'ok');
       setTimeout(() => {
         window.location.href = '/';

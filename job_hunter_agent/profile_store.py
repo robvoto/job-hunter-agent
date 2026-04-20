@@ -222,7 +222,7 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
 def load_profile() -> dict[str, Any]:
     ensure_profile_exists()
     try:
-        data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+        data = json.loads(PROFILE_PATH.read_text(encoding="utf-8-sig"))
         if isinstance(data, dict):
             merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), data)
             merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))

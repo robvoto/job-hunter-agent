@@ -456,8 +456,3 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
 
     profile["capability_profile_rules"] = capability_rules
     return profile
-
-
-def apply_skill_review_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
-    return apply_capability_tuning_decisions(profile, decisions)
-

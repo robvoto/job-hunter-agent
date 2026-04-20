@@ -13,7 +13,7 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 
 ## What Works Now
 
-- guided onboarding at `http://127.0.0.1:8765/start`
+- guided onboarding at `http://127.0.0.1:8765/start` (supports `.docx` and plain text)
 - local admin console at `http://127.0.0.1:8765/admin`
 - local dashboard at `http://127.0.0.1:8765/dashboard`
 - persistent local profile in `data/profile.json`
@@ -122,6 +122,18 @@ Then open:
 - admin: `http://127.0.0.1:8765/admin`
 - dashboard: `http://127.0.0.1:8765/dashboard`
 - demo/showcase: `http://127.0.0.1:8765/demo`
+
+## Tech Stack
+
+- **Core**: Python 3.11+
+- **Automation**: Playwright (SEEK scraping)
+- **Multi-Source**: `python-jobspy` (LinkedIn)
+- **Intelligence**: OpenAI API (GPT-4o / GPT-4o-mini)
+- **Parsing**: `python-docx` and `pandas`
+- **UI**: Python `http.server` with custom HTML/JS templates
+- **Environment**: `python-dotenv`
+
+Logic and core modules reside in the `job_hunter_agent/` package. Root-level `.py` files are compatibility launchers for easy CLI access.
 
 ## Important Files
 

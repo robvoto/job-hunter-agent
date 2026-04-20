@@ -1,4 +1,4 @@
-﻿import base64
+import base64
 import copy
 import json
 import re
@@ -52,9 +52,7 @@ ONBOARDING_RESET_FIELDS = (
 DEFAULT_SOURCE_MATERIALS = {
     "profile_sources": [],
     "cv_variants": [],
-}
-
-STAR_LABEL_KEYWORDS = ("star", "achievement", "example", "selection criteria", "impact")
+} 
 
 UPLOAD_SLOT_MAP = {
     "primary cv": "primary_cv",
@@ -327,13 +325,9 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Title patterns â€” always re-extracted during onboarding (no guard needed here)
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
-        if suggestion.get("target_title_patterns"):
-            patch["target_title_patterns"] = suggestion["target_title_patterns"]
-            if suggestion.get("adjacent_title_patterns"):
-                patch["adjacent_title_patterns"] = suggestion["adjacent_title_patterns"]
-            print(f"[TITLE_PATTERNS] Saved {len(suggestion['target_title_patterns'])} target and {len(suggestion.get('adjacent_title_patterns', []))} adjacent patterns")
-        else:
-            print("[TITLE_PATTERNS] Deterministic parser returned no target patterns")
+        patch["target_title_patterns"] = suggestion.get("target_title_patterns") or []
+        patch["adjacent_title_patterns"] = suggestion.get("adjacent_title_patterns") or []
+        print(f"[TITLE_PATTERNS] Extracted {len(patch['target_title_patterns'])} target and {len(patch['adjacent_title_patterns'])} adjacent patterns")
         if suggestion.get("suggested_search_keywords"):
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
@@ -440,48 +434,4 @@ def build_llm_profile_brief(
         lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:10]))
 
     return "\n".join(lines).strip()[:3000]
-
-
-def import_uploaded_documents_to_profile(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:
-    imported_sources: list[dict[str, Any]] = []
-    missing_sources: list[str] = []
-    combined_sections: list[str] = []
-    source_sections: list[dict[str, str]] = []
-
-    for item in files_payload or []:
-        if not isinstance(item, dict):
-            continue
-        label = str(item.get("label") or item.get("filename") or "Source Document").strip()
-        filename = str(item.get("filename") or "").strip()
-        content_base64 = str(item.get("content_base64") or "").strip()
-        if not filename or not content_base64:
-            continue
-        try:
-            raw_bytes = base64.b64decode(content_base64)
-            suffix = Path(filename).suffix.lower()
-            if suffix == ".docx":
-                text = repair_text(_read_docx_bytes(raw_bytes))
-            elif suffix in {".txt", ".md"}:
-                text = repair_text(raw_bytes.decode("utf-8", errors="ignore"))
-            else:
-                raise ValueError(f"Unsupported file type: {suffix}")
-        except Exception:
-            missing_sources.append(filename)
-            continue
-        if not text:
-            missing_sources.append(filename)
-            continue
-        imported_sources.append({
-            "label": label,
-            "path": filename,
-            "characters": len(text),
-        })
-        combined_sections.append(f"## {label}\n{text}")
-        source_sections.append({"label": label, "text": text})
-
-    if not combined_sections:
-        raise ValueError("No readable onboarding documents were provided.")
-
-    combined_text = "\n\n".join(combined_sections).strip()
-    return _build_profile_import_result(imported_sources, missing_sources, combined_text, source_sections)
-
+ 

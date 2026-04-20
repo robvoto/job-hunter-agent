@@ -138,3 +138,48 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
         "max_adjacent_patterns": 4,
     }
 
+
+def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
+    sanitized = local_server.AdminHandler._sanitize_agent_settings_payload(
+        {
+            "schedule": {
+                "daily_time_local": "09:45",
+                "loop_sleep_seconds": 30,
+            }
+        }
+    )
+
+    assert sanitized["schedule"] == {
+        "daily_time_local": "09:45",
+        "loop_sleep_seconds": 60,
+    }
+
+    public_payload = local_server.AdminHandler._public_agent_settings_payload(
+        {
+            "schedule": {
+                "daily_time_local": "09:45",
+                "loop_sleep_seconds": 120,
+            }
+        }
+    )
+
+    assert public_payload["schedule"] == {
+        "daily_time_local": "09:45",
+        "loop_sleep_seconds": 120,
+    }
+
+
+def test_agent_settings_schedule_payload_rejects_bad_time_format():
+    try:
+        local_server.AdminHandler._sanitize_agent_settings_payload(
+            {
+                "schedule": {
+                    "daily_time_local": "9:45 am",
+                }
+            }
+        )
+    except ValueError as exc:
+        assert "HH:MM" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for invalid schedule time")
+

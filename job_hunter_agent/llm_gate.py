@@ -1,4 +1,4 @@
-﻿"""LLM fit-decision gateway.
+"""LLM fit-decision gateway.
 
 Main goals:
 - build the compact candidate context sent to the LLM
@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from job_hunter_agent.agent_settings import load_agent_settings
+from job_hunter_agent.profile_learning import _resolve_extraction_lookback_years, _resolve_onboarding_int
 from job_hunter_agent.profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
 
 load_dotenv()
@@ -35,7 +36,6 @@ _TEST_SCRAPE_MODE = "--test-scrape-mode" in sys.argv
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
 
-# â”€â”€ Cost logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _LLM_COSTS_PATH = DATA_DIR / "llm_costs.jsonl"
 _PRICING_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
@@ -261,10 +261,11 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
     settings = onboarding_settings or {}
-    lookback_years = max(1, int(settings.get("title_extraction_lookback_years") or 8))
-    min_months = max(1, int(settings.get("title_extraction_min_months") or 6))
-    max_target = max(1, int(settings.get("max_target_patterns") or 8))
-    max_adjacent = max(1, int(settings.get("max_adjacent_patterns") or 6))
+    lookback_years = _resolve_extraction_lookback_years(settings)
+    min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
+    max_target = _resolve_onboarding_int(settings, "max_target_patterns")
+    max_adjacent = _resolve_onboarding_int(settings, "max_adjacent_patterns")
+    today_label = datetime.now().date().isoformat()
 
     print(f"[TITLE_PATTERNS] Calling LLM with {len(cv_text)} chars of CV text (lookback={lookback_years}y, min={min_months}mo, max_target={max_target}, max_adjacent={max_adjacent})")
     prompt = (
@@ -276,7 +277,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         "- \"suggested_search_keywords\": broad search terms. 2-4 keywords.\n\n"
         "Rules for target_title_patterns:\n"
         f"- Only include roles the candidate actually held for more than {min_months} months.\n"
-        f"- Only include roles that ended within the last {lookback_years} years (today is 2026-04-16).\n"
+        f"- Only include roles that ended within the last {lookback_years} years (today is {today_label}).\n"
         "- Base patterns on real job titles from the CV work history â€” not skills, tools, or certifications.\n"
         "- If uncertain whether a role qualifies, exclude it. Fewer accurate patterns beat many noisy ones.\n\n"
         "Rules for adjacent_title_patterns:\n"

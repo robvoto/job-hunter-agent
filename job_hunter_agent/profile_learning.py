@@ -1,4 +1,4 @@
-﻿"""Profile learning helpers.
+"""Profile learning helpers.
 
 Main goals:
 - repair imported text
@@ -77,20 +77,6 @@ def _find_rating(text: str) -> float | None:
     return float(match.group(1))
 
 
-def _level_from_rating(rating: float | None) -> str:
-    if rating is None:
-        return "basic"
-    if rating >= 8.0:
-        return "strong"
-    if rating >= 6.0:
-        return "working"
-    if rating >= 4.5:
-        return "basic"
-    if rating > 0:
-        return "low"
-    return "none"
-
-
 def _extract_section(text: str, header: str) -> str:
     pattern = rf"##\s+{re.escape(header)}\s*\n(.*?)(?=\n##\s+|\Z)"
     match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
@@ -102,10 +88,7 @@ def _extract_subsection(text: str, header: str) -> str:
     match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
     return match.group(1).strip() if match else ""
 
-
-def _extract_named_section(text: str, header: str) -> str:
-    return _extract_subsection(text, header) or _extract_section(text, header)
-
+ 
 
 def _extract_bullets(text: str) -> list[str]:
     return [match.strip() for match in re.findall(r"^\*\s+(.+)$", text, flags=re.MULTILINE)]
@@ -118,6 +101,7 @@ def _clean_sentence(text: str) -> str:
 _VALID_LEVELS = {"strong", "working", "basic", "low", "none"}
 _VALID_FITS = {"core", "supporting", "contextual", "avoid"}
 _CURRENT_YEAR = datetime.now().year
+_CURRENT_MONTH = datetime.now().month
 _ROLE_SECTION_HINTS = ("experience", "employment", "career", "work history", "professional")
 _SKILL_SECTION_HINTS = ("skill", "capabilit", "tool", "technology", "competenc", "summary", "profile")
 _IGNORE_SECTION_HINTS = ("education", "certification", "certificate", "training", "award")
@@ -147,6 +131,60 @@ _EMPLOYER_MARKERS = {
     "pty", "ltd", "llc", "inc", "corp", "corporation", "company", "limited", "holdings", "partners",
     "association", "authority", "commission", "office", "hospital", "health", "care", "trust",
 }
+_TITLE_PATTERN_ANCHOR_NOUNS = {
+    "analyst",
+    "manager",
+    "coordinator",
+    "consultant",
+    "specialist",
+    "developer",
+    "engineer",
+    "architect",
+    "officer",
+    "director",
+    "administrator",
+    "lead",
+    "master",
+}
+_MONTH_NAME_TO_NUMBER = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+_MONTH_TOKEN_PATTERN = (
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+    r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|"
+    r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
+)
+_DATE_RANGE_PATTERN = re.compile(
+    rf"(?:(?P<start_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
+    rf"(?P<start_year>(?:19|20)\d{{2}})"
+    rf"\s*(?:-|–|—|â€“|to|/)\s*"
+    rf"(?:(?P<end_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
+    rf"(?:(?P<end_year>(?:19|20)\d{{2}})|(?P<end_relative>present|current|now|ongoing))",
+    flags=re.IGNORECASE,
+)
 
 
 def _clean_line(text: str) -> str:
@@ -186,21 +224,26 @@ def _section_kind(section_name: str) -> str:
 
 
 def _extract_year_range(text: str) -> dict[str, Any] | None:
-    match = re.search(
-        r"(?P<start>(?:19|20)\d{2})\s*(?:-|â€“|to|/)\s*(?P<end>present|current|now|(?:19|20)\d{2})",
-        str(text or ""),
-        flags=re.IGNORECASE,
-    )
+    match = _DATE_RANGE_PATTERN.search(str(text or ""))
     if not match:
         return None
-    start_year = int(match.group("start"))
-    raw_end = match.group("end").lower()
-    is_current = raw_end in {"present", "current", "now"}
-    end_year = _CURRENT_YEAR if is_current else int(raw_end)
-    duration_months = max(((end_year - start_year) + 1) * 12, 12)
+    start_year = int(match.group("start_year"))
+    start_month_name = str(match.group("start_month") or "").strip().lower()
+    end_month_name = str(match.group("end_month") or "").strip().lower()
+    raw_end_relative = str(match.group("end_relative") or "").strip().lower()
+    is_current = raw_end_relative in {"present", "current", "now", "ongoing"}
+    end_year = _CURRENT_YEAR if is_current else int(match.group("end_year"))
+    start_month = _MONTH_NAME_TO_NUMBER.get(start_month_name, 1)
+    if is_current:
+        end_month = _CURRENT_MONTH
+    else:
+        end_month = _MONTH_NAME_TO_NUMBER.get(end_month_name, 12)
+    duration_months = max(((end_year - start_year) * 12) + (end_month - start_month) + 1, 1)
     return {
         "start_year": start_year,
+        "start_month": start_month,
         "end_year": end_year,
+        "end_month": end_month,
         "is_current": is_current,
         "duration_months": duration_months,
     }
@@ -300,7 +343,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
     i = 0
 
     inline_role_re = re.compile(
-        r"^(?P<employer>.+?)\s*-\s*(?P<title>.+?)\s*\((?P<dates>(?:19|20)\d{2}.*?(?:present|current|now|(?:19|20)\d{2}))\)\s*$",
+        rf"^(?P<employer>.+?)\s*-\s*(?P<title>.+?)\s*\((?P<dates>.*?(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}.*?(?:present|current|now|ongoing|(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}))\)\s*$",
         flags=re.IGNORECASE,
     )
 
@@ -400,18 +443,73 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         deduped.append(role)
     return deduped
 
-
-def _simplify_title(title: str) -> str:
-    tokens = [_normalize_token(token) for token in _clean_line(title).split()]
-    while tokens and tokens[0] in _TITLE_MODIFIERS:
-        tokens.pop(0)
-    simplified = " ".join(token for token in tokens if token)
-    return simplified.strip()
-
+ 
 
 def _make_title_pattern(title: str) -> str:
     normalized = _clean_line(title).lower()
     return rf"\b{re.escape(normalized)}\b" if normalized else ""
+
+
+def _contains_role_noun(text: str) -> bool:
+    tokens = [_normalize_token(token) for token in _clean_line(text).split()]
+    return any(token in _GENERIC_ROLE_NOUNS for token in tokens)
+
+
+def _title_pattern_candidates(title: str) -> list[str]:
+    cleaned = _clean_line(title)
+    if not cleaned:
+        return []
+
+    seen: set[str] = set()
+    candidates: list[str] = []
+
+    def push(value: str) -> None:
+        candidate = _clean_line(value)
+        normalized = _normalize_phrase(candidate)
+        if not candidate or not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        candidates.append(candidate)
+
+    base_title = _clean_line(re.sub(r"\([^)]*\)", "", cleaned))
+    if not base_title:
+        return []
+
+    components: list[str] = [base_title]
+    if " - " in base_title:
+        left, right = [part.strip() for part in base_title.split(" - ", 1)]
+        if left and right and not _contains_role_noun(right):
+            components.append(left)
+
+    split_components: list[str] = []
+    for component in components:
+        if "/" in component:
+            split_components.extend(
+                _clean_line(part)
+                for part in re.split(r"\s*/\s*", component)
+                if _clean_line(part)
+            )
+            continue
+        split_components.append(component)
+
+    for component in split_components:
+        tokens = [_normalize_token(token) for token in component.split()]
+        tokens = [token for token in tokens if token and token != "&"]
+        if len(tokens) == 1 and tokens[0] in _GENERIC_ROLE_NOUNS:
+            continue
+
+        for index, token in enumerate(tokens):
+            if token not in _TITLE_PATTERN_ANCHOR_NOUNS:
+                continue
+            if index >= 1:
+                push(" ".join(tokens[index - 1:index + 1]))
+            if index >= 2 and tokens[index - 2] in _TITLE_MODIFIERS:
+                push(" ".join(tokens[index - 2:index + 1]))
+
+        if len(tokens) <= 3 and any(token in _TITLE_PATTERN_ANCHOR_NOUNS for token in tokens):
+            push(" ".join(tokens))
+
+    return candidates
 
 
 def _is_quality_phrase(phrase: str) -> bool:
@@ -763,24 +861,20 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
         title = _clean_line(role.get("title", ""))
         if not title:
             continue
-        simplified = _simplify_title(title)
-        normalized_title = _normalize_phrase(title)
+        pattern_candidates = _title_pattern_candidates(title)
         end_year = int(role.get("end_year", 0) or 0)
         duration_months = int(role.get("duration_months", 0) or 0)
         in_lookback = end_year >= recent_cutoff
 
         if not in_lookback:
+            # STRICT LOOKBACK: Ignore roles that fall outside the extraction window.
             continue
 
         if duration_months >= min_months:
-            target_titles.append(title)
-            if simplified and simplified != normalized_title and not _is_generic_title_phrase(simplified):
-                target_titles.append(simplified)
-            suggested_keywords.append(simplified if simplified and not _is_generic_title_phrase(simplified) else normalized_title)
+            target_titles.extend(pattern_candidates or [title])
+            suggested_keywords.extend(pattern_candidates[:2] or [_normalize_phrase(title)])
         else:
-            adjacent_titles.append(title)
-            if simplified and not _is_generic_title_phrase(simplified):
-                adjacent_titles.append(simplified)
+            adjacent_titles.extend(pattern_candidates or [title])
 
     def _dedupe_patterns(titles: list[str], limit: int) -> list[str]:
         patterns: list[str] = []
@@ -823,4 +917,3 @@ def merge_capability_rules(existing: list[dict[str, Any]], learned: list[dict[st
         if name:
             merged[name] = dict(rule)
     return list(merged.values())
-

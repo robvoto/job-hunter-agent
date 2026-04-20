@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 import threading
 from datetime import datetime
@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from job_hunter_agent.agent_settings import load_agent_settings, save_agent_settings
+from job_hunter_agent.agent_settings import DEFAULT_AGENT_SETTINGS, load_agent_settings, save_agent_settings
 from job_hunter_agent.config import OUTPUT_HTML
 from job_hunter_agent.filters import build_title_block_rule, extract_rejection_suggestions, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
@@ -381,9 +381,10 @@ class AdminHandler(BaseHTTPRequestHandler):
     def _sanitize_agent_settings_payload(payload: dict) -> dict:
         telegram = payload.get("telegram", {}) if isinstance(payload, dict) else {}
         llm = payload.get("llm", {}) if isinstance(payload, dict) else {}
+        schedule_payload = payload.get("schedule") if isinstance(payload, dict) else None
         _allowed_models = {"gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o"}
         model = str(llm.get("model") or "").strip()
-        return {
+        sanitized = {
             "telegram": {
                 "enabled": bool(telegram.get("enabled", False)),
                 "bot_token": str(telegram.get("bot_token") or "").strip(),
@@ -394,13 +395,52 @@ class AdminHandler(BaseHTTPRequestHandler):
                 "model": model if model in _allowed_models else "gpt-4.1-mini",
             },
         }
+        if isinstance(schedule_payload, dict):
+            daily_time_local = str(
+                schedule_payload.get("daily_time_local")
+                or DEFAULT_AGENT_SETTINGS["schedule"]["daily_time_local"]
+            ).strip()
+            if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", daily_time_local):
+                raise ValueError("Schedule time must be in HH:MM 24-hour format.")
+            try:
+                loop_sleep_seconds = int(
+                    schedule_payload.get(
+                        "loop_sleep_seconds",
+                        DEFAULT_AGENT_SETTINGS["schedule"]["loop_sleep_seconds"],
+                    )
+                    or DEFAULT_AGENT_SETTINGS["schedule"]["loop_sleep_seconds"]
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Schedule polling interval must be a whole number of seconds.") from exc
+            sanitized["schedule"] = {
+                "daily_time_local": daily_time_local,
+                "loop_sleep_seconds": max(60, loop_sleep_seconds),
+            }
+        return sanitized
 
     @staticmethod
     def _public_agent_settings_payload(settings: dict) -> dict:
         telegram = settings.get("telegram", {}) if isinstance(settings, dict) else {}
         llm = settings.get("llm", {}) if isinstance(settings, dict) else {}
+        schedule = settings.get("schedule", {}) if isinstance(settings, dict) else {}
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
+            "schedule": {
+                "daily_time_local": str(
+                    schedule.get("daily_time_local")
+                    or DEFAULT_AGENT_SETTINGS["schedule"]["daily_time_local"]
+                ).strip(),
+                "loop_sleep_seconds": max(
+                    60,
+                    int(
+                        schedule.get(
+                            "loop_sleep_seconds",
+                            DEFAULT_AGENT_SETTINGS["schedule"]["loop_sleep_seconds"],
+                        )
+                        or DEFAULT_AGENT_SETTINGS["schedule"]["loop_sleep_seconds"]
+                    ),
+                ),
+            },
             "telegram": {
                 "enabled": bool(telegram.get("enabled", False)),
                 "bot_token_present": bool(str(telegram.get("bot_token") or "").strip()),
@@ -1022,6 +1062,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     telegram_patch.pop("bot_token", None)
                 current.setdefault("telegram", {}).update(telegram_patch)
                 current.setdefault("llm", {}).update(patch.get("llm", {}))
+                current.setdefault("schedule", {}).update(patch.get("schedule", {}))
                 updated = save_agent_settings(current)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
@@ -1150,9 +1191,10 @@ class AdminHandler(BaseHTTPRequestHandler):
                 keyword = str(payload.get("search_keyword") or "").strip()
                 if not target:
                     raise ValueError("target_title_patterns must not be empty")
-                profile_patch: dict = {"target_title_patterns": target}
-                if adjacent:
-                    profile_patch["adjacent_title_patterns"] = adjacent
+                profile_patch: dict = {
+                    "target_title_patterns": target,
+                    "adjacent_title_patterns": adjacent
+                }
                 if keyword:
                     current = load_profile()
                     search_settings = dict(current.get("search_settings", {}))
@@ -1421,4 +1463,3 @@ if __name__ == "__main__":
     print(f"Settings:   http://{HOST}:{PORT}/settings")
     print(f"Onboarding: http://{HOST}:{PORT}/start")
     server.serve_forever()
-

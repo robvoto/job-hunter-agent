@@ -110,11 +110,13 @@ Do not move the project back to pane-based scraping unless there is a very stron
 
 | Path | Purpose |
 |------|---------|
-| `source_connector.py` | Main job-source connector and dashboard builder |
+| `job_hunter_agent/` | Core package containing application logic |
+| `source_connector.py` | Compatibility launcher for job collection and dashboard rebuilds |
 | `filters.py` | Deterministic title and content filtering |
 | `llm_gate.py` | Optional constrained LLM decision step |
-| `local_server.py` | Local web server for admin, dashboard, and API endpoints |
-| `agent_runner.py` | Local daily agent runner for collection, digest, and notification delivery |
+| `local_server.py` | Launcher for the local web server (Admin, Dashboard, Onboarding) |
+| `agent_runner.py` | Launcher for the daily agent runner and notification delivery |
+| `test_runner.py` | Wrapper for running the pytest suite |
 | `agent_settings.py` | Local agent settings and state helpers |
 | `profile_store.py` | Runtime profile loading, defaults, and persistence |
 | `profile_learning.py` | Converts free-text knowledge into structured profile updates |
@@ -251,6 +253,14 @@ The admin server now also serves the dashboard at:
 
 - `http://127.0.0.1:8765/dashboard`
 
+### Match Score Bands
+
+The dashboard uses internal scoring (0-100) mapped to human-readable bands:
+- **Strong match** (80-100)
+- **Good match** (65-79)
+- **Worth a look** (50-64)
+- **Stretch** (0-49)
+
 ---
 
 ## Persistence rules
@@ -300,7 +310,7 @@ The code now resolves these files relative to the repo location, not the shell w
 - [ ] Add message delivery
 - [ ] Add application feedback loop
 - [ ] Add `Prepare Application` pack flow with tailored CV and cover letter drafts
-- [ ] Add source expansion beyond SEEK
+- [x] Add source expansion beyond SEEK (LinkedIn implemented via jobspy)
 - [ ] Add durable cloud storage model
 - [ ] Wrap cleanly for OpenClaw or similar agent runtime
 
@@ -309,9 +319,13 @@ The code now resolves these files relative to the repo location, not the shell w
 ## Tech stack
 
 - Python
-- Playwright
-- OpenAI API
-- python-dotenv
+- Playwright (Browser automation for SEEK)
+- OpenAI API (LLM analysis and fit evaluation)
+- python-jobspy (LinkedIn and multi-board scraping)
+- python-docx (CV and document parsing)
+- pandas (Data manipulation and CSV handling)
+- requests (Notifications and external API integration)
+- python-dotenv (Environment variable management)
 - optional Anthropic-style future agent integration
 - local HTML admin UI backed by Python `http.server`
 - JSON file persistence

@@ -25,7 +25,7 @@ python local_server.py
 
 3. Upload:
 
-- one strong detailed CV
+- one strong detailed CV (supports .docx and plain text)
 - optionally extra notes in plain English
 
 4. Click `Create Profile`
@@ -114,6 +114,15 @@ python source_connector.py
 Then open the dashboard at:
 
 - `http://127.0.0.1:8765/dashboard`
+
+## Match Score Bands
+
+The dashboard groups jobs by their calculated fit score:
+
+- **Strong match** (80-100): High alignment with core capabilities and experience.
+- **Good match** (65-79): Solid alignment, perhaps missing secondary criteria.
+- **Worth a look** (50-64): Borderline fit or adjacent role.
+- **Stretch** (0-49): Low alignment or significant requirement gaps.
 
 The dashboard groups jobs into:
 

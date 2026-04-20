@@ -77,6 +77,171 @@
       color: #166534;
       border-color: #86efac;
     }
+    .ws-flash-mount {
+      padding: 16px 22px 0;
+    }
+    .ws-flash-card {
+      display: none;
+      max-width: 1200px;
+      margin: 0 auto;
+      background:
+        radial-gradient(circle at top left, rgba(20, 83, 45, 0.16), transparent 32%),
+        linear-gradient(135deg, #fff8ee 0%, #fffdfa 58%, #eef6ff 100%);
+      border: 1px solid #e4d4bf;
+      border-radius: 26px;
+      box-shadow: 0 24px 58px rgba(24, 34, 49, 0.12);
+      overflow: hidden;
+    }
+    .ws-flash-card.is-visible {
+      display: block;
+      animation: wsFlashCardIn 480ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .ws-flash-body {
+      display: grid;
+      gap: 22px;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.95fr);
+      padding: 26px;
+    }
+    .ws-flash-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #14532d;
+    }
+    .ws-flash-title {
+      margin: 0 0 12px;
+      font-size: clamp(1.8rem, 3vw, 2.5rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: #182231;
+    }
+    .ws-flash-copy {
+      margin: 0;
+      color: #495466;
+      line-height: 1.65;
+      font-size: 1rem;
+    }
+    .ws-flash-subcopy {
+      margin-top: 10px;
+      color: #5f6b7b;
+      line-height: 1.6;
+      font-size: 0.94rem;
+    }
+    .ws-flash-steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .ws-flash-step {
+      opacity: 0;
+      padding: 14px 14px 15px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(219, 206, 188, 0.95);
+      transform: translateY(10px);
+      animation: wsFlashItemIn 520ms ease forwards;
+    }
+    .ws-flash-step:nth-child(2) {
+      animation-delay: 70ms;
+    }
+    .ws-flash-step:nth-child(3) {
+      animation-delay: 140ms;
+    }
+    .ws-flash-step-title {
+      margin: 0 0 6px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: #182231;
+    }
+    .ws-flash-step-copy {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #5b6470;
+    }
+    .ws-flash-note {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(219, 206, 188, 0.95);
+      color: #425064;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    .ws-flash-side {
+      padding: 20px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(223, 209, 189, 0.96);
+    }
+    .ws-flash-side h2 {
+      margin: 0 0 10px;
+      font-size: 1.02rem;
+      color: #182231;
+    }
+    .ws-flash-side p {
+      margin: 0 0 12px;
+      color: #5b6470;
+      line-height: 1.6;
+      font-size: 0.93rem;
+    }
+    .ws-flash-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .ws-flash-dismiss {
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid #d6c7af;
+      background: #fffdf9;
+      color: #29435c;
+    }
+    .ws-flash-optout {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      color: #5b6470;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .ws-flash-optout input {
+      margin: 0;
+      accent-color: #14532d;
+    }
+    @keyframes wsFlashCardIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.985);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    @keyframes wsFlashItemIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
 
     /* Results mount */
     #results-mount { min-height: calc(100vh - 54px); }
@@ -89,6 +254,14 @@
 
     #results-mount .page { max-width: none !important; padding: 16px 22px 56px !important; }
     #results-mount .dashboard-layout { display: grid !important; }
+    @media (max-width: 900px) {
+      .ws-flash-body {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .ws-flash-steps {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
   </style>
 </head>
 <body>
@@ -96,20 +269,166 @@
     <span class="ws-brand">Job Hunter</span>
     <div class="ws-header-actions">
       <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
-      <span class="ws-status-pill" id="ws_status_pill">Loading…</span>
+      <span class="ws-status-pill" id="ws_status_pill">Loading...</span>
       <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
     </div>
   </header>
+  <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div id="results-mount">
-    <div id="results-loading">Loading results…</div>
+    <div id="results-loading">Loading results...</div>
   </div>
 
   <script>
     const wsStatusPill = document.getElementById('ws_status_pill');
     const wsRunBtn = document.getElementById('ws_run_btn');
+    const wsFlashMount = document.getElementById('ws_flash_mount');
     const resultsMount = document.getElementById('results-mount');
+    const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
+    const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
     let runPollHandle = null;
     let runWasRunning = false;
+
+    function consumeOnboardingWelcomeState() {
+      try {
+        const raw = window.sessionStorage.getItem(ONBOARDING_WELCOME_KEY);
+        if (!raw) {
+          return null;
+        }
+        window.sessionStorage.removeItem(ONBOARDING_WELCOME_KEY);
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        window.sessionStorage.removeItem(ONBOARDING_WELCOME_KEY);
+        return null;
+      }
+    }
+
+    function onboardingWelcomeOptedOut() {
+      try {
+        return window.localStorage.getItem(ONBOARDING_WELCOME_OPT_OUT_KEY) === '1';
+      } catch {
+        return false;
+      }
+    }
+
+    function setOnboardingWelcomeOptOut(enabled) {
+      try {
+        if (enabled) {
+          window.localStorage.setItem(ONBOARDING_WELCOME_OPT_OUT_KEY, '1');
+        } else {
+          window.localStorage.removeItem(ONBOARDING_WELCOME_OPT_OUT_KEY);
+        }
+      } catch {
+        // Ignore storage errors in private mode or locked-down environments.
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderOnboardingWelcome() {
+      if (!wsFlashMount) {
+        return;
+      }
+      const state = consumeOnboardingWelcomeState();
+      if (!state || onboardingWelcomeOptedOut()) {
+        wsFlashMount.innerHTML = '';
+        return;
+      }
+
+      const keyword = String(state.search_keywords || '').trim();
+      const locations = Array.isArray(state.search_locations)
+        ? state.search_locations.map((value) => String(value || '').trim()).filter(Boolean)
+        : [];
+      const searchSummary = [];
+      if (keyword) {
+        searchSummary.push(`keyword "${escapeHtml(keyword)}"`);
+      }
+      if (locations.length) {
+        searchSummary.push(`locations ${escapeHtml(locations.join(', '))}`);
+      }
+      const title = state.kind === 'profile-refresh'
+        ? 'Profile refreshed. This is your dashboard.'
+        : 'Welcome. This is your dashboard.';
+      const introCopy = state.kind === 'profile-refresh'
+        ? 'We refreshed your profile from your latest CV. Your shortlist lives here, and the next search will use the updated profile automatically.'
+        : 'We built your starting profile from your CV. This is where your shortlist appears and where new matches land after each search.';
+      const subCopy = 'You should not need to know anything about internal files or extraction rules here. The important part is simple: review roles below, run another search when you want fresh results, and open Settings if you want to tune how matching works.';
+      const searchNote = searchSummary.length
+        ? `<div class="ws-flash-note">Your next search will use ${searchSummary.join(' and ')}.</div>`
+        : '';
+
+      wsFlashMount.innerHTML = `
+        <section class="ws-flash-card is-visible" aria-label="Onboarding summary">
+          <div class="ws-flash-body">
+            <div>
+              <div class="ws-flash-eyebrow">Welcome to Job Hunter</div>
+              <h1 class="ws-flash-title">${title}</h1>
+              <p class="ws-flash-copy">${introCopy}</p>
+              <p class="ws-flash-subcopy">${subCopy}</p>
+              <div class="ws-flash-steps">
+                <div class="ws-flash-step">
+                  <p class="ws-flash-step-title">1. Review the shortlist</p>
+                  <p class="ws-flash-step-copy">The roles below are your current shortlist. Open any card to inspect it and decide what is worth your time.</p>
+                </div>
+                <div class="ws-flash-step">
+                  <p class="ws-flash-step-title">2. Run a search when ready</p>
+                  <p class="ws-flash-step-copy">Use <strong>Run Search</strong> to fetch fresh roles. It can take a few minutes, and this dashboard will refresh when the run finishes.</p>
+                </div>
+                <div class="ws-flash-step">
+                  <p class="ws-flash-step-title">3. Schedule or tune things in Settings</p>
+                  <p class="ws-flash-step-copy">If you want hands-off searching, set a daily schedule there. You can also adjust titles, locations, salary, and other matching preferences.</p>
+                </div>
+              </div>
+              ${searchNote}
+            </div>
+            <aside class="ws-flash-side">
+              <h2>Quick start</h2>
+              <p>This intro is just a handoff so you know where you are. Once dismissed, the dashboard below becomes the main thing you work from.</p>
+              <p>If you already have saved roles, browse them now. If not, run a search and wait here while the dashboard refreshes with fresh matches. If you prefer, you can set a daily schedule instead.</p>
+              <div class="ws-flash-actions">
+                <button class="ws-btn ws-btn-primary" id="ws_flash_run" type="button">Run Search</button>
+                <a href="/settings#schedule-panel" class="ws-btn ws-btn-secondary">Set Daily Schedule</a>
+                <a href="/settings" class="ws-btn ws-btn-secondary">Open Settings</a>
+                <button class="ws-flash-dismiss" id="ws_flash_dismiss" type="button">Got it</button>
+              </div>
+              <label class="ws-flash-optout" for="ws_flash_opt_out">
+                <input type="checkbox" id="ws_flash_opt_out">
+                <span>Do not show this intro again</span>
+              </label>
+            </aside>
+          </div>
+        </section>
+      `;
+
+      const dismissButton = document.getElementById('ws_flash_dismiss');
+      const runButton = document.getElementById('ws_flash_run');
+      const optOut = document.getElementById('ws_flash_opt_out');
+      if (optOut) {
+        optOut.checked = onboardingWelcomeOptedOut();
+      }
+      const closeFlash = () => {
+        if (optOut) {
+          setOnboardingWelcomeOptOut(optOut.checked);
+        }
+        wsFlashMount.innerHTML = '';
+      };
+      if (dismissButton) {
+        dismissButton.addEventListener('click', closeFlash);
+      }
+      if (runButton) {
+        runButton.addEventListener('click', () => {
+          closeFlash();
+          wsRunBtn.click();
+        });
+      }
+    }
 
     function updateStatusPill(status, lastRunAt) {
       if (status === 'running') {
@@ -191,6 +510,7 @@
     });
 
     (async () => {
+      renderOnboardingWelcome();
       const status = await checkRunStatus();
       if (status === 'running') {
         wsRunBtn.disabled = true;

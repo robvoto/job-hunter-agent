@@ -366,7 +366,7 @@
 
         <section class="panel">
           <h2>Run Search</h2>
-          <p class="panel-copy">Runs use the current <code>search_settings</code> saved in <code>profile.json</code>.</p>
+          <p class="panel-copy">Run a fresh search with your current search and matching preferences. Searches can take a few minutes, so the dashboard may update shortly after the run starts.</p>
           <div class="run-toolbar" style="margin-top:14px;">
             <div>
               <span class="status-pill idle" id="run_status_pill">Idle</span>
@@ -376,6 +376,20 @@
               <button class="primary" id="run_now" type="button">Run Now</button>
               <button class="secondary" id="save_search" type="button">Save Search Settings</button>
             </div>
+          </div>
+        </section>
+
+        <section class="panel" id="schedule-panel">
+          <h2>Daily Search Schedule</h2>
+          <p class="panel-copy">If you want Job Hunter to check for new roles automatically, choose a daily local time here.</p>
+
+          <label for="schedule_daily_time_local">Run every day at</label>
+          <input id="schedule_daily_time_local" type="time">
+          <div class="help">This uses your local machine time. Searches still take a few minutes, so new matches may appear a little after the scheduled time.</div>
+          <div class="help">Automatic runs use the background agent loop. If you use scheduled runs, keep that loop running.</div>
+
+          <div class="panel-actions">
+            <button class="secondary" id="save_schedule" type="button">Save Daily Schedule</button>
           </div>
         </section>
 
@@ -757,6 +771,7 @@
     const applyLearningButton = document.getElementById('apply_learning');
     const learningStatusEl = document.getElementById('learning_status');
     let telegramConnectLink = '';
+    let loadedAgentSettings = null;
     let loadedProfile = null;
     let runStatusPollHandle = null;
     let lastObservedRunStatus = 'idle';
@@ -938,6 +953,9 @@
     }
 
     function fillAgentSettings(settings) {
+      loadedAgentSettings = settings || {};
+      const schedule = settings?.schedule || {};
+      document.getElementById('schedule_daily_time_local').value = schedule.daily_time_local || '08:30';
       const telegram = settings?.telegram || {};
       document.getElementById('telegram_enabled').value = String(Boolean(telegram.enabled));
       document.getElementById('telegram_bot_token').value = '';
@@ -960,7 +978,12 @@
     }
 
     function collectAgentSettings() {
+      const currentSchedule = loadedAgentSettings?.schedule || {};
       return {
+        schedule: {
+          daily_time_local: document.getElementById('schedule_daily_time_local').value || '08:30',
+          loop_sleep_seconds: Number(currentSchedule.loop_sleep_seconds || 300),
+        },
         telegram: {
           enabled: document.getElementById('telegram_enabled').value === 'true',
           bot_token: document.getElementById('telegram_bot_token').value.trim(),
@@ -1459,6 +1482,11 @@
         await saveAgentSettings();
         await loadTelegramConnectLink().catch(() => ({}));
       } catch (error) { showStatus(error.message, 'error'); }
+    });
+
+    document.getElementById('save_schedule').addEventListener('click', async () => {
+      try { await saveAgentSettings(); showStatus('Daily schedule saved.', 'ok'); }
+      catch (error) { showStatus(error.message, 'error'); }
     });
 
     document.getElementById('save_llm_settings').addEventListener('click', async () => {

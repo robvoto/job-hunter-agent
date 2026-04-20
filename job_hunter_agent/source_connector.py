@@ -2466,7 +2466,7 @@ def render_html(
         else f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and preserves your viewed history."
     )
     hero_summary = (
-        f"Last run {run_label} â€” {run_stats.get('cards_seen', 0)} cards scanned, "
+        f"Last run {run_label} - {run_stats.get('cards_seen', 0)} cards scanned, "
         f"{len(current_records)} matches found"
     )
     this_run_cards_html = "".join(
@@ -3653,6 +3653,7 @@ def render_html(
           <section class="section filter-panel">
             <div class="section-head">
               <h2>Match Controls</h2>
+              <button class="mini-button" type="button" id="reset_dashboard_filters">Reset All Filters</button>
             </div>
             <div class="filter-grid">
               <label class="filter-field">
@@ -3912,6 +3913,7 @@ def render_html(
     const JOB_HISTORY_API_URL = 'http://127.0.0.1:8765/api/job-history';
     const RUN_API_URL = 'http://127.0.0.1:8765/api/run';
     const RUN_STATUS_API_URL = 'http://127.0.0.1:8765/api/run-status';
+    const DASHBOARD_FILTERS_KEY = 'jobHunter.dashboard.filters';
     const INITIAL_SEARCH_SETTINGS = {json.dumps(search_settings_payload, ensure_ascii=False)};
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
     const sortSelect = document.getElementById('sort_select');
@@ -3921,6 +3923,7 @@ def render_html(
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
+    const resetFiltersButton = document.getElementById('reset_dashboard_filters');
     const resultsHelper = document.getElementById('results_helper');
     const dismissResultsHelperButton = document.getElementById('dismiss_results_helper');
     const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
@@ -4156,6 +4159,37 @@ def render_html(
 
       resetPagination();
       applyDashboardControls();
+    }}
+
+    function saveDashboardFilters() {{
+      const filters = {{
+        sort: sortSelect?.value,
+        pageSize: pageSizeSelect?.value,
+        scope: scopeFilter?.value,
+        posted: postedFilter?.value,
+        workMode: workModeFilter?.value,
+        score: scoreFilter?.value,
+        salary: salaryFilter?.value,
+      }};
+      try {{
+        window.localStorage.setItem(DASHBOARD_FILTERS_KEY, JSON.stringify(filters));
+      }} catch (e) {{}}
+    }}
+
+    function loadDashboardFilters() {{
+      try {{
+        const saved = window.localStorage.getItem(DASHBOARD_FILTERS_KEY);
+        if (!saved) return;
+        const filters = JSON.parse(saved);
+        
+        if (filters.sort && sortSelect) sortSelect.value = filters.sort;
+        if (filters.pageSize && pageSizeSelect) pageSizeSelect.value = filters.pageSize;
+        if (filters.scope && scopeFilter) scopeFilter.value = filters.scope;
+        if (filters.posted && postedFilter) postedFilter.value = filters.posted;
+        if (filters.workMode && workModeFilter) workModeFilter.value = filters.workMode;
+        if (filters.score && scoreFilter) scoreFilter.value = filters.score;
+        if (filters.salary && salaryFilter) salaryFilter.value = filters.salary;
+      }} catch (e) {{}}
     }}
 
     function getVisibleCards() {{
@@ -4647,6 +4681,7 @@ def render_html(
     for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, scoreFilter, salaryFilter]) {{
       control?.addEventListener('change', () => {{
         resetPagination();
+        saveDashboardFilters();
         applyDashboardControls();
       }});
     }}
@@ -4654,6 +4689,7 @@ def render_html(
     renderSearchSettingsReadonly(INITIAL_SEARCH_SETTINGS);
     renderSearchSettingsForm(INITIAL_SEARCH_SETTINGS);
     setRunStatusPill('idle');
+    loadDashboardFilters();
     syncRunStatus();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
     showResultsHelperIfNeeded();
@@ -5400,4 +5436,3 @@ if __name__ == "__main__":
         rebuild_html_dashboard()
     else:
         scrape_jobs_direct()
-
