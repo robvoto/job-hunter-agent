@@ -130,7 +130,7 @@ The dashboard can filter by:
 
 ## LLM Use
 
-The LLM is optional.
+The LLM is optional and requires an OpenAI API key.
 
 Current behavior:
 
@@ -139,7 +139,11 @@ Current behavior:
 - the LLM reads from `data/profile.json`
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
 
-If `OPENAI_API_KEY` is not set, the app runs without live LLM review.
+To enable:
+1. Create a `.env` file in the project root.
+2. Add `OPENAI_API_KEY=sk-your-actual-key`
+
+If the variable is not found in the environment or the `.env` file, the app runs without live LLM review.
 
 ## Testing
 

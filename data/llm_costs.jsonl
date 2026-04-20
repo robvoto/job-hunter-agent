@@ -1,2 +1,3 @@
 {"ts": "2026-04-19T13:22:22Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 175, "tok_out": 34, "cost_usd": 4.7e-05, "session_usd": 4.7e-05}
 {"ts": "2026-04-19T13:27:15Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 175, "tok_out": 26, "cost_usd": 4.2e-05, "session_usd": 4.2e-05}
+{"ts": "2026-04-20T09:42:28Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 824, "tok_out": 119, "cost_usd": 0.000195, "session_usd": 0.000195}

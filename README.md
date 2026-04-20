@@ -160,7 +160,13 @@ These are intended to stay local and ignored:
 
 ## LLM Notes
 
-If `OPENAI_API_KEY` is not set, the app still works, but the live LLM review step is effectively disabled and falls back to deterministic filtering plus `MAYBE`.
+The app uses `python-dotenv` to load environment variables. To use the LLM:
+
+1. Create a `.env` file in the root directory.
+2. Add your key: `OPENAI_API_KEY=sk-your-key-here`
+3. Ensure the dependency is installed: `pip install python-dotenv`.
+
+If the key is not set, the app still works, but the live LLM review step is effectively disabled and falls back to deterministic filtering plus `MAYBE`.
 
 ## Daily Agent Notes
 

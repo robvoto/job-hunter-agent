@@ -17,10 +17,13 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from dotenv import load_dotenv
 from openai import OpenAI
 
 from job_hunter_agent.agent_settings import load_agent_settings
 from job_hunter_agent.profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
+
+load_dotenv()
 
 # Token budgets â€” keep fit decisions tight; extraction can be generous
 MAX_TOKENS_FIT_DECISION = 50
@@ -431,4 +434,3 @@ def get_cost_summary() -> dict[str, Any]:
         pass
     grand = sum(v["cost_usd"] for v in totals.values())
     return {"by_purpose": totals, "grand_total_usd": round(grand, 6)}
-

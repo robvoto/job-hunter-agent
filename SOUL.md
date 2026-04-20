@@ -311,6 +311,7 @@ The code now resolves these files relative to the repo location, not the shell w
 - Python
 - Playwright
 - OpenAI API
+- python-dotenv
 - optional Anthropic-style future agent integration
 - local HTML admin UI backed by Python `http.server`
 - JSON file persistence
