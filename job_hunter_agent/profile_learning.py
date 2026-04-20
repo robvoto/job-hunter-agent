@@ -48,26 +48,19 @@ def _resolve_onboarding_int(
     key: str,
     *,
     minimum: int = 1,
-    legacy_keys: list[str] | None = None,
 ) -> int:
     settings = onboarding_settings or {}
-    for candidate_key in [key, *(legacy_keys or [])]:
-        value = settings.get(candidate_key)
-        if value in (None, ""):
-            continue
+    value = settings.get(key)
+    if value not in (None, ""):
         try:
             return max(minimum, int(value))
         except Exception:
-            continue
+            pass
     return max(minimum, int(DEFAULT_ONBOARDING_SETTINGS[key]))
 
 
 def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | None = None) -> int:
-    return _resolve_onboarding_int(
-        onboarding_settings,
-        "extraction_lookback_years",
-        legacy_keys=["title_extraction_lookback_years"],
-    )
+    return _resolve_onboarding_int(onboarding_settings, "extraction_lookback_years")
 
 
 def _find_rating(text: str) -> float | None:

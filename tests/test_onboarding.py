@@ -71,12 +71,12 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
     }
 
 
-def test_normalize_onboarding_settings_payload_supports_legacy_key_and_clamps(monkeypatch):
+def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
     monkeypatch.setattr(local_server, "load_profile", lambda: {"onboarding_settings": {}})
 
     normalized = local_server._normalize_onboarding_settings_payload(
         {
-            "title_extraction_lookback_years": 999,
+            "extraction_lookback_years": 999,
             "title_extraction_min_months": 0,
             "max_target_patterns": -1,
             "max_adjacent_patterns": 999,

@@ -28,7 +28,7 @@ def main() -> int:
     parser.add_argument("-m", dest="marker", default="", help="Only run tests matching this marker expression.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Run pytest in verbose mode.")
     parser.add_argument("pytest_args", nargs="*", help="Additional arguments passed to pytest.")
-    args = parser.parse_args()
+    args, extra_pytest_args = parser.parse_known_args()
 
     command = [_python_executable(), "-m", "pytest"]
     if args.verbose:
@@ -38,6 +38,7 @@ def main() -> int:
     if args.marker:
         command.extend(["-m", args.marker])
     command.extend(args.pytest_args)
+    command.extend(extra_pytest_args)
 
     completed = subprocess.run(command, cwd=ROOT_DIR)
     return int(completed.returncode)

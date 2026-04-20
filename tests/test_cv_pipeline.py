@@ -18,15 +18,4 @@ Acme Corp - Platform Lead ({_CURRENT_YEAR - 7} - {_CURRENT_YEAR - 7})
     assert long_roles[0]["is_recent"] is True
 
 
-def test_parse_roles_accepts_legacy_lookback_key_for_compatibility():
-    cv_text = f"""
-# Professional Experience
-Acme Corp - Platform Lead ({_CURRENT_YEAR - 7} - {_CURRENT_YEAR - 7})
-- Led platform delivery.
-"""
-
-    roles = parse_roles(cv_text, {"title_extraction_lookback_years": 8})
-
-    assert roles
-    assert roles[0]["is_recent"] is True
 

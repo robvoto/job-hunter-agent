@@ -4245,12 +4245,7 @@ def render_html(
         if (filters.scope && scopeFilter) scopeFilter.value = filters.scope;
         if (filters.posted && postedFilter) postedFilter.value = filters.posted;
         if (filters.workMode && workModeFilter) workModeFilter.value = filters.workMode;
-        if (filters.score && scoreFilter) {{
-          const availableScoreValues = new Set(Array.from(scoreFilter.options).map(option => option.value));
-          if (availableScoreValues.has(String(filters.score))) {{
-            scoreFilter.value = String(filters.score);
-          }}
-        }}
+        if (filters.score && scoreFilter) scoreFilter.value = filters.score;
         if (filters.salary && salaryFilter) salaryFilter.value = filters.salary;
       }} catch (e) {{}}
     }}

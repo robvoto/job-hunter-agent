@@ -16,7 +16,7 @@ That is the current source connector, not the final limit of the product.
 1. Start the local web UI:
 
 ```powershell
-python local_server.py
+python -m job_hunter_agent.local_server
 ```
 
 2. Open:
@@ -108,7 +108,7 @@ Think of admin as the maintenance surface for your profile, not the place where 
 Run the current source connector:
 
 ```powershell
-python source_connector.py
+python -m job_hunter_agent.source_connector
 ```
 
 Then open the dashboard at:
@@ -165,23 +165,23 @@ pip install -r requirements-dev.txt
 Run the local test suite:
 
 ```powershell
-python test_runner.py
+python -m job_hunter_agent.test_runner
 ```
 
 ## Which Command Does What
 
-`python source_connector.py`
+`python -m job_hunter_agent.source_connector`
 
 - refreshes jobs
 - rebuilds the dashboard
 - updates local run outputs
 
-`python source_connector.py --rebuild-dashboard`
+`python -m job_hunter_agent.source_connector --rebuild-dashboard`
 
 - rebuilds the dashboard from saved local state only
 - useful when UI behavior changed and you want the latest HTML without a fresh scrape
 
-`python source_connector.py --test-scrape-mode`
+`python -m job_hunter_agent.source_connector --test-scrape-mode`
 
 - runs a wider scrape test mode
 - widens both SEEK and LinkedIn source windows
@@ -193,21 +193,21 @@ Important:
 - some specialist-domain requirements can now hard-block a role entirely
 - if a source page comes back as a challenge or invalid detail page, the app rejects it instead of scoring it from bad text
 
-`python source_connector.py --rebuild-dashboard --test-dashboard-mode`
+`python -m job_hunter_agent.source_connector --rebuild-dashboard --test-dashboard-mode`
 
 - rebuilds the dashboard in test view only
 - shows raw score numbers on cards for tuning
 - does not run a fresh scrape
 
-`python agent_runner.py`
+`python -m job_hunter_agent.agent_runner`
 
 - runs the refresh flow and then creates a digest
 - can also send that digest by email or Telegram if configured
 
 Simple rule:
 
-- if you just want fresh jobs, run `python source_connector.py`
-- if you want automation and notifications, use `python agent_runner.py`
+- if you just want fresh jobs, run `python -m job_hunter_agent.source_connector`
+- if you want automation and notifications, use `python -m job_hunter_agent.agent_runner`
 
 ## Local Files To Keep
 

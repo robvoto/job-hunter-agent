@@ -115,7 +115,7 @@ def _validate_required_onboarding_inputs(
     if isinstance(raw_settings.get("onboarding_settings"), dict):
         raw_settings = raw_settings.get("onboarding_settings") or {}
 
-    raw_lookback = raw_settings.get("extraction_lookback_years", raw_settings.get("title_extraction_lookback_years"))
+    raw_lookback = raw_settings.get("extraction_lookback_years")
     raw_min_months = raw_settings.get("title_extraction_min_months")
     if raw_lookback in (None, ""):
         raise ValueError("Please choose how far back we should look.")
@@ -159,10 +159,10 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
         overrides["keywords"] = str(source.get("keywords") or "").strip()
     if "locations" in source:
         overrides["locations"] = _parse_locations_override(source.get("locations"))
-    if "date_range_days" in source or "date_window_days" in source:
-        overrides["date_range_days"] = source.get("date_range_days", source.get("date_window_days"))
-    if "max_pages_cap" in source or "pages_cap" in source:
-        overrides["max_pages_cap"] = source.get("max_pages_cap", source.get("pages_cap"))
+    if "date_range_days" in source:
+        overrides["date_range_days"] = source.get("date_range_days")
+    if "max_pages_cap" in source:
+        overrides["max_pages_cap"] = source.get("max_pages_cap")
 
     if not overrides:
         return {}
@@ -194,7 +194,7 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
 
     normalized = dict(DEFAULT_ONBOARDING_SETTINGS)
     normalized["extraction_lookback_years"] = _coerce_int(
-        source.get("extraction_lookback_years", source.get("title_extraction_lookback_years")),
+        source.get("extraction_lookback_years"),
         DEFAULT_ONBOARDING_SETTINGS["extraction_lookback_years"],
         1,
         20,

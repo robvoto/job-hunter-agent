@@ -63,7 +63,7 @@ Run the job-source connector:
 Canonical refresh command:
 
 ```powershell
-python source_connector.py
+python -m job_hunter_agent.source_connector
 ```
 
 Use this by default when you want fresh job results and a rebuilt dashboard.
@@ -76,44 +76,44 @@ Search design note:
 Rebuild the dashboard from saved local state:
 
 ```powershell
-python source_connector.py --rebuild-dashboard
+python -m job_hunter_agent.source_connector --rebuild-dashboard
 ```
 
 Run the local web UI:
 
 ```powershell
-python local_server.py
+python -m job_hunter_agent.local_server
 ```
 
 Run the daily local agent once:
 
 ```powershell
-python agent_runner.py
+python -m job_hunter_agent.agent_runner
 ```
 
 This is the orchestration layer. It can run the connector, rebuild the dashboard, create a digest, and send notifications.
 
 Most users should think of it like this:
 
-- `python source_connector.py` = canonical refresh command
-- `python agent_runner.py` = optional automation wrapper around the refresh flow
+- `python -m job_hunter_agent.source_connector` = canonical refresh command
+- `python -m job_hunter_agent.agent_runner` = optional automation wrapper around the refresh flow
 
 Run the daily local agent in loop mode:
 
 ```powershell
-python agent_runner.py --loop
+python -m job_hunter_agent.agent_runner --loop
 ```
 
 Run the automated test suite:
 
 ```powershell
-python test_runner.py
+python -m job_hunter_agent.test_runner
 ```
 
 You can pass normal pytest selectors through the runner, for example:
 
 ```powershell
-python test_runner.py -k profile_learning -v
+python -m job_hunter_agent.test_runner -k profile_learning -v
 ```
 
 Then open:
@@ -133,7 +133,7 @@ Then open:
 - **UI**: Python `http.server` with custom HTML/JS templates
 - **Environment**: `python-dotenv`
 
-Logic and core modules reside in the `job_hunter_agent/` package. Root-level `.py` files are compatibility launchers for easy CLI access.
+Logic and core modules reside in the `job_hunter_agent/` package.
 
 ## Important Files
 
@@ -184,7 +184,7 @@ If the key is not set, the app still works, but the live LLM review step is effe
 
 The first daily agent layer is now local-first:
 
-- `agent_runner.py` runs the current connector, rebuilds the dashboard, and creates a compact digest
+- `job_hunter_agent.agent_runner` runs the current connector, rebuilds the dashboard, and creates a compact digest
 - email delivery uses SMTP settings from local `data/agent_settings.json`
 - Telegram delivery uses a bot token plus chat id from local `data/agent_settings.json`
 - Telegram messages arrive in the user's private chat with their bot, not from their personal Telegram identity
@@ -194,15 +194,14 @@ Recommended beta setup:
 
 1. Copy `data/agent_settings.template.json` to local `data/agent_settings.json`
 2. Fill in email and/or Telegram settings
-3. Test with `python agent_runner.py --no-notify`
-4. If the summary looks right, test live delivery with `python agent_runner.py`
+3. Test with `python -m job_hunter_agent.agent_runner --no-notify`
+4. If the summary looks right, test live delivery with `python -m job_hunter_agent.agent_runner`
 5. Use Windows Task Scheduler for the real daily schedule
 
 ## Docs
 
 - application code lives in `job_hunter_agent/`
 - tests live in `tests/`
-- repo-root scripts like `local_server.py` and `source_connector.py` are compatibility launchers
 
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - [docs/OPERATIONS.md](docs/OPERATIONS.md)

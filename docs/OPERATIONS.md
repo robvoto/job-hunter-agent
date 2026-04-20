@@ -23,8 +23,6 @@ Important note:
 
 - the product is broader than SEEK
 - the current connector implementation lives in `job_hunter_agent/source_connector.py`
-- the repo-root `source_connector.py` is kept as a thin launcher for local commands and VS Code
-- do not treat that filename as the intended long-term product naming model
 
 ## Local Setup
 
@@ -40,19 +38,19 @@ python -m playwright install chromium
 Run the current source connector:
 
 ```powershell
-python source_connector.py
+python -m job_hunter_agent.source_connector
 ```
 
 Rebuild the dashboard from saved local state:
 
 ```powershell
-python source_connector.py --rebuild-dashboard
+python -m job_hunter_agent.source_connector --rebuild-dashboard
 ```
 
 Run the local UI:
 
 ```powershell
-python local_server.py
+python -m job_hunter_agent.local_server
 ```
 
 ## Dashboard Model
@@ -126,13 +124,13 @@ If `OPENAI_API_KEY` is missing, the app runs without live LLM review.
 Use the repo test runner after changes:
 
 ```powershell
-python test_runner.py
+python -m job_hunter_agent.test_runner
 ```
 
 ## Runner Split
 
-- `python source_connector.py`
+- `python -m job_hunter_agent.source_connector`
   Canonical direct run for refreshing jobs and rebuilding the dashboard.
 
-- `python agent_runner.py`
+- `python -m job_hunter_agent.agent_runner`
   Wraps the refresh flow, builds a digest, and optionally sends notifications.

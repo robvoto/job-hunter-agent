@@ -43,13 +43,6 @@ Primary modules:
 - `job_hunter_agent/llm_gate.py`
   Optional constrained LLM decision step.
 
-Compatibility launchers kept at the repo root:
-
-- `local_server.py`
-- `source_connector.py`
-- `agent_runner.py`
-- `test_runner.py`
-
 Standard project folders:
 
 - `job_hunter_agent/` for application code
@@ -78,14 +71,6 @@ Do not rename major files casually unless there is time to clean the whole proje
 3. Uploaded documents are saved into a local source pack under ignored paths
 4. The source pack is imported into `data/profile.json`
 5. Admin is then used to refine the runtime profile
-
-## Current Runner Split
-
-- `source_connector.py`
-  Compatibility launcher for `job_hunter_agent/source_connector.py`.
-
-- `agent_runner.py`
-  Compatibility launcher for `job_hunter_agent/agent_runner.py`.
 
 ## Score Presentation
 
@@ -154,7 +139,7 @@ Do not accidentally commit:
 Use the repo test runner for repeatable local validation:
 
 ```powershell
-python test_runner.py
+python -m job_hunter_agent.test_runner
 ```
 
 The runner resolves the local virtualenv automatically when present and forwards normal pytest selectors such as `-k` and `-m`.

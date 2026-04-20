@@ -10,56 +10,7 @@ from job_hunter_agent.profile_store import load_profile
 
 
 
-GENERIC_TITLE_BLOCK_WORDS = {
-    "a",
-    "an",
-    "and",
-    "analyst",
-    "analytics",
-    "apps",
-    "associate",
-    "architect",
-    "assistant",
-    "ba",
-    "business",
-    "change",
-    "consultant",
-    "contract",
-    "delivery",
-    "digital",
-    "enterprise",
-    "functional",
-    "government",
-    "graduate",
-    "implementation",
-    "intermediate",
-    "intern",
-    "junior",
-    "lead",
-    "manager",
-    "mid",
-    "midlevel",
-    "multiple",
-    "owner",
-    "operations",
-    "permanent",
-    "principal",
-    "product",
-    "program",
-    "project",
-    "role",
-    "roles",
-    "senior",
-    "solution",
-    "specialist",
-    "support",
-    "system",
-    "systems",
-    "technical",
-    "temp",
-    "temporary",
-    "transformation",
-}
+TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]")
 
 
 def _matches_any(text: str, patterns: list[str]) -> bool:
@@ -84,7 +35,7 @@ def _phrase_from_segment(segment: str) -> str:
     tokens = [
         token
         for token in cleaned.split()
-        if token not in GENERIC_TITLE_BLOCK_WORDS and len(token) >= 2 and not token.isdigit()
+        if len(token) >= 2 and not token.isdigit()
     ]
     if not tokens:
         return ""
@@ -92,34 +43,30 @@ def _phrase_from_segment(segment: str) -> str:
 
 
 def suggest_title_block_phrases(title: str) -> list[str]:
-    """Return ranked non-empty block-phrase candidates from every title segment."""
+    """Return ranked non-empty block-phrase candidates from explicit title qualifiers."""
     raw_title = (title or "").strip()
     if not raw_title:
         return []
     normalized = re.sub(r"\s+", " ", raw_title)
-    # | handled with or without surrounding spaces; - / : only when space-bounded
-    segments = [
-        s.strip()
-        for s in re.split(r"\s*\|\s*|\s[-â€“â€”/:]\s|[(),\[\]]", normalized)
-        for s in re.split(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]", normalized)
-        if s and s.strip()
-    ]
+    segments = [segment.strip() for segment in TITLE_BLOCK_SEGMENT_SPLIT_RE.split(normalized) if segment and segment.strip()]
+    if len(segments) <= 1:
+        return []
     ranked_groups: list[list[str]] = [[], []]
     seen: set[str] = set()
     for index, seg in enumerate(segments):
+        if index == 0:
+            continue
         phrase = _phrase_from_segment(seg)
         if phrase and phrase not in seen:
             seen.add(phrase)
-            ranked_groups[0 if index > 0 else 1].append(phrase)
+            ranked_groups[0].append(phrase)
     return ranked_groups[0] + ranked_groups[1]
 
 
 def suggest_title_block_phrase(title: str) -> str:
     """Return the single best block phrase."""
     candidates = suggest_title_block_phrases(title)
-    if candidates:
-        return candidates[0]
-    return _phrase_from_segment(re.sub(r"\s+", " ", (title or "").strip()))
+    return candidates[0] if candidates else ""
 
 
 def build_title_block_rule(phrase: str) -> dict[str, str]:

@@ -1,9 +1,4 @@
-﻿"""Tests for the deterministic title block phrase extractor.
-﻿"""Tests for the deterministic title block phrase extractor.
-
-Run with: python -m pytest tests/test_title_block_extractor.py -v
-Or:        python tests/test_title_block_extractor.py
-"""
+"""Tests for the deterministic title block phrase extractor."""
 
 import sys
 from pathlib import Path
@@ -14,29 +9,23 @@ from job_hunter_agent.filters import suggest_title_block_phrase
 
 
 CASES = [
-    # (title, expected_suggestion_or_None)
-    # Post-separator discriminators
     ("Senior Delivery Manager - Guidewire", "guidewire"),
     ("Senior Analyst - Payments", "payments"),
     ("Operations Analyst - Banking", "banking"),
+    ("Senior Advisor - Procurement", "procurement"),
+    ("Program Coordinator - Healthcare", "healthcare"),
     ("Operations Analyst - Cyber, Cloud", "cyber"),
     ("Senior Analyst - ERP", "erp"),
-    # Pre-separator token fallback (no separator, leftover non-generic token)
-    ("Wealth Operations Manager", "wealth"),
-    # Two-char tech acronym
+    ("Wealth Operations Manager", None),
     ("Senior Delivery Manager | AI & 365", "ai"),
-    # No safe discriminator â€” all tokens are generic
-    # No safe discriminator — all tokens are generic
     ("Senior Delivery Manager", None),
     ("Senior Analyst", None),
     ("Senior Delivery Digital Manager", None),
-    # Protected positive-fit terms must never be suggested
-    ("Multiple Roles - Government", None),
-    ("Operations Analyst - Government Digital", None),
-    # Numeric-only fragments must be skipped
+    ("Senior Officer", None),
+    ("Multiple Roles - Government", "government"),
+    ("Operations Analyst - Government Digital", "government digital"),
     ("Operations Analyst - 365", None),
-    # ERP preferred over generic post-separator when that's the only fragment
-    ("Senior SAP Tester - ERP", "erp"),   # v1: post-separator takes priority
+    ("Senior SAP Tester - ERP", "erp"),
 ]
 
 
@@ -63,40 +52,65 @@ if __name__ == "__main__":
     raise SystemExit(0 if ok else 1)
 
 
-# pytest-compatible tests
 def test_guidewire():
     assert suggest_title_block_phrase("Senior Delivery Manager - Guidewire") == "guidewire"
+
 
 def test_payments():
     assert suggest_title_block_phrase("Senior Analyst - Payments") == "payments"
 
+
 def test_banking():
     assert suggest_title_block_phrase("Operations Analyst - Banking") == "banking"
+
+
+def test_procurement():
+    assert suggest_title_block_phrase("Senior Advisor - Procurement") == "procurement"
+
+
+def test_healthcare():
+    assert suggest_title_block_phrase("Program Coordinator - Healthcare") == "healthcare"
+
 
 def test_cyber_first():
     assert suggest_title_block_phrase("Operations Analyst - Cyber, Cloud") == "cyber"
 
+
 def test_erp():
     assert suggest_title_block_phrase("Senior Analyst - ERP") == "erp"
 
+
 def test_wealth_fallback():
-    assert suggest_title_block_phrase("Wealth Operations Manager") == "wealth"
+    assert not suggest_title_block_phrase("Wealth Operations Manager")
+
 
 def test_ai_acronym():
     assert suggest_title_block_phrase("Senior Delivery Manager | AI & 365") == "ai"
 
+
 def test_generic_no_suggestion():
     assert not suggest_title_block_phrase("Senior Delivery Manager")
+
 
 def test_senior_analyst_no_suggestion():
     assert not suggest_title_block_phrase("Senior Analyst")
 
+
 def test_fully_generic_no_suggestion():
     assert not suggest_title_block_phrase("Senior Delivery Digital Manager")
 
+
+def test_generic_officer_no_suggestion():
+    assert not suggest_title_block_phrase("Senior Officer")
+
+
 def test_government_protected():
-    assert not suggest_title_block_phrase("Multiple Roles - Government")
+    assert suggest_title_block_phrase("Multiple Roles - Government") == "government"
+
+
+def test_government_digital_segment():
+    assert suggest_title_block_phrase("Operations Analyst - Government Digital") == "government digital"
+
 
 def test_numeric_fragment_skipped():
     assert not suggest_title_block_phrase("Operations Analyst - 365")
-

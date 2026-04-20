@@ -19,7 +19,7 @@ PRIMARY COMMANDS
 ----------------
 
 ▶ Normal Manual Refresh:
-  python source_connector.py
+  python -m job_hunter_agent.source_connector
 
   Use this for a standard run. It scrapes fresh jobs using your profile
   settings and rebuilds the dashboard. This is the main command you will
@@ -27,7 +27,7 @@ PRIMARY COMMANDS
 
 
 ▶ Automated Agent Run:
-  python agent_runner.py
+  python -m job_hunter_agent.agent_runner
 
   Use this to run the full agent pipeline: refresh jobs, create a digest,
   and send notifications.
@@ -36,7 +36,7 @@ PRIMARY COMMANDS
 
 
 ▶ Local Web Server:
-  python local_server.py
+  python -m job_hunter_agent.local_server
 
   Use this to start the web server for the Admin UI and to view the dashboard
   in your browser.
@@ -47,23 +47,23 @@ PRIMARY COMMANDS
 COMMON WORKFLOWS & FLAGS
 ------------------------
 
-You can combine flags with `python source_connector.py` to create specific workflows.
+You can combine flags with `python -m job_hunter_agent.source_connector` to create specific workflows.
 
 ---
 
 ▶ For Fast UI/Dashboard Testing (No Scrape):
-  python source_connector.py --rebuild-dashboard
+  python -m job_hunter_agent.source_connector --rebuild-dashboard
 
   This is the fastest way to see UI changes. It skips all scraping and
   AI review, and just rebuilds `dashboard.html` from the last saved run.
 
   Combine with `--test-dashboard-mode` to see more jobs and debug scores:
-  python source_connector.py --rebuild-dashboard --test-dashboard-mode
+  python -m job_hunter_agent.source_connector --rebuild-dashboard --test-dashboard-mode
 
 ---
 
 ▶ For Quick & Cheap Scrape Testing:
-  python source_connector.py --test-scrape-mode
+  python -m job_hunter_agent.source_connector --test-scrape-mode
 
   This mode is designed for cheaper and faster feedback during development.
   It does a real scrape, but:
@@ -72,7 +72,7 @@ You can combine flags with `python source_connector.py` to create specific workf
   - Shows raw scores on job cards for easier tuning.
 
   For a super-fast check, limit it to one page:
-  python source_connector.py --test-scrape-mode --max-pages 1
+  python -m job_hunter_agent.source_connector --test-scrape-mode --max-pages 1
 
 ---
 
@@ -94,7 +94,7 @@ QUICK NOTES
 -----------
 
 - If the right panel says `Test mode ON`, you are looking at a test-mode dashboard.
-- Run `python source_connector.py` to get back to a normal dashboard.
+- Run `python -m job_hunter_agent.source_connector` to get back to a normal dashboard.
 - Console logs now show whether a run is `real` or `test`.
 - If you save profile changes in admin, the next scrape will use them.
-- If admin save feedback does not look right, restart the local server with `python local_server.py`.
+- If admin save feedback does not look right, restart the local server with `python -m job_hunter_agent.local_server`.
