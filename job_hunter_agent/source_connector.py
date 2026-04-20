@@ -1,4 +1,4 @@
-﻿"""Main job-source connector and dashboard builder.
+﻿﻿"""Main job-source connector and dashboard builder.
 
 Main goals:
 - fetch current job listings from all enabled source implementations
@@ -5320,17 +5320,18 @@ def _deduplicate_across_sources(records: List[dict]) -> List[dict]:
 
 def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
     configure_console_output()
-    if TEST_SCRAPE_MODE:
-        from job_hunter_agent.llm_gate import _get_llm_model
-        print("=" * 60)
-        print("  TEST SCRAPE MODE")
-        print(f"  LLM model  : {_get_llm_model()}  (overrides admin setting)")
-        print(f"  Score floor: {DASHBOARD_MIN_SCORE}  (normal: 50)")
-        print("  Raw scores : visible on cards")
-        print("=" * 60)
-    else:
-        from job_hunter_agent.llm_gate import _get_llm_model
-        print(f"Mode: normal scrape  |  LLM: {_get_llm_model()}  |  Score floor: {DASHBOARD_MIN_SCORE}")
+    from job_hunter_agent.llm_gate import _get_llm_model
+    print("=" * 60)
+    print("  JOB HUNTER AGENT - SCRAPE RUN")
+    print("=" * 60)
+    print(f"  Test Scrape Mode   : {'ON' if TEST_SCRAPE_MODE else 'OFF'}")
+    print(f"  LLM Disabled       : {'YES (--no-llm flag)' if NO_LLM_MODE else 'NO'}")
+    print(f"  LLM Model          : {_get_llm_model()}")
+    print(f"  Score Floor        : {DASHBOARD_MIN_SCORE}")
+    print(f"  Reset New To You   : {'YES' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
+    if CLI_MAX_PAGES_CAP is not None:
+        print(f"  Max Pages Override : {CLI_MAX_PAGES_CAP}")
+    print("=" * 60)
 
     profile = load_profile()
     previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
@@ -5452,12 +5453,12 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
 
 def rebuild_html_dashboard() -> str:
     configure_console_output()
-    if TEST_DASHBOARD_MODE:
-        print("Mode: test dashboard rebuild")
-    elif TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
-        print("Mode: real dashboard rebuild with viewed-state reset")
-    else:
-        print("Mode: real dashboard rebuild")
+    print("=" * 60)
+    print("  JOB HUNTER AGENT - DASHBOARD REBUILD")
+    print("=" * 60)
+    print(f"  Test Dashboard Mode: {'ON' if TEST_DASHBOARD_MODE else 'OFF'}")
+    print(f"  Reset New To You   : {'YES' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
+    print("=" * 60)
     profile = load_profile()
     search_settings = get_search_settings(profile)
     configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
@@ -5482,10 +5483,6 @@ def rebuild_html_dashboard() -> str:
         reference_time,
     )
     print(f"Dashboard rebuilt at {OUTPUT_HTML}")
-    if TEST_ANY_MODE:
-        print("New To You has been reset for testing.")
-    elif "--reset-new-to-you" in CLI_FLAGS:
-        print("Viewed history has been reset for this dashboard rebuild.")
     return OUTPUT_HTML
 
 
