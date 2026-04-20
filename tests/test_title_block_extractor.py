@@ -1,4 +1,5 @@
 ﻿"""Tests for the deterministic title block phrase extractor.
+﻿"""Tests for the deterministic title block phrase extractor.
 
 Run with: python -m pytest tests/test_title_block_extractor.py -v
 Or:        python tests/test_title_block_extractor.py
@@ -25,6 +26,7 @@ CASES = [
     # Two-char tech acronym
     ("Senior Delivery Manager | AI & 365", "ai"),
     # No safe discriminator â€” all tokens are generic
+    # No safe discriminator — all tokens are generic
     ("Senior Delivery Manager", None),
     ("Senior Analyst", None),
     ("Senior Delivery Digital Manager", None),

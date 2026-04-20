@@ -101,6 +101,7 @@ def suggest_title_block_phrases(title: str) -> list[str]:
     segments = [
         s.strip()
         for s in re.split(r"\s*\|\s*|\s[-â€“â€”/:]\s|[(),\[\]]", normalized)
+        for s in re.split(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]", normalized)
         if s and s.strip()
     ]
     ranked_groups: list[list[str]] = [[], []]

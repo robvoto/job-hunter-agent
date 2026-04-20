@@ -180,7 +180,7 @@ _MONTH_TOKEN_PATTERN = (
 _DATE_RANGE_PATTERN = re.compile(
     rf"(?:(?P<start_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
     rf"(?P<start_year>(?:19|20)\d{{2}})"
-    rf"\s*(?:-|–|—|â€“|to|/)\s*"
+    rf"\s*(?:-|–|—|to|/)\s*"
     rf"(?:(?P<end_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
     rf"(?:(?P<end_year>(?:19|20)\d{{2}})|(?P<end_relative>present|current|now|ongoing))",
     flags=re.IGNORECASE,

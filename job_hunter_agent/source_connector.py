@@ -78,9 +78,8 @@ TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = (
 )
 SKIP_QUICK_CARD_GATE_FOR_TESTING = False
 SHOW_SCORING_DEBUG = TEST_ANY_MODE
-SHOW_BORDERLINE_BY_DEFAULT = TEST_ANY_MODE
 DASHBOARD_MIN_SCORE = 35 if TEST_ANY_MODE else 50
-DEFAULT_SCORE_FILTER_MIN = 35 if TEST_ANY_MODE else (50 if SHOW_BORDERLINE_BY_DEFAULT else 65)
+DEFAULT_SCORE_FILTER_MIN = DASHBOARD_MIN_SCORE
 LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
 DEBUG_JSON_PATH = OUTPUT_DIR / "audit_records.json"
 JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
@@ -371,7 +370,7 @@ def infer_employer_type(record: dict, details_text: str) -> str:
     company = compact_whitespace(record.get("company") or "").lower()
     combined = f"{company}\n{compact_whitespace(details_text).lower()}"
 
-    if any(term in combined for term in ("government", "department", "agency", "aps", "public sector", "ministry", "council")):
+    if has_government_context(combined):
         return "Government agency"
     if any(term in company for term in ("recruitment", "sourcing", "talent", "peoplebank", "randstad", "hays", "ignite")):
         return "Recruitment-led role"
@@ -427,6 +426,21 @@ def friendly_capability_label(name: str) -> str:
     return normalized[:1].upper() + normalized[1:] if normalized else ""
 
 
+_GOVERNMENT_CONTEXT_PATTERNS = (
+    r"\bgovernment\b",
+    r"\bpublic sector\b",
+    r"\bfederal\b",
+    r"\baps\d*\b",
+    r"\bdepartment\b",
+    r"\bdepartment of\b",
+    r"\bministry\b",
+    r"\bcouncil\b",
+    r"\bstate government\b",
+    r"\blocal government\b",
+    r"\bgovernment agency\b",
+)
+
+
 def text_contains_term(text: str, term: str) -> bool:
     cleaned_text = compact_whitespace(text).lower()
     cleaned_term = compact_whitespace(term).lower()
@@ -434,6 +448,13 @@ def text_contains_term(text: str, term: str) -> bool:
         return False
     pattern = rf"(?<!\w){re.escape(cleaned_term)}(?!\w)"
     return re.search(pattern, cleaned_text) is not None
+
+
+def has_government_context(text: str) -> bool:
+    lowered = compact_whitespace(text).lower()
+    if not lowered:
+        return False
+    return any(re.search(pattern, lowered) for pattern in _GOVERNMENT_CONTEXT_PATTERNS)
 
 
 def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
@@ -528,11 +549,7 @@ def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[st
 
 
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
-    highlights: List[str] = [
-        compact_whitespace(item)
-        for item in (record.get("fit_highlights") or [])
-        if compact_whitespace(item)
-    ]
+    highlights: List[str] = []
     active_profile = profile or load_profile()
     role_bundle = role_text_bundle(record, details_text)
     lowered = role_bundle.lower()
@@ -545,7 +562,7 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
         if label and f"Strong capability match: {label}" not in highlights:
             highlights.append(f"Strong capability match: {label}")
 
-    if any(text_contains_term(lowered, term) for term in ("government", "department", "agency", "aps", "public sector", "federal", "state")):
+    if has_government_context(lowered):
         highlights.append("Government context")
 
     contract_months = extract_contract_months(details_text)
@@ -1333,20 +1350,34 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     title = compact_whitespace(record.get("title") or "").lower()
     company = compact_whitespace(record.get("company") or "").lower()
     source_text = build_fit_source_text(record).lower()
-    government_terms = (
-        "government",
-        "department",
-        "agency",
-        "public sector",
-        "aps",
-        "ministerial",
-        "federal",
-        "state",
-    )
     combined = "\n".join([title, company, source_text])
-    if any(term in combined for term in government_terms):
+    if has_government_context(combined) or text_contains_term(combined, "ministerial"):
         return {"label": "Government context", "value": 4}
     return None
+
+
+def visible_fit_reasons(fit_highlights: List[str], score_breakdown: List[dict], max_items: int = 4) -> List[str]:
+    reasons = dedupe_preserve_order([
+        compact_whitespace(item)
+        for item in fit_highlights
+        if compact_whitespace(item)
+    ])
+    excluded = {
+        "Fit evidence bullets",
+        "Passed content filters",
+    }
+
+    for item in score_breakdown:
+        label = compact_whitespace(item.get("label") or "")
+        value = int(item.get("value", 0) or 0)
+        if not label or value <= 0 or label in excluded:
+            continue
+        if label not in reasons:
+            reasons.append(label)
+        if len(reasons) >= max_items:
+            break
+
+    return reasons[:max_items]
 
 
 def score_to_match_label(score: int) -> str:
@@ -1357,6 +1388,34 @@ def score_to_match_label(score: int) -> str:
     if score >= 50:
         return "Worth a look"
     return "Stretch"
+
+
+def score_filter_thresholds(
+    records: List[dict],
+    scoring_profile: Optional[dict] = None,
+    include_borderline: Optional[bool] = None,
+) -> List[int]:
+    active_profile = scoring_profile or load_profile()
+    show_borderline = TEST_ANY_MODE if include_borderline is None else bool(include_borderline)
+    scores = [fit_score(record, active_profile) for record in records]
+
+    thresholds = [80, 65, 50]
+    if show_borderline or any(score < 50 for score in scores):
+        thresholds.append(35)
+    return thresholds
+
+
+def render_score_filter_options(
+    records: List[dict],
+    scoring_profile: Optional[dict] = None,
+    default_min: int = DEFAULT_SCORE_FILTER_MIN,
+    include_borderline: Optional[bool] = None,
+) -> str:
+    options = ['<option value="all">Any</option>']
+    for threshold in score_filter_thresholds(records, scoring_profile, include_borderline=include_borderline):
+        selected_attr = " selected" if int(default_min) == threshold else ""
+        options.append(f'<option value="{threshold}"{selected_attr}>{threshold}+ only</option>')
+    return "".join(options)
 
 
 def humanize_reject_reason(reason: Optional[str]) -> str:
@@ -2078,6 +2137,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     fit_label = score_to_match_label(fit_points)
     fit_tone_class = score_to_tone_class(fit_points)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
+    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown)
     posted_text = normalize_posted_text(record.get("posted"))
     posted_date_label = format_posted_date_label(
         posted_text,
@@ -2178,8 +2238,8 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         else ""
     )
     note_bits: List[str] = []
-    if fit_highlights:
-        note_bits.append(f"Strongest fit: {fit_highlights[0]}.")
+    if visible_reasons:
+        note_bits.append(f"Strongest fit: {visible_reasons[0]}.")
     if missing_evidence:
         note_bits.append(f"Missing evidence: {missing_evidence[0]}.")
     elif soft_risk_reasons:
@@ -2190,11 +2250,11 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         else ""
     )
     insight_sections = []
-    if fit_highlights:
+    if visible_reasons:
         insight_sections.append(
             '<div class="job-insight-group">'
             '<strong>Why it fits</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in fit_highlights)}</ul>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in visible_reasons)}</ul>'
             '</div>'
         )
     if missing_evidence:
@@ -2425,6 +2485,8 @@ def render_html(
     stale_archive_records = dashboard_records["stale_archive_records"]
     applied_records = dashboard_records["applied_records"]
     hidden_records = dashboard_records["hidden_records"]
+    potential_records = [*current_records, *recent_archive_records, *stale_archive_records]
+    score_filter_options_html = render_score_filter_options(potential_records, scoring_profile)
     shortlist_count = len(current_records) + len(recent_archive_records) + len(stale_archive_records)
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
     target_summaries = []
@@ -3707,11 +3769,7 @@ def render_html(
               <label class="filter-field">
                 <span>Match score</span>
                 <select id="score_filter">
-                  <option value="all">Any</option>
-                  <option value="80" {"selected" if DEFAULT_SCORE_FILTER_MIN == 80 else ""}>80+ only</option>
-                  <option value="65" {"selected" if DEFAULT_SCORE_FILTER_MIN == 65 else ""}>65+ only</option>
-                  <option value="35" {"selected" if DEFAULT_SCORE_FILTER_MIN == 35 else ""}>35+ only</option>
-                  <option value="50" {"selected" if DEFAULT_SCORE_FILTER_MIN == 50 else ""}>50+ only</option>
+                  {score_filter_options_html}
                 </select>
               </label>
               <label class="filter-field">
@@ -4187,7 +4245,12 @@ def render_html(
         if (filters.scope && scopeFilter) scopeFilter.value = filters.scope;
         if (filters.posted && postedFilter) postedFilter.value = filters.posted;
         if (filters.workMode && workModeFilter) workModeFilter.value = filters.workMode;
-        if (filters.score && scoreFilter) scoreFilter.value = filters.score;
+        if (filters.score && scoreFilter) {{
+          const availableScoreValues = new Set(Array.from(scoreFilter.options).map(option => option.value));
+          if (availableScoreValues.has(String(filters.score))) {{
+            scoreFilter.value = String(filters.score);
+          }}
+        }}
         if (filters.salary && salaryFilter) salaryFilter.value = filters.salary;
       }} catch (e) {{}}
     }}

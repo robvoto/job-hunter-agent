@@ -36,6 +36,7 @@ _TEST_SCRAPE_MODE = "--test-scrape-mode" in sys.argv
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
 
+# â”€â”€ Cost logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” €â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— ⏩
 _LLM_COSTS_PATH = DATA_DIR / "llm_costs.jsonl"
 _PRICING_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
@@ -254,10 +255,10 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
     or empty lists if LLM is unavailable or extraction fails.
     """
     if client is None:
-        print("[TITLE_PATTERNS] Skipped â€” LLM client is None (no OPENAI_API_KEY?)")
+        print("[TITLE_PATTERNS] Skipped — LLM client is None (no OPENAI_API_KEY?)")
         return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
     if not str(cv_text or "").strip():
-        print("[TITLE_PATTERNS] Skipped â€” cv_text is empty")
+        print("[TITLE_PATTERNS] Skipped — cv_text is empty")
         return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
     settings = onboarding_settings or {}
@@ -278,7 +279,7 @@ def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | Non
         "Rules for target_title_patterns:\n"
         f"- Only include roles the candidate actually held for more than {min_months} months.\n"
         f"- Only include roles that ended within the last {lookback_years} years (today is {today_label}).\n"
-        "- Base patterns on real job titles from the CV work history â€” not skills, tools, or certifications.\n"
+        "- Base patterns on real job titles from the CV work history — not skills, tools, or certifications.\n"
         "- If uncertain whether a role qualifies, exclude it. Fewer accurate patterns beat many noisy ones.\n\n"
         "Rules for adjacent_title_patterns:\n"
         "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
@@ -418,7 +419,7 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def get_cost_summary() -> dict[str, Any]:
-    """Read llm_costs.jsonl and return totals by purpose â€” useful for debugging."""
+    """Read llm_costs.jsonl and return totals by purpose — useful for debugging."""
     totals: dict[str, dict[str, Any]] = {}
     try:
         with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:
