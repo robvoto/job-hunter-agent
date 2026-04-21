@@ -302,26 +302,6 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
     except Exception:
         return []
 
-def _normalize_pattern_list(items: list[Any], limit: int) -> list[str]:
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for item in items or []:
-        text = (
-            str(item)
-            .replace("\r\n", "\n")
-            .replace("\r", "\n")
-            .replace("\\r\\n", "\n")
-            .replace("\\n", "\n")
-            .replace("\\r", "\n")
-        )
-        for part in text.split("\n"):
-            value = part.strip()
-            key = value.lower()
-            if value and key not in seen:
-                seen.add(key)
-                normalized.append(value)
-    return normalized[:limit]
-
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:
     if client is None:
         return dict(DEFAULT_LLM_REVIEW)

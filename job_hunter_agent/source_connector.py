@@ -287,35 +287,6 @@ def _is_generic_summary_text(text: str) -> bool:
     return any(phrase in lowered for phrase in generic_phrases)
 
 
-def score_summary_snippet(snippet: str) -> int:
-    lowered = snippet.lower()
-    score = 0
-    summary_keywords = (
-        "looking for",
-        "seeking",
-        "you will",
-        "responsible for",
-        "lead",
-        "deliver",
-        "support",
-        "requirements",
-        "stakeholder",
-        "workshop",
-        "process",
-        "integration",
-        "data",
-        "implementation",
-    )
-    score += sum(2 for keyword in summary_keywords if keyword in lowered)
-    if len(snippet) < 60:
-        score -= 1
-    if _is_generic_summary_text(snippet):
-        score -= 3
-    if re.search(r"\$\d", lowered):
-        score -= 2
-    return score
-
-
 def synthesize_role_snapshot(record: dict) -> str:
     title = compact_whitespace(record.get("title") or "")
     location = compact_whitespace(record.get("location") or "")
@@ -340,24 +311,6 @@ def synthesize_role_snapshot(record: dict) -> str:
         summary = f"{summary} {teaser}".strip()
 
     return summarize_snippet(summary, max_length=220) if summary else "Role summary not available."
-
-
-def build_role_snapshot(details_text: str, teaser: Optional[str]) -> str:
-    teaser_text = compact_whitespace(teaser)
-    detail_snippets = split_text_snippets(details_text)
-    if teaser_text and teaser_text.lower() != "n/a" and not _is_generic_summary_text(teaser_text):
-        if len(teaser_text) <= 240:
-            return teaser_text
-    if detail_snippets:
-        ranked = sorted(
-            detail_snippets,
-            key=lambda item: (-score_summary_snippet(item), len(item)),
-        )
-        best = ranked[0]
-        if len(best) <= 260:
-            return best
-        return best[:257].rstrip() + "..."
-    return teaser_text or "Role summary not available."
 
 
 def summarize_snippet(snippet: str, max_length: int = 180) -> str:
@@ -502,53 +455,6 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
     }
 
 
-def find_matching_evidence_snippets(details_text: str, profile: dict) -> List[str]:
-    snippets = split_text_snippets(details_text)
-    if not snippets:
-        return []
-
-    target_terms: Set[str] = set()
-    for rule in profile.get("capability_profile_rules", []):
-        if not isinstance(rule, dict):
-            continue
-        fit = str(rule.get("fit") or "").strip().lower()
-        level = str(rule.get("level") or "").strip().lower()
-        if fit in {"core", "supporting"} and level in {"strong", "working", "basic"}:
-            name = str(rule.get("name") or "").strip().lower()
-            if name:
-                target_terms.add(name)
-            for alias in rule.get("aliases", []):
-                cleaned_alias = str(alias).strip().lower()
-                if cleaned_alias:
-                    target_terms.add(cleaned_alias)
-
-    generic_positive_terms = {
-        "delivery",
-        "implementation",
-        "transformation",
-        "change",
-        "strategy",
-        "project",
-        "initiative",
-        "lead",
-        "manage",
-        "ownership",
-    }
-
-    scored: List[tuple[int, str]] = []
-    for snippet in snippets:
-        lowered = snippet.lower()
-        target_matches = sum(1 for term in target_terms if text_contains_term(lowered, term))
-        positive_matches = sum(1 for term in generic_positive_terms if text_contains_term(lowered, term))
-        if target_matches > 0 or positive_matches > 0:
-            score = (target_matches * 3) + positive_matches
-            if any(token in lowered for token in ("experience in", "responsible for", "working with", "will")):
-                score += 1
-            scored.append((score, summarize_snippet(snippet)))
-    scored.sort(key=lambda item: (-item[0], len(item[1])))
-    return dedupe_preserve_order([snippet for _, snippet in scored[:3]])
-
-
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
     highlights: List[str] = []
     active_profile = profile or load_profile()
@@ -578,6 +484,18 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
 
     highlights.extend(competitive_fit_highlights(record, active_profile))
     return dedupe_preserve_order(highlights)[:4]
+
+
+def is_capability_fit_highlight(value: str) -> bool:
+    return compact_whitespace(value).startswith("Strong capability match:")
+
+
+def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
+    return [
+        compact_whitespace(item)
+        for item in fit_highlights
+        if is_capability_fit_highlight(str(item))
+    ]
 
 
 def build_risk_and_missing_evidence(
@@ -618,15 +536,6 @@ def _normalized_aliases(values: List[str]) -> List[str]:
     return dedupe_preserve_order(
         [compact_whitespace(str(value)).lower() for value in values if compact_whitespace(str(value))]
     )
-
-
-def _profile_text_blob(profile: dict) -> str:
-    parts = [
-        profile.get("llm_profile_brief"),
-        profile.get("star_evidence_text"),
-        profile.get("cv_text"),
-    ]
-    return "\n".join(compact_whitespace(part).lower() for part in parts if compact_whitespace(part))
 
 
 def _profile_auxiliary_text(profile: dict) -> str:
@@ -862,7 +771,7 @@ def competitive_signal_assessments(record: dict, profile: Optional[dict] = None)
             return sanitized
 
     active_profile = profile or load_profile()
-    details_text = build_fit_source_text(record, include_risks=False)
+    details_text = build_scoring_source_text(record)
     signals = detect_competitive_signals(details_text, active_profile)
     return [evaluate_competitive_signal_alignment(signal, active_profile) for signal in signals]
 
@@ -946,7 +855,7 @@ def salary_fit_label(record: dict, profile: Optional[dict] = None) -> str:
         return "missing"
 
     salary_adjustment = salary_fit_adjustment(record, profile)
-    if salary_adjustment >= 4:
+    if salary_adjustment > 0:
         return "meets"
     if salary_adjustment < 0:
         return "below"
@@ -1087,53 +996,20 @@ def weighted_points(value: int, weight: float) -> int:
     return -int(math.floor(abs(scaled) + 0.5))
 
 
-def build_fit_source_text(record: dict, include_risks: bool = True) -> str:
-    # WARNING: Must NOT be used for fit evaluation. For display/debug only.
-    explicit_source = compact_whitespace(record.get("fit_source_text") or "")
-    if explicit_source:
-        return explicit_source
+def build_scoring_source_text(record: dict) -> str:
     source_parts: List[str] = []
-    values = [
+    for value in [
+        record.get("fit_source_text"),
+        record.get("full_description"),
         record.get("title"),
+        record.get("company"),
         record.get("role_snapshot"),
         record.get("teaser"),
-        *(record.get("fit_highlights", []) or []),
-    ]
-    if include_risks:
-        values.extend(record.get("missing_evidence", []) or [])
-        values.extend(record.get("soft_risk_reasons", []) or [])
-    for value in values:
+    ]:
         cleaned = compact_whitespace(value)
         if cleaned and cleaned != "N/A":
             source_parts.append(cleaned)
     return "\n".join(dedupe_preserve_order(source_parts))
-
-
-def find_requirement_strength(details_text: str, aliases: List[str]) -> str:
-    lowered = compact_whitespace(details_text).lower()
-    if not lowered:
-        return ""
-
-    essential_terms = r"(required|essential|must have|mandatory|strong experience|proven experience)"
-    desirable_terms = r"(desirable|nice to have|preferred|bonus)"
-
-    for alias in aliases:
-        cleaned = str(alias).strip().lower()
-        if not cleaned:
-            continue
-        escaped = re.escape(cleaned)
-        if re.search(rf"{essential_terms}.{{0,60}}{escaped}|{escaped}.{{0,60}}{essential_terms}", lowered):
-            return "essential"
-    for alias in aliases:
-        cleaned = str(alias).strip().lower()
-        if not cleaned:
-            continue
-        escaped = re.escape(cleaned)
-        if re.search(rf"{desirable_terms}.{{0,60}}{escaped}|{escaped}.{{0,60}}{desirable_terms}", lowered):
-            return "desirable"
-    if any(str(alias).strip().lower() in lowered for alias in aliases if str(alias).strip()):
-        return "mentioned"
-    return ""
 
 
 def extract_contract_months(details_text: str) -> Optional[int]:
@@ -1239,7 +1115,7 @@ def llm_description_fit_entry(record: dict) -> dict:
 
 def deterministic_review_outcome(record: dict, fit_highlights: List[str], missing_evidence: List[str], soft_risk_reasons: List[str]) -> Optional[dict]:
     title_reason = str(record.get("title_reason") or "")
-    strong_signal_count = len(fit_highlights)
+    strong_signal_count = len(capability_fit_highlights(fit_highlights))
     high_risks = len(missing_evidence)
     medium_risks = len(soft_risk_reasons)
 
@@ -1257,7 +1133,7 @@ def deterministic_review_outcome(record: dict, fit_highlights: List[str], missin
 def assess_location_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
-    source_text = build_fit_source_text(record).lower()
+    source_text = build_scoring_source_text(record).lower()
     location = compact_whitespace(record.get("location") or "").lower()
     work_mode = compact_whitespace(record.get("work_mode") or "").lower()
 
@@ -1310,7 +1186,7 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
-    source_text = build_fit_source_text(record)
+    source_text = build_scoring_source_text(record)
     work_type = compact_whitespace(record.get("work_type") or "").lower()
     preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
     short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
@@ -1350,7 +1226,7 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
 
     title = compact_whitespace(record.get("title") or "").lower()
     company = compact_whitespace(record.get("company") or "").lower()
-    source_text = build_fit_source_text(record).lower()
+    source_text = build_scoring_source_text(record).lower()
     combined = "\n".join([title, company, source_text])
     if has_government_context(combined) or text_contains_term(combined, "ministerial"):
         return {"label": "Government context", "value": 4}
@@ -1391,6 +1267,13 @@ def score_to_match_label(score: int) -> str:
     return "Stretch"
 
 
+def score_filter_option_label(threshold: int) -> str:
+    label = score_to_match_label(threshold)
+    if threshold >= 80:
+        return f"{label} only"
+    return f"{label} or better"
+
+
 def score_filter_thresholds(
     records: List[dict],
     scoring_profile: Optional[dict] = None,
@@ -1412,10 +1295,44 @@ def render_score_filter_options(
     default_min: int = DEFAULT_SCORE_FILTER_MIN,
     include_borderline: Optional[bool] = None,
 ) -> str:
-    options = ['<option value="all">Any</option>']
+    options = ['<option value="all">All match levels</option>']
     for threshold in score_filter_thresholds(records, scoring_profile, include_borderline=include_borderline):
         selected_attr = " selected" if int(default_min) == threshold else ""
-        options.append(f'<option value="{threshold}"{selected_attr}>{threshold}+ only</option>')
+        options.append(
+            f'<option value="{threshold}"{selected_attr}>'
+            f'{safe_html(score_filter_option_label(threshold))}</option>'
+        )
+    return "".join(options)
+
+
+def posted_filter_option_label(threshold: int) -> str:
+    labels = {
+        1: "Posted today",
+        3: "Recent roles",
+        7: "This week",
+        15: "Last two weeks",
+        30: "This month",
+    }
+    return labels.get(threshold, f"Last {threshold} days")
+
+
+def render_posted_filter_options(records: List[dict]) -> str:
+    options = [f'<option value="all">Any posted date ({len(records)})</option>']
+    previous_count = 0
+    for threshold in [1, 3, 7, 15, 30]:
+        count = sum(
+            1
+            for record in records
+            if record.get("posted_age_days") is not None
+            and float(record.get("posted_age_days") or 0) <= threshold
+        )
+        if count == previous_count:
+            continue
+        previous_count = count
+        options.append(
+            f'<option value="{threshold}">'
+            f'{safe_html(posted_filter_option_label(threshold))} ({count})</option>'
+        )
     return "".join(options)
 
 
@@ -1553,7 +1470,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     if content_reason == "OK":
         breakdown.append({"label": "Passed content filters", "value": weighted_points(8, weights["fit"])})
 
-    evidence_score = min(len(fit_highlights) * 3, 12)
+    evidence_score = min(len(capability_fit_highlights(fit_highlights)) * 3, 12)
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
 
@@ -2181,14 +2098,16 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         badges.append(viewed_badge_html())
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
 
+    score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
-        f'<div class="match-tile {fit_tone_class}">'
+        f'<div class="match-tile {fit_tone_class}" style="--match-score: {score_percent}%;">'
         + (
             f'<span class="match-tile-number">{fit_points}</span>'
-            if TEST_ANY_MODE
+            if SHOW_SCORES_MODE
             else ""
         )
         + f'<span class="match-tile-label">{safe_html(fit_label)}</span>'
+        + '<span class="match-tile-bar" aria-hidden="true"><span class="match-tile-bar-fill"></span></span>'
         + "</div>"
     )
 
@@ -2334,7 +2253,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             '</div>'
             '<p class="block-impact" data-block-impact></p>'
             '<p class="block-confirm-sub">This will remove similar roles in future searches.</p>'
-            '<p class="block-admin-tip">Manage all blocked patterns in the <a href="http://127.0.0.1:8765" target="_blank" rel="noopener">Admin panel</a>.</p>'
+            '<p class="block-admin-tip">Manage all blocked patterns in the <a href="/" target="_blank" rel="noopener">Admin panel</a>.</p>'
             '<div class="block-confirm-actions">'
             '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Confirm Block</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
@@ -2488,6 +2407,7 @@ def render_html(
     hidden_records = dashboard_records["hidden_records"]
     potential_records = [*current_records, *recent_archive_records, *stale_archive_records]
     score_filter_options_html = render_score_filter_options(potential_records, scoring_profile)
+    posted_filter_options_html = render_posted_filter_options(potential_records)
     shortlist_count = len(current_records) + len(recent_archive_records) + len(stale_archive_records)
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
     target_summaries = []
@@ -2497,12 +2417,12 @@ def render_html(
     testing_mode_note = ""
     if TEST_SCRAPE_MODE:
         testing_mode_note = (
-            f" Scrape test mode is on, so the dashboard keeps roles scoring {DASHBOARD_MIN_SCORE}+,"
+            f" Scrape test mode is on, so the dashboard keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better,"
             f" shows raw scores, and treats every role as New To You."
         )
     elif TEST_DASHBOARD_MODE:
         testing_mode_note = (
-            f" Dashboard test mode is on, so the shortlist keeps roles scoring {DASHBOARD_MIN_SCORE}+"
+            f" Dashboard test mode is on, so the shortlist keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better"
             f" and treats every role as New To You without running a fresh scrape."
         )
     elif "--reset-new-to-you" in CLI_FLAGS:
@@ -2523,10 +2443,11 @@ def render_html(
     search_keywords_label = search_settings_payload["keywords"] or "Not set"
     search_locations_label = " | ".join(search_settings_payload["locations"]) or "Not set"
     search_locations_text = "\n".join(search_settings_payload["locations"])
+    search_settings_json = json.dumps(search_settings_payload, ensure_ascii=False).replace("</", "<\\/")
     snapshot_helper = (
-        f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and treats all roles as New To You."
+        f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and treats all roles as New To You."
         if TEST_ANY_MODE
-        else f"Shortlist currently keeps roles scoring {DASHBOARD_MIN_SCORE}+ and preserves your viewed history."
+        else f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and preserves your viewed history."
     )
     hero_summary = (
         f"Last run {run_label} - {run_stats.get('cards_seen', 0)} cards scanned, "
@@ -3142,24 +3063,43 @@ def render_html(
       margin-top: 4px;
     }}
     .match-tile {{
-      min-width: 108px;
+      min-width: 124px;
       align-self: flex-start;
       border-radius: 18px;
-      padding: 12px 14px 10px;
+      padding: 12px 14px 11px;
       text-align: center;
       background: #eefbf3;
+      display: grid;
+      gap: 7px;
     }}
     .match-tile-number {{
       display: block;
       font-family: var(--serif);
       font-size: 2rem;
       line-height: 1;
-      margin-bottom: 4px;
     }}
     .match-tile-label {{
       display: block;
       font-size: 0.95rem;
       font-weight: 600;
+      line-height: 1.2;
+    }}
+    .match-tile-bar {{
+      display: block;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }}
+    .match-tile-bar-fill {{
+      display: block;
+      width: var(--match-score, 0%);
+      height: 100%;
+      border-radius: inherit;
+      background: currentColor;
+      opacity: 0.72;
     }}
     .tone-strong.match-tile {{
       background: #dbf8e6;
@@ -3750,12 +3690,7 @@ def render_html(
               <label class="filter-field">
                 <span>Posted</span>
                 <select id="posted_filter">
-                  <option value="all">Any time</option>
-                  <option value="1">Today</option>
-                  <option value="3">Last 3 days</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="15">Last 15 days</option>
-                  <option value="30">Last 30 days</option>
+                  {posted_filter_options_html}
                 </select>
               </label>
               <label class="filter-field">
@@ -3768,7 +3703,7 @@ def render_html(
                 </select>
               </label>
               <label class="filter-field">
-                <span>Match score</span>
+                <span>Match level</span>
                 <select id="score_filter">
                   {score_filter_options_html}
                 </select>
@@ -3910,21 +3845,21 @@ def render_html(
         </details>
         <details class="side-panel">
           <summary>
-            <span>How Match Score Works</span>
+            <span>How Match Levels Work</span>
             <span class="side-toggle-hint">Show / hide</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">The score is a guide, not a final verdict. The raw number is kept internally for ranking and is shown on cards only in test mode. Normal mode shows four human-friendly bands instead so the dashboard does not pretend to be more precise than it really is.</p>
+            <p class="side-panel-copy">Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the dashboard does not pretend to be more precise than it really is.</p>
             <div class="job-meta">
-              <span class="chip"><strong>Strong match:</strong> 80-100</span>
-              <span class="chip"><strong>Good match:</strong> 65-79</span>
-              <span class="chip"><strong>Worth a look:</strong> 50-64</span>
-              <span class="chip"><strong>Stretch:</strong> 0-49</span>
-              <span class="chip"><strong>Title match:</strong> +14 direct, +4 adjacent</span>
-              <span class="chip"><strong>Description review:</strong> +20 excellent, +16 strong, +12 solid, +6 weak, 0 poor, -10 mismatch</span>
-              <span class="chip"><strong>Competitive signals:</strong> specialist bias can add a small boost or a moderate penalty</span>
-              <span class="chip"><strong>Freshness:</strong> newer roles score higher</span>
-              <span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can now be dialed up or down</span>
+              <span class="chip"><strong>Strong match:</strong> strongest fit signals</span>
+              <span class="chip"><strong>Good match:</strong> clear fit with fewer caveats</span>
+              <span class="chip"><strong>Worth a look:</strong> plausible fit worth reviewing</span>
+              <span class="chip"><strong>Stretch:</strong> lower-confidence or borderline fit</span>
+              <span class="chip"><strong>Title match:</strong> direct titles are favored over adjacent titles</span>
+              <span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span>
+              <span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span>
+              <span class="chip"><strong>Freshness:</strong> newer roles are favored</span>
+              <span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can be dialed up or down</span>
               <span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>
               <span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>
             </div>
@@ -3964,16 +3899,17 @@ def render_html(
       <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
       <button class="rejection-btn-skip" id="rejection-btn-skip" type="button">Just Hide</button>
       <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
-      <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="http://127.0.0.1:8765" target="_blank" rel="noopener">Admin panel</a>.</p>
+      <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="/" target="_blank" rel="noopener">Admin panel</a>.</p>
     </div>
   </div>
     <script>
-    const REVIEW_API_URL = 'http://127.0.0.1:8765/api/review';
-    const JOB_HISTORY_API_URL = 'http://127.0.0.1:8765/api/job-history';
-    const RUN_API_URL = 'http://127.0.0.1:8765/api/run';
-    const RUN_STATUS_API_URL = 'http://127.0.0.1:8765/api/run-status';
+    const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+    const REVIEW_API_URL = `${{API_BASE_URL}}/api/review`;
+    const JOB_HISTORY_API_URL = `${{API_BASE_URL}}/api/job-history`;
+    const RUN_API_URL = `${{API_BASE_URL}}/api/run`;
+    const RUN_STATUS_API_URL = `${{API_BASE_URL}}/api/run-status`;
     const DASHBOARD_FILTERS_KEY = 'jobHunter.dashboard.filters';
-    const INITIAL_SEARCH_SETTINGS = {json.dumps(search_settings_payload, ensure_ascii=False)};
+    const INITIAL_SEARCH_SETTINGS = {search_settings_json};
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
@@ -4071,7 +4007,7 @@ def render_html(
       return normalizeSearchSettingsInput({{
         keywords: searchKeywordsInput?.value || '',
         locations: String(searchLocationsInput?.value || '')
-          .split(/[\r\n]+/)
+          .split(/[\\r\\n]+/)
           .map(value => value.trim())
           .filter(Boolean),
         date_range_days: Number(searchDateRangeInput?.value || 3),
@@ -4524,7 +4460,7 @@ def render_html(
         if (!selected.length) {{ impactEl.textContent = ''; return; }}
         impactEl.textContent = 'Checking impact\u2026';
         try {{
-          const resp = await fetch('http://127.0.0.1:8765/api/title-block-preview', {{
+          const resp = await fetch(`${{API_BASE_URL}}/api/title-block-preview`, {{
             method: 'POST',
             headers: {{ 'Content-Type': 'application/json' }},
             body: JSON.stringify({{ phrases: selected }}),
@@ -4772,7 +4708,7 @@ def render_html(
       document.getElementById('rejection-panel').removeAttribute('hidden');
       document.getElementById('rejection-overlay').removeAttribute('hidden');
       const jobKey = button.dataset.jobKey || '';
-      fetch(`/api/rejection-suggestions?job_id=${{encodeURIComponent(jobKey)}}`)
+      fetch(`${{API_BASE_URL}}/api/rejection-suggestions?job_id=${{encodeURIComponent(jobKey)}}`)
         .then(r => r.json())
         .catch(() => ({{}}))
         .then(data => _rejRenderSuggestions(data));
@@ -4803,9 +4739,6 @@ def render_html(
         `<div class="rejection-group">` +
         `<div class="rejection-group-label">${{_rejCatLabels[cat] || cat}}</div>` +
         `<div class="rejection-chips">${{terms.map(t =>
-          `<label class="rejection-chip">` +
-          `<input type="checkbox" data-cat="${{cat}}" data-value="${{t.replace(/"/g, '&quot;')}}" />` +
-          `${{t}}</label>`
           `<div class="rejection-chip">` +
           `<label><input type="checkbox" data-value="${{t.replace(/"/g, '&quot;')}}" /> ${{t}}</label>` +
           `<select class="rejection-chip-select" data-orig="${{cat}}">${{catOptions}}</select>` +
@@ -4845,7 +4778,7 @@ def render_html(
         }});
       _rejectionCustomTerms.forEach(t => rules.push({{ value: t.value, category: t.category, source: 'manual' }}));
       if (rules.length > 0) {{
-        await fetch('/api/rejection-rules', {{
+        await fetch(`${{API_BASE_URL}}/api/rejection-rules`, {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
           body: JSON.stringify({{ job_id: jobKey, job_title: jobTitle, rules }}),
@@ -5252,8 +5185,6 @@ def _seek_scrape_to_records(
                             record["llm_decision"] = llm_review["decision"]
                             record["llm_fit_grade"] = llm_review["grade"]
                             record["review_source"] = review_source
-                            record["llm_decision"] = llm_review["decision"]
-                            record["llm_fit_grade"] = llm_review["grade"]
                             if TEST_SCRAPE_MODE:
                                 test_score_breakdown = fit_score_breakdown(record, profile)
                                 print(

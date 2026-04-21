@@ -3,7 +3,6 @@ import copy
 import json
 import re
 import zipfile
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -155,13 +154,6 @@ def _extract_docx_xml_text(document_xml: bytes, ns: dict[str, str]) -> str:
         if text:
             paragraphs.append(text)
     return "\n".join(paragraphs)
-
-
-def _read_docx_bytes(data: bytes) -> str:
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    with zipfile.ZipFile(BytesIO(data)) as archive:
-        document_xml = archive.read("word/document.xml")
-    return _extract_docx_xml_text(document_xml, ns)
 
 
 def read_source_document(path_value: str) -> str:

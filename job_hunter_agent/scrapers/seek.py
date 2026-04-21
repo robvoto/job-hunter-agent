@@ -225,10 +225,6 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
     }
 
 
-def fetch_job_details_text(detail_page, full_url: str) -> str:
-    return str(fetch_job_details_payload(detail_page, full_url).get("text") or "")
-
-
 def stable_job_key(full_url: Optional[str]) -> Optional[str]:
     if not full_url:
         return None
