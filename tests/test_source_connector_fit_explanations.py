@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from job_hunter_agent import source_connector
 
 
@@ -172,6 +174,27 @@ def test_salary_fit_label_marks_scores_above_target_as_meets():
     assert source_connector.salary_fit_label({"salary": "$650 per day"}, profile) == "below"
 
 
+def test_salary_fit_ignores_non_comparable_hourly_and_monthly_rates():
+    profile = {
+        **_test_profile(),
+        "salary_preferences": {
+            "minimum_salary_yearly": 120000,
+            "minimum_daily_rate": 700,
+        },
+    }
+
+    assert source_connector.salary_fit_adjustment({"salary": "$90/hr"}, profile) == 0
+    assert source_connector.salary_fit_adjustment({"salary": "$8,000 per month"}, profile) == 0
+    assert source_connector.salary_fit_adjustment({"salary": "$650 p/d"}, profile) < 0
+
+
+def test_contract_preference_treats_hyphenated_full_time_as_permanent():
+    assert source_connector.assess_contract_preference(
+        {"work_type": "Full-time", "salary": "N/A"},
+        _test_profile(),
+    ) == {"label": "Permanent role", "value": 7}
+
+
 def test_scoring_helpers_ignore_display_only_fit_highlights():
     profile = {
         **_test_profile(),
@@ -244,6 +267,32 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
     assert source_connector.profile_recency_multiplier(profile, ["delivery leadership"]) == 1.0
 
 
+def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypatch):
+    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(source_connector, "is_dashboard_eligible", lambda record, profile=None: True)
+
+    records = [
+        {"job_key": "fresh-low", "score": 55, "posted_age_days": 0.1, "times_viewed": 0},
+        {"job_key": "older-high", "score": 90, "posted_age_days": 5, "times_viewed": 0},
+        {"job_key": "fresh-mid", "score": 70, "posted_age_days": 0.2, "times_viewed": 0},
+    ]
+
+    dashboard_records = source_connector.build_dashboard_record_sets(
+        records,
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        reference_time=datetime(2026, 4, 21),
+        scoring_profile={},
+    )
+
+    assert [record["job_key"] for record in dashboard_records["current_records"]] == [
+        "older-high",
+        "fresh-mid",
+        "fresh-low",
+    ]
+
+
 def test_score_filter_thresholds_hide_35_when_no_borderline_roles(monkeypatch):
     monkeypatch.setattr(source_connector, "TEST_ANY_MODE", False)
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
@@ -300,3 +349,27 @@ def test_posted_filter_options_show_counts_and_skip_duplicate_windows():
     assert "This week (3)" in options_html
     assert "Last two weeks" not in options_html
     assert "This month" not in options_html
+
+
+def test_posted_display_anchors_relative_text_to_retrieval_date():
+    label = source_connector.posted_display_label(
+        {
+            "posted": "2d ago",
+            "posted_age_days": 2,
+            "run_started_at": "2026-04-21T09:00:00+10:00",
+        }
+    )
+
+    assert label == "19 Apr 2026 (listed as 2d ago when retrieved)"
+
+
+def test_posted_display_converts_today_to_retrieved_date():
+    label = source_connector.posted_display_label(
+        {
+            "posted": "today",
+            "posted_age_days": 0,
+            "run_started_at": "2026-04-21T09:00:00+10:00",
+        }
+    )
+
+    assert label == "21 Apr 2026 (listed as today when retrieved)"

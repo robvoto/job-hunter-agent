@@ -230,7 +230,7 @@ def _run_scrape_job() -> None:
 
 
 
-class AdminHandler(BaseHTTPRequestHandler):
+class SettingsHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _combine_text_sections(*sections: str) -> str:
         cleaned: list[str] = []
@@ -267,21 +267,21 @@ class AdminHandler(BaseHTTPRequestHandler):
             )
 
 
-        merged_cv_text = AdminHandler._combine_text_sections(current.get("cv_text", ""), raw_text)
+        merged_cv_text = SettingsHandler._combine_text_sections(current.get("cv_text", ""), raw_text)
         if merged_cv_text:
             merged_patch["cv_text"] = merged_cv_text
             current_tiers = get_evidence_tiers(current)
-            inferred_tiers = build_evidence_tiers_from_sections([{"label": "Admin Input", "text": raw_text}])
+            inferred_tiers = build_evidence_tiers_from_sections([{"label": "Settings Input", "text": raw_text}])
             merged_patch["evidence_tiers"] = {
-                "primary_current_evidence": AdminHandler._combine_text_sections(
+                "primary_current_evidence": SettingsHandler._combine_text_sections(
                     current_tiers.get("primary_current_evidence", ""),
                     inferred_tiers.get("primary_current_evidence", ""),
                 ),
-                "secondary_older_evidence": AdminHandler._combine_text_sections(
+                "secondary_older_evidence": SettingsHandler._combine_text_sections(
                     current_tiers.get("secondary_older_evidence", ""),
                     inferred_tiers.get("secondary_older_evidence", ""),
                 ),
-                "background_optional_evidence": AdminHandler._combine_text_sections(
+                "background_optional_evidence": SettingsHandler._combine_text_sections(
                     current_tiers.get("background_optional_evidence", ""),
                     inferred_tiers.get("background_optional_evidence", ""),
                 ),
@@ -369,7 +369,7 @@ class AdminHandler(BaseHTTPRequestHandler):
         patch = build_learning_patch(cleaned, onboarding_settings=onboarding_settings)
         if not patch:
             raise ValueError("Could not extract structured learning from that text")
-        patch = AdminHandler._merge_profile_learning_patch(current, patch, cleaned)
+        patch = SettingsHandler._merge_profile_learning_patch(current, patch, cleaned)
         profile = patch_profile(patch)
         return {
             "ok": True,
@@ -1461,7 +1461,7 @@ class AdminHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = ThreadingHTTPServer((HOST, PORT), AdminHandler)
+    server = ThreadingHTTPServer((HOST, PORT), SettingsHandler)
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Workspace:  http://{HOST}:{PORT}/")
     print(f"Settings:   http://{HOST}:{PORT}/settings")

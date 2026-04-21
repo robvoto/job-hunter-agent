@@ -14,7 +14,7 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 ## What Works Now
 
 - guided onboarding at `http://127.0.0.1:8765/start` (supports `.docx` and plain text)
-- local admin console at `http://127.0.0.1:8765/admin`
+- local settings console at `http://127.0.0.1:8765/settings`
 - local dashboard at `http://127.0.0.1:8765/dashboard`
 - persistent local profile in `data/profile.json`
 - deterministic filtering before any LLM review
@@ -119,7 +119,7 @@ python -m job_hunter_agent.test_runner -k profile_learning -v
 Then open:
 
 - onboarding: `http://127.0.0.1:8765/start`
-- admin: `http://127.0.0.1:8765/admin`
+- settings: `http://127.0.0.1:8765/settings`
 - dashboard: `http://127.0.0.1:8765/dashboard`
 - demo/showcase: `http://127.0.0.1:8765/demo`
 

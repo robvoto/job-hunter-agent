@@ -38,9 +38,9 @@ PRIMARY COMMANDS
 ▶ Local Web Server:
   python -m job_hunter_agent.local_server
 
-  Use this to start the web server for the Admin UI and to view the dashboard
+  Use this to start the web server for the Settings UI and to view the dashboard
   in your browser.
-  - Admin: http://127.0.0.1:8765/admin
+  - Settings: http://127.0.0.1:8765/settings
   - Dashboard: http://127.0.0.1:8765/dashboard
 
 
@@ -62,17 +62,16 @@ You can combine flags with `python -m job_hunter_agent.source_connector` to crea
 
 ---
 
-▶ For Quick & Cheap Scrape Testing:
-  python -m job_hunter_agent.source_connector --test-scrape-mode
+▶ For a Wider, Cheaper Scrape:
+  python -m job_hunter_agent.source_connector --wide-scrape
 
-  This mode is designed for cheaper and faster feedback during development.
+  This mode is designed for exploring more borderline matches cheaply.
   It does a real scrape, but:
   - Forces the use of a cheaper LLM model (gpt-4o-mini) to save costs.
   - Lowers the dashboard score threshold to 35 to show more borderline jobs.
-  - Shows raw scores on job cards for easier tuning.
 
   For a super-fast check, limit it to one page:
-  python -m job_hunter_agent.source_connector --test-scrape-mode --max-pages 1
+  python -m job_hunter_agent.source_connector --wide-scrape --max-pages 1
 
 ---
 
@@ -89,6 +88,10 @@ You can combine flags with `python -m job_hunter_agent.source_connector` to crea
     Resets the 'Viewed' status for all jobs, making the dashboard feel like a
     first look again. Often used with `--rebuild-dashboard`.
 
+--show-scores
+    Shows raw score numbers on cards and expands the fit breakdown for easier
+    tuning.
+
 
 QUICK NOTES
 -----------
@@ -96,5 +99,5 @@ QUICK NOTES
 - If the right panel says `Test mode ON`, you are looking at a test-mode dashboard.
 - Run `python -m job_hunter_agent.source_connector` to get back to a normal dashboard.
 - Console logs now show whether a run is `real` or `test`.
-- If you save profile changes in admin, the next scrape will use them.
-- If admin save feedback does not look right, restart the local server with `python -m job_hunter_agent.local_server`.
+- If you save profile changes in settings, the next scrape will use them.
+- If settings save feedback does not look right, restart the local server with `python -m job_hunter_agent.local_server`.

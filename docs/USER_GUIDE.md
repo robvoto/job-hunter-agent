@@ -30,9 +30,9 @@ python -m job_hunter_agent.local_server
 
 4. Click `Create Profile`
 
-5. Then open admin:
+5. Then open settings:
 
-- `http://127.0.0.1:8765/admin`
+- `http://127.0.0.1:8765/settings`
 
 The app will create or enrich `data/profile.json`, which becomes your working profile for job matching.
 
@@ -49,11 +49,11 @@ That profile includes:
 - capability rules
 - title targeting hints
 
-You can then refine those fields from admin.
+You can then refine those fields from the settings UI.
 
-## What The Admin Is For
+## What Settings Is For
 
-Use the admin UI to maintain the runtime profile and review controls.
+Use the settings UI to maintain the runtime profile and review controls.
 
 Tabs:
 
@@ -62,7 +62,7 @@ Tabs:
 - `Review`: hidden jobs, applied jobs, and skill-review decisions
 - `Test`: latest run stats and rejected samples
 
-Think of admin as the maintenance surface for your profile, not the place where you upload raw source files every time.
+Think of settings as the maintenance surface for your profile, not the place where you upload raw source files every time.
 
 ## What The Main Profile Fields Mean
 
@@ -181,12 +181,11 @@ python -m job_hunter_agent.test_runner
 - rebuilds the dashboard from saved local state only
 - useful when UI behavior changed and you want the latest HTML without a fresh scrape
 
-`python -m job_hunter_agent.source_connector --test-scrape-mode`
+`python -m job_hunter_agent.source_connector --wide-scrape`
 
-- runs a wider scrape test mode
+- runs a wider scrape to catch borderline matches
 - widens both SEEK and LinkedIn source windows
 - lowers the shortlist threshold
-- shows raw score numbers on cards for tuning
 
 Important:
 
@@ -196,8 +195,12 @@ Important:
 `python -m job_hunter_agent.source_connector --rebuild-dashboard --test-dashboard-mode`
 
 - rebuilds the dashboard in test view only
-- shows raw score numbers on cards for tuning
 - does not run a fresh scrape
+
+`python -m job_hunter_agent.source_connector --show-scores`
+
+- shows raw score numbers (e.g. 72/100) directly on cards
+- expands the fit breakdown section showing exactly how points were added/subtracted
 
 `python -m job_hunter_agent.agent_runner`
 

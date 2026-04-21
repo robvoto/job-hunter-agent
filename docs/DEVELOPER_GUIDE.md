@@ -17,7 +17,7 @@ Core runtime code now lives under `job_hunter_agent/`.
 Primary modules:
 
 - `job_hunter_agent/local_server.py`
-  Local web server for the admin console, dashboard, onboarding UI, and API endpoints.
+  Local web server for the settings console, dashboard, onboarding UI, and API endpoints.
 
 - `job_hunter_agent/source_documents.py`
   Local source-pack persistence and source-document import into `profile.json`.
@@ -70,7 +70,7 @@ Do not rename major files casually unless there is time to clean the whole proje
 2. Uploads a detailed CV
 3. Uploaded documents are saved into a local source pack under ignored paths
 4. The source pack is imported into `data/profile.json`
-5. Admin is then used to refine the runtime profile
+5. Settings UI is then used to refine the runtime profile
 
 ## Score Presentation
 
@@ -87,7 +87,7 @@ Design intent:
 
 - the numeric score is useful to the engine and to technical debugging
 - the raw `/100` can mislead users into reading the score as a literal probability or percentage
-- test mode may still show the raw score on cards for tuning work
+- you can use the `--show-scores` flag to see the raw score on cards and the detailed breakdown for tuning work
 
 Current band mapping:
 

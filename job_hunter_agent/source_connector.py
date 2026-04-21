@@ -72,13 +72,14 @@ _max_pages_arg = next((sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a
 CLI_MAX_PAGES_CAP = int(_max_pages_arg) if _max_pages_arg and _max_pages_arg.isdigit() else None
 NO_LLM_MODE = "--no-llm" in CLI_FLAGS
 TEST_DASHBOARD_MODE = "--test-dashboard-mode" in CLI_FLAGS
-TEST_SCRAPE_MODE = "--test-scrape-mode" in CLI_FLAGS
-TEST_ANY_MODE = TEST_DASHBOARD_MODE or TEST_SCRAPE_MODE
+WIDE_SCRAPE_MODE = "--wide-scrape" in CLI_FLAGS
+TEST_ANY_MODE = TEST_DASHBOARD_MODE or WIDE_SCRAPE_MODE
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = (
     "--reset-new-to-you" in CLI_FLAGS or TEST_ANY_MODE
 )
 SKIP_QUICK_CARD_GATE_FOR_TESTING = False
-SHOW_SCORING_DEBUG = TEST_ANY_MODE
+SHOW_SCORES_MODE = "--show-scores" in CLI_FLAGS
+SHOW_SCORING_DEBUG = SHOW_SCORES_MODE
 DASHBOARD_MIN_SCORE = 35 if TEST_ANY_MODE else 50
 DEFAULT_SCORE_FILTER_MIN = DASHBOARD_MIN_SCORE
 LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
@@ -962,7 +963,7 @@ def format_timestamp_label(value: Optional[str]) -> str:
 
 def format_posted_date_label(posted_text: Optional[str], posted_age_days: Optional[float], reference_time: Optional[datetime]) -> str:
     normalized_posted = normalize_posted_text(posted_text)
-    if normalized_posted.lower() == "today":
+    if normalized_posted.lower() == "today" and reference_time is None:
         return "Today"
     if posted_age_days is None or reference_time is None:
         return "Unknown"
@@ -971,6 +972,40 @@ def format_posted_date_label(posted_text: Optional[str], posted_age_days: Option
         return posted_at.strftime("%d %b %Y")
     except Exception:
         return "Unknown"
+
+
+def posted_reference_time(record: dict) -> Optional[datetime]:
+    for key in ("run_started_at", "last_seen_at", "last_kept_at", "first_seen_at"):
+        timestamp = parse_timestamp(record.get(key))
+        if timestamp:
+            return timestamp
+    return None
+
+
+def is_relative_posted_text(value: Optional[str]) -> bool:
+    text = normalize_posted_text(value).lower()
+    if text in {"today", "yesterday"}:
+        return True
+    return re.fullmatch(r"\d+\s*[mhdy](?:\s*ago)?", text) is not None
+
+
+def posted_display_label(record: dict) -> str:
+    posted_text = normalize_posted_text(record.get("posted"))
+    posted_age_days = record.get("posted_age_days")
+    posted_date_label = format_posted_date_label(
+        posted_text,
+        posted_age_days,
+        posted_reference_time(record),
+    )
+
+    if posted_date_label != "Unknown" and posted_age_days is not None and is_relative_posted_text(posted_text):
+        return f"{posted_date_label} (listed as {posted_text} when retrieved)"
+    if posted_age_days is not None and posted_age_days >= 1 and posted_text not in ("N/A", ""):
+        if posted_date_label != "Unknown" and posted_date_label != posted_text:
+            return f"{posted_text} ({posted_date_label})"
+    if posted_text in ("N/A", "") and posted_date_label != "Unknown":
+        return posted_date_label
+    return posted_text
 
 
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
@@ -1192,8 +1227,9 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
     eng_pref = preferences.get("engagement_type", "both")
 
-    is_perm = "full time" in work_type or "permanent" in work_type
-    is_contract = "contract" in work_type
+    normalized_work_type = re.sub(r"[\s_-]+", " ", work_type).strip()
+    is_perm = "full time" in normalized_work_type or "permanent" in normalized_work_type
+    is_contract = "contract" in normalized_work_type
 
     if is_perm:
         if eng_pref == "contract":
@@ -1419,7 +1455,14 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
     parsed_value = _salary_max_value(salary_text)
     lowered = salary_text.lower()
-    is_daily = "per day" in lowered or "daily rate" in lowered or "/day" in lowered
+    is_daily = bool(re.search(r"\b(per\s+day|daily\s+rate|day\s+rate|p/d|pd)\b|/day", lowered))
+    is_non_comparable_period = bool(
+        re.search(
+            r"\b(per\s+hour|hourly|p/h|ph|per\s+week|weekly|per\s+month|monthly)\b"
+            r"|/(?:hr|hour|wk|week|mo|month)",
+            lowered,
+        )
+    )
 
     if is_daily:
         if minimum_daily_rate <= 0 or parsed_value <= 0:
@@ -1432,6 +1475,9 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
         if ratio >= 0.60:
             return -4
         return -5
+
+    if is_non_comparable_period:
+        return 0
 
     if minimum_salary_yearly <= 0 or parsed_value <= 0:
         return 0
@@ -1954,13 +2000,25 @@ def build_dashboard_record_sets(
 ) -> Dict[str, List[dict]]:
     profile = scoring_profile or load_profile()
     curated_kept_records = [record for record in kept_records if is_dashboard_eligible(record, profile)]
-    current_records = sorted(
-        curated_kept_records,
-        key=lambda record: (
-            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+
+    def _rank_by_fit(record: dict) -> tuple:
+        return (
             -fit_score(record, profile),
             -(1 if not viewed_by_user(record) else 0),
-        ),
+            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+        )
+
+    def _rank_archive_by_fit(record: dict) -> tuple:
+        timestamp = parse_timestamp(record.get("last_kept_at"))
+        return (
+            -fit_score(record, profile),
+            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+            -(timestamp or datetime.min).timestamp() if timestamp else float("-inf"),
+        )
+
+    current_records = sorted(
+        curated_kept_records,
+        key=_rank_by_fit,
     )
     current_run_keys = {
         normalize_job_key(str(record.get("job_key") or ""))
@@ -1978,23 +2036,11 @@ def build_dashboard_record_sets(
     hidden_records = build_hidden_records(hidden_job_keys, job_history, reference_time)
     recent_archive_records = sorted(
         [record for record in archive_records if not record.get("is_stale") and is_dashboard_eligible(record, profile)],
-        key=lambda record: (
-            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
-            -(fit_score(record, profile)),
-            -(parse_timestamp(record.get("last_kept_at")) or datetime.min).timestamp()
-            if parse_timestamp(record.get("last_kept_at"))
-            else float("-inf"),
-        ),
+        key=_rank_archive_by_fit,
     )
     stale_archive_records = sorted(
         [record for record in archive_records if record.get("is_stale") and is_dashboard_eligible(record, profile)],
-        key=lambda record: (
-            record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
-            -(fit_score(record, profile)),
-            -(parse_timestamp(record.get("last_kept_at")) or datetime.min).timestamp()
-            if parse_timestamp(record.get("last_kept_at"))
-            else float("-inf"),
-        ),
+        key=_rank_archive_by_fit,
     )
     return {
         "current_records": current_records,
@@ -2056,12 +2102,6 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     fit_tone_class = score_to_tone_class(fit_points)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
     visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown)
-    posted_text = normalize_posted_text(record.get("posted"))
-    posted_date_label = format_posted_date_label(
-        posted_text,
-        record.get("posted_age_days"),
-        parse_timestamp(record.get("last_seen_at")) or parse_timestamp(record.get("first_seen_at")),
-    )
     work_mode = str(record.get("work_mode") or "N/A")
     posted_age_days = record.get("posted_age_days")
     salary_value = salary_sort_value(str(record.get("salary") or ""))
@@ -2111,12 +2151,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         + "</div>"
     )
 
-    posted_display = posted_text
-    if posted_age_days is not None and posted_age_days >= 1 and posted_text not in ("N/A", ""):
-        if posted_date_label != "Unknown" and posted_date_label != posted_text:
-            posted_display = f"{posted_text} ({posted_date_label})"
-    elif posted_display in ("N/A", "") and posted_date_label != "Unknown":
-        posted_display = posted_date_label
+    posted_display = posted_display_label(record)
 
     meta_items = []
     for label, value in [
@@ -2253,7 +2288,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             '</div>'
             '<p class="block-impact" data-block-impact></p>'
             '<p class="block-confirm-sub">This will remove similar roles in future searches.</p>'
-            '<p class="block-admin-tip">Manage all blocked patterns in the <a href="/" target="_blank" rel="noopener">Admin panel</a>.</p>'
+            '<p class="block-admin-tip">Manage all blocked patterns in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>'
             '<div class="block-confirm-actions">'
             '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Confirm Block</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
@@ -2415,15 +2450,15 @@ def render_html(
         page_label = ", ".join(str(page) for page in pages) if pages else "none"
         target_summaries.append(f"{location}: pages {page_label}")
     testing_mode_note = ""
-    if TEST_SCRAPE_MODE:
+    if WIDE_SCRAPE_MODE:
         testing_mode_note = (
-            f" Scrape test mode is on, so the dashboard keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better,"
-            f" shows raw scores, and treats every role as New To You."
+            f" Wide scrape mode is on, so the dashboard keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better,"
+                f" and treats every role as New To You."
         )
     elif TEST_DASHBOARD_MODE:
         testing_mode_note = (
             f" Dashboard test mode is on, so the shortlist keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better"
-            f" and treats every role as New To You without running a fresh scrape."
+                f" and treats every role as New To You without running a fresh scrape."
         )
     elif "--reset-new-to-you" in CLI_FLAGS:
         testing_mode_note = " Viewed history has been reset for this dashboard rebuild, so all roles are shown as unseen."
@@ -2942,7 +2977,7 @@ def render_html(
     }}
     .filter-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
       gap: 12px;
     }}
     .scope-tabs {{
@@ -2989,9 +3024,11 @@ def render_html(
     .filter-field select {{
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px 14px;
+      border-radius: 10px;
+      padding: 11px 38px 11px 12px;
       font: inherit;
+      line-height: 1.3;
+      min-height: 48px;
       background: rgba(255, 255, 255, 0.82);
       color: var(--ink);
     }}
@@ -3546,6 +3583,10 @@ def render_html(
       color: #334155;
       cursor: pointer;
     }}
+    .block-empty-suggestion {{
+      color: var(--muted);
+      font-size: 0.84rem;
+    }}
     .block-phrase-checkbox {{
       accent-color: var(--cool);
       width: 15px;
@@ -3642,7 +3683,7 @@ def render_html(
     <div class="dashboard-layout">
       <div class="dashboard-main">
         <section class="hero">
-          <h1>Potential Jobs</h1>
+          <h1>Potential Jobs Found</h1>
           <p class="hero-note">{safe_html(hero_summary)}</p>
         </section>
         <section class="section filter-panel">
@@ -3662,8 +3703,8 @@ def render_html(
               <label class="filter-field">
                 <span>Sort</span>
                 <select id="sort_select">
-                  <option value="newest">Newest posted first</option>
                   <option value="fit">Best match first</option>
+                  <option value="newest">Newest posted first</option>
                   <option value="salary">Highest salary first</option>
                   <option value="unseen">Not opened by me first</option>
                 </select>
@@ -3899,7 +3940,7 @@ def render_html(
       <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
       <button class="rejection-btn-skip" id="rejection-btn-skip" type="button">Just Hide</button>
       <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
-      <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="/" target="_blank" rel="noopener">Admin panel</a>.</p>
+      <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>
     </div>
   </div>
     <script>
@@ -4239,7 +4280,7 @@ def render_html(
     }}
 
     function applyDashboardControls() {{
-      const sortMode = sortSelect?.value || 'newest';
+      const sortMode = sortSelect?.value || 'fit';
       const scopeMode = scopeFilter?.value || 'all';
       const postedLimit = postedFilter?.value || 'all';
       const workMode = workModeFilter?.value || 'all';
@@ -4418,12 +4459,6 @@ def render_html(
       try {{ phrases = JSON.parse(button.dataset.blockPhrases || '[]'); }} catch(e) {{}}
       if (!phrases.length && button.dataset.blockPhrase) phrases = [button.dataset.blockPhrase.trim()].filter(Boolean);
 
-      if (!phrases.length) {{
-        if (blockStatus) blockStatus.textContent = 'We couldn\u2019t identify a clear title pattern to block for this role.';
-        confirm.hidden = true;
-        return;
-      }}
-
       const checksContainer = confirm.querySelector('[data-block-phrase-checks]');
       const manualInput = confirm.querySelector('[data-block-manual-input]');
       const impactEl = confirm.querySelector('[data-block-impact]');
@@ -4438,9 +4473,11 @@ def render_html(
       }}
 
       if (checksContainer) {{
-        checksContainer.innerHTML = phrases.map(p =>
-          `<label class="block-phrase-check-row"><input class="block-phrase-checkbox" type="checkbox" value="${{p}}" checked> ${{p}}</label>`
-        ).join('');
+        checksContainer.innerHTML = phrases.length
+          ? phrases.map(p =>
+              `<label class="block-phrase-check-row"><input class="block-phrase-checkbox" type="checkbox" value="${{p}}" checked> ${{p}}</label>`
+            ).join('')
+          : '<span class="block-empty-suggestion">Add a phrase below.</span>';
       }}
       if (manualInput) manualInput.value = '';
 
@@ -5185,7 +5222,7 @@ def _seek_scrape_to_records(
                             record["llm_decision"] = llm_review["decision"]
                             record["llm_fit_grade"] = llm_review["grade"]
                             record["review_source"] = review_source
-                            if TEST_SCRAPE_MODE:
+                            if SHOW_SCORES_MODE:
                                 test_score_breakdown = fit_score_breakdown(record, profile)
                                 print(
                                     f"[TEST][SCORE] {title} @ {company} | "
@@ -5256,7 +5293,8 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
     print("=" * 60)
     print("  JOB HUNTER AGENT - SCRAPE RUN")
     print("=" * 60)
-    print(f"  Test Scrape Mode   : {'ON' if TEST_SCRAPE_MODE else 'OFF'}")
+    print(f"  Wide Scrape Mode   : {'ON' if WIDE_SCRAPE_MODE else 'OFF'}")
+    print(f"  Show Scores Mode   : {'ON' if SHOW_SCORES_MODE else 'OFF'}")
     print(f"  LLM Disabled       : {'YES (--no-llm flag)' if NO_LLM_MODE else 'NO'}")
     print(f"  LLM Model          : {_get_llm_model()}")
     print(f"  Score Floor        : {DASHBOARD_MIN_SCORE}")
@@ -5389,6 +5427,7 @@ def rebuild_html_dashboard() -> str:
     print("  JOB HUNTER AGENT - DASHBOARD REBUILD")
     print("=" * 60)
     print(f"  Test Dashboard Mode: {'ON' if TEST_DASHBOARD_MODE else 'OFF'}")
+    print(f"  Show Scores Mode   : {'ON' if SHOW_SCORES_MODE else 'OFF'}")
     print(f"  Reset New To You   : {'YES' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
     print("=" * 60)
     profile = load_profile()

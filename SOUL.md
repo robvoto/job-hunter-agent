@@ -34,7 +34,7 @@ The project is past the initial prototype stage.
 - SEEK scraping uses the direct-page approach in `source_connector.py`
 - deterministic filtering happens before any LLM call
 - LLM fallback is constrained to `KEEP`, `REJECT`, or `MAYBE`
-- search settings are configurable from the local admin UI
+- search settings are configurable from the local settings UI
 - search supports date window, sort by newest, locations, and classification filters
 - runtime profile is persisted in `data/profile.json`
 - source documents can now be imported into `data/profile.json` from the admin UI
@@ -66,7 +66,7 @@ This project has now settled into a clearer shape:
 
 - source documents are the human truth
 - `data/profile.json` is the runtime machine truth
-- admin is the editor and maintenance surface for that runtime truth
+- settings is the editor and maintenance surface for that runtime truth
 - generated application outputs should be derived from source documents and profile data, not treated as primary sources
 
 For a real user, the intended flow is:
@@ -74,13 +74,13 @@ For a real user, the intended flow is:
 1. import one strong detailed CV
 2. optionally import richer evidence such as STAR notes or long-form experience
 3. generate a distilled runtime profile in `data/profile.json`
-4. let the user maintain and refine that profile from the admin UI
+4. let the user maintain and refine that profile from the settings UI
 5. use that runtime profile for scraping, filtering, LLM review, and later application generation
 
 Important distinction:
 
 - `data/profile.json` is not meant to be hand-authored from zero forever
-- it should be generated initially from source documents, then edited incrementally in admin
+- it should be generated initially from source documents, then edited incrementally in settings
 - government/private CV variants are best treated as derived application outputs or templates, not the main source of truth
 
 This matters for the long-term multi-user design:
@@ -114,7 +114,7 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `source_connector.py` | Compatibility launcher for job collection and dashboard rebuilds |
 | `filters.py` | Deterministic title and content filtering |
 | `llm_gate.py` | Optional constrained LLM decision step |
-| `local_server.py` | Launcher for the local web server (Admin, Dashboard, Onboarding) |
+| `local_server.py` | Launcher for the local web server (Settings, Dashboard, Onboarding) |
 | `agent_runner.py` | Launcher for the daily agent runner and notification delivery |
 | `test_runner.py` | Wrapper for running the pytest suite |
 | `agent_settings.py` | Local agent settings and state helpers |
@@ -168,9 +168,9 @@ The exact live fit model is driven by:
 
 ---
 
-## Admin model
+## Settings model
 
-The admin UI is the main local control surface.
+The settings UI is the main local control surface.
 
 Tabs:
 - `Search`: what SEEK gets asked for
@@ -180,8 +180,8 @@ Tabs:
 
 Relationship to `profile.json`:
 
-- the admin loads data from `data/profile.json`
-- admin edits are saved back into `data/profile.json`
+- the settings UI loads data from `data/profile.json`
+- settings edits are saved back into `data/profile.json`
 - scraper and LLM both read `data/profile.json`
 - the source CV or candidate note should feed into this profile, not compete with it as a second runtime configuration system
 
@@ -200,8 +200,8 @@ When applied, new knowledge is written into `data/profile.json` and should then 
 Current intended future behavior:
 
 - initial profile fields such as the fit brief, candidate summary, CV text, evidence tiers, capability hints, and title targeting should come from imported source documents
-- after import, admin becomes the place to refine, correct, and extend them over time
-- a first-pass source-document importer now exists in the `Source Documents` panel of admin
+- after import, the settings UI becomes the place to refine, correct, and extend them over time
+- a first-pass source-document importer now exists in the `Source Documents` panel of settings
 
 ---
 
@@ -327,7 +327,7 @@ The code now resolves these files relative to the repo location, not the shell w
 - requests (Notifications and external API integration)
 - python-dotenv (Environment variable management)
 - optional Anthropic-style future agent integration
-- local HTML admin UI backed by Python `http.server`
+- local HTML settings UI backed by Python `http.server`
 - JSON file persistence
 
 ---

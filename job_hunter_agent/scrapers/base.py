@@ -160,15 +160,31 @@ def _build_salary_string(
     if min_amt is None and max_amt is None:
         return "N/A"
     prefix = "$" if currency in ("AUD", "USD", "N/A", "") else f"{currency} "
-    interval_map = {"yearly": "p.a.", "monthly": "/mo", "hourly": "/hr"}
-    suffix = interval_map.get(interval.lower(), "")
+    normalized_interval = interval.lower()
+    interval_map = {
+        "yearly": "p.a.",
+        "annual": "p.a.",
+        "monthly": "/mo",
+        "hourly": "/hr",
+        "daily": "/day",
+    }
+    divisor = 1000 if normalized_interval in {"yearly", "annual"} else 1
+    suffix = interval_map.get(normalized_interval, "")
     try:
         if min_amt is not None and max_amt is not None:
-            result = f"{prefix}{int(min_amt / 1000)}k\u2013{int(max_amt / 1000)}k"
+            result = (
+                f"{prefix}{int(min_amt / divisor)}k\u2013{int(max_amt / divisor)}k"
+                if divisor == 1000
+                else f"{prefix}{int(min_amt)}\u2013{int(max_amt)}"
+            )
         elif min_amt is not None:
-            result = f"{prefix}{int(min_amt / 1000)}k+"
+            result = f"{prefix}{int(min_amt / divisor)}k+" if divisor == 1000 else f"{prefix}{int(min_amt)}+"
         else:
-            result = f"{prefix}{int(max_amt / 1000)}k"  # type: ignore[arg-type]
+            result = (
+                f"{prefix}{int(max_amt / divisor)}k"
+                if divisor == 1000
+                else f"{prefix}{int(max_amt)}"
+            )  # type: ignore[arg-type]
         return f"{result} {suffix}".strip() if suffix else result
     except Exception:
         return "N/A"

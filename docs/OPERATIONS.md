@@ -2,7 +2,7 @@
 
 ## Runtime Source Of Truth
 
-Filtering, matching, admin editing, and LLM review all depend on `data/profile.json`.
+Filtering, matching, settings editing, and LLM review all depend on `data/profile.json`.
 
 ## Profile Creation Model
 
@@ -10,7 +10,7 @@ The intended runtime model is:
 
 1. source documents come in through onboarding
 2. onboarding creates or enriches `data/profile.json`
-3. admin refines `data/profile.json`
+3. settings refines `data/profile.json`
 4. the job-source connector and LLM read `data/profile.json`
 
 Current onboarding persists a local source pack under ignored paths and uses that to build the runtime profile.
@@ -64,7 +64,7 @@ It currently supports:
 - hidden jobs with unhide review
 - older kept jobs collapsed by default
 - filtering, sorting, and pagination
-- salary-target filtering tied to admin salary preferences
+- salary-target filtering tied to settings salary preferences
 - local viewed/opened tracking
 
 ## Files That Can Be Rebuilt

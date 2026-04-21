@@ -29,8 +29,8 @@ load_dotenv()
 MAX_TOKENS_FIT_DECISION = 50
 MAX_TOKENS_CV_EXTRACTION = 500
 
-# Test-mode flag: mirrors the same argv check in source_connector
-_TEST_SCRAPE_MODE = "--test-scrape-mode" in sys.argv
+# Wide-scrape flag: mirrors the same argv check in source_connector
+_WIDE_SCRAPE_MODE = "--wide-scrape" in sys.argv
 
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
@@ -98,9 +98,9 @@ def _profile_fingerprint() -> str:
 
 def _get_llm_model() -> str:
     """Return the configured model, falling back to gpt-4.1-mini.
-    In test-scrape mode uses gpt-4o-mini to reduce cost during testing.
+    In wide-scrape mode uses gpt-4o-mini to reduce cost when evaluating more jobs.
     """
-    if _TEST_SCRAPE_MODE:
+    if _WIDE_SCRAPE_MODE:
         return "gpt-4o-mini"
     return load_agent_settings().get("llm", {}).get("model", "gpt-4.1-mini")
 
@@ -113,7 +113,7 @@ def _log_llm_model_once() -> str:
     global _llm_model_logged
     model = _get_llm_model()
     if not _llm_model_logged:
-        source = "test-scrape override" if _TEST_SCRAPE_MODE else "agent_settings.json"
+        source = "wide-scrape override" if _WIDE_SCRAPE_MODE else "agent_settings.json"
         print(f"[LLM] Model: {model}  (source: {source})")
         _llm_model_logged = True
     return model
