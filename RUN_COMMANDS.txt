@@ -1,105 +1,230 @@
-TESTS
-=====
-.\.venv\Scripts\python.exe -m pytest
-
-For the focused checks example:
-.\.venv\Scripts\python.exe -m pytest tests/test_cv_pipeline.py tests/test_profile_learning_parser.py tests/test_title_extraction.py tests/test_source_documents.py
-
-To avoid spending credits on test runs, run them locally from e:\Programming\job-hunter-agent and paste me only the failures if you want help:
-If you want me not to run tests at all, just say “don’t run tests; I’ll verify locally.”
-
-
 JOB HUNTER AGENT - QUICK RUN COMMANDS
 =====================================
 
 Open this file anytime when you forget what to run.
 
 
-PRIMARY COMMANDS
-----------------
+TESTS
+=====
 
-▶ Normal Manual Refresh:
+Run all tests:
+  .\.venv\Scripts\python.exe -m pytest
+
+Run focused checks:
+  .\.venv\Scripts\python.exe -m pytest tests/test_cv_pipeline.py tests/test_profile_learning_parser.py tests/test_title_extraction.py tests/test_source_documents.py
+
+To avoid spending credits on test runs, run them locally from:
+  E:\Programming\job-hunter-agent
+
+If you want me not to run tests at all, say:
+  don't run tests; I'll verify locally.
+
+
+PRIMARY COMMANDS
+================
+
+Normal manual refresh:
   python -m job_hunter_agent.source_connector
 
-  Use this for a standard run. It scrapes fresh jobs using your profile
-  settings and rebuilds the dashboard. This is the main command you will
-  use for manual refreshes.
+What it does:
+  Scrapes fresh jobs using your profile settings, reviews them, saves the run,
+  and rebuilds the dashboard.
 
 
-▶ Automated Agent Run:
+Automated agent run:
   python -m job_hunter_agent.agent_runner
 
-  Use this to run the full agent pipeline: refresh jobs, create a digest,
-  and send notifications.
-  - Add `--loop` to run it on a daily schedule.
-  - Add `--no-notify` to test the digest without sending alerts.
+What it does:
+  Runs the full agent pipeline: refresh jobs, create a digest, and send
+  notifications.
 
 
-▶ Local Web Server:
+Local web server:
   python -m job_hunter_agent.local_server
 
-  Use this to start the web server for the Settings UI and to view the dashboard
-  in your browser.
-  - Settings: http://127.0.0.1:8765/settings
-  - Dashboard: http://127.0.0.1:8765/dashboard
+What it does:
+  Starts the browser UI.
+
+Open:
+  Settings:  http://127.0.0.1:8765/settings
+  Dashboard: http://127.0.0.1:8765/dashboard
 
 
-COMMON WORKFLOWS & FLAGS
-------------------------
+SOURCE CONNECTOR FLAGS
+======================
 
-You can combine flags with `python -m job_hunter_agent.source_connector` to create specific workflows.
+Use these with:
+  python -m job_hunter_agent.source_connector
 
----
 
-▶ For Fast UI/Dashboard Testing (No Scrape):
+--rebuild-dashboard
+-------------------
+
+What it does:
+  Rebuilds output/dashboard.html from the last saved run. It does not scrape
+  job sites and does not run AI review.
+
+Use when:
+  You changed dashboard UI/code and want to see the result quickly.
+
+Example:
   python -m job_hunter_agent.source_connector --rebuild-dashboard
 
-  This is the fastest way to see UI changes. It skips all scraping and
-  AI review, and just rebuilds `dashboard.html` from the last saved run.
 
-  Combine with `--test-dashboard-mode` to see more jobs and debug scores:
-  python -m job_hunter_agent.source_connector --rebuild-dashboard --test-dashboard-mode
+--expand-dashboard
+------------------
 
----
+What it does:
+  Expands what the dashboard is willing to show from saved data by lowering the
+  dashboard score floor from 50 to 35.
 
-▶ For a Wider, Cheaper Scrape:
-  python -m job_hunter_agent.source_connector --wide-scrape
+Important:
+  This is not the same as --scrape-allow-low. It is dashboard-only. It does not
+  scrape job sites, does not run AI review, and does not switch the LLM model.
 
-  This mode is designed for exploring more borderline matches cheaply.
-  It does a real scrape, but:
-  - Forces the use of a cheaper LLM model (gpt-4o-mini) to save costs.
-  - Lowers the dashboard score threshold to 35 to show more borderline jobs.
+Use when:
+  You want to inspect borderline jobs already saved from a previous run.
 
-  For a super-fast check, limit it to one page:
-  python -m job_hunter_agent.source_connector --wide-scrape --max-pages 1
+Best example:
+  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard
 
----
 
-▶ Other Useful Flags:
+--scrape-allow-low
+-------------
 
---no-llm
-    Skips the AI fit review step entirely, even if an API key is configured.
-    Useful for very fast runs when you only want to test the deterministic filters.
+What it does:
+  Runs a fresh scrape with a wider dashboard pool. It lowers the dashboard score
+  floor from 50 to 35 and forces the cheaper gpt-4o-mini model while reviewing
+  jobs.
 
---max-pages <number>
-    Temporarily overrides the 'Max pages to check' setting from your profile.
-    Using `--max-pages 1` is highly recommended for quick testing without
-    waiting for a full deep scrape to complete.
+Use when:
+  You want to find more borderline matches from job sites, not just re-display
+  saved data.
 
---reset-new-to-you
-    Resets the 'Viewed' status for all jobs, making the dashboard feel like a
-    first look again. Often used with `--rebuild-dashboard`.
+Example:
+  python -m job_hunter_agent.source_connector --scrape-allow-low
+
+Fast test example:
+  python -m job_hunter_agent.source_connector --scrape-allow-low --max-pages 1
+
 
 --show-scores
-    Shows raw score numbers on cards and expands the fit breakdown for easier
-    tuning.
+-------------
+
+What it does:
+  Shows raw score numbers on job cards and expands the fit breakdown.
+
+Use when:
+  You are tuning filters or trying to understand why roles are only scoring
+  "Worth a look".
+
+Examples:
+  python -m job_hunter_agent.source_connector --show-scores
+  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard --show-scores
+
+
+--reset-new-to-you
+------------------
+
+What it does:
+  Makes jobs appear unread/new-to-you again in the generated dashboard.
+
+Use when:
+  You want to re-check the current saved jobs as if this is your first look.
+
+Example:
+  python -m job_hunter_agent.source_connector --rebuild-dashboard --reset-new-to-you
+
+
+--max-pages <number>
+--------------------
+
+What it does:
+  Temporarily overrides the "Max pages to check" profile setting for this run.
+
+Use when:
+  You want a quick scrape without waiting for the full page limit.
+
+Example:
+  python -m job_hunter_agent.source_connector --max-pages 1
+
+
+--no-llm
+--------
+
+What it does:
+  Skips the AI fit review step, even if an API key is configured.
+
+Use when:
+  You only want to test deterministic scraping, title filters, exclusions, and
+  dashboard generation.
+
+Example:
+  python -m job_hunter_agent.source_connector --no-llm
+
+
+AGENT RUNNER FLAGS
+==================
+
+Use these with:
+  python -m job_hunter_agent.agent_runner
+
+
+--loop
+------
+
+What it does:
+  Keeps the agent running and triggers once per day at the configured local time.
+
+Example:
+  python -m job_hunter_agent.agent_runner --loop
+
+
+--skip-collection
+-----------------
+
+What it does:
+  Does not fetch new jobs. It rebuilds the dashboard and sends a digest from
+  current local state.
+
+Example:
+  python -m job_hunter_agent.agent_runner --skip-collection
+
+
+--no-notify
+-----------
+
+What it does:
+  Builds the digest without sending email or Telegram notifications.
+
+Example:
+  python -m job_hunter_agent.agent_runner --no-notify
+
+
+QUICK WORKFLOWS
+===============
+
+Fast UI/dashboard check, no scrape:
+  python -m job_hunter_agent.source_connector --rebuild-dashboard
+
+Show borderline saved jobs, no scrape:
+  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard
+
+Show borderline saved jobs with visible scores:
+  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard --show-scores
+
+Fresh scrape-allow-low, cheaper AI model:
+  python -m job_hunter_agent.source_connector --scrape-allow-low
+
+Fresh scrape-allow-low, one page only:
+  python -m job_hunter_agent.source_connector --scrape-allow-low --max-pages 1
 
 
 QUICK NOTES
------------
+===========
 
-- If the right panel says `Test mode ON`, you are looking at a test-mode dashboard.
+- If the right panel says "Test mode ON", you are looking at a test-mode dashboard.
 - Run `python -m job_hunter_agent.source_connector` to get back to a normal dashboard.
-- Console logs now show whether a run is `real` or `test`.
+- Console logs show whether scrape allow low, score display, LLM disablement, and page overrides are active.
 - If you save profile changes in settings, the next scrape will use them.
 - If settings save feedback does not look right, restart the local server with `python -m job_hunter_agent.local_server`.

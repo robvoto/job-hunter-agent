@@ -181,7 +181,7 @@ python -m job_hunter_agent.test_runner
 - rebuilds the dashboard from saved local state only
 - useful when UI behavior changed and you want the latest HTML without a fresh scrape
 
-`python -m job_hunter_agent.source_connector --wide-scrape`
+`python -m job_hunter_agent.source_connector --scrape-allow-low`
 
 - runs a wider scrape to catch borderline matches
 - widens both SEEK and LinkedIn source windows
@@ -192,10 +192,15 @@ Important:
 - some specialist-domain requirements can now hard-block a role entirely
 - if a source page comes back as a challenge or invalid detail page, the app rejects it instead of scoring it from bad text
 
-`python -m job_hunter_agent.source_connector --rebuild-dashboard --test-dashboard-mode`
+`python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard`
 
-- rebuilds the dashboard in test view only
+- rebuilds the dashboard showing borderline "Stretch" roles (score 35+)
 - does not run a fresh scrape
+
+`python -m job_hunter_agent.source_connector --reset-new-to-you`
+
+- resets the 'Viewed' status for all jobs so they appear as "New To You"
+- useful for testing how roles evaluate visually
 
 `python -m job_hunter_agent.source_connector --show-scores`
 

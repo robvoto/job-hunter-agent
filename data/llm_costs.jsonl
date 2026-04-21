@@ -48,3 +48,10 @@
 {"ts": "2026-04-21T10:46:26Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1917, "tok_out": 6, "cost_usd": 0.000291, "session_usd": 0.005425}
 {"ts": "2026-04-21T10:46:28Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1856, "tok_out": 5, "cost_usd": 0.000281, "session_usd": 0.005706}
 {"ts": "2026-04-21T10:46:30Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1899, "tok_out": 5, "cost_usd": 0.000288, "session_usd": 0.005994}
+{"ts": "2026-04-21T12:01:54Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1584, "tok_out": 5, "cost_usd": 0.000241, "session_usd": 0.000241}
+{"ts": "2026-04-21T12:02:01Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 2022, "tok_out": 5, "cost_usd": 0.000306, "session_usd": 0.000547}
+{"ts": "2026-04-21T12:02:07Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1850, "tok_out": 6, "cost_usd": 0.000281, "session_usd": 0.000828}
+{"ts": "2026-04-21T12:02:23Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1924, "tok_out": 7, "cost_usd": 0.000293, "session_usd": 0.001121}
+{"ts": "2026-04-21T12:02:33Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1604, "tok_out": 5, "cost_usd": 0.000244, "session_usd": 0.001364}
+{"ts": "2026-04-21T12:02:37Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1626, "tok_out": 5, "cost_usd": 0.000247, "session_usd": 0.001611}
+{"ts": "2026-04-21T12:02:44Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1812, "tok_out": 5, "cost_usd": 0.000275, "session_usd": 0.001886}

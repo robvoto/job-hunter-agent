@@ -71,16 +71,14 @@ CLI_FLAGS = set(sys.argv[1:])
 _max_pages_arg = next((sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--max-pages"), None)
 CLI_MAX_PAGES_CAP = int(_max_pages_arg) if _max_pages_arg and _max_pages_arg.isdigit() else None
 NO_LLM_MODE = "--no-llm" in CLI_FLAGS
-TEST_DASHBOARD_MODE = "--test-dashboard-mode" in CLI_FLAGS
-WIDE_SCRAPE_MODE = "--wide-scrape" in CLI_FLAGS
-TEST_ANY_MODE = TEST_DASHBOARD_MODE or WIDE_SCRAPE_MODE
-TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = (
-    "--reset-new-to-you" in CLI_FLAGS or TEST_ANY_MODE
-)
+EXPAND_DASHBOARD_MODE = "--expand-dashboard" in CLI_FLAGS
+LOW_SCRAPE_MODE = "--scrape-allow-low" in CLI_FLAGS
+EXPANDED_POOL_MODE = EXPAND_DASHBOARD_MODE or WIDE_SCRAPE_MODE
+TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = "--reset-new-to-you" in CLI_FLAGS
 SKIP_QUICK_CARD_GATE_FOR_TESTING = False
 SHOW_SCORES_MODE = "--show-scores" in CLI_FLAGS
 SHOW_SCORING_DEBUG = SHOW_SCORES_MODE
-DASHBOARD_MIN_SCORE = 35 if TEST_ANY_MODE else 50
+DASHBOARD_MIN_SCORE = 35 if EXPANDED_POOL_MODE else 50
 DEFAULT_SCORE_FILTER_MIN = DASHBOARD_MIN_SCORE
 LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
 DEBUG_JSON_PATH = OUTPUT_DIR / "audit_records.json"
@@ -1316,7 +1314,7 @@ def score_filter_thresholds(
     include_borderline: Optional[bool] = None,
 ) -> List[int]:
     active_profile = scoring_profile or load_profile()
-    show_borderline = TEST_ANY_MODE if include_borderline is None else bool(include_borderline)
+    show_borderline = EXPANDED_POOL_MODE if include_borderline is None else bool(include_borderline)
     scores = [fit_score(record, active_profile) for record in records]
 
     thresholds = [80, 65, 50]
@@ -2445,26 +2443,23 @@ def render_html(
     posted_filter_options_html = render_posted_filter_options(potential_records)
     shortlist_count = len(current_records) + len(recent_archive_records) + len(stale_archive_records)
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
+    dashboard_run_id = str(run_stats.get("run_started_at") or run_started_at.isoformat(timespec="seconds"))
     target_summaries = []
     for location, pages in (run_stats.get("search_targets") or {}).items():
         page_label = ", ".join(str(page) for page in pages) if pages else "none"
         target_summaries.append(f"{location}: pages {page_label}")
-    testing_mode_note = ""
+    testing_mode_notes = []
     if WIDE_SCRAPE_MODE:
-        testing_mode_note = (
-            f" Wide scrape mode is on, so the dashboard keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better,"
-                f" and treats every role as New To You."
-        )
-    elif TEST_DASHBOARD_MODE:
-        testing_mode_note = (
-            f" Dashboard test mode is on, so the shortlist keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better"
-                f" and treats every role as New To You without running a fresh scrape."
-        )
-    elif "--reset-new-to-you" in CLI_FLAGS:
-        testing_mode_note = " Viewed history has been reset for this dashboard rebuild, so all roles are shown as unseen."
+        testing_mode_notes.append(f"Wide scrape mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better.")
+    elif EXPAND_DASHBOARD_MODE:
+        testing_mode_notes.append(f"Expanded dashboard mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better without a fresh scrape.")
+    if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
+        testing_mode_notes.append("Viewed history has been reset, so all roles are shown as unseen.")
+        
+    testing_mode_note = " " + " ".join(testing_mode_notes) if testing_mode_notes else ""
     search_window_label = f"Last {date_range_days} day" + ("" if date_range_days == 1 else "s")
     sort_order_label = "Newest first" if sort_newest_first else "Source relevance"
-    mode_label = "Test mode ON" if TEST_ANY_MODE else "Normal mode"
+    mode_label = "Test mode ON" if EXPANDED_POOL_MODE or TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "Normal mode"
     current_search_settings = get_search_settings(scoring_profile)
     search_settings_payload = {
         "keywords": str(current_search_settings.get("keywords") or "").strip(),
@@ -2479,11 +2474,8 @@ def render_html(
     search_locations_label = " | ".join(search_settings_payload["locations"]) or "Not set"
     search_locations_text = "\n".join(search_settings_payload["locations"])
     search_settings_json = json.dumps(search_settings_payload, ensure_ascii=False).replace("</", "<\\/")
-    snapshot_helper = (
-        f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and treats all roles as New To You."
-        if TEST_ANY_MODE
-        else f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and preserves your viewed history."
-    )
+    view_history_text = "treats all roles as New To You" if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "preserves your viewed history"
+    snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and {view_history_text}."
     hero_summary = (
         f"Last run {run_label} - {run_stats.get('cards_seen', 0)} cards scanned, "
         f"{len(current_records)} matches found"
@@ -3707,7 +3699,6 @@ def render_html(
                   <option value="fit">Best match first</option>
                   <option value="newest">Newest posted first</option>
                   <option value="salary">Highest salary first</option>
-                <option value="unseen">New to you first</option>
                 </select>
               </label>
               <label class="filter-field">
@@ -3725,8 +3716,6 @@ def render_html(
                   <option value="all" selected>All potential jobs</option>
                   <option value="current">Matches this run</option>
                   <option value="saved">Kept from earlier runs</option>
-                <option value="unseen">New to you</option>
-                  <option value="viewed">Opened by me</option>
                 </select>
               </label>
               <label class="filter-field">
@@ -3754,7 +3743,7 @@ def render_html(
                 <span>Salary</span>
                 <select id="salary_filter">
                   <option value="all">Any</option>
-                  <option value="listed">Salary listed</option>
+                  <option value="listed">Any salary shown</option>
                   <option value="meets">Meets my target</option>
                   <option value="below">Below my target</option>
                   <option value="missing">No salary shown</option>
@@ -3941,7 +3930,9 @@ def render_html(
     const JOB_HISTORY_API_URL = `${{API_BASE_URL}}/api/job-history`;
     const RUN_API_URL = `${{API_BASE_URL}}/api/run`;
     const RUN_STATUS_API_URL = `${{API_BASE_URL}}/api/run-status`;
-    const DASHBOARD_FILTERS_KEY = 'jobHunter.dashboard.filters';
+    const DASHBOARD_RUN_ID = {json.dumps(dashboard_run_id)};
+    const LEGACY_DASHBOARD_FILTERS_KEY = 'jobHunter.dashboard.filters';
+    const DASHBOARD_FILTERS_KEY = `jobHunter.dashboard.filters.${{DASHBOARD_RUN_ID}}`;
     const INITIAL_SEARCH_SETTINGS = {search_settings_json};
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
     const sortSelect = document.getElementById('sort_select');
@@ -3951,6 +3942,7 @@ def render_html(
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
+    const DEFAULT_SCORE_FILTER_VALUE = {json.dumps(str(DEFAULT_SCORE_FILTER_MIN))};
     const resetFiltersButton = document.getElementById('reset_dashboard_filters');
     const resultsHelper = document.getElementById('results_helper');
     const dismissResultsHelperButton = document.getElementById('dismiss_results_helper');
@@ -4204,20 +4196,49 @@ def render_html(
       }} catch (e) {{}}
     }}
 
+    function setSelectValueIfAvailable(select, value) {{
+      if (!select || value === undefined || value === null || value === '') {{
+        return;
+      }}
+      const normalized = String(value);
+      if (Array.from(select.options).some(option => option.value === normalized)) {{
+        select.value = normalized;
+      }}
+    }}
+
     function loadDashboardFilters() {{
       try {{
+        window.localStorage.removeItem(LEGACY_DASHBOARD_FILTERS_KEY);
         const saved = window.localStorage.getItem(DASHBOARD_FILTERS_KEY);
         if (!saved) return;
         const filters = JSON.parse(saved);
         
-        if (filters.sort && sortSelect) sortSelect.value = filters.sort;
-        if (filters.pageSize && pageSizeSelect) pageSizeSelect.value = filters.pageSize;
-        if (filters.scope && scopeFilter) scopeFilter.value = filters.scope;
-        if (filters.posted && postedFilter) postedFilter.value = filters.posted;
-        if (filters.workMode && workModeFilter) workModeFilter.value = filters.workMode;
-        if (filters.score && scoreFilter) scoreFilter.value = filters.score;
-        if (filters.salary && salaryFilter) salaryFilter.value = filters.salary;
+        setSelectValueIfAvailable(sortSelect, filters.sort);
+        setSelectValueIfAvailable(pageSizeSelect, filters.pageSize);
+        setSelectValueIfAvailable(scopeFilter, filters.scope);
+        setSelectValueIfAvailable(postedFilter, filters.posted);
+        setSelectValueIfAvailable(workModeFilter, filters.workMode);
+        setSelectValueIfAvailable(scoreFilter, filters.score);
+        setSelectValueIfAvailable(salaryFilter, filters.salary);
       }} catch (e) {{}}
+    }}
+
+    function resetDashboardFiltersToDefaults() {{
+      if (sortSelect) sortSelect.value = 'fit';
+      if (pageSizeSelect) pageSizeSelect.value = '12';
+      if (scopeFilter) scopeFilter.value = 'all';
+      if (postedFilter) postedFilter.value = 'all';
+      if (workModeFilter) workModeFilter.value = 'all';
+      if (scoreFilter) {{
+        setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
+      }}
+      if (salaryFilter) salaryFilter.value = 'all';
+      try {{
+        window.localStorage.removeItem(DASHBOARD_FILTERS_KEY);
+        window.localStorage.removeItem(LEGACY_DASHBOARD_FILTERS_KEY);
+      }} catch (e) {{}}
+      resetPagination();
+      applyDashboardControls();
     }}
 
     function getVisibleCards() {{
@@ -4314,6 +4335,7 @@ def render_html(
 
       for (const grid of Array.from(document.querySelectorAll('.job-grid'))) {{
         const cards = Array.from(grid.querySelectorAll('.job-card'));
+        const originalOrder = [...cards];
         cards.sort((a, b) => {{
           if (sortMode === 'newest') {{
             return Number(a.dataset.postedAge || 9999) - Number(b.dataset.postedAge || 9999);
@@ -4331,6 +4353,18 @@ def render_html(
         }});
         for (const card of cards) {{
           grid.appendChild(card);
+        }}
+        let orderChanged = false;
+        for (let i = 0; i < cards.length; i++) {{
+          if (cards[i] !== originalOrder[i]) {{
+            orderChanged = true;
+            break;
+          }}
+        }}
+        if (orderChanged) {{
+          for (const card of cards) {{
+            grid.appendChild(card);
+          }}
         }}
       }}
 
@@ -4587,6 +4621,12 @@ def render_html(
     }}
 
     document.addEventListener('click', async event => {{
+      const resetFilters = event.target.closest('#reset_dashboard_filters');
+      if (resetFilters) {{
+        resetDashboardFiltersToDefaults();
+        return;
+      }}
+
       const searchToggle = event.target.closest('#search_settings_toggle');
       if (searchToggle) {{
         if (!searchSettingsEdit) {{
@@ -5285,7 +5325,7 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
     print("=" * 60)
     print("  JOB HUNTER AGENT - SCRAPE RUN")
     print("=" * 60)
-    print(f"  Wide Scrape Mode   : {'ON' if WIDE_SCRAPE_MODE else 'OFF'}")
+    print(f"  Wide Scrape Mode   : {'ON' if LOW_SCRAPE_MODE else 'OFF'}")
     print(f"  Show Scores Mode   : {'ON' if SHOW_SCORES_MODE else 'OFF'}")
     print(f"  LLM Disabled       : {'YES (--no-llm flag)' if NO_LLM_MODE else 'NO'}")
     print(f"  LLM Model          : {_get_llm_model()}")
@@ -5418,7 +5458,7 @@ def rebuild_html_dashboard() -> str:
     print("=" * 60)
     print("  JOB HUNTER AGENT - DASHBOARD REBUILD")
     print("=" * 60)
-    print(f"  Test Dashboard Mode: {'ON' if TEST_DASHBOARD_MODE else 'OFF'}")
+    print(f"  Expanded Dashboard : {'ON' if EXPAND_DASHBOARD_MODE else 'OFF'}")
     print(f"  Show Scores Mode   : {'ON' if SHOW_SCORES_MODE else 'OFF'}")
     print(f"  Reset New To You   : {'YES' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
     print("=" * 60)
