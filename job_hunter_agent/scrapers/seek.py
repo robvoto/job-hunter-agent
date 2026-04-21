@@ -8,7 +8,7 @@ import re
 from typing import List, Optional
 from urllib.parse import urljoin
 
-from job_hunter_agent.config import MAX_PAGES_CAP  # noqa: F401 â€“ re-exported for callers
+from job_hunter_agent.config import MAX_PAGES_CAP  # noqa: F401 - re-exported for callers
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.utils import extract_work_mode, set_query_param
 
@@ -242,4 +242,3 @@ def build_full_seek_url(relative_or_full_url: Optional[str]) -> Optional[str]:
     if not relative_or_full_url:
         return None
     return urljoin("https://www.seek.com.au", relative_or_full_url)
-

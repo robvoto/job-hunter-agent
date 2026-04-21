@@ -322,7 +322,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
 
-    # Title patterns â€” always re-extracted during onboarding (no guard needed here)
+    # Title patterns - always re-extracted during onboarding (no guard needed here)
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
         patch["target_title_patterns"] = suggestion.get("target_title_patterns") or []

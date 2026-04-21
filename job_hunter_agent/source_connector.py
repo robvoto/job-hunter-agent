@@ -1,4 +1,5 @@
-﻿﻿"""Main job-source connector and dashboard builder.
+"""
+Main job-source connector and dashboard builder.
 
 Main goals:
 - fetch current job listings from all enabled source implementations
@@ -136,7 +137,7 @@ def salary_sort_value(value: str) -> float:
 def _salary_max_value(value: str) -> float:
     """Return the upper bound of a salary range for minimum-target comparisons.
 
-    For '$450 - $700 per day' returns 700; for '$130kâ€“$145k p.a.' returns 145000.
+    For '$450 - $700 per day' returns 700; for '$130k-$145k p.a.' returns 145000.
     Falls back to salary_sort_value when only one figure is present.
     """
     if not value or value == "N/A":
@@ -243,7 +244,7 @@ def compact_whitespace(value: Optional[str]) -> str:
 def split_text_snippets(text: str) -> List[str]:
     snippets: List[str] = []
     for raw_line in re.split(r"[\r\n]+", text or ""):
-        cleaned = compact_whitespace(raw_line.strip(" -â€¢\t"))
+        cleaned = compact_whitespace(raw_line.strip(" -\u2022\t"))
         if len(cleaned) >= 24:
             snippets.append(cleaned)
     if snippets:
@@ -1137,7 +1138,7 @@ def find_requirement_strength(details_text: str, aliases: List[str]) -> str:
 
 def extract_contract_months(details_text: str) -> Optional[int]:
     lowered = compact_whitespace(details_text).lower()
-    matches = [int(value) for value in re.findall(r"\b(\d{1,2})\s*[-â€‘â€“ ]?(?:month|months|mth)\b", lowered)]
+    matches = [int(value) for value in re.findall(r"\b(\d{1,2})\s*[-\u2011\u2013 ]?(?:month|months|mth)\b", lowered)]
     if not matches:
         return None
     return max(matches)
@@ -1166,7 +1167,7 @@ def _line_year_context(line: str, current_year: int) -> Optional[int]:
         return None
 
     patterns = [
-        r"(20\d{2})\s*[-â€“]\s*(present|current|ongoing|20\d{2})",
+        r"(20\d{2})\s*[-\u2013]\s*(present|current|ongoing|20\d{2})",
         r"from\s+(20\d{2})\s+to\s+(20\d{2})",
     ]
     for pattern in patterns:
@@ -3189,7 +3190,7 @@ def render_html(
       line-height: 1.4;
     }}
     .job-meta-item:not(:last-child)::after {{
-      content: "â€¢";
+      content: "\\2022";
       margin-left: 18px;
       color: #b6a795;
     }}
@@ -3307,7 +3308,7 @@ def render_html(
       color: var(--warm);
       border: 1px solid rgba(154, 52, 18, 0.22);
     }}
-    /* â”€â”€ Rejection-learning panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Rejection-learning panel */
     .rejection-overlay {{
       position: fixed;
       inset: 0;
@@ -4752,7 +4753,7 @@ def render_html(
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
     showResultsHelperIfNeeded();
     hydrateViewedState();
-    // â”€â”€ Rejection-learning panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Rejection-learning panel
     let _rejectionPendingButton = null;
     let _rejectionCustomTerms = [];
 
@@ -4908,7 +4909,7 @@ def render_html(
     document.getElementById('rejection-overlay').addEventListener('click', () => {{
       document.getElementById('rejection-btn-cancel').click();
     }});
-    // â”€â”€ end rejection-learning panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // end rejection-learning panel
   </script>
 </body>
 </html>

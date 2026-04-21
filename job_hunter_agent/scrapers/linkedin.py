@@ -283,7 +283,7 @@ class LinkedInScraper(BaseJobScraper):
                 )
 
         print(
-            f"\n[LinkedIn] Done â€” kept {len(kept_records)} / {len(audit_rows)} total records"
+            f"\n[LinkedIn] Done - kept {len(kept_records)} / {len(audit_rows)} total records"
         )
         return kept_records, audit_rows, skill_observations
 
@@ -375,4 +375,3 @@ def _normalize_location_for_jobspy(seek_location: str) -> str:
     if text and not text.lower().endswith("australia"):
         text = f"{text}, Australia"
     return text or seek_location
-

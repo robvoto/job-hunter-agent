@@ -234,7 +234,7 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
     for index, item in enumerate(top):
         renamed = dict(item)
         if index < len(labels):
-            # Use raw LLM label (lowercased only) â€” don't normalize/stem it
+            # Use raw LLM label (lowercased only) - don't normalize/stem it
             label = str(labels[index]).strip().lower()
             # Basic length check; _is_quality_phrase would over-stem the label
             words = label.split()
@@ -313,4 +313,3 @@ def run_cv_pipeline(
         f"{len(output.get('dominant_signal_clusters', []))} dominant clusters"
     )
     return _strip_internal_keys(output)
-

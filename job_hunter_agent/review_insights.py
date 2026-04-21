@@ -209,7 +209,7 @@ def build_capability_tuning_suggestions(
         skill = str(entry["skill"] or normalized).strip()
 
         if current_rule:
-            # Already classified â€” skip regardless of level/fit.
+            # Already classified - skip regardless of level/fit.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
         if count >= 5:

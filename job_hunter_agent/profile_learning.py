@@ -63,23 +63,11 @@ def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | Non
     return _resolve_onboarding_int(onboarding_settings, "extraction_lookback_years")
 
 
-def _find_rating(text: str) -> float | None:
-    match = re.search(r"Level:\s*([0-9]+(?:\.[0-9]+)?)\s*/\s*10", text, flags=re.IGNORECASE)
-    if not match:
-        return None
-    return float(match.group(1))
-
-
 def _extract_section(text: str, header: str) -> str:
     pattern = rf"##\s+{re.escape(header)}\s*\n(.*?)(?=\n##\s+|\Z)"
     match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
     return match.group(1).strip() if match else ""
 
-
-def _extract_subsection(text: str, header: str) -> str:
-    pattern = rf"###\s+{re.escape(header)}\s*\n(.*?)(?=\n###\s+|\n##\s+|\Z)"
-    match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-    return match.group(1).strip() if match else ""
 
  
 

@@ -21,7 +21,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from job_hunter_agent.agent_settings import load_agent_settings
-from job_hunter_agent.profile_learning import _resolve_extraction_lookback_years, _resolve_onboarding_int
 from job_hunter_agent.profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
 
 load_dotenv()
@@ -246,76 +245,6 @@ def normalize_llm_review(value: Any) -> Dict[str, str]:
                 return {"decision": decision, "grade": grade}
 
     return dict(DEFAULT_LLM_REVIEW)
-
-
-def extract_title_patterns_from_cv(cv_text: str, onboarding_settings: dict | None = None) -> dict:
-    """Call LLM to extract title/search patterns from CV work history.
-
-    Returns {"target_title_patterns": [...], "adjacent_title_patterns": [...], "suggested_search_keywords": [...]}
-    or empty lists if LLM is unavailable or extraction fails.
-    """
-    if client is None:
-        print("[TITLE_PATTERNS] Skipped — LLM client is None (no OPENAI_API_KEY?)")
-        return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
-    if not str(cv_text or "").strip():
-        print("[TITLE_PATTERNS] Skipped — cv_text is empty")
-        return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
-
-    settings = onboarding_settings or {}
-    lookback_years = _resolve_extraction_lookback_years(settings)
-    min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
-    max_target = _resolve_onboarding_int(settings, "max_target_patterns")
-    max_adjacent = _resolve_onboarding_int(settings, "max_adjacent_patterns")
-    today_label = datetime.now().date().isoformat()
-
-    print(f"[TITLE_PATTERNS] Calling LLM with {len(cv_text)} chars of CV text (lookback={lookback_years}y, min={min_months}mo, max_target={max_target}, max_adjacent={max_adjacent})")
-    prompt = (
-        "You are reading a candidate's CV. Extract job search targeting patterns from their work history.\n\n"
-        "Return a JSON object with exactly three keys:\n"
-        f"- \"target_title_patterns\": regex patterns (case-insensitive, matched against lowercase job titles) "
-        f"for roles the candidate directly targets. Use \\\\b word-boundary anchors. Up to {max_target} patterns.\n"
-        f"- \"adjacent_title_patterns\": regex patterns for roles the candidate could step into based on their experience. Up to {max_adjacent} patterns.\n"
-        "- \"suggested_search_keywords\": broad search terms. 2-4 keywords.\n\n"
-        "Rules for target_title_patterns:\n"
-        f"- Only include roles the candidate actually held for more than {min_months} months.\n"
-        f"- Only include roles that ended within the last {lookback_years} years (today is {today_label}).\n"
-        "- Base patterns on real job titles from the CV work history — not skills, tools, or certifications.\n"
-        "- If uncertain whether a role qualifies, exclude it. Fewer accurate patterns beat many noisy ones.\n\n"
-        "Rules for adjacent_title_patterns:\n"
-        "- Adjacent means a real job title the candidate could credibly apply for, based on their experience.\n"
-        "- Do NOT include tool or platform names as adjacent titles.\n\n"
-        "Rules for suggested_search_keywords:\n"
-        "- Must be a broad search phrase of 2-3 words maximum.\n"
-        "- Do NOT use tool names, certifications, or domain terms as keywords.\n\n"
-        "Use lowercase for all patterns and keywords. Only return the JSON object, no explanation.\n\nCV:\n"
-        + str(cv_text)[:4000]
-    )
-    try:
-        _model = _get_llm_model()
-        resp = client.responses.create(
-            model=_model,
-            input=[{"role": "user", "content": prompt}],
-            max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
-        )
-        _log_llm_call(resp, "title_patterns", _model)
-        import json as _json
-        raw = (resp.output_text or "").strip()
-        print(f"[TITLE_PATTERNS] Raw LLM response: {raw[:300]}")
-        if raw.startswith("```"):
-            raw = raw.split("```")[1].lstrip("json").strip()
-        data = _json.loads(raw)
-        if isinstance(data, dict):
-            result = {
-                "target_title_patterns": _normalize_pattern_list(data.get("target_title_patterns", []), max_target),
-                "adjacent_title_patterns": _normalize_pattern_list(data.get("adjacent_title_patterns", []), max_adjacent),
-                "suggested_search_keywords": [str(p).strip() for p in data.get("suggested_search_keywords", []) if str(p).strip()][:5],
-            }
-            print(f"[TITLE_PATTERNS] Extracted: {len(result['target_title_patterns'])} target, {len(result['adjacent_title_patterns'])} adjacent, {len(result['suggested_search_keywords'])} keywords")
-            return result
-        print(f"[TITLE_PATTERNS] LLM returned non-dict: {type(data)}")
-    except Exception as exc:
-        print(f"[TITLE_PATTERNS] Exception: {exc}")
-    return {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []}
 
 
 def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
