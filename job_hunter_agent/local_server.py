@@ -15,7 +15,7 @@ from job_hunter_agent.profile_learning import build_learning_patch, merge_capabi
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_search_settings, patch_profile, save_profile
 from job_hunter_agent.profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
-from job_hunter_agent.source_connector import scrape_jobs_direct
+from job_hunter_agent.source_connector import rebuild_html_dashboard, scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     build_llm_profile_brief,
     load_source_materials,
@@ -231,6 +231,28 @@ def _run_scrape_job() -> None:
 
 
 class SettingsHandler(BaseHTTPRequestHandler):
+    MATCHING_RULE_PROFILE_KEYS = {
+        "target_title_patterns",
+        "adjacent_title_patterns",
+        "must_not_require_skills",
+        "reject_title_rules",
+        "reject_description_phrase_rules",
+        "reject_description_regex_rules",
+    }
+
+    @staticmethod
+    def _patch_affects_matching_rules(patch: dict) -> bool:
+        return any(key in (patch or {}) for key in SettingsHandler.MATCHING_RULE_PROFILE_KEYS)
+
+    @staticmethod
+    def _rebuild_dashboard_after_rule_change() -> None:
+        if not DASHBOARD_PATH.exists() and not RUN_STATS_PATH.exists() and not AUDIT_RECORDS_PATH.exists():
+            return
+        try:
+            rebuild_html_dashboard()
+        except Exception as exc:
+            print(f"[DASHBOARD][WARN] Could not rebuild after rule change: {type(exc).__name__}: {exc}")
+
     @staticmethod
     def _combine_text_sections(*sections: str) -> str:
         cleaned: list[str] = []
@@ -793,6 +815,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
         if added_rules:
             profile["reject_title_rules"] = existing
             save_profile(profile)
+            cls._rebuild_dashboard_after_rule_change()
 
         cls._persist_review_event(
             "block_title",
@@ -1080,6 +1103,8 @@ class SettingsHandler(BaseHTTPRequestHandler):
             current = load_profile()
             patch = self._normalize_profile_patch_for_save(current, self._read_json_body())
             updated = patch_profile(patch)
+            if self._patch_affects_matching_rules(patch):
+                self._rebuild_dashboard_after_rule_change()
         except Exception as exc:
             self._send_json(400, {"error": str(exc)})
             return
@@ -1244,6 +1269,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     existing.append({"phrase": phrase, "reason": reason or f"DESC_REJECT:{phrase}"})
                     profile["reject_description_phrase_rules"] = existing
                     updated = save_profile(profile)
+                    self._rebuild_dashboard_after_rule_change()
                 else:
                     updated = profile
             except Exception as exc:
@@ -1449,6 +1475,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     return
                 profile["reject_title_rules"] = updated_rules
                 saved = save_profile(profile)
+                self._rebuild_dashboard_after_rule_change()
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
@@ -1458,6 +1485,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args) -> None:
         return
+
+
+AdminHandler = SettingsHandler
 
 
 if __name__ == "__main__":

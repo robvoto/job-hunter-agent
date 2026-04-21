@@ -3684,6 +3684,7 @@ def render_html(
       <div class="dashboard-main">
         <section class="hero">
           <h1>Potential Jobs Found</h1>
+          <p class="hero-note">Mode: {safe_html(mode_label)}</p>
           <p class="hero-note">{safe_html(hero_summary)}</p>
         </section>
         <section class="section filter-panel">
@@ -3706,7 +3707,7 @@ def render_html(
                   <option value="fit">Best match first</option>
                   <option value="newest">Newest posted first</option>
                   <option value="salary">Highest salary first</option>
-                  <option value="unseen">Not opened by me first</option>
+                <option value="unseen">New to you first</option>
                 </select>
               </label>
               <label class="filter-field">
@@ -3724,7 +3725,7 @@ def render_html(
                   <option value="all" selected>All potential jobs</option>
                   <option value="current">Matches this run</option>
                   <option value="saved">Kept from earlier runs</option>
-                  <option value="unseen">Not opened by me</option>
+                <option value="unseen">New to you</option>
                   <option value="viewed">Opened by me</option>
                 </select>
               </label>
@@ -3807,15 +3808,6 @@ def render_html(
       </div>
       <aside class="dashboard-sidebar">
         <section class="snapshot-rail">
-          <section class="snapshot-section">
-            <h2 class="snapshot-heading">Run Snapshot</h2>
-            <div class="snapshot-meta">
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Last run</span><span class="snapshot-meta-value">{safe_html(run_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Window</span><span class="snapshot-meta-value">{safe_html(search_window_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Sort</span><span class="snapshot-meta-value">{safe_html(sort_order_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Mode</span><span class="snapshot-meta-value">{safe_html(mode_label)}</span></div>
-            </div>
-          </section>
           <section class="snapshot-section">
             <div class="snapshot-section-head">
               <h2 class="snapshot-heading">Search Settings</h2>

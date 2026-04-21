@@ -240,6 +240,7 @@
     #target_title_patterns, #adjacent_title_patterns,
     #reject_title_rules, #reject_description_phrase_rules,
     #reject_description_regex_rules, #must_not_require_skills { min-height: 120px; }
+    .technical-rule-source { display: none; }
     .advanced-shell { padding: 22px; }
     .advanced-head { margin-bottom: 14px; }
     .advanced-grid {
@@ -267,6 +268,48 @@
       border-radius: 999px;
       padding: 4px 10px;
       font-size: 0.83rem;
+    }
+    .rule-chip button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0;
+    }
+    .badge-editor {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      padding: 10px;
+      min-height: 76px;
+    }
+    .badge-editor-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 30px;
+      align-items: flex-start;
+    }
+    .badge-editor-empty {
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 5px 0;
+    }
+    .badge-editor-form {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    .badge-editor-form input {
+      min-width: 0;
+      flex: 1;
+    }
+    .badge-editor-form button {
+      padding: 9px 14px;
+      white-space: nowrap;
     }
     .review-list { display: grid; gap: 12px; }
     .tuning-summary {
@@ -637,33 +680,74 @@
 
           <section class="subpanel">
             <h3>Title Matching</h3>
-            <label for="target_title_patterns">Target title patterns</label>
-            <textarea id="target_title_patterns"></textarea>
-            <div class="field-help">One strong-match regex per line.</div>
+            <label for="target_title_patterns_add">Target titles</label>
+            <div class="badge-editor" data-chip-editor="target_title_patterns">
+              <div id="target_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
+              <div class="badge-editor-form">
+                <input id="target_title_patterns_add" type="text" data-chip-input="target_title_patterns" placeholder="Add a title">
+                <button class="secondary" type="button" data-add-chip="target_title_patterns">Add</button>
+              </div>
+            </div>
+            <textarea id="target_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+            <div class="field-help">Titles that should count as strong matches.</div>
 
-            <label for="adjacent_title_patterns">Adjacent title patterns</label>
-            <textarea id="adjacent_title_patterns"></textarea>
-            <div class="field-help">One possible-match regex per line.</div>
+            <label for="adjacent_title_patterns_add">Adjacent titles</label>
+            <div class="badge-editor" data-chip-editor="adjacent_title_patterns">
+              <div id="adjacent_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
+              <div class="badge-editor-form">
+                <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="Add a nearby title">
+                <button class="secondary" type="button" data-add-chip="adjacent_title_patterns">Add</button>
+              </div>
+            </div>
+            <textarea id="adjacent_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+            <div class="field-help">Nearby titles that are worth reviewing with stronger evidence.</div>
 
-            <label for="reject_title_rules">Reject title rules</label>
-            <div id="reject_title_rules_chips" class="rule-chips"></div>
-            <textarea id="reject_title_rules"></textarea>
-            <div class="field-help">Format: <code>pattern || reason</code>. Rules added via the dashboard appear above automatically.</div>
+            <label for="reject_title_rules_add">Blocked title words</label>
+            <div class="badge-editor" data-chip-editor="reject_title_rules">
+              <div id="reject_title_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+              <div class="badge-editor-form">
+                <input id="reject_title_rules_add" type="text" data-chip-input="reject_title_rules" placeholder="Add a word to block">
+                <button class="secondary" type="button" data-add-chip="reject_title_rules">Add</button>
+              </div>
+            </div>
+            <textarea id="reject_title_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+            <div class="field-help">Words like ERP that should remove wrong-fit titles.</div>
           </section>
 
           <section class="subpanel">
             <h3>Description Exclusions</h3>
-            <label for="reject_description_phrase_rules">Reject description phrases</label>
-            <textarea id="reject_description_phrase_rules"></textarea>
-            <div class="field-help">Format: <code>phrase || reason</code>.</div>
+            <label for="reject_description_phrase_rules_add">Blocked description phrases</label>
+            <div class="badge-editor" data-chip-editor="reject_description_phrase_rules">
+              <div id="reject_description_phrase_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+              <div class="badge-editor-form">
+                <input id="reject_description_phrase_rules_add" type="text" data-chip-input="reject_description_phrase_rules" placeholder="Add a phrase to block">
+                <button class="secondary" type="button" data-add-chip="reject_description_phrase_rules">Add</button>
+              </div>
+            </div>
+            <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+            <div class="field-help">Phrases that should remove wrong-fit descriptions.</div>
 
-            <label for="reject_description_regex_rules">Reject description regex rules</label>
-            <textarea id="reject_description_regex_rules"></textarea>
-            <div class="field-help">Format: <code>pattern || reason</code>.</div>
+            <label for="reject_description_regex_rules_add">Blocked description patterns</label>
+            <div class="badge-editor" data-chip-editor="reject_description_regex_rules">
+              <div id="reject_description_regex_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+              <div class="badge-editor-form">
+                <input id="reject_description_regex_rules_add" type="text" data-chip-input="reject_description_regex_rules" placeholder="Add a description pattern">
+                <button class="secondary" type="button" data-add-chip="reject_description_regex_rules">Add</button>
+              </div>
+            </div>
+            <textarea id="reject_description_regex_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+            <div class="field-help">Reusable wording patterns that should remove wrong-fit descriptions.</div>
 
-            <label for="must_not_require_skills">Mandatory skills you do not have</label>
-            <textarea id="must_not_require_skills"></textarea>
-            <div class="field-help">One skill per line for essential-skill rejection.</div>
+            <label for="must_not_require_skills_add">Skills to avoid when mandatory</label>
+            <div class="badge-editor" data-chip-editor="must_not_require_skills">
+              <div id="must_not_require_skills_chips" class="badge-editor-list" aria-live="polite"></div>
+              <div class="badge-editor-form">
+                <input id="must_not_require_skills_add" type="text" data-chip-input="must_not_require_skills" placeholder="Add a skill">
+                <button class="secondary" type="button" data-add-chip="must_not_require_skills">Add</button>
+              </div>
+            </div>
+            <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+            <div class="field-help">Skills that should reject roles only when they are essential.</div>
           </section>
         </div>
         <div style="margin-top:16px;">
@@ -839,6 +923,198 @@
       }).filter(rule => rule.name && rule.level);
     }
 
+    const chipEditors = {
+      target_title_patterns: { kind: 'list', listId: 'target_title_patterns_chips', inputId: 'target_title_patterns_add', emptyText: 'No target titles yet.' },
+      adjacent_title_patterns: { kind: 'list', listId: 'adjacent_title_patterns_chips', inputId: 'adjacent_title_patterns_add', emptyText: 'No adjacent titles yet.' },
+      must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
+      reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },
+      reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No blocked description phrases yet.' },
+      reject_description_regex_rules: { kind: 'rule', key: 'pattern', listId: 'reject_description_regex_rules_chips', inputId: 'reject_description_regex_rules_add', emptyText: 'No blocked description patterns yet.' },
+    };
+
+    function escapeRegExp(value) {
+      return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function normalizePlainPhrase(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeReasonToken(value) {
+      return normalizePlainPhrase(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'custom';
+    }
+
+    function titlePhraseToPattern(value) {
+      const tokens = normalizePlainPhrase(value).toLowerCase().match(/[a-z0-9]+/g) || [];
+      if (!tokens.length) return '';
+      return `\\b${tokens.map(escapeRegExp).join('\\s+')}\\b`;
+    }
+
+    function descriptionPatternFromInput(value) {
+      const raw = normalizePlainPhrase(value);
+      if (!raw) return '';
+      if (/[\\[\]()|+*?{}^$]/.test(raw)) return raw;
+      return titlePhraseToPattern(raw);
+    }
+
+    function normalizeTitleBlockPhrase(value) {
+      const tokens = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+      return tokens.slice(0, 3).join(' ');
+    }
+
+    function patternToLabel(pattern) {
+      return normalizePlainPhrase(
+        String(pattern || '')
+          .replace(/\\b/g, '')
+          .replace(/\\s\+/g, ' ')
+          .replace(/\\ /g, ' ')
+          .replace(/\\/g, '')
+      );
+    }
+
+    function friendlyListLabel(id, value) {
+      if (id === 'target_title_patterns' || id === 'adjacent_title_patterns') {
+        return patternToLabel(value) || value;
+      }
+      return normalizePlainPhrase(value);
+    }
+
+    function friendlyRuleLabel(id, rule) {
+      if (id === 'reject_title_rules') {
+        const reason = String(rule.reason || '');
+        const label = reason.startsWith('TITLE_BAD_KEYWORD:') ? reason.replace('TITLE_BAD_KEYWORD:', '') : '';
+        return normalizePlainPhrase(label || patternToLabel(rule.pattern) || rule.pattern);
+      }
+      if (id === 'reject_description_regex_rules') {
+        return patternToLabel(rule.pattern) || rule.pattern;
+      }
+      return normalizePlainPhrase(rule.phrase || rule.pattern || '');
+    }
+
+    function listIdentity(id, value) {
+      return friendlyListLabel(id, value).toLowerCase();
+    }
+
+    function ruleIdentity(id, rule) {
+      return friendlyRuleLabel(id, rule).toLowerCase();
+    }
+
+    function getListItems(id) {
+      const field = document.getElementById(id);
+      return field ? toLines(field.value) : [];
+    }
+
+    function setListItems(id, items) {
+      const field = document.getElementById(id);
+      if (field) field.value = (items || []).join('\n');
+    }
+
+    function getRuleItems(id) {
+      const editor = chipEditors[id];
+      const field = document.getElementById(id);
+      return field && editor ? textToRules(field.value, editor.key) : [];
+    }
+
+    function setRuleItems(id, items) {
+      const editor = chipEditors[id];
+      const field = document.getElementById(id);
+      if (field && editor) field.value = rulesToText(items || [], editor.key);
+    }
+
+    function buildChipValue(id, rawValue) {
+      const raw = normalizePlainPhrase(rawValue);
+      if (!raw) return null;
+      if (id === 'target_title_patterns' || id === 'adjacent_title_patterns') return titlePhraseToPattern(raw);
+      if (id === 'must_not_require_skills') return raw;
+      if (id === 'reject_title_rules') {
+        const phrase = normalizeTitleBlockPhrase(raw);
+        if (!phrase) return null;
+        return { pattern: titlePhraseToPattern(phrase), reason: `TITLE_BAD_KEYWORD:${phrase}` };
+      }
+      if (id === 'reject_description_phrase_rules') {
+        const phrase = raw.toLowerCase();
+        return { phrase, reason: `DESC_REJECT:${normalizeReasonToken(phrase)}` };
+      }
+      if (id === 'reject_description_regex_rules') {
+        const pattern = descriptionPatternFromInput(raw);
+        return { pattern, reason: `DESC_REJECT:${normalizeReasonToken(patternToLabel(pattern) || pattern)}` };
+      }
+      return raw;
+    }
+
+    function renderChipEditor(id) {
+      const editor = chipEditors[id];
+      const list = editor ? document.getElementById(editor.listId) : null;
+      if (!editor || !list) return;
+
+      const isRule = editor.kind === 'rule';
+      const items = isRule ? getRuleItems(id) : getListItems(id);
+      if (!items.length) {
+        list.innerHTML = `<span class="badge-editor-empty">${escapeHtml(editor.emptyText)}</span>`;
+        return;
+      }
+      list.innerHTML = items.map((item, index) => {
+        const label = isRule ? friendlyRuleLabel(id, item) : friendlyListLabel(id, item);
+        const title = isRule ? (item[editor.key] || label) : item;
+        return `<span class="rule-chip">
+          <span title="${escapeHtml(title)}">${escapeHtml(label || title)}</span>
+          <button type="button" data-remove-chip="${escapeHtml(id)}" data-chip-index="${index}" title="Remove ${escapeHtml(label || title)}">&#215;</button>
+        </span>`;
+      }).join('');
+    }
+
+    function renderAdvancedChipEditors() {
+      Object.keys(chipEditors).forEach(renderChipEditor);
+    }
+
+    function addChipValue(id) {
+      const editor = chipEditors[id];
+      const input = editor ? document.getElementById(editor.inputId) : null;
+      if (!editor || !input) return false;
+      const value = buildChipValue(id, input.value);
+      if (!value) return false;
+      if (editor.kind === 'rule') {
+        const items = getRuleItems(id);
+        const identity = ruleIdentity(id, value);
+        if (identity && !items.some(item => ruleIdentity(id, item) === identity)) {
+          items.push(value);
+          setRuleItems(id, items);
+        }
+      } else {
+        const items = getListItems(id);
+        const identity = listIdentity(id, value);
+        if (identity && !items.some(item => listIdentity(id, item) === identity)) {
+          items.push(value);
+          setListItems(id, items);
+        }
+      }
+      input.value = '';
+      renderChipEditor(id);
+      return true;
+    }
+
+    function removeChipValue(id, index) {
+      const editor = chipEditors[id];
+      if (!editor) return;
+      if (editor.kind === 'rule') {
+        const items = getRuleItems(id);
+        items.splice(index, 1);
+        setRuleItems(id, items);
+      } else {
+        const items = getListItems(id);
+        items.splice(index, 1);
+        setListItems(id, items);
+      }
+      renderChipEditor(id);
+    }
+
+    function flushChipEditorInputs() {
+      Object.keys(chipEditors).forEach(id => {
+        const input = document.getElementById(chipEditors[id].inputId);
+        if (input && input.value.trim()) addChipValue(id);
+      });
+    }
+
     function fillForm(profile) {
       document.getElementById('keywords').value = profile.search_settings?.keywords || '';
       document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\n');
@@ -869,50 +1145,26 @@
       for (const [id, key] of ruleTextAreas) {
         document.getElementById(id).value = rulesToText(profile[id], key);
       }
-      renderTitleBlockChips(profile.reject_title_rules || []);
-    }
-
-    function renderTitleBlockChips(rules) {
-      const container = document.getElementById('reject_title_rules_chips');
-      if (!container) return;
-      if (!rules.length) {
-        container.innerHTML = '<span style="color:var(--muted);font-size:0.85rem;">No title blocks yet. Rules added from the dashboard appear here.</span>';
-        return;
-      }
-      container.innerHTML = rules.map(rule => {
-        const reason = (rule.reason || '').replace('TITLE_BAD_KEYWORD:', '');
-        const pattern = escapeHtml(rule.pattern || '');
-        return `<span class="rule-chip">
-          <span title="${pattern}">${escapeHtml(reason || pattern)}</span>
-          <button type="button" data-delete-title-block="${pattern}" title="Remove this title block" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;line-height:1;padding:0;">&#215;</button>
-        </span>`;
-      }).join('');
+      renderAdvancedChipEditors();
     }
 
     document.addEventListener('click', async e => {
-      const deleteBtn = e.target.closest('[data-delete-title-block]');
-      if (!deleteBtn) return;
-      const pattern = deleteBtn.dataset.deleteTitleBlock;
-      if (!pattern) return;
-      deleteBtn.disabled = true;
-      try {
-        const resp = await fetch('/api/rule/title-block', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pattern }),
-        });
-        const payload = await resp.json();
-        if (payload.ok) {
-          renderTitleBlockChips(payload.reject_title_rules || []);
-          const ta = document.getElementById('reject_title_rules');
-          if (ta) ta.value = rulesToText(payload.reject_title_rules, 'pattern');
-        } else {
-          alert(payload.error || 'Could not remove rule.');
-          deleteBtn.disabled = false;
-        }
-      } catch {
-        deleteBtn.disabled = false;
+      const addBtn = e.target.closest('[data-add-chip]');
+      if (addBtn) {
+        addChipValue(addBtn.dataset.addChip);
+        return;
       }
+      const removeBtn = e.target.closest('[data-remove-chip]');
+      if (removeBtn) {
+        removeChipValue(removeBtn.dataset.removeChip, Number(removeBtn.dataset.chipIndex));
+      }
+    });
+
+    document.addEventListener('keydown', e => {
+      const input = e.target.closest('[data-chip-input]');
+      if (!input || e.key !== 'Enter') return;
+      e.preventDefault();
+      addChipValue(input.dataset.chipInput);
     });
 
     function renderTelegramSubscribers(subscribers) {
@@ -1303,6 +1555,7 @@
     }
 
     function collectProfile() {
+      flushChipEditorInputs();
       return {
         search_settings: {
           keywords: document.getElementById('keywords').value.trim(),

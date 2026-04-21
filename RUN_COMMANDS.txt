@@ -83,6 +83,8 @@ You can combine flags with `python -m job_hunter_agent.source_connector` to crea
 
 --max-pages <number>
     Temporarily overrides the 'Max pages to check' setting from your profile.
+    Using `--max-pages 1` is highly recommended for quick testing without
+    waiting for a full deep scrape to complete.
 
 --reset-new-to-you
     Resets the 'Viewed' status for all jobs, making the dashboard feel like a

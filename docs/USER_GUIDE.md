@@ -202,6 +202,12 @@ Important:
 - shows raw score numbers (e.g. 72/100) directly on cards
 - expands the fit breakdown section showing exactly how points were added/subtracted
 
+`python -m job_hunter_agent.source_connector --max-pages 1`
+
+- limits the scraper to checking only the first page of results per location
+- overrides the maximum pages setting in your profile temporarily
+- highly recommended for testing new filters quickly without doing a full run
+
 `python -m job_hunter_agent.agent_runner`
 
 - runs the refresh flow and then creates a digest
