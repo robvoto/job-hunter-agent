@@ -178,14 +178,34 @@ def _matches_soft_requirement(text: str, alias: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
-def _matches_missing_skill_requirement(description_lower: str, skill_lower: str) -> bool:
+def matches_missing_requirement(description_text: str, required_term: str) -> bool:
+    description_lower = (description_text or "").lower()
+    skill_lower = (required_term or "").strip().lower()
+    if not description_lower or not skill_lower:
+        return False
     escaped_skill = re.escape(skill_lower)
-    mandatory_patterns = [
-        rf"\b(strong|extensive|proven|solid|deep|hands[- ]on|expert)\b.{{0,25}}\b{escaped_skill}\b",
-        rf"\b{escaped_skill}\b.{{0,35}}\b(required|essential|must have|mandatory)\b",
-        rf"\b(required|essential|must have|mandatory)\b.{{0,35}}\b{escaped_skill}\b",
-    ]
-    return any(re.search(pattern, description_lower) for pattern in mandatory_patterns)
+    term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
+    hard_requirement_re = re.compile(r"\b(required|requires|required to|essential|must have|mandatory|need to have|needs to have)\b")
+    strength_re = re.compile(r"\b(strong|extensive|proven|solid|deep|hands[- ]on|expert)\b")
+    desirable_re = re.compile(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial|highly desirable)\b")
+
+    def hard_requirement_matches(context: str) -> bool:
+        for hard_match in hard_requirement_re.finditer(context):
+            prefix = context[max(0, hard_match.start() - 5):hard_match.start()]
+            if re.search(r"\bnot\s+$", prefix):
+                continue
+            return True
+        return False
+
+    for match in re.finditer(term_pattern, description_lower):
+        start = max(match.start() - 45, 0)
+        end = min(match.end() + 45, len(description_lower))
+        context = description_lower[start:end]
+        if hard_requirement_matches(context):
+            return True
+        if strength_re.search(context) and not desirable_re.search(context):
+            return True
+    return False
 
 
 def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:
@@ -283,7 +303,7 @@ def _evaluate_description_confidence(details_text: str, description_lower: str, 
             "dynamic team",
             "leading organisation",
             "excellent communication skills",
-            "must be based in australia",
+            "must be based in",
             "full working rights",
         )
         if phrase in description_lower
@@ -391,7 +411,7 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
         skill_lower = (skill or "").strip().lower()
         if not skill_lower:
             continue
-        if _matches_missing_skill_requirement(description_lower, skill_lower):
+        if matches_missing_requirement(description_lower, skill_lower):
             return False, f"DESC_MANDATORY_SKILL:{_normalize_reason_token(skill_lower)}"
 
     return True, "OK"
@@ -454,86 +474,6 @@ def passes_quick_card_filters(
 # ---------------------------------------------------------------------------
 
 _REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
-
-# (pattern, category) - each pattern matches a trigger phrase in a job description.
-# Structural-label patterns (sector, domain, etc.) require a colon so we don't
-# accidentally capture mid-sentence uses like "the insurance sector required...".
-_EXTRACTION_TRIGGERS: list[tuple[str, str]] = [
-    (r"experience (?:in|with)\s+", "mandatory_experience"),
-    (r"must[- ]have\s+", "mandatory_skill"),
-    (r"(?:required|essential):\s+", "mandatory_skill"),
-    (r"background in\s+", "domain"),
-    (r"knowledge of\s+", "mandatory_skill"),
-    (r"exposure to\s+", "mandatory_experience"),
-    (r"worked (?:in|with)\s+", "domain"),
-    (r"working (?:in|with)\s+", "domain"),
-    (r"\bdomain:\s+", "domain"),
-    (r"\bsector:\s+", "domain"),
-    (r"\bindustry:\s+", "domain"),
-    (r"\bplatform:\s+", "industry_platform"),
-    (r"proficien(?:t|cy) (?:in|with)\s+", "mandatory_skill"),
-    (r"understanding of\s+", "mandatory_skill"),
-    (r"familiarity with\s+", "mandatory_skill"),
-    (r"clearance[:\s]+", "clearance_or_regulation"),
-    (r"compliance with\s+", "clearance_or_regulation"),
-]
-
-# Stops candidate extraction at punctuation or a low-information connective word.
-# Newlines are pre-collapsed via re.sub so we only need to handle single spaces.
-_STOP_AFTER_RE = re.compile(
-    r"[,;.()]|\s+(?:and|or|to|for|as|is|are|has|the|a|an|by|of|essential|required|needed|necessary|preferred)\b",
-    re.IGNORECASE,
-)
-_STRIP_LEAD_RE = re.compile(
-    r"^(?:a|an|the|strong|extensive|proven|solid|excellent|good|relevant|significant|deep)\s+",
-    re.IGNORECASE,
-)
-# Single-word extractions that are part of the trigger vocabulary itself - skip them
-_SKIP_SINGLE_WORDS = frozenset({
-    "required", "essential", "necessary", "important", "knowledge",
-    "experience", "skills", "ability", "exposure", "understanding",
-    "management", "background", "expertise", "proficiency", "familiarity",
-})
-_GENERIC_PHRASES = frozenset({
-    "the role", "this role", "our team", "the team", "the business",
-    "the company", "our company", "your experience", "your background",
-})
-
-
-def _extract_phrase_after(text: str, start: int) -> str:
-    """Pull the first meaningful noun phrase from text starting at start."""
-    segment = text[start:start + 55]
-    m = _STOP_AFTER_RE.search(segment)
-    phrase = segment[:m.start()].strip() if m else segment.strip()
-    phrase = _STRIP_LEAD_RE.sub("", phrase).strip()
-    words = [w.rstrip(".,;:)") for w in phrase.split()[:3] if len(w) >= 2]
-    return " ".join(words)
-
-
-def extract_rejection_suggestions(text: str) -> dict[str, list[str]]:
-    """Extract candidate rejection terms from a job description.
-
-    Pure heuristic, no AI, no predefined vocabulary.
-    Returns dict of category -> list of candidate phrases (capped at 6 per category).
-    """
-    lowered = re.sub(r"\s+", " ", (text or "").lower())
-    results: dict[str, list[str]] = {}
-    seen: set[str] = set()
-
-    for pattern, category in _EXTRACTION_TRIGGERS:
-        for m in re.finditer(pattern, lowered):
-            phrase = _extract_phrase_after(lowered, m.end())
-            if not phrase or len(phrase) < 3 or phrase in seen:
-                continue
-            if phrase in _GENERIC_PHRASES:
-                continue
-            # Skip single words that are part of the trigger vocabulary
-            if phrase in _SKIP_SINGLE_WORDS:
-                continue
-            seen.add(phrase)
-            results.setdefault(category, []).append(phrase)
-
-    return {cat: terms[:6] for cat, terms in results.items()}
 
 
 def _load_saved_rejection_rules() -> list:

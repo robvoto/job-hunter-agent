@@ -24,6 +24,7 @@ from playwright.sync_api import sync_playwright
 
 from job_hunter_agent.config import MAX_PAGES_CAP, OUTPUT_HTML
 from job_hunter_agent.filters import (
+    matches_missing_requirement,
     passes_content_filters,
     passes_quick_card_filters,
     passes_saved_rejection_rules,
@@ -39,7 +40,7 @@ from job_hunter_agent.profile_store import (
     get_search_settings,
     load_profile,
 )
-from job_hunter_agent.review_insights import build_review_data, extract_detected_skills
+from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.scrapers.seek import (
     SELECTOR_CARDS,
     SELECTOR_COMPANY,
@@ -71,12 +72,14 @@ CLI_FLAGS = set(sys.argv[1:])
 _max_pages_arg = next((sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--max-pages"), None)
 CLI_MAX_PAGES_CAP = int(_max_pages_arg) if _max_pages_arg and _max_pages_arg.isdigit() else None
 NO_LLM_MODE = "--no-llm" in CLI_FLAGS
-EXPAND_DASHBOARD_MODE = "--expand-dashboard" in CLI_FLAGS
+CHEAP_LLM_MODE = "--cheap-llm" in CLI_FLAGS
+DASHBOARD_DEBUG_MODE = "--debug-dashboard" in CLI_FLAGS
+EXPAND_DASHBOARD_MODE = "--expand-dashboard" in CLI_FLAGS or DASHBOARD_DEBUG_MODE
 LOW_SCRAPE_MODE = "--scrape-allow-low" in CLI_FLAGS
-EXPANDED_POOL_MODE = EXPAND_DASHBOARD_MODE or WIDE_SCRAPE_MODE
+EXPANDED_POOL_MODE = EXPAND_DASHBOARD_MODE or LOW_SCRAPE_MODE
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = "--reset-new-to-you" in CLI_FLAGS
 SKIP_QUICK_CARD_GATE_FOR_TESTING = False
-SHOW_SCORES_MODE = "--show-scores" in CLI_FLAGS
+SHOW_SCORES_MODE = "--show-scores" in CLI_FLAGS or DASHBOARD_DEBUG_MODE
 SHOW_SCORING_DEBUG = SHOW_SCORES_MODE
 DASHBOARD_MIN_SCORE = 35 if EXPANDED_POOL_MODE else 50
 DEFAULT_SCORE_FILTER_MIN = DASHBOARD_MIN_SCORE
@@ -87,6 +90,7 @@ RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
 REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 MIN_TRUSTED_DESCRIPTION_LENGTH = 600
 TRUSTED_DESCRIPTION_SOURCES = frozenset({"jobaddetails", "body", "linkedin_full_description"})
+DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
 
 KEEP_SNAPSHOT_FIELDS = (
     "title",
@@ -280,7 +284,7 @@ def _is_generic_summary_text(text: str) -> bool:
         "great opportunity",
         "asap",
         "urgent",
-        "must be based in australia",
+        "must be based in",
         "full working rights",
     )
     return any(phrase in lowered for phrase in generic_phrases)
@@ -289,6 +293,8 @@ def _is_generic_summary_text(text: str) -> bool:
 def synthesize_role_snapshot(record: dict) -> str:
     title = compact_whitespace(record.get("title") or "")
     location = compact_whitespace(record.get("location") or "")
+    if location.endswith(", Australia"):
+        location = location[:-11].strip()
     work_type = compact_whitespace(record.get("work_type") or "")
     teaser = compact_whitespace(record.get("teaser") or "")
 
@@ -392,6 +398,10 @@ _GOVERNMENT_CONTEXT_PATTERNS = (
     r"\blocal government\b",
     r"\bgovernment agency\b",
 )
+_GOVERNMENT_CONTEXT_FALSE_POSITIVE_PATTERNS = (
+    r"\bgovernment\s+id(?:entification)?\s+(?:number|numbers|document|documents)?\b",
+    r"\bgovernment-issued\s+id(?:entification)?\b",
+)
 
 
 def text_contains_term(text: str, term: str) -> bool:
@@ -407,6 +417,8 @@ def has_government_context(text: str) -> bool:
     lowered = compact_whitespace(text).lower()
     if not lowered:
         return False
+    for pattern in _GOVERNMENT_CONTEXT_FALSE_POSITIVE_PATTERNS:
+        lowered = re.sub(pattern, " ", lowered)
     return any(re.search(pattern, lowered) for pattern in _GOVERNMENT_CONTEXT_PATTERNS)
 
 
@@ -443,7 +455,7 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
 
     for skill in profile.get("must_not_require_skills", []):
         cleaned_skill = str(skill).strip().lower()
-        if cleaned_skill and text_contains_term(lowered, cleaned_skill):
+        if cleaned_skill and matches_missing_requirement(lowered, cleaned_skill):
             matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
 
     return {
@@ -452,6 +464,60 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         "low_fit": dedupe_preserve_order(matched_low_fit),
         "must_not": dedupe_preserve_order(matched_must_not),
     }
+
+
+def _near_desirable_language(text: str, term: str, window: int = 90) -> bool:
+    cleaned_text = compact_whitespace(text).lower()
+    cleaned_term = compact_whitespace(term).lower()
+    if not cleaned_text or not cleaned_term:
+        return False
+    for match in re.finditer(rf"(?<!\w){re.escape(cleaned_term)}(?!\w)", cleaned_text):
+        start = max(match.start() - window, 0)
+        end = min(match.end() + window, len(cleaned_text))
+        context = cleaned_text[start:end]
+        if re.search(
+            r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b",
+            context,
+        ):
+            return True
+    return False
+
+
+def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
+    lowered = compact_whitespace(details_text).lower()
+    if not lowered:
+        return []
+
+    watchouts: List[str] = []
+
+    for skill in profile.get("must_not_require_skills", []):
+        cleaned_skill = compact_whitespace(str(skill)).lower()
+        if not cleaned_skill or not text_contains_term(lowered, cleaned_skill):
+            continue
+        label = cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill
+        if matches_missing_requirement(lowered, cleaned_skill):
+            watchouts.append(f"{label} appears required")
+        elif _near_desirable_language(lowered, cleaned_skill):
+            watchouts.append(f"{label} appears desirable")
+        else:
+            watchouts.append(f"{label} appears in the description")
+
+    for rule in profile.get("reject_description_phrase_rules", []):
+        phrase = compact_whitespace(str(rule.get("phrase") or "")).lower()
+        if phrase and phrase in lowered:
+            watchouts.append(f"Blocked description phrase appears: {phrase}")
+
+    for rule in profile.get("reject_description_regex_rules", []):
+        pattern = str(rule.get("pattern") or "")
+        if not pattern:
+            continue
+        try:
+            if re.search(pattern, lowered):
+                watchouts.append("Blocked description pattern appears")
+        except re.error:
+            continue
+
+    return dedupe_preserve_order(watchouts)[:4]
 
 
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
@@ -517,10 +583,11 @@ def build_risk_and_missing_evidence(
     if capability_matches["low_fit"]:
         risks.append(f"{list_to_phrase(capability_matches['low_fit'][:2]).capitalize()} looks niche for your background")
 
+    risks.extend(description_watchout_reasons(details_text, profile))
+
     for signal in (competitive_signals or []):
         if int(signal.get("adjustment", 0)) < 0:
             alignment = compact_whitespace(signal.get("alignment") or "").lower()
-            label = compact_whitespace(signal.get("watchout_label") or signal.get("name") or "")
             label = compact_whitespace(signal.get("risk_label") or signal.get("name") or "")
             if label:
                 if alignment == "weak":
@@ -886,6 +953,8 @@ def compact_score_label(label: str) -> str:
         "Salary/rate signal": "Salary",
         "Salary/rate below target": "Salary",
         "Already viewed by you": "Viewed",
+        "Description capture incomplete": "Description",
+        "On-site role": "Work mode",
     }
     if label in direct_map:
         return direct_map[label]
@@ -959,17 +1028,42 @@ def format_timestamp_label(value: Optional[str]) -> str:
         return value
 
 
+def posted_datetime_from_age(posted_age_days: Optional[float], reference_time: Optional[datetime]) -> Optional[datetime]:
+    if posted_age_days is None or reference_time is None:
+        return None
+    try:
+        return reference_time - timedelta(days=float(posted_age_days))
+    except Exception:
+        return None
+
+
 def format_posted_date_label(posted_text: Optional[str], posted_age_days: Optional[float], reference_time: Optional[datetime]) -> str:
     normalized_posted = normalize_posted_text(posted_text)
     if normalized_posted.lower() == "today" and reference_time is None:
         return "Today"
-    if posted_age_days is None or reference_time is None:
+    posted_at = posted_datetime_from_age(posted_age_days, reference_time)
+    if posted_at is None:
         return "Unknown"
     try:
-        posted_at = reference_time - timedelta(days=float(posted_age_days))
         return posted_at.strftime("%d %b %Y")
     except Exception:
         return "Unknown"
+
+
+def relative_posted_age_label(posted_at: Optional[datetime], now: Optional[datetime] = None) -> str:
+    if posted_at is None:
+        return ""
+    current = now or datetime.now().astimezone()
+    try:
+        local_posted = posted_at.astimezone(current.tzinfo) if posted_at.tzinfo and current.tzinfo else posted_at
+        days_old = max((current.date() - local_posted.date()).days, 0)
+    except Exception:
+        return ""
+    if days_old == 0:
+        return "today"
+    if days_old == 1:
+        return "yesterday"
+    return f"{days_old} days ago"
 
 
 def posted_reference_time(record: dict) -> Optional[datetime]:
@@ -987,22 +1081,27 @@ def is_relative_posted_text(value: Optional[str]) -> bool:
     return re.fullmatch(r"\d+\s*[mhdy](?:\s*ago)?", text) is not None
 
 
-def posted_display_label(record: dict) -> str:
+def posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
     posted_text = normalize_posted_text(record.get("posted"))
     posted_age_days = record.get("posted_age_days")
+    reference_time = posted_reference_time(record)
+    posted_at = posted_datetime_from_age(posted_age_days, reference_time)
+    relative_label = relative_posted_age_label(posted_at, now) if posted_at else ""
     posted_date_label = format_posted_date_label(
         posted_text,
         posted_age_days,
-        posted_reference_time(record),
+        reference_time,
     )
 
     if posted_date_label != "Unknown" and posted_age_days is not None and is_relative_posted_text(posted_text):
-        return f"{posted_date_label} (listed as {posted_text} when retrieved)"
+        return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
     if posted_age_days is not None and posted_age_days >= 1 and posted_text not in ("N/A", ""):
         if posted_date_label != "Unknown" and posted_date_label != posted_text:
-            return f"{posted_text} ({posted_date_label})"
+            if relative_label:
+                return f"{posted_date_label} ({relative_label})"
+            return posted_date_label
     if posted_text in ("N/A", "") and posted_date_label != "Unknown":
-        return posted_date_label
+        return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
     return posted_text
 
 
@@ -1291,6 +1390,58 @@ def visible_fit_reasons(fit_highlights: List[str], score_breakdown: List[dict], 
     return reasons[:max_items]
 
 
+def negative_score_reasons(
+    score_breakdown: List[dict],
+    max_items: int = 4,
+    include_values: bool = True,
+) -> List[str]:
+    friendly_labels = {
+        "Salary/rate below target": "Salary is below target range",
+        "Description capture incomplete": DESCRIPTION_CAPTURE_ISSUE,
+        "Already viewed by you": "Already opened by you",
+        "Contract is shorter than preferred": "Contract length is shorter than preferred",
+    }
+    reasons = [
+        (
+            f"{compact_whitespace(item.get('label') or '')}: {int(item.get('value', 0) or 0):+d}"
+            if include_values
+            else friendly_labels.get(
+                compact_whitespace(item.get("label") or ""),
+                compact_whitespace(item.get("label") or ""),
+            )
+        )
+        for item in score_breakdown
+        if compact_whitespace(item.get("label") or "") and int(item.get("value", 0) or 0) < 0
+    ]
+    return dedupe_preserve_order(reasons)[:max_items]
+
+
+def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int = 4) -> List[str]:
+    labels = [compact_whitespace(item.get("label") or "") for item in score_breakdown]
+    evidence_points = next(
+        (int(item.get("value", 0) or 0) for item in score_breakdown if item.get("label") == "Fit evidence bullets"),
+        0,
+    )
+    gaps: List[str] = []
+
+    if not any(label.startswith("Posted within") or label == "Still relatively recent" for label in labels):
+        gaps.append("No reliable recent-posted signal")
+
+    if not any(label in {"Salary/rate signal", "Salary/rate below target"} for label in labels):
+        salary = compact_whitespace(record.get("salary") or "")
+        if not salary or salary == "N/A":
+            gaps.append("No comparable salary/rate found")
+
+    if evidence_points < 12:
+        capability_count = len(capability_fit_highlights(record.get("fit_highlights", []) or []))
+        gaps.append(f"Only {capability_count} strong capability evidence bullet{'s' if capability_count != 1 else ''} counted")
+
+    if full_description_confidence(record) == "LOW":
+        gaps.append("Scoring confidence is limited because the full description was not captured")
+
+    return dedupe_preserve_order(gaps)[:max_items]
+
+
 def score_to_match_label(score: int) -> str:
     if score >= 80:
         return "Strong match"
@@ -1401,12 +1552,6 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Older than the search window ({cleaned_detail} days)"
     if prefix == "DESC_LOCATION" and cleaned_detail:
         return f"Location mismatch: {cleaned_detail}"
-    if prefix == "DESC_FINANCE" and cleaned_detail:
-        return f"Finance-domain mismatch: {cleaned_detail}"
-    if prefix == "DESC_TREASURY" and cleaned_detail:
-        return f"Treasury or banking-specialist role: {cleaned_detail}"
-    if prefix == "DESC_ERP_FIN" and cleaned_detail:
-        return f"ERP or finance-specialist workflow: {cleaned_detail}"
     if prefix == "DESC_CAPABILITY_LOW" and cleaned_detail:
         return f"Low-fit specialist area: {cleaned_detail}"
     if prefix == "DESC_HARD_BLOCK" and cleaned_detail:
@@ -1417,6 +1562,8 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Excluded description phrase: {cleaned_detail}"
     if prefix == "DESC_BAD_REGEX" and cleaned_detail:
         return f"Excluded description pattern: {cleaned_detail}"
+    if prefix == "LEARNED_REJECT" and cleaned_detail:
+        return f"Learned blocker: {cleaned_detail.split(':')[-1].strip()}"
     if prefix == "TITLE_POTENTIAL_MATCH":
         return "Adjacent title match"
     if prefix == "CARD_SPECIALIST" and cleaned_detail:
@@ -1514,6 +1661,9 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     if content_reason == "OK":
         breakdown.append({"label": "Passed content filters", "value": weighted_points(8, weights["fit"])})
 
+    if full_description_confidence(record) == "LOW":
+        breakdown.append({"label": "Description capture incomplete", "value": weighted_points(-10, weights["fit"])})
+
     evidence_score = min(len(capability_fit_highlights(fit_highlights)) * 3, 12)
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
@@ -1558,6 +1708,8 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         breakdown.append({"label": "Hybrid work available", "value": weighted_points(1, weights["work_mode"])})
     elif work_mode == "remote":
         breakdown.append({"label": "Remote work available", "value": weighted_points(2, weights["work_mode"])})
+    elif work_mode in {"on-site", "onsite", "on site"}:
+        breakdown.append({"label": "On-site role", "value": weighted_points(-4, weights["work_mode"])})
 
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
@@ -1690,29 +1842,38 @@ def get_trusted_full_description(record: dict) -> str:
     """Return the trusted full description text, or empty string if not available.
 
     Prefers the canonical ``full_description`` field. Falls back to
-    ``fit_source_text`` only when ``description_source`` is trusted and the
-    text meets the minimum length threshold.
+    ``fit_source_text`` when the source is trusted. Older saved LinkedIn
+    snapshots did not always persist ``description_source``; if the detail
+    status was OK and the fallback text is long enough, treat that as trusted
+    legacy detail text so dashboard rebuilds do not lose evidence.
     """
     full = compact_whitespace(record.get("full_description") or "")
     if full:
         return full
     source = str(record.get("description_source") or "").strip().lower()
+    fallback_text = compact_whitespace(record.get("fit_source_text") or "")
+    if len(fallback_text) < MIN_TRUSTED_DESCRIPTION_LENGTH:
+        return ""
     if source in TRUSTED_DESCRIPTION_SOURCES:
-        fallback_text = compact_whitespace(record.get("fit_source_text") or "")
-        if len(fallback_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH:
-            return fallback_text
+        return fallback_text
+    details_status = str(record.get("details_status") or "").strip().lower()
+    if details_status == "ok" and not source:
+        return fallback_text
     return ""
 
 
 def full_description_confidence(record: dict) -> str:
     """Return 'HIGH' if a trusted full description is available, else 'LOW'.
 
-    Prefers the explicit ``fit_confidence`` field when already stored.
+    Recomputes HIGH from trusted text first so legacy records with recovered
+    detail text are not stuck with an old LOW confidence marker.
     """
+    if get_trusted_full_description(record):
+        return "HIGH"
     stored = str(record.get("fit_confidence") or "").strip().upper()
     if stored in {"HIGH", "LOW"}:
         return stored
-    return "HIGH" if get_trusted_full_description(record) else "LOW"
+    return "LOW"
 
 
 def is_description_trusted(record: dict) -> bool:
@@ -2053,6 +2214,11 @@ def build_dashboard_record_sets(
 def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str:
     active_profile = scoring_profile or load_profile()
     display_record = dict(record)
+    
+    loc = str(display_record.get("location") or "").strip()
+    if loc.endswith(", Australia"):
+        display_record["location"] = loc[:-11].strip()
+        
     title = safe_html(record.get("title", "Untitled"))
     company = safe_html(record.get("company", "N/A"))
     url = safe_html(record.get("url", "#"))
@@ -2071,6 +2237,10 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
 
     if fit_confidence_level == "HIGH" and trusted_desc:
         display_record["fit_source_text"] = trusted_desc
+        display_record["fit_confidence"] = "HIGH"
+        detail_work_mode = extract_work_mode(trusted_desc)
+        if detail_work_mode != "N/A":
+            display_record["work_mode"] = detail_work_mode
         role_summary = build_role_summary(record, trusted_desc, active_profile)
         display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
         fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
@@ -2085,10 +2255,11 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
     else:
         role_summary = stored_snapshot
+        display_record["fit_confidence"] = "LOW"
         display_record["competitive_signals"] = []
         fit_highlights = []
         soft_risk_reasons = []
-        missing_evidence = ["Full job description not captured clearly"]
+        missing_evidence = [DESCRIPTION_CAPTURE_ISSUE]
         blocking_reasons = []
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
@@ -2100,10 +2271,11 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     fit_tone_class = score_to_tone_class(fit_points)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
     visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown)
-    work_mode = str(record.get("work_mode") or "N/A")
+    description_issue = fit_confidence_level == "LOW"
+    work_mode = str(display_record.get("work_mode") or "N/A")
     posted_age_days = record.get("posted_age_days")
-    salary_value = salary_sort_value(str(record.get("salary") or ""))
-    salary_fit_state = salary_fit_label(record, scoring_profile)
+    salary_value = salary_sort_value(str(display_record.get("salary") or ""))
+    salary_fit_state = salary_fit_label(display_record, scoring_profile)
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
     company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
@@ -2134,6 +2306,8 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         badges.append(render_badge("15+ Days Old", "badge-stale", "This role is older, but still saved for reference."))
     elif seen_by_you:
         badges.append(viewed_badge_html())
+    if description_issue:
+        badges.append(render_badge("Description Issue", "badge-warning", "The full job description was not captured clearly, so this match needs manual checking."))
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
 
     score_percent = max(min(int(fit_points), 100), 0)
@@ -2154,10 +2328,10 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     meta_items = []
     for label, value in [
         ("Posted", posted_display),
-        ("Location", record.get("location")),
-        ("Work mode", record.get("work_mode")),
-        ("Type", record.get("work_type")),
-        ("Salary", record.get("salary")),
+        ("Location", display_record.get("location")),
+        ("Work mode", display_record.get("work_mode")),
+        ("Type", display_record.get("work_type")),
+        ("Salary", display_record.get("salary")),
     ]:
         if value and value != "N/A" and value != "Unknown":
             meta_items.append(
@@ -2169,7 +2343,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             *soft_risk_reasons,
             "Salary is below target range",
         ])
-    contract_item = assess_contract_preference(record, scoring_profile)
+    contract_item = assess_contract_preference(display_record, scoring_profile)
     if contract_item and int(contract_item.get("value", 0)) < 0:
         soft_risk_reasons = dedupe_preserve_order([
             *soft_risk_reasons,
@@ -2191,9 +2365,9 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         else ""
     )
     note_bits: List[str] = []
-    if visible_reasons:
-        note_bits.append(f"Strongest fit: {visible_reasons[0]}.")
-    if missing_evidence:
+    if description_issue:
+        note_bits.append("Description issue: full job description was not captured clearly.")
+    elif missing_evidence:
         note_bits.append(f"Missing evidence: {missing_evidence[0]}.")
     elif soft_risk_reasons:
         note_bits.append(f"Risk: {soft_risk_reasons[0]}.")
@@ -2210,27 +2384,69 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in visible_reasons)}</ul>'
             '</div>'
         )
-    if missing_evidence:
+    visible_penalties = negative_score_reasons(score_breakdown, include_values=SHOW_SCORING_DEBUG)
+    if description_issue:
+        visible_penalties = [
+            item for item in visible_penalties
+            if not item.startswith("Description capture incomplete")
+        ]
+    negative_items = dedupe_preserve_order([
+        *([] if description_issue else missing_evidence),
+        *soft_risk_reasons,
+        *visible_penalties,
+    ])[:6]
+    if description_issue:
+        description_issue_items = [DESCRIPTION_CAPTURE_ISSUE]
+        if SHOW_SCORING_DEBUG:
+            capture_facts = []
+            status = compact_whitespace(record.get("details_status") or "")
+            source_name = compact_whitespace(record.get("description_source") or "")
+            details_length = record.get("details_length")
+            if status:
+                capture_facts.append(f"details status: {status}")
+            if source_name:
+                capture_facts.append(f"description source: {source_name}")
+            if details_length not in {None, ""}:
+                capture_facts.append(f"details length: {details_length}")
+            if capture_facts:
+                description_issue_items.append("; ".join(capture_facts))
         insight_sections.append(
-            '<div class="job-insight-group">'
-            '<strong>Missing evidence</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in missing_evidence)}</ul>'
+            '<div class="job-insight-group job-insight-warning">'
+            '<strong>Description issue</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in description_issue_items)}</ul>'
             '</div>'
         )
-    if soft_risk_reasons:
+    if negative_items:
         insight_sections.append(
-            '<div class="job-insight-group">'
-            '<strong>Risks</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in soft_risk_reasons)}</ul>'
+            '<div class="job-insight-group job-insight-warning">'
+            '<strong>What lowers it</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_items)}</ul>'
             '</div>'
         )
-    elif fit_confidence_level == "LOW":
+    elif SHOW_SCORING_DEBUG:
         insight_sections.append(
-            '<div class="job-insight-group job-insight-unavailable">'
-            '<strong>Risks & missing evidence</strong>'
-            '<p class="insight-unavailable-note">Unavailable \u2014 full job description was not captured for this role.</p>'
+            '<div class="job-insight-group job-insight-muted">'
+            '<strong>Watchouts</strong>'
+            '<p class="insight-unavailable-note">No explicit risks detected from the captured description.</p>'
             '</div>'
         )
+    if SHOW_SCORING_DEBUG:
+        negative_reasons = negative_score_reasons(score_breakdown)
+        if negative_reasons:
+            insight_sections.append(
+                '<div class="job-insight-group job-insight-warning">'
+                '<strong>Score penalties</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_reasons)}</ul>'
+                '</div>'
+            )
+        gap_reasons = score_gap_reasons(display_record, score_breakdown)
+        if gap_reasons:
+            insight_sections.append(
+                '<div class="job-insight-group is-secondary">'
+                '<strong>Score gaps</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in gap_reasons)}</ul>'
+                '</div>'
+            )
     if SHOW_SCORING_DEBUG and score_breakdown:
         score_breakdown_html = "".join(
             f"<li>{safe_html(str(item['label']))}: {int(item['value']):+d}</li>"
@@ -2251,10 +2467,17 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         else ""
     )
 
-    if hidden_record:
+    if applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-unhide" type="button" data-review-action="unhide" {button_data_attrs}>Unhide</button>'
+            f'<button class="review-button review-undo" type="button" data-review-action="unapply" {button_data_attrs}>Undo Applied</button>'
+            '<span class="review-status" aria-live="polite"></span>'
+            "</div>"
+        )
+    elif hidden_record:
+        actions_html = (
+            '<div class="job-actions">'
+            f'<button class="review-button review-undo" type="button" data-review-action="unhide" {button_data_attrs}>Unhide</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -2269,8 +2492,10 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     else:
         actions_html = ""
 
+    card_classes = f'job-card {fit_tone_class}' + (" is-description-issue" if description_issue else "")
+
     return (
-        f'<article class="job-card" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}" data-source="{safe_html(source)}">'
+        f'<article class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}" data-source="{safe_html(source)}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         '<div class="job-header-row">'
         '<div class="job-header-copy">'
@@ -2449,17 +2674,19 @@ def render_html(
         page_label = ", ".join(str(page) for page in pages) if pages else "none"
         target_summaries.append(f"{location}: pages {page_label}")
     testing_mode_notes = []
-    if WIDE_SCRAPE_MODE:
-        testing_mode_notes.append(f"Wide scrape mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better.")
+    if LOW_SCRAPE_MODE:
+        testing_mode_notes.append(f"Scrape allow-low mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better.")
+    elif DASHBOARD_DEBUG_MODE:
+        testing_mode_notes.append(f"Dashboard debug mode is on, showing scores and keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better without a fresh scrape.")
     elif EXPAND_DASHBOARD_MODE:
-        testing_mode_notes.append(f"Expanded dashboard mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better without a fresh scrape.")
+        testing_mode_notes.append(f"Expanded dashboard view is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better without a fresh scrape.")
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         testing_mode_notes.append("Viewed history has been reset, so all roles are shown as unseen.")
         
     testing_mode_note = " " + " ".join(testing_mode_notes) if testing_mode_notes else ""
     search_window_label = f"Last {date_range_days} day" + ("" if date_range_days == 1 else "s")
     sort_order_label = "Newest first" if sort_newest_first else "Source relevance"
-    mode_label = "Test mode ON" if EXPANDED_POOL_MODE or TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "Normal mode"
+    mode_label = "Debug view ON" if EXPANDED_POOL_MODE or TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "Normal mode"
     current_search_settings = get_search_settings(scoring_profile)
     search_settings_payload = {
         "keywords": str(current_search_settings.get("keywords") or "").strip(),
@@ -2792,6 +3019,7 @@ def render_html(
       gap: 10px;
       flex-wrap: wrap;
       margin-top: 12px;
+      align-items: center;
     }}
     .search-settings-edit {{
       display: grid;
@@ -2896,11 +3124,35 @@ def render_html(
       gap: 18px;
     }}
     .job-card {{
+      --card-accent: rgba(214, 198, 178, 0.85);
+      --card-accent-bg: rgba(214, 198, 178, 0.06);
       background: rgba(255, 253, 250, 0.98);
       border: 1px solid var(--line);
+      border-left: 5px solid var(--card-accent);
       border-radius: 24px;
       padding: 20px 22px 18px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      background-image: linear-gradient(90deg, var(--card-accent-bg), rgba(255, 253, 250, 0) 34%);
+    }}
+    .job-card.tone-strong {{
+      --card-accent: #16a34a;
+      --card-accent-bg: rgba(22, 163, 74, 0.08);
+    }}
+    .job-card.tone-good {{
+      --card-accent: #0f766e;
+      --card-accent-bg: rgba(15, 118, 110, 0.08);
+    }}
+    .job-card.tone-borderline {{
+      --card-accent: #d89b00;
+      --card-accent-bg: rgba(216, 155, 0, 0.1);
+    }}
+    .job-card.tone-low {{
+      --card-accent: #9ca3af;
+      --card-accent-bg: rgba(156, 163, 175, 0.08);
+    }}
+    .job-card.is-description-issue {{
+      --card-accent: #dc2626;
+      --card-accent-bg: rgba(220, 38, 38, 0.09);
     }}
     .job-badges {{
       display: flex;
@@ -2917,7 +3169,7 @@ def render_html(
       font-weight: 500;
       cursor: help;
     }}
-    .badge-new {{ background: var(--accent-soft); color: var(--accent); }}
+    .badge-new {{ background: var(--accent-soft); color: var(--accent); text-transform: none; }}
     .badge-potential {{ background: var(--warm-soft); color: var(--warm); }}
     .badge-archive {{ background: #f3e8ff; color: #6b21a8; }}
     .badge-hidden {{ background: #fee2e2; color: #991b1b; }}
@@ -2928,6 +3180,7 @@ def render_html(
     .badge-fit-high {{ background: #dcfce7; color: #166534; }}
     .badge-fit-medium {{ background: #fef3c7; color: #92400e; }}
     .badge-fit-borderline {{ background: #e5e7eb; color: #374151; }}
+    .badge-warning {{ background: #fee2e2; color: #991b1b; }}
     .filter-panel {{
       background: rgba(255, 253, 249, 0.96);
       border: 1px solid var(--line);
@@ -3220,6 +3473,12 @@ def render_html(
     .job-insight-group.is-secondary strong {{
       color: var(--muted);
     }}
+    .job-insight-group.job-insight-warning strong {{
+      color: #991b1b;
+    }}
+    .job-insight-group.job-insight-muted strong {{
+      color: #6b7280;
+    }}
     .job-insight-group ul {{
       margin: 0;
       padding-left: 18px;
@@ -3391,13 +3650,6 @@ def render_html(
       font-size: 0.84rem;
       background: var(--bg);
     }}
-    .rejection-other-row select {{
-      padding: 5px 6px;
-      border: 1px solid var(--line);
-      border-radius: 5px;
-      font-size: 0.82rem;
-      background: var(--bg);
-    }}
     .rejection-other-row button {{
       padding: 5px 12px;
       background: var(--accent);
@@ -3472,24 +3724,28 @@ def render_html(
       cursor: pointer;
     }}
     .title-block-btn {{
-      display: inline-block;
-      background: none;
-      border: none;
-      padding: 2px 0 0 8px;
-      font-size: 0.78rem;
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      margin-left: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(29, 78, 216, 0.2);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.76rem;
+      font-weight: 700;
       color: var(--cool);
       cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      text-decoration-color: rgba(29,78,216,0.45);
       vertical-align: middle;
       white-space: nowrap;
-      transition: color 0.15s, text-decoration-color 0.15s;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
     }}
     .title-block-btn:hover {{
       color: #1d4ed8;
-      text-decoration-color: #1d4ed8;
+      background: #eff6ff;
+      border-color: rgba(29, 78, 216, 0.42);
     }}
+    .review-undo,
     .review-unhide {{
       background: var(--cool);
       color: white;
@@ -3800,7 +4056,6 @@ def render_html(
           <section class="snapshot-section">
             <div class="snapshot-section-head">
               <h2 class="snapshot-heading">Search Settings</h2>
-              <span class="search-status-pill is-idle" id="run_status_pill">Idle</span>
             </div>
             <div class="snapshot-meta search-settings-readonly">
               <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value" id="search_keywords_current">{safe_html(search_keywords_label)}</span></div>
@@ -3810,7 +4065,7 @@ def render_html(
             </div>
             <div class="search-settings-actions">
               <button class="search-button search-button-secondary" type="button" id="search_settings_toggle">Edit</button>
-              <button class="search-button search-button-primary" type="button" id="run_now_button">Run Now</button>
+              <span class="search-status-pill is-idle" id="run_status_pill" style="margin-left: auto;" title="Background scraper status">Idle</span>
             </div>
             <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
             <div class="search-settings-edit" id="search_settings_edit" hidden>
@@ -3831,6 +4086,9 @@ def render_html(
                   <span>Pages cap</span>
                   <input type="number" id="search_max_pages_input" min="1" max="25" value="{safe_html(str(search_settings_payload['max_pages_cap']))}">
                 </label>
+              </div>
+              <div class="search-settings-actions">
+                <button class="search-button search-button-primary" type="button" id="run_now_button">Save &amp; Run</button>
               </div>
             </div>
           </section>
@@ -3895,24 +4153,13 @@ def render_html(
   <div class="rejection-panel" id="rejection-panel" hidden>
     <div class="rejection-panel-header">
       <h3 id="rejection-panel-title">Why isn&#39;t this role for you?</h3>
-      <p>Select terms that turned you off this job. We&#39;ll save them as learning signals.</p>
+      <p>Pick only blockers you want the app to avoid next time. Skip weak suggestions.</p>
     </div>
     <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
     <div class="rejection-other">
-      <div class="rejection-other-label">Add your own term</div>
+      <div class="rejection-other-label">Add your own blocker</div>
       <div class="rejection-other-row">
-        <input type="text" id="rejection-other-input" placeholder="e.g. Salesforce" maxlength="80" />
-        <select id="rejection-other-cat">
-          <option value="mandatory_skill">Skill</option>
-          <option value="mandatory_experience">Experience</option>
-          <option value="domain">Domain</option>
-          <option value="clearance_or_regulation">Clearance</option>
-          <option value="industry_platform">Platform</option>
-          <option value="location">Location</option>
-          <option value="work_mode">Work mode</option>
-          <option value="contract_type">Contract type</option>
-          <option value="other">Other</option>
-        </select>
+        <input type="text" id="rejection-other-input" placeholder="e.g. SAP, payroll, top secret clearance" maxlength="80" />
         <button type="button" id="rejection-other-add">Add</button>
       </div>
       <div class="rejection-custom-list" id="rejection-custom-list"></div>
@@ -4551,6 +4798,7 @@ def render_html(
 
     function reviewSavingMessage(action) {{
       if (action === 'applied') return 'Saving as applied...';
+      if (action === 'unapply') return 'Removing from applied jobs...';
       if (action === 'unhide') return 'Removing from hidden jobs...';
       if (action === 'not_for_me') return 'Saving Not For Me feedback...';
       if (action === 'block_similar') return 'Saving title block...';
@@ -4562,13 +4810,14 @@ def render_html(
         return payload.message;
       }}
       if (action === 'applied') return 'Saved to Applied jobs. It will be hidden in future runs.';
+      if (action === 'unapply') return 'Removed from Applied jobs. It can appear again in future runs.';
       if (action === 'unhide') return 'Removed from Hidden jobs. It can appear again in future runs.';
       if (action === 'not_for_me') return 'Saved as Not For Me. We will learn from this without blocking similar titles yet.';
       if (action === 'block_similar') return 'Saved. Similar jobs will be blocked by title in future runs.';
       return 'Review action saved.';
     }}
 
-    async function saveReviewAction(button, extraPayload = {{}}) {{
+    async function saveReviewAction(button, extraPayload = {{}}, options = {{}}) {{
       const card = button.closest('.job-card');
       const status = card?.querySelector('.review-status');
       const action = button.dataset.reviewAction || extraPayload.action || '';
@@ -4604,8 +4853,12 @@ def render_html(
 
         hideBlockConfirm(card);
         card.classList.add('is-reviewed');
-        status.textContent = reviewSuccessMessage(action, payload);
+        status.textContent = options.successMessage || reviewSuccessMessage(action, payload);
         window.setTimeout(() => {{
+          if (payload?.reload_dashboard || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {{
+            window.location.reload();
+            return;
+          }}
           card.dataset.reviewDismissed = '1';
           applyDashboardControls();
           if (action === 'block_similar') {{
@@ -4761,10 +5014,43 @@ def render_html(
     // Rejection-learning panel
     let _rejectionPendingButton = null;
     let _rejectionCustomTerms = [];
+    let _rejectionStage = 'select';
+    let _rejectionSavedBlockers = [];
+    let _rejectionTitleSuggestions = [];
+
+    const _rejVisibleSuggestionCategories = new Set([
+      'other',
+    ]);
+
+    function _rejEscapeHtml(value) {{
+      return String(value || '').replace(/[&<>"']/g, ch => ({{
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }}[ch]));
+    }}
+
+    function _rejResetPanelChrome() {{
+      _rejectionStage = 'select';
+      _rejectionSavedBlockers = [];
+      _rejectionTitleSuggestions = [];
+      document.getElementById('rejection-btn-save').textContent = 'Save & Continue';
+      document.getElementById('rejection-btn-save').disabled = true;
+      document.getElementById('rejection-btn-skip').textContent = 'Just Hide';
+      document.getElementById('rejection-btn-cancel').removeAttribute('hidden');
+      document.querySelector('.rejection-other')?.removeAttribute('hidden');
+      const headerCopy = document.querySelector('#rejection-panel .rejection-panel-header p');
+      if (headerCopy) {{
+        headerCopy.textContent = 'Pick only blockers you want the app to avoid next time. Skip weak suggestions.';
+      }}
+    }}
 
     function openRejectionPanel(button) {{
       _rejectionPendingButton = button;
       _rejectionCustomTerms = [];
+      _rejResetPanelChrome();
       const jobTitle = button.dataset.jobTitle || 'this role';
       document.getElementById('rejection-panel-title').textContent =
         `Why isn\u2019t "${{jobTitle}}" for you?`;
@@ -4773,7 +5059,6 @@ def render_html(
       body.textContent = 'Loading suggestions\u2026';
       document.getElementById('rejection-custom-list').innerHTML = '';
       document.getElementById('rejection-other-input').value = '';
-      document.getElementById('rejection-btn-save').disabled = true;
       document.getElementById('rejection-panel').removeAttribute('hidden');
       document.getElementById('rejection-overlay').removeAttribute('hidden');
       const jobKey = button.dataset.jobKey || '';
@@ -4783,47 +5068,112 @@ def render_html(
         .then(data => _rejRenderSuggestions(data));
     }}
 
-    const _rejCatLabels = {{
-      mandatory_skill: 'Required Skills',
-      mandatory_experience: 'Required Experience',
-      domain: 'Domain / Sector',
-      clearance_or_regulation: 'Clearance / Compliance',
-      industry_platform: 'Platform / Tool',
-      location: 'Location',
-      work_mode: 'Work Mode',
-      contract_type: 'Contract Type',
-      other: 'Other',
-    }};
+    function _rejSuggestionItems(groups) {{
+      const items = [];
+      const seen = new Set();
+      for (const [cat, terms] of Object.entries(groups || {{}})) {{
+        if (!_rejVisibleSuggestionCategories.has(cat)) continue;
+        for (const raw of terms || []) {{
+          const value = String(raw || '').trim();
+          const key = value.toLowerCase();
+          if (!value || seen.has(key)) continue;
+          seen.add(key);
+          items.push({{ value, category: cat }});
+        }}
+      }}
+      return items.slice(0, 12);
+    }}
+
+    function _rejCollectSelectedBlockers() {{
+      const selected = Array.from(
+        document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-value]:checked')
+      ).map(cb => String(cb.dataset.value || '').trim()).filter(Boolean);
+      const custom = _rejectionCustomTerms.map(item => String(item.value || '').trim()).filter(Boolean);
+      return [...new Set([...selected, ...custom])];
+    }}
 
     function _rejRenderSuggestions(groups) {{
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body';
-      const entries = Object.entries(groups || {{}}).filter(([, terms]) => terms.length > 0);
-      if (entries.length === 0) {{
-        body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No suggestions found. Use the field below to add your own terms.</p>';
+      const items = _rejSuggestionItems(groups);
+      if (items.length === 0) {{
+        body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No suggestions found. Use the field below to add your own blocker.</p>';
         return;
       }}
-      const catOptions = Object.entries(_rejCatLabels).map(([k, v]) => `<option value="${{k}}">${{v}}</option>`).join('');
-      body.innerHTML = entries.map(([cat, terms]) =>
+      const chips = items.map(item => {{
+        const escapedValue = _rejEscapeHtml(item.value);
+        const escapedCat = _rejEscapeHtml(item.category);
+        return `<div class="rejection-chip">` +
+          `<label><input type="checkbox" data-value="${{escapedValue}}" data-cat="${{escapedCat}}" /> ${{escapedValue}}</label>` +
+          `</div>`;
+      }}).join('');
+      body.innerHTML =
         `<div class="rejection-group">` +
-        `<div class="rejection-group-label">${{_rejCatLabels[cat] || cat}}</div>` +
-        `<div class="rejection-chips">${{terms.map(t =>
-          `<div class="rejection-chip">` +
-          `<label><input type="checkbox" data-value="${{t.replace(/"/g, '&quot;')}}" /> ${{t}}</label>` +
-          `<select class="rejection-chip-select" data-orig="${{cat}}">${{catOptions}}</select>` +
-          `</div>`
-        ).join('')}}</div></div>`
-      ).join('');
-      body.querySelectorAll('.rejection-chip-select').forEach(sel => {{
-        sel.value = sel.dataset.orig;
-      }});
+        `<div class="rejection-group-label">Suggested blockers</div>` +
+        `<div class="rejection-chips">${{chips}}</div>` +
+        `</div>`;
       body.querySelectorAll('input[type=checkbox]').forEach(cb => {{
         cb.addEventListener('change', _rejUpdateSaveBtn);
       }});
     }}
 
+    function _rejRenderTitleFollowup(payload) {{
+      _rejectionStage = 'title_followup';
+      _rejectionTitleSuggestions = Array.isArray(payload?.title_block_suggestions) ? payload.title_block_suggestions : [];
+      document.querySelector('.rejection-other')?.setAttribute('hidden', '');
+      document.getElementById('rejection-btn-save').textContent = 'Add Title Blocks';
+      document.getElementById('rejection-btn-skip').textContent = 'Continue Without Title Blocks';
+      document.getElementById('rejection-btn-cancel').setAttribute('hidden', '');
+      const headerCopy = document.querySelector('#rejection-panel .rejection-panel-header p');
+      if (headerCopy) {{
+        headerCopy.textContent = 'Optional next step. Only block by title if the title alone is enough to reject future roles.';
+      }}
+      const body = document.getElementById('rejection-panel-body');
+      body.className = 'rejection-panel-body';
+      const cards = _rejectionTitleSuggestions.map(item => {{
+        const phrase = _rejEscapeHtml(item.phrase || '');
+        const rejectedCount = Number(item.matched_rejected_count || 0);
+        const rejectedExamples = Array.isArray(item.sample_rejected_titles) ? item.sample_rejected_titles : [];
+        const examplesHtml = rejectedExamples.length
+          ? `<ul>${{rejectedExamples.map(example => `<li>${{_rejEscapeHtml(example.title || 'Untitled role')}}${{example.company ? ` - ${{_rejEscapeHtml(example.company)}}` : ''}}</li>`).join('')}}</ul>`
+          : '<p>No sample titles saved yet.</p>';
+        return `
+          <div class="rejection-group">
+            <div class="rejection-chip" style="display:flex;align-items:flex-start;width:100%;border-radius:14px;padding:10px 12px;">
+              <label style="display:flex;gap:8px;align-items:flex-start;width:100%;cursor:pointer;">
+                <input type="checkbox" data-title-followup="1" data-phrase="${{phrase}}" />
+                <span>
+                  <strong>${{phrase}}</strong><br>
+                  <span style="color:var(--muted);font-size:0.8rem;">Matched ${{rejectedCount}} rejected title${{rejectedCount === 1 ? '' : 's'}} and no kept titles.</span>
+                </span>
+              </label>
+            </div>
+            <div style="margin:6px 0 0 26px;color:var(--muted);font-size:0.82rem;">
+              <strong style="color:var(--ink);font-size:0.82rem;">Examples</strong>
+              ${{examplesHtml}}
+            </div>
+          </div>
+        `;
+      }}).join('');
+      body.innerHTML =
+        `<div class="rejection-group">` +
+        `<div class="rejection-group-label">Optional title blocks</div>` +
+        `<p style="margin:0 0 10px;color:var(--muted);font-size:0.84rem;">These terms also look strong enough to block at the title level before the app reads the description.</p>` +
+        `${{cards}}` +
+        `</div>`;
+      body.querySelectorAll('input[type=checkbox][data-title-followup]').forEach(cb => {{
+        cb.addEventListener('change', _rejUpdateSaveBtn);
+      }});
+      _rejUpdateSaveBtn();
+    }}
+
     function _rejUpdateSaveBtn() {{
-      const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox]:checked');
+      if (_rejectionStage === 'title_followup') {{
+        const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox][data-title-followup]:checked');
+        document.getElementById('rejection-btn-save').disabled = !anyChecked;
+        return;
+      }}
+      const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox][data-value]:checked');
       document.getElementById('rejection-btn-save').disabled =
         !anyChecked && _rejectionCustomTerms.length === 0;
     }}
@@ -4833,36 +5183,89 @@ def render_html(
       document.getElementById('rejection-overlay').setAttribute('hidden', '');
       _rejectionPendingButton = null;
       _rejectionCustomTerms = [];
+      _rejResetPanelChrome();
+    }}
+
+    async function _rejPersistMandatoryBlockers(blockers, titleBlockPhrases = []) {{
+      const button = _rejectionPendingButton;
+      const response = await fetch(`${{API_BASE_URL}}/api/rejection-feedback/mandatory-blockers`, {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{
+          job_id: button?.dataset.jobKey || '',
+          job_title: button?.dataset.jobTitle || '',
+          url: button?.dataset.jobUrl || '',
+          company: button?.dataset.jobCompany || '',
+          teaser: button?.dataset.jobTeaser || '',
+          blockers,
+          title_block_phrases: titleBlockPhrases,
+        }}),
+      }});
+      const payload = await response.json().catch(() => ({{}}));
+      if (!response.ok) {{
+        throw new Error(payload.error || 'Could not save blockers');
+      }}
+      return payload;
+    }}
+
+    async function _rejCompleteReview(result, titleBlockPhrases = []) {{
+      const button = _rejectionPendingButton;
+      const successMessage = result?.message || 'Saved blocker feedback.';
+      closeRejectionPanel();
+      titleBlockPhrases.filter(Boolean).forEach(phrase => dismissCardsByTitlePhrase(phrase));
+      if (button) {{
+        await saveReviewAction(button, {{}}, {{ successMessage }});
+      }}
     }}
 
     async function _rejSaveAndContinue() {{
-      const button = _rejectionPendingButton;
-      const jobKey = button?.dataset.jobKey || '';
-      const jobTitle = button?.dataset.jobTitle || '';
-      const rules = [];
-      document.querySelectorAll('#rejection-panel-body input[type=checkbox]:checked')
-        .forEach(cb => {{
-          const select = cb.closest('.rejection-chip')?.querySelector('select');
-          rules.push({{ value: cb.dataset.value, category: select ? select.value : (cb.dataset.cat || 'other'), source: 'suggestion' }});
-        }});
-      _rejectionCustomTerms.forEach(t => rules.push({{ value: t.value, category: t.category, source: 'manual' }}));
-      if (rules.length > 0) {{
-        await fetch(`${{API_BASE_URL}}/api/rejection-rules`, {{
-          method: 'POST',
-          headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{ job_id: jobKey, job_title: jobTitle, rules }}),
-        }}).catch(() => {{}});
+      const saveButton = document.getElementById('rejection-btn-save');
+      const originalLabel = saveButton.textContent;
+      saveButton.disabled = true;
+      saveButton.textContent = _rejectionStage === 'title_followup' ? 'Saving…' : 'Saving blockers…';
+      try {{
+        if (_rejectionStage === 'title_followup') {{
+          const selectedTitlePhrases = Array.from(
+            document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-title-followup]:checked')
+          ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
+          const result = await _rejPersistMandatoryBlockers(_rejectionSavedBlockers, selectedTitlePhrases);
+          await _rejCompleteReview(result, result?.applied_title_block_phrases || selectedTitlePhrases);
+          return;
+        }}
+
+        const blockers = _rejCollectSelectedBlockers();
+        if (!blockers.length) {{
+          return;
+        }}
+        _rejectionSavedBlockers = blockers;
+        const result = await _rejPersistMandatoryBlockers(blockers);
+        if (Array.isArray(result?.title_block_suggestions) && result.title_block_suggestions.length) {{
+          _rejRenderTitleFollowup(result);
+          return;
+        }}
+        await _rejCompleteReview(result);
+      }} catch (error) {{
+        saveButton.disabled = false;
+        saveButton.textContent = originalLabel;
+        const body = document.getElementById('rejection-panel-body');
+        if (body && !body.classList.contains('is-loading')) {{
+          body.insertAdjacentHTML(
+            'afterbegin',
+            `<p style="margin:0 0 10px;color:#b91c1c;font-size:0.84rem;">${{_rejEscapeHtml(error.message || 'Could not save blockers.')}}</p>`
+          );
+        }}
+        return;
       }}
-      closeRejectionPanel();
-      if (button) saveReviewAction(button);
+      saveButton.textContent = originalLabel;
     }}
 
     function _rejRenderCustomChips() {{
       const list = document.getElementById('rejection-custom-list');
-      list.innerHTML = _rejectionCustomTerms.map((t, i) =>
-        `<span class="rejection-custom-chip">${{t.value}}` +
-        `<button type="button" data-idx="${{i}}" aria-label="Remove">&times;</button></span>`
-      ).join('');
+      list.innerHTML = _rejectionCustomTerms.map((t, i) => {{
+        const value = _rejEscapeHtml(t.value);
+        return `<span class="rejection-custom-chip">${{value}}` +
+          `<button type="button" data-idx="${{i}}" aria-label="Remove">&times;</button></span>`;
+      }}).join('');
       list.querySelectorAll('button').forEach(btn => {{
         btn.addEventListener('click', () => {{
           _rejectionCustomTerms.splice(+btn.dataset.idx, 1);
@@ -4873,8 +5276,9 @@ def render_html(
     }}
 
     document.getElementById('rejection-other-add').addEventListener('click', () => {{
+      if (_rejectionStage !== 'select') return;
       const input = document.getElementById('rejection-other-input');
-      const cat = document.getElementById('rejection-other-cat').value;
+      const cat = 'other';
       const val = input.value.trim();
       if (!val || val.length < 2) return;
       _rejectionCustomTerms.push({{ value: val, category: cat }});
@@ -4891,6 +5295,12 @@ def render_html(
 
     document.getElementById('rejection-btn-skip').addEventListener('click', () => {{
       const btn = _rejectionPendingButton;
+      if (_rejectionStage === 'title_followup') {{
+        _rejCompleteReview({{
+          message: 'Saved blocker feedback without adding title blocks.',
+        }}).catch(() => {{}});
+        return;
+      }}
       closeRejectionPanel();
       if (!btn) return;
 
@@ -5150,17 +5560,6 @@ def _seek_scrape_to_records(
                             is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
                             record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
 
-                            for skill in extract_detected_skills(details_text):
-                                skill_observations.append(
-                                    {
-                                        "skill": skill,
-                                        "title": title,
-                                        "company": company,
-                                        "url": full_url,
-                                        "search_location": search_location,
-                                    }
-                                )
-
                             ok_desc, desc_reason = passes_content_filters(
                                 details_text,
                                 record["location"],
@@ -5325,14 +5724,29 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
     print("=" * 60)
     print("  JOB HUNTER AGENT - SCRAPE RUN")
     print("=" * 60)
-    print(f"  Wide Scrape Mode   : {'ON' if LOW_SCRAPE_MODE else 'OFF'}")
-    print(f"  Show Scores Mode   : {'ON' if SHOW_SCORES_MODE else 'OFF'}")
+    print("  Trigger            : manual scrape command")
+    print("  Action             : scrape fresh jobs, review them, rebuild dashboard")
+    print("  Fresh scrape       : YES")
+    print(f"  Dashboard debug    : {'ON (--debug-dashboard)' if DASHBOARD_DEBUG_MODE else 'OFF'}")
+    print(f"  Scrape allow low   : {'ON (--scrape-allow-low)' if LOW_SCRAPE_MODE else 'OFF'}")
+    print(f"  Cheap LLM          : {'ON (--cheap-llm)' if CHEAP_LLM_MODE else 'OFF'}")
+    if DASHBOARD_DEBUG_MODE:
+        expanded_label = "ON (--debug-dashboard)"
+    elif LOW_SCRAPE_MODE:
+        expanded_label = "ON (--scrape-allow-low)"
+    elif EXPAND_DASHBOARD_MODE:
+        expanded_label = "ON (--expand-dashboard)"
+    else:
+        expanded_label = "OFF"
+    score_debug_label = "ON (--debug-dashboard)" if DASHBOARD_DEBUG_MODE else ("ON (--show-scores)" if SHOW_SCORES_MODE else "OFF")
+    print(f"  Expanded view      : {expanded_label}")
+    print(f"  Score debug        : {score_debug_label}")
     print(f"  LLM Disabled       : {'YES (--no-llm flag)' if NO_LLM_MODE else 'NO'}")
     print(f"  LLM Model          : {_get_llm_model()}")
     print(f"  Score Floor        : {DASHBOARD_MIN_SCORE}")
-    print(f"  Reset New To You   : {'YES' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
+    print(f"  Reset New To You   : {'YES (--reset-new-to-you)' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
     if CLI_MAX_PAGES_CAP is not None:
-        print(f"  Max Pages Override : {CLI_MAX_PAGES_CAP}")
+        print(f"  Max pages override : {CLI_MAX_PAGES_CAP} (--max-pages)")
     print("=" * 60)
 
     profile = load_profile()
@@ -5453,14 +5867,21 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
     return OUTPUT_HTML
 
 
-def rebuild_html_dashboard() -> str:
+def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -> str:
     configure_console_output()
     print("=" * 60)
     print("  JOB HUNTER AGENT - DASHBOARD REBUILD")
     print("=" * 60)
-    print(f"  Expanded Dashboard : {'ON' if EXPAND_DASHBOARD_MODE else 'OFF'}")
-    print(f"  Show Scores Mode   : {'ON' if SHOW_SCORES_MODE else 'OFF'}")
-    print(f"  Reset New To You   : {'YES' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
+    print(f"  Trigger            : {reason}")
+    print("  Action             : re-render saved dashboard only")
+    print("  Fresh scrape       : NO")
+    print("  AI review          : NO")
+    print(f"  Dashboard debug    : {'ON (--debug-dashboard)' if DASHBOARD_DEBUG_MODE else 'OFF'}")
+    expanded_label = "ON (--debug-dashboard)" if DASHBOARD_DEBUG_MODE else ("ON (--expand-dashboard)" if EXPAND_DASHBOARD_MODE else "OFF")
+    score_debug_label = "ON (--debug-dashboard)" if DASHBOARD_DEBUG_MODE else ("ON (--show-scores)" if SHOW_SCORES_MODE else "OFF")
+    print(f"  Expanded view      : {expanded_label}")
+    print(f"  Score debug        : {score_debug_label}")
+    print(f"  Reset New To You   : {'YES (--reset-new-to-you)' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
     print("=" * 60)
     profile = load_profile()
     search_settings = get_search_settings(profile)
@@ -5472,6 +5893,11 @@ def rebuild_html_dashboard() -> str:
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
     job_history = load_job_history()
     kept_records = load_last_kept_records()
+    print(f"  Saved kept records : {len(kept_records)}")
+    print(f"  Job history records: {len(job_history)}")
+    print(f"  Applied keys       : {len(applied_job_keys)}")
+    print(f"  Hidden keys        : {len(hidden_job_keys)}")
+    print("=" * 60)
 
     render_html(
         OUTPUT_HTML,

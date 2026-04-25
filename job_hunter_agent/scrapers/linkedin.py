@@ -12,7 +12,6 @@ from typing import List, Set
 from job_hunter_agent.filters import passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules, passes_title_filters
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.review_insights import extract_detected_skills
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
 from job_hunter_agent.utils import extract_salary, extract_work_mode
 
@@ -167,16 +166,6 @@ class LinkedInScraper(BaseJobScraper):
                 is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
                 record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
                 record["details_status"] = "ok"
-
-                # Skill observations
-                for skill in extract_detected_skills(details_text):
-                    skill_observations.append({
-                        "skill": skill,
-                        "title": title,
-                        "company": company,
-                        "url": record.get("url", ""),
-                        "search_location": target["location"],
-                    })
 
                 # Content filter
                 ok_desc, desc_reason = passes_content_filters(

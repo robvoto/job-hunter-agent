@@ -183,3 +183,35 @@ def test_agent_settings_schedule_payload_rejects_bad_time_format():
     else:
         raise AssertionError("Expected ValueError for invalid schedule time")
 
+
+def test_remove_review_key_supports_unapply(monkeypatch):
+    saved_profile = {
+        "review_controls": {
+            "applied_job_keys": ["job-1", "job-2"],
+            "hidden_job_keys": ["job-3"],
+        }
+    }
+    events = []
+
+    monkeypatch.setattr(local_server, "load_profile", lambda: saved_profile)
+    monkeypatch.setattr(local_server, "save_profile", lambda profile: profile)
+    monkeypatch.setattr(
+        local_server.SettingsHandler,
+        "_persist_review_event",
+        classmethod(lambda cls, *args, **kwargs: events.append((args, kwargs))),
+    )
+    monkeypatch.setattr(
+        local_server.SettingsHandler,
+        "_rebuild_dashboard_after_rule_change",
+        staticmethod(lambda reason="": events.append(((f"rebuild:{reason}",), {}))),
+    )
+
+    result = local_server.SettingsHandler._remove_review_key("unapply", "job-1")
+
+    assert result["ok"] is True
+    assert result["reload_dashboard"] is True
+    assert saved_profile["review_controls"]["applied_job_keys"] == ["job-2"]
+    assert saved_profile["review_controls"]["hidden_job_keys"] == ["job-3"]
+    assert events[0][0][0] == "unapply"
+    assert str(events[1][0][0]).startswith("rebuild:review action saved: unapply")
+

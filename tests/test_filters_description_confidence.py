@@ -1,6 +1,13 @@
 from job_hunter_agent import filters
 
 
+def test_missing_requirement_detector_separates_required_from_desirable():
+    assert filters.matches_missing_requirement("SAP experience is mandatory for this role.", "SAP")
+    assert filters.matches_missing_requirement("Proven experience in financial services is required.", "financial services")
+    assert not filters.matches_missing_requirement("SAP experience is desirable for this role.", "SAP")
+    assert not filters.matches_missing_requirement("Strong SAP experience is preferred but not essential.", "SAP")
+
+
 def test_adjacent_title_requires_stronger_role_proof(monkeypatch):
     monkeypatch.setattr(
         filters,

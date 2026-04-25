@@ -252,7 +252,7 @@ def run_agent_once(skip_collection: bool = False, notify: bool = True) -> dict[s
 
     if skip_collection:
         print("Rebuilding dashboard from current local state...")
-        rebuild_html_dashboard()
+        rebuild_html_dashboard(reason="agent runner --skip-collection")
     else:
         print("Starting job collection...")
         scrape_jobs_direct()

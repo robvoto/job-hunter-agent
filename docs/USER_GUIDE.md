@@ -197,6 +197,12 @@ Important:
 - rebuilds the dashboard showing borderline "Stretch" roles (score 35+)
 - does not run a fresh scrape
 
+`python -m job_hunter_agent.source_connector --rebuild-dashboard --debug-dashboard`
+
+- rebuilds the dashboard from saved local state only
+- shows expanded score/debug details and borderline roles
+- does not run a fresh scrape or AI review
+
 `python -m job_hunter_agent.source_connector --reset-new-to-you`
 
 - resets the 'Viewed' status for all jobs so they appear as "New To You"

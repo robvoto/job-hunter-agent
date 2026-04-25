@@ -50,7 +50,7 @@ DEFAULT_AGENT_SETTINGS = {
         "subscribers": [],
     },
     "llm": {
-        "model": "gpt-4.1-mini",
+        "model": "gpt-4o-mini",
     },
 }
 

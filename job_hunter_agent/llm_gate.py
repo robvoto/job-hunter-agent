@@ -13,6 +13,7 @@ Notes:
 import hashlib
 import json as _json_mod
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -28,9 +29,10 @@ load_dotenv()
 # Token budgets â€” keep fit decisions tight; extraction can be generous
 MAX_TOKENS_FIT_DECISION = 50
 MAX_TOKENS_CV_EXTRACTION = 500
+MAX_TOKENS_REJECTION_SUGGESTIONS = 300
 
-# Scrape-allow-low flag: mirrors the same argv check in source_connector
-_LOW_SCRAPE_MODE = "--scrape-allow-low" in sys.argv
+# Cheap-llm flag: mirrors the same argv check in source_connector
+_CHEAP_LLM_MODE = "--cheap-llm" in sys.argv
 
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
@@ -98,9 +100,9 @@ def _profile_fingerprint() -> str:
 
 def _get_llm_model() -> str:
     """Return the configured model, falling back to gpt-4.1-mini.
-    In scrape-allow-low mode uses gpt-4o-mini to reduce cost when evaluating more jobs.
+    In cheap-llm mode uses gpt-4o-mini to reduce cost when evaluating more jobs.
     """
-    if _LOW_SCRAPE_MODE:
+    if _CHEAP_LLM_MODE:
         return "gpt-4o-mini"
     return load_agent_settings().get("llm", {}).get("model", "gpt-4.1-mini")
 
@@ -113,7 +115,7 @@ def _log_llm_model_once() -> str:
     global _llm_model_logged
     model = _get_llm_model()
     if not _llm_model_logged:
-        source = "scrape-allow-low override" if _LOW_SCRAPE_MODE else "agent_settings.json"
+        source = "cheap-llm override" if _CHEAP_LLM_MODE else "agent_settings.json"
         print(f"[LLM] Model: {model}  (source: {source})")
         _llm_model_logged = True
     return model
@@ -124,6 +126,23 @@ client = OpenAI(api_key=_api_key) if _api_key else None
 ALLOWED_DECISIONS = {"KEEP", "REJECT", "MAYBE"}
 ALLOWED_GRADES = {"EXCELLENT", "STRONG", "SOLID", "WEAK", "POOR", "MISMATCH"}
 DEFAULT_LLM_REVIEW = {"decision": "MAYBE", "grade": "SOLID"}
+HARD_BLOCKER_KINDS = {
+    "credential",
+    "clearance",
+    "license",
+    "work_authorization",
+    "language",
+    "location",
+    "domain",
+    "industry",
+    "regulatory",
+    "platform",
+    "tool",
+    "product",
+    "security",
+    "specialist_experience",
+    "other_hard_requirement",
+}
 
 
 def llm_is_enabled() -> bool:
@@ -247,6 +266,92 @@ def normalize_llm_review(value: Any) -> Dict[str, str]:
     return dict(DEFAULT_LLM_REVIEW)
 
 
+def _strip_json_fence(value: str) -> str:
+    raw = str(value or "").strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1].lstrip("json").strip()
+    return raw
+
+
+def normalize_rejection_blocker_suggestions(value: Any, max_items: int = 6) -> list[str]:
+    if isinstance(value, str):
+        try:
+            value = _json_mod.loads(_strip_json_fence(value))
+        except Exception:
+            return []
+    if isinstance(value, dict):
+        value = value.get("blockers") or value.get("suggestions") or []
+    if not isinstance(value, list):
+        return []
+
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        kind = re.sub(r"[^a-z_]+", "_", str(item.get("kind") or "").strip().lower()).strip("_")
+        if kind not in HARD_BLOCKER_KINDS:
+            continue
+        phrase = re.sub(r"\s+", " ", str(item.get("term") or "").strip().lower())
+        if not phrase:
+            continue
+        if len(phrase) < 2 or len(phrase) > 80:
+            continue
+        if re.search(r"[\r\n.;!?]", phrase):
+            continue
+        if len(phrase.split()) > 6:
+            continue
+        if phrase in seen:
+            continue
+        seen.add(phrase)
+        suggestions.append(phrase)
+        if len(suggestions) >= max_items:
+            break
+    return suggestions
+
+
+def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = None) -> list[str]:
+    active_client = llm_client or client
+    description = str(job_description_text or "").strip()
+    if active_client is None or not description:
+        return []
+
+    system_prompt = "\n".join(
+        part for part in [
+            "You suggest candidate-controlled blocker terms for a job-search assistant.",
+            "The user will explicitly approve any suggestion before it is saved. Do not decide or save anything.",
+            "Use the candidate profile context to avoid suggesting requirements already evidenced by the candidate.",
+            "Suggest only concise blocker terms that appear to be hard requirements for this specific job and are not clearly evidenced by the candidate profile.",
+            "Hard blockers can be from any field: credentials, clearances, licences, work authorization, language, location, regulated/domain experience, industry background, products, platforms, tools, or specialist experience.",
+            "Do not suggest desirable, preferred, nice-to-have, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs.",
+            "Classify each suggestion with one kind from: credential, clearance, license, work_authorization, language, location, domain, industry, regulatory, platform, tool, product, security, specialist_experience, other_hard_requirement.",
+            "Return JSON only, in this exact shape: {\"blockers\":[{\"term\":\"term\",\"kind\":\"kind\"}]}. Return an empty array if unsure.",
+            build_profile_prompt_context(),
+        ]
+        if part
+    )
+
+    try:
+        model = _log_llm_model_once()
+        resp = active_client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Job description:\n" + description[:5000]},
+            ],
+            max_output_tokens=MAX_TOKENS_REJECTION_SUGGESTIONS,
+        )
+        _log_llm_call(resp, "rejection_suggestions", model)
+    except Exception as exc:
+        print(f"[LLM][REJECTION_SUGGESTIONS][ERROR] {exc}")
+        return []
+
+    suggestions = normalize_rejection_blocker_suggestions(getattr(resp, "output_text", ""))
+    if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
+        print(f"[LLM][REJECTION_SUGGESTIONS][UNEXPECTED] {str(resp.output_text).strip()}")
+    return suggestions
+
+
 def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
     """Use the LLM only to label pre-selected deterministic capability clusters."""
     active_client = llm_client or client
@@ -282,20 +387,19 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         "- Return a JSON array of strings only, one label per input cluster.\n\n"
         "Clusters:\n"
     )
-    import json as _json
 
     try:
         _model = _get_llm_model()
         resp = active_client.responses.create(
             model=_model,
-            input=[{"role": "user", "content": prompt + _json.dumps(payload, ensure_ascii=False)}],
+            input=[{"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}],
             max_output_tokens=MAX_TOKENS_CV_EXTRACTION,
         )
         _log_llm_call(resp, "capability_naming", _model)
         raw = (resp.output_text or "").strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
-        labels = _json.loads(raw)
+        labels = _json_mod.loads(raw)
         if not isinstance(labels, list):
             return []
         return [str(label).strip().lower() for label in labels[: len(payload)]]

@@ -710,9 +710,9 @@ def _apply_llm_capability_names(capabilities: list[dict[str, Any]]) -> list[dict
 
 
 def _parse_summary(source_text: str) -> str:
-    experience = _extract_section(source_text, "EXPERIENCE SUMMARY (REALITY BASELINE)")
-    roles = _extract_bullets(_extract_section(source_text, "EXPERIENCE SUMMARY (REALITY BASELINE)"))
-    primary_strength_match = re.search(r"Primary strength:\s*(.+)", _extract_section(source_text, "CORE STRENGTH IDENTITY"), flags=re.IGNORECASE)
+    experience = _extract_section(source_text, "EXPERIENCE SUMMARY") or _extract_section(source_text, "SUMMARY")
+    roles = _extract_bullets(experience)
+    primary_strength_match = re.search(r"(?:Primary strength|Core strength):\s*(.+)", source_text, flags=re.IGNORECASE)
     years_match = re.search(
         r"(?P<label>Years in [^:\n]+|Experience):\s*(?P<value>[^\n]+)",
         experience,

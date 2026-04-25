@@ -1,6 +1,5 @@
 ﻿import re
 from typing import Any
-from job_hunter_agent.filters import extract_rejection_suggestions
 
 
 def _normalize_term(value: str) -> str:
@@ -23,16 +22,6 @@ def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
             if normalized_alias:
                 known_terms.add(normalized_alias)
     return known_terms
-
-
-def extract_detected_skills(details_text: str) -> list[str]:
-    suggestions = extract_rejection_suggestions(details_text)
-    found = set()
-    for cat in ["mandatory_skill", "industry_platform", "mandatory_experience", "domain"]:
-        for term in suggestions.get(cat, []):
-            if len(term) > 2:
-                found.add(term)
-    return sorted(list(found), key=lambda item: item.lower())
 
 
 def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str, Any]) -> list[dict]:

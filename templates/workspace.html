@@ -34,6 +34,14 @@
       gap: 10px;
       flex-wrap: wrap;
     }
+    .ws-run-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 14px;
+      margin-left: 4px;
+      border-left: 1px solid #e9ddcf;
+    }
     .ws-btn {
       border-radius: 999px;
       padding: 8px 16px;
@@ -269,8 +277,10 @@
     <span class="ws-brand">Job Hunter</span>
     <div class="ws-header-actions">
       <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
-      <span class="ws-status-pill" id="ws_status_pill">Loading...</span>
-      <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
+      <div class="ws-run-group">
+        <span class="ws-status-pill" id="ws_status_pill">Loading...</span>
+        <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
+      </div>
     </div>
   </header>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
@@ -436,8 +446,8 @@
         wsStatusPill.className = 'ws-status-pill is-running';
       } else {
         const label = lastRunAt
-          ? 'Last run: ' + new Date(lastRunAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-          : 'Never run';
+          ? 'Last run: ' + new Date(lastRunAt).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+          : 'Ready to search';
         wsStatusPill.textContent = label;
         wsStatusPill.className = 'ws-status-pill';
       }

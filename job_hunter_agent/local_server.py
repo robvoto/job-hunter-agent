@@ -8,7 +8,8 @@ from typing import Any
 
 from job_hunter_agent.agent_settings import DEFAULT_AGENT_SETTINGS, load_agent_settings, save_agent_settings
 from job_hunter_agent.config import OUTPUT_HTML
-from job_hunter_agent.filters import build_title_block_rule, extract_rejection_suggestions, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
+from job_hunter_agent.filters import build_title_block_rule, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
+from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import DATA_DIR, DOCS_DIR, OUTPUT_DIR, REPO_ROOT, TEMPLATES_DIR
 from job_hunter_agent.profile_learning import build_learning_patch, merge_capability_rules, repair_text
@@ -245,11 +246,11 @@ class SettingsHandler(BaseHTTPRequestHandler):
         return any(key in (patch or {}) for key in SettingsHandler.MATCHING_RULE_PROFILE_KEYS)
 
     @staticmethod
-    def _rebuild_dashboard_after_rule_change() -> None:
+    def _rebuild_dashboard_after_rule_change(reason: str = "matching rule change") -> None:
         if not DASHBOARD_PATH.exists() and not RUN_STATS_PATH.exists() and not AUDIT_RECORDS_PATH.exists():
             return
         try:
-            rebuild_html_dashboard()
+            rebuild_html_dashboard(reason=f"{reason}; applying saved filters to current dashboard")
         except Exception as exc:
             print(f"[DASHBOARD][WARN] Could not rebuild after rule change: {type(exc).__name__}: {exc}")
 
@@ -404,7 +405,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
         telegram = payload.get("telegram", {}) if isinstance(payload, dict) else {}
         llm = payload.get("llm", {}) if isinstance(payload, dict) else {}
         schedule_payload = payload.get("schedule") if isinstance(payload, dict) else None
-        _allowed_models = {"gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o"}
+        _allowed_models = {"gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1", "gpt-4o"}
         model = str(llm.get("model") or "").strip()
         sanitized = {
             "telegram": {
@@ -414,7 +415,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
             },
             "llm": {
-                "model": model if model in _allowed_models else "gpt-4.1-mini",
+                "model": model if model in _allowed_models else "gpt-4o-mini",
             },
         }
         if isinstance(schedule_payload, dict):
@@ -473,7 +474,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 "subscribers": subscribers if isinstance(subscribers, list) else [],
             },
             "llm": {
-                "model": str(llm.get("model") or "gpt-4.1-mini").strip(),
+                "model": str(llm.get("model") or "gpt-4o-mini").strip(),
             },
         }
 
@@ -581,6 +582,8 @@ class SettingsHandler(BaseHTTPRequestHandler):
             if not entry.get("first_applied_at"):
                 entry["first_applied_at"] = now_iso
             entry["last_applied_at"] = now_iso
+        elif action == "unapply":
+            entry["last_unapplied_at"] = now_iso
         elif action == "not_for_me":
             entry["last_not_for_me_at"] = now_iso
             entry["times_not_for_me"] = int(entry.get("times_not_for_me", 0) or 0) + 1
@@ -644,11 +647,13 @@ class SettingsHandler(BaseHTTPRequestHandler):
             company=company,
             teaser=teaser,
         )
+        cls._rebuild_dashboard_after_rule_change(f"review action saved: {action}")
         return {
             "ok": True,
             "action": action,
             "job_key": normalized,
             "saved_count": len(existing),
+            "reload_dashboard": True,
         }
 
     @classmethod
@@ -669,6 +674,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
         review_controls = profile.setdefault("review_controls", {})
 
         list_name = {
+            "unapply": "applied_job_keys",
             "unhide": "hidden_job_keys",
         }.get(action)
         if not list_name:
@@ -690,17 +696,34 @@ class SettingsHandler(BaseHTTPRequestHandler):
             company=company,
             teaser=teaser,
         )
+        cls._rebuild_dashboard_after_rule_change(f"review action saved: {action}")
         return {
             "ok": True,
             "action": action,
             "job_key": normalized,
             "saved_count": len(updated),
+            "reload_dashboard": True,
         }
 
 
     # ------------------------------------------------------------------
     # Rejection-learning helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _load_audit_rows() -> list[dict[str, Any]]:
+        if not AUDIT_RECORDS_PATH.exists():
+            return []
+        try:
+            data = json.loads(AUDIT_RECORDS_PATH.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    @staticmethod
+    def _normalize_requirement_blocker(value: str) -> str:
+        cleaned = re.sub(r"\s+", " ", str(value or "").strip())
+        return cleaned[:80]
 
     @staticmethod
     def _load_rejection_rules() -> list:
@@ -744,6 +767,236 @@ class SettingsHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         return ""
+
+    @classmethod
+    def _build_title_block_followups(cls, blockers: list[str]) -> list[dict[str, Any]]:
+        profile = load_profile()
+        existing_patterns = {
+            str(rule.get("pattern") or "").strip()
+            for rule in profile.get("reject_title_rules", [])
+            if isinstance(rule, dict)
+        }
+        audit_rows = cls._load_audit_rows()
+        history = cls._load_job_history()
+        suggestions: list[dict[str, Any]] = []
+        seen_phrases: set[str] = set()
+
+        for blocker in blockers:
+            phrase = normalize_title_block_phrase(blocker)
+            if not phrase or phrase in seen_phrases:
+                continue
+            seen_phrases.add(phrase)
+            rule = build_title_block_rule(phrase)
+            if rule["pattern"] in existing_patterns:
+                continue
+
+            matcher = re.compile(rule["pattern"], re.IGNORECASE)
+            rejected_keys: set[str] = set()
+            kept_keys: set[str] = set()
+            rejected_examples: list[dict[str, str]] = []
+            kept_examples: list[dict[str, str]] = []
+
+            for row in audit_rows:
+                if not isinstance(row, dict):
+                    continue
+                title = str(row.get("title") or "").strip()
+                if not title or not matcher.search(title.lower()):
+                    continue
+                job_key = cls._normalize_job_key(str(row.get("job_key") or row.get("url") or title))
+                item = {
+                    "title": title,
+                    "company": str(row.get("company") or "").strip(),
+                }
+                if str(row.get("decision") or "").strip().upper() == "KEEP":
+                    if job_key and job_key in kept_keys:
+                        continue
+                    if job_key:
+                        kept_keys.add(job_key)
+                    if len(kept_examples) < 3:
+                        kept_examples.append(item)
+                    continue
+                if job_key and job_key in rejected_keys:
+                    continue
+                if job_key:
+                    rejected_keys.add(job_key)
+                if len(rejected_examples) < 3:
+                    rejected_examples.append(item)
+
+            for raw_key, entry in history.items():
+                if not isinstance(entry, dict):
+                    continue
+                if int(entry.get("times_kept", 0) or 0) <= 0:
+                    continue
+                job_key = cls._normalize_job_key(str(raw_key))
+                if job_key and job_key in kept_keys:
+                    continue
+                snapshot = entry.get("last_kept_snapshot") if isinstance(entry.get("last_kept_snapshot"), dict) else {}
+                title = str(snapshot.get("title") or entry.get("title") or "").strip()
+                if not title or not matcher.search(title.lower()):
+                    continue
+                if job_key:
+                    kept_keys.add(job_key)
+                if len(kept_examples) < 3:
+                    kept_examples.append({
+                        "title": title,
+                        "company": str(snapshot.get("company") or entry.get("company") or "").strip(),
+                    })
+
+            rejected_count = len(rejected_keys) or len(rejected_examples)
+            kept_count = len(kept_keys) or len(kept_examples)
+            if rejected_count < 2 or kept_count > 0:
+                continue
+
+            suggestions.append(
+                {
+                    "phrase": phrase,
+                    "matched_rejected_count": rejected_count,
+                    "matched_kept_count": kept_count,
+                    "sample_rejected_titles": rejected_examples,
+                    "sample_kept_titles": kept_examples,
+                }
+            )
+
+        suggestions.sort(
+            key=lambda item: (
+                -int(item.get("matched_rejected_count", 0) or 0),
+                str(item.get("phrase") or ""),
+            )
+        )
+        return suggestions[:4]
+
+    @classmethod
+    def _save_requirement_blockers_feedback(
+        cls,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+        blockers: list[str] | None = None,
+        title_block_phrases: list[str] | None = None,
+    ) -> dict[str, Any]:
+        normalized = cls._normalize_job_key(job_key or url)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        cleaned_blockers: list[str] = []
+        seen_blockers: set[str] = set()
+        for raw in blockers or []:
+            cleaned = cls._normalize_requirement_blocker(str(raw or ""))
+            normalized_blocker = cleaned.lower()
+            if len(cleaned) < 2 or normalized_blocker in seen_blockers:
+                continue
+            seen_blockers.add(normalized_blocker)
+            cleaned_blockers.append(cleaned)
+
+        if not cleaned_blockers:
+            raise ValueError("At least one blocker is required")
+
+        profile = load_profile()
+        existing_blockers = list(profile.get("must_not_require_skills", []))
+        existing_lookup = {
+            cls._normalize_requirement_blocker(str(item or "")).lower()
+            for item in existing_blockers
+            if cls._normalize_requirement_blocker(str(item or ""))
+        }
+        added_blockers: list[str] = []
+        skipped_blockers: list[str] = []
+        for blocker in cleaned_blockers:
+            blocker_key = blocker.lower()
+            if blocker_key in existing_lookup:
+                skipped_blockers.append(blocker)
+                continue
+            existing_lookup.add(blocker_key)
+            existing_blockers.append(blocker)
+            added_blockers.append(blocker)
+
+        if added_blockers:
+            profile["must_not_require_skills"] = existing_blockers
+            save_profile(profile)
+
+        title_result: dict[str, Any] | None = None
+        applied_title_block_phrases: list[str] = []
+        if title_block_phrases:
+            title_result = cls._save_block_similar_feedback(
+                normalized,
+                url=url,
+                title=title,
+                company=company,
+                teaser=teaser,
+                block_phrases=title_block_phrases,
+            )
+            applied_title_block_phrases = list(title_result.get("block_phrases") or [])
+
+        if added_blockers:
+            cls._persist_review_event(
+                "block_requirement",
+                normalized,
+                url=url,
+                title=title,
+                company=company,
+                teaser=teaser,
+                extra={
+                    "blockers_added": added_blockers,
+                    "title_block_phrases": applied_title_block_phrases,
+                },
+            )
+        elif skipped_blockers:
+            cls._persist_review_event(
+                "block_requirement",
+                normalized,
+                url=url,
+                title=title,
+                company=company,
+                teaser=teaser,
+                extra={
+                    "blockers_skipped": skipped_blockers,
+                    "title_block_phrases": applied_title_block_phrases,
+                },
+            )
+
+        title_rules_added = list(title_result.get("rules_added") or []) if isinstance(title_result, dict) else []
+        if added_blockers and not title_rules_added:
+            cls._rebuild_dashboard_after_rule_change(
+                f"requirement blockers added for {', '.join(added_blockers)}"
+            )
+
+        title_block_suggestions = (
+            []
+            if applied_title_block_phrases
+            else cls._build_title_block_followups(cleaned_blockers)
+        )
+
+        message_bits: list[str] = []
+        if added_blockers:
+            noun = "blocker" if len(added_blockers) == 1 else "blockers"
+            message_bits.append(
+                f"Added {len(added_blockers)} mandatory requirement {noun}. Future runs will only reject when those terms look required."
+            )
+        elif skipped_blockers:
+            noun = "blocker" if len(skipped_blockers) == 1 else "blockers"
+            message_bits.append(f"{len(skipped_blockers)} mandatory requirement {noun} already existed.")
+
+        if applied_title_block_phrases:
+            noun = "title block" if len(applied_title_block_phrases) == 1 else "title blocks"
+            message_bits.append(
+                f"Added {len(applied_title_block_phrases)} {noun} for stronger early filtering."
+            )
+        elif title_block_suggestions:
+            noun = "title block" if len(title_block_suggestions) == 1 else "title blocks"
+            message_bits.append(
+                f"{len(title_block_suggestions)} optional {noun} also has strong evidence from past rejections."
+            )
+
+        return {
+            "ok": True,
+            "job_key": normalized,
+            "added_blockers": added_blockers,
+            "skipped_blockers": skipped_blockers,
+            "title_block_suggestions": title_block_suggestions,
+            "applied_title_block_phrases": applied_title_block_phrases,
+            "message": " ".join(message_bits).strip() or "Requirement blockers saved.",
+        }
 
     @classmethod
     def _save_not_for_me_feedback(
@@ -815,7 +1068,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
         if added_rules:
             profile["reject_title_rules"] = existing
             save_profile(profile)
-            cls._rebuild_dashboard_after_rule_change()
+            cls._rebuild_dashboard_after_rule_change(
+                f"title block added for {', '.join(resolved)}"
+            )
 
         cls._persist_review_event(
             "block_title",
@@ -857,7 +1112,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
         history = cls._load_job_history()
         entry = history.get(normalized, {})
-        now_iso = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
+        now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 
         entry["job_key"] = normalized
         if title and not entry.get("title"):
@@ -981,12 +1236,14 @@ class SettingsHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True})
             return
         if _path == "/api/run-status":
+            last_run = _read_last_run_timestamp()
             self._send_json(
                 200,
                 {
                     "ok": True,
                     "status": "running" if _is_run_in_progress() else "idle",
-                    "last_run_at": _read_last_run_timestamp(),
+                    "last_run_at": last_run,
+                    "has_run": last_run is not None,
                 },
             )
             return
@@ -1073,8 +1330,8 @@ class SettingsHandler(BaseHTTPRequestHandler):
             if not description:
                 self._send_json(200, {})
                 return
-            suggestions = extract_rejection_suggestions(description)
-            self._send_json(200, suggestions)
+            suggestions = llm_suggest_rejection_blockers(description)
+            self._send_json(200, {"other": suggestions} if suggestions else {})
             return
 
         self._send_json(404, {"error": "Not found"})
@@ -1104,7 +1361,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
             patch = self._normalize_profile_patch_for_save(current, self._read_json_body())
             updated = patch_profile(patch)
             if self._patch_affects_matching_rules(patch):
-                self._rebuild_dashboard_after_rule_change()
+                self._rebuild_dashboard_after_rule_change("profile matching rules saved")
         except Exception as exc:
             self._send_json(400, {"error": str(exc)})
             return
@@ -1139,12 +1396,14 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 return
 
             if not _try_mark_run_started():
+                last_run = _read_last_run_timestamp()
                 self._send_json(
                     200,
                     {
                         "ok": True,
                         "status": "running",
-                        "last_run_at": _read_last_run_timestamp(),
+                        "last_run_at": last_run,
+                        "has_run": last_run is not None,
                     },
                 )
                 return
@@ -1160,12 +1419,14 @@ class SettingsHandler(BaseHTTPRequestHandler):
             except Exception:
                 _set_run_in_progress(False)
                 raise
+            last_run = _read_last_run_timestamp()
             self._send_json(
                 200,
                 {
                     "ok": True,
                     "status": "started",
-                    "last_run_at": _read_last_run_timestamp(),
+                    "last_run_at": last_run,
+                    "has_run": last_run is not None,
                 },
             )
             return
@@ -1269,13 +1530,38 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     existing.append({"phrase": phrase, "reason": reason or f"DESC_REJECT:{phrase}"})
                     profile["reject_description_phrase_rules"] = existing
                     updated = save_profile(profile)
-                    self._rebuild_dashboard_after_rule_change()
+                    self._rebuild_dashboard_after_rule_change(f"description phrase rule added for {phrase}")
                 else:
                     updated = profile
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
             self._send_json(200, {"ok": True, "message": f"Phrase rule added: {phrase}", "profile": updated})
+            return
+        if self.path == "/api/rejection-feedback/mandatory-blockers":
+            try:
+                payload = self._read_json_body()
+                blockers = payload.get("blockers", [])
+                title_block_phrases = payload.get("title_block_phrases", [])
+                if not isinstance(blockers, list):
+                    raise ValueError("blockers must be a list")
+                if title_block_phrases is None:
+                    title_block_phrases = []
+                if not isinstance(title_block_phrases, list):
+                    raise ValueError("title_block_phrases must be a list")
+                result = self._save_requirement_blockers_feedback(
+                    str(payload.get("job_id") or payload.get("job_key") or "").strip(),
+                    url=str(payload.get("url") or "").strip(),
+                    title=str(payload.get("job_title") or payload.get("title") or "").strip(),
+                    company=str(payload.get("company") or "").strip(),
+                    teaser=str(payload.get("teaser") or "").strip(),
+                    blockers=[str(item or "") for item in blockers],
+                    title_block_phrases=[str(item or "") for item in title_block_phrases],
+                )
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
             return
         if self.path == "/api/telegram/sync":
             try:
@@ -1318,6 +1604,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 "domain", "mandatory_experience", "mandatory_skill",
                 "role_type", "seniority", "work_arrangement",
                 "industry_platform", "clearance_or_regulation", "other",
+                "credential", "clearance", "license", "work_authorization",
+                "language", "location", "regulatory", "platform", "tool", 
+                "product", "security", "specialist_experience", "other_hard_requirement"
             }
             _JUNK_VALUES = {"no", "bad", "not me", "yes", "ok", "good", "n/a"}
             try:
@@ -1328,7 +1617,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 if not isinstance(raw_rules, list):
                     raise ValueError("rules must be a list")
                 validated = []
-                now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
                 for i, r in enumerate(raw_rules):
                     value = str(r.get("value") or "").strip()
                     category = str(r.get("category") or "other").strip()
@@ -1437,7 +1726,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     teaser,
                     block_phrases=phrases_arg or None,
                 )
-            elif action == "unhide":
+            elif action in {"unapply", "unhide"}:
                 result = self._remove_review_key(
                     action,
                     job_key,
@@ -1475,7 +1764,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     return
                 profile["reject_title_rules"] = updated_rules
                 saved = save_profile(profile)
-                self._rebuild_dashboard_after_rule_change()
+                self._rebuild_dashboard_after_rule_change(f"title block rule removed: {pattern}")
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from job_hunter_agent import source_connector
+from job_hunter_agent.utils import extract_work_mode
 
 
 def _test_profile():
@@ -39,6 +40,26 @@ def test_has_government_context_detects_real_public_sector_language():
     assert source_connector.has_government_context(
         "Federal government department delivering a public sector program."
     )
+
+
+def test_has_government_context_ignores_privacy_notice_government_id_phrase():
+    assert not source_connector.has_government_context(
+        "Please do not submit sensitive personal data such as government ID numbers."
+    )
+
+
+def test_legacy_linkedin_fit_source_text_can_restore_description_confidence():
+    record = {
+        "details_status": "ok",
+        "fit_source_text": "Business analyst duties. " * 40,
+    }
+
+    assert source_connector.full_description_confidence(record) == "HIGH"
+    assert source_connector.get_trusted_full_description(record).startswith("Business analyst duties.")
+
+
+def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_method():
+    assert extract_work_mode("Familiarity with Agile, Waterfall, or hybrid delivery environments. This role is 5 days in office.") == "On-site"
 
 
 def test_visible_fit_reasons_backfills_from_positive_score_drivers():
@@ -133,6 +154,196 @@ def test_fit_score_evidence_still_counts_capability_highlights():
     )
 
     assert _breakdown_value(breakdown, "Fit evidence bullets") == 3
+
+
+def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
+    watchouts = source_connector.description_watchout_reasons(
+        "ERP experience is desirable for this business analyst role.",
+        {
+            "must_not_require_skills": ["ERP"],
+            "reject_description_phrase_rules": [],
+            "reject_description_regex_rules": [],
+            "reject_title_rules": [],
+        },
+    )
+    risks, missing = source_connector.build_risk_and_missing_evidence(
+        "ERP experience is desirable for this business analyst role.",
+        "OK",
+        {
+            "must_not_require_skills": ["ERP"],
+            "reject_description_phrase_rules": [],
+            "reject_description_regex_rules": [],
+            "reject_title_rules": [],
+            "capability_profile_rules": [],
+        },
+    )
+
+    assert watchouts == ["erp appears desirable"]
+    assert risks == ["erp appears desirable"]
+    assert missing == []
+
+
+def test_on_site_role_gets_visible_score_penalty():
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        _test_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "On-site role") == -4
+
+
+def test_job_card_shows_negative_score_factors_without_debug_mode():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-visible-negative",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "<strong>What lowers it</strong>" in html
+    assert "On-site role" in html
+    assert "Score penalties" not in html
+
+
+def test_job_card_uses_score_tone_as_card_accent_class():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-card-tone",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert 'class="job-card tone-low"' in html
+    assert 'class="match-tile tone-low"' in html
+    assert ">New To You<" in html
+
+
+def test_applied_and_hidden_cards_render_undo_actions():
+    base_record = {
+        "job_key": "test-undo",
+        "title": "Business Analyst",
+        "company": "Acme",
+        "url": "https://example.com/job",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "full_description": "Requirements elicitation across delivery teams. " * 40,
+        "fit_highlights": [],
+        "source": "seek",
+    }
+
+    applied_html = source_connector.render_job_card({**base_record, "applied": True}, _test_profile())
+    hidden_html = source_connector.render_job_card({**base_record, "hidden": True}, _test_profile())
+
+    assert 'data-review-action="unapply"' in applied_html
+    assert "Undo Applied" in applied_html
+    assert 'data-review-action="unhide"' in hidden_html
+    assert ">Unhide<" in hidden_html
+
+
+def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
+    profile = {
+        **_test_profile(),
+        "capability_profile_rules": [
+            {
+                "name": "multi-client delivery",
+                "level": "strong",
+                "fit": "core",
+                "aliases": ["multiple client transition projects"],
+            }
+        ],
+    }
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-repetition",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across multiple client transition projects. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        profile,
+    )
+
+    assert "Strongest fit:" not in html
+    assert html.count("Strong capability match: Multi-client delivery") == 1
+
+
+def test_low_confidence_card_shows_single_description_issue_section():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-low-description",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "teaser": "Business analyst role.",
+            "fit_highlights": [],
+            "source": "linkedin",
+        },
+        _test_profile(),
+    )
+
+    assert "Description Issue" in html
+    assert html.count("<strong>Description issue</strong>") == 1
+    assert "<strong>Missing evidence</strong>" not in html
+    assert "Risks &amp; missing evidence" not in html
 
 
 def test_deterministic_review_counts_only_capability_highlights():
@@ -294,36 +505,36 @@ def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypa
 
 
 def test_score_filter_thresholds_hide_35_when_no_borderline_roles(monkeypatch):
-    monkeypatch.setattr(source_connector, "TEST_ANY_MODE", False)
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
         [{"score": 80}, {"score": 65}, {"score": 50}],
         scoring_profile={},
+        include_borderline=False,
     )
 
     assert thresholds == [80, 65, 50]
 
 
 def test_score_filter_thresholds_show_35_when_borderline_roles_are_present(monkeypatch):
-    monkeypatch.setattr(source_connector, "TEST_ANY_MODE", False)
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
         [{"score": 58}, {"score": 43}],
         scoring_profile={},
+        include_borderline=False,
     )
 
     assert thresholds == [80, 65, 50, 35]
 
 
 def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
-    monkeypatch.setattr(source_connector, "TEST_ANY_MODE", False)
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     options_html = source_connector.render_score_filter_options(
         [{"score": 80}, {"score": 65}, {"score": 50}],
         scoring_profile={},
+        include_borderline=False,
     )
 
     assert "All match levels" in options_html
@@ -357,10 +568,11 @@ def test_posted_display_anchors_relative_text_to_retrieval_date():
             "posted": "2d ago",
             "posted_age_days": 2,
             "run_started_at": "2026-04-21T09:00:00+10:00",
-        }
+        },
+        now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
     )
 
-    assert label == "19 Apr 2026 (listed as 2d ago when retrieved)"
+    assert label == "19 Apr 2026 (3 days ago)"
 
 
 def test_posted_display_converts_today_to_retrieved_date():
@@ -369,7 +581,21 @@ def test_posted_display_converts_today_to_retrieved_date():
             "posted": "today",
             "posted_age_days": 0,
             "run_started_at": "2026-04-21T09:00:00+10:00",
-        }
+        },
+        now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
     )
 
-    assert label == "21 Apr 2026 (listed as today when retrieved)"
+    assert label == "21 Apr 2026 (yesterday)"
+
+
+def test_posted_display_shows_today_against_current_render_date():
+    label = source_connector.posted_display_label(
+        {
+            "posted": "3h ago",
+            "posted_age_days": 0.125,
+            "run_started_at": "2026-04-22T09:00:00+10:00",
+        },
+        now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
+    )
+
+    assert label == "22 Apr 2026 (today)"

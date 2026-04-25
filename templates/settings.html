@@ -258,6 +258,13 @@
     }
     .subpanel h3 { margin: 0 0 10px; font-size: 1rem; }
     .subpanel .field-help { margin-bottom: 6px; }
+    .advanced-rule-drawer {
+      margin-top: 16px;
+      background: rgba(247, 242, 234, 0.72);
+    }
+    .advanced-rule-drawer label {
+      margin-top: 12px;
+    }
     .rule-chips { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
     .rule-chip {
       display: inline-flex;
@@ -413,7 +420,7 @@
           <div class="run-toolbar" style="margin-top:14px;">
             <div>
               <span class="status-pill idle" id="run_status_pill">Idle</span>
-              <div class="help" id="run_last_run">Last run: none yet.</div>
+              <div class="help" id="run_last_run">Ready to search</div>
             </div>
             <div class="panel-actions" style="margin-top:0;">
               <button class="primary" id="run_now" type="button">Run Now</button>
@@ -715,39 +722,44 @@
           </section>
 
           <section class="subpanel">
-            <h3>Description Exclusions</h3>
-            <label for="reject_description_phrase_rules_add">Blocked description phrases</label>
-            <div class="badge-editor" data-chip-editor="reject_description_phrase_rules">
-              <div id="reject_description_phrase_rules_chips" class="badge-editor-list" aria-live="polite"></div>
-              <div class="badge-editor-form">
-                <input id="reject_description_phrase_rules_add" type="text" data-chip-input="reject_description_phrase_rules" placeholder="Add a phrase to block">
-                <button class="secondary" type="button" data-add-chip="reject_description_phrase_rules">Add</button>
-              </div>
-            </div>
-            <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-            <div class="field-help">Phrases that should remove wrong-fit descriptions.</div>
-
-            <label for="reject_description_regex_rules_add">Blocked description patterns</label>
-            <div class="badge-editor" data-chip-editor="reject_description_regex_rules">
-              <div id="reject_description_regex_rules_chips" class="badge-editor-list" aria-live="polite"></div>
-              <div class="badge-editor-form">
-                <input id="reject_description_regex_rules_add" type="text" data-chip-input="reject_description_regex_rules" placeholder="Add a description pattern">
-                <button class="secondary" type="button" data-add-chip="reject_description_regex_rules">Add</button>
-              </div>
-            </div>
-            <textarea id="reject_description_regex_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-            <div class="field-help">Reusable wording patterns that should remove wrong-fit descriptions.</div>
-
-            <label for="must_not_require_skills_add">Skills to avoid when mandatory</label>
+            <h3>Requirement Exclusions</h3>
+            <label for="must_not_require_skills_add">Reject jobs requiring</label>
             <div class="badge-editor" data-chip-editor="must_not_require_skills">
               <div id="must_not_require_skills_chips" class="badge-editor-list" aria-live="polite"></div>
               <div class="badge-editor-form">
-                <input id="must_not_require_skills_add" type="text" data-chip-input="must_not_require_skills" placeholder="Add a skill">
+                <input id="must_not_require_skills_add" type="text" data-chip-input="must_not_require_skills" placeholder="Add a requirement">
                 <button class="secondary" type="button" data-add-chip="must_not_require_skills">Add</button>
               </div>
             </div>
             <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-            <div class="field-help">Skills that should reject roles only when they are essential.</div>
+            <div class="field-help">Add things you do not have and do not want jobs to require, e.g. SAP, payroll, top secret clearance. Desirable-only mentions are flagged, not rejected.</div>
+
+            <details class="help-drawer advanced-rule-drawer" id="advanced_description_blockers">
+              <summary>Advanced description blockers</summary>
+              <p>These are internal escape hatches for exact wording and regex rules. Use the requirement chips above for normal job-fit blocking.</p>
+
+              <label for="reject_description_phrase_rules_add">Blocked description phrases</label>
+              <div class="badge-editor" data-chip-editor="reject_description_phrase_rules">
+                <div id="reject_description_phrase_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="reject_description_phrase_rules_add" type="text" data-chip-input="reject_description_phrase_rules" placeholder="Add exact phrase">
+                  <button class="secondary" type="button" data-add-chip="reject_description_phrase_rules">Add</button>
+                </div>
+              </div>
+              <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Exact phrases that should remove wrong-fit descriptions.</div>
+
+              <label for="reject_description_regex_rules_add">Blocked description patterns</label>
+              <div class="badge-editor" data-chip-editor="reject_description_regex_rules">
+                <div id="reject_description_regex_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="reject_description_regex_rules_add" type="text" data-chip-input="reject_description_regex_rules" placeholder="Add regex pattern">
+                  <button class="secondary" type="button" data-add-chip="reject_description_regex_rules">Add</button>
+                </div>
+              </div>
+              <textarea id="reject_description_regex_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Regex patterns for advanced/debug filtering only.</div>
+            </details>
           </section>
         </div>
         <div style="margin-top:16px;">
@@ -859,7 +871,6 @@
     let loadedProfile = null;
     let runStatusPollHandle = null;
     let lastObservedRunStatus = 'idle';
-
     const listTextAreas = [
       'locations',
       'target_title_patterns',
@@ -1336,7 +1347,13 @@
       const normalized = status === 'running' ? 'running' : 'idle';
       runStatusPillEl.textContent = normalized === 'running' ? 'Running...' : 'Idle';
       runStatusPillEl.className = `status-pill ${normalized}`;
-      runLastRunEl.textContent = lastRunAt ? `Last run: ${lastRunAt}` : 'Last run: none yet.';
+      
+      let dateLabel = '';
+      if (lastRunAt) {
+        const d = new Date(lastRunAt);
+        dateLabel = isNaN(d.valueOf()) ? lastRunAt : d.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      }
+      runLastRunEl.textContent = dateLabel ? `Last run: ${dateLabel}` : 'Ready to search';
       lastObservedRunStatus = normalized;
     }
 

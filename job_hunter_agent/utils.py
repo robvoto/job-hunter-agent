@@ -68,6 +68,18 @@ def extract_work_mode(text: str) -> str:
         return "N/A"
 
     lowered = text.lower()
+    strict_onsite_tokens = [
+        "5 days in office",
+        "five days in office",
+        "must be in office",
+        "must work from the office",
+        "100% office based",
+        "100% office-based",
+        "fully office based",
+        "fully office-based",
+    ]
+    if any(token in lowered for token in strict_onsite_tokens):
+        return "On-site"
     if any(token in lowered for token in ["hybrid", "split between home and office", "mix of home and office"]):
         return "Hybrid"
     if any(

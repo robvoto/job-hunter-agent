@@ -90,12 +90,11 @@ Best example:
 
 
 --scrape-allow-low
--------------
+------------------
 
 What it does:
   Runs a fresh scrape with a wider dashboard pool. It lowers the dashboard score
-  floor from 50 to 35 and forces the cheaper gpt-4o-mini model while reviewing
-  jobs.
+  floor from 50 to 35.
 
 Use when:
   You want to find more borderline matches from job sites, not just re-display
@@ -106,6 +105,19 @@ Example:
 
 Fast test example:
   python -m job_hunter_agent.source_connector --scrape-allow-low --max-pages 1
+
+
+--cheap-llm
+-----------
+
+What it does:
+  Forces the use of the cheaper gpt-4o-mini model while reviewing jobs.
+
+Use when:
+  You want to save costs on API usage, especially during larger scrapes.
+
+Example:
+  python -m job_hunter_agent.source_connector --cheap-llm
 
 
 --show-scores
@@ -213,8 +225,11 @@ Show borderline saved jobs, no scrape:
 Show borderline saved jobs with visible scores:
   python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard --show-scores
 
-Fresh scrape-allow-low, cheaper AI model:
+Fresh scrape-allow-low:
   python -m job_hunter_agent.source_connector --scrape-allow-low
+
+Fresh scrape-allow-low, cheaper AI model:
+  python -m job_hunter_agent.source_connector --scrape-allow-low --cheap-llm
 
 Fresh scrape-allow-low, one page only:
   python -m job_hunter_agent.source_connector --scrape-allow-low --max-pages 1
