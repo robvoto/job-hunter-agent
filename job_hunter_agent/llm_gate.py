@@ -347,6 +347,10 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
         return []
 
     suggestions = normalize_rejection_blocker_suggestions(getattr(resp, "output_text", ""))
+    raw_output = str(getattr(resp, "output_text", "") or "").strip()
+    if raw_output:
+        print(f"[LLM][REJECTION_SUGGESTIONS][RAW] {raw_output[:1200]}")
+    print(f"[LLM][REJECTION_SUGGESTIONS][NORMALIZED] {suggestions}")
     if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
         print(f"[LLM][REJECTION_SUGGESTIONS][UNEXPECTED] {str(resp.output_text).strip()}")
     return suggestions

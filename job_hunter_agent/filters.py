@@ -4,6 +4,7 @@ import json
 import re
 from typing import Tuple
 
+from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import load_profile
 
@@ -216,7 +217,7 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
         name = str(rule.get("name") or "").strip()
         level = _normalize_level(str(rule.get("level") or "basic"))
         fit = _normalize_fit(str(rule.get("fit") or ""), level)
-        aliases = [str(alias).strip() for alias in rule.get("aliases", []) if str(alias).strip()]
+        aliases = expand_capability_terms(rule)
         if not name or not aliases:
             continue
 
@@ -255,7 +256,7 @@ def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple
         if not name or fit == "avoid" or level == "none":
             continue
 
-        aliases = [name, *[str(alias).strip() for alias in rule.get("aliases", []) if str(alias).strip()]]
+        aliases = expand_capability_terms(rule)
         deduped_aliases: list[str] = []
         seen_aliases: set[str] = set()
         for alias in aliases:

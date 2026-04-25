@@ -54,8 +54,7 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
             "sample_kept_titles": [],
         }
     ]
-    assert len(rebuilds) == 1
-    assert "requirement blockers added for sap" in rebuilds[0]
+    assert rebuilds == []
     assert events[0][0][0] == "block_requirement"
 
 

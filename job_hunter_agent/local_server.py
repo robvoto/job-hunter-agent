@@ -1,4 +1,5 @@
 import json
+import hashlib
 import re
 import threading
 from datetime import datetime
@@ -13,7 +14,7 @@ from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import DATA_DIR, DOCS_DIR, OUTPUT_DIR, REPO_ROOT, TEMPLATES_DIR
 from job_hunter_agent.profile_learning import build_learning_patch, merge_capability_rules, repair_text
-from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_search_settings, patch_profile, save_profile
+from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_capability_rules, normalize_search_settings, patch_profile, save_profile
 from job_hunter_agent.profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.source_connector import rebuild_html_dashboard, scrape_jobs_direct
@@ -41,6 +42,7 @@ SETTINGS_HTML_PATH = TEMPLATES_DIR / "settings.html"
 ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
 _run_in_progress = False
 _run_state_lock = threading.Lock()
+_rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
 
 
 def _set_run_in_progress(value: bool) -> None:
@@ -96,9 +98,7 @@ def _validate_required_onboarding_inputs(
     locations = [str(value).strip() for value in search_preferences.get("locations") or [] if str(value).strip()]
     engagement_type = str(search_preferences.get("engagement_type") or "").strip().lower()
 
-    if not keywords:
-        raise ValueError("Please enter at least one target keyword.")
-    if len(keywords) < 2 or len(keywords) > 120:
+    if keywords and (len(keywords) < 2 or len(keywords) > 120):
         raise ValueError("Please keep your target keywords between 2 and 120 characters.")
     if not locations:
         raise ValueError("Please add at least one search location.")
@@ -233,6 +233,7 @@ def _run_scrape_job() -> None:
 
 class SettingsHandler(BaseHTTPRequestHandler):
     MATCHING_RULE_PROFILE_KEYS = {
+        "capability_profile_rules",
         "target_title_patterns",
         "adjacent_title_patterns",
         "must_not_require_skills",
@@ -249,10 +250,17 @@ class SettingsHandler(BaseHTTPRequestHandler):
     def _rebuild_dashboard_after_rule_change(reason: str = "matching rule change") -> None:
         if not DASHBOARD_PATH.exists() and not RUN_STATS_PATH.exists() and not AUDIT_RECORDS_PATH.exists():
             return
-        try:
-            rebuild_html_dashboard(reason=f"{reason}; applying saved filters to current dashboard")
-        except Exception as exc:
-            print(f"[DASHBOARD][WARN] Could not rebuild after rule change: {type(exc).__name__}: {exc}")
+        def _rebuild() -> None:
+            try:
+                rebuild_html_dashboard(reason=f"{reason}; applying saved filters to current dashboard")
+            except Exception as exc:
+                print(f"[DASHBOARD][WARN] Could not rebuild after rule change: {type(exc).__name__}: {exc}")
+
+        threading.Thread(
+            target=_rebuild,
+            daemon=True,
+            name="job-hunter-dashboard-rebuild",
+        ).start()
 
     @staticmethod
     def _combine_text_sections(*sections: str) -> str:
@@ -956,10 +964,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
             )
 
         title_rules_added = list(title_result.get("rules_added") or []) if isinstance(title_result, dict) else []
-        if added_blockers and not title_rules_added:
-            cls._rebuild_dashboard_after_rule_change(
-                f"requirement blockers added for {', '.join(added_blockers)}"
-            )
 
         title_block_suggestions = (
             []
@@ -1330,7 +1334,17 @@ class SettingsHandler(BaseHTTPRequestHandler):
             if not description:
                 self._send_json(200, {})
                 return
-            suggestions = llm_suggest_rejection_blockers(description)
+            description_hash = hashlib.sha1(description.encode("utf-8")).hexdigest()
+            cached = _rejection_suggestions_cache.get(job_id)
+            if isinstance(cached, dict) and cached.get("description_hash") == description_hash:
+                suggestions = cached.get("suggestions") or []
+                print(f"[LLM][REJECTION_SUGGESTIONS][CACHE_HIT] job_id={job_id} suggestions={suggestions}")
+            else:
+                suggestions = llm_suggest_rejection_blockers(description)
+                _rejection_suggestions_cache[job_id] = {
+                    "description_hash": description_hash,
+                    "suggestions": list(suggestions),
+                }
             self._send_json(200, {"other": suggestions} if suggestions else {})
             return
 
@@ -1473,28 +1487,33 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(200, result)
             return
-        if self.path == "/api/onboarding/confirm-title-patterns":
+        if self.path == "/api/onboarding/confirm-profile-signals":
             try:
                 payload = self._read_json_body()
                 target = [str(p).strip() for p in payload.get("target_title_patterns", []) if str(p).strip()]
                 adjacent = [str(p).strip() for p in payload.get("adjacent_title_patterns", []) if str(p).strip()]
                 keyword = str(payload.get("search_keyword") or "").strip()
+                capability_rules = normalize_capability_rules(payload.get("capability_profile_rules") or [])
                 if not target:
                     raise ValueError("target_title_patterns must not be empty")
                 profile_patch: dict = {
                     "target_title_patterns": target,
-                    "adjacent_title_patterns": adjacent
+                    "adjacent_title_patterns": adjacent,
                 }
+                if capability_rules:
+                    profile_patch["capability_profile_rules"] = capability_rules
+                current = load_profile()
+                search_settings = dict(current.get("search_settings", {}))
                 if keyword:
-                    current = load_profile()
-                    search_settings = dict(current.get("search_settings", {}))
                     search_settings["keywords"] = keyword
-                    profile_patch["search_settings"] = search_settings
+                elif not str(search_settings.get("keywords") or "").strip():
+                    search_settings["keywords"] = " ".join(target[:3])
+                profile_patch["search_settings"] = search_settings
                 updated = patch_profile(profile_patch)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
-            self._send_json(200, {"ok": True, "message": "Title patterns and search keyword saved.", "profile": updated})
+            self._send_json(200, {"ok": True, "message": "Onboarding targeting saved.", "profile": updated})
             return
         if self.path in {"/api/tuning-decisions", "/api/skill-decisions"}:
             try:

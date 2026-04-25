@@ -20,6 +20,32 @@ def _test_profile():
     }
 
 
+def _capability_profile():
+    return {
+        **_test_profile(),
+        "capability_profile_rules": [
+            {
+                "name": "Agile methodologies",
+                "level": "strong",
+                "fit": "core",
+                "aliases": ["agile", "scrum", "kanban"],
+            },
+            {
+                "name": "Acceptance testing",
+                "level": "strong",
+                "fit": "core",
+                "aliases": ["uat", "user acceptance testing", "acceptance criteria"],
+            },
+            {
+                "name": "Primary stakeholder engagement",
+                "level": "strong",
+                "fit": "supporting",
+                "aliases": ["stakeholder engagement", "stakeholder management", "facilitate workshops"],
+            },
+        ],
+    }
+
+
 def _breakdown_value(breakdown, label):
     for item in breakdown:
         if item["label"] == label:
@@ -27,13 +53,28 @@ def _breakdown_value(breakdown, label):
     return None
 
 
-def test_infer_employer_type_ignores_current_state_phrase():
-    employer_type = source_connector.infer_employer_type(
+def test_infer_posting_channel_ignores_current_state_phrase():
+    channel = source_connector.infer_posting_channel(
         {"company": "Preacta Recruitment"},
         "Join a global consultancy. Analyse current-state data capability and maturity.",
     )
 
-    assert employer_type == "Recruitment-led role"
+    assert channel == {
+        "kind": "recruiter",
+        "label": "Recruiter posting",
+        "confidence": "medium",
+    }
+
+
+def test_infer_role_sector_only_claims_government_when_explicit():
+    assert source_connector.infer_role_sector(
+        {"company": "Standards Australia Ltd"},
+        "Project coordination role supporting internal standards delivery.",
+    ) == {
+        "kind": "unknown",
+        "label": "",
+        "confidence": "unknown",
+    }
 
 
 def test_has_government_context_detects_real_public_sector_language():
@@ -60,6 +101,50 @@ def test_legacy_linkedin_fit_source_text_can_restore_description_confidence():
 
 def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_method():
     assert extract_work_mode("Familiarity with Agile, Waterfall, or hybrid delivery environments. This role is 5 days in office.") == "On-site"
+
+
+def test_build_role_summary_prefers_description_snippet_over_generic_sector_stub():
+    summary = source_connector.build_role_summary(
+        {
+            "title": "Project Coordinator",
+            "company": "Standards Australia Ltd",
+            "location": "Sydney NSW",
+            "work_type": "Full time",
+            "teaser": "Private sector role for a Project Coordinator.",
+        },
+        "About the role: Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams.",
+    )
+
+    assert "Coordinate delivery planning" in summary
+    assert "Private sector role" not in summary
+
+
+def test_render_job_card_does_not_claim_private_sector_by_default():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-sector-unknown",
+            "title": "Project Coordinator",
+            "company": "Standards Australia Ltd",
+            "url": "https://example.com/job",
+            "title_reason": "TITLE_POTENTIAL_MATCH",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. " * 20,
+            "fit_source_text": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. " * 20,
+            "description_source": "jobAdDetails",
+            "details_status": "ok",
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "Private sector role" not in html
+    assert ">Government<" not in html
 
 
 def test_visible_fit_reasons_backfills_from_positive_score_drivers():
@@ -108,7 +193,7 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
     assert highlights == []
 
 
-def test_fit_score_evidence_counts_only_capability_highlights():
+def test_fit_score_evidence_ignores_display_only_fit_highlights():
     breakdown = source_connector.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
@@ -116,6 +201,7 @@ def test_fit_score_evidence_counts_only_capability_highlights():
             "content_reason": "OK",
             "llm_fit_grade": "SOLID",
             "fit_highlights": [
+                "Strong capability match: Agile methodologies",
                 "Government context",
                 "12+ month contract",
                 "Location matches primary preference: Sydney NSW",
@@ -127,33 +213,88 @@ def test_fit_score_evidence_counts_only_capability_highlights():
             "salary": "N/A",
             "competitive_signals": [],
         },
-        _test_profile(),
+        _capability_profile(),
     )
 
     assert _breakdown_value(breakdown, "Fit evidence bullets") is None
 
 
-def test_fit_score_evidence_still_counts_capability_highlights():
+def test_fit_score_evidence_uses_full_capability_match_set():
     breakdown = source_connector.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
             "content_reason": "OK",
             "llm_fit_grade": "SOLID",
-            "fit_highlights": [
-                "Strong capability match: Delivery teams",
-                "Government context",
-            ],
             "location": "Sydney NSW",
             "work_type": "Full Time",
             "work_mode": "Hybrid",
             "salary": "N/A",
+            "full_description": (
+                "Lead agile delivery ceremonies, write acceptance criteria, coordinate UAT, "
+                "and facilitate workshops with business stakeholders."
+            ),
             "competitive_signals": [],
         },
-        _test_profile(),
+        _capability_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Fit evidence bullets") == 3
+    assert _breakdown_value(breakdown, "Fit evidence bullets") == 10
+
+
+def test_strong_high_confidence_fit_gets_calibration_bonus():
+    profile = _capability_profile()
+    record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "STRONG",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "posted_age_days": 1,
+        "full_description": (
+            "Business analyst role driving agile delivery, backlog refinement, acceptance criteria, "
+            "user acceptance testing, and stakeholder management workshops across teams. "
+        ) * 20,
+        "competitive_signals": [],
+        "missing_evidence": [],
+        "soft_risk_reasons": [],
+    }
+
+    breakdown = source_connector.fit_score_breakdown(record, profile)
+
+    assert _breakdown_value(breakdown, "Core fit signals align") == 6
+    assert source_connector.fit_score(record, profile) >= 70
+
+
+def test_clean_solid_fit_gets_small_bonus_into_good_band():
+    profile = _capability_profile()
+    record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "posted_age_days": 1,
+        "full_description": (
+            "Business analyst role covering agile delivery, scrum ceremonies, acceptance criteria, "
+            "user acceptance testing, stakeholder management, and facilitate workshops with delivery teams. "
+        ) * 20,
+        "competitive_signals": [],
+        "missing_evidence": [],
+        "soft_risk_reasons": [],
+    }
+
+    breakdown = source_connector.fit_score_breakdown(record, profile)
+    without_bonus = source_connector.fit_score({**record, "soft_risk_reasons": ["Minor caveat"]}, profile)
+
+    assert _breakdown_value(breakdown, "Clean fit with no clear penalties") == 2
+    assert source_connector.fit_score(record, profile) == without_bonus + 2
 
 
 def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
@@ -254,6 +395,37 @@ def test_job_card_uses_score_tone_as_card_accent_class():
     assert 'class="job-card tone-low"' in html
     assert 'class="match-tile tone-low"' in html
     assert ">New To You<" in html
+
+
+def test_recruiter_badge_uses_distinct_class():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-recruiter-badge",
+            "title": "Business Analyst",
+            "company": "Preacta Recruitment",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Leading consultancy seeks a business analyst to run agile workshops and stakeholder discovery. " * 20,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "badge-channel-recruiter" in html
+    assert "badge-sector-government" not in html
+
+
+def test_score_to_tone_class_uses_same_bands_as_match_labels():
+    assert source_connector.score_to_tone_class(84) == "tone-good"
+    assert source_connector.score_to_tone_class(69) == "tone-borderline"
+    assert source_connector.score_to_tone_class(54) == "tone-low"
 
 
 def test_applied_and_hidden_cards_render_undo_actions():
@@ -508,12 +680,12 @@ def test_score_filter_thresholds_hide_35_when_no_borderline_roles(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
-        [{"score": 80}, {"score": 65}, {"score": 50}],
+        [{"score": 85}, {"score": 70}, {"score": 55}],
         scoring_profile={},
         include_borderline=False,
     )
 
-    assert thresholds == [80, 65, 50]
+    assert thresholds == [85, 70, 55]
 
 
 def test_score_filter_thresholds_show_35_when_borderline_roles_are_present(monkeypatch):
@@ -525,14 +697,14 @@ def test_score_filter_thresholds_show_35_when_borderline_roles_are_present(monke
         include_borderline=False,
     )
 
-    assert thresholds == [80, 65, 50, 35]
+    assert thresholds == [85, 70, 55, 35]
 
 
 def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     options_html = source_connector.render_score_filter_options(
-        [{"score": 80}, {"score": 65}, {"score": 50}],
+        [{"score": 85}, {"score": 70}, {"score": 55}],
         scoring_profile={},
         include_borderline=False,
     )
@@ -540,7 +712,7 @@ def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     assert "All match levels" in options_html
     assert "Strong match only" in options_html
     assert "Good match or better" in options_html
-    assert "Worth a look or better" in options_html
+    assert "Possible fit or better" in options_html
     assert "50+ only" not in options_html
 
 

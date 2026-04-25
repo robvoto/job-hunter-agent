@@ -15,6 +15,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from job_hunter_agent.capability_matrix import derive_job_description_aliases
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     _GENERIC_PHRASE_STOPWORDS,
@@ -251,24 +252,32 @@ def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
 
     for candidate in candidates:
         score = float(candidate["score"])
+        matching_aliases = derive_job_description_aliases(
+            candidate["name"],
+            [candidate["seed"], *candidate["aliases"]],
+            max_aliases=8,
+        )
 
         if score >= 0.25:
             capability_rules.append({
                 "name": candidate["name"],
                 "level": candidate["level"],
                 "fit": candidate["fit"],
-                "aliases": candidate["aliases"][:6],
+                "aliases": matching_aliases,
             })
 
         if score >= 0.20:
+            signal_aliases = matching_aliases[:]
+            if len(signal_aliases) < 2:
+                signal_aliases = list(dict.fromkeys([candidate["name"], *signal_aliases]))
             dominant_signal_clusters.append({
                 "name": candidate["name"],
-                "aliases": [candidate["seed"], *candidate["aliases"][:8]],
+                "aliases": signal_aliases[:8],
                 "fit_label": candidate["fit_label"],
                 "watchout_label": candidate["watchout_label"],
-                "min_alias_hits": 2,
+                "min_alias_hits": 2 if len(signal_aliases) >= 2 else 1,
                 "min_snippet_hits": 2,
-                "dense_snippet_alias_hits": max(len(candidate["aliases"]) // 2 + 2, 4),
+                "dense_snippet_alias_hits": max(len(signal_aliases) // 2 + 2, 4),
             })
 
     return {

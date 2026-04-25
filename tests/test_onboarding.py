@@ -18,7 +18,7 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
     }
 
 
-def test_validate_required_onboarding_inputs_requires_all_user_fields():
+def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
     try:
         local_server._validate_required_onboarding_inputs(
             {
@@ -29,9 +29,23 @@ def test_validate_required_onboarding_inputs_requires_all_user_fields():
             {},
         )
     except ValueError as exc:
-        assert "target keyword" in str(exc)
+        assert "location" in str(exc).lower()
     else:
         raise AssertionError("Expected ValueError for missing onboarding inputs")
+
+
+def test_validate_required_onboarding_inputs_allows_blank_keywords():
+    local_server._validate_required_onboarding_inputs(
+        {
+            "keywords": "",
+            "locations": ["Sydney NSW"],
+            "engagement_type": "both",
+        },
+        {
+            "extraction_lookback_years": 12,
+            "title_extraction_min_months": 6,
+        },
+    )
 
 
 def test_validate_required_onboarding_inputs_rejects_bad_boundaries():
@@ -214,4 +228,36 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     assert saved_profile["review_controls"]["hidden_job_keys"] == ["job-3"]
     assert events[0][0][0] == "unapply"
     assert str(events[1][0][0]).startswith("rebuild:review action saved: unapply")
+
+
+def test_patch_affects_matching_rules_includes_capability_matrix():
+    assert local_server.SettingsHandler._patch_affects_matching_rules({"capability_profile_rules": []}) is True
+
+
+def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp_path):
+    started = []
+    rebuilds = []
+
+    class FakeThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self.target = target
+            self.daemon = daemon
+            self.name = name
+
+        def start(self):
+            started.append({"daemon": self.daemon, "name": self.name})
+            if self.target:
+                self.target()
+
+    monkeypatch.setattr(local_server, "DASHBOARD_PATH", tmp_path / "dashboard.html")
+    monkeypatch.setattr(local_server, "RUN_STATS_PATH", tmp_path / "run_stats.json")
+    monkeypatch.setattr(local_server, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    (tmp_path / "dashboard.html").write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(local_server.threading, "Thread", FakeThread)
+    monkeypatch.setattr(local_server, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
+
+    local_server.SettingsHandler._rebuild_dashboard_after_rule_change("profile matching rules saved")
+
+    assert started == [{"daemon": True, "name": "job-hunter-dashboard-rebuild"}]
+    assert rebuilds == ["profile matching rules saved; applying saved filters to current dashboard"]
 

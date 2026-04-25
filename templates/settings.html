@@ -236,7 +236,6 @@
     textarea.is-readonly { background: #f7f2ea; color: #5b6470; }
     #llm_profile_brief { min-height: 170px; }
     #star_evidence_text, #learning_update_text { min-height: 180px; }
-    #capability_profile_rules { min-height: 180px; }
     #target_title_patterns, #adjacent_title_patterns,
     #reject_title_rules, #reject_description_phrase_rules,
     #reject_description_regex_rules, #must_not_require_skills { min-height: 120px; }
@@ -318,6 +317,113 @@
       padding: 9px 14px;
       white-space: nowrap;
     }
+    .capability-editor { display: grid; gap: 14px; }
+    .capability-group {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 14px;
+    }
+    .capability-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .capability-group-head h4 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .capability-group-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
+    .capability-row-list {
+      display: grid;
+      gap: 10px;
+    }
+    .capability-row {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .capability-row-fields {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) 150px 150px auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .capability-row-fields input {
+      font-weight: 700;
+    }
+    .capability-row-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .capability-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .capability-copy {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+    .capability-alias-summary {
+      cursor: pointer;
+      color: var(--accent-2);
+      font-weight: 700;
+    }
+    .capability-alias-shell {
+      margin-top: 10px;
+      border-top: 1px solid rgba(230, 220, 205, 0.72);
+      padding-top: 10px;
+    }
+    .capability-editor-empty {
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.55);
+      font-size: 0.88rem;
+    }
+    .capability-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .capability-toolbar-main {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .capability-filter {
+      min-width: min(320px, 100%);
+      max-width: 420px;
+    }
+    .capability-toolbar-copy {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+    .capability-editor-empty-group {
+      padding: 10px 0 2px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
     .review-list { display: grid; gap: 12px; }
     .tuning-summary {
       display: grid;
@@ -386,6 +492,11 @@
       .profile-shell { grid-template-columns: 1fr; }
       .advanced-grid { grid-template-columns: 1fr; }
       .tuning-summary { grid-template-columns: 1fr; }
+      .capability-row-fields { grid-template-columns: 1fr 1fr; }
+      .capability-row-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+      }
     }
     @media (max-width: 760px) {
       .profile-panel-head, .profile-fields-grid, .field-grid {
@@ -395,6 +506,7 @@
       .profile-panel-head { display: block; }
       .profile-panel-actions { justify-content: flex-start; margin-top: 14px; }
       .field-block.field-span-2 { grid-column: auto; }
+      .capability-row-fields { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -575,6 +687,7 @@
                     <option value="1.5">High</option>
                     <option value="2">Very high</option>
                   </select>
+              <div class="field-help">Scales the bonus for meeting your target and the penalty for falling short.</div>
                 </div>
                 <div class="field-block">
                   <label for="location_weight">Location / travel</label>
@@ -618,6 +731,7 @@
                     <option value="1.5">High</option>
                     <option value="2">Very high</option>
                   </select>
+              <div class="field-help">Scales the score bonus for public sector or government agency roles.</div>
                 </div>
                 <div class="field-block">
                   <label for="freshness_weight">Freshness</label>
@@ -680,9 +794,16 @@
         <div class="advanced-grid">
           <section class="subpanel">
             <h3>Capability Matrix</h3>
-            <label for="capability_profile_rules">Capability profile rules</label>
-            <textarea id="capability_profile_rules"></textarea>
-            <div class="field-help">Format: <code>name || level || fit || alias 1, alias 2</code>.</div>
+            <p class="field-help">Each row is one capability the engine can recognize. Use a clear human label, choose how strong it is in your profile, and add the short job-ad keywords the engine should scan for.</p>
+            <div id="capability_matrix_editor" class="capability-editor"></div>
+            <div class="capability-toolbar">
+              <div class="capability-toolbar-main">
+                <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities or job ad keywords">
+                <span class="capability-toolbar-copy">Keywords stay tucked into each row so long matrices remain scannable.</span>
+              </div>
+              <button class="secondary" id="add_capability_rule" type="button">Add capability</button>
+            </div>
+            <textarea id="capability_profile_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
           </section>
 
           <section class="subpanel">
@@ -718,7 +839,7 @@
               </div>
             </div>
             <textarea id="reject_title_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-            <div class="field-help">Words like ERP that should remove wrong-fit titles.</div>
+            <div class="field-help">Words that immediately disqualify a job if they appear in the title (e.g., <code>ERP</code>, <code>payroll</code>).</div>
           </section>
 
           <section class="subpanel">
@@ -732,11 +853,14 @@
               </div>
             </div>
             <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-            <div class="field-help">Add things you do not have and do not want jobs to require, e.g. SAP, payroll, top secret clearance. Desirable-only mentions are flagged, not rejected.</div>
+            <details class="help-drawer" style="margin-top: 8px;">
+              <summary>How mandatory blockers work</summary>
+              <p>Add skills or tools you do not have (e.g., <code>SAP</code>, <code>NV1 clearance</code>). The engine reads the context around the word. If it's a <strong>hard requirement</strong> ("Must have SAP"), the job is rejected. If it's just desirable ("SAP is a plus"), the job is kept but flagged as a risk.</p>
+            </details>
 
             <details class="help-drawer advanced-rule-drawer" id="advanced_description_blockers">
-              <summary>Advanced description blockers</summary>
-              <p>These are internal escape hatches for exact wording and regex rules. Use the requirement chips above for normal job-fit blocking.</p>
+              <summary>Advanced hard-blockers (Exact phrase &amp; Regex)</summary>
+              <p>Unlike the mandatory blockers above, these are <strong>hard blocks</strong>. If a job description contains these exact phrases or patterns <em>anywhere</em> in the text, the job is immediately rejected.</p>
 
               <label for="reject_description_phrase_rules_add">Blocked description phrases</label>
               <div class="badge-editor" data-chip-editor="reject_description_phrase_rules">
@@ -747,7 +871,7 @@
                 </div>
               </div>
               <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-              <div class="field-help">Exact phrases that should remove wrong-fit descriptions.</div>
+              <div class="field-help">Exact phrases to completely ban. E.g., adding <code>payroll</code> rejects any job mentioning the word "payroll".</div>
 
               <label for="reject_description_regex_rules_add">Blocked description patterns</label>
               <div class="badge-editor" data-chip-editor="reject_description_regex_rules">
@@ -758,7 +882,7 @@
                 </div>
               </div>
               <textarea id="reject_description_regex_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-              <div class="field-help">Regex patterns for advanced/debug filtering only.</div>
+              <div class="field-help">Regular expressions for complex pattern blocking (e.g., catching variations of a certification).</div>
             </details>
           </section>
         </div>
@@ -795,6 +919,7 @@
             <option value="false">No</option>
             <option value="true">Yes</option>
           </select>
+          <div class="help">Prevents Telegram from cluttering the chat with large URL previews for your dashboard links.</div>
 
           <div id="telegram_connect_panel" class="help" style="margin-top:10px;">Save Telegram settings to generate a one-tap connect link.</div>
           <div id="telegram_subscribers_panel" class="help">No Telegram subscribers synced yet.</div>
@@ -869,6 +994,7 @@
     let telegramConnectLink = '';
     let loadedAgentSettings = null;
     let loadedProfile = null;
+    let capabilityRuleState = [];
     let runStatusPollHandle = null;
     let lastObservedRunStatus = 'idle';
     const listTextAreas = [
@@ -932,6 +1058,166 @@
           aliases: (parts[aliasesIndex] || '').split(',').map(item => item.trim()).filter(Boolean),
         };
       }).filter(rule => rule.name && rule.level);
+    }
+
+    const capabilityLevelMeta = {
+      strong: {
+        label: 'Strong',
+        summary: 'Proven strength that should count heavily when a role depends on it.',
+      },
+      working: {
+        label: 'Working',
+        summary: 'Solid evidence, but not one of your main headline strengths.',
+      },
+      basic: {
+        label: 'Minor exposure',
+        summary: 'Real exposure, but this should stay a light signal rather than a driver.',
+      },
+    };
+
+    const capabilityPriorityMeta = {
+      core: {
+        label: 'Primary',
+        summary: 'This should actively pull matching roles up.',
+      },
+      supporting: {
+        label: 'Secondary',
+        summary: 'Relevant and positive, but secondary to your core pitch.',
+      },
+      contextual: {
+        label: 'Background',
+        summary: 'Useful context only. It should not drive matching on its own.',
+      },
+    };
+
+    const capabilityPriorityOrder = ['core', 'supporting', 'contextual'];
+
+    function normalizeCapabilityAliasValue(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
+    function normalizeCapabilityRule(rule) {
+      const name = String(rule?.name || '').replace(/\s+/g, ' ').trim();
+      const rawLevel = String(rule?.level || 'basic').trim().toLowerCase();
+      const rawFit = String(rule?.fit || 'contextual').trim().toLowerCase();
+      const level = rawLevel === 'strong' ? 'strong' : rawLevel === 'working' ? 'working' : 'basic';
+      const fit = rawFit === 'core' ? 'core' : rawFit === 'supporting' ? 'supporting' : 'contextual';
+      const aliases = [];
+      const seen = new Set();
+      for (const value of Array.isArray(rule?.aliases) ? rule.aliases : []) {
+        const cleaned = normalizeCapabilityAliasValue(value);
+        if (!cleaned || cleaned === name.toLowerCase() || seen.has(cleaned)) continue;
+        seen.add(cleaned);
+        aliases.push(cleaned);
+      }
+      return { name, level, fit, aliases };
+    }
+
+    function setCapabilityRuleState(rules) {
+      capabilityRuleState = (rules || [])
+        .map(normalizeCapabilityRule)
+        .filter(rule => rule.name);
+      document.getElementById('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+      renderCapabilityRuleEditor();
+    }
+
+    function collectCapabilityRuleState() {
+      const cleaned = capabilityRuleState
+        .map(normalizeCapabilityRule)
+        .filter(rule => rule.name);
+      capabilityRuleState = cleaned;
+      document.getElementById('capability_profile_rules').value = capabilityRulesToText(cleaned);
+      return cleaned;
+    }
+
+    function renderCapabilityRuleEditor() {
+      const container = document.getElementById('capability_matrix_editor');
+      if (!container) return;
+      if (!capabilityRuleState.length) {
+        container.innerHTML = '<div class="capability-editor-empty">No capability rules yet. Run onboarding or add a capability row here.</div>';
+        return;
+      }
+      const filterTerm = String(document.getElementById('capability_matrix_filter')?.value || '').trim().toLowerCase();
+      const groups = capabilityPriorityOrder.map(priority => {
+        const rules = capabilityRuleState
+          .map((rule, index) => ({ rule, index }))
+          .filter(item => item.rule.fit === priority)
+          .filter(item => {
+            if (!filterTerm) return true;
+            return item.rule.name.toLowerCase().includes(filterTerm)
+              || item.rule.aliases.some(alias => alias.includes(filterTerm));
+          });
+        return { priority, rules };
+      });
+
+      container.innerHTML = groups.map(group => {
+        const priorityMeta = capabilityPriorityMeta[group.priority];
+        const rowsHtml = group.rules.length
+          ? group.rules.map(({ rule, index }) => `
+              <article class="capability-row" data-capability-index="${index}">
+                <div class="capability-row-fields">
+                  <div>
+                    <label for="capability_name_${index}">Capability</label>
+                    <input id="capability_name_${index}" type="text" data-capability-field="name" value="${escapeHtml(rule.name)}" placeholder="e.g. Agile delivery">
+                  </div>
+                  <div>
+                    <label for="capability_level_${index}">Strength</label>
+                    <select id="capability_level_${index}" data-capability-field="level">
+                      <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Strong</option>
+                      <option value="working"${rule.level === 'working' ? ' selected' : ''}>Working</option>
+                      <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Minor exposure</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="capability_fit_${index}">Priority</label>
+                    <select id="capability_fit_${index}" data-capability-field="fit">
+                      <option value="core"${rule.fit === 'core' ? ' selected' : ''}>Primary</option>
+                      <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>Secondary</option>
+                      <option value="contextual"${rule.fit === 'contextual' ? ' selected' : ''}>Background</option>
+                    </select>
+                  </div>
+                  <div class="capability-row-actions">
+                    <button class="secondary" type="button" data-remove-capability="${index}">Remove</button>
+                  </div>
+                </div>
+                <div class="capability-meta">
+                  <span class="suggestion-chip">${escapeHtml(capabilityLevelMeta[rule.level]?.label || 'Minor exposure')}</span>
+                  <span class="suggestion-chip">${escapeHtml(capabilityPriorityMeta[rule.fit]?.label || 'Background')}</span>
+                  <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} job ad keyword${rule.aliases.length === 1 ? '' : 's'}</span>
+                </div>
+                <p class="capability-copy">${escapeHtml(capabilityLevelMeta[rule.level]?.summary || '')}</p>
+                <details class="capability-alias-shell">
+                  <summary class="capability-alias-summary">Job ad keywords (${rule.aliases.length})</summary>
+                  <p class="field-help">Short words or phrases the app looks for in job descriptions. Use JD language like <code>agile</code>, <code>scrum</code>, <code>kanban</code>, not CV sentence fragments.</p>
+                  <div class="badge-editor">
+                    <div class="badge-editor-list">
+                      ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
+                        <span class="rule-chip">
+                          <span>${escapeHtml(alias)}</span>
+                          <button type="button" data-remove-capability-alias="${index}" data-alias-index="${aliasIndex}" title="Remove ${escapeHtml(alias)}">&#215;</button>
+                        </span>
+                      `).join('') : '<span class="badge-editor-empty">No job ad keywords yet.</span>'}
+                    </div>
+                    <div class="badge-editor-form">
+                      <input type="text" data-capability-alias-input="${index}" placeholder="Add a short job-ad keyword">
+                      <button class="secondary" type="button" data-add-capability-alias="${index}">Add</button>
+                    </div>
+                  </div>
+                </details>
+              </article>
+            `).join('')
+          : '<div class="capability-editor-empty-group">No matching capabilities in this group.</div>';
+        return `
+          <section class="capability-group">
+            <div class="capability-group-head">
+              <h4>${escapeHtml(priorityMeta.label)} capabilities</h4>
+              <span class="suggestion-chip">${escapeHtml(String(group.rules.length))} shown</span>
+            </div>
+            <p class="capability-group-copy">${escapeHtml(priorityMeta.summary)}</p>
+            <div class="capability-row-list">${rowsHtml}</div>
+          </section>
+        `;
+      }).join('');
     }
 
     const chipEditors = {
@@ -1148,7 +1434,7 @@
       document.getElementById('contract_weight').value = String(profile.preference_weights?.contract ?? 1);
       document.getElementById('government_weight').value = String(profile.preference_weights?.government ?? 1);
       document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness ?? 1);
-      document.getElementById('capability_profile_rules').value = capabilityRulesToText(profile.capability_profile_rules);
+      setCapabilityRuleState(profile.capability_profile_rules || []);
       document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
       for (const id of ['target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills']) {
         document.getElementById(id).value = (profile[id] || []).join('\n');
@@ -1601,7 +1887,7 @@
         },
         llm_profile_brief_mode: 'auto',
         llm_profile_brief: '',
-        capability_profile_rules: textToCapabilityRules(document.getElementById('capability_profile_rules').value),
+        capability_profile_rules: collectCapabilityRuleState(),
         target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
         adjacent_title_patterns: toLines(document.getElementById('adjacent_title_patterns').value),
         must_not_require_skills: toLines(document.getElementById('must_not_require_skills').value),
@@ -1868,7 +2154,7 @@
           },
           'Matching rules saved to profile.json.'
         );
-        showInlineStatus(advStatusEl, 'Saved.', 'ok');
+        showInlineStatus(advStatusEl, 'Saved. Dashboard refresh is running in the background.', 'ok');
       } catch (error) {
         showStatus(error.message, 'error');
         showInlineStatus(advStatusEl, error.message, 'error');
@@ -1876,6 +2162,86 @@
         btn.disabled = false;
         btn.textContent = originalLabel;
       }
+    });
+
+    document.getElementById('add_capability_rule').addEventListener('click', () => {
+      capabilityRuleState = [...capabilityRuleState, { name: '', level: 'working', fit: 'supporting', aliases: [] }];
+      renderCapabilityRuleEditor();
+    });
+
+    document.getElementById('capability_matrix_filter').addEventListener('input', () => {
+      renderCapabilityRuleEditor();
+    });
+
+    document.getElementById('capability_matrix_editor').addEventListener('input', (event) => {
+      const field = event.target.closest('[data-capability-field]');
+      if (!field) return;
+      const card = field.closest('[data-capability-index]');
+      if (!card) return;
+      const index = Number(card.dataset.capabilityIndex);
+      const key = field.dataset.capabilityField;
+      capabilityRuleState[index] = {
+        ...capabilityRuleState[index],
+        [key]: key === 'name' ? String(field.value || '').replace(/\s+/g, ' ').trim() : String(field.value || '').trim().toLowerCase(),
+      };
+      document.getElementById('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+    });
+
+    document.getElementById('capability_matrix_editor').addEventListener('change', (event) => {
+      const field = event.target.closest('[data-capability-field]');
+      if (!field) return;
+      const card = field.closest('[data-capability-index]');
+      if (!card) return;
+      const index = Number(card.dataset.capabilityIndex);
+      const key = field.dataset.capabilityField;
+      capabilityRuleState[index] = {
+        ...capabilityRuleState[index],
+        [key]: key === 'name' ? String(field.value || '').replace(/\s+/g, ' ').trim() : String(field.value || '').trim().toLowerCase(),
+      };
+      renderCapabilityRuleEditor();
+    });
+
+    document.getElementById('capability_matrix_editor').addEventListener('click', (event) => {
+      const removeCard = event.target.closest('[data-remove-capability]');
+      if (removeCard) {
+        const index = Number(removeCard.dataset.removeCapability);
+        capabilityRuleState.splice(index, 1);
+        setCapabilityRuleState(capabilityRuleState);
+        return;
+      }
+      const removeAlias = event.target.closest('[data-remove-capability-alias]');
+      if (removeAlias) {
+        const ruleIndex = Number(removeAlias.dataset.removeCapabilityAlias);
+        const aliasIndex = Number(removeAlias.dataset.aliasIndex);
+        const nextAliases = [...(capabilityRuleState[ruleIndex]?.aliases || [])];
+        nextAliases.splice(aliasIndex, 1);
+        capabilityRuleState[ruleIndex] = { ...capabilityRuleState[ruleIndex], aliases: nextAliases };
+        setCapabilityRuleState(capabilityRuleState);
+        return;
+      }
+      const addAlias = event.target.closest('[data-add-capability-alias]');
+      if (!addAlias) return;
+      const ruleIndex = Number(addAlias.dataset.addCapabilityAlias);
+      const input = document.querySelector(`[data-capability-alias-input="${ruleIndex}"]`);
+      const cleaned = normalizeCapabilityAliasValue(input?.value || '');
+      if (!cleaned) return;
+      const aliases = [...(capabilityRuleState[ruleIndex]?.aliases || [])];
+      if (!aliases.includes(cleaned)) aliases.push(cleaned);
+      capabilityRuleState[ruleIndex] = { ...capabilityRuleState[ruleIndex], aliases };
+      setCapabilityRuleState(capabilityRuleState);
+    });
+
+    document.getElementById('capability_matrix_editor').addEventListener('keydown', (event) => {
+      const input = event.target.closest('[data-capability-alias-input]');
+      if (!input || event.key !== 'Enter') return;
+      event.preventDefault();
+      const ruleIndex = Number(input.dataset.capabilityAliasInput);
+      const cleaned = normalizeCapabilityAliasValue(input.value || '');
+      if (!cleaned) return;
+      const aliases = [...(capabilityRuleState[ruleIndex]?.aliases || [])];
+      if (!aliases.includes(cleaned)) aliases.push(cleaned);
+      capabilityRuleState[ruleIndex] = { ...capabilityRuleState[ruleIndex], aliases };
+      setCapabilityRuleState(capabilityRuleState);
     });
 
     Promise.all([

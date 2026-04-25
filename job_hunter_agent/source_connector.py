@@ -22,6 +22,7 @@ from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright
 
+from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.config import MAX_PAGES_CAP, OUTPUT_HTML
 from job_hunter_agent.filters import (
     matches_missing_requirement,
@@ -325,17 +326,83 @@ def summarize_snippet(snippet: str, max_length: int = 180) -> str:
     return cleaned[: max_length - 3].rstrip() + "..."
 
 
-def infer_employer_type(record: dict, details_text: str) -> str:
+def _clean_summary_candidate(text: str) -> str:
+    cleaned = compact_whitespace(text)
+    if not cleaned:
+        return ""
+    if ":" in cleaned[:40]:
+        prefix, _, remainder = cleaned.partition(":")
+        if 0 < len(prefix.split()) <= 4 and remainder.strip():
+            cleaned = compact_whitespace(remainder)
+    cleaned = re.sub(r"^[•\-–—]+\s*", "", cleaned).strip()
+    return cleaned
+
+
+def _is_summary_heading(text: str) -> bool:
+    cleaned = compact_whitespace(text)
+    if not cleaned:
+        return True
+    if len(cleaned) <= 24 and cleaned.endswith(":"):
+        return True
+    tokens = cleaned.split()
+    if len(tokens) <= 5 and cleaned == cleaned.upper():
+        return True
+    return False
+
+
+def _looks_like_generic_job_summary(text: str, title: str, company: str) -> bool:
+    cleaned = compact_whitespace(text)
+    lowered = cleaned.lower()
+    title_lower = compact_whitespace(title).lower()
+    company_lower = compact_whitespace(company).lower()
+    if not cleaned or len(cleaned) < 45:
+        return True
+    if cleaned.endswith(":"):
+        return True
+    if title_lower and lowered == title_lower:
+        return True
+    if company_lower and lowered == company_lower:
+        return True
+    if lowered.startswith("about the role") and len(cleaned.split()) <= 4:
+        return True
+    return False
+
+
+def description_summary_snippet(record: dict, details_text: str) -> str:
+    title = compact_whitespace(record.get("title") or "")
+    company = compact_whitespace(record.get("company") or "")
+    snippets = [
+        _clean_summary_candidate(snippet)
+        for snippet in split_text_snippets(details_text)
+    ]
+    for snippet in snippets:
+        if _is_summary_heading(snippet):
+            continue
+        if _looks_like_generic_job_summary(snippet, title, company):
+            continue
+        return summarize_snippet(snippet, max_length=220)
+    return ""
+
+
+def infer_role_sector(record: dict, details_text: str) -> dict[str, str]:
     company = compact_whitespace(record.get("company") or "").lower()
     combined = f"{company}\n{compact_whitespace(details_text).lower()}"
 
     if has_government_context(combined):
-        return "Government agency"
-    if any(term in company for term in ("recruitment", "sourcing", "talent", "peoplebank", "randstad", "hays", "ignite")):
-        return "Recruitment-led role"
-    if any(term in company for term in ("consulting", "consult", "advisory", "services")):
-        return "Consulting firm"
-    return "Private sector employer"
+        return {"kind": "government", "label": "Government", "confidence": "high"}
+    return {"kind": "unknown", "label": "", "confidence": "unknown"}
+
+
+def infer_posting_channel(record: dict, details_text: str) -> dict[str, str]:
+    company = compact_whitespace(record.get("company") or "").lower()
+    combined = f"{company}\n{compact_whitespace(details_text).lower()}"
+    recruiter_company_match = re.search(r"\b(recruitment|recruiter|staffing|talent)\b", company)
+    recruiter_copy_match = re.search(r"\bour client\b", combined)
+    if recruiter_company_match and recruiter_copy_match:
+        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "high"}
+    if recruiter_company_match:
+        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "medium"}
+    return {"kind": "unknown", "label": "", "confidence": "unknown"}
 
 
 def role_text_bundle(record: dict, details_text: str) -> str:
@@ -352,8 +419,17 @@ def role_text_bundle(record: dict, details_text: str) -> str:
 
 
 def build_role_summary(record: dict, details_text: str, profile: Optional[dict] = None) -> str:
-    employer_type = infer_employer_type(record, details_text)
+    teaser = compact_whitespace(record.get("teaser") or "")
     title = compact_whitespace(record.get("title") or "")
+    location = compact_whitespace(record.get("location") or "")
+    work_type = compact_whitespace(record.get("work_type") or "")
+
+    detail_summary = description_summary_snippet(record, details_text)
+    if detail_summary:
+        return detail_summary
+
+    if teaser and teaser != "N/A" and not _is_generic_summary_text(teaser):
+        return summarize_snippet(teaser, max_length=220)
 
     domain_focus = ""
     if " - " in title:
@@ -363,14 +439,12 @@ def build_role_summary(record: dict, details_text: str, profile: Optional[dict] 
 
     base_role = title.split(" - ")[0].split("(")[0].strip() if domain_focus else title
 
-    if employer_type == "Government agency":
-        intro = f"Government agency looking for a {base_role}"
-    elif employer_type == "Consulting firm":
-        intro = f"Consulting firm looking for a {base_role}"
-    elif employer_type == "Recruitment-led role":
-        intro = f"Recruitment-led role for a {base_role}"
+    if title and location and location != "N/A" and work_type and work_type != "N/A":
+        intro = f"{base_role} role in {location} ({work_type.lower()})"
+    elif title and location and location != "N/A":
+        intro = f"{base_role} role in {location}"
     else:
-        intro = f"Private sector role for a {base_role}"
+        intro = f"{base_role} role" if base_role else "Role"
 
     if domain_focus:
         summary = f"{intro} focused on {domain_focus}."
@@ -435,11 +509,7 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         name = str(rule.get("name") or "").strip()
         fit = str(rule.get("fit") or "").strip().lower()
         level = str(rule.get("level") or "").strip().lower()
-        aliases = [
-            str(alias).strip().lower()
-            for alias in [rule.get("name"), *(rule.get("aliases") or [])]
-            if str(alias).strip()
-        ]
+        aliases = [str(alias).strip().lower() for alias in expand_capability_terms(rule) if str(alias).strip()]
         if not aliases:
             continue
         if not any(text_contains_term(lowered, alias) for alias in aliases):
@@ -767,9 +837,7 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     for rule in profile.get("capability_profile_rules", []):
         if not isinstance(rule, dict):
             continue
-        rule_aliases = _normalized_aliases(
-            [str(rule.get("name") or "")] + list(rule.get("aliases") or [])
-        )
+        rule_aliases = _normalized_aliases(expand_capability_terms(rule))
         if not rule_aliases:
             continue
         overlap = sum(1 for alias in aliases if alias in rule_aliases or any(alias in rule_alias or rule_alias in alias for rule_alias in rule_aliases))
@@ -929,11 +997,11 @@ def salary_fit_label(record: dict, profile: Optional[dict] = None) -> str:
 
 
 def score_to_tone_class(score: int) -> str:
-    if score >= 80:
+    if score >= 85:
         return "tone-strong"
-    if score >= 65:
+    if score >= 70:
         return "tone-good"
-    if score >= 50:
+    if score >= 55:
         return "tone-borderline"
     return "tone-low"
 
@@ -1245,6 +1313,67 @@ def llm_description_fit_entry(record: dict) -> dict:
     return {"label": label, "value": value}
 
 
+def capability_match_summary(record: dict, profile: Optional[dict] = None) -> Dict[str, List[str]]:
+    active_profile = profile or load_profile()
+    source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
+    return find_profile_capability_matches(source_text, active_profile)
+
+
+def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> tuple[int, dict]:
+    matches = capability_match_summary(record, profile)
+    core_count = len(matches.get("core", []))
+    supporting_count = len(matches.get("supporting", []))
+    score = min((core_count * 4) + (supporting_count * 2), 18)
+    return score, matches
+
+
+def calibrated_fit_alignment_entry(record: dict, capability_matches: Optional[dict] = None) -> Optional[dict]:
+    grade = str(record.get("llm_fit_grade") or "").strip().upper()
+    title_reason = str(record.get("title_reason") or "").strip().upper()
+    content_reason = str(record.get("content_reason") or "").strip().upper()
+    fit_confidence = full_description_confidence(record)
+    missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
+    soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
+    matches = capability_matches or capability_match_summary(record)
+    core_count = len(matches.get("core", []))
+
+    if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
+        return None
+    if missing_evidence:
+        return None
+    if grade in {"EXCELLENT", "STRONG"} and core_count >= 2:
+        bonus = 6 if not soft_risks else 4
+        return {"label": "Core fit signals align", "value": bonus}
+    return None
+
+
+def clean_fit_bonus_entry(
+    record: dict,
+    breakdown: List[dict],
+    capability_matches: Optional[dict] = None,
+) -> Optional[dict]:
+    grade = str(record.get("llm_fit_grade") or "").strip().upper()
+    title_reason = str(record.get("title_reason") or "").strip().upper()
+    content_reason = str(record.get("content_reason") or "").strip().upper()
+    fit_confidence = full_description_confidence(record)
+    missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
+    soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
+    matches = capability_matches or capability_match_summary(record)
+    capability_count = len(matches.get("core", [])) + len(matches.get("supporting", []))
+
+    if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
+        return None
+    if grade not in {"EXCELLENT", "STRONG", "SOLID"}:
+        return None
+    if missing_evidence or soft_risks:
+        return None
+    if capability_count < 3:
+        return None
+    if any(int(item.get("value", 0) or 0) < 0 for item in breakdown):
+        return None
+    return {"label": "Clean fit with no clear penalties", "value": 2}
+
+
 def deterministic_review_outcome(record: dict, fit_highlights: List[str], missing_evidence: List[str], soft_risk_reasons: List[str]) -> Optional[dict]:
     title_reason = str(record.get("title_reason") or "")
     strong_signal_count = len(capability_fit_highlights(fit_highlights))
@@ -1366,7 +1495,13 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     return None
 
 
-def visible_fit_reasons(fit_highlights: List[str], score_breakdown: List[dict], max_items: int = 4) -> List[str]:
+
+def visible_fit_reasons(
+    fit_highlights: List[str],
+    score_breakdown: List[dict],
+    max_items: int = 4,
+    include_values: bool = False,
+) -> List[str]:
     reasons = dedupe_preserve_order([
         compact_whitespace(item)
         for item in fit_highlights
@@ -1387,7 +1522,19 @@ def visible_fit_reasons(fit_highlights: List[str], score_breakdown: List[dict], 
         if len(reasons) >= max_items:
             break
 
-    return reasons[:max_items]
+    reasons = reasons[:max_items]
+
+    if include_values:
+        formatted_reasons = []
+        for reason in reasons:
+            val = next((int(i.get("value", 0) or 0) for i in score_breakdown if compact_whitespace(i.get("label") or "") == reason), None)
+            if val is not None:
+                formatted_reasons.append(f"{reason}: {val:+d}")
+            else:
+                formatted_reasons.append(reason)
+        return formatted_reasons
+
+    return reasons
 
 
 def negative_score_reasons(
@@ -1433,8 +1580,9 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
             gaps.append("No comparable salary/rate found")
 
     if evidence_points < 12:
-        capability_count = len(capability_fit_highlights(record.get("fit_highlights", []) or []))
-        gaps.append(f"Only {capability_count} strong capability evidence bullet{'s' if capability_count != 1 else ''} counted")
+        capability_matches = capability_match_summary(record)
+        capability_count = len(capability_matches.get("core", [])) + len(capability_matches.get("supporting", []))
+        gaps.append(f"Only {capability_count} capability evidence match{'es' if capability_count != 1 else ''} counted")
 
     if full_description_confidence(record) == "LOW":
         gaps.append("Scoring confidence is limited because the full description was not captured")
@@ -1443,18 +1591,18 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
 
 
 def score_to_match_label(score: int) -> str:
-    if score >= 80:
+    if score >= 85:
         return "Strong match"
-    if score >= 65:
+    if score >= 70:
         return "Good match"
-    if score >= 50:
-        return "Worth a look"
+    if score >= 55:
+        return "Possible fit"
     return "Stretch"
 
 
 def score_filter_option_label(threshold: int) -> str:
     label = score_to_match_label(threshold)
-    if threshold >= 80:
+    if threshold >= 85:
         return f"{label} only"
     return f"{label} or better"
 
@@ -1468,7 +1616,7 @@ def score_filter_thresholds(
     show_borderline = EXPANDED_POOL_MODE if include_borderline is None else bool(include_borderline)
     scores = [fit_score(record, active_profile) for record in records]
 
-    thresholds = [80, 65, 50]
+    thresholds = [85, 70, 55]
     if show_borderline or any(score < 50 for score in scores):
         thresholds.append(35)
     return thresholds
@@ -1646,6 +1794,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     active_profile = profile or load_profile()
     weights = get_preference_weights(active_profile)
     hard_block_labels = hard_block_reasons(record, active_profile)
+    evidence_score, capability_matches = capability_evidence_score(record, active_profile)
 
     if hard_block_labels:
         return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": -100}]
@@ -1664,9 +1813,15 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     if full_description_confidence(record) == "LOW":
         breakdown.append({"label": "Description capture incomplete", "value": weighted_points(-10, weights["fit"])})
 
-    evidence_score = min(len(capability_fit_highlights(fit_highlights)) * 3, 12)
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
+
+    calibrated_fit_entry = calibrated_fit_alignment_entry(record, capability_matches)
+    if calibrated_fit_entry:
+        breakdown.append({
+            "label": calibrated_fit_entry["label"],
+            "value": weighted_points(int(calibrated_fit_entry["value"]), weights["fit"]),
+        })
 
     for item in competitive_signal_breakdown(record, active_profile):
         breakdown.append({"label": item["label"], "value": weighted_points(int(item["value"]), weights["fit"])})
@@ -1719,6 +1874,10 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
 
     if viewed_by_user(record) and not record.get("applied"):
         breakdown.append({"label": "Already viewed by you", "value": -3})
+
+    clean_fit_bonus = clean_fit_bonus_entry(record, breakdown, capability_matches)
+    if clean_fit_bonus:
+        breakdown.append({"label": clean_fit_bonus["label"], "value": weighted_points(int(clean_fit_bonus["value"]), weights["fit"])})
 
     return breakdown
 
@@ -2270,7 +2429,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     fit_label = score_to_match_label(fit_points)
     fit_tone_class = score_to_tone_class(fit_points)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
-    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown)
+    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=SHOW_SCORING_DEBUG)
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
     posted_age_days = record.get("posted_age_days")
@@ -2279,6 +2438,8 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
     company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
+    sector_signal = infer_role_sector(display_record, trusted_desc if trusted_desc else stored_snapshot)
+    channel_signal = infer_posting_channel(display_record, trusted_desc if trusted_desc else stored_snapshot)
     _block_phrases_list = suggest_title_block_phrases(str(record.get("title") or ""))
     block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
     block_phrases_json = safe_html(json.dumps(_block_phrases_list))
@@ -2287,7 +2448,9 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         f'data-job-url="{url}" '
         f'data-job-title="{title}" '
         f'data-job-company="{company_attr}" '
-        f'data-job-teaser="{teaser_attr}"'
+        f'data-job-teaser="{teaser_attr}" '
+        f'data-role-sector="{safe_html(sector_signal.get("kind") or "unknown")}" '
+        f'data-posting-channel="{safe_html(channel_signal.get("kind") or "unknown")}"'
     )
 
     source = str(record.get("source") or "unknown").lower().strip()
@@ -2309,6 +2472,11 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     if description_issue:
         badges.append(render_badge("Description Issue", "badge-warning", "The full job description was not captured clearly, so this match needs manual checking."))
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
+    if sector_signal.get("kind") == "government":
+        badges.append(render_badge("Government", "badge-sector-government", "Government/public-sector context detected from the captured job text."))
+    if channel_signal.get("kind") == "recruiter":
+        confidence_text = channel_signal.get("confidence") or "inferred"
+        badges.append(render_badge("Recruiter", "badge-channel-recruiter", f"Recruiter/intermediary posting inferred with {confidence_text} confidence from the captured job text."))
 
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
@@ -2486,6 +2654,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
             '<div class="job-actions">'
             f'<button class="review-button review-applied" type="button" data-review-action="applied" {button_data_attrs}>Applied</button>'
             f'<button class="review-button review-not-for-me" type="button" data-review-action="not_for_me" {button_data_attrs} title="Marks this role as not a fit and stores it as learning feedback">Not For Me</button>'
+            f'<button class="review-button review-hide" type="button" data-review-action="hidden" {button_data_attrs} title="Hide this one job only. You can unhide it later from Hidden jobs.">Hide</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -2501,24 +2670,25 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         '<div class="job-header-copy">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         + (
-            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Block similar titles from appearing in future results">Block similar titles</button>'
+            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Hide future roles whose titles contain the selected words, before description review.">Hide title words</button>'
             '<div class="block-confirm" data-block-confirm hidden>'
-            '<p class="block-confirm-copy">Block titles containing:</p>'
+            '<p class="block-confirm-copy">Hide future titles with:</p>'
             '<div class="block-phrase-checks" data-block-phrase-checks></div>'
+            '<button class="mini-button block-manual-toggle" type="button" data-block-manual-toggle>Add other title words</button>'
             '<div class="block-manual-row">'
-            '<span class="block-manual-label">Add phrase (comma-separated):</span>'
-            '<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. project manager">'
+            '<span class="block-manual-label">Add title words</span>'
+            '<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. project manager, payroll">'
+            '<span class="block-manual-help">Adds to the checked words above. Use commas to add more than one.</span>'
             '</div>'
             '<p class="block-impact" data-block-impact></p>'
-            '<p class="block-confirm-sub">This will remove similar roles in future searches.</p>'
-            '<p class="block-admin-tip">Manage all blocked patterns in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>'
+            '<p class="block-confirm-sub">This is a strong filter. Matching titles will be hidden before description review.</p>'
             '<div class="block-confirm-actions">'
-            '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Confirm Block</button>'
+            '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Block Selected Titles</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
             '</div>'
             '</div>'
             '<span class="block-status" aria-live="polite"></span>'
-            if not applied_record and not hidden_record else ""
+            if (not applied_record and not hidden_record and _block_phrases_list) else ""
         )
         + f'<div class="job-company">{company}</div>'
         '</div>'
@@ -3177,6 +3347,9 @@ def render_html(
     .badge-viewed {{ background: #fef3c7; color: #92400e; }}
     .badge-source-seek {{ background: #e0f2fe; color: #0c4a6e; }}
     .badge-source-linkedin {{ background: #dbeafe; color: #1e3a5f; }}
+    .badge-source-neutral {{ background: #ecfdf3; color: #166534; }}
+    .badge-sector-government {{ background: #e0f2fe; color: #0c4a6e; }}
+    .badge-channel-recruiter {{ background: #fff1e6; color: #b45309; }}
     .badge-fit-high {{ background: #dcfce7; color: #166534; }}
     .badge-fit-medium {{ background: #fef3c7; color: #92400e; }}
     .badge-fit-borderline {{ background: #e5e7eb; color: #374151; }}
@@ -3322,7 +3495,7 @@ def render_html(
       align-items: flex-start;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }}
     .job-header-copy {{
       min-width: 0;
@@ -3536,6 +3709,11 @@ def render_html(
       color: var(--warm);
       border: 1px solid rgba(154, 52, 18, 0.22);
     }}
+    .review-hide {{
+      background: #f8fafc;
+      color: #475569;
+      border: 1px solid #d7dee8;
+    }}
     /* Rejection-learning panel */
     .rejection-overlay {{
       position: fixed;
@@ -3551,34 +3729,63 @@ def render_html(
       z-index: 901;
       background: var(--card);
       border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-      width: min(520px, 94vw);
+      border-radius: 14px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.18);
+      width: min(640px, 96vw);
       max-height: 82vh;
       display: flex;
       flex-direction: column;
-      font-size: 0.9rem;
+      font-size: 0.94rem;
     }}
     .rejection-panel[hidden],
     .rejection-overlay[hidden] {{
       display: none;
     }}
     .rejection-panel-header {{
-      padding: 16px 18px 10px;
+      padding: 18px 22px 12px;
       border-bottom: 1px solid var(--line);
     }}
     .rejection-panel-header h3 {{
-      margin: 0 0 3px;
-      font-size: 1rem;
+      margin: 0 0 4px;
+      font-size: 1.08rem;
       color: var(--ink);
     }}
     .rejection-panel-header p {{
       margin: 0;
-      font-size: 0.8rem;
+      font-size: 0.84rem;
+      line-height: 1.45;
       color: var(--muted);
     }}
+    .rejection-first-use {{
+      margin: 12px 22px 0;
+      border: 1px solid #dbe7f5;
+      border-radius: 12px;
+      background: #f8fbff;
+      color: #516173;
+      overflow: hidden;
+    }}
+    .rejection-first-use[hidden] {{
+      display: none;
+    }}
+    .rejection-first-use summary {{
+      cursor: pointer;
+      list-style: none;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #35506b;
+    }}
+    .rejection-first-use summary::-webkit-details-marker {{
+      display: none;
+    }}
+    .rejection-first-use-body {{
+      padding: 0 12px 12px;
+      font-size: 0.81rem;
+      line-height: 1.5;
+      color: #516173;
+    }}
     .rejection-panel-body {{
-      padding: 12px 18px;
+      padding: 16px 22px;
       overflow-y: auto;
       flex: 1;
     }}
@@ -3603,17 +3810,17 @@ def render_html(
     .rejection-chips {{
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px;
     }}
     .rejection-chip {{
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 4px 10px;
+      gap: 6px;
+      padding: 6px 12px;
       border-radius: 20px;
       border: 1px solid var(--line);
       background: var(--bg);
-      font-size: 0.82rem;
+      font-size: 0.86rem;
       cursor: pointer;
       user-select: none;
       transition: background 0.12s, border-color 0.12s;
@@ -3627,11 +3834,11 @@ def render_html(
       border-color: var(--accent);
     }}
     .rejection-other {{
-      padding: 10px 18px 12px;
+      padding: 12px 22px 14px;
       border-top: 1px solid var(--line);
     }}
     .rejection-other-label {{
-      font-size: 0.78rem;
+      font-size: 0.82rem;
       font-weight: 600;
       color: var(--muted);
       margin-bottom: 6px;
@@ -3644,19 +3851,20 @@ def render_html(
     .rejection-other-row input[type=text] {{
       flex: 1;
       min-width: 0;
-      padding: 5px 8px;
+      padding: 8px 10px;
       border: 1px solid var(--line);
-      border-radius: 5px;
-      font-size: 0.84rem;
+      border-radius: 7px;
+      font-size: 0.88rem;
       background: var(--bg);
     }}
     .rejection-other-row button {{
-      padding: 5px 12px;
+      padding: 8px 14px;
       background: var(--accent);
       color: white;
       border: none;
-      border-radius: 5px;
-      font-size: 0.82rem;
+      border-radius: 7px;
+      font-size: 0.84rem;
+      font-weight: 700;
       cursor: pointer;
     }}
     .rejection-custom-list {{
@@ -3685,7 +3893,7 @@ def render_html(
       color: var(--muted);
     }}
     .rejection-panel-footer {{
-      padding: 10px 18px 14px;
+      padding: 12px 22px 16px;
       border-top: 1px solid var(--line);
       display: flex;
       gap: 8px;
@@ -3693,12 +3901,12 @@ def render_html(
     }}
     .rejection-btn-save {{
       flex: 1;
-      padding: 8px 14px;
+      padding: 10px 16px;
       background: var(--accent);
       color: white;
       border: none;
-      border-radius: 6px;
-      font-size: 0.86rem;
+      border-radius: 8px;
+      font-size: 0.88rem;
       font-weight: 600;
       cursor: pointer;
     }}
@@ -3707,21 +3915,35 @@ def render_html(
       cursor: default;
     }}
     .rejection-btn-skip {{
-      padding: 8px 14px;
+      padding: 10px 16px;
       background: white;
       color: var(--muted);
       border: 1px solid var(--line);
-      border-radius: 6px;
-      font-size: 0.84rem;
+      border-radius: 8px;
+      font-size: 0.86rem;
       cursor: pointer;
     }}
     .rejection-btn-cancel {{
-      padding: 8px 12px;
+      padding: 10px 12px;
       background: none;
       border: none;
       color: var(--muted);
-      font-size: 0.84rem;
+      font-size: 0.86rem;
       cursor: pointer;
+    }}
+    .rejection-inline-tip {{
+      width: 100%;
+      margin: -2px 0 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid #dbe7f5;
+      color: #475569;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }}
+    .rejection-inline-tip[hidden] {{
+      display: none;
     }}
     .title-block-btn {{
       display: inline-flex;
@@ -3846,9 +4068,17 @@ def render_html(
       flex-direction: column;
       gap: 4px;
     }}
+    .block-manual-row[hidden] {{
+      display: none;
+    }}
     .block-manual-label {{
       font-size: 0.8rem;
       color: var(--muted);
+    }}
+    .block-manual-help {{
+      font-size: 0.78rem;
+      color: #64748b;
+      line-height: 1.4;
     }}
     .block-manual-input {{
       border: 1px solid rgba(29, 78, 216, 0.2);
@@ -4152,21 +4382,25 @@ def render_html(
   <div class="rejection-overlay" id="rejection-overlay" hidden></div>
   <div class="rejection-panel" id="rejection-panel" hidden>
     <div class="rejection-panel-header">
-      <h3 id="rejection-panel-title">Why isn&#39;t this role for you?</h3>
-      <p>Pick only blockers you want the app to avoid next time. Skip weak suggestions.</p>
+      <h3 id="rejection-panel-title">Why isn&#39;t this a fit for you?</h3>
+      <p>Choose required terms you do not want the app to accept again.</p>
     </div>
+    <details class="rejection-first-use" id="rejection-first-use" hidden>
+      <summary>How this works</summary>
+      <div class="rejection-first-use-body" id="rejection-first-use-body">If you save a term here, future jobs are filtered only when it looks required. To block any mention, use advanced description blockers in Settings.</div>
+    </details>
     <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
     <div class="rejection-other">
-      <div class="rejection-other-label">Add your own blocker</div>
+      <div class="rejection-other-label">Add your own required term</div>
       <div class="rejection-other-row">
-        <input type="text" id="rejection-other-input" placeholder="e.g. SAP, payroll, top secret clearance" maxlength="80" />
+        <input type="text" id="rejection-other-input" placeholder="e.g. SAP, payroll, NV1 clearance" maxlength="80" />
         <button type="button" id="rejection-other-add">Add</button>
       </div>
       <div class="rejection-custom-list" id="rejection-custom-list"></div>
     </div>
     <div class="rejection-panel-footer">
       <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
-      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button">Just Hide</button>
+      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button" hidden>Continue Without Title Blocks</button>
       <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
       <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>
     </div>
@@ -4182,6 +4416,7 @@ def render_html(
     const DASHBOARD_FILTERS_KEY = `jobHunter.dashboard.filters.${{DASHBOARD_RUN_ID}}`;
     const INITIAL_SEARCH_SETTINGS = {search_settings_json};
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
+    const REJECTION_FIRST_USE_KEY = 'jobHunter.dashboard.rejectionFirstUseSeen';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
     const scopeFilter = document.getElementById('scope_filter');
@@ -4393,6 +4628,26 @@ def render_html(
       }}
       try {{
         window.localStorage.setItem(RESULTS_HELPER_DISMISSED_KEY, '1');
+      }} catch (error) {{
+      }}
+    }}
+
+    function updateRejectionFirstUseNote(exampleTerm = '') {{
+      const note = document.getElementById('rejection-first-use');
+      const body = document.getElementById('rejection-first-use-body');
+      if (!note || !body) {{
+        return;
+      }}
+      const example = String(exampleTerm || '').trim() || 'payroll';
+      body.textContent = `Example: if you save "${{example}}", future jobs are filtered only when ${{example}} looks required, not when it is just preferred. To block any mention, use advanced description blockers in Settings.`;
+      note.hidden = false;
+      note.open = true;
+      try {{
+        if (window.localStorage.getItem(REJECTION_FIRST_USE_KEY) === '1') {{
+          note.open = false;
+          return;
+        }}
+        window.localStorage.setItem(REJECTION_FIRST_USE_KEY, '1');
       }} catch (error) {{
       }}
     }}
@@ -4734,6 +4989,8 @@ def render_html(
 
       const checksContainer = confirm.querySelector('[data-block-phrase-checks]');
       const manualInput = confirm.querySelector('[data-block-manual-input]');
+      const manualToggle = confirm.querySelector('[data-block-manual-toggle]');
+      const manualRow = confirm.querySelector('.block-manual-row');
       const impactEl = confirm.querySelector('[data-block-impact]');
       const confirmButton = confirm.querySelector('[data-confirm-block]');
 
@@ -4753,6 +5010,8 @@ def render_html(
           : '<span class="block-empty-suggestion">Add a phrase below.</span>';
       }}
       if (manualInput) manualInput.value = '';
+      if (manualRow) manualRow.hidden = true;
+      if (manualToggle) manualToggle.hidden = false;
 
       function getSelectedPhrases() {{
         const checked = Array.from(
@@ -4790,6 +5049,13 @@ def render_html(
         }});
       }}
       if (manualInput) manualInput.addEventListener('input', updateImpact);
+      if (manualToggle) {{
+        manualToggle.onclick = () => {{
+          if (manualRow) manualRow.hidden = false;
+          manualToggle.hidden = true;
+          manualInput?.focus();
+        }};
+      }}
 
       updateImpact();
       if (blockStatus) blockStatus.textContent = '';
@@ -4799,6 +5065,7 @@ def render_html(
     function reviewSavingMessage(action) {{
       if (action === 'applied') return 'Saving as applied...';
       if (action === 'unapply') return 'Removing from applied jobs...';
+      if (action === 'hidden') return 'Hiding this job...';
       if (action === 'unhide') return 'Removing from hidden jobs...';
       if (action === 'not_for_me') return 'Saving Not For Me feedback...';
       if (action === 'block_similar') return 'Saving title block...';
@@ -4811,6 +5078,7 @@ def render_html(
       }}
       if (action === 'applied') return 'Saved to Applied jobs. It will be hidden in future runs.';
       if (action === 'unapply') return 'Removed from Applied jobs. It can appear again in future runs.';
+      if (action === 'hidden') return 'Hidden. This role moved to Hidden jobs and can be unhidden later.';
       if (action === 'unhide') return 'Removed from Hidden jobs. It can appear again in future runs.';
       if (action === 'not_for_me') return 'Saved as Not For Me. We will learn from this without blocking similar titles yet.';
       if (action === 'block_similar') return 'Saved. Similar jobs will be blocked by title in future runs.';
@@ -5038,12 +5306,18 @@ def render_html(
       _rejectionTitleSuggestions = [];
       document.getElementById('rejection-btn-save').textContent = 'Save & Continue';
       document.getElementById('rejection-btn-save').disabled = true;
-      document.getElementById('rejection-btn-skip').textContent = 'Just Hide';
+      document.getElementById('rejection-btn-skip').textContent = 'Continue Without Title Blocks';
+      document.getElementById('rejection-btn-skip').setAttribute('hidden', '');
       document.getElementById('rejection-btn-cancel').removeAttribute('hidden');
       document.querySelector('.rejection-other')?.removeAttribute('hidden');
       const headerCopy = document.querySelector('#rejection-panel .rejection-panel-header p');
       if (headerCopy) {{
-        headerCopy.textContent = 'Pick only blockers you want the app to avoid next time. Skip weak suggestions.';
+        headerCopy.textContent = 'Choose required terms you do not want the app to accept again.';
+      }}
+      const firstUseNote = document.getElementById('rejection-first-use');
+      if (firstUseNote) {{
+        firstUseNote.hidden = false;
+        firstUseNote.open = false;
       }}
     }}
 
@@ -5053,7 +5327,7 @@ def render_html(
       _rejResetPanelChrome();
       const jobTitle = button.dataset.jobTitle || 'this role';
       document.getElementById('rejection-panel-title').textContent =
-        `Why isn\u2019t "${{jobTitle}}" for you?`;
+        `Why isn\u2019t "${{jobTitle}}" a fit for you?`;
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body is-loading';
       body.textContent = 'Loading suggestions\u2026';
@@ -5089,15 +5363,17 @@ def render_html(
         document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-value]:checked')
       ).map(cb => String(cb.dataset.value || '').trim()).filter(Boolean);
       const custom = _rejectionCustomTerms.map(item => String(item.value || '').trim()).filter(Boolean);
-      return [...new Set([...selected, ...custom])];
+      const pendingInput = String(document.getElementById('rejection-other-input')?.value || '').trim();
+      return [...new Set([...selected, ...custom, ...(pendingInput ? [pendingInput] : [])])];
     }}
 
     function _rejRenderSuggestions(groups) {{
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body';
       const items = _rejSuggestionItems(groups);
+      updateRejectionFirstUseNote(items[0]?.value || '');
       if (items.length === 0) {{
-        body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No suggestions found. Use the field below to add your own blocker.</p>';
+        body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No strong required terms found. Add one below if this role clearly depends on something you want to avoid.</p>';
         return;
       }}
       const chips = items.map(item => {{
@@ -5109,7 +5385,7 @@ def render_html(
       }}).join('');
       body.innerHTML =
         `<div class="rejection-group">` +
-        `<div class="rejection-group-label">Suggested blockers</div>` +
+        `<div class="rejection-group-label">Suggested required terms</div>` +
         `<div class="rejection-chips">${{chips}}</div>` +
         `</div>`;
       body.querySelectorAll('input[type=checkbox]').forEach(cb => {{
@@ -5123,10 +5399,15 @@ def render_html(
       document.querySelector('.rejection-other')?.setAttribute('hidden', '');
       document.getElementById('rejection-btn-save').textContent = 'Add Title Blocks';
       document.getElementById('rejection-btn-skip').textContent = 'Continue Without Title Blocks';
+      document.getElementById('rejection-btn-skip').removeAttribute('hidden');
       document.getElementById('rejection-btn-cancel').setAttribute('hidden', '');
       const headerCopy = document.querySelector('#rejection-panel .rejection-panel-header p');
       if (headerCopy) {{
         headerCopy.textContent = 'Optional next step. Only block by title if the title alone is enough to reject future roles.';
+      }}
+      const firstUseNote = document.getElementById('rejection-first-use');
+      if (firstUseNote) {{
+        firstUseNote.hidden = true;
       }}
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body';
@@ -5294,21 +5575,10 @@ def render_html(
     document.getElementById('rejection-btn-save').addEventListener('click', _rejSaveAndContinue);
 
     document.getElementById('rejection-btn-skip').addEventListener('click', () => {{
-      const btn = _rejectionPendingButton;
       if (_rejectionStage === 'title_followup') {{
         _rejCompleteReview({{
           message: 'Saved blocker feedback without adding title blocks.',
         }}).catch(() => {{}});
-        return;
-      }}
-      closeRejectionPanel();
-      if (!btn) return;
-
-      const card = btn.closest('.job-card');
-      if (card) {{
-        card.dataset.reviewDismissed = '1';
-        card.classList.add('is-reviewed');
-        applyDashboardControls();
       }}
     }});
 
