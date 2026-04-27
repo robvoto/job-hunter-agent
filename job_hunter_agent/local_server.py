@@ -13,7 +13,6 @@ from job_hunter_agent.filters import build_title_block_rule, normalize_title_blo
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import DATA_DIR, DOCS_DIR, OUTPUT_DIR, REPO_ROOT, TEMPLATES_DIR
-from job_hunter_agent.profile_learning import build_learning_patch, merge_capability_rules, repair_text
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_capability_rules, normalize_search_settings, patch_profile, save_profile
 from job_hunter_agent.profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
@@ -263,76 +262,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
         ).start()
 
     @staticmethod
-    def _combine_text_sections(*sections: str) -> str:
-        cleaned: list[str] = []
-        seen: set[str] = set()
-        for section in sections:
-            value = repair_text(str(section or ""))
-            if not value:
-                continue
-            normalized = value.lower()
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            cleaned.append(value)
-        return "\n\n".join(cleaned).strip()
-
-    @staticmethod
-    def _merge_profile_learning_patch(current: dict, patch: dict, raw_text: str) -> dict:
-        merged_patch = dict(patch or {})
-        current = current or load_profile()
-
-        imported_summary = str(merged_patch.get("candidate_summary") or "").strip()
-        existing_summary = str(current.get("candidate_summary") or "").strip()
-        default_summary = str(DEFAULT_PROFILE.get("candidate_summary") or "").strip()
-        if imported_summary and existing_summary and existing_summary != default_summary:
-            merged_patch.pop("candidate_summary", None)
-
-        if merged_patch.get("capability_profile_rules"):
-            merged_patch["capability_profile_rules"] = merge_capability_rules(
-                merge_capability_rules(
-                    DEFAULT_PROFILE.get("capability_profile_rules", []),
-                    current.get("capability_profile_rules", []),
-                ),
-                merged_patch.get("capability_profile_rules", []),
-            )
-
-
-        merged_cv_text = SettingsHandler._combine_text_sections(current.get("cv_text", ""), raw_text)
-        if merged_cv_text:
-            merged_patch["cv_text"] = merged_cv_text
-            current_tiers = get_evidence_tiers(current)
-            inferred_tiers = build_evidence_tiers_from_sections([{"label": "Settings Input", "text": raw_text}])
-            merged_patch["evidence_tiers"] = {
-                "primary_current_evidence": SettingsHandler._combine_text_sections(
-                    current_tiers.get("primary_current_evidence", ""),
-                    inferred_tiers.get("primary_current_evidence", ""),
-                ),
-                "secondary_older_evidence": SettingsHandler._combine_text_sections(
-                    current_tiers.get("secondary_older_evidence", ""),
-                    inferred_tiers.get("secondary_older_evidence", ""),
-                ),
-                "background_optional_evidence": SettingsHandler._combine_text_sections(
-                    current_tiers.get("background_optional_evidence", ""),
-                    inferred_tiers.get("background_optional_evidence", ""),
-                ),
-            }
-
-        final_rules = merged_patch.get("capability_profile_rules") or current.get("capability_profile_rules", [])
-        brief_mode = str(
-            merged_patch.get("llm_profile_brief_mode", current.get("llm_profile_brief_mode", "auto")) or "auto"
-        ).strip().lower()
-        if brief_mode != "manual":
-            llm_profile_brief = build_llm_profile_brief(
-                capability_rules=final_rules,
-            )
-            if llm_profile_brief:
-                merged_patch["llm_profile_brief"] = llm_profile_brief
-            merged_patch["llm_profile_brief_mode"] = "auto"
-
-        return merged_patch
-
-    @staticmethod
     def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:
         normalized = dict(patch or {})
         current = current or load_profile()
@@ -389,24 +318,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
             json.dumps(history, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
-    @staticmethod
-    def _apply_learning_text(text: str) -> dict:
-        cleaned = repair_text(text)
-        if not cleaned:
-            raise ValueError("No learning text provided")
-        current = load_profile()
-        onboarding_settings = current.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
-        patch = build_learning_patch(cleaned, onboarding_settings=onboarding_settings)
-        if not patch:
-            raise ValueError("Could not extract structured learning from that text")
-        patch = SettingsHandler._merge_profile_learning_patch(current, patch, cleaned)
-        profile = patch_profile(patch)
-        return {
-            "ok": True,
-            "message": "Learning update applied to profile.json.",
-            "profile": profile,
-        }
 
     @staticmethod
     def _sanitize_agent_settings_payload(payload: dict) -> dict:
@@ -734,6 +645,11 @@ class SettingsHandler(BaseHTTPRequestHandler):
         return cleaned[:80]
 
     @staticmethod
+    def _normalize_description_block_phrase(value: str) -> str:
+        cleaned = re.sub(r"\s+", " ", str(value or "").strip().lower())
+        return cleaned[:120]
+
+    @staticmethod
     def _load_rejection_rules() -> list:
         if not REJECTION_RULES_PATH.exists():
             return []
@@ -874,6 +790,180 @@ class SettingsHandler(BaseHTTPRequestHandler):
         return suggestions[:4]
 
     @classmethod
+    def _build_description_block_followups(cls, blockers: list[str]) -> list[dict[str, Any]]:
+        profile = load_profile()
+        existing_phrases = {
+            cls._normalize_description_block_phrase(str(rule.get("phrase") or ""))
+            for rule in profile.get("reject_description_phrase_rules", [])
+            if isinstance(rule, dict)
+        }
+        audit_rows = cls._load_audit_rows()
+        history = cls._load_job_history()
+        suggestions: list[dict[str, Any]] = []
+        seen_phrases: set[str] = set()
+
+        for blocker in blockers:
+            phrase = cls._normalize_description_block_phrase(blocker)
+            if len(phrase) < 3 or phrase in seen_phrases or phrase in existing_phrases:
+                continue
+            seen_phrases.add(phrase)
+
+            rejected_keys: set[str] = set()
+            kept_keys: set[str] = set()
+            rejected_examples: list[dict[str, str]] = []
+            kept_examples: list[dict[str, str]] = []
+
+            for row in audit_rows:
+                if not isinstance(row, dict):
+                    continue
+                details_text = str(row.get("full_description") or row.get("fit_source_text") or "").strip().lower()
+                if not details_text or phrase not in details_text:
+                    continue
+                job_key = cls._normalize_job_key(str(row.get("job_key") or row.get("url") or row.get("title") or phrase))
+                item = {
+                    "title": str(row.get("title") or "").strip(),
+                    "company": str(row.get("company") or "").strip(),
+                }
+                if str(row.get("decision") or "").strip().upper() == "KEEP":
+                    if job_key and job_key in kept_keys:
+                        continue
+                    if job_key:
+                        kept_keys.add(job_key)
+                    if len(kept_examples) < 3:
+                        kept_examples.append(item)
+                    continue
+                if job_key and job_key in rejected_keys:
+                    continue
+                if job_key:
+                    rejected_keys.add(job_key)
+                if len(rejected_examples) < 3:
+                    rejected_examples.append(item)
+
+            for raw_key, entry in history.items():
+                if not isinstance(entry, dict):
+                    continue
+                if int(entry.get("times_kept", 0) or 0) <= 0:
+                    continue
+                snapshot = entry.get("last_kept_snapshot") if isinstance(entry.get("last_kept_snapshot"), dict) else {}
+                details_text = str(snapshot.get("full_description") or snapshot.get("fit_source_text") or "").strip().lower()
+                if not details_text or phrase not in details_text:
+                    continue
+                job_key = cls._normalize_job_key(str(raw_key))
+                if job_key and job_key in kept_keys:
+                    continue
+                if job_key:
+                    kept_keys.add(job_key)
+                if len(kept_examples) < 3:
+                    kept_examples.append({
+                        "title": str(snapshot.get("title") or entry.get("title") or "").strip(),
+                        "company": str(snapshot.get("company") or entry.get("company") or "").strip(),
+                    })
+
+            rejected_count = len(rejected_keys) or len(rejected_examples)
+            kept_count = len(kept_keys) or len(kept_examples)
+            if rejected_count < 2 or kept_count > 0:
+                continue
+
+            suggestions.append(
+                {
+                    "phrase": phrase,
+                    "matched_rejected_count": rejected_count,
+                    "matched_kept_count": kept_count,
+                    "sample_rejected_titles": rejected_examples,
+                    "sample_kept_titles": kept_examples,
+                }
+            )
+
+        suggestions.sort(
+            key=lambda item: (
+                -int(item.get("matched_rejected_count", 0) or 0),
+                str(item.get("phrase") or ""),
+            )
+        )
+        return suggestions[:4]
+
+    @classmethod
+    def _save_description_block_feedback(
+        cls,
+        job_key: str,
+        url: str = "",
+        title: str = "",
+        company: str = "",
+        teaser: str = "",
+        block_phrases: list[str] | None = None,
+    ) -> dict[str, Any]:
+        normalized = cls._normalize_job_key(job_key or url)
+        if not normalized:
+            raise ValueError("Missing job key")
+
+        resolved: list[str] = []
+        seen_phrases: set[str] = set()
+        for raw in block_phrases or []:
+            phrase = cls._normalize_description_block_phrase(raw)
+            if len(phrase) < 3 or phrase in seen_phrases:
+                continue
+            seen_phrases.add(phrase)
+            resolved.append(phrase)
+        if not resolved:
+            raise ValueError("At least one description block phrase is required")
+
+        profile = load_profile()
+        existing = list(profile.get("reject_description_phrase_rules", []))
+        existing_phrases = {
+            cls._normalize_description_block_phrase(str(item.get("phrase") or ""))
+            for item in existing
+            if isinstance(item, dict)
+        }
+
+        added_rules: list[dict[str, str]] = []
+        skipped_phrases: list[str] = []
+        for phrase in resolved:
+            if phrase in existing_phrases:
+                skipped_phrases.append(phrase)
+                continue
+            existing_phrases.add(phrase)
+            added_rules.append({
+                "phrase": phrase,
+                "reason": f"DESC_REJECT:{phrase}",
+            })
+
+        if added_rules:
+            profile["reject_description_phrase_rules"] = existing + added_rules
+            save_profile(profile)
+            cls._rebuild_dashboard_after_rule_change(
+                f"description phrase rule added for {', '.join(resolved)}"
+            )
+
+        cls._persist_review_event(
+            "block_description",
+            normalized,
+            url=url,
+            title=title,
+            company=company,
+            teaser=teaser,
+            extra={
+                "description_phrases_added": [rule["phrase"] for rule in added_rules],
+                "description_phrases_skipped": skipped_phrases,
+            },
+        )
+
+        if added_rules and skipped_phrases:
+            message = f"Added {len(added_rules)} description block phrase(s). {len(skipped_phrases)} already existed."
+        elif added_rules:
+            message = f"Added {len(added_rules)} description block phrase(s)."
+        else:
+            message = "All selected description block phrases already existed."
+
+        return {
+            "ok": True,
+            "action": "block_description",
+            "job_key": normalized,
+            "block_phrases": resolved,
+            "rules_added": added_rules,
+            "message": message,
+        }
+
+    @classmethod
     def _save_requirement_blockers_feedback(
         cls,
         job_key: str,
@@ -883,6 +973,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
         teaser: str = "",
         blockers: list[str] | None = None,
         title_block_phrases: list[str] | None = None,
+        description_block_phrases: list[str] | None = None,
     ) -> dict[str, Any]:
         normalized = cls._normalize_job_key(job_key or url)
         if not normalized:
@@ -924,7 +1015,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
             save_profile(profile)
 
         title_result: dict[str, Any] | None = None
+        description_result: dict[str, Any] | None = None
         applied_title_block_phrases: list[str] = []
+        applied_description_block_phrases: list[str] = []
         if title_block_phrases:
             title_result = cls._save_block_similar_feedback(
                 normalized,
@@ -935,6 +1028,16 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 block_phrases=title_block_phrases,
             )
             applied_title_block_phrases = list(title_result.get("block_phrases") or [])
+        if description_block_phrases:
+            description_result = cls._save_description_block_feedback(
+                normalized,
+                url=url,
+                title=title,
+                company=company,
+                teaser=teaser,
+                block_phrases=description_block_phrases,
+            )
+            applied_description_block_phrases = list(description_result.get("block_phrases") or [])
 
         if added_blockers:
             cls._persist_review_event(
@@ -947,6 +1050,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 extra={
                     "blockers_added": added_blockers,
                     "title_block_phrases": applied_title_block_phrases,
+                    "description_block_phrases": applied_description_block_phrases,
                 },
             )
         elif skipped_blockers:
@@ -960,15 +1064,19 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 extra={
                     "blockers_skipped": skipped_blockers,
                     "title_block_phrases": applied_title_block_phrases,
+                    "description_block_phrases": applied_description_block_phrases,
                 },
             )
-
-        title_rules_added = list(title_result.get("rules_added") or []) if isinstance(title_result, dict) else []
 
         title_block_suggestions = (
             []
             if applied_title_block_phrases
             else cls._build_title_block_followups(cleaned_blockers)
+        )
+        description_block_suggestions = (
+            []
+            if applied_description_block_phrases
+            else cls._build_description_block_followups(cleaned_blockers)
         )
 
         message_bits: list[str] = []
@@ -986,10 +1094,16 @@ class SettingsHandler(BaseHTTPRequestHandler):
             message_bits.append(
                 f"Added {len(applied_title_block_phrases)} {noun} for stronger early filtering."
             )
-        elif title_block_suggestions:
-            noun = "title block" if len(title_block_suggestions) == 1 else "title blocks"
+        if applied_description_block_phrases:
+            noun = "description block" if len(applied_description_block_phrases) == 1 else "description blocks"
             message_bits.append(
-                f"{len(title_block_suggestions)} optional {noun} also has strong evidence from past rejections."
+                f"Added {len(applied_description_block_phrases)} hard {noun} for future runs."
+            )
+        followup_suggestion_count = len(title_block_suggestions) + len(description_block_suggestions)
+        if followup_suggestion_count:
+            noun = "extra block" if followup_suggestion_count == 1 else "extra blocks"
+            message_bits.append(
+                f"{followup_suggestion_count} optional {noun} also has strong evidence from past rejections."
             )
 
         return {
@@ -998,7 +1112,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
             "added_blockers": added_blockers,
             "skipped_blockers": skipped_blockers,
             "title_block_suggestions": title_block_suggestions,
+            "description_block_suggestions": description_block_suggestions,
             "applied_title_block_phrases": applied_title_block_phrases,
+            "applied_description_block_phrases": applied_description_block_phrases,
             "message": " ".join(message_bits).strip() or "Requirement blockers saved.",
         }
 
@@ -1444,15 +1560,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if self.path == "/api/learning":
-            try:
-                payload = self._read_json_body()
-                result = self._apply_learning_text(str(payload.get("text") or ""))
-            except Exception as exc:
-                self._send_json(400, {"error": str(exc)})
-                return
-            self._send_json(200, result)
-            return
         if self.path == "/api/onboarding/import":
             try:
                 payload = self._read_json_body()
@@ -1562,12 +1669,17 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 payload = self._read_json_body()
                 blockers = payload.get("blockers", [])
                 title_block_phrases = payload.get("title_block_phrases", [])
+                description_block_phrases = payload.get("description_block_phrases", [])
                 if not isinstance(blockers, list):
                     raise ValueError("blockers must be a list")
                 if title_block_phrases is None:
                     title_block_phrases = []
+                if description_block_phrases is None:
+                    description_block_phrases = []
                 if not isinstance(title_block_phrases, list):
                     raise ValueError("title_block_phrases must be a list")
+                if not isinstance(description_block_phrases, list):
+                    raise ValueError("description_block_phrases must be a list")
                 result = self._save_requirement_blockers_feedback(
                     str(payload.get("job_id") or payload.get("job_key") or "").strip(),
                     url=str(payload.get("url") or "").strip(),
@@ -1576,6 +1688,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     teaser=str(payload.get("teaser") or "").strip(),
                     blockers=[str(item or "") for item in blockers],
                     title_block_phrases=[str(item or "") for item in title_block_phrases],
+                    description_block_phrases=[str(item or "") for item in description_block_phrases],
                 )
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})

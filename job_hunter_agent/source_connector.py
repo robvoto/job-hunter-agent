@@ -4400,7 +4400,7 @@ def render_html(
     </div>
     <div class="rejection-panel-footer">
       <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
-      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button" hidden>Continue Without Title Blocks</button>
+      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button" hidden>Continue Without Extra Blocks</button>
       <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
       <p class="block-admin-tip" style="width:100%;text-align:center;margin-top:2px;">View and edit saved rules in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>
     </div>
@@ -5285,6 +5285,7 @@ def render_html(
     let _rejectionStage = 'select';
     let _rejectionSavedBlockers = [];
     let _rejectionTitleSuggestions = [];
+    let _rejectionDescriptionSuggestions = [];
 
     const _rejVisibleSuggestionCategories = new Set([
       'other',
@@ -5304,9 +5305,10 @@ def render_html(
       _rejectionStage = 'select';
       _rejectionSavedBlockers = [];
       _rejectionTitleSuggestions = [];
+      _rejectionDescriptionSuggestions = [];
       document.getElementById('rejection-btn-save').textContent = 'Save & Continue';
       document.getElementById('rejection-btn-save').disabled = true;
-      document.getElementById('rejection-btn-skip').textContent = 'Continue Without Title Blocks';
+      document.getElementById('rejection-btn-skip').textContent = 'Continue Without Extra Blocks';
       document.getElementById('rejection-btn-skip').setAttribute('hidden', '');
       document.getElementById('rejection-btn-cancel').removeAttribute('hidden');
       document.querySelector('.rejection-other')?.removeAttribute('hidden');
@@ -5393,17 +5395,18 @@ def render_html(
       }});
     }}
 
-    function _rejRenderTitleFollowup(payload) {{
-      _rejectionStage = 'title_followup';
+    function _rejRenderBlockFollowup(payload) {{
+      _rejectionStage = 'block_followup';
       _rejectionTitleSuggestions = Array.isArray(payload?.title_block_suggestions) ? payload.title_block_suggestions : [];
+      _rejectionDescriptionSuggestions = Array.isArray(payload?.description_block_suggestions) ? payload.description_block_suggestions : [];
       document.querySelector('.rejection-other')?.setAttribute('hidden', '');
-      document.getElementById('rejection-btn-save').textContent = 'Add Title Blocks';
-      document.getElementById('rejection-btn-skip').textContent = 'Continue Without Title Blocks';
+      document.getElementById('rejection-btn-save').textContent = 'Apply Extra Blocks';
+      document.getElementById('rejection-btn-skip').textContent = 'Continue Without Extra Blocks';
       document.getElementById('rejection-btn-skip').removeAttribute('hidden');
       document.getElementById('rejection-btn-cancel').setAttribute('hidden', '');
       const headerCopy = document.querySelector('#rejection-panel .rejection-panel-header p');
       if (headerCopy) {{
-        headerCopy.textContent = 'Optional next step. Only block by title if the title alone is enough to reject future roles.';
+        headerCopy.textContent = 'Optional next step. Only add extra blocks when they are safe to reject without more context.';
       }}
       const firstUseNote = document.getElementById('rejection-first-use');
       if (firstUseNote) {{
@@ -5411,7 +5414,32 @@ def render_html(
       }}
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body';
-      const cards = _rejectionTitleSuggestions.map(item => {{
+      const descriptionCards = _rejectionDescriptionSuggestions.map(item => {{
+        const phrase = _rejEscapeHtml(item.phrase || '');
+        const rejectedCount = Number(item.matched_rejected_count || 0);
+        const rejectedExamples = Array.isArray(item.sample_rejected_titles) ? item.sample_rejected_titles : [];
+        const examplesHtml = rejectedExamples.length
+          ? `<ul>${{rejectedExamples.map(example => `<li>${{_rejEscapeHtml(example.title || 'Untitled role')}}${{example.company ? ` - ${{_rejEscapeHtml(example.company)}}` : ''}}</li>`).join('')}}</ul>`
+          : '<p>No sample roles saved yet.</p>';
+        return `
+          <div class="rejection-group">
+            <div class="rejection-chip" style="display:flex;align-items:flex-start;width:100%;border-radius:14px;padding:10px 12px;">
+              <label style="display:flex;gap:8px;align-items:flex-start;width:100%;cursor:pointer;">
+                <input type="checkbox" data-description-followup="1" data-phrase="${{phrase}}" />
+                <span>
+                  <strong>${{phrase}}</strong><br>
+                  <span style="color:var(--muted);font-size:0.8rem;">Matched ${{rejectedCount}} rejected description${{rejectedCount === 1 ? '' : 's'}} and no kept roles.</span>
+                </span>
+              </label>
+            </div>
+            <div style="margin:6px 0 0 26px;color:var(--muted);font-size:0.82rem;">
+              <strong style="color:var(--ink);font-size:0.82rem;">Examples</strong>
+              ${{examplesHtml}}
+            </div>
+          </div>
+        `;
+      }}).join('');
+      const titleCards = _rejectionTitleSuggestions.map(item => {{
         const phrase = _rejEscapeHtml(item.phrase || '');
         const rejectedCount = Number(item.matched_rejected_count || 0);
         const rejectedExamples = Array.isArray(item.sample_rejected_titles) ? item.sample_rejected_titles : [];
@@ -5436,21 +5464,35 @@ def render_html(
           </div>
         `;
       }}).join('');
-      body.innerHTML =
-        `<div class="rejection-group">` +
-        `<div class="rejection-group-label">Optional title blocks</div>` +
-        `<p style="margin:0 0 10px;color:var(--muted);font-size:0.84rem;">These terms also look strong enough to block at the title level before the app reads the description.</p>` +
-        `${{cards}}` +
-        `</div>`;
-      body.querySelectorAll('input[type=checkbox][data-title-followup]').forEach(cb => {{
+      const sections = [];
+      if (descriptionCards) {{
+        sections.push(
+          `<div class="rejection-group">` +
+          `<div class="rejection-group-label">Optional hard description blocks</div>` +
+          `<p style="margin:0 0 10px;color:var(--muted);font-size:0.84rem;">These phrases only appeared in rejected descriptions, so they can be blocked anywhere in future job descriptions.</p>` +
+          `${{descriptionCards}}` +
+          `</div>`
+        );
+      }}
+      if (titleCards) {{
+        sections.push(
+          `<div class="rejection-group">` +
+          `<div class="rejection-group-label">Optional title blocks</div>` +
+          `<p style="margin:0 0 10px;color:var(--muted);font-size:0.84rem;">These terms also look strong enough to block at the title level before the app reads the description.</p>` +
+          `${{titleCards}}` +
+          `</div>`
+        );
+      }}
+      body.innerHTML = sections.join('');
+      body.querySelectorAll('input[type=checkbox][data-title-followup], input[type=checkbox][data-description-followup]').forEach(cb => {{
         cb.addEventListener('change', _rejUpdateSaveBtn);
       }});
       _rejUpdateSaveBtn();
     }}
 
     function _rejUpdateSaveBtn() {{
-      if (_rejectionStage === 'title_followup') {{
-        const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox][data-title-followup]:checked');
+      if (_rejectionStage === 'block_followup') {{
+        const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox][data-title-followup]:checked, #rejection-panel-body input[type=checkbox][data-description-followup]:checked');
         document.getElementById('rejection-btn-save').disabled = !anyChecked;
         return;
       }}
@@ -5467,7 +5509,7 @@ def render_html(
       _rejResetPanelChrome();
     }}
 
-    async function _rejPersistMandatoryBlockers(blockers, titleBlockPhrases = []) {{
+    async function _rejPersistMandatoryBlockers(blockers, titleBlockPhrases = [], descriptionBlockPhrases = []) {{
       const button = _rejectionPendingButton;
       const response = await fetch(`${{API_BASE_URL}}/api/rejection-feedback/mandatory-blockers`, {{
         method: 'POST',
@@ -5480,6 +5522,7 @@ def render_html(
           teaser: button?.dataset.jobTeaser || '',
           blockers,
           title_block_phrases: titleBlockPhrases,
+          description_block_phrases: descriptionBlockPhrases,
         }}),
       }});
       const payload = await response.json().catch(() => ({{}}));
@@ -5489,7 +5532,7 @@ def render_html(
       return payload;
     }}
 
-    async function _rejCompleteReview(result, titleBlockPhrases = []) {{
+    async function _rejCompleteReview(result, titleBlockPhrases = [], descriptionBlockPhrases = []) {{
       const button = _rejectionPendingButton;
       const successMessage = result?.message || 'Saved blocker feedback.';
       closeRejectionPanel();
@@ -5503,14 +5546,25 @@ def render_html(
       const saveButton = document.getElementById('rejection-btn-save');
       const originalLabel = saveButton.textContent;
       saveButton.disabled = true;
-      saveButton.textContent = _rejectionStage === 'title_followup' ? 'Saving…' : 'Saving blockers…';
+      saveButton.textContent = _rejectionStage === 'block_followup' ? 'Saving…' : 'Saving blockers…';
       try {{
-        if (_rejectionStage === 'title_followup') {{
+        if (_rejectionStage === 'block_followup') {{
           const selectedTitlePhrases = Array.from(
             document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-title-followup]:checked')
           ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
-          const result = await _rejPersistMandatoryBlockers(_rejectionSavedBlockers, selectedTitlePhrases);
-          await _rejCompleteReview(result, result?.applied_title_block_phrases || selectedTitlePhrases);
+          const selectedDescriptionPhrases = Array.from(
+            document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-description-followup]:checked')
+          ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
+          const result = await _rejPersistMandatoryBlockers(
+            _rejectionSavedBlockers,
+            selectedTitlePhrases,
+            selectedDescriptionPhrases,
+          );
+          await _rejCompleteReview(
+            result,
+            result?.applied_title_block_phrases || selectedTitlePhrases,
+            result?.applied_description_block_phrases || selectedDescriptionPhrases,
+          );
           return;
         }}
 
@@ -5520,8 +5574,11 @@ def render_html(
         }}
         _rejectionSavedBlockers = blockers;
         const result = await _rejPersistMandatoryBlockers(blockers);
-        if (Array.isArray(result?.title_block_suggestions) && result.title_block_suggestions.length) {{
-          _rejRenderTitleFollowup(result);
+        const hasFollowups =
+          (Array.isArray(result?.title_block_suggestions) && result.title_block_suggestions.length) ||
+          (Array.isArray(result?.description_block_suggestions) && result.description_block_suggestions.length);
+        if (hasFollowups) {{
+          _rejRenderBlockFollowup(result);
           return;
         }}
         await _rejCompleteReview(result);
@@ -5575,9 +5632,9 @@ def render_html(
     document.getElementById('rejection-btn-save').addEventListener('click', _rejSaveAndContinue);
 
     document.getElementById('rejection-btn-skip').addEventListener('click', () => {{
-      if (_rejectionStage === 'title_followup') {{
+      if (_rejectionStage === 'block_followup') {{
         _rejCompleteReview({{
-          message: 'Saved blocker feedback without adding title blocks.',
+          message: 'Saved blocker feedback without adding extra blocks.',
         }}).catch(() => {{}});
       }}
     }});

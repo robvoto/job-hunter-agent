@@ -118,12 +118,10 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 def _choice_label(choice: str) -> str:
     labels = {
-        "no_knowledge": "No knowledge",
-        "basic_only": "Basic only",
-        "working_knowledge": "Working knowledge",
-        "strong": "Strong",
-        "avoid": "Avoid",
-        "not_core_but_acceptable": "Not core but acceptable",
+        "core_skill": "Core skill",
+        "useful_support": "Useful support",
+        "background_only": "Background only",
+        "not_for_me": "Not for me",
     }
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
@@ -135,12 +133,13 @@ def _current_rule_label(rule: dict[str, Any] | None) -> str:
     fit = str(rule.get("fit") or "").strip().lower()
     if not level and not fit:
         return "Unclassified"
-    parts = []
-    if fit:
-        parts.append(fit)
-    if level:
-        parts.append(level)
-    return " / ".join(parts)
+    if fit == "avoid" or level == "none":
+        return "Not for me"
+    if fit == "core":
+        return "Core skill"
+    if fit == "supporting":
+        return "Useful support"
+    return "Background only"
 
 
 def build_capability_tuning_suggestions(
@@ -202,9 +201,9 @@ def build_capability_tuning_suggestions(
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
         if count >= 5:
-            recommended_choice = "working_knowledge"
+            recommended_choice = "useful_support"
         else:
-            recommended_choice = "not_core_but_acceptable"
+            recommended_choice = "background_only"
         headline = f"Classify {skill} as a known capability signal"
         detail = f"Seen in {count} kept role(s) and still unclassified."
 
@@ -389,21 +388,18 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
         if not normalized or not choice:
             continue
 
-        if choice in {"no_knowledge", "avoid"}:
+        if choice == "not_for_me":
             level = "none"
             fit = "avoid"
-        elif choice == "basic_only":
+        elif choice == "background_only":
             level = "basic"
             fit = "contextual"
-        elif choice == "working_knowledge":
-            level = "working"
-            fit = "supporting"
-        elif choice == "strong":
+        elif choice == "core_skill":
             level = "strong"
-            fit = "supporting"
-        elif choice == "not_core_but_acceptable":
+            fit = "core"
+        elif choice == "useful_support":
             level = "working"
-            fit = "contextual"
+            fit = "supporting"
         else:
             continue
 
