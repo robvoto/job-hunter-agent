@@ -119,10 +119,10 @@ Then open the dashboard at:
 
 The dashboard groups jobs by their calculated fit score:
 
-- **Strong match** (80-100): High alignment with core capabilities and experience.
-- **Good match** (65-79): Solid alignment, perhaps missing secondary criteria.
-- **Worth a look** (50-64): Borderline fit or adjacent role.
-- **Stretch** (0-49): Low alignment or significant requirement gaps.
+- **Strong match** (85-100): High alignment with core capabilities and experience.
+- **Good match** (70-84): Solid alignment, perhaps missing secondary criteria.
+- **Possible fit** (55-69): Borderline fit or adjacent role.
+- **Stretch** (0-54): Low alignment or significant requirement gaps.
 
 The dashboard groups jobs into:
 
@@ -136,6 +136,14 @@ The dashboard can filter by:
 - posted age
 - work mode
 - salary state
+
+## Improving Accuracy (Rejection Learning)
+
+If the agent keeps suggesting roles with a specific requirement you don't have (e.g., a specific security clearance or software tool), use the **Not For Me** button on the job card.
+
+- It will prompt you to select the "mandatory blockers" found in that job description.
+- Once saved, the agent learns to automatically reject future roles that list those terms as mandatory requirements.
+- You can review and delete these rules in the **Settings > Review** tab.
 
 ## LLM Use
 

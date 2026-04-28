@@ -33,6 +33,10 @@ from job_hunter_agent.filters import (
     suggest_title_block_phrase,
     suggest_title_block_phrases,
 )
+from job_hunter_agent.job_identity import (
+    deduplicate_across_sources,
+    find_similar_job,
+)
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from job_hunter_agent.profile_store import (
     get_evidence_tier_weights,
@@ -576,16 +580,6 @@ def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
         phrase = compact_whitespace(str(rule.get("phrase") or "")).lower()
         if phrase and phrase in lowered:
             watchouts.append(f"Blocked description phrase appears: {phrase}")
-
-    for rule in profile.get("reject_description_regex_rules", []):
-        pattern = str(rule.get("pattern") or "")
-        if not pattern:
-            continue
-        try:
-            if re.search(pattern, lowered):
-                watchouts.append("Blocked description pattern appears")
-        except re.error:
-            continue
 
     return dedupe_preserve_order(watchouts)[:4]
 
@@ -1596,7 +1590,7 @@ def score_to_match_label(score: int) -> str:
     if score >= 70:
         return "Good match"
     if score >= 55:
-        return "Possible fit"
+        return "Worth a look"
     return "Stretch"
 
 
@@ -2370,7 +2364,7 @@ def build_dashboard_record_sets(
     }
 
 
-def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str:
+def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applied_pool: Optional[List[dict]] = None) -> str:
     active_profile = scoring_profile or load_profile()
     display_record = dict(record)
     
@@ -2420,6 +2414,13 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         soft_risk_reasons = []
         missing_evidence = [DESCRIPTION_CAPTURE_ISSUE]
         blocking_reasons = []
+
+    similar_applied_record = None
+    is_possible_repost = False
+    if not applied_record and applied_pool:
+        similar_applied_record = find_similar_job(record, applied_pool)
+        is_possible_repost = similar_applied_record is not None
+
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
@@ -2443,6 +2444,15 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     _block_phrases_list = suggest_title_block_phrases(str(record.get("title") or ""))
     block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
     block_phrases_json = safe_html(json.dumps(_block_phrases_list))
+    similar_applied_title = safe_html(str((similar_applied_record or {}).get("title") or ""))
+    similar_applied_company = safe_html(str((similar_applied_record or {}).get("company") or ""))
+    similar_applied_source = str((similar_applied_record or {}).get("source") or "").lower().strip()
+    similar_applied_source_label = safe_html(
+        {"linkedin": "LinkedIn", "seek": "SEEK"}.get(similar_applied_source, similar_applied_source.upper())
+        if similar_applied_source
+        else ""
+    )
+    similar_applied_job_key = safe_html(str((similar_applied_record or {}).get("job_key") or ""))
     button_data_attrs = (
         f'data-job-key="{job_key}" '
         f'data-job-url="{url}" '
@@ -2450,7 +2460,12 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         f'data-job-company="{company_attr}" '
         f'data-job-teaser="{teaser_attr}" '
         f'data-role-sector="{safe_html(sector_signal.get("kind") or "unknown")}" '
-        f'data-posting-channel="{safe_html(channel_signal.get("kind") or "unknown")}"'
+        f'data-posting-channel="{safe_html(channel_signal.get("kind") or "unknown")}" '
+        f'data-similar-applied-warning="{"1" if is_possible_repost else "0"}" '
+        f'data-similar-applied-job-key="{similar_applied_job_key}" '
+        f'data-similar-applied-title="{similar_applied_title}" '
+        f'data-similar-applied-company="{similar_applied_company}" '
+        f'data-similar-applied-source="{similar_applied_source_label}"'
     )
 
     source = str(record.get("source") or "unknown").lower().strip()
@@ -2461,6 +2476,8 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
         badges.append(render_badge("Applied", "badge-viewed", "You already applied for this role."))
     elif hidden_record:
         badges.append(render_badge("Hidden", "badge-hidden", "You hid this role for now."))
+    elif is_possible_repost:
+        badges.append(render_badge("Possible Repost", "badge-warning", "This role looks very similar to one you have already applied to."))
     elif archived:
         badges.append(render_badge("Previously Kept", "badge-archive", "This role was kept in an earlier run and carried forward into the dashboard."))
     if not applied_record and not seen_by_you:
@@ -2535,6 +2552,8 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None) -> str
     note_bits: List[str] = []
     if description_issue:
         note_bits.append("Description issue: full job description was not captured clearly.")
+    elif is_possible_repost:
+        note_bits.append("Alert: This looks like a role you already marked as applied at this company.")
     elif missing_evidence:
         note_bits.append(f"Missing evidence: {missing_evidence[0]}.")
     elif soft_risk_reasons:
@@ -2709,14 +2728,14 @@ def section_dom_id(title: str) -> str:
     return slug or "matches"
 
 
-def render_section(title: str, records: List[dict], empty_message: str, scoring_profile: Optional[dict] = None) -> str:
+def render_section(title: str, records: List[dict], empty_message: str, scoring_profile: Optional[dict] = None, applied_pool: Optional[List[dict]] = None) -> str:
     if not records:
         return (
             f'<section class="section"><h2>{safe_html(title)}</h2>'
             f'<p class="empty-state">{safe_html(empty_message)}</p></section>'
         )
     dom_id = section_dom_id(title)
-    cards = "".join(render_job_card(record, scoring_profile) for record in records)
+    cards = "".join(render_job_card(record, scoring_profile, applied_pool=applied_pool) for record in records)
     return (
         f'<section class="section job-section" data-section-id="{safe_html(dom_id)}">'
         '<div class="section-head">'
@@ -2744,11 +2763,12 @@ def load_last_kept_records() -> List[dict]:
     if not latest_run_started_at:
         return []
 
-    return [
+    records = [
         row
         for row in audit_rows
         if row.get("decision") == "KEEP" and str(row.get("run_started_at") or "") == latest_run_started_at
     ]
+    return deduplicate_across_sources(records)
 
 
 def build_run_stats(
@@ -2871,6 +2891,10 @@ def render_html(
     search_locations_label = " | ".join(search_settings_payload["locations"]) or "Not set"
     search_locations_text = "\n".join(search_settings_payload["locations"])
     search_settings_json = json.dumps(search_settings_payload, ensure_ascii=False).replace("</", "<\\/")
+    
+    li_hours = scoring_profile.get("search_settings", {}).get("linkedin_hours_old", 24)
+    li_results = scoring_profile.get("search_settings", {}).get("linkedin_results_per_search", 25)
+    
     view_history_text = "treats all roles as New To You" if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "preserves your viewed history"
     snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and {view_history_text}."
     hero_summary = (
@@ -3125,6 +3149,16 @@ def render_html(
       padding-bottom: 0;
       border-bottom: 0;
     }}
+    .snapshot-subheading {{
+      margin: 12px 0 8px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      border-bottom: 1px solid rgba(233, 221, 207, 0.5);
+      padding-bottom: 4px;
+    }}
     .snapshot-meta-label {{
       color: var(--muted);
       font-size: 0.8rem;
@@ -3254,6 +3288,10 @@ def render_html(
     }}
     .search-button:hover {{
       transform: translateY(-1px);
+    }}
+    .search-button:active {{
+      transform: translateY(0) scale(0.98);
+      opacity: 0.9;
     }}
     .search-button[disabled] {{
       opacity: 0.6;
@@ -3418,6 +3456,10 @@ def render_html(
     .scope-tab:hover {{
       transform: translateY(-1px);
     }}
+    .scope-tab:active {{
+      transform: translateY(0) scale(0.98);
+      opacity: 0.9;
+    }}
     .scope-tab.is-active {{
       color: var(--accent);
       border-color: rgba(20, 83, 45, 0.24);
@@ -3480,6 +3522,13 @@ def render_html(
       cursor: pointer;
       background: white;
       color: var(--cool);
+      transition: transform 120ms ease, opacity 120ms ease;
+    }}
+    .pagination-button:hover:not(:disabled) {{
+      transform: translateY(-1px);
+    }}
+    .pagination-button:active:not(:disabled) {{
+      transform: translateY(0) scale(0.98);
     }}
     .pagination-button[disabled] {{
       opacity: 0.5;
@@ -3909,6 +3958,13 @@ def render_html(
       font-size: 0.88rem;
       font-weight: 600;
       cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease;
+    }}
+    .rejection-btn-save:not(:disabled):hover {{
+      transform: translateY(-1px);
+    }}
+    .rejection-btn-save:not(:disabled):active {{
+      transform: translateY(0) scale(0.98);
     }}
     .rejection-btn-save:disabled {{
       opacity: 0.55;
@@ -3922,6 +3978,13 @@ def render_html(
       border-radius: 8px;
       font-size: 0.86rem;
       cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease;
+    }}
+    .rejection-btn-skip:hover {{
+      transform: translateY(-1px);
+    }}
+    .rejection-btn-skip:active {{
+      transform: translateY(0) scale(0.98);
     }}
     .rejection-btn-cancel {{
       padding: 10px 12px;
@@ -4030,6 +4093,13 @@ def render_html(
       cursor: pointer;
       background: white;
       color: var(--cool);
+      transition: transform 120ms ease, opacity 120ms ease;
+    }}
+    .mini-button:hover:not(:disabled) {{
+      transform: translateY(-1px);
+    }}
+    .mini-button:active:not(:disabled) {{
+      transform: translateY(0) scale(0.98);
     }}
     .mini-button-primary {{
       background: var(--cool);
@@ -4127,6 +4197,13 @@ def render_html(
       cursor: pointer;
       background: var(--card);
       color: var(--cool);
+      transition: transform 120ms ease, opacity 120ms ease;
+    }}
+    .toggle-button:hover:not(:disabled) {{
+      transform: translateY(-1px);
+    }}
+    .toggle-button:active:not(:disabled) {{
+      transform: translateY(0) scale(0.98);
     }}
     .toggle-button[disabled] {{
       opacity: 0.55;
@@ -4241,8 +4318,8 @@ def render_html(
             <p class="results-helper-copy">Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar titles directly from the title. This helps remove repeated noise from future results.</p>
             <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">Dismiss</button>
           </div>
-          {render_section("Matches From This Run", current_records, "No kept roles from the latest run right now.", scoring_profile)}
-          {render_section("Kept From Earlier Runs", recent_archive_records, "No roles from earlier runs are being carried forward right now.", scoring_profile)}
+          {render_section("Matches From This Run", current_records, "No kept roles from the latest run right now.", scoring_profile, applied_pool=applied_records)}
+          {render_section("Kept From Earlier Runs", recent_archive_records, "No roles from earlier runs are being carried forward right now.", scoring_profile, applied_pool=applied_records)}
           <section class="section job-section" data-section-id="older-saved">
             <div class="section-head">
               <h2>Older Previously Kept Jobs</h2>
@@ -4256,7 +4333,7 @@ def render_html(
             <p class="section-copy">Roles kept from earlier runs are collapsed here once they are more than {ARCHIVE_STALE_AFTER_DAYS} days past their last keep, so the dashboard stays focused.</p>
             <div id="older-archive" hidden>
               <div class="job-grid">
-                {''.join(render_job_card(record, scoring_profile) for record in stale_archive_records)}
+                {''.join(render_job_card(record, scoring_profile, applied_pool=applied_records) for record in stale_archive_records)}
               </div>
             </div>
             {'' if stale_archive_records else '<p class="empty-state">No older previously kept roles right now.</p>'}
@@ -4284,43 +4361,88 @@ def render_html(
       <aside class="dashboard-sidebar">
         <section class="snapshot-rail">
           <section class="snapshot-section">
-            <div class="snapshot-section-head">
-              <h2 class="snapshot-heading">Search Settings</h2>
+            <h2 class="snapshot-heading">Search Configuration</h2>
+            
+            <div class="search-settings-group" style="margin-bottom: 16px;">
+              <h3 class="snapshot-subheading">Common Settings</h3>
+              <div class="snapshot-meta">
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value" id="search_keywords_current">{safe_html(search_keywords_label)}</span></div>
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value" id="search_locations_current">{safe_html(search_locations_label)}</span></div>
+              </div>
             </div>
-            <div class="snapshot-meta search-settings-readonly">
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value" id="search_keywords_current">{safe_html(search_keywords_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value" id="search_locations_current">{safe_html(search_locations_label)}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date window</span><span class="snapshot-meta-value" id="search_date_range_current">{safe_html(str(search_settings_payload["date_range_days"]))} day{"s" if int(search_settings_payload["date_range_days"]) != 1 else ""}</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Pages cap</span><span class="snapshot-meta-value" id="search_max_pages_current">{safe_html(str(search_settings_payload["max_pages_cap"]))}</span></div>
+
+            <div class="search-settings-group" style="margin-bottom: 16px;">
+              <h3 class="snapshot-subheading">SEEK Settings</h3>
+              <div class="snapshot-meta">
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date window</span><span class="snapshot-meta-value" id="search_date_range_current">{safe_html(str(search_settings_payload["date_range_days"]))} day{"s" if int(search_settings_payload["date_range_days"]) != 1 else ""}</span></div>
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Pages cap</span><span class="snapshot-meta-value" id="search_max_pages_current">{safe_html(str(search_settings_payload["max_pages_cap"]))}</span></div>
+              </div>
             </div>
-            <div class="search-settings-actions">
-              <button class="search-button search-button-secondary" type="button" id="search_settings_toggle">Edit</button>
-              <span class="search-status-pill is-idle" id="run_status_pill" style="margin-left: auto;" title="Background scraper status">Idle</span>
+
+            <div class="search-settings-group" style="margin-bottom: 16px;">
+              <h3 class="snapshot-subheading">LinkedIn Settings</h3>
+              <div class="snapshot-meta">
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Max age</span><span class="snapshot-meta-value" id="search_li_hours_current">{safe_html(str(li_hours))} hours</span></div>
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Results cap</span><span class="snapshot-meta-value" id="search_li_results_current">{safe_html(str(li_results))}</span></div>
+              </div>
             </div>
-            <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
+
+            <div class="search-settings-actions" style="margin-top: 14px;">
+              <button class="search-button search-button-secondary" type="button" id="search_settings_toggle">Edit Configuration</button>
+            </div>
+
             <div class="search-settings-edit" id="search_settings_edit" hidden>
-              <label class="search-settings-field">
-                <span>Keywords</span>
-                <input type="text" id="search_keywords_input" value="{safe_html(search_settings_payload['keywords'])}" placeholder="Optional keywords">
-              </label>
-              <label class="search-settings-field">
-                <span>Locations</span>
-                <textarea id="search_locations_input" placeholder="One location per line">{safe_html(search_locations_text)}</textarea>
-              </label>
-              <div class="search-settings-grid">
+              <div class="search-settings-group" style="margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px;">
+                <h3 class="snapshot-subheading">Common</h3>
                 <label class="search-settings-field">
-                  <span>Date window</span>
-                  <input type="number" id="search_date_range_input" min="1" max="30" value="{safe_html(str(search_settings_payload['date_range_days']))}">
+                  <span>Keywords</span>
+                  <input type="text" id="search_keywords_input" value="{safe_html(search_settings_payload['keywords'])}" placeholder="Optional keywords">
                 </label>
                 <label class="search-settings-field">
-                  <span>Pages cap</span>
-                  <input type="number" id="search_max_pages_input" min="1" max="25" value="{safe_html(str(search_settings_payload['max_pages_cap']))}">
+                  <span>Locations</span>
+                  <textarea id="search_locations_input" placeholder="One location per line">{safe_html(search_locations_text)}</textarea>
                 </label>
               </div>
-              <div class="search-settings-actions">
-                <button class="search-button search-button-primary" type="button" id="run_now_button">Save &amp; Run</button>
+
+              <div class="search-settings-group">
+                <h3 class="snapshot-subheading">SEEK</h3>
+                <div class="search-settings-grid">
+                  <label class="search-settings-field">
+                    <span>Date window</span>
+                    <input type="number" id="search_date_range_input" min="1" max="30" value="{safe_html(str(search_settings_payload['date_range_days']))}">
+                  </label>
+                  <label class="search-settings-field">
+                    <span>Pages cap</span>
+                    <input type="number" id="search_max_pages_input" min="1" max="25" value="{safe_html(str(search_settings_payload['max_pages_cap']))}">
+                  </label>
+                </div>
+              </div>
+
+              <div class="search-settings-group">
+                <h3 class="snapshot-subheading">LinkedIn</h3>
+                <div class="search-settings-grid">
+                  <label class="search-settings-field">
+                    <span>Hours old</span>
+                    <input type="number" id="search_li_hours_input" min="1" max="168" value="{safe_html(str(li_hours))}">
+                  </label>
+                  <label class="search-settings-field">
+                    <span>Results cap</span>
+                    <input type="number" id="search_li_results_input" min="1" max="100" value="{safe_html(str(li_results))}">
+                  </label>
+                </div>
               </div>
             </div>
+          </section>
+
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">Search Operations</h2>
+            <div class="search-status-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <span class="snapshot-meta-label">Status</span>
+              <span class="search-status-pill is-idle" id="run_status_pill" title="Background scraper status">Idle</span>
+            </div>
+            <button class="search-button search-button-primary" style="width: 100%;" type="button" id="run_now_button">Run Search Now</button>
+            <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
+            <p class="snapshot-helper" style="margin-top: 10px;">Daily automation schedule and notification targets are configured in the <a href="/settings" target="_blank">Settings Console</a>.</p>
           </section>
           <section class="snapshot-section">
             <h2 class="snapshot-heading">This Run</h2>
@@ -5085,6 +5207,19 @@ def render_html(
       return 'Review action saved.';
     }}
 
+    function confirmPossibleRepostBeforeApply(button) {{
+      if (button.dataset.reviewAction !== 'applied' || button.dataset.similarAppliedWarning !== '1') {{
+        return true;
+      }}
+      const priorTitle = button.dataset.similarAppliedTitle || button.dataset.jobTitle || 'this role';
+      const priorCompany = button.dataset.similarAppliedCompany || button.dataset.jobCompany || '';
+      const priorSource = button.dataset.similarAppliedSource || 'another source';
+      const companyLabel = priorCompany ? ` at ${{priorCompany}}` : '';
+      return window.confirm(
+        `You already marked a very similar role as applied: "${{priorTitle}}"${{companyLabel}} from ${{priorSource}}.\n\nContinue marking this one as applied?`
+      );
+    }}
+
     async function saveReviewAction(button, extraPayload = {{}}, options = {{}}) {{
       const card = button.closest('.job-card');
       const status = card?.querySelector('.review-status');
@@ -5259,6 +5394,14 @@ def render_html(
       if (button.dataset.reviewAction === 'not_for_me') {{
         openRejectionPanel(button);
       }} else {{
+        if (!confirmPossibleRepostBeforeApply(button)) {{
+          const card = button.closest('.job-card');
+          const status = card?.querySelector('.review-status');
+          if (status) {{
+            status.textContent = 'Apply cancelled. This role looks very similar to one already marked as applied.';
+          }}
+          return;
+        }}
         saveReviewAction(button);
       }}
     }});
@@ -5414,6 +5557,29 @@ def render_html(
       }}
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body';
+      const selectedBlockers = Array.isArray(_rejectionSavedBlockers) ? _rejectionSavedBlockers : [];
+      const selectedBlockerKeys = new Set(selectedBlockers.map(item => String(item || '').trim().toLowerCase()).filter(Boolean));
+      const directDescriptionCards = selectedBlockers.map(blocker => {{
+        const phrase = _rejEscapeHtml(String(blocker || '').trim());
+        if (!phrase) return '';
+        return `
+          <div class="rejection-group">
+            <div class="rejection-chip" style="display:flex;align-items:flex-start;width:100%;border-radius:14px;padding:10px 12px;">
+              <label style="display:flex;gap:8px;align-items:flex-start;width:100%;cursor:pointer;">
+                <input type="checkbox" data-direct-description-followup="1" data-phrase="${{phrase}}" />
+                <span>
+                  <strong>${{phrase}}</strong><br>
+                  <span style="color:var(--muted);font-size:0.8rem;">Reject any future job that mentions this exact phrase anywhere in the description.</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        `;
+      }}).join('');
+      const filteredDescriptionSuggestions = _rejectionDescriptionSuggestions.filter(item => {{
+        const key = String(item?.phrase || '').trim().toLowerCase();
+        return key && !selectedBlockerKeys.has(key);
+      }});
       const descriptionCards = _rejectionDescriptionSuggestions.map(item => {{
         const phrase = _rejEscapeHtml(item.phrase || '');
         const rejectedCount = Number(item.matched_rejected_count || 0);
@@ -5465,6 +5631,15 @@ def render_html(
         `;
       }}).join('');
       const sections = [];
+      if (directDescriptionCards) {{
+        sections.push(
+          `<div class="rejection-group">` +
+          `<div class="rejection-group-label">Always reject exact phrase</div>` +
+          `<p style="margin:0 0 10px;color:var(--muted);font-size:0.84rem;">Use this only when any mention should reject the job, even if the term is not framed as a requirement.</p>` +
+          `${{directDescriptionCards}}` +
+          `</div>`
+        );
+      }}
       if (descriptionCards) {{
         sections.push(
           `<div class="rejection-group">` +
@@ -5484,7 +5659,7 @@ def render_html(
         );
       }}
       body.innerHTML = sections.join('');
-      body.querySelectorAll('input[type=checkbox][data-title-followup], input[type=checkbox][data-description-followup]').forEach(cb => {{
+      body.querySelectorAll('input[type=checkbox][data-title-followup], input[type=checkbox][data-description-followup], input[type=checkbox][data-direct-description-followup]').forEach(cb => {{
         cb.addEventListener('change', _rejUpdateSaveBtn);
       }});
       _rejUpdateSaveBtn();
@@ -5492,7 +5667,7 @@ def render_html(
 
     function _rejUpdateSaveBtn() {{
       if (_rejectionStage === 'block_followup') {{
-        const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox][data-title-followup]:checked, #rejection-panel-body input[type=checkbox][data-description-followup]:checked');
+        const anyChecked = document.querySelector('#rejection-panel-body input[type=checkbox][data-title-followup]:checked, #rejection-panel-body input[type=checkbox][data-description-followup]:checked, #rejection-panel-body input[type=checkbox][data-direct-description-followup]:checked');
         document.getElementById('rejection-btn-save').disabled = !anyChecked;
         return;
       }}
@@ -5553,17 +5728,21 @@ def render_html(
             document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-title-followup]:checked')
           ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
           const selectedDescriptionPhrases = Array.from(
+            document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-direct-description-followup]:checked')
+          ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
+          const suggestedDescriptionPhrases = Array.from(
             document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-description-followup]:checked')
           ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
+          const allDescriptionPhrases = [...new Set([...selectedDescriptionPhrases, ...suggestedDescriptionPhrases])];
           const result = await _rejPersistMandatoryBlockers(
             _rejectionSavedBlockers,
             selectedTitlePhrases,
-            selectedDescriptionPhrases,
+            allDescriptionPhrases,
           );
           await _rejCompleteReview(
             result,
             result?.applied_title_block_phrases || selectedTitlePhrases,
-            result?.applied_description_block_phrases || selectedDescriptionPhrases,
+            result?.applied_description_block_phrases || allDescriptionPhrases,
           );
           return;
         }}
@@ -5575,6 +5754,7 @@ def render_html(
         _rejectionSavedBlockers = blockers;
         const result = await _rejPersistMandatoryBlockers(blockers);
         const hasFollowups =
+          blockers.length > 0 ||
           (Array.isArray(result?.title_block_suggestions) && result.title_block_suggestions.length) ||
           (Array.isArray(result?.description_block_suggestions) && result.description_block_suggestions.length);
         if (hasFollowups) {{
@@ -6021,30 +6201,6 @@ def _seek_scrape_to_records(
     return kept_records, audit_rows, skill_observations
 
 
-def _deduplicate_across_sources(records: List[dict]) -> List[dict]:
-    """Remove cross-source duplicates. SEEK record wins over LinkedIn."""
-
-    def _norm(text: str) -> str:
-        return re.sub(r"\s+", " ", (text or "").lower()).strip()
-
-    def _are_same_job(a: dict, b: dict) -> bool:
-        co_a = _norm(a.get("company", ""))
-        co_b = _norm(b.get("company", ""))
-        if not co_a or co_a != co_b:
-            return False
-        words_a = set(_norm(a.get("title", "")).split())
-        words_b = set(_norm(b.get("title", "")).split())
-        if not words_a or not words_b:
-            return False
-        return len(words_a & words_b) / len(words_a | words_b) >= 0.8
-
-    seen: List[dict] = []
-    for record in records:
-        if not any(_are_same_job(record, kept) for kept in seen):
-            seen.append(record)
-    return seen
-
-
 def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = False) -> str:
     configure_console_output()
     from job_hunter_agent.llm_gate import _get_llm_model
@@ -6132,13 +6288,16 @@ def scrape_jobs_direct(max_pages_cap: int = MAX_PAGES_CAP, headless: bool = Fals
                 run_iso=run_iso,
             )
             li_kept, li_audit, li_skills = li.scrape()
-            kept_records = _deduplicate_across_sources(kept_records + li_kept)
+            kept_records.extend(li_kept)
             audit_rows.extend(li_audit)
             skill_observations.extend(li_skills)
         except Exception as exc:
             print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
 
     # --- Finalize ---
+    # Final semantic deduplication pass to collapse reposts and cross-source duplicates
+    kept_records = deduplicate_across_sources(kept_records)
+
     if not audit_rows and previous_audit_rows:
         render_html(
             OUTPUT_HTML,

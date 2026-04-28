@@ -110,7 +110,6 @@ DEFAULT_PROFILE = {
     "must_not_require_skills": [],
     "reject_title_rules": [],
     "reject_description_phrase_rules": [],
-    "reject_description_regex_rules": [],
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
     },

@@ -394,12 +394,6 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
         if phrase and phrase in description_lower:
             return False, reason
 
-    for rule in profile.get("reject_description_regex_rules", []):
-        pattern = rule.get("pattern", "")
-        reason = rule.get("reason", f"DESC_REJECT:{pattern}")
-        if pattern and re.search(pattern, description_lower):
-            return False, reason
-
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
     if not ok_capability:
         return False, capability_reason

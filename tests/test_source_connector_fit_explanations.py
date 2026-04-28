@@ -303,7 +303,6 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
         {
             "must_not_require_skills": ["ERP"],
             "reject_description_phrase_rules": [],
-            "reject_description_regex_rules": [],
             "reject_title_rules": [],
         },
     )
@@ -313,7 +312,6 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
         {
             "must_not_require_skills": ["ERP"],
             "reject_description_phrase_rules": [],
-            "reject_description_regex_rules": [],
             "reject_title_rules": [],
             "capability_profile_rules": [],
         },
@@ -453,6 +451,42 @@ def test_applied_and_hidden_cards_render_undo_actions():
     assert "Undo Applied" in applied_html
     assert 'data-review-action="unhide"' in hidden_html
     assert ">Unhide<" in hidden_html
+
+
+def test_possible_repost_card_carries_duplicate_apply_warning_details():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "seek:new",
+            "title": "Senior Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/new-role",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+        },
+        _test_profile(),
+        applied_pool=[
+            {
+                "job_key": "seek:old",
+                "title": "Business Analyst Senior",
+                "company": "Acme",
+                "source": "seek",
+            }
+        ],
+    )
+
+    assert "Possible Repost" in html
+    assert 'data-similar-applied-warning="1"' in html
+    assert 'data-similar-applied-job-key="seek:old"' in html
+    assert 'data-similar-applied-title="Business Analyst Senior"' in html
+    assert "Alert: This looks like a role you already marked as applied at this company." in html
 
 
 def test_positive_note_does_not_repeat_first_why_it_fits_bullet():

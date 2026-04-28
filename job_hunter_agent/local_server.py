@@ -1,5 +1,6 @@
 import json
 import hashlib
+import mimetypes
 import re
 import threading
 from datetime import datetime
@@ -39,6 +40,11 @@ REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
 WORKSPACE_HTML_PATH = TEMPLATES_DIR / "workspace.html"
 SETTINGS_HTML_PATH = TEMPLATES_DIR / "settings.html"
 ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
+STATIC_DIR = TEMPLATES_DIR / "static"
+_STATIC_MIME_OVERRIDES = {
+    ".css": "text/css",
+    ".js": "text/javascript",
+}
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -98,7 +104,7 @@ def _validate_required_onboarding_inputs(
     engagement_type = str(search_preferences.get("engagement_type") or "").strip().lower()
 
     if keywords and (len(keywords) < 2 or len(keywords) > 120):
-        raise ValueError("Please keep your target keywords between 2 and 120 characters.")
+        raise ValueError("Please keep the primary search title between 2 and 120 characters.")
     if not locations:
         raise ValueError("Please add at least one search location.")
     if len(locations) > 8:
@@ -163,6 +169,10 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
         overrides["date_range_days"] = source.get("date_range_days")
     if "max_pages_cap" in source:
         overrides["max_pages_cap"] = source.get("max_pages_cap")
+    if "linkedin_hours_old" in source:
+        overrides["linkedin_hours_old"] = source.get("linkedin_hours_old")
+    if "linkedin_results_per_search" in source:
+        overrides["linkedin_results_per_search"] = source.get("linkedin_results_per_search")
 
     if not overrides:
         return {}
@@ -238,7 +248,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
         "must_not_require_skills",
         "reject_title_rules",
         "reject_description_phrase_rules",
-        "reject_description_regex_rules",
     }
 
     @staticmethod
@@ -1275,6 +1284,21 @@ class SettingsHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_static_file(self, file_path: Path) -> None:
+        body = file_path.read_bytes()
+        mime_type = _STATIC_MIME_OVERRIDES.get(file_path.suffix.lower())
+        if not mime_type:
+            mime_type, _ = mimetypes.guess_type(str(file_path))
+        self.send_response(200)
+        content_type = mime_type or "application/octet-stream"
+        if content_type.startswith("text/") or content_type == "application/javascript":
+            content_type = f"{content_type}; charset=utf-8"
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _redirect(self, location: str) -> None:
         self.send_response(302)
         self.send_header("Location", location)
@@ -1294,6 +1318,15 @@ class SettingsHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         from urllib.parse import urlparse as _urlparse
         _path = _urlparse(self.path).path
+        if _path.startswith("/static/"):
+            relative = _path.removeprefix("/static/").strip("/")
+            candidate = (STATIC_DIR / relative).resolve()
+            static_root = STATIC_DIR.resolve()
+            if static_root in candidate.parents and candidate.is_file():
+                self._send_static_file(candidate)
+                return
+            self._send_json(404, {"error": "Static asset not found"})
+            return
         if _path in {"/", "/workspace", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard", "/settings"}:
             if _path in {"/admin", "/profile"}:
                 self._redirect("/settings")
@@ -1614,7 +1647,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 if keyword:
                     search_settings["keywords"] = keyword
                 elif not str(search_settings.get("keywords") or "").strip():
-                    search_settings["keywords"] = " ".join(target[:3])
+                    search_settings["keywords"] = target[0]
                 profile_patch["search_settings"] = search_settings
                 updated = patch_profile(profile_patch)
             except Exception as exc:
@@ -1707,7 +1740,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "ok": True,
-                    "message": f"Telegram sync complete. {result['total_subscribers']} subscriber(s) available.",
+                    "message": f"Telegram sync complete. {result['total_subscribers']} connected Telegram account(s) found.",
                     "result": result,
                     "settings": self._public_agent_settings_payload(updated),
                 },
@@ -1715,9 +1748,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/telegram/test-message":
             try:
-                payload = self._read_json_body()
+                self._read_json_body()
                 settings = load_agent_settings(create_if_missing=True)
-                message_text = str(payload.get("message") or "").strip() or "Job Hunter test message."
+                message_text = "Job Hunter test alert. Telegram is connected correctly."
                 result = send_telegram_notification(message_text, "", settings["telegram"])
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})

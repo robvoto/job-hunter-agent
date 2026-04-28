@@ -389,7 +389,7 @@
                 </div>
                 <div class="ws-flash-step">
                   <p class="ws-flash-step-title">2. Run a search when ready</p>
-                  <p class="ws-flash-step-copy">Use <strong>Run Search</strong> to fetch fresh roles. It can take a few minutes, and this dashboard will refresh when the run finishes.</p>
+                  <p class="ws-flash-step-copy">Use the <strong>Run Search</strong> button in the top bar to fetch fresh roles. It can take a few minutes, and this dashboard will refresh when the run finishes.</p>
                 </div>
                 <div class="ws-flash-step">
                   <p class="ws-flash-step-title">3. Schedule or tune things in Settings</p>
@@ -401,9 +401,8 @@
             <aside class="ws-flash-side">
               <h2>Quick start</h2>
               <p>This intro is just a handoff so you know where you are. Once dismissed, the dashboard below becomes the main thing you work from.</p>
-              <p>If you already have saved roles, browse them now. If not, run a search and wait here while the dashboard refreshes with fresh matches. If you prefer, you can set a daily schedule instead.</p>
+              <p>If you already have saved roles, browse them now. If not, use the top-bar run button and wait here while the dashboard refreshes with fresh matches. If you prefer, you can set a daily schedule instead.</p>
               <div class="ws-flash-actions">
-                <button class="ws-btn ws-btn-primary" id="ws_flash_run" type="button">Run Search</button>
                 <a href="/settings#schedule-panel" class="ws-btn ws-btn-secondary">Set Daily Schedule</a>
                 <a href="/settings" class="ws-btn ws-btn-secondary">Open Settings</a>
                 <button class="ws-flash-dismiss" id="ws_flash_dismiss" type="button">Got it</button>
@@ -418,7 +417,6 @@
       `;
 
       const dismissButton = document.getElementById('ws_flash_dismiss');
-      const runButton = document.getElementById('ws_flash_run');
       const optOut = document.getElementById('ws_flash_opt_out');
       if (optOut) {
         optOut.checked = onboardingWelcomeOptedOut();
@@ -432,23 +430,14 @@
       if (dismissButton) {
         dismissButton.addEventListener('click', closeFlash);
       }
-      if (runButton) {
-        runButton.addEventListener('click', () => {
-          closeFlash();
-          wsRunBtn.click();
-        });
-      }
     }
 
     function updateStatusPill(status, lastRunAt) {
       if (status === 'running') {
-        wsStatusPill.textContent = '\u25cf Running\u2026';
+        wsStatusPill.textContent = '\u25cf Search running\u2026';
         wsStatusPill.className = 'ws-status-pill is-running';
       } else {
-        const label = lastRunAt
-          ? 'Last run: ' + new Date(lastRunAt).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
-          : 'Ready to search';
-        wsStatusPill.textContent = label;
+        wsStatusPill.textContent = lastRunAt ? 'Search ready' : 'Never run yet';
         wsStatusPill.className = 'ws-status-pill';
       }
     }
@@ -489,7 +478,7 @@
         if (status === 'running') {
           runWasRunning = true;
           wsRunBtn.disabled = true;
-          wsRunBtn.textContent = '\u25cf Running\u2026';
+          wsRunBtn.textContent = '\u25cf Search running\u2026';
         } else if (runWasRunning) {
           clearInterval(runPollHandle);
           runPollHandle = null;
@@ -511,7 +500,7 @@
         });
         const data = await resp.json();
         updateStatusPill('running', data.last_run_at);
-        wsRunBtn.textContent = '\u25cf Running\u2026';
+        wsRunBtn.textContent = '\u25cf Search running\u2026';
         startRunPolling();
       } catch {
         wsRunBtn.disabled = false;
@@ -524,7 +513,7 @@
       const status = await checkRunStatus();
       if (status === 'running') {
         wsRunBtn.disabled = true;
-        wsRunBtn.textContent = '\u25cf Running\u2026';
+        wsRunBtn.textContent = '\u25cf Search running\u2026';
         startRunPolling();
       }
       await loadResults();

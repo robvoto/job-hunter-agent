@@ -323,8 +323,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         if suggestion.get("suggested_search_keywords"):
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
-                patch["search_settings"]["keywords"] = " ".join(suggestion["suggested_search_keywords"])
-                print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
+                patch["search_settings"]["keywords"] = str(suggestion["suggested_search_keywords"][0]).strip()
+                print(f"[TITLE_PATTERNS] Pre-filled primary search title: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
 

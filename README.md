@@ -18,6 +18,7 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 - local dashboard at `http://127.0.0.1:8765/dashboard`
 - persistent local profile in `data/profile.json`
 - deterministic filtering before any LLM review
+- mandatory requirement blockers and "Not For Me" feedback loop
 - optional constrained LLM decision step
 - persistent dashboard with fresh, kept-earlier, and hidden jobs
 - dashboard filtering for score, posting age, work mode, and salary-target state
@@ -25,10 +26,10 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 
 ## Match Score Bands
 
-- `Strong match`: `80-100`
-- `Good match`: `65-79`
-- `Worth a look`: `50-64`
-- `Stretch`: `0-49`
+- `Strong match`: `85-100`
+- `Good match`: `70-84`
+- `Possible fit`: `55-69`
+- `Stretch`: `0-54`
 
 The score is built from title match, full-description review result, content-filter pass, fit-evidence bullets, freshness, location match, work mode, salary signal, watchout penalties, and whether the role has already been viewed. Each card now also shows a short inline score summary so you can see the main drivers without opening the full breakdown.
 
@@ -168,6 +169,7 @@ These are intended to stay local and ignored:
 - `data/agent_settings.json`
 - `data/agent_state.json`
 - `data/llm_costs.jsonl`
+- `output/rejection_rules.json`
 - `output/`
 
 ## LLM Notes

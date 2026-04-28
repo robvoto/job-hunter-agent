@@ -256,10 +256,10 @@ The admin server now also serves the dashboard at:
 ### Match Score Bands
 
 The dashboard uses internal scoring (0-100) mapped to human-readable bands:
-- **Strong match** (80-100)
-- **Good match** (65-79)
-- **Worth a look** (50-64)
-- **Stretch** (0-49)
+- **Strong match** (85-100)
+- **Good match** (70-84)
+- **Possible fit** (55-69)
+- **Stretch** (0-54)
 
 ---
 

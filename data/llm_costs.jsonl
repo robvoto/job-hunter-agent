@@ -111,3 +111,11 @@
 {"ts": "2026-04-25T09:03:07Z", "purpose": "rejection_suggestions", "model": "gpt-4o-mini", "tok_in": 2133, "tok_out": 109, "cost_usd": 0.000385, "session_usd": 0.000385}
 {"ts": "2026-04-25T09:10:17Z", "purpose": "rejection_suggestions", "model": "gpt-4o-mini", "tok_in": 1712, "tok_out": 138, "cost_usd": 0.00034, "session_usd": 0.000725}
 {"ts": "2026-04-25T09:21:48Z", "purpose": "rejection_suggestions", "model": "gpt-4o-mini", "tok_in": 2133, "tok_out": 112, "cost_usd": 0.000387, "session_usd": 0.000387}
+{"ts": "2026-04-27T13:47:09Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1706, "tok_out": 5, "cost_usd": 0.000259, "session_usd": 0.000259}
+{"ts": "2026-04-27T13:47:26Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1418, "tok_out": 5, "cost_usd": 0.000216, "session_usd": 0.000475}
+{"ts": "2026-04-27T13:47:51Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1509, "tok_out": 6, "cost_usd": 0.00023, "session_usd": 0.000705}
+{"ts": "2026-04-27T13:48:02Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1441, "tok_out": 5, "cost_usd": 0.000219, "session_usd": 0.000924}
+{"ts": "2026-04-27T13:48:47Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1678, "tok_out": 5, "cost_usd": 0.000255, "session_usd": 0.001178}
+{"ts": "2026-04-27T22:31:06Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1418, "tok_out": 5, "cost_usd": 0.000216, "session_usd": 0.001394}
+{"ts": "2026-04-27T22:31:56Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1304, "tok_out": 5, "cost_usd": 0.000199, "session_usd": 0.001593}
+{"ts": "2026-04-27T22:31:58Z", "purpose": "job_review", "model": "gpt-4o-mini", "tok_in": 1730, "tok_out": 6, "cost_usd": 0.000263, "session_usd": 0.001856}

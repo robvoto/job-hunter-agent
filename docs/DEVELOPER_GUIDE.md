@@ -31,6 +31,15 @@ Primary modules:
 - `job_hunter_agent/cv_pipeline.py`
   Heuristic and LLM-assisted CV analysis and capability mapping.
 
+- `job_hunter_agent/review_insights.py`
+  Aggregates audit data and skill observations to suggest profile tuning.
+
+- `job_hunter_agent/capability_matrix.py`
+  Logic for alias expansion and deterministic capability matching.
+
+- `job_hunter_agent/agent_runner.py` / `agent_settings.py`
+  Orchestration for daily scheduled runs and notification state.
+
 - `job_hunter_agent/source_connector.py`
   Current source connector and dashboard renderer for SEEK and LinkedIn.
 
@@ -91,10 +100,10 @@ Design intent:
 
 Current band mapping:
 
-- `80-100` -> `Strong match`
-- `65-79` -> `Good match`
-- `50-64` -> `Worth a look`
-- `0-49` -> `Stretch`
+- `85-100` -> `Strong match`
+- `70-84` -> `Good match`
+- `55-69` -> `Possible fit` (or Worth a look)
+- `0-54` -> `Stretch`
 
 Hard blockers:
 
@@ -129,6 +138,7 @@ Do not accidentally commit:
 - `data/agent_settings.json`
 - `data/agent_state.json`
 - `data/llm_costs.jsonl`
+- `output/rejection_rules.json`
 - `data/application_inputs/`
 - `data/application_materials.json`
 - `TODO.txt`

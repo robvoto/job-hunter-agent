@@ -28,7 +28,6 @@ def test_adjacent_title_requires_stronger_role_proof(monkeypatch):
                 },
             ],
             "reject_description_phrase_rules": [],
-            "reject_description_regex_rules": [],
             "must_not_require_skills": [],
         },
     )
@@ -62,7 +61,6 @@ def test_adjacent_title_with_clear_role_evidence_can_pass(monkeypatch):
                 },
             ],
             "reject_description_phrase_rules": [],
-            "reject_description_regex_rules": [],
             "must_not_require_skills": [],
         },
     )
@@ -88,7 +86,6 @@ def test_direct_title_can_still_reject_overly_vague_description(monkeypatch):
         lambda: {
             "capability_profile_rules": [],
             "reject_description_phrase_rules": [],
-            "reject_description_regex_rules": [],
             "must_not_require_skills": [],
         },
     )

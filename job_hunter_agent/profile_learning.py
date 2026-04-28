@@ -776,24 +776,37 @@ def _extract_match_preferences(text: str) -> dict[str, Any]:
     lowered = text.lower()
 
     # Engagement Preference
-    if re.search(r"\b(permanent only|no contracts|prefer permanent)\b", lowered):
+    if re.search(r"\b(permanent only|no contracts|prefer permanent|seeking permanent)\b", lowered):
         prefs["prefer_permanent"] = True
+    elif re.search(r"\b(contract only|prefer contracts|freelance|interim)\b", lowered):
+        prefs["prefer_permanent"] = False
+
+    # Work Mode
+    if re.search(r"\b(remote only|100% remote|work from home only)\b", lowered):
+        prefs["work_mode_preference"] = "remote"
+    elif re.search(r"\b(hybrid|flexible working|mix of office and home)\b", lowered):
+        prefs["work_mode_preference"] = "hybrid"
 
     # Location hint (e.g., "Based in Melbourne" or "Home base: Sydney")
-    loc_match = re.search(r"(?i)\b(?:based in|home base|location|reside in):\s*([A-Za-z\s,]+)(?=\n|\.|$)", text)
-    if loc_match:
-        loc = loc_match.group(1).strip()
-        if 2 < len(loc) < 60:
-            prefs["home_location"] = loc
+    loc = extract_location_hint(text)
+    if loc:
+        prefs["home_location"] = loc
 
     return prefs
 
 
 def extract_location_hint(text: str) -> str:
     """Extract a home location hint from text (e.g. 'Based in Melbourne')."""
-    match = re.search(r"(?i)\b(?:based in|location|reside in|lives in|home base):\s*([A-Za-z\s,]+)(?=\n|\.|$)", text)
+    match = re.search(
+        r"(?i)\b(?:based in|location|reside in|lives in|home base|resident of):\s*([A-Za-z\s,]+?)(?=\n|[,.]?\s+and\b|[,.]?\s+with\b|[.!?]|\s{2,}|\Z)",
+        text
+    )
     if match:
-        return match.group(1).strip()
+        loc = match.group(1).strip()
+        # Cleanup trailing geographical noise
+        loc = re.sub(r"(?i)[,\s]+(australia|vic|nsw|qld|wa|sa|tas|act|nt)$", "", loc).strip()
+        if 2 < len(loc) < 60:
+            return loc
     return ""
 
 
@@ -837,6 +850,8 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
     adjacent_titles: list[str] = []
     suggested_keywords: list[str] = []
     recent_cutoff = _CURRENT_YEAR - lookback_years
+    strong_role_titles: list[str] = []
+    supporting_role_titles: list[str] = []
 
     for role in roles:
         title = _clean_line(role.get("title", ""))
@@ -852,10 +867,18 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
             continue
 
         if duration_months >= min_months:
-            target_titles.extend(pattern_candidates or [title])
-            suggested_keywords.extend(pattern_candidates[:2] or [_normalize_phrase(title)])
+            strong_role_titles.extend(pattern_candidates or [title])
         else:
-            adjacent_titles.extend(pattern_candidates or [title])
+            supporting_role_titles.extend(pattern_candidates or [title])
+
+    # Use only the first couple of strong recent titles as direct targets.
+    # Other valid titles still matter, but they belong in the softer bucket so
+    # the app does not treat every past role as a primary search direction.
+    direct_target_limit = max(1, min(2, max_target))
+    target_titles.extend(strong_role_titles[:direct_target_limit])
+    adjacent_titles.extend(strong_role_titles[direct_target_limit:])
+    adjacent_titles.extend(supporting_role_titles)
+    suggested_keywords.extend(target_titles[:2])
 
     def _dedupe_patterns(titles: list[str], limit: int) -> list[str]:
         patterns: list[str] = []

@@ -1,4 +1,4 @@
-﻿"""Daily local agent runner.
+﻿﻿﻿"""Daily local agent runner.
 
 Main goals:
 - run the current job-source connector on a schedule or on demand
@@ -19,12 +19,12 @@ from job_hunter_agent.agent_settings import (
     ROOT_DIR,
     load_agent_settings,
     load_agent_state,
+    save_agent_settings,
     save_agent_state,
 )
 from job_hunter_agent.config import OUTPUT_HTML
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
 from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
-from job_hunter_agent.agent_settings import save_agent_settings
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.source_connector import (
     RUN_STATS_PATH,
@@ -37,7 +37,12 @@ from job_hunter_agent.source_connector import (
     parse_timestamp,
     rebuild_html_dashboard,
     scrape_jobs_direct,
+    score_to_match_label,
     viewed_by_user,
+)
+from job_hunter_agent.job_identity import (
+    are_jobs_semantically_similar,
+    find_similar_job,
 )
 
 
@@ -89,6 +94,21 @@ def build_digest_payload(
     previous_keys = {_job_key(record) for record in previous_records if _job_key(record)}
     current_keys = {_job_key(record) for record in current_records if _job_key(record)}
     new_records = [record for record in current_records if _job_key(record) and _job_key(record) not in previous_keys]
+
+    # Deduplication safety net: skip notifying for roles that are semantically identical to
+    # something already known (previous run, archive, applied) or repeated in this batch.
+    existing_pool = (
+        previous_records +
+        dashboard_records.get("applied_records", []) +
+        dashboard_records.get("recent_archive_records", []) +
+        dashboard_records.get("stale_archive_records", [])
+    )
+    unique_new = []
+    for record in new_records:
+        if not find_similar_job(record, existing_pool) and not find_similar_job(record, unique_new):
+            unique_new.append(record)
+    new_records = unique_new
+
     saved_records = dashboard_records.get("recent_archive_records", []) + dashboard_records.get("stale_archive_records", [])
     visible_dashboard_records = dashboard_records.get("current_records", []) + saved_records
     dashboard_unopened_records = [record for record in visible_dashboard_records if not viewed_by_user(record)]
@@ -132,11 +152,13 @@ def format_job_line(record: dict, index: int | None = None) -> str:
     title = str(record.get("title") or "Untitled")
     location = str(record.get("location") or "N/A")
     score = fit_score(record)
+    score_label = score_to_match_label(score)
+    source = str(record.get("source") or "N/A").upper()
     url = str(record.get("url") or "").strip()
     prefix = f"{index}. " if index is not None else "- "
     lines = [
         f"{prefix}{title} - {company}",
-        f"   {score}/100 | {posted} | {location}",
+        f"   {score}/100 ({score_label}) | {source} | {posted} | {location}",
     ]
     if url:
         lines.append(f"   {url}")
@@ -149,9 +171,11 @@ def format_job_html(record: dict, index: int | None = None) -> str:
     title = html.escape(str(record.get("title") or "Untitled"))
     location = html.escape(str(record.get("location") or "N/A"))
     score = fit_score(record)
+    score_label = html.escape(score_to_match_label(score))
+    source = html.escape(str(record.get("source") or "N/A").upper())
     url = str(record.get("url") or "").strip()
     prefix = f"{index}. " if index is not None else ""
-    detail_line = f"{score}/100 | {posted} | {location}"
+    detail_line = f"{score}/100 (<b>{score_label}</b>) | {source} | {posted} | {location}"
     link_line = f'\n<a href="{html.escape(url)}">View role</a>' if url else ""
     return f"<b>{html.escape(prefix)}{title}</b> - {company}\n{detail_line}{link_line}"
 
@@ -328,12 +352,12 @@ def should_run_now(state: dict[str, Any], daily_time_local: str, now: datetime) 
 
 
 def run_agent_loop() -> None:
-    settings = load_agent_settings(create_if_missing=True)
-    sleep_seconds = int(settings["schedule"]["loop_sleep_seconds"])
-    daily_time_local = str(settings["schedule"]["daily_time_local"] or "08:30").strip()
-    print(f"Daily agent loop started. Scheduled local time: {daily_time_local}")
-
+    print("Daily agent loop started.")
     while True:
+        settings = load_agent_settings(create_if_missing=True)
+        sleep_seconds = int(settings["schedule"]["loop_sleep_seconds"])
+        daily_time_local = str(settings["schedule"]["daily_time_local"] or "08:30").strip()
+
         now = datetime.now().astimezone()
         state = load_agent_state()
         if should_run_now(state, daily_time_local, now):
