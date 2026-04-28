@@ -11,7 +11,6 @@ from job_hunter_agent.cv_pipeline import run_cv_pipeline
 from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
 from job_hunter_agent.profile_learning import (
-    build_learning_patch,
     extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
     repair_text,
 )
@@ -271,11 +270,6 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
     patch.update(run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings))
-    if not patch.get("capability_profile_rules"):
-        deterministic_patch = build_learning_patch(combined_text, onboarding_settings=active_onboarding_settings)
-        fallback_capabilities = deterministic_patch.get("capability_profile_rules") or []
-        if fallback_capabilities:
-            patch["capability_profile_rules"] = fallback_capabilities
 
     brief = build_llm_profile_brief(capability_rules=patch.get("capability_profile_rules") or [])
     if brief:

@@ -12,6 +12,7 @@ const addLocationButton = document.getElementById('add_location');
 const locationSuggestions = document.getElementById('location_suggestions');
 const locationQuickPicks = document.getElementById('location_quick_picks');
 const locationSelected = document.getElementById('location_selected');
+const capabilityUi = window.JobHunterCapabilityUi || {};
 
 const COMMON_LOCATION_OPTIONS = [
   'Sydney NSW',
@@ -44,17 +45,9 @@ let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
 let lastImportPayload = null;
 
-const reviewCapabilityLevelMeta = {
-  strong: { label: 'Strong', summary: 'Proven strength that should count heavily when a role depends on it.' },
-  working: { label: 'Solid', summary: 'Clear evidence, but not one of your main headline strengths.' },
-  basic: { label: 'Some exposure', summary: 'Real exposure, but this should stay a light supporting signal.' },
-};
+const reviewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
 
-const reviewCapabilityPriorityMeta = {
-  core: { label: 'Essential', summary: 'Capabilities that should matter a lot for your target roles.' },
-  supporting: { label: 'Helpful', summary: 'Relevant capabilities that should help, but not define, the match.' },
-  contextual: { label: 'Background', summary: 'Experience that should stay in the background.' },
-};
+const reviewCapabilityPriorityMeta = capabilityUi.capabilityPriorityMeta || {};
 
 const reviewCapabilityPriorityOrder = ['core', 'supporting', 'contextual'];
 
@@ -392,17 +385,17 @@ function renderReviewCapabilities() {
           <div>
             <label for="review_capability_level_${index}">Strength</label>
             <select id="review_capability_level_${index}" data-review-capability-field="level">
-              <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Strong</option>
-              <option value="working"${rule.level === 'working' ? ' selected' : ''}>Solid</option>
-              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Some exposure</option>
+              <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.strong?.label || 'Strong')}</option>
+              <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.working?.label || 'Solid')}</option>
+              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.basic?.label || 'Some exposure')}</option>
             </select>
           </div>
           <div>
-            <label for="review_capability_fit_${index}">How relevant is this to your target roles?</label>
+            <label for="review_capability_fit_${index}">${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
             <select id="review_capability_fit_${index}" data-review-capability-field="fit">
-              <option value="core"${rule.fit === 'core' ? ' selected' : ''}>Essential</option>
-              <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>Helpful</option>
-              <option value="contextual"${rule.fit === 'contextual' ? ' selected' : ''}>Background</option>
+              <option value="core"${rule.fit === 'core' ? ' selected' : ''}>${escapeHtml(reviewCapabilityPriorityMeta.core?.label || 'Essential')}</option>
+              <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>${escapeHtml(reviewCapabilityPriorityMeta.supporting?.label || 'Helpful')}</option>
+              <option value="contextual"${rule.fit === 'contextual' ? ' selected' : ''}>${escapeHtml(reviewCapabilityPriorityMeta.contextual?.label || 'Background')}</option>
             </select>
           </div>
           <div class="review-capability-actions">

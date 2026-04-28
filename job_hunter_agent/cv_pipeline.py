@@ -21,6 +21,7 @@ from job_hunter_agent.profile_learning import (
     _GENERIC_PHRASE_STOPWORDS,
     _is_generic_title_phrase,
     _is_quality_phrase,
+    _normalize_token,
     _normalize_phrase,
     _parse_role_entries,
     _resolve_extraction_lookback_years,
@@ -40,6 +41,44 @@ _ACTION_VERBS = {
     "automate", "negotiated", "negotiate", "architected", "architect",
     "mentored", "mentor", "presented", "present", "deployed", "deploy",
 }
+_TOOL_LINE_RE = re.compile(
+    r"^(?:tools?|tools\s+and\s+platforms?|tools\s+and\s+practices)(?:\s+included|\s+include)?\s*:?\s*(?P<body>.+)$",
+    flags=re.IGNORECASE,
+)
+_WEAK_NAME_LEAD_TOKENS = _ACTION_VERBS | {
+    "including",
+    "multiple",
+    "primary",
+    "senior",
+    "junior",
+    "tool",
+    "tools",
+    "team",
+    "teams",
+    "external",
+    "internal",
+    "during",
+    "through",
+    "across",
+    "compare",
+    "check",
+    "based",
+}
+_WEAK_NAME_TAIL_TOKENS = {
+    "client",
+    "clients",
+    "environment",
+    "external",
+    "manager",
+    "managers",
+    "program",
+    "programs",
+    "service",
+    "services",
+    "technology",
+    "vendor",
+    "vendors",
+}
 
 
 def parse_roles(
@@ -52,6 +91,7 @@ def parse_roles(
         end_year = int(role.get("end_year") or 0)
         roles.append({
             "title": role.get("title", ""),
+            "employer": role.get("employer", ""),
             "start_year": role.get("start_year"),
             "end_year": end_year,
             "is_recent": end_year >= recent_cutoff,
@@ -65,11 +105,48 @@ def _has_action_verb(text: str) -> bool:
     return bool(tokens & _ACTION_VERBS)
 
 
-def _ngrams(text: str) -> list[str]:
+def _tool_terms(text: str) -> list[str]:
+    match = _TOOL_LINE_RE.match(str(text or "").strip())
+    if not match:
+        return []
+
+    body = str(match.group("body") or "").strip().rstrip(".")
+    if not body:
+        return []
+
+    raw_parts = [
+        part.strip()
+        for part in re.split(r",|;", body)
+        if part.strip()
+    ]
+    terms: list[str] = []
+    for raw_part in raw_parts:
+        cleaned_part = re.sub(r"\([^)]*\)", "", raw_part).strip()
+        if not cleaned_part:
+            continue
+        pieces = [
+            piece.strip()
+            for piece in re.split(r"\s*&\s*|\s+and\s+", cleaned_part)
+            if piece.strip()
+        ]
+        for piece in pieces or [cleaned_part]:
+            tokens = [_normalize_token(token) for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", piece)]
+            tokens = [token for token in tokens if token and token not in _GENERIC_PHRASE_STOPWORDS]
+            if not tokens:
+                continue
+            term = " ".join(tokens[:4]).strip()
+            if term and _is_quality_phrase(term) and not _is_generic_title_phrase(term):
+                terms.append(term)
+    return list(dict.fromkeys(terms))
+
+
+def _ngrams(text: str, excluded_tokens: set[str] | None = None) -> list[str]:
+    blocked = excluded_tokens or set()
     tokens = [
-        token.lower()
+        _normalize_token(token)
         for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
-        if token.lower() not in _GENERIC_PHRASE_STOPWORDS
+        if _normalize_token(token) not in _GENERIC_PHRASE_STOPWORDS
+        and _normalize_token(token) not in blocked
     ]
     phrases: list[str] = []
     for size in (3, 2):
@@ -85,9 +162,24 @@ def extract_phrases(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for role in roles:
         title = role.get("title", "")
         is_recent = bool(role.get("is_recent"))
+        employer_tokens = {
+            _normalize_token(token)
+            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", str(role.get("employer", "")))
+            if _normalize_token(token)
+        }
         for bullet in role.get("bullets", []):
             has_action_verb = _has_action_verb(bullet)
-            for phrase in _ngrams(bullet):
+            tool_terms = _tool_terms(bullet)
+            for phrase in tool_terms:
+                phrase_items.append({
+                    "phrase": phrase,
+                    "role_title": title,
+                    "is_recent": is_recent,
+                    "has_action_verb": False,
+                })
+            if tool_terms:
+                continue
+            for phrase in _ngrams(bullet, excluded_tokens=employer_tokens):
                 phrase_items.append({
                     "phrase": phrase,
                     "role_title": title,
@@ -235,8 +327,9 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
     for index, item in enumerate(top):
         renamed = dict(item)
         if index < len(labels):
-            # Use raw LLM label (lowercased only) - don't normalize/stem it
             label = str(labels[index]).strip().lower()
+            if label == "skip":
+                continue
             # Basic length check; _is_quality_phrase would over-stem the label
             words = label.split()
             if label and 1 <= len(words) <= 5 and not _is_generic_title_phrase(_normalize_phrase(label)):
@@ -245,13 +338,16 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
     return renamed_top + candidates[len(top):]
 
 
-def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_output(candidates: list[dict[str, Any]], total_roles: int = 0) -> dict[str, Any]:
     capability_rules: list[dict[str, Any]] = []
     dominant_signal_clusters: list[dict[str, Any]] = []
     must_not_require_skills: list[str] = []
 
     for candidate in candidates:
         score = float(candidate["score"])
+        role_count = int(candidate.get("role_count") or 0)
+        if total_roles > 1 and role_count < 2 and (score < 0.65 or candidate.get("fit") != "core"):
+            continue
         display_name = choose_capability_name(
             candidate["name"],
             [candidate["seed"], *candidate["aliases"]],
@@ -262,6 +358,18 @@ def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
             max_aliases=8,
         )
         if not display_name:
+            continue
+        name_tokens = display_name.split()
+        if (
+            not matching_aliases
+            and len(name_tokens) <= 2
+            and (
+                name_tokens[0] in _WEAK_NAME_LEAD_TOKENS
+                or name_tokens[-1] in _WEAK_NAME_TAIL_TOKENS
+            )
+        ):
+            continue
+        if name_tokens and name_tokens[0] in _WEAK_NAME_LEAD_TOKENS:
             continue
 
         if score >= 0.25:
@@ -318,8 +426,7 @@ def run_cv_pipeline(
     phrase_items = extract_phrases(roles)
     clusters = cluster_phrases(phrase_items)
     candidates = score_and_promote(clusters)
-    renamed = _rename_top_clusters(candidates, llm_client=llm_client)
-    output = _build_output(renamed)
+    output = _build_output(candidates, total_roles=len(roles))
 
     print(
         f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "

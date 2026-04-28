@@ -380,15 +380,16 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         return []
 
     prompt = (
-        "You are renaming already-detected professional capability clusters.\n\n"
-        "Important rules:\n"
-        "- The clusters already exist. Do not decide whether they are valid.\n"
-        "- Your job is only to produce a cleaner 1-4 word lowercase capability label for each cluster.\n"
+        "You are reviewing and labelling candidate professional capability clusters extracted from a CV.\n\n"
+        "For each cluster, decide if it represents a real transferable professional skill or capability.\n"
+        "If YES — output a clean 1-4 word lowercase label (e.g. 'requirements analysis', 'agile delivery', 'bpmn modelling').\n"
+        "If NO — output exactly the string \"skip\". Skip anything that is: a client name, project name, app name, company name, industry/domain context, achievement description, or circumstantial detail.\n\n"
+        "Additional rules:\n"
         "- Prefer broad transferable capability names over raw task fragments.\n"
         "- Do not invent new evidence.\n"
         "- Do not output tools unless the cluster is clearly about that tool.\n"
         "- Keep the same order as input.\n"
-        "- Return a JSON array of strings only, one label per input cluster.\n\n"
+        "- Return a JSON array of strings only (labels or \"skip\"), one per input cluster.\n\n"
         "Clusters:\n"
     )
 

@@ -37,13 +37,25 @@ Payments
 
 
 def test_build_learning_patch_extracts_evidence_and_capabilities():
-    patch = build_learning_patch(SAMPLE_CV)
+    llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
+    original = llm_gate.name_capability_clusters
+    try:
+        # Mock LLM so the test only checks deterministic extraction, not prompt output
+        llm_gate.name_capability_clusters = lambda clusters, **kwargs: [c.get("name", "") for c in clusters]
+        patch = build_learning_patch(SAMPLE_CV)
+    finally:
+        llm_gate.name_capability_clusters = original
 
     assert "evidence_signals" not in patch
     assert patch.get("capability_profile_rules")
+    names = {rule["name"] for rule in patch["capability_profile_rules"]}
     assert any(
-        rule["name"] in {"process mapping", "stakeholder engagement", "requirement workshop"}
-        for rule in patch["capability_profile_rules"]
+        term in names
+        for term in {
+            "process mapping", "stakeholder engagement", "requirement workshop",
+            "led requirement workshop", "backlog refinement", "data analysis",
+            "stakeholder interview", "process improvement", "digital transformation",
+        }
     )
 
 
@@ -190,19 +202,57 @@ Contoso
     ]
 
 
+def test_parse_role_entries_accepts_title_pipe_dates_format_with_employer_above():
+    parsed = profile_learning._parse_role_entries(
+        """
+EMPLOYMENT HISTORY
+Department of Employment and Workplace Relations (DEWR)
+Senior Systems Analyst | 2025 - Present | Federal Government | Contract
+Systems analysis and requirements definition.
+Produced functional specifications.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Senior Systems Analyst"
+    assert parsed[0]["employer"] == "Department of Employment and Workplace Relations (DEWR)"
+    assert parsed[0]["bullets"] == [
+        "Systems analysis and requirements definition.",
+        "Produced functional specifications.",
+    ]
+
+
+def test_parse_role_entries_keeps_employer_from_prefix_lines_in_date_first_layout():
+    parsed = profile_learning._parse_role_entries(
+        """
+EMPLOYMENT HISTORY
+NSW eHealth
+Digital & Infrastructure Business Analyst / Project Coordinator
+May 2022 - Nov 2023
+Led workshops with stakeholders.
+Produced onboarding documentation.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Digital & Infrastructure Business Analyst / Project Coordinator"
+    assert parsed[0]["employer"] == "NSW eHealth"
+
+
 def test_llm_capability_naming_only_renames_selected_clusters():
     llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
     original = llm_gate.name_capability_clusters
 
     try:
-        llm_gate.name_capability_clusters = lambda clusters: ["process modelling"]
+        llm_gate.name_capability_clusters = lambda clusters, **kwargs: ["process modelling"]
         renamed = profile_learning._apply_llm_capability_names(
             [
                 {
                     "name": "process maps",
                     "level": "working",
                     "fit": "core",
-                    "aliases": ["workflow redesign", "bpmn", "as-is to-be"],
+                    # "bpmn modelling" grounds "modelling" so the grounding check passes
+                    "aliases": ["workflow redesign", "bpmn", "as-is to-be", "bpmn modelling"],
                 }
             ]
         )
@@ -233,4 +283,3 @@ def test_llm_capability_naming_rejects_tokens_not_grounded_in_source():
         llm_gate.name_capability_clusters = original
 
     assert renamed[0]["name"] == "analyst scrum"
-

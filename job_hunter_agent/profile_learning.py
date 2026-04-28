@@ -2,46 +2,71 @@
 
 Main goals:
 - repair imported text
-- extract summaries, notes, and capability rules from human material
-- provide a local knowledge-note fallback for profile enrichment
-
-Notes:
-- capability_profile.txt is a local editable knowledge note
-- capability_profile.template.txt is the committed starter template for new users
+- extract capabilities and title patterns from CV text via LLM
+- structural parsing (sections, dates, roles) shared with other pipeline modules
 """
 
-from collections import Counter, defaultdict
-from datetime import datetime
+import hashlib
+import json
 import re
+from datetime import datetime
 from typing import Any
 
-from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
+from job_hunter_agent.paths import REPO_ROOT
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
 
 
 ROOT_DIR = REPO_ROOT
 
+_VALID_LEVELS = {"strong", "working", "basic", "low", "none"}
+_VALID_FITS = {"core", "supporting", "contextual", "avoid"}
+_CURRENT_YEAR = datetime.now().year
+_CURRENT_MONTH = datetime.now().month
+
+_MONTH_NAME_TO_NUMBER = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
+    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_MONTH_TOKEN_PATTERN = (
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+    r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|"
+    r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
+)
+_DATE_RANGE_PATTERN = re.compile(
+    rf"(?:(?P<start_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
+    rf"(?P<start_year>(?:19|20)\d{{2}})"
+    rf"\s*(?:-|–|—|to|/)\s*"
+    rf"(?:(?P<end_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
+    rf"(?:(?P<end_year>(?:19|20)\d{{2}})|(?P<end_relative>present|current|now|ongoing))",
+    flags=re.IGNORECASE,
+)
+
+_BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
+
+_cv_extraction_cache: dict[str, dict[str, Any]] = {}
+
+
+# ── Text repair ────────────────────────────────────────────────────────────────
 
 def repair_text(text: str) -> str:
     if not text:
         return ""
     repaired = text.replace("\r\n", "\n")
-    if "\u00c3\u00a2" in repaired or "\u00c3\u0192" in repaired:
+    if "Ã¢" in repaired or "Ãƒ" in repaired:
         try:
             candidate = repaired.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-            if candidate.count("\u00c3\u00a2") < repaired.count("\u00c3\u00a2"):
+            if candidate.count("Ã¢") < repaired.count("Ã¢"):
                 repaired = candidate
         except Exception:
             pass
-    replacements = {
-        "\u2014": "-",
-        "\u2013": "-",
-        "\u2192": "->",
-    }
-    for source, target in replacements.items():
+    for source, target in {"—": "-", "–": "-", "→": "->"}.items():
         repaired = repaired.replace(source, target)
     return repaired.strip()
 
+
+# ── Settings resolution ────────────────────────────────────────────────────────
 
 def _resolve_onboarding_int(
     onboarding_settings: dict[str, Any] | None,
@@ -63,110 +88,7 @@ def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | Non
     return _resolve_onboarding_int(onboarding_settings, "extraction_lookback_years")
 
 
-def _extract_section(text: str, header: str) -> str:
-    pattern = rf"##\s+{re.escape(header)}\s*\n(.*?)(?=\n##\s+|\Z)"
-    match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-    return match.group(1).strip() if match else ""
-
-
- 
-
-def _extract_bullets(text: str) -> list[str]:
-    return [match.strip() for match in re.findall(r"^\*\s+(.+)$", text, flags=re.MULTILINE)]
-
-
-def _clean_sentence(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip(" -\n")
-
-
-_VALID_LEVELS = {"strong", "working", "basic", "low", "none"}
-_VALID_FITS = {"core", "supporting", "contextual", "avoid"}
-_CURRENT_YEAR = datetime.now().year
-_CURRENT_MONTH = datetime.now().month
-_ROLE_SECTION_HINTS = ("experience", "employment", "career", "work history", "professional")
-_SKILL_SECTION_HINTS = ("skill", "capabilit", "tool", "technology", "competenc", "summary", "profile")
-_IGNORE_SECTION_HINTS = ("education", "certification", "certificate", "training", "award")
-_GENERIC_PHRASE_STOPWORDS = {
-    "a", "an", "and", "the", "to", "for", "of", "in", "on", "with", "by", "from", "into", "across",
-    "using", "use", "used", "within", "through", "across", "under", "over", "per", "or", "as", "at",
-    "is", "are", "was", "were", "be", "been", "being", "that", "this", "these", "those", "their",
-    "our", "your", "my", "his", "her", "its", "will", "would", "can", "could", "should", "may",
-}
-_GENERIC_PHRASE_BLACKLIST = {
-    "experience", "responsibility", "responsibilities", "project", "projects", "domain", "outcome",
-    "outcomes", "location", "present", "profile", "professional experience", "professional summary",
-    "core profile", "tools", "technologies", "skills", "summary",
-}
-_TITLE_MODIFIERS = {
-    "senior", "lead", "principal", "technical", "functional", "digital", "delivery", "staff",
-    "junior", "associate", "executive", "chief", "head", "contract", "consulting", "consultant",
-}
-_GENERIC_ROLE_NOUNS = {
-    "analyst", "manager", "coordinator", "consultant", "specialist", "developer", "engineer",
-    "architect", "officer", "director", "administrator", "owner", "lead", "executive", "master",
-    "head", "staff", "project", "business",
-}
-_EMPLOYER_MARKERS = {
-    "bank", "group", "consulting", "services", "solutions", "systems", "technology", "technologies",
-    "university", "college", "school", "council", "government", "department", "agency", "institute",
-    "pty", "ltd", "llc", "inc", "corp", "corporation", "company", "limited", "holdings", "partners",
-    "association", "authority", "commission", "office", "hospital", "health", "care", "trust",
-}
-_TITLE_PATTERN_ANCHOR_NOUNS = {
-    "analyst",
-    "manager",
-    "coordinator",
-    "consultant",
-    "specialist",
-    "developer",
-    "engineer",
-    "architect",
-    "officer",
-    "director",
-    "administrator",
-    "lead",
-    "master",
-}
-_MONTH_NAME_TO_NUMBER = {
-    "jan": 1,
-    "january": 1,
-    "feb": 2,
-    "february": 2,
-    "mar": 3,
-    "march": 3,
-    "apr": 4,
-    "april": 4,
-    "may": 5,
-    "jun": 6,
-    "june": 6,
-    "jul": 7,
-    "july": 7,
-    "aug": 8,
-    "august": 8,
-    "sep": 9,
-    "sept": 9,
-    "september": 9,
-    "oct": 10,
-    "october": 10,
-    "nov": 11,
-    "november": 11,
-    "dec": 12,
-    "december": 12,
-}
-_MONTH_TOKEN_PATTERN = (
-    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
-    r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|"
-    r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
-)
-_DATE_RANGE_PATTERN = re.compile(
-    rf"(?:(?P<start_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
-    rf"(?P<start_year>(?:19|20)\d{{2}})"
-    rf"\s*(?:-|\u2013|\u2014|to|/)\s*"
-    rf"(?:(?P<end_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
-    rf"(?:(?P<end_year>(?:19|20)\d{{2}})|(?P<end_relative>present|current|now|ongoing))",
-    flags=re.IGNORECASE,
-)
-
+# ── Shared text utilities (used by capability_matrix.py and cv_pipeline.py) ──
 
 def _clean_line(text: str) -> str:
     cleaned = re.sub(r"[*_`#]+", " ", str(text or ""))
@@ -186,33 +108,21 @@ def _normalize_token(token: str) -> str:
 def _normalize_phrase(text: str) -> str:
     tokens = [_normalize_token(token) for token in re.split(r"\s+", str(text or ""))]
     tokens = [token for token in tokens if token]
-    while tokens and tokens[0] in _GENERIC_PHRASE_STOPWORDS:
-        tokens.pop(0)
-    while tokens and tokens[-1] in _GENERIC_PHRASE_STOPWORDS:
-        tokens.pop()
     return " ".join(tokens).strip()
 
 
-_BULLET_PREFIX_RE = re.compile(r"^[\-*\u2022\u2013\u2014]+\s*")
-
+# ── Structural parsing helpers ─────────────────────────────────────────────────
 
 def _is_bullet_line(text: str) -> bool:
     return bool(_BULLET_PREFIX_RE.match(str(text or "").lstrip()))
 
 
+def _is_heading_line(text: str) -> bool:
+    return str(text or "").lstrip().startswith("#")
+
+
 def _strip_bullet_prefix(text: str) -> str:
     return _clean_line(_BULLET_PREFIX_RE.sub("", str(text or "").lstrip()))
-
-
-def _section_kind(section_name: str) -> str:
-    lowered = str(section_name or "").strip().lower()
-    if any(hint in lowered for hint in _IGNORE_SECTION_HINTS):
-        return "ignore"
-    if any(hint in lowered for hint in _ROLE_SECTION_HINTS):
-        return "experience"
-    if any(hint in lowered for hint in _SKILL_SECTION_HINTS):
-        return "skills"
-    return "other"
 
 
 def _extract_year_range(text: str) -> dict[str, Any] | None:
@@ -226,10 +136,7 @@ def _extract_year_range(text: str) -> dict[str, Any] | None:
     is_current = raw_end_relative in {"present", "current", "now", "ongoing"}
     end_year = _CURRENT_YEAR if is_current else int(match.group("end_year"))
     start_month = _MONTH_NAME_TO_NUMBER.get(start_month_name, 1)
-    if is_current:
-        end_month = _CURRENT_MONTH
-    else:
-        end_month = _MONTH_NAME_TO_NUMBER.get(end_month_name, 12)
+    end_month = _CURRENT_MONTH if is_current else _MONTH_NAME_TO_NUMBER.get(end_month_name, 12)
     duration_months = max(((end_year - start_year) * 12) + (end_month - start_month) + 1, 1)
     return {
         "start_year": start_year,
@@ -244,7 +151,7 @@ def _extract_year_range(text: str) -> dict[str, Any] | None:
 def _looks_like_title(text: str) -> bool:
     cleaned = _clean_line(text)
     lowered = cleaned.lower()
-    if not cleaned or len(cleaned.split()) > 8:
+    if not cleaned or len(cleaned.split()) > 10:
         return False
     if re.search(r"\b(degree|certified|certification|university|college|school)\b", lowered):
         return False
@@ -252,104 +159,62 @@ def _looks_like_title(text: str) -> bool:
         return False
     if _extract_year_range(cleaned):
         return False
+    if not re.search(r"[A-Za-z]", cleaned):
+        return False
     return True
 
 
-def _title_signal_score(text: str) -> int:
+def _looks_like_employer(text: str) -> bool:
     cleaned = _clean_line(text)
-    tokens = [_normalize_token(token) for token in cleaned.split()]
     if not cleaned:
-        return 0
-    score = 0
-    if _looks_like_title(cleaned):
-        score += 1
-    score += sum(2 for token in tokens if token in _GENERIC_ROLE_NOUNS)
-    score += sum(1 for token in tokens if token in _TITLE_MODIFIERS)
-    if len(tokens) <= 6:
-        score += 1
-    if re.search(r"[,&/]", cleaned):
-        score += 1
-    return score
-
-
-def _employer_signal_score(text: str) -> int:
-    cleaned = _clean_line(text)
-    tokens = [_normalize_token(token) for token in cleaned.split()]
-    if not cleaned:
-        return 0
-    score = 0
-    score += sum(2 for token in tokens if token in _EMPLOYER_MARKERS)
-    if cleaned.isupper() and len(tokens) <= 5:
-        score += 1
-    if "&" in cleaned:
-        score += 1
-    return score
+        return False
+    if _extract_year_range(cleaned):
+        return False
+    if re.search(r"\([A-Z]{2,}\)", cleaned):
+        return True
+    if re.search(r"\b(?:pty|ltd|llc|inc|corp)\b", cleaned, flags=re.IGNORECASE):
+        return True
+    if cleaned.isupper() and len(cleaned.split()) <= 5:
+        return True
+    return False
 
 
 def _is_plausible_role_title(text: str) -> bool:
     cleaned = _clean_line(text)
     if not _looks_like_title(cleaned):
         return False
-
-    normalized = _normalize_phrase(cleaned)
-    tokens = [_normalize_token(token) for token in cleaned.split()]
-    tokens = [token for token in tokens if token]
-    if not normalized or not tokens:
+    if len(cleaned.split()) < 2:
         return False
-    if tokens[0] in _GENERIC_PHRASE_STOPWORDS:
+    if len(cleaned) < 3:
         return False
-    if normalized in _GENERIC_PHRASE_BLACKLIST:
+    if cleaned.isupper():
         return False
-
-    has_role_signal = any(token in _GENERIC_ROLE_NOUNS or token in _TITLE_PATTERN_ANCHOR_NOUNS for token in tokens)
-    if not has_role_signal:
+    if re.search(r"\b(profile|summary|skills|tools|technologies|responsibilities|experience)\b", cleaned, flags=re.IGNORECASE):
         return False
-
-    if _employer_signal_score(cleaned) >= 2 and not any(token in _TITLE_PATTERN_ANCHOR_NOUNS for token in tokens):
-        return False
-
     return True
 
 
 def _pick_role_title_and_employer(candidate_lines: list[str], prefer_prefix_order: bool = False) -> tuple[str, str]:
-    if not candidate_lines:
+    ordered_lines = [_clean_line(line) for line in candidate_lines if _clean_line(line)]
+    if not ordered_lines:
         return "", ""
-    if len(candidate_lines) == 1:
-        only = candidate_lines[0]
-        return (only, "") if _looks_like_title(only) else ("", only)
 
-    first = candidate_lines[0]
-    second = candidate_lines[1]
-    first_title_score = _title_signal_score(first)
-    second_title_score = _title_signal_score(second)
-    first_employer_score = _employer_signal_score(first)
-    second_employer_score = _employer_signal_score(second)
+    if len(ordered_lines) == 1:
+        only = ordered_lines[0]
+        if _is_plausible_role_title(only):
+            return only, ""
+        return "", only if _looks_like_employer(only) else ""
 
-    first_beats_second = (
-        first_title_score > second_title_score and second_employer_score >= first_employer_score
-    )
-    second_beats_first = (
-        second_title_score > first_title_score and first_employer_score >= second_employer_score
-    )
-
-    if first_beats_second:
-        return first, second
-    if second_beats_first:
+    first = ordered_lines[0]
+    second = ordered_lines[1]
+    if prefer_prefix_order and _is_plausible_role_title(first):
+        return first, second if second != first else ""
+    if _looks_like_employer(first) and _is_plausible_role_title(second):
         return second, first
-
-    if first_title_score > second_title_score:
-        return first, ""
-    if second_title_score > first_title_score:
-        return second, ""
-
-    if prefer_prefix_order and _looks_like_title(first):
-        return first, second
-    if _looks_like_title(second) and not _looks_like_title(first):
-        return second, first
-    if _looks_like_title(first):
-        return first, ""
-    if _looks_like_title(second):
-        return second, ""
+    if _is_plausible_role_title(first):
+        return first, second if second != first else ""
+    if _is_plausible_role_title(second):
+        return second, first if first != second else ""
     return "", ""
 
 
@@ -365,6 +230,10 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
     )
     title_with_dates_re = re.compile(
         rf"^(?P<title>.+?)\s*\((?P<dates>.*?(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}.*?(?:present|current|now|ongoing|(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}))\)\s*$",
+        flags=re.IGNORECASE,
+    )
+    title_pipe_dates_re = re.compile(
+        rf"^(?P<title>.+?)\s*\|\s*(?P<dates>(?:(?:{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?(?:19|20)\d{{2}}\s*(?:-|–|—|to|/)\s*(?:(?:{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?(?:present|current|now|ongoing|(?:19|20)\d{{2}}))(?:\s*\|\s*(?P<tail>.*))?$",
         flags=re.IGNORECASE,
     )
 
@@ -395,25 +264,20 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             i += 1
             continue
 
-        if raw_line.lstrip().startswith("#"):
+        if _is_heading_line(raw_line):
             current_section = cleaned.lower()
             i += 1
             continue
 
         inline_match = inline_role_re.match(cleaned)
-        if inline_match and _section_kind(current_section) != "ignore":
+        if inline_match:
             date_info = _extract_year_range(inline_match.group("dates"))
             bullets, j = collect_role_detail_lines(i + 1)
             if date_info:
                 inline_left = _clean_line(inline_match.group("employer"))
                 inline_right = _clean_line(inline_match.group("title"))
-                title, employer = _pick_role_title_and_employer(
-                    [inline_left, inline_right],
-                    prefer_prefix_order=False,
-                )
-                if not title:
-                    title = inline_right
-                    employer = inline_left
+                title = inline_right
+                employer = inline_left
                 if not _is_plausible_role_title(title) and _is_plausible_role_title(employer):
                     title, employer = employer, title
                 if not _is_plausible_role_title(title):
@@ -423,6 +287,38 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     {
                         "title": title,
                         "employer": employer if employer != title else "",
+                        "header_lines": [item for item in [inline_left, inline_right] if item],
+                        "section": current_section,
+                        "bullets": bullets,
+                        **date_info,
+                    }
+                )
+            i = max(j, i + 1)
+            continue
+
+        title_pipe_dates_match = title_pipe_dates_re.match(cleaned)
+        if title_pipe_dates_match:
+            date_info = _extract_year_range(title_pipe_dates_match.group("dates"))
+            if date_info:
+                bullets, j = collect_role_detail_lines(i + 1)
+                title = _clean_line(title_pipe_dates_match.group("title"))
+                employer = ""
+                if i > 0:
+                    previous_line = _clean_line(lines[i - 1].strip())
+                    if (
+                        previous_line
+                        and not previous_line.lstrip().startswith("#")
+                        and not _extract_year_range(previous_line)
+                    ):
+                        employer = previous_line
+                if not _is_plausible_role_title(title):
+                    i = max(j, i + 1)
+                    continue
+                roles.append(
+                    {
+                        "title": title,
+                        "employer": employer,
+                        "header_lines": [item for item in [employer, title] if item],
                         "section": current_section,
                         "bullets": bullets,
                         **date_info,
@@ -432,7 +328,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             continue
 
         title_with_dates_match = title_with_dates_re.match(cleaned)
-        if title_with_dates_match and _section_kind(current_section) != "ignore":
+        if title_with_dates_match:
             date_info = _extract_year_range(title_with_dates_match.group("dates"))
             if date_info:
                 title = _clean_line(title_with_dates_match.group("title"))
@@ -444,6 +340,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     {
                         "title": title,
                         "employer": "",
+                        "header_lines": [title],
                         "section": current_section,
                         "bullets": bullets,
                         **date_info,
@@ -453,7 +350,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             continue
 
         date_info = _extract_year_range(cleaned)
-        if not date_info or _section_kind(current_section) == "ignore":
+        if not date_info:
             i += 1
             continue
 
@@ -464,7 +361,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             look_back = _clean_line(look_back_raw)
             if not look_back:
                 break
-            if look_back_raw.lstrip().startswith("#") or look_back_raw.lstrip().startswith(("-", "*")):
+            if _is_heading_line(look_back_raw) or look_back_raw.lstrip().startswith(("-", "*")):
                 break
             if _extract_year_range(look_back):
                 break
@@ -481,15 +378,13 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             if not look:
                 j += 1
                 continue
-            if look_raw.lstrip().startswith("#"):
+            if _is_heading_line(look_raw):
                 break
             if _extract_year_range(look):
                 break
             if _is_bullet_line(look_raw):
                 bullets.append(_strip_bullet_prefix(look_raw))
             elif prefix_candidate_lines:
-                # When title/employer were already found above the date line,
-                # plain paragraphs below the date belong to the role body.
                 bullets.append(look)
             elif not bullets and len(candidate_lines) < 3:
                 candidate_lines.append(look)
@@ -504,12 +399,15 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                 employer = next((line for line in candidate_lines if line != title), "")
             else:
                 title = ""
+        if title and not employer and len(prefix_candidate_lines) >= 2:
+            employer = next((line for line in prefix_candidate_lines if line != title), "")
 
         if title:
             roles.append(
                 {
                     "title": title,
                     "employer": employer if employer != title else "",
+                    "header_lines": [item for item in candidate_lines if item][:3],
                     "section": current_section,
                     "bullets": bullets,
                     **date_info,
@@ -531,323 +429,144 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         deduped.append(role)
     return deduped
 
- 
 
-def _make_title_pattern(title: str) -> str:
-    normalized = _clean_line(title).lower()
-    return rf"\b{re.escape(normalized)}\b" if normalized else ""
+def _build_cv_evidence_payload(source_text: str, lookback_years: int) -> dict[str, Any]:
+    recent_from_year = _CURRENT_YEAR - lookback_years
+    structured_roles: list[dict[str, Any]] = []
 
-
-def _contains_role_noun(text: str) -> bool:
-    tokens = [_normalize_token(token) for token in _clean_line(text).split()]
-    return any(token in _GENERIC_ROLE_NOUNS for token in tokens)
-
-
-def _title_pattern_candidates(title: str) -> list[str]:
-    cleaned = _clean_line(title)
-    if not cleaned:
-        return []
-
-    seen: set[str] = set()
-    candidates: list[str] = []
-
-    def push(value: str) -> None:
-        candidate = _clean_line(value)
-        normalized = _normalize_phrase(candidate)
-        if not candidate or not normalized or normalized in seen:
-            return
-        seen.add(normalized)
-        candidates.append(candidate)
-
-    base_title = _clean_line(re.sub(r"\([^)]*\)", "", cleaned))
-    if not base_title:
-        return []
-
-    components: list[str] = [base_title]
-    if " - " in base_title:
-        left, right = [part.strip() for part in base_title.split(" - ", 1)]
-        if left and right and not _contains_role_noun(right):
-            components.append(left)
-
-    split_components: list[str] = []
-    for component in components:
-        if "/" in component:
-            split_components.extend(
-                _clean_line(part)
-                for part in re.split(r"\s*/\s*", component)
-                if _clean_line(part)
-            )
-            continue
-        split_components.append(component)
-
-    for component in split_components:
-        tokens = [_normalize_token(token) for token in component.split()]
-        tokens = [token for token in tokens if token and token != "&"]
-        if len(tokens) == 1 and tokens[0] in _GENERIC_ROLE_NOUNS:
-            continue
-
-        for index, token in enumerate(tokens):
-            if token not in _TITLE_PATTERN_ANCHOR_NOUNS:
-                continue
-            if index >= 1:
-                push(" ".join(tokens[index - 1:index + 1]))
-            if index >= 2 and tokens[index - 2] in _TITLE_MODIFIERS:
-                push(" ".join(tokens[index - 2:index + 1]))
-
-        if len(tokens) <= 3 and any(token in _TITLE_PATTERN_ANCHOR_NOUNS for token in tokens):
-            push(" ".join(tokens))
-
-    return candidates
-
-
-def _is_quality_phrase(phrase: str) -> bool:
-    cleaned = _normalize_phrase(phrase)
-    if not cleaned or cleaned in _GENERIC_PHRASE_BLACKLIST:
-        return False
-    tokens = cleaned.split()
-    if not tokens or len(tokens) > 4:
-        return False
-    if len(tokens) == 1 and len(tokens[0]) < 4:
-        return False
-    if all(token in _GENERIC_PHRASE_STOPWORDS for token in tokens):
-        return False
-    return True
-
-
-def _is_generic_title_phrase(phrase: str) -> bool:
-    tokens = _normalize_phrase(phrase).split()
-    return bool(tokens) and all(token in _TITLE_MODIFIERS or token in _GENERIC_ROLE_NOUNS for token in tokens)
-
-
-def _phrase_variants_from_text(text: str) -> list[str]:
-    cleaned = _clean_line(text)
-    if not cleaned:
-        return []
-
-    variants: list[str] = []
-    chunks = [chunk.strip() for chunk in re.split(r"[;,]|(?:\s{2,})", cleaned) if chunk.strip()]
-    for chunk in chunks or [cleaned]:
-        normalized_chunk = _normalize_phrase(chunk)
-        if _is_quality_phrase(normalized_chunk):
-            variants.append(normalized_chunk)
-
-        tokens = [_normalize_token(token) for token in chunk.split()]
-        tokens = [token for token in tokens if token and token not in _GENERIC_PHRASE_STOPWORDS]
-        for size in (3, 2, 1):
-            if size == 1 and len(tokens) > 1:
-                continue
-            for start in range(0, max(len(tokens) - size + 1, 0)):
-                phrase = " ".join(tokens[start:start + size])
-                if _is_quality_phrase(phrase):
-                    variants.append(phrase)
-    return list(dict.fromkeys(variants))
-
-
-def _collect_phrase_stats(
-    source_text: str,
-    roles: list[dict[str, Any]],
-    onboarding_settings: dict[str, Any] | None = None,
-) -> dict[str, dict[str, Any]]:
-    stats: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {
-            "score": 0.0,
-            "roles": set(),
-            "recent_roles": set(),
-            "variants": Counter(),
-            "source_types": set(),
-        }
-    )
-    recent_cutoff = _CURRENT_YEAR - _resolve_extraction_lookback_years(onboarding_settings)
-
-    for role in roles:
-        role_key = f"{role.get('title','')}|{role.get('start_year','')}"
-        recent = int(role.get("end_year", 0) or 0) >= recent_cutoff
-        for phrase in _phrase_variants_from_text(role.get("title", "")):
-            entry = stats[phrase]
-            entry["score"] += 2.2
-            entry["roles"].add(role_key)
-            if recent:
-                entry["recent_roles"].add(role_key)
-            entry["variants"][phrase] += 1
-            entry["source_types"].add("role_title")
-        for bullet in role.get("bullets", []):
-            for phrase in _phrase_variants_from_text(bullet):
-                entry = stats[phrase]
-                entry["score"] += 1.1
-                entry["roles"].add(role_key)
-                if recent:
-                    entry["recent_roles"].add(role_key)
-                entry["variants"][phrase] += 1
-                entry["source_types"].add("role_bullet")
-
-    current_section = ""
-    for raw_line in source_text.splitlines():
-        line = _clean_line(raw_line)
-        if not line:
-            continue
-        if raw_line.lstrip().startswith("#"):
-            current_section = line.lower()
-            continue
-        section_kind = _section_kind(current_section)
-        if section_kind == "ignore":
-            continue
-        if section_kind == "experience" and _extract_year_range(line):
-            continue
-        weight = 3.0 if section_kind == "skills" else 0.7
-        for phrase in _phrase_variants_from_text(line):
-            entry = stats[phrase]
-            entry["score"] += weight
-            entry["variants"][phrase] += 1
-            entry["source_types"].add(section_kind or "other")
-    return stats
-
-
-def _rank_phrase_items(stats: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    ranked: list[dict[str, Any]] = []
-    for phrase, item in stats.items():
-        roles = len(item["roles"])
-        recent_roles = len(item["recent_roles"])
-        score = float(item["score"]) + (roles * 0.8) + (recent_roles * 0.6)
-        ranked.append(
+    for index, role in enumerate(_parse_role_entries(source_text)):
+        structured_roles.append(
             {
-                "phrase": phrase,
-                "score": score,
-                "roles": roles,
-                "recent_roles": recent_roles,
-                "variants": [variant for variant, _ in item["variants"].most_common(6)],
-                "source_types": set(item["source_types"]),
+                "role_index": index,
+                "title": str(role.get("title") or "").strip(),
+                "employer": str(role.get("employer") or "").strip(),
+                "header_lines": [str(item).strip() for item in (role.get("header_lines") or []) if str(item).strip()][:3],
+                "section": str(role.get("section") or "").strip(),
+                "start_year": int(role.get("start_year") or 0),
+                "start_month": int(role.get("start_month") or 0),
+                "end_year": int(role.get("end_year") or 0),
+                "end_month": int(role.get("end_month") or 0),
+                "is_current": bool(role.get("is_current")),
+                "duration_months": int(role.get("duration_months") or 0),
+                "is_recent": int(role.get("end_year") or 0) >= recent_from_year,
+                "bullets": [str(item).strip() for item in (role.get("bullets") or []) if str(item).strip()][:8],
             }
         )
-    ranked.sort(key=lambda item: (-item["score"], -item["roles"], item["phrase"]))
-    return ranked
+
+    return {
+        "current_year": _CURRENT_YEAR,
+        "lookback_years": lookback_years,
+        "recent_from_year": recent_from_year,
+        "roles": structured_roles,
+    }
 
 
-def _parse_capabilities(
-    source_text: str,
-    onboarding_settings: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    source_text = repair_text(source_text)
-    if not source_text:
-        return []
+# ── LLM extraction ─────────────────────────────────────────────────────────────
 
-    roles = _parse_role_entries(source_text)
-    ranked = _rank_phrase_items(_collect_phrase_stats(source_text, roles, onboarding_settings=onboarding_settings))
-    capabilities: list[dict[str, Any]] = []
-    seen: set[str] = set()
+def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any]:
+    """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
+    cache_key = hashlib.sha256(f"{lookback_years}:{source_text}".encode()).hexdigest()[:16]
+    if cache_key in _cv_extraction_cache:
+        return _cv_extraction_cache[cache_key]
 
-    for item in ranked:
-        phrase = item["phrase"]
-        if phrase in seen:
-            continue
-        if item["source_types"] == {"role_title"}:
-            continue
-        if _is_generic_title_phrase(phrase):
-            continue
-        min_score = 2.0 if "skills" in item["source_types"] else 3.0
-        if item["score"] < min_score:
-            continue
-        seen.add(phrase)
-
-        if item["score"] >= 8 or item["roles"] >= 3:
-            level = "strong"
-        elif item["score"] >= 5 or item["roles"] >= 2:
-            level = "working"
-        else:
-            level = "basic"
-
-        if item["roles"] >= 2 and item["recent_roles"] >= 1:
-            fit = "core"
-        elif item["score"] >= 4:
-            fit = "supporting"
-        else:
-            fit = "contextual"
-
-        aliases = [variant for variant in item["variants"] if variant != phrase][:6]
-        capabilities.append(
-            {
-                "name": phrase,
-                "level": level if level in _VALID_LEVELS else "basic",
-                "fit": fit if fit in _VALID_FITS else "contextual",
-                "aliases": aliases,
-            }
-        )
-        if len(capabilities) >= 20:
-            break
-    return _apply_llm_capability_names(capabilities)
-
-
-def _apply_llm_capability_names(capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if not capabilities:
-        return []
     try:
-        from job_hunter_agent.llm_gate import name_capability_clusters
-
-        labels = name_capability_clusters(capabilities)
+        from job_hunter_agent.llm_gate import client, _get_llm_model, _log_llm_call
     except Exception:
-        return capabilities
+        return {}
 
-    if not labels:
-        return capabilities
+    if client is None:
+        return {}
 
-    renamed: list[dict[str, Any]] = []
-    for capability, label in zip(capabilities, labels):
-        updated = dict(capability)
-        cleaned = _normalize_phrase(label)
-        if not _is_quality_phrase(cleaned) or _is_generic_title_phrase(cleaned):
-            renamed.append(updated)
+    recent_from = _CURRENT_YEAR - lookback_years
+    evidence_payload = _build_cv_evidence_payload(source_text, lookback_years)
+    evidence_json = json.dumps(evidence_payload, ensure_ascii=True)
+    prompt = (
+        "Extract structured data from this CV evidence pack.\n\n"
+        "Return JSON matching this schema exactly:\n"
+        '{"capabilities":[{"name":"2-4 word lowercase skill","level":"strong|working|basic",'
+        '"fit":"core|supporting|contextual","aliases":["variant"]}],'
+        '"target_title_patterns":["business analyst"],'
+        '"secondary_title_patterns":["project manager"],'
+        '"suggested_search_keywords":["business analysis"],'
+        '"match_preferences":{"prefer_permanent":null,"work_mode_preference":null,"home_location":""}}\n\n'
+        "Rules:\n"
+        f"- Current year is {_CURRENT_YEAR}. Recent means {recent_from} onward.\n"
+        "- Treat the evidence pack as the source of truth. Use raw CV text only as fallback context when evidence is incomplete.\n"
+        "- For each role, trust header_lines plus dates and bullets more than the parser's title/employer fields if they appear inconsistent.\n"
+        "- capabilities: transferable professional skills only. Not company/project names, domains, or generic duties. "
+        "Use role titles, bullets, and skill lines as evidence. level=strong if repeated across multiple roles or clearly senior; "
+        "fit=core if recent and repeated.\n"
+        "- target_title_patterns: short searchable patterns from the most recent substantial roles in the lookback window.\n"
+        "- secondary_title_patterns: other plausible patterns from the same window.\n"
+        "- suggested_search_keywords: 2-4 short phrases describing the candidate's primary expertise.\n"
+        "- match_preferences: infer only from explicit statements; use null if not stated.\n"
+        "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
+        "- Return only valid JSON.\n\n"
+        f"Evidence pack JSON:\n{evidence_json[:12000]}\n\n"
+        f"Raw CV fallback:\n{source_text[:3000]}"
+    )
+
+    try:
+        model = _get_llm_model()
+        resp = client.responses.create(
+            model=model,
+            input=[{"role": "user", "content": prompt}],
+            max_output_tokens=900,
+        )
+        _log_llm_call(resp, "cv_extraction", model)
+        raw = (resp.output_text or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        result = json.loads(raw)
+    except Exception:
+        result = {}
+
+    _cv_extraction_cache[cache_key] = result
+    return result
+
+
+def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
+    result = []
+    for item in raw or []:
+        if not isinstance(item, dict):
             continue
-        original_name = str(updated.get("name") or "").strip().lower()
-        source_tokens = {
-            _normalize_token(token)
-            for value in [original_name, *updated.get("aliases", [])]
-            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/&-]*", str(value or ""))
-            if _normalize_token(token)
-        }
-        cleaned_tokens = [
-            _normalize_token(token)
-            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/&-]*", cleaned)
-            if _normalize_token(token)
-        ]
-        if cleaned_tokens and any(token not in source_tokens for token in cleaned_tokens):
-            renamed.append(updated)
+        name = str(item.get("name") or "").strip().lower()
+        level = str(item.get("level") or "basic").strip().lower()
+        fit = str(item.get("fit") or "contextual").strip().lower()
+        aliases = [str(a).strip().lower() for a in (item.get("aliases") or []) if str(a).strip()]
+        if not name:
             continue
-        if cleaned and cleaned != original_name:
-            aliases = [original_name, *updated.get("aliases", [])]
-            deduped_aliases: list[str] = []
-            seen_aliases: set[str] = {cleaned}
-            for alias in aliases:
-                normalized_alias = _normalize_phrase(alias)
-                if not normalized_alias or normalized_alias in seen_aliases:
-                    continue
-                seen_aliases.add(normalized_alias)
-                deduped_aliases.append(normalized_alias)
-            updated["name"] = cleaned
-            updated["aliases"] = deduped_aliases[:6]
-        renamed.append(updated)
+        result.append({
+            "name": name,
+            "level": level if level in _VALID_LEVELS else "basic",
+            "fit": fit if fit in _VALID_FITS else "contextual",
+            "aliases": aliases[:6],
+        })
+    return result[:20]
 
-    if len(capabilities) > len(labels):
-        renamed.extend(dict(item) for item in capabilities[len(labels):])
-    return renamed
 
+def _validate_patterns(raw: Any, limit: int = 6) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(p).strip().lower() for p in raw if str(p).strip()][:limit]
+
+
+# ── Match preference extraction ────────────────────────────────────────────────
 
 def _extract_match_preferences(text: str) -> dict[str, Any]:
-    """Extract candidate preferences/warnings from the source text."""
     prefs = {}
     lowered = text.lower()
 
-    # Engagement Preference
     if re.search(r"\b(permanent only|no contracts|prefer permanent|seeking permanent)\b", lowered):
         prefs["prefer_permanent"] = True
     elif re.search(r"\b(contract only|prefer contracts|freelance|interim)\b", lowered):
         prefs["prefer_permanent"] = False
 
-    # Work Mode
     if re.search(r"\b(remote only|100% remote|work from home only)\b", lowered):
         prefs["work_mode_preference"] = "remote"
     elif re.search(r"\b(hybrid|flexible working|mix of office and home)\b", lowered):
         prefs["work_mode_preference"] = "hybrid"
 
-    # Location hint (e.g., "Based in Melbourne" or "Home base: Sydney")
     loc = extract_location_hint(text)
     if loc:
         prefs["home_location"] = loc
@@ -856,19 +575,19 @@ def _extract_match_preferences(text: str) -> dict[str, Any]:
 
 
 def extract_location_hint(text: str) -> str:
-    """Extract a home location hint from text (e.g. 'Based in Melbourne')."""
     match = re.search(
         r"(?i)\b(?:based in|location|reside in|lives in|home base|resident of):\s*([A-Za-z\s,]+?)(?=\n|[,.]?\s+and\b|[,.]?\s+with\b|[.!?]|\s{2,}|\Z)",
-        text
+        text,
     )
     if match:
         loc = match.group(1).strip()
-        # Cleanup trailing geographical noise
-        loc = re.sub(r"(?i)[,\s]+(australia|vic|nsw|qld|wa|sa|tas|act|nt)$", "", loc).strip()
+        loc = re.sub(r"(?i)[,\s]+\w{2,3}$", "", loc).strip()
         if 2 < len(loc) < 60:
             return loc
     return ""
 
+
+# ── Public API ─────────────────────────────────────────────────────────────────
 
 def build_learning_patch(
     text: str,
@@ -878,99 +597,45 @@ def build_learning_patch(
     if not source_text:
         return {}
 
-    patch: dict[str, Any] = {
-        "cv_text": source_text,
-    }
+    lookback_years = _resolve_extraction_lookback_years(onboarding_settings)
+    extracted = _llm_extract_from_cv(source_text, lookback_years)
 
-    capability_rules = _parse_capabilities(source_text, onboarding_settings=onboarding_settings)
-    if capability_rules:
-        patch["capability_profile_rules"] = capability_rules
+    patch: dict[str, Any] = {"cv_text": source_text}
 
-    match_prefs = _extract_match_preferences(source_text)
+    capabilities = _validate_capabilities(extracted.get("capabilities", []))
+    if capabilities:
+        patch["capability_profile_rules"] = capabilities
+
+    raw_prefs = extracted.get("match_preferences") or {}
+    match_prefs = {k: v for k, v in raw_prefs.items() if v is not None and v != ""}
     if match_prefs:
         patch["match_preferences"] = match_prefs
 
     return patch
 
 
-def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dict | None = None) -> dict[str, list[str]]:
+def extract_title_pattern_suggestions(
+    source_text: str,
+    onboarding_settings: dict | None = None,
+) -> dict[str, list[str]]:
     source_text = repair_text(source_text)
     settings = onboarding_settings or {}
     lookback_years = _resolve_extraction_lookback_years(settings)
-    min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
     max_target = _resolve_onboarding_int(settings, "max_target_patterns")
     max_secondary = _resolve_onboarding_int(settings, "max_secondary_patterns")
-    roles = _parse_role_entries(source_text)
-
-    target_titles: list[str] = []
-    secondary_titles: list[str] = []
-    suggested_keywords: list[str] = []
-    recent_cutoff = _CURRENT_YEAR - lookback_years
-    strong_role_titles: list[str] = []
-    supporting_role_titles: list[str] = []
-
-    for role in roles:
-        title = _clean_line(role.get("title", ""))
-        if not title:
-            continue
-        pattern_candidates = _title_pattern_candidates(title)
-        end_year = int(role.get("end_year", 0) or 0)
-        duration_months = int(role.get("duration_months", 0) or 0)
-        in_lookback = end_year >= recent_cutoff
-
-        if not in_lookback:
-            # STRICT LOOKBACK: Ignore roles that fall outside the extraction window.
-            continue
-
-        if duration_months >= min_months:
-            strong_role_titles.extend(pattern_candidates or [title])
-        else:
-            supporting_role_titles.extend(pattern_candidates or [title])
-
-    # Use only the first couple of strong recent titles as direct targets.
-    # Other valid titles still matter, but they belong in the softer bucket so
-    # the app does not treat every past role as a primary search direction.
-    direct_target_limit = max(1, min(2, max_target))
-    target_titles.extend(strong_role_titles[:direct_target_limit])
-    secondary_titles.extend(strong_role_titles[direct_target_limit:])
-    secondary_titles.extend(supporting_role_titles)
-    suggested_keywords.extend(target_titles[:2])
-
-    def _dedupe_patterns(titles: list[str], limit: int, exclude: set[str] | None = None) -> list[str]:
-        patterns: list[str] = []
-        seen_patterns: set[str] = set()
-        blocked = exclude or set()
-        for title in titles:
-            pattern = _make_title_pattern(title)
-            if pattern and pattern not in seen_patterns and pattern not in blocked:
-                seen_patterns.add(pattern)
-                patterns.append(pattern)
-            if len(patterns) >= limit:
-                break
-        return patterns
-
-    deduped_keywords: list[str] = []
-    seen_keywords: set[str] = set()
-    for keyword in suggested_keywords:
-        cleaned = _normalize_phrase(keyword)
-        if not cleaned or cleaned in seen_keywords:
-            continue
-        seen_keywords.add(cleaned)
-        deduped_keywords.append(cleaned)
-        if len(deduped_keywords) >= 4:
-            break
-
-    target_patterns = _dedupe_patterns(target_titles, max_target)
-    secondary_patterns = _dedupe_patterns(secondary_titles, max_secondary, exclude=set(target_patterns))
+    extracted = _llm_extract_from_cv(source_text, lookback_years)
 
     return {
-        "target_title_patterns": target_patterns,
-        "secondary_title_patterns": secondary_patterns,
-        "suggested_search_keywords": deduped_keywords,
+        "target_title_patterns": _validate_patterns(extracted.get("target_title_patterns"), max_target),
+        "secondary_title_patterns": _validate_patterns(extracted.get("secondary_title_patterns"), max_secondary),
+        "suggested_search_keywords": _validate_patterns(extracted.get("suggested_search_keywords"), 4),
     }
 
 
-def merge_capability_rules(existing: list[dict[str, Any]], learned: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def merge_capability_rules(
+    existing: list[dict[str, Any]],
+    learned: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
     for rule in existing or []:
         name = str(rule.get("name") or "").strip().lower()

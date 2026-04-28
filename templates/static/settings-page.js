@@ -4,6 +4,7 @@
     const runLastRunEl = document.getElementById('run_last_run');
     const runNowButton = document.getElementById('run_now');
     const rebuildProfileButton = document.getElementById('rebuild_profile');
+    const capabilityUi = window.JobHunterCapabilityUi || {};
     let telegramConnectLink = '';
     let loadedAgentSettings = null;
     let loadedProfile = null;
@@ -87,51 +88,9 @@
       }).filter(rule => rule.name && rule.level);
     }
 
-    const capabilityModeMeta = {
-      core_skill: {
-        label: 'Essential',
-        summary: 'One of your main strengths for the roles you want.',
-        level: 'strong',
-        fit: 'core',
-      },
-      useful_support: {
-        label: 'Helpful',
-        summary: 'A real skill that helps matching, but should not define it.',
-        level: 'working',
-        fit: 'supporting',
-      },
-      background_only: {
-        label: 'Background',
-        summary: 'Acceptable context, but it should not pull roles up by itself.',
-        level: 'basic',
-        fit: 'contextual',
-      },
-      not_for_me: {
-        label: 'Not a fit',
-        summary: 'If a role leans on this capability, it is probably the wrong direction.',
-        level: 'none',
-        fit: 'avoid',
-      },
-    };
+    const capabilityModeMeta = capabilityUi.capabilityModeMeta || {};
 
-    const capabilityPriorityMeta = {
-      core: {
-        label: 'Essential',
-        summary: 'Capabilities that should matter a lot for your target roles.',
-      },
-      supporting: {
-        label: 'Helpful',
-        summary: 'Relevant capabilities that should help, but not define, the match.',
-      },
-      contextual: {
-        label: 'Background',
-        summary: 'Experience that should stay in the background.',
-      },
-      avoid: {
-        label: 'Not a fit',
-        summary: 'Capabilities that point toward the wrong kinds of roles.',
-      },
-    };
+    const capabilityPriorityMeta = capabilityUi.capabilityPriorityMeta || {};
 
     const capabilityPriorityOrder = ['core', 'supporting', 'contextual', 'avoid'];
 
@@ -247,12 +206,12 @@
                       <input id="capability_name_${index}" type="text" data-capability-field="name" value="${escapeHtml(rule.name)}" placeholder="e.g. Agile delivery">
                     </div>
                     <div>
-                      <label for="capability_mode_${index}">How relevant is this to your target roles?</label>
+                      <label for="capability_mode_${index}">${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
                       <select id="capability_mode_${index}" data-capability-mode>
-                        <option value="core_skill"${capabilityModeFromRule(rule) === 'core_skill' ? ' selected' : ''}>Essential</option>
-                        <option value="useful_support"${capabilityModeFromRule(rule) === 'useful_support' ? ' selected' : ''}>Helpful</option>
-                        <option value="background_only"${capabilityModeFromRule(rule) === 'background_only' ? ' selected' : ''}>Background</option>
-                        <option value="not_for_me"${capabilityModeFromRule(rule) === 'not_for_me' ? ' selected' : ''}>Not a fit</option>
+                        <option value="core_skill"${capabilityModeFromRule(rule) === 'core_skill' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.core_skill?.label || 'Essential')}</option>
+                        <option value="useful_support"${capabilityModeFromRule(rule) === 'useful_support' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.useful_support?.label || 'Helpful')}</option>
+                        <option value="background_only"${capabilityModeFromRule(rule) === 'background_only' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.background_only?.label || 'Background')}</option>
+                        <option value="not_for_me"${capabilityModeFromRule(rule) === 'not_for_me' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.not_for_me?.label || 'Not a fit')}</option>
                       </select>
                     </div>
                     <div class="capability-row-actions">
@@ -756,14 +715,9 @@
     }
 
     function getReviewChoiceMeta(choice) {
-      const meta = {
-        '': { label: 'Choose an option', summary: 'Pick the simplest description of how this capability fits your target roles.', useWhen: 'Choose the closest option based on your CV and the kept-role examples.', engineEffect: 'Nothing changes until you confirm.' },
-        core_skill: { label: 'Essential', summary: 'This is one of your main strengths for the roles you want.', useWhen: 'Use this when the capability should matter a lot in matching.', engineEffect: 'The app will treat it as a strong core capability.' },
-        useful_support: { label: 'Helpful', summary: 'This is a real skill, but it should support matching rather than define it.', useWhen: 'Use this when the capability is relevant and useful, but not central to your pitch.', engineEffect: 'The app will treat it as a positive supporting capability.' },
-        background_only: { label: 'Background', summary: 'This is acceptable context, but it should not drive matching on its own.', useWhen: 'Use this for adjacent or lighter experience that should stay in the background.', engineEffect: 'The app will keep it as a weak contextual signal.' },
-        not_for_me: { label: 'Not a fit', summary: 'Jobs that lean on this capability are probably the wrong direction.', useWhen: 'Use this when the capability points toward work you do not want the app to favour.', engineEffect: 'The app will treat it as a capability to avoid.' },
-      };
-      return meta[choice] || meta[''];
+      const emptyMeta = capabilityUi.emptyReviewChoiceMeta || { label: 'Choose an option', summary: 'Pick the simplest description of how this capability fits your target roles.', useWhen: 'Choose the closest option based on your CV and the kept-role examples.', engineEffect: 'Nothing changes until you confirm.' };
+      if (!choice) return emptyMeta;
+      return capabilityModeMeta[choice] || emptyMeta;
     }
 
     function renderReviewChoiceGuide(choice) {
@@ -779,10 +733,10 @@
     function reviewOptionMarkup(selectedValue) {
       const options = [
         ['', 'Choose an option'],
-        ['core_skill', 'Essential'],
-        ['useful_support', 'Helpful'],
-        ['background_only', 'Background'],
-        ['not_for_me', 'Not a fit'],
+        ['core_skill', capabilityModeMeta.core_skill?.label || 'Essential'],
+        ['useful_support', capabilityModeMeta.useful_support?.label || 'Helpful'],
+        ['background_only', capabilityModeMeta.background_only?.label || 'Background'],
+        ['not_for_me', capabilityModeMeta.not_for_me?.label || 'Not a fit'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -820,7 +774,7 @@
                 <h3>${escapeHtml(item.skill || 'Capability signal')}</h3>
                 <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
                 <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
-                <label>How relevant is this to your target roles?</label>
+                <label>${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
                 <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">${reviewOptionMarkup(item.recommended_choice || '')}</select>
                 <details class="review-choice-guide">
                   <summary>What this choice means</summary>

@@ -40,6 +40,7 @@ from job_hunter_agent.job_identity import (
     find_similar_job,
 )
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
+from job_hunter_agent.match_labels import MATCH_LEVELS, score_to_match_label
 from job_hunter_agent.profile_store import (
     get_evidence_tier_weights,
     get_evidence_tiers,
@@ -1617,16 +1618,6 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
     return dedupe_preserve_order(gaps)[:max_items]
 
 
-def score_to_match_label(score: int) -> str:
-    if score >= 85:
-        return "Strong match"
-    if score >= 70:
-        return "Good match"
-    if score >= 55:
-        return "Worth a look"
-    return "Stretch"
-
-
 def score_filter_option_label(threshold: int) -> str:
     label = score_to_match_label(threshold)
     if threshold >= 85:
@@ -2640,6 +2631,23 @@ def _render_results_fragment(context: dict[str, str]) -> str:
     return template.safe_substitute(context)
 
 
+def _render_match_level_guide_html() -> str:
+    guide_bits = [
+        f'<span class="chip"><strong>{safe_html(str(level["label"]))}:</strong> {safe_html(str(level["description"]))}</span>'
+        for level in MATCH_LEVELS
+    ]
+    guide_bits.extend([
+        '<span class="chip"><strong>Title match:</strong> direct titles are favored over secondary titles</span>',
+        '<span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span>',
+        '<span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span>',
+        '<span class="chip"><strong>Freshness:</strong> newer roles are favored</span>',
+        '<span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can be dialed up or down</span>',
+        '<span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>',
+        '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
+    ])
+    return "".join(guide_bits)
+
+
 def render_html(
     output_path: str,
     kept_records: List[dict],
@@ -2805,6 +2813,7 @@ def render_html(
             "SNAPSHOT_HELPER": safe_html(snapshot_helper),
             "TESTING_MODE_NOTE": safe_html(testing_mode_note),
             "TOP_REJECT_REASONS_HTML": top_reject_reasons_html,
+            "MATCH_LEVEL_GUIDE_HTML": _render_match_level_guide_html(),
             "DASHBOARD_RUN_ID_JSON": json.dumps(dashboard_run_id),
             "SEARCH_SETTINGS_JSON": search_settings_json,
             "DEFAULT_SCORE_FILTER_MIN_JSON": json.dumps(str(DEFAULT_SCORE_FILTER_MIN)),

@@ -138,6 +138,29 @@ _ACTIONISH_ALIAS_TOKENS = {
     "support",
     "supported",
 }
+_WEAK_CAPABILITY_NAME_TOKENS = {
+    "across",
+    "based",
+    "check",
+    "during",
+    "environment",
+    "external",
+    "including",
+    "internal",
+    "manager",
+    "managers",
+    "multiple",
+    "primary",
+    "secondary",
+    "service",
+    "services",
+    "technology",
+    "through",
+    "tool",
+    "tools",
+    "vendor",
+    "vendors",
+}
 
 
 def _clean_phrase(value: Any) -> str:
@@ -239,6 +262,34 @@ def _collect_short_terms(value: str) -> list[str]:
                 continue
             terms.append(term)
     return list(dict.fromkeys(terms))
+
+
+def _capability_name_score(term: str) -> int:
+    cleaned = _repair_term_text(_normalize_phrase(term))
+    tokens = _tokenize(cleaned)
+    if not cleaned or not tokens:
+        return -100
+    if _is_low_value_alias_term(cleaned):
+        return -80
+
+    informative_tokens = _informative_token_count(tokens)
+    score = informative_tokens * 5
+    if len(tokens) >= 2:
+        score += 6
+    else:
+        score += 2
+
+    if tokens[0] in _ACTIONISH_ALIAS_TOKENS:
+        score -= 10
+    if tokens[0] in _WEAK_CAPABILITY_NAME_TOKENS:
+        score -= 8
+    if tokens[-1] in _WEAK_CAPABILITY_NAME_TOKENS:
+        score -= 6
+    if len(tokens) == 2 and informative_tokens <= 1:
+        score -= 5
+    if any(token in _TITLE_LIKE_TOKENS for token in tokens):
+        score -= 4
+    return score
 
 
 def derive_job_description_aliases(
@@ -374,12 +425,15 @@ def derive_job_description_aliases(
 
 def choose_capability_name(name: str, raw_aliases: list[str] | None) -> str:
     cleaned_name = _repair_term_text(_normalize_phrase(name))
+    derived_aliases = derive_job_description_aliases(cleaned_name or name, raw_aliases or [], max_aliases=6)
+    best_alias = next((alias for alias in derived_aliases if not _is_low_value_alias_term(alias)), "")
+    name_score = _capability_name_score(cleaned_name)
+    alias_score = _capability_name_score(best_alias)
+    if best_alias and (name_score < 0 or alias_score >= name_score + 3):
+        return best_alias
     if cleaned_name and not _is_low_value_alias_term(cleaned_name):
         return cleaned_name
-    for alias in derive_job_description_aliases(cleaned_name or name, raw_aliases or [], max_aliases=6):
-        if not _is_low_value_alias_term(alias):
-            return alias
-    return cleaned_name
+    return best_alias or cleaned_name
 
 
 def expand_capability_terms(rule: dict[str, Any], max_terms: int = 10) -> list[str]:

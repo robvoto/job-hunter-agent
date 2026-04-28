@@ -77,6 +77,13 @@ def test_infer_role_sector_only_claims_government_when_explicit():
     }
 
 
+def test_score_to_match_label_uses_central_match_band_mapping():
+    assert source_connector.score_to_match_label(92) == "Strong match"
+    assert source_connector.score_to_match_label(74) == "Good match"
+    assert source_connector.score_to_match_label(61) == "Worth a look"
+    assert source_connector.score_to_match_label(40) == "Stretch"
+
+
 def test_has_government_context_detects_real_public_sector_language():
     assert source_connector.has_government_context(
         "Federal government department delivering a public sector program."
