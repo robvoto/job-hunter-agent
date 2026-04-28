@@ -500,7 +500,7 @@
       list-style: none;
     }
     .capability-row-summary::after {
-      content: '▾';
+      content: '\25BE';
       color: var(--muted);
       font-size: 0.9rem;
       line-height: 1;

@@ -1,4 +1,4 @@
-﻿﻿from job_hunter_agent import local_server
+from job_hunter_agent import local_server
 from job_hunter_agent import source_documents
 
 

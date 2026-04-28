@@ -1,4 +1,4 @@
-﻿import re
+import re
 from typing import Any
 
 
@@ -118,10 +118,10 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 def _choice_label(choice: str) -> str:
     labels = {
-        "core_skill": "Core skill",
-        "useful_support": "Useful support",
-        "background_only": "Background only",
-        "not_for_me": "Not for me",
+        "core_skill": "Essential",
+        "useful_support": "Helpful",
+        "background_only": "Background",
+        "not_for_me": "Not a fit",
     }
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
@@ -134,12 +134,12 @@ def _current_rule_label(rule: dict[str, Any] | None) -> str:
     if not level and not fit:
         return "Unclassified"
     if fit == "avoid" or level == "none":
-        return "Not for me"
+        return "Not a fit"
     if fit == "core":
-        return "Core skill"
+        return "Essential"
     if fit == "supporting":
-        return "Useful support"
-    return "Background only"
+        return "Helpful"
+    return "Background"
 
 
 def build_capability_tuning_suggestions(

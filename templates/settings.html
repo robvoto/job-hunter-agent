@@ -263,13 +263,13 @@
             <div class="advanced-head">
               <div class="panel-kicker">Scoring signals</div>
               <h2>Capability Matrix</h2>
-              <p class="panel-copy">Each row is a capability the engine can score against job descriptions.</p>
+              <p class="panel-copy">Each row is a capability Job Hunter can use when judging fit.</p>
             </div>
             <div id="capability_matrix_editor" class="capability-editor"></div>
             <div class="capability-toolbar">
               <div class="capability-toolbar-main">
-                <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities or job ad keywords">
-                <span class="capability-toolbar-copy">Use job-ad wording in aliases, not CV sentence fragments.</span>
+                <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities or aliases">
+                <span class="capability-toolbar-copy">Aliases should use common job-ad wording, not CV sentence fragments.</span>
               </div>
               <button class="secondary" id="add_capability_rule" type="button">Add capability</button>
             </div>
@@ -282,7 +282,7 @@
           <div class="advanced-grid">
             <section class="subpanel">
               <h3>Title Matching</h3>
-              <div class="field-help" style="margin-bottom:12px;">Primary titles are your strongest role directions. Secondary titles are still relevant, but they should need stronger evidence before a job feels like a match.</div>
+              <div class="field-help" style="margin-bottom:12px;">Strong fit job titles are your clearest role directions. Conditional fit job titles can still fit, but they should need stronger evidence before a job feels like a match.</div>
               <label for="target_title_patterns_add">Target titles</label>
               <div class="badge-editor" data-chip-editor="target_title_patterns">
                 <div id="target_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
@@ -294,11 +294,11 @@
               <textarea id="target_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <div class="field-help">Jobs with these titles should count as direct hits.</div>
 
-              <label for="adjacent_title_patterns_add">Secondary titles</label>
+              <label for="adjacent_title_patterns_add">Conditional fit job titles</label>
               <div class="badge-editor" data-chip-editor="adjacent_title_patterns">
                 <div id="adjacent_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
-                  <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="Add a secondary title">
+                  <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="Add a conditional-fit title">
                   <button class="secondary" type="button" data-add-chip="adjacent_title_patterns">Add</button>
                 </div>
               </div>
@@ -329,7 +329,7 @@
               </div>
               <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <details class="help-drawer" style="margin-top:8px;">
-                <summary>How “Reject jobs requiring” works</summary>
+                <summary>How "Reject jobs requiring" works</summary>
                 <p>Add skills or tools you do not have. The engine only rejects when those terms look mandatory in context.</p>
               </details>
 

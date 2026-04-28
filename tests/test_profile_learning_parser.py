@@ -1,4 +1,4 @@
-﻿import importlib
+import importlib
 
 from job_hunter_agent import profile_learning
 from job_hunter_agent.profile_learning import (
@@ -150,6 +150,46 @@ Acme Bank
     assert parsed[0]["employer"] == "Acme Bank"
 
 
+def test_parse_role_entries_keeps_plain_paragraphs_after_prefix_title_and_dates():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Senior Delivery Lead
+Acme Bank
+2022 - Present
+Led workshops across product and delivery teams.
+Produced process maps and business requirements.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Senior Delivery Lead"
+    assert parsed[0]["employer"] == "Acme Bank"
+    assert parsed[0]["bullets"] == [
+        "Led workshops across product and delivery teams.",
+        "Produced process maps and business requirements.",
+    ]
+
+
+def test_parse_role_entries_supports_unicode_bullet_markers():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Business Analyst
+Contoso
+2022 - Present
+\u2022 Led workshops
+\u2022 Produced user stories
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["bullets"] == [
+        "Led workshops",
+        "Produced user stories",
+    ]
+
+
 def test_llm_capability_naming_only_renames_selected_clusters():
     llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
     original = llm_gate.name_capability_clusters
@@ -171,4 +211,26 @@ def test_llm_capability_naming_only_renames_selected_clusters():
 
     assert renamed[0]["name"] == "process modelling"
     assert "process maps" in renamed[0]["aliases"]
+
+
+def test_llm_capability_naming_rejects_tokens_not_grounded_in_source():
+    llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
+    original = llm_gate.name_capability_clusters
+
+    try:
+        llm_gate.name_capability_clusters = lambda clusters: ["analytical scrum"]
+        renamed = profile_learning._apply_llm_capability_names(
+            [
+                {
+                    "name": "analyst scrum",
+                    "level": "working",
+                    "fit": "supporting",
+                    "aliases": ["scrum analyst"],
+                }
+            ]
+        )
+    finally:
+        llm_gate.name_capability_clusters = original
+
+    assert renamed[0]["name"] == "analyst scrum"
 

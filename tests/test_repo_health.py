@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import importlib
 
 from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS

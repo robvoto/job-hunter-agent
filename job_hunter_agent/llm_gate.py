@@ -26,7 +26,7 @@ from job_hunter_agent.profile_store import DATA_DIR, get_evidence_tiers, get_evi
 
 load_dotenv()
 
-# Token budgets â€” keep fit decisions tight; extraction can be generous
+# Token budgets - keep fit decisions tight; extraction can be generous
 MAX_TOKENS_FIT_DECISION = 50
 MAX_TOKENS_CV_EXTRACTION = 500
 MAX_TOKENS_REJECTION_SUGGESTIONS = 300
@@ -37,7 +37,7 @@ _CHEAP_LLM_MODE = "--cheap-llm" in sys.argv
 _PROFILE_PATH = DATA_DIR / "profile.json"
 _profile_fingerprint_cache: str | None = None
 
-# â”€â”€ Cost logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” €â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— â”— ⏩
+# Cost logging --------------------------------------------------------
 _LLM_COSTS_PATH = DATA_DIR / "llm_costs.jsonl"
 _PRICING_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
@@ -82,7 +82,7 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
 
 
 def _profile_fingerprint() -> str:
-    """Cheap fingerprint of the profile file â€” mtime + size, no read/parse.
+    """Cheap fingerprint of the profile file - mtime + size, no read/parse.
     Cached for the lifetime of the process so repeated cache-key lookups in a
     single scraping run are O(1) after the first call.
     """
@@ -225,7 +225,7 @@ def build_system_prompt() -> str:
     parts = [
         "You are helping decide whether a candidate should apply for a job.",
         "Judge fit primarily from the job description and the candidate profile evidence below, not from title alone.",
-        "Be honest about gaps. Secondary titles can still fit when responsibilities match the candidate background.",
+        "Be honest about gaps. Conditional-fit job titles can still fit when responsibilities match the candidate background.",
         "Recent directly relevant experience matters more than older exposure from many years ago.",
         "Treat primary current evidence as strongest proof. Treat older evidence as weaker, and background-only context such as certifications, broad industry mentions, or optional supporting history as weakest.",
         "Use capability levels and aliases from the candidate profile context as supporting evidence when responsibilities align.",
@@ -436,7 +436,7 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def get_cost_summary() -> dict[str, Any]:
-    """Read llm_costs.jsonl and return totals by purpose — useful for debugging."""
+    """Read llm_costs.jsonl and return totals by purpose - useful for debugging."""
     totals: dict[str, dict[str, Any]] = {}
     try:
         with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:

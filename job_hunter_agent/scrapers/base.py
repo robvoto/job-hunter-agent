@@ -31,7 +31,7 @@ class BaseJobScraper(ABC):
         """Run the scraper.
 
         Returns:
-            (kept_records, audit_rows, skill_observations) – three lists of dicts.
+            (kept_records, audit_rows, skill_observations) - three lists of dicts.
         """
         ...
 
@@ -44,7 +44,7 @@ def make_namespaced_key(source: str, raw_id: str) -> str:
 def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str, run_iso: str) -> dict:
     """Map a python-jobspy DataFrame row to the project's normalized record shape."""
     try:
-        import pandas as pd  # noqa: F401 – only used for pd.isna
+        import pandas as pd  # noqa: F401 - only used for pd.isna
         _pd = pd
     except ImportError:
         _pd = None
@@ -77,7 +77,7 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
             return row.get(attr)
         return getattr(row, attr, None)
 
-    # Posted date → age in days
+    # Posted date -> age in days
     raw_date = _get("date_posted")
     posted_age_days: Optional[float] = None
     posted_text = "N/A"

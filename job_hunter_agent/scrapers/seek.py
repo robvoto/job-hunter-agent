@@ -1,4 +1,4 @@
-﻿"""SEEK-specific connector helpers.
+"""SEEK-specific connector helpers.
 
 These functions are extracted from source_connector.py to keep SEEK-specific
 I/O logic separate from the shared pipeline. Imported back into source_connector.py.

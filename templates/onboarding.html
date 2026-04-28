@@ -12,7 +12,7 @@
       <div class="hero-kicker">Job Hunter</div>
       <div class="hero-step" id="hero_step">Step 1 of 4</div>
       <h1 id="hero_title">Set Up Your Job Search Profile</h1>
-      <p id="hero_copy">Upload one detailed CV. Job Hunter will build a draft profile, let you review it, and then ask for the minimum search basics before matching starts.</p>
+      <p id="hero_copy">Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.</p>
     </section>
 
     <div class="grid">
@@ -32,7 +32,7 @@
             <p id="workflow_intro">This creates the profile Job Hunter uses to find and score relevant jobs for you.</p>
             <ol class="workflow-steps">
               <li id="workflow_step_1">You upload one detailed CV.</li>
-              <li id="workflow_step_2">We extract likely titles, strengths, and a starter search direction.</li>
+              <li id="workflow_step_2">We extract likely job titles, capabilities, and a starter search direction.</li>
               <li id="workflow_step_3">You review the draft, set search basics, and confirm it before matching starts.</li>
             </ol>
             
@@ -86,7 +86,7 @@
             <div class="setting-row">
               <div class="setting-copy">
                 <label for="os_min_months">Ignore very short roles</label>
-                <div class="help">Roles shorter than this are treated as background context instead of main targeting signals.</div>
+                <div class="help">Roles shorter than this are treated as background context instead of strong role signals.</div>
               </div>
               <div class="number-input">
                 <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
@@ -103,7 +103,7 @@
         <section class="wizard-step" data-step="2" hidden>
           <button class="back-link" id="back_to_upload" type="button">Back</button>
           <h2>Review Draft Profile</h2>
-          <p class="section-copy">Check what Job Hunter learned from your CV. Fix the targeting before you move on to search basics.</p>
+          <p class="section-copy">Check the job titles and capabilities Job Hunter learned from your CV. Fix the role direction before you move on to search basics.</p>
 
           <div class="review-grid">
             <section class="review-block">
@@ -111,7 +111,7 @@
               <p class="help">You can confidently do these roles based on your past experience. These are treated as high-confidence matches.</p>
               <div class="chip-list" id="review_target_titles_list"></div>
               <div class="chip-editor-row">
-                <input id="review_target_titles_input" type="text" placeholder="Add a target title">
+                <input id="review_target_titles_input" type="text" placeholder="Add a strong-fit title">
                 <button class="secondary" id="review_add_target_title" type="button">Add</button>
               </div>
             </section>
@@ -121,7 +121,7 @@
               <p class="help">Only include roles where you can prove the fit through specific experience. These require validation before being accepted.</p>
               <div class="chip-list" id="review_secondary_titles_list"></div>
               <div class="chip-editor-row">
-                <input id="review_secondary_titles_input" type="text" placeholder="Add a secondary title">
+                <input id="review_secondary_titles_input" type="text" placeholder="Add a conditional-fit title">
                 <button class="secondary" id="review_add_secondary_title" type="button">Add</button>
               </div>
             </section>
@@ -129,8 +129,8 @@
 
           <section class="review-block capability-shell">
             <h3>Capability matrix</h3>
-            <p class="help">These labels stay human-readable. The engine actually scans the short job-ad keywords inside each row.</p>
-            <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities or job ad keywords">
+            <p class="help">These are the capabilities Job Hunter picked up from your CV. The capability name is for you. Aliases are alternate terms it can recognise in job ads. Job Hunter should usually suggest these for you.</p>
+            <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities or aliases">
             <div id="review_capability_cards" class="review-capability-list"></div>
             <div class="actions">
               <button class="secondary" id="review_add_capability" type="button">Add capability</button>
@@ -206,7 +206,7 @@
                   <dd id="check_target_titles"></dd>
                 </div>
                 <div>
-                  <dt>Secondary titles</dt>
+                  <dt>Conditional fit job titles</dt>
                   <dd id="check_secondary_titles"></dd>
                 </div>
                 <div>

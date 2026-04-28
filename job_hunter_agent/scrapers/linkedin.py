@@ -1,4 +1,4 @@
-﻿"""LinkedIn source connector using python-jobspy.
+"""LinkedIn source connector using python-jobspy.
 
 Scrapes LinkedIn public job listings (no login required) via the jobspy library.
 Returns normalized records in the same shape as the SEEK connector so the shared

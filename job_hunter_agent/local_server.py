@@ -88,15 +88,16 @@ def _normalize_onboarding_search_preferences(payload: dict | None) -> dict[str, 
     engagement_type = str(source.get("engagement_type") or "").strip().lower()
     keywords = str(source.get("keywords") or "").strip()
     locations = _parse_locations_override(source.get("locations"))
-    minimum_salary_yearly = source.get("minimum_salary_yearly")
-    minimum_daily_rate = source.get("minimum_daily_rate")
-    return {
+    normalized = {
         "keywords": keywords,
         "locations": locations,
         "engagement_type": engagement_type,
-        "minimum_salary_yearly": minimum_salary_yearly,
-        "minimum_daily_rate": minimum_daily_rate,
     }
+    if "minimum_salary_yearly" in source:
+        normalized["minimum_salary_yearly"] = source.get("minimum_salary_yearly")
+    if "minimum_daily_rate" in source:
+        normalized["minimum_daily_rate"] = source.get("minimum_daily_rate")
+    return normalized
 
 
 def _validate_required_onboarding_inputs(
@@ -104,9 +105,22 @@ def _validate_required_onboarding_inputs(
     onboarding_settings_payload: dict | None,
 ) -> None:
     keywords = str(search_preferences.get("keywords") or "").strip()
+    locations = _parse_locations_override(search_preferences.get("locations"))
+    engagement_type = str(search_preferences.get("engagement_type") or "").strip().lower()
 
     if keywords and (len(keywords) < 2 or len(keywords) > 120):
         raise ValueError("Please keep the primary search title between 2 and 120 characters.")
+    if not locations:
+        raise ValueError("Please add at least one search location.")
+    if len(locations) > 8:
+        raise ValueError("Please keep your location list to 8 places or fewer.")
+    for location in locations:
+        if len(location) < 2 or len(location) > 80:
+            raise ValueError("Each location should be between 2 and 80 characters.")
+        if not _LOCATION_NAME_RE.match(location):
+            raise ValueError("Locations should look like normal city, state, or region names.")
+    if engagement_type not in _VALID_ENGAGEMENT_TYPES:
+        raise ValueError("Please choose what type of work you are open to.")
 
     raw_yearly = search_preferences.get("minimum_salary_yearly")
     if raw_yearly not in (None, ""):
@@ -223,6 +237,12 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
         DEFAULT_ONBOARDING_SETTINGS["title_extraction_min_months"],
         1,
         24,
+    )
+    normalized["max_target_patterns"] = _coerce_int(
+        source.get("max_target_patterns"),
+        DEFAULT_ONBOARDING_SETTINGS["max_target_patterns"],
+        1,
+        20,
     )
     normalized["max_secondary_patterns"] = _coerce_int(
         source.get("max_secondary_patterns"),
@@ -1377,7 +1397,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
             return
         if _path == "/api/results-html":
             if not DASHBOARD_PATH.exists():
-                body = b'<div style="padding:64px 24px;color:#667085;text-align:center;font-family:sans-serif;">No results yet \u2014 run a search first.</div>'
+                body = '<div style="padding:64px 24px;color:#667085;text-align:center;font-family:sans-serif;">No results yet - run a search first.</div>'.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -1386,13 +1406,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             try:
-                import re as _re
-                full_html = DASHBOARD_PATH.read_text(encoding="utf-8", errors="ignore")
-                style_match = _re.search(r"<style>(.*?)</style>", full_html, _re.DOTALL)
-                style = f"<style>{style_match.group(1)}</style>" if style_match else ""
-                body_match = _re.search(r"<body>(.*?)</body>", full_html, _re.DOTALL)
-                body_content = body_match.group(1) if body_match else full_html
-                fragment = (style + body_content).encode("utf-8")
+                fragment = DASHBOARD_PATH.read_bytes()
             except Exception as exc:
                 self._send_json(500, {"error": str(exc)})
                 return
@@ -1616,7 +1630,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 payload = self._read_json_body()
                 files = payload.get("files", [])
                 search_prefs = _normalize_onboarding_search_preferences(payload.get("search_preferences"))
-                _validate_required_onboarding_inputs(search_prefs, payload.get("onboarding_settings"))
                 onboarding_settings = _normalize_onboarding_settings_payload(payload.get("onboarding_settings"))
                 if not isinstance(files, list):
                     raise ValueError("files must be a list")
@@ -1704,7 +1717,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
                 return
-            self._send_json(200, {"ok": True, "message": "Onboarding targeting saved.", "profile": updated})
+            self._send_json(200, {"ok": True, "message": "Onboarding profile saved.", "profile": updated})
             return
         if self.path in {"/api/tuning-decisions", "/api/skill-decisions"}:
             try:

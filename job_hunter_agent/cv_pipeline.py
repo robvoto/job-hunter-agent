@@ -1,4 +1,4 @@
-﻿"""CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
+"""CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
 
 Produces 3 profile fields from raw CV text:
   capability_profile_rules, dominant_signal_clusters, and must_not_require_skills.
@@ -15,7 +15,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-from job_hunter_agent.capability_matrix import derive_job_description_aliases
+from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     _GENERIC_PHRASE_STOPWORDS,
@@ -252,15 +252,21 @@ def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
 
     for candidate in candidates:
         score = float(candidate["score"])
-        matching_aliases = derive_job_description_aliases(
+        display_name = choose_capability_name(
             candidate["name"],
+            [candidate["seed"], *candidate["aliases"]],
+        )
+        matching_aliases = derive_job_description_aliases(
+            display_name,
             [candidate["seed"], *candidate["aliases"]],
             max_aliases=8,
         )
+        if not display_name:
+            continue
 
         if score >= 0.25:
             capability_rules.append({
-                "name": candidate["name"],
+                "name": display_name,
                 "level": candidate["level"],
                 "fit": candidate["fit"],
                 "aliases": matching_aliases,
@@ -269,9 +275,9 @@ def _build_output(candidates: list[dict[str, Any]]) -> dict[str, Any]:
         if score >= 0.20:
             signal_aliases = matching_aliases[:]
             if len(signal_aliases) < 2:
-                signal_aliases = list(dict.fromkeys([candidate["name"], *signal_aliases]))
+                signal_aliases = list(dict.fromkeys([display_name, *signal_aliases]))
             dominant_signal_clusters.append({
-                "name": candidate["name"],
+                "name": display_name,
                 "aliases": signal_aliases[:8],
                 "fit_label": candidate["fit_label"],
                 "watchout_label": candidate["watchout_label"],

@@ -89,25 +89,25 @@
 
     const capabilityModeMeta = {
       core_skill: {
-        label: 'Core skill',
+        label: 'Essential',
         summary: 'One of your main strengths for the roles you want.',
         level: 'strong',
         fit: 'core',
       },
       useful_support: {
-        label: 'Useful support',
+        label: 'Helpful',
         summary: 'A real skill that helps matching, but should not define it.',
         level: 'working',
         fit: 'supporting',
       },
       background_only: {
-        label: 'Background only',
+        label: 'Background',
         summary: 'Acceptable context, but it should not pull roles up by itself.',
         level: 'basic',
         fit: 'contextual',
       },
       not_for_me: {
-        label: 'Not for me',
+        label: 'Not a fit',
         summary: 'If a role leans on this capability, it is probably the wrong direction.',
         level: 'none',
         fit: 'avoid',
@@ -116,19 +116,19 @@
 
     const capabilityPriorityMeta = {
       core: {
-        label: 'Core skills',
-        summary: 'Main strengths that should actively pull matching roles up.',
+        label: 'Essential',
+        summary: 'Capabilities that should matter a lot for your target roles.',
       },
       supporting: {
-        label: 'Useful support',
-        summary: 'Helpful skills that should improve matching without defining it.',
+        label: 'Helpful',
+        summary: 'Relevant capabilities that should help, but not define, the match.',
       },
       contextual: {
-        label: 'Background only',
-        summary: 'Acceptable context that should stay in the background.',
+        label: 'Background',
+        summary: 'Experience that should stay in the background.',
       },
       avoid: {
-        label: 'Not for me',
+        label: 'Not a fit',
         summary: 'Capabilities that point toward the wrong kinds of roles.',
       },
     };
@@ -159,11 +159,11 @@
 
     function capabilityAliasPreview(aliases) {
       const cleaned = Array.isArray(aliases) ? aliases.filter(Boolean) : [];
-      if (!cleaned.length) return 'Job ad keywords: none yet';
+      if (!cleaned.length) return 'Aliases: none yet';
       const preview = cleaned.slice(0, 3).join(', ');
       return cleaned.length > 3
-        ? `Job ad keywords: ${preview}, +${cleaned.length - 3} more`
-        : `Job ad keywords: ${preview}`;
+        ? `Aliases: ${preview}, +${cleaned.length - 3} more`
+        : `Aliases: ${preview}`;
     }
 
     function normalizeCapabilityRule(rule) {
@@ -236,8 +236,8 @@
                     <span class="capability-row-summary-copy">${escapeHtml(capabilityAliasPreview(rule.aliases))}</span>
                   </div>
                   <div class="capability-row-summary-meta">
-                    <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background only')}</span>
-                    <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} job ad keyword${rule.aliases.length === 1 ? '' : 's'}</span>
+                    <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background')}</span>
+                    <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
                   </div>
                 </summary>
                 <div class="capability-row-body">
@@ -247,12 +247,12 @@
                       <input id="capability_name_${index}" type="text" data-capability-field="name" value="${escapeHtml(rule.name)}" placeholder="e.g. Agile delivery">
                     </div>
                     <div>
-                      <label for="capability_mode_${index}">How should the app treat this?</label>
+                      <label for="capability_mode_${index}">How relevant is this to your target roles?</label>
                       <select id="capability_mode_${index}" data-capability-mode>
-                        <option value="core_skill"${capabilityModeFromRule(rule) === 'core_skill' ? ' selected' : ''}>Core skill</option>
-                        <option value="useful_support"${capabilityModeFromRule(rule) === 'useful_support' ? ' selected' : ''}>Useful support</option>
-                        <option value="background_only"${capabilityModeFromRule(rule) === 'background_only' ? ' selected' : ''}>Background only</option>
-                        <option value="not_for_me"${capabilityModeFromRule(rule) === 'not_for_me' ? ' selected' : ''}>Not for me</option>
+                        <option value="core_skill"${capabilityModeFromRule(rule) === 'core_skill' ? ' selected' : ''}>Essential</option>
+                        <option value="useful_support"${capabilityModeFromRule(rule) === 'useful_support' ? ' selected' : ''}>Helpful</option>
+                        <option value="background_only"${capabilityModeFromRule(rule) === 'background_only' ? ' selected' : ''}>Background</option>
+                        <option value="not_for_me"${capabilityModeFromRule(rule) === 'not_for_me' ? ' selected' : ''}>Not a fit</option>
                       </select>
                     </div>
                     <div class="capability-row-actions">
@@ -260,13 +260,13 @@
                     </div>
                   </div>
                   <div class="capability-meta">
-                    <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background only')}</span>
-                    <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} job ad keyword${rule.aliases.length === 1 ? '' : 's'}</span>
+                    <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background')}</span>
+                    <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
                   </div>
                   <p class="capability-copy">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.summary || '')}</p>
                   <details class="capability-alias-shell">
-                    <summary class="capability-alias-summary">Job ad keywords (${rule.aliases.length})</summary>
-                    <p class="field-help">Short words or phrases the app looks for in job descriptions. Use JD language like <code>agile</code>, <code>scrum</code>, <code>kanban</code>, not CV sentence fragments.</p>
+                    <summary class="capability-alias-summary">Aliases (${rule.aliases.length})</summary>
+                    <p class="field-help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
                     <div class="badge-editor">
                       <div class="badge-editor-list">
                         ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
@@ -274,10 +274,10 @@
                             <span>${escapeHtml(alias)}</span>
                             <button type="button" data-remove-capability-alias="${index}" data-alias-index="${aliasIndex}" title="Remove ${escapeHtml(alias)}">&#215;</button>
                           </span>
-                        `).join('') : '<span class="badge-editor-empty">No job ad keywords yet.</span>'}
+                        `).join('') : '<span class="badge-editor-empty">No aliases yet.</span>'}
                       </div>
                       <div class="badge-editor-form">
-                        <input type="text" data-capability-alias-input="${index}" placeholder="Add a short job-ad keyword">
+                        <input type="text" data-capability-alias-input="${index}" placeholder="Add an alias">
                         <button class="secondary" type="button" data-add-capability-alias="${index}">Add</button>
                       </div>
                     </div>
@@ -301,7 +301,7 @@
 
     const chipEditors = {
       target_title_patterns: { kind: 'list', listId: 'target_title_patterns_chips', inputId: 'target_title_patterns_add', emptyText: 'No target titles yet.' },
-      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
+      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No conditional-fit titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
       reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },
       reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No blocked description phrases yet.' },
@@ -575,7 +575,7 @@
           <p><strong>Connect your Telegram account</strong></p>
           <p class="field-help">This step tells your personal bot which Telegram account should receive alerts.</p>
           <p class="field-help"><strong>Telegram link:</strong> <a href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer" style="word-break: break-all;">${escapeHtml(telegramConnectLink)}</a></p>
-          <p class="field-help"><strong>What “Open Telegram Link” means:</strong> it opens this bot chat in Telegram on this device so you can press <strong>Start</strong>.</p>
+          <p class="field-help"><strong>What "Open Telegram Link" means:</strong> it opens this bot chat in Telegram on this device so you can press <strong>Start</strong>.</p>
           <p class="field-help"><strong>Finish setup:</strong></p>
           <ol style="margin: 0; padding-left: 20px; color: var(--muted); font-size: 0.9rem; line-height: 1.5;">
             <li>Click <strong>Open Telegram Link</strong>.</li>
@@ -758,10 +758,10 @@
     function getReviewChoiceMeta(choice) {
       const meta = {
         '': { label: 'Choose an option', summary: 'Pick the simplest description of how this capability fits your target roles.', useWhen: 'Choose the closest option based on your CV and the kept-role examples.', engineEffect: 'Nothing changes until you confirm.' },
-        core_skill: { label: 'Core skill', summary: 'This is one of your main strengths for the roles you want.', useWhen: 'Use this when you want the app to strongly value this capability in matching.', engineEffect: 'The app will treat it as a strong core capability.' },
-        useful_support: { label: 'Useful support', summary: 'This is a real skill, but it should support matching rather than define it.', useWhen: 'Use this when the capability is helpful and relevant, but not central to your pitch.', engineEffect: 'The app will treat it as a positive supporting capability.' },
-        background_only: { label: 'Background only', summary: 'This is acceptable context, but it should not drive matching on its own.', useWhen: 'Use this for adjacent or lighter experience that should stay in the background.', engineEffect: 'The app will keep it as a weak contextual signal.' },
-        not_for_me: { label: 'Not for me', summary: 'Jobs that lean on this capability are probably the wrong direction.', useWhen: 'Use this when the capability points toward work you do not want the app to favour.', engineEffect: 'The app will treat it as a capability to avoid.' },
+        core_skill: { label: 'Essential', summary: 'This is one of your main strengths for the roles you want.', useWhen: 'Use this when the capability should matter a lot in matching.', engineEffect: 'The app will treat it as a strong core capability.' },
+        useful_support: { label: 'Helpful', summary: 'This is a real skill, but it should support matching rather than define it.', useWhen: 'Use this when the capability is relevant and useful, but not central to your pitch.', engineEffect: 'The app will treat it as a positive supporting capability.' },
+        background_only: { label: 'Background', summary: 'This is acceptable context, but it should not drive matching on its own.', useWhen: 'Use this for adjacent or lighter experience that should stay in the background.', engineEffect: 'The app will keep it as a weak contextual signal.' },
+        not_for_me: { label: 'Not a fit', summary: 'Jobs that lean on this capability are probably the wrong direction.', useWhen: 'Use this when the capability points toward work you do not want the app to favour.', engineEffect: 'The app will treat it as a capability to avoid.' },
       };
       return meta[choice] || meta[''];
     }
@@ -779,10 +779,10 @@
     function reviewOptionMarkup(selectedValue) {
       const options = [
         ['', 'Choose an option'],
-        ['core_skill', 'Core skill'],
-        ['useful_support', 'Useful support'],
-        ['background_only', 'Background only'],
-        ['not_for_me', 'Not for me'],
+        ['core_skill', 'Essential'],
+        ['useful_support', 'Helpful'],
+        ['background_only', 'Background'],
+        ['not_for_me', 'Not a fit'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -820,7 +820,7 @@
                 <h3>${escapeHtml(item.skill || 'Capability signal')}</h3>
                 <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
                 <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
-                <label>How should the app treat this?</label>
+                <label>How relevant is this to your target roles?</label>
                 <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">${reviewOptionMarkup(item.recommended_choice || '')}</select>
                 <details class="review-choice-guide">
                   <summary>What this choice means</summary>
@@ -980,7 +980,7 @@
       return payload;
     }
 
-    // ── Event listeners ───────────────────────────────────────
+    // -- Event listeners ---------------------------------------
 
     if (runNowButton) {
       runNowButton.addEventListener('click', async () => {
@@ -1283,7 +1283,7 @@
       markDirty();
     });
 
-    // ── Navigation ────────────────────────────────────────────
+    // -- Navigation --------------------------------------------
     document.querySelectorAll('.nav-item[data-section]').forEach(btn => {
       btn.addEventListener('click', () => {
         const sectionId = btn.dataset.section;
@@ -1302,7 +1302,7 @@
       if (target) target.click();
     }
 
-    // ── Sliders ───────────────────────────────────────────────
+    // -- Sliders -----------------------------------------------
     function updateSliderLabel(slider) {
       const label = document.getElementById(slider.id + '_label');
       if (!label) return;
@@ -1322,7 +1322,7 @@
       document.querySelectorAll('[data-weight-slider]').forEach(updateSliderLabel);
     }
 
-    // ── Save Management ───────────────────────────────────────
+    // -- Save Management ---------------------------------------
     const stickySaveBar = document.getElementById('sticky_save_bar');
     const saveAllBtn = document.getElementById('save_all_btn');
     const globalStatus = document.getElementById('global_save_status');

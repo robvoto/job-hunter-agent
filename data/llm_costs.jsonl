@@ -122,3 +122,13 @@
 {"ts": "2026-04-28T09:10:01Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 391, "tok_out": 79, "cost_usd": 0.000106, "session_usd": 0.000106}
 {"ts": "2026-04-28T09:21:26Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 380, "tok_out": 72, "cost_usd": 0.0001, "session_usd": 0.0001}
 {"ts": "2026-04-28T09:23:17Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 222, "tok_out": 53, "cost_usd": 6.5e-05, "session_usd": 6.5e-05}
+{"ts": "2026-04-28T10:21:35Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 179, "tok_out": 36, "cost_usd": 4.8e-05, "session_usd": 4.8e-05}
+{"ts": "2026-04-28T10:44:56Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 179, "tok_out": 29, "cost_usd": 4.4e-05, "session_usd": 9.3e-05}
+{"ts": "2026-04-28T11:41:17Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 371, "tok_out": 120, "cost_usd": 0.000128, "session_usd": 0.000128}
+{"ts": "2026-04-28T11:41:32Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 371, "tok_out": 119, "cost_usd": 0.000127, "session_usd": 0.000127}
+{"ts": "2026-04-28T11:41:46Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 230, "tok_out": 35, "cost_usd": 5.6e-05, "session_usd": 5.6e-05}
+{"ts": "2026-04-28T11:42:22Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 230, "tok_out": 36, "cost_usd": 5.6e-05, "session_usd": 5.6e-05}
+{"ts": "2026-04-28T11:50:33Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 230, "tok_out": 36, "cost_usd": 5.6e-05, "session_usd": 5.6e-05}
+{"ts": "2026-04-28T11:59:17Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 230, "tok_out": 35, "cost_usd": 5.6e-05, "session_usd": 5.6e-05}
+{"ts": "2026-04-28T12:00:10Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 230, "tok_out": 37, "cost_usd": 5.7e-05, "session_usd": 5.7e-05}
+{"ts": "2026-04-28T12:01:07Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 230, "tok_out": 36, "cost_usd": 5.6e-05, "session_usd": 5.6e-05}

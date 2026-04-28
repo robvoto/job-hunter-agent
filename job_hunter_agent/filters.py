@@ -1,4 +1,4 @@
-﻿# filters.py
+# filters.py
 
 import json
 import re
@@ -11,7 +11,7 @@ from job_hunter_agent.profile_store import load_profile
 
 
 
-TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-–—/:]\s|[(),\[\]]")
+TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\[\]]")
 
 
 def _matches_any(text: str, patterns: list[str]) -> bool:

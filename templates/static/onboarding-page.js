@@ -46,14 +46,14 @@ let lastImportPayload = null;
 
 const reviewCapabilityLevelMeta = {
   strong: { label: 'Strong', summary: 'Proven strength that should count heavily when a role depends on it.' },
-  working: { label: 'Working', summary: 'Solid evidence, but not one of your main headline strengths.' },
-  basic: { label: 'Minor exposure', summary: 'Real exposure, but this should stay a light signal rather than a driver.' },
+  working: { label: 'Solid', summary: 'Clear evidence, but not one of your main headline strengths.' },
+  basic: { label: 'Some exposure', summary: 'Real exposure, but this should stay a light supporting signal.' },
 };
 
 const reviewCapabilityPriorityMeta = {
-  core: { label: 'Primary', summary: 'This should actively pull matching roles up.' },
-  supporting: { label: 'Secondary', summary: 'Relevant and positive, but secondary to your core pitch.' },
-  contextual: { label: 'Background', summary: 'Useful context only. It should not drive matching on its own.' },
+  core: { label: 'Essential', summary: 'Capabilities that should matter a lot for your target roles.' },
+  supporting: { label: 'Helpful', summary: 'Relevant capabilities that should help, but not define, the match.' },
+  contextual: { label: 'Background', summary: 'Experience that should stay in the background.' },
 };
 
 const reviewCapabilityPriorityOrder = ['core', 'supporting', 'contextual'];
@@ -64,12 +64,12 @@ const stepMeta = {
     heroTitle: () => isRebuildMode ? 'Refresh Your Profile' : 'Set Up Your Job Search Profile',
     heroCopy: () => isRebuildMode
       ? 'Upload an updated CV. Job Hunter will refresh your profile, let you review the draft, and keep your wider settings in place until you confirm the new version.'
-      : 'Upload one detailed CV. Job Hunter will build a draft profile, let you review it, and then ask for the minimum search basics before matching starts.',
+      : 'Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.',
   },
   2: {
     title: () => 'Review Draft Profile',
     heroTitle: () => isRebuildMode ? 'Review Refreshed Draft' : 'Review Your Draft Profile',
-    heroCopy: () => 'Check what Job Hunter learned from your CV before you lock in the search direction.',
+    heroCopy: () => 'Check the job titles and capabilities Job Hunter learned from your CV before you lock in the search direction.',
   },
   3: {
     title: () => 'Set Search Basics',
@@ -393,15 +393,15 @@ function renderReviewCapabilities() {
             <label for="review_capability_level_${index}">Strength</label>
             <select id="review_capability_level_${index}" data-review-capability-field="level">
               <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Strong</option>
-              <option value="working"${rule.level === 'working' ? ' selected' : ''}>Working</option>
-              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Minor exposure</option>
+              <option value="working"${rule.level === 'working' ? ' selected' : ''}>Solid</option>
+              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Some exposure</option>
             </select>
           </div>
           <div>
-            <label for="review_capability_fit_${index}">Priority</label>
+            <label for="review_capability_fit_${index}">How relevant is this to your target roles?</label>
             <select id="review_capability_fit_${index}" data-review-capability-field="fit">
-              <option value="core"${rule.fit === 'core' ? ' selected' : ''}>Primary</option>
-              <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>Secondary</option>
+              <option value="core"${rule.fit === 'core' ? ' selected' : ''}>Essential</option>
+              <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>Helpful</option>
               <option value="contextual"${rule.fit === 'contextual' ? ' selected' : ''}>Background</option>
             </select>
           </div>
@@ -411,18 +411,18 @@ function renderReviewCapabilities() {
         </div>
         <p class="review-capability-copy">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.summary || '')}</p>
         <details>
-          <summary>Job ad keywords (${rule.aliases.length})</summary>
-          <p class="help">Short words or phrases the app looks for in job descriptions. Use JD language like <code>agile</code> or <code>uat</code>, not CV sentence fragments.</p>
+          <summary>Aliases (${rule.aliases.length})</summary>
+          <p class="help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
           <div class="chip-list chip-list-tight">
             ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
               <span class="chip-item">
                 <span>${escapeHtml(alias)}</span>
                 <button type="button" data-remove-review-alias="${index}" data-review-alias-index="${aliasIndex}" aria-label="Remove ${escapeHtml(alias)}">&#215;</button>
               </span>
-            `).join('') : '<span class="chip-empty">No job ad keywords yet.</span>'}
+            `).join('') : '<span class="chip-empty">No aliases yet.</span>'}
           </div>
           <div class="chip-editor-row">
-            <input type="text" data-review-alias-input="${index}" placeholder="Add a short job-ad keyword">
+            <input type="text" data-review-alias-input="${index}" placeholder="Add an alias">
             <button class="secondary" type="button" data-add-review-alias="${index}">Add</button>
           </div>
         </details>
@@ -443,7 +443,7 @@ function renderReviewCapabilities() {
 
 function renderReviewStep() {
   renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No target titles extracted yet.', 'data-remove-review-target');
-  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No secondary titles extracted yet.', 'data-remove-review-secondary');
+  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No conditional-fit titles extracted yet.', 'data-remove-review-secondary');
   renderReviewCapabilities();
 }
 
@@ -555,7 +555,7 @@ async function createProfile() {
   hydrateDraftStep(payload.profile || {});
   hydrateSearchBasics(payload.profile || {});
   setStep(REVIEW_STEP);
-  showStatus('Your draft profile is ready. Review the targeting before you continue.', 'ok');
+  showStatus('Your draft profile is ready. Review the role direction before you continue.', 'ok');
 }
 
 function continueFromReview() {

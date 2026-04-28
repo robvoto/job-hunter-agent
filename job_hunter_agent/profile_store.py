@@ -158,6 +158,17 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
     seen_names: set[str] = set()
     valid_levels = {"strong", "working", "basic", "low", "none"}
     valid_fits = {"core", "supporting", "contextual", "avoid"}
+    choose_capability_name = None
+    derive_job_description_aliases = None
+
+    try:
+        from job_hunter_agent.capability_matrix import choose_capability_name as _choose_capability_name
+        from job_hunter_agent.capability_matrix import derive_job_description_aliases as _derive_job_description_aliases
+
+        choose_capability_name = _choose_capability_name
+        derive_job_description_aliases = _derive_job_description_aliases
+    except Exception:
+        pass
 
     for rule in rules or []:
         if not isinstance(rule, dict):
@@ -166,11 +177,6 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
         name = str(rule.get("name") or "").strip()
         if not name:
             continue
-
-        name_norm = re.sub(r"\s+", " ", name).strip().lower()
-        if name_norm in seen_names:
-            continue
-        seen_names.add(name_norm)
 
         level = str(rule.get("level") or "").strip().lower()
         fit = str(rule.get("fit") or "").strip().lower()
@@ -188,6 +194,15 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
             ]
         else:
             alias_items = list(raw_aliases or [])
+
+        if choose_capability_name and derive_job_description_aliases:
+            name = choose_capability_name(name, alias_items)
+            alias_items = derive_job_description_aliases(name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=8)
+
+        name_norm = re.sub(r"\s+", " ", name).strip().lower()
+        if not name_norm or name_norm in seen_names:
+            continue
+        seen_names.add(name_norm)
 
         aliases: list[str] = []
         seen_aliases: set[str] = set()
@@ -232,7 +247,6 @@ def load_profile() -> dict[str, Any]:
             merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
                 merged.get("evidence_tier_weights", {})
             )
-            merged.pop("candidate_summary", None)
             merged.pop("strengths", None)
             merged["capability_profile_rules"] = normalize_capability_rules(
                 merged.get("capability_profile_rules", [])
@@ -263,7 +277,6 @@ def load_profile() -> dict[str, Any]:
     fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
         fallback.get("evidence_tier_weights", {})
     )
-    fallback.pop("candidate_summary", None)
     fallback.pop("strengths", None)
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
@@ -295,7 +308,6 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
         normalized.get("evidence_tier_weights", {})
     )
-    normalized.pop("candidate_summary", None)
     normalized.pop("strengths", None)
     normalized["capability_profile_rules"] = normalize_capability_rules(
         normalized.get("capability_profile_rules", [])

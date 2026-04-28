@@ -26,10 +26,10 @@ def repair_text(text: str) -> str:
     if not text:
         return ""
     repaired = text.replace("\r\n", "\n")
-    if "Ã¢" in repaired or "Ãƒ" in repaired:
+    if "\u00c3\u00a2" in repaired or "\u00c3\u0192" in repaired:
         try:
             candidate = repaired.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-            if candidate.count("Ã¢") < repaired.count("Ã¢"):
+            if candidate.count("\u00c3\u00a2") < repaired.count("\u00c3\u00a2"):
                 repaired = candidate
         except Exception:
             pass
@@ -161,7 +161,7 @@ _MONTH_TOKEN_PATTERN = (
 _DATE_RANGE_PATTERN = re.compile(
     rf"(?:(?P<start_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
     rf"(?P<start_year>(?:19|20)\d{{2}})"
-    rf"\s*(?:-|–|—|to|/)\s*"
+    rf"\s*(?:-|\u2013|\u2014|to|/)\s*"
     rf"(?:(?P<end_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
     rf"(?:(?P<end_year>(?:19|20)\d{{2}})|(?P<end_relative>present|current|now|ongoing))",
     flags=re.IGNORECASE,
@@ -191,6 +191,17 @@ def _normalize_phrase(text: str) -> str:
     while tokens and tokens[-1] in _GENERIC_PHRASE_STOPWORDS:
         tokens.pop()
     return " ".join(tokens).strip()
+
+
+_BULLET_PREFIX_RE = re.compile(r"^[\-*\u2022\u2013\u2014]+\s*")
+
+
+def _is_bullet_line(text: str) -> bool:
+    return bool(_BULLET_PREFIX_RE.match(str(text or "").lstrip()))
+
+
+def _strip_bullet_prefix(text: str) -> str:
+    return _clean_line(_BULLET_PREFIX_RE.sub("", str(text or "").lstrip()))
 
 
 def _section_kind(section_name: str) -> str:
@@ -370,8 +381,8 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                 break
             if _extract_year_range(look):
                 break
-            if look_raw.lstrip().startswith(("-", "*")):
-                details.append(_clean_line(re.sub(r"^[-*]\s*", "", look_raw)))
+            if _is_bullet_line(look_raw):
+                details.append(_strip_bullet_prefix(look_raw))
             else:
                 details.append(look)
             j += 1
@@ -474,8 +485,12 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                 break
             if _extract_year_range(look):
                 break
-            if look_raw.lstrip().startswith(("-", "*")):
-                bullets.append(_clean_line(re.sub(r"^[-*]\s*", "", look_raw)))
+            if _is_bullet_line(look_raw):
+                bullets.append(_strip_bullet_prefix(look_raw))
+            elif prefix_candidate_lines:
+                # When title/employer were already found above the date line,
+                # plain paragraphs below the date belong to the role body.
+                bullets.append(look)
             elif not bullets and len(candidate_lines) < 3:
                 candidate_lines.append(look)
             j += 1
@@ -782,6 +797,20 @@ def _apply_llm_capability_names(capabilities: list[dict[str, Any]]) -> list[dict
             renamed.append(updated)
             continue
         original_name = str(updated.get("name") or "").strip().lower()
+        source_tokens = {
+            _normalize_token(token)
+            for value in [original_name, *updated.get("aliases", [])]
+            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/&-]*", str(value or ""))
+            if _normalize_token(token)
+        }
+        cleaned_tokens = [
+            _normalize_token(token)
+            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/&-]*", cleaned)
+            if _normalize_token(token)
+        ]
+        if cleaned_tokens and any(token not in source_tokens for token in cleaned_tokens):
+            renamed.append(updated)
+            continue
         if cleaned and cleaned != original_name:
             aliases = [original_name, *updated.get("aliases", [])]
             deduped_aliases: list[str] = []
