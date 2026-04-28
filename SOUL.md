@@ -230,7 +230,7 @@ Important design note:
 
 - titles are useful as a cheap first pass, but the long-term fit decision should be driven more by description evidence and profile fit than by title alone
 - many roles with a strong title are poor matches after reading the description
-- many adjacent titles may still be good matches once the description is read
+- many secondary titles may still be good matches once the description is read
 
 ---
 
@@ -258,7 +258,7 @@ The admin server now also serves the dashboard at:
 The dashboard uses internal scoring (0-100) mapped to human-readable bands:
 - **Strong match** (85-100)
 - **Good match** (70-84)
-- **Possible fit** (55-69)
+- **Possible fit** (55-69) (also referred to as "Worth a look")
 - **Stretch** (0-54)
 
 ---

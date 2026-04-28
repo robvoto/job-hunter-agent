@@ -1,4 +1,4 @@
-﻿from job_hunter_agent import local_server
+﻿﻿from job_hunter_agent import local_server
 from job_hunter_agent import source_documents
 
 
@@ -73,7 +73,7 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
             "extraction_lookback_years": 12,
             "title_extraction_min_months": 9,
             "max_target_patterns": 10,
-            "max_adjacent_patterns": 7,
+            "max_secondary_patterns": 7,
         }
     )
 
@@ -81,7 +81,7 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
         "extraction_lookback_years": 12,
         "title_extraction_min_months": 9,
         "max_target_patterns": 10,
-        "max_adjacent_patterns": 7,
+        "max_secondary_patterns": 7,
     }
 
 
@@ -93,7 +93,7 @@ def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
             "extraction_lookback_years": 999,
             "title_extraction_min_months": 0,
             "max_target_patterns": -1,
-            "max_adjacent_patterns": 999,
+                "max_secondary_patterns": 999,
         }
     )
 
@@ -101,7 +101,7 @@ def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
         "extraction_lookback_years": 20,
         "title_extraction_min_months": 1,
         "max_target_patterns": 1,
-        "max_adjacent_patterns": 20,
+            "max_secondary_patterns": 20,
     }
 
 
@@ -121,7 +121,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
                 "extraction_lookback_years": 11,
                 "title_extraction_min_months": 5,
                 "max_target_patterns": 9,
-                "max_adjacent_patterns": 4,
+                "max_secondary_patterns": 4,
             },
         },
     )
@@ -131,7 +131,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
@@ -149,7 +149,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
         "extraction_lookback_years": 11,
         "title_extraction_min_months": 5,
         "max_target_patterns": 9,
-        "max_adjacent_patterns": 4,
+        "max_secondary_patterns": 4,
     }
 
 
@@ -260,4 +260,3 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
 
     assert started == [{"daemon": True, "name": "job-hunter-dashboard-rebuild"}]
     assert rebuilds == ["profile matching rules saved; applying saved filters to current dashboard"]
-

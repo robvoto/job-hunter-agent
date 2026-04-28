@@ -11,6 +11,7 @@ from job_hunter_agent.cv_pipeline import run_cv_pipeline
 from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
 from job_hunter_agent.profile_learning import (
+    build_learning_patch,
     extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
     repair_text,
 )
@@ -34,10 +35,9 @@ SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
     "target_title_patterns",
-    "adjacent_title_patterns",
+    "secondary_title_patterns",
     "reject_title_rules",
     "capability_profile_rules",
-    "candidate_summary",
     "cv_text",
     "evidence_tiers",
     "llm_profile_brief",
@@ -271,10 +271,11 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
     patch.update(run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings))
-
-    imported_summary = _extract_summary_from_text(combined_text)
-    if imported_summary:
-        patch["candidate_summary"] = imported_summary
+    if not patch.get("capability_profile_rules"):
+        deterministic_patch = build_learning_patch(combined_text, onboarding_settings=active_onboarding_settings)
+        fallback_capabilities = deterministic_patch.get("capability_profile_rules") or []
+        if fallback_capabilities:
+            patch["capability_profile_rules"] = fallback_capabilities
 
     brief = build_llm_profile_brief(capability_rules=patch.get("capability_profile_rules") or [])
     if brief:
@@ -318,8 +319,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
         patch["target_title_patterns"] = suggestion.get("target_title_patterns") or []
-        patch["adjacent_title_patterns"] = suggestion.get("adjacent_title_patterns") or []
-        print(f"[TITLE_PATTERNS] Extracted {len(patch['target_title_patterns'])} target and {len(patch['adjacent_title_patterns'])} adjacent patterns")
+        patch["secondary_title_patterns"] = suggestion.get("secondary_title_patterns") or []
+        print(f"[TITLE_PATTERNS] Extracted {len(patch['target_title_patterns'])} target and {len(patch['secondary_title_patterns'])} secondary patterns")
         if suggestion.get("suggested_search_keywords"):
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
@@ -348,56 +349,6 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     }
 
 
-def _extract_summary_from_text(text: str) -> str:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if not lines:
-        return ""
-    headers = {
-        "executive summary",
-        "professional summary",
-        "summary",
-        "profile",
-        "experience summary",
-    }
-    for index, line in enumerate(lines):
-        if line.lower().rstrip(":") in headers:
-            parts: list[str] = []
-            for candidate in lines[index + 1:]:
-                normalized = candidate.strip()
-                if len(normalized.split()) <= 8 and normalized.upper() == normalized:
-                    break
-                parts.append(normalized)
-                if len(" ".join(parts)) >= 1400:
-                    break
-            if parts:
-                return " ".join(parts)[:1500].strip()
-
-    titles: list[str] = []
-    seen_titles: set[str] = set()
-    for line in lines:
-        match = re.search(r"-\s*([A-Za-z][A-Za-z /&-]{2,80}?)\s*\((?:19|20)\d{2}", line)
-        if not match:
-            continue
-        title = re.sub(r"\s+", " ", match.group(1)).strip(" -")
-        normalized = title.lower()
-        if normalized in seen_titles:
-            continue
-        seen_titles.add(normalized)
-        titles.append(title)
-        if len(titles) >= 3:
-            break
-    if titles:
-        if len(titles) == 1:
-            return f"Recent experience in {titles[0]} roles."
-        return f"Recent experience in {titles[0]} and {titles[1]} roles."
-
-    filtered = [
-        line
-        for line in lines
-        if not line.startswith("##")
-        and not (len(line.split()) <= 8 and line.upper() == line)
-    ]
-    return " ".join(filtered[:20])[:1500].strip()
 def build_llm_profile_brief(
     capability_rules: Any,
 ) -> str:

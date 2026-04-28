@@ -1,4 +1,4 @@
-﻿from job_hunter_agent import llm_gate
+﻿﻿from job_hunter_agent import llm_gate
 from job_hunter_agent import source_documents
 
 
@@ -33,7 +33,7 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_title_patterns": [], "adjacent_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
@@ -75,4 +75,3 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
 
     assert "process mapping: strong, core (process design)" in context
     assert "stakeholder engagement: working" in context
-

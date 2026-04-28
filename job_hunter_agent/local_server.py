@@ -88,10 +88,14 @@ def _normalize_onboarding_search_preferences(payload: dict | None) -> dict[str, 
     engagement_type = str(source.get("engagement_type") or "").strip().lower()
     keywords = str(source.get("keywords") or "").strip()
     locations = _parse_locations_override(source.get("locations"))
+    minimum_salary_yearly = source.get("minimum_salary_yearly")
+    minimum_daily_rate = source.get("minimum_daily_rate")
     return {
         "keywords": keywords,
         "locations": locations,
         "engagement_type": engagement_type,
+        "minimum_salary_yearly": minimum_salary_yearly,
+        "minimum_daily_rate": minimum_daily_rate,
     }
 
 
@@ -100,22 +104,27 @@ def _validate_required_onboarding_inputs(
     onboarding_settings_payload: dict | None,
 ) -> None:
     keywords = str(search_preferences.get("keywords") or "").strip()
-    locations = [str(value).strip() for value in search_preferences.get("locations") or [] if str(value).strip()]
-    engagement_type = str(search_preferences.get("engagement_type") or "").strip().lower()
 
     if keywords and (len(keywords) < 2 or len(keywords) > 120):
         raise ValueError("Please keep the primary search title between 2 and 120 characters.")
-    if not locations:
-        raise ValueError("Please add at least one search location.")
-    if len(locations) > 8:
-        raise ValueError("Please keep your location list to 8 places or fewer.")
-    for location in locations:
-        if len(location) < 2 or len(location) > 80:
-            raise ValueError("Each search location must be between 2 and 80 characters.")
-        if not _LOCATION_NAME_RE.fullmatch(location):
-            raise ValueError("Search locations should look like normal city, state, or region names.")
-    if engagement_type not in _VALID_ENGAGEMENT_TYPES:
-        raise ValueError("Please choose what type of work you are open to.")
+
+    raw_yearly = search_preferences.get("minimum_salary_yearly")
+    if raw_yearly not in (None, ""):
+        try:
+            yearly = int(raw_yearly)
+        except Exception as exc:
+            raise ValueError("Minimum permanent salary must be a whole number.") from exc
+        if yearly < 0:
+            raise ValueError("Minimum permanent salary cannot be negative.")
+
+    raw_daily = search_preferences.get("minimum_daily_rate")
+    if raw_daily not in (None, ""):
+        try:
+            daily = int(raw_daily)
+        except Exception as exc:
+            raise ValueError("Minimum contract daily rate must be a whole number.") from exc
+        if daily < 0:
+            raise ValueError("Minimum contract daily rate cannot be negative.")
 
     raw_settings = onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
     if isinstance(raw_settings.get("onboarding_settings"), dict):
@@ -215,19 +224,22 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
         1,
         24,
     )
-    normalized["max_target_patterns"] = _coerce_int(
-        source.get("max_target_patterns"),
-        DEFAULT_ONBOARDING_SETTINGS["max_target_patterns"],
-        1,
-        20,
-    )
-    normalized["max_adjacent_patterns"] = _coerce_int(
-        source.get("max_adjacent_patterns"),
-        DEFAULT_ONBOARDING_SETTINGS["max_adjacent_patterns"],
+    normalized["max_secondary_patterns"] = _coerce_int(
+        source.get("max_secondary_patterns"),
+        DEFAULT_ONBOARDING_SETTINGS["max_secondary_patterns"],
         1,
         20,
     )
     return normalized
+
+
+def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
+    current = profile if isinstance(profile, dict) else load_profile()
+    target_titles = [str(value).strip() for value in current.get("target_title_patterns", []) if str(value).strip()]
+    search_settings = normalize_search_settings(current.get("search_settings", {}))
+    locations = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
+    keywords = str(search_settings.get("keywords") or "").strip()
+    return bool(target_titles and locations and keywords)
 
 
 def _run_scrape_job() -> None:
@@ -244,7 +256,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
     MATCHING_RULE_PROFILE_KEYS = {
         "capability_profile_rules",
         "target_title_patterns",
-        "adjacent_title_patterns",
+        "secondary_title_patterns",
         "must_not_require_skills",
         "reject_title_rules",
         "reject_description_phrase_rules",
@@ -1328,11 +1340,23 @@ class SettingsHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Static asset not found"})
             return
         if _path in {"/", "/workspace", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard", "/settings"}:
+            if _path in {"/", "/workspace", "/admin", "/profile", "/dashboard", "/settings"} and not _onboarding_complete():
+                self._redirect("/start")
+                return
             if _path in {"/admin", "/profile"}:
                 self._redirect("/settings")
                 return
             if _path == "/dashboard":
                 self._redirect("/")
+                return
+            if _path == "/settings":
+                if not _onboarding_complete():
+                    self._redirect("/start")
+                    return
+                if SETTINGS_HTML_PATH.exists():
+                    self._send_html(SETTINGS_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
+                else:
+                    self._send_html("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
                 return
             if _path in {"/start", "/onboarding"}:
                 if ONBOARDING_HTML_PATH.exists():
@@ -1345,12 +1369,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     self._send_html(SHOWCASE_PATH.read_text(encoding="utf-8", errors="ignore"))
                     return
                 self._send_html("<h1>Demo page not found</h1>")
-                return
-            if _path == "/settings":
-                if SETTINGS_HTML_PATH.exists():
-                    self._send_html(SETTINGS_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
-                else:
-                    self._send_html("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
                 return
             if WORKSPACE_HTML_PATH.exists():
                 self._send_html(WORKSPACE_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
@@ -1631,14 +1649,39 @@ class SettingsHandler(BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
                 target = [str(p).strip() for p in payload.get("target_title_patterns", []) if str(p).strip()]
-                adjacent = [str(p).strip() for p in payload.get("adjacent_title_patterns", []) if str(p).strip()]
+                secondary = [str(p).strip() for p in payload.get("secondary_title_patterns", []) if str(p).strip()]
                 keyword = str(payload.get("search_keyword") or "").strip()
+                locations = [str(value).strip() for value in payload.get("search_locations", []) if str(value).strip()]
+                engagement_type = str(payload.get("engagement_type") or "").strip().lower()
+                raw_minimum_salary_yearly = payload.get("minimum_salary_yearly")
+                raw_minimum_daily_rate = payload.get("minimum_daily_rate")
                 capability_rules = normalize_capability_rules(payload.get("capability_profile_rules") or [])
                 if not target:
                     raise ValueError("target_title_patterns must not be empty")
+                if keyword and (len(keyword) < 2 or len(keyword) > 120):
+                    raise ValueError("Please keep the primary search title between 2 and 120 characters.")
+                if not locations:
+                    raise ValueError("Please add at least one search location.")
+                if len(locations) > 8:
+                    raise ValueError("Please keep your location list to 8 places or fewer.")
+                for location in locations:
+                    if len(location) < 2 or len(location) > 80:
+                        raise ValueError("Each search location must be between 2 and 80 characters.")
+                    if not _LOCATION_NAME_RE.fullmatch(location):
+                        raise ValueError("Search locations should look like normal city, state, or region names.")
+                if engagement_type not in _VALID_ENGAGEMENT_TYPES:
+                    raise ValueError("Please choose what type of work you are open to.")
+                try:
+                    minimum_salary_yearly = max(0, int(raw_minimum_salary_yearly or 0))
+                except Exception as exc:
+                    raise ValueError("Minimum permanent salary must be a whole number.") from exc
+                try:
+                    minimum_daily_rate = max(0, int(raw_minimum_daily_rate or 0))
+                except Exception as exc:
+                    raise ValueError("Minimum contract daily rate must be a whole number.") from exc
                 profile_patch: dict = {
                     "target_title_patterns": target,
-                    "adjacent_title_patterns": adjacent,
+                    "secondary_title_patterns": secondary,
                 }
                 if capability_rules:
                     profile_patch["capability_profile_rules"] = capability_rules
@@ -1648,7 +1691,15 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     search_settings["keywords"] = keyword
                 elif not str(search_settings.get("keywords") or "").strip():
                     search_settings["keywords"] = target[0]
+                search_settings["locations"] = locations
                 profile_patch["search_settings"] = search_settings
+                match_preferences = dict(current.get("match_preferences", {}))
+                match_preferences["engagement_type"] = engagement_type
+                profile_patch["match_preferences"] = match_preferences
+                profile_patch["salary_preferences"] = {
+                    "minimum_salary_yearly": minimum_salary_yearly,
+                    "minimum_daily_rate": minimum_daily_rate,
+                }
                 updated = patch_profile(profile_patch)
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})

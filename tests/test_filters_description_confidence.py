@@ -8,7 +8,7 @@ def test_missing_requirement_detector_separates_required_from_desirable():
     assert not filters.matches_missing_requirement("Strong SAP experience is preferred but not essential.", "SAP")
 
 
-def test_adjacent_title_requires_stronger_role_proof(monkeypatch):
+def test_secondary_title_requires_stronger_role_proof(monkeypatch):
     monkeypatch.setattr(
         filters,
         "load_profile",
@@ -41,7 +41,7 @@ def test_adjacent_title_requires_stronger_role_proof(monkeypatch):
     assert reason == "DESC_ROLE_PROOF_MISSING"
 
 
-def test_adjacent_title_with_clear_role_evidence_can_pass(monkeypatch):
+def test_secondary_title_with_clear_role_evidence_can_pass(monkeypatch):
     monkeypatch.setattr(
         filters,
         "load_profile",
@@ -105,7 +105,7 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
         "load_profile",
         lambda: {
             "target_title_patterns": [r"\bbusiness\ analyst\b"],
-            "adjacent_title_patterns": [],
+            "secondary_title_patterns": [],
             "reject_title_rules": [],
         },
     )

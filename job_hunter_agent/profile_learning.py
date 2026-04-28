@@ -103,7 +103,7 @@ _TITLE_MODIFIERS = {
 }
 _GENERIC_ROLE_NOUNS = {
     "analyst", "manager", "coordinator", "consultant", "specialist", "developer", "engineer",
-    "architect", "officer", "director", "administrator", "owner", "lead", "executive",
+    "architect", "officer", "director", "administrator", "owner", "lead", "executive", "master",
     "head", "staff", "project", "business",
 }
 _EMPLOYER_MARKERS = {
@@ -275,6 +275,31 @@ def _employer_signal_score(text: str) -> int:
     return score
 
 
+def _is_plausible_role_title(text: str) -> bool:
+    cleaned = _clean_line(text)
+    if not _looks_like_title(cleaned):
+        return False
+
+    normalized = _normalize_phrase(cleaned)
+    tokens = [_normalize_token(token) for token in cleaned.split()]
+    tokens = [token for token in tokens if token]
+    if not normalized or not tokens:
+        return False
+    if tokens[0] in _GENERIC_PHRASE_STOPWORDS:
+        return False
+    if normalized in _GENERIC_PHRASE_BLACKLIST:
+        return False
+
+    has_role_signal = any(token in _GENERIC_ROLE_NOUNS or token in _TITLE_PATTERN_ANCHOR_NOUNS for token in tokens)
+    if not has_role_signal:
+        return False
+
+    if _employer_signal_score(cleaned) >= 2 and not any(token in _TITLE_PATTERN_ANCHOR_NOUNS for token in tokens):
+        return False
+
+    return True
+
+
 def _pick_role_title_and_employer(candidate_lines: list[str], prefer_prefix_order: bool = False) -> tuple[str, str]:
     if not candidate_lines:
         return "", ""
@@ -327,6 +352,30 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         rf"^(?P<employer>.+?)\s*-\s*(?P<title>.+?)\s*\((?P<dates>.*?(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}.*?(?:present|current|now|ongoing|(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}))\)\s*$",
         flags=re.IGNORECASE,
     )
+    title_with_dates_re = re.compile(
+        rf"^(?P<title>.+?)\s*\((?P<dates>.*?(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}.*?(?:present|current|now|ongoing|(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}))\)\s*$",
+        flags=re.IGNORECASE,
+    )
+
+    def collect_role_detail_lines(start_index: int) -> tuple[list[str], int]:
+        details: list[str] = []
+        j = start_index
+        while j < len(lines):
+            look_raw = lines[j].strip()
+            look = _clean_line(look_raw)
+            if not look:
+                j += 1
+                continue
+            if look_raw.lstrip().startswith("#"):
+                break
+            if _extract_year_range(look):
+                break
+            if look_raw.lstrip().startswith(("-", "*")):
+                details.append(_clean_line(re.sub(r"^[-*]\s*", "", look_raw)))
+            else:
+                details.append(look)
+            j += 1
+        return details, j
 
     while i < len(lines):
         raw_line = lines[i].strip()
@@ -343,17 +392,53 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         inline_match = inline_role_re.match(cleaned)
         if inline_match and _section_kind(current_section) != "ignore":
             date_info = _extract_year_range(inline_match.group("dates"))
+            bullets, j = collect_role_detail_lines(i + 1)
             if date_info:
+                inline_left = _clean_line(inline_match.group("employer"))
+                inline_right = _clean_line(inline_match.group("title"))
+                title, employer = _pick_role_title_and_employer(
+                    [inline_left, inline_right],
+                    prefer_prefix_order=False,
+                )
+                if not title:
+                    title = inline_right
+                    employer = inline_left
+                if not _is_plausible_role_title(title) and _is_plausible_role_title(employer):
+                    title, employer = employer, title
+                if not _is_plausible_role_title(title):
+                    i = max(j, i + 1)
+                    continue
                 roles.append(
                     {
-                        "title": _clean_line(inline_match.group("title")),
-                        "employer": _clean_line(inline_match.group("employer")),
+                        "title": title,
+                        "employer": employer if employer != title else "",
                         "section": current_section,
-                        "bullets": [],
+                        "bullets": bullets,
                         **date_info,
                     }
                 )
-            i += 1
+            i = max(j, i + 1)
+            continue
+
+        title_with_dates_match = title_with_dates_re.match(cleaned)
+        if title_with_dates_match and _section_kind(current_section) != "ignore":
+            date_info = _extract_year_range(title_with_dates_match.group("dates"))
+            if date_info:
+                title = _clean_line(title_with_dates_match.group("title"))
+                if not _is_plausible_role_title(title):
+                    i += 1
+                    continue
+                bullets, j = collect_role_detail_lines(i + 1)
+                roles.append(
+                    {
+                        "title": title,
+                        "employer": "",
+                        "section": current_section,
+                        "bullets": bullets,
+                        **date_info,
+                    }
+                )
+            i = max(j, i + 1)
             continue
 
         date_info = _extract_year_range(cleaned)
@@ -397,6 +482,13 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
 
         using_prefix_fallback = bool(prefix_candidate_lines) and candidate_lines[:len(prefix_candidate_lines)] == prefix_candidate_lines
         title, employer = _pick_role_title_and_employer(candidate_lines, prefer_prefix_order=using_prefix_fallback)
+        if title and not _is_plausible_role_title(title):
+            plausible_candidates = [line for line in candidate_lines if _is_plausible_role_title(line)]
+            if plausible_candidates:
+                title = plausible_candidates[0]
+                employer = next((line for line in candidate_lines if line != title), "")
+            else:
+                title = ""
 
         if title:
             roles.append(
@@ -709,67 +801,6 @@ def _apply_llm_capability_names(capabilities: list[dict[str, Any]]) -> list[dict
     return renamed
 
 
-def _parse_summary(source_text: str) -> str:
-    experience = _extract_section(source_text, "EXPERIENCE SUMMARY") or _extract_section(source_text, "SUMMARY")
-    roles = _extract_bullets(experience)
-    primary_strength_match = re.search(r"(?:Primary strength|Core strength):\s*(.+)", source_text, flags=re.IGNORECASE)
-    years_match = re.search(
-        r"(?P<label>Years in [^:\n]+|Experience):\s*(?P<value>[^\n]+)",
-        experience,
-        flags=re.IGNORECASE,
-    )
-
-    parts = []
-    if years_match:
-        label = _clean_sentence(years_match.group("label"))
-        value = _clean_sentence(years_match.group("value"))
-        if label.lower().startswith("years in "):
-            parts.append(f"{value} in {_clean_sentence(label[9:])}")
-        else:
-            parts.append(value)
-    if roles:
-        parts.append("Primary roles: " + ", ".join(roles[:3]))
-    if primary_strength_match:
-        parts.append(_clean_sentence(primary_strength_match.group(1)).replace("->", "").replace(">", ""))
-
-    if not parts and experience:
-        parts.append(experience)
-
-    summary = ". ".join(part.strip(". ") for part in parts if part).strip()
-    if summary:
-        return summary[:1500]
-
-    lines = [line.strip() for line in source_text.splitlines() if line.strip()]
-    headers = {
-        "executive summary",
-        "professional summary",
-        "summary",
-        "profile",
-        "career profile",
-    }
-    for index, line in enumerate(lines):
-        if line.lower().lstrip("#").strip().rstrip(":") not in headers:
-            continue
-        collected: list[str] = []
-        for candidate in lines[index + 1:]:
-            normalized = candidate.strip()
-            lowered = normalized.lower().lstrip("#").strip().rstrip(":")
-            if lowered in headers:
-                break
-            if normalized.startswith("#"):
-                break
-            if len(normalized.split()) <= 8 and normalized.upper() == normalized:
-                break
-            collected.append(normalized)
-            if len(" ".join(collected)) >= 1400:
-                break
-        if collected:
-            return " ".join(collected)[:1500].strip()
-    return ""
-
-
-
-
 def _extract_match_preferences(text: str) -> dict[str, Any]:
     """Extract candidate preferences/warnings from the source text."""
     prefs = {}
@@ -822,10 +853,6 @@ def build_learning_patch(
         "cv_text": source_text,
     }
 
-    summary = _parse_summary(source_text)
-    if summary:
-        patch["candidate_summary"] = summary
-
     capability_rules = _parse_capabilities(source_text, onboarding_settings=onboarding_settings)
     if capability_rules:
         patch["capability_profile_rules"] = capability_rules
@@ -843,11 +870,11 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
     lookback_years = _resolve_extraction_lookback_years(settings)
     min_months = _resolve_onboarding_int(settings, "title_extraction_min_months")
     max_target = _resolve_onboarding_int(settings, "max_target_patterns")
-    max_adjacent = _resolve_onboarding_int(settings, "max_adjacent_patterns")
+    max_secondary = _resolve_onboarding_int(settings, "max_secondary_patterns")
     roles = _parse_role_entries(source_text)
 
     target_titles: list[str] = []
-    adjacent_titles: list[str] = []
+    secondary_titles: list[str] = []
     suggested_keywords: list[str] = []
     recent_cutoff = _CURRENT_YEAR - lookback_years
     strong_role_titles: list[str] = []
@@ -876,16 +903,17 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
     # the app does not treat every past role as a primary search direction.
     direct_target_limit = max(1, min(2, max_target))
     target_titles.extend(strong_role_titles[:direct_target_limit])
-    adjacent_titles.extend(strong_role_titles[direct_target_limit:])
-    adjacent_titles.extend(supporting_role_titles)
+    secondary_titles.extend(strong_role_titles[direct_target_limit:])
+    secondary_titles.extend(supporting_role_titles)
     suggested_keywords.extend(target_titles[:2])
 
-    def _dedupe_patterns(titles: list[str], limit: int) -> list[str]:
+    def _dedupe_patterns(titles: list[str], limit: int, exclude: set[str] | None = None) -> list[str]:
         patterns: list[str] = []
         seen_patterns: set[str] = set()
+        blocked = exclude or set()
         for title in titles:
             pattern = _make_title_pattern(title)
-            if pattern and pattern not in seen_patterns:
+            if pattern and pattern not in seen_patterns and pattern not in blocked:
                 seen_patterns.add(pattern)
                 patterns.append(pattern)
             if len(patterns) >= limit:
@@ -903,9 +931,12 @@ def extract_title_pattern_suggestions(source_text: str, onboarding_settings: dic
         if len(deduped_keywords) >= 4:
             break
 
+    target_patterns = _dedupe_patterns(target_titles, max_target)
+    secondary_patterns = _dedupe_patterns(secondary_titles, max_secondary, exclude=set(target_patterns))
+
     return {
-        "target_title_patterns": _dedupe_patterns(target_titles, max_target),
-        "adjacent_title_patterns": _dedupe_patterns(adjacent_titles, max_adjacent),
+        "target_title_patterns": target_patterns,
+        "secondary_title_patterns": secondary_patterns,
         "suggested_search_keywords": deduped_keywords,
     }
 

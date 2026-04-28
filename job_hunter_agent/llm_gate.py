@@ -225,7 +225,7 @@ def build_system_prompt() -> str:
     parts = [
         "You are helping decide whether a candidate should apply for a job.",
         "Judge fit primarily from the job description and the candidate profile evidence below, not from title alone.",
-        "Be honest about gaps. Adjacent titles can still fit when responsibilities match the candidate background.",
+        "Be honest about gaps. Secondary titles can still fit when responsibilities match the candidate background.",
         "Recent directly relevant experience matters more than older exposure from many years ago.",
         "Treat primary current evidence as strongest proof. Treat older evidence as weaker, and background-only context such as certifications, broad industry mentions, or optional supporting history as weakest.",
         "Use capability levels and aliases from the candidate profile context as supporting evidence when responsibilities align.",

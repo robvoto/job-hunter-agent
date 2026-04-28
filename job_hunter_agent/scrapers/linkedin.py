@@ -47,6 +47,7 @@ class LinkedInScraper(BaseJobScraper):
             detect_competitive_signals,
             deterministic_review_outcome,
             evaluate_competitive_signal_alignment,
+            extract_skill_observations,
             finalize_record,
             hard_block_entries,
             hard_block_reasons,
@@ -264,6 +265,7 @@ class LinkedInScraper(BaseJobScraper):
                     continue
 
                 record["decision"] = "KEEP"
+                skill_observations.extend(extract_skill_observations(record, details_text, self.profile))
                 finalize_record(self.job_history, audit_rows, record, self.run_iso)
                 kept_records.append(record)
                 print(

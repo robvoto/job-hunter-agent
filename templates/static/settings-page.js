@@ -16,7 +16,7 @@
     const listTextAreas = [
       'locations',
       'target_title_patterns',
-      'adjacent_title_patterns',
+      'secondary_title_patterns',
       'classification_ids',
       'must_not_require_skills',
     ];
@@ -301,7 +301,7 @@
 
     const chipEditors = {
       target_title_patterns: { kind: 'list', listId: 'target_title_patterns_chips', inputId: 'target_title_patterns_add', emptyText: 'No target titles yet.' },
-      adjacent_title_patterns: { kind: 'list', listId: 'adjacent_title_patterns_chips', inputId: 'adjacent_title_patterns_add', emptyText: 'No secondary titles yet.' },
+      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
       reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },
       reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No blocked description phrases yet.' },
@@ -341,7 +341,7 @@
     }
 
     function friendlyListLabel(id, value) {
-      if (id === 'target_title_patterns' || id === 'adjacent_title_patterns') {
+      if (id === 'target_title_patterns' || id === 'secondary_title_patterns') {
         return patternToLabel(value) || value;
       }
       return normalizePlainPhrase(value);
@@ -399,7 +399,7 @@
     function buildChipValue(id, rawValue) {
       const raw = normalizePlainPhrase(rawValue);
       if (!raw) return null;
-      if (id === 'target_title_patterns' || id === 'adjacent_title_patterns') return titlePhraseToPattern(raw);
+      if (id === 'target_title_patterns' || id === 'secondary_title_patterns') return titlePhraseToPattern(raw);
       if (id === 'must_not_require_skills') return raw;
       if (id === 'reject_title_rules') {
         const phrase = normalizeTitleBlockPhrase(raw);
@@ -512,7 +512,7 @@
       document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness ?? 1);
       setCapabilityRuleState(profile.capability_profile_rules || []);
       document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
-      for (const id of ['target_title_patterns', 'adjacent_title_patterns', 'must_not_require_skills']) {
+      for (const id of ['target_title_patterns', 'secondary_title_patterns', 'must_not_require_skills']) {
         document.getElementById(id).value = (profile[id] || []).join('\n');
       }
       for (const [id, key] of ruleTextAreas) {
@@ -927,7 +927,7 @@
         llm_profile_brief: '',
         capability_profile_rules: collectCapabilityRuleState(),
         target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
-        adjacent_title_patterns: toLines(document.getElementById('adjacent_title_patterns').value),
+        secondary_title_patterns: toLines(document.getElementById('secondary_title_patterns').value),
         must_not_require_skills: toLines(document.getElementById('must_not_require_skills').value),
         reject_title_rules: textToRules(document.getElementById('reject_title_rules').value, 'pattern'),
         reject_description_phrase_rules: textToRules(document.getElementById('reject_description_phrase_rules').value, 'phrase'),

@@ -3,103 +3,112 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Build Your Profile | Job Hunter</title>
+  <title>Set Up Job Hunter | Job Hunter</title>
   <link rel="stylesheet" href="/static/onboarding-page.css">
 </head>
 <body>
   <main class="page">
     <section class="hero">
-      <div class="hero-kicker">Guided Onboarding</div>
-      <h1 id="hero_title">Build Your Profile</h1>
-      <p id="hero_copy">Start with one detailed CV and a few search basics. We will build the working profile the agent uses for search, filtering, and scoring, then let you review it before it drives future runs.</p>
+      <div class="hero-kicker">Job Hunter</div>
+      <div class="hero-step" id="hero_step">Step 1 of 4</div>
+      <h1 id="hero_title">Set Up Your Job Search Profile</h1>
+      <p id="hero_copy">Upload one detailed CV. Job Hunter will build a draft profile, let you review it, and then ask for the minimum search basics before matching starts.</p>
     </section>
 
     <div class="grid">
       <section class="panel">
-        <h2 id="form_title">Step 1. Setup Basics</h2>
-        <p class="section-copy">Start with the basics. We will keep the more technical pattern limits in Settings.</p>
-        <div class="support-stack">
+        <div class="wizard-progress" aria-hidden="true">
+          <div class="wizard-progress-bar">
+            <span id="wizard_progress_fill"></span>
+          </div>
+        </div>
+
+        <section class="wizard-step is-active" data-step="1">
+          <h2 id="form_title">Upload Your CV</h2>
+          <p class="section-copy">Start with the CV that best represents your real experience. We will use it to build your starting profile.</p>
+
           <div class="support-note workflow-card">
             <h3 id="workflow_title">How this works</h3>
-            <p id="workflow_intro">This creates the working profile the agent uses for matching, filtering, and search suggestions.</p>
+            <p id="workflow_intro">This creates the profile Job Hunter uses to find and score relevant jobs for you.</p>
             <ol class="workflow-steps">
-              <li id="workflow_step_1">You give us one detailed CV and your search basics.</li>
-              <li id="workflow_step_2">We extract titles, capability signals, and starter search terms.</li>
-              <li id="workflow_step_3">You review the generated targeting before it drives future runs.</li>
+              <li id="workflow_step_1">You upload one detailed CV.</li>
+              <li id="workflow_step_2">We extract likely titles, strengths, and a starter search direction.</li>
+              <li id="workflow_step_3">You review the draft, set search basics, and confirm it before matching starts.</li>
             </ol>
-            <p class="workflow-note" id="workflow_note">After that, you continue in the workspace to tune search rules, alerts, and scoring.</p>
+            
           </div>
-        </div>
 
-        <div class="setting-row">
-          <div class="setting-copy">
-            <label for="os_lookback_years">How far back should we look?</label>
-            <div class="help">We use this when pulling your experience from older roles.</div>
+          <div class="field-stack">
+            <div>
+              <label class="sr-only" for="primary_cv">Upload your CV</label>
+              <input id="primary_cv" type="file" accept=".docx,.md,.txt" required aria-label="Upload your CV">
+              <div class="help">Required. Use the most detailed CV you have, not the prettiest final layout.</div>
+              <div class="help">Privacy tip: only upload the CV content needed for matching. Remove date of birth, licence numbers, passport details, street address, and other sensitive personal identifiers.</div>
+              <details class="guidance-card">
+                <summary>What makes a good CV for setup?</summary>
+                <p class="help">Best results come from a detailed CV with role titles, dates, employers, and bullet points.</p>
+                <div class="guidance-grid">
+                  <section>
+                    <h3>Include</h3>
+                    <ul class="guidance-list">
+                      <li>Recent and older roles with dates</li>
+                      <li>Clear job titles</li>
+                      <li>Employer names</li>
+                      <li>Bullet points describing what you did</li>
+                      <li>Skills, tools, domains, or platforms you actually used</li>
+                    </ul>
+                  </section>
+                  <section>
+                    <h3>Avoid</h3>
+                    <ul class="guidance-list">
+                      <li>One-page marketing CVs with very little detail</li>
+                      <li>Image-heavy layouts where the text is hard to extract</li>
+                      <li>CVs with missing dates or vague role names</li>
+                      <li>Multiple different target directions crammed into a short summary</li>
+                    </ul>
+                  </section>
+                </div>
+                <p class="guidance-note">Plain, detailed content beats pretty formatting.</p>
+              </details>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label for="os_lookback_years">How far back should we look?</label>
+                <div class="help">We use this when pulling your experience from older roles.</div>
+              </div>
+              <div class="number-input">
+                <input id="os_lookback_years" class="compact-number" type="number" min="1" max="20" step="1" inputmode="numeric" required>
+                <span>years</span>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label for="os_min_months">Ignore very short roles</label>
+                <div class="help">Roles shorter than this are treated as background context instead of main targeting signals.</div>
+              </div>
+              <div class="number-input">
+                <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
+                <span>months</span>
+              </div>
+            </div>
           </div>
-          <div class="number-input">
-            <input id="os_lookback_years" class="compact-number" type="number" min="1" max="20" step="1" inputmode="numeric" required>
-            <span>years</span>
+
+          <div class="actions">
+            <button class="primary" id="create_profile" type="button">Build Draft Profile</button>
           </div>
-        </div>
+        </section>
 
-        <div class="setting-row">
-          <div class="setting-copy">
-            <label for="os_min_months">Ignore very short roles</label>
-            <div class="help">Roles shorter than this are treated as background context instead of main targeting signals.</div>
-          </div>
-          <div class="number-input">
-            <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
-            <span>months</span>
-          </div>
-        </div>
-
-        <h2 style="margin-top:22px;">Step 2. Search Preferences</h2>
-        <label for="search_keywords">Primary search title</label>
-        <input id="search_keywords" type="text" placeholder="e.g. Business Analyst" maxlength="120" required>
-        <div class="help">Use one clear job title. We will prefill the most obvious one after reading your CV, and you can replace it if you want a different direction.</div>
-
-        <label for="location_search">Where should we search?</label>
-        <div class="location-picker">
-          <div class="location-input-row">
-            <input id="location_search" list="location_suggestions" type="text" placeholder="Start typing a city or region" maxlength="80">
-            <button class="secondary location-add-button" id="add_location" type="button">Add location</button>
-          </div>
-          <datalist id="location_suggestions"></datalist>
-          <div class="location-suggestions" id="location_quick_picks"></div>
-          <div class="location-selected" id="location_selected"></div>
-        </div>
-        <div class="help">Required. Add at least one city, state, or region.</div>
-
-        <label>What type of work are you open to?</label>
-        <div class="choice-list">
-          <label class="choice-card"><input type="radio" name="engagement_pref" value="both" checked><span>Both permanent and contract</span></label>
-          <label class="choice-card"><input type="radio" name="engagement_pref" value="permanent"><span>Permanent only</span></label>
-          <label class="choice-card"><input type="radio" name="engagement_pref" value="contract"><span>Contract only</span></label>
-        </div>
-
-        <h2 style="margin-top:22px;">Step 3. Primary CV</h2>
-        <label for="primary_cv">Detailed CV</label>
-        <input id="primary_cv" type="file" accept=".docx,.md,.txt" required>
-        <div class="help">This is the only required file. Use the most detailed CV you have, not the prettiest final layout.</div>
-
-        <div class="summary-box" id="summary_box">
-          <h3 id="summary_heading">Profile Preview</h3>
-          <p id="summary_text"></p>
-          <code id="patterns_text"></code>
-        </div>
-
-        <section class="summary-box" id="review_box" hidden>
-          <h3>Step 4. Review generated targeting</h3>
-          <p>We extracted likely titles and capabilities from your CV. Confirm them before they drive search and scoring.</p>
-
-          <label for="review_search_keywords">Primary search title</label>
-          <input id="review_search_keywords" type="text" placeholder="We can prefill this from your extracted titles">
-          <div class="help">Use one clear role title for source searches. We default this from the strongest extracted title, but you can replace it with a different title if needed.</div>
+        <section class="wizard-step" data-step="2" hidden>
+          <button class="back-link" id="back_to_upload" type="button">Back</button>
+          <h2>Review Draft Profile</h2>
+          <p class="section-copy">Check what Job Hunter learned from your CV. Fix the targeting before you move on to search basics.</p>
 
           <div class="review-grid">
             <section class="review-block">
-              <h4>Target titles</h4>
-              <p class="help">Strong title matches. These should be the jobs you want the engine to treat as direct hits.</p>
+              <h3>Strong fit job titles</h3>
+              <p class="help">You can confidently do these roles based on your past experience. These are treated as high-confidence matches.</p>
               <div class="chip-list" id="review_target_titles_list"></div>
               <div class="chip-editor-row">
                 <input id="review_target_titles_input" type="text" placeholder="Add a target title">
@@ -108,32 +117,141 @@
             </section>
 
             <section class="review-block">
-              <h4>Secondary titles</h4>
-              <p class="help">Still relevant titles, but they should need stronger proof from the role before they count as a match.</p>
-              <div class="chip-list" id="review_adjacent_titles_list"></div>
+              <h3>Conditional fit job titles</h3>
+              <p class="help">Only include roles where you can prove the fit through specific experience. These require validation before being accepted.</p>
+              <div class="chip-list" id="review_secondary_titles_list"></div>
               <div class="chip-editor-row">
-                <input id="review_adjacent_titles_input" type="text" placeholder="Add a secondary title">
-                <button class="secondary" id="review_add_adjacent_title" type="button">Add</button>
+                <input id="review_secondary_titles_input" type="text" placeholder="Add a secondary title">
+                <button class="secondary" id="review_add_secondary_title" type="button">Add</button>
               </div>
             </section>
           </div>
 
-          <section class="review-block" style="margin-top:14px;">
-            <h4>Capability matrix</h4>
+          <section class="review-block capability-shell">
+            <h3>Capability matrix</h3>
             <p class="help">These labels stay human-readable. The engine actually scans the short job-ad keywords inside each row.</p>
             <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities or job ad keywords">
             <div id="review_capability_cards" class="review-capability-list"></div>
-            <div class="actions" style="margin-top:14px;">
+            <div class="actions">
               <button class="secondary" id="review_add_capability" type="button">Add capability</button>
-              <button class="primary" id="confirm_review" type="button">Save and Continue</button>
+              <button class="primary" id="continue_to_search_basics" type="button">Continue</button>
             </div>
           </section>
         </section>
 
-        <div class="actions">
-          <button class="primary" id="create_profile" type="button">Build Profile</button>
-          <a class="button-link secondary" id="workspace_link" href="/settings">Go to Workspace</a>
-        </div>
+        <section class="wizard-step" data-step="3" hidden>
+          <button class="back-link" id="back_to_review" type="button">Back</button>
+          <h2>Set Search Basics</h2>
+          <p class="section-copy">Set the minimum information Job Hunter needs to search safely and score roles in the right direction.</p>
+
+          <label for="review_search_keywords">Primary search title</label>
+          <input id="review_search_keywords" type="text" placeholder="We will prefill this from your CV when possible">
+          <div class="help">Use one clear role title for searches. You can keep the extracted one or replace it with the direction you actually want.</div>
+
+          <label for="location_search">Where should we search?</label>
+          <div class="location-picker">
+            <div class="location-input-row">
+              <input id="location_search" list="location_suggestions" type="text" placeholder="Start typing a city or region" maxlength="80">
+              <button class="secondary location-add-button" id="add_location" type="button">Add location</button>
+            </div>
+            <datalist id="location_suggestions"></datalist>
+            <div class="location-suggestions" id="location_quick_picks"></div>
+            <div class="location-selected" id="location_selected"></div>
+          </div>
+          <div class="help">Required. Add at least one city, state, or region.</div>
+
+          <label>What type of work are you open to?</label>
+          <div class="choice-list">
+            <label class="choice-card"><input type="radio" name="engagement_pref" value="both" checked><span>Both permanent and contract</span></label>
+            <label class="choice-card"><input type="radio" name="engagement_pref" value="permanent"><span>Permanent only</span></label>
+            <label class="choice-card"><input type="radio" name="engagement_pref" value="contract"><span>Contract only</span></label>
+          </div>
+
+          <div class="review-grid">
+            <section class="review-block">
+              <h3>Minimum salary</h3>
+              <label for="review_minimum_salary_yearly">Permanent roles</label>
+              <input id="review_minimum_salary_yearly" type="number" min="0" step="1000" inputmode="numeric" placeholder="e.g. 140000">
+              <div class="help">Optional. Ignore permanent roles below this yearly salary.</div>
+            </section>
+
+            <section class="review-block">
+              <h3>Minimum daily rate</h3>
+              <label for="review_minimum_daily_rate">Contract roles</label>
+              <input id="review_minimum_daily_rate" type="number" min="0" step="10" inputmode="numeric" placeholder="e.g. 900">
+              <div class="help">Optional. Ignore contract roles below this daily rate.</div>
+            </section>
+          </div>
+
+          <div class="actions">
+            <button class="secondary" id="back_to_review_footer" type="button">Back</button>
+            <button class="primary" id="continue_to_check" type="button">Continue</button>
+          </div>
+        </section>
+
+        <section class="wizard-step" data-step="4" hidden>
+          <button class="back-link" id="back_to_search_basics" type="button">Back</button>
+          <h2>Check Your Setup</h2>
+          <p class="section-copy">Make sure this looks right. When you finish, onboarding is complete and Settings will unlock.</p>
+
+          <div class="check-grid">
+            <section class="check-card">
+              <div class="check-card-head">
+                <h3>Draft profile</h3>
+                <button class="text-link" id="edit_draft_profile" type="button">Change</button>
+              </div>
+              <dl class="check-list">
+                <div>
+                  <dt>Target titles</dt>
+                  <dd id="check_target_titles"></dd>
+                </div>
+                <div>
+                  <dt>Secondary titles</dt>
+                  <dd id="check_secondary_titles"></dd>
+                </div>
+                <div>
+                  <dt>Capabilities</dt>
+                  <dd id="check_capabilities"></dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="check-card">
+              <div class="check-card-head">
+                <h3>Search basics</h3>
+                <button class="text-link" id="edit_search_basics" type="button">Change</button>
+              </div>
+              <dl class="check-list">
+                <div>
+                  <dt>Primary search title</dt>
+                  <dd id="check_search_title"></dd>
+                </div>
+                <div>
+                  <dt>Locations</dt>
+                  <dd id="check_locations"></dd>
+                </div>
+                <div>
+                  <dt>Work type</dt>
+                  <dd id="check_engagement_type"></dd>
+                </div>
+                <div>
+                  <dt>Minimum salary</dt>
+                  <dd id="check_salary_yearly"></dd>
+                </div>
+                <div>
+                  <dt>Minimum daily rate</dt>
+                  <dd id="check_salary_daily"></dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+
+          <div class="actions">
+            <button class="secondary" id="back_to_search_basics_footer" type="button">Back</button>
+            <button class="primary" id="confirm_review" type="button">Finish Setup</button>
+          </div>
+        </section>
+
         <div class="status" id="status"></div>
       </section>
     </div>

@@ -102,7 +102,7 @@ Current band mapping:
 
 - `85-100` -> `Strong match`
 - `70-84` -> `Good match`
-- `55-69` -> `Possible fit` (or Worth a look)
+- `55-69` -> `Possible fit` (or "Worth a look")
 - `0-54` -> `Stretch`
 
 Hard blockers:

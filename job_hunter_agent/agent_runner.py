@@ -1,4 +1,4 @@
-﻿﻿﻿"""Daily local agent runner.
+"""Daily local agent runner.
 
 Main goals:
 - run the current job-source connector on a schedule or on demand

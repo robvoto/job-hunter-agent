@@ -1,0 +1,438 @@
+{
+  "enabled_sources": [
+    "seek",
+    "linkedin"
+  ],
+  "search_settings": {
+    "keywords": "business analyst",
+    "locations": [
+      "All Sydney NSW"
+    ],
+    "classification_ids": [
+      "6076",
+      "1209",
+      "6123",
+      "6281",
+      "1223"
+    ],
+    "date_range_days": 3,
+    "max_pages_cap": 10,
+    "enforce_posted_age_limit": true,
+    "sort_newest_first": true,
+    "linkedin_hours_old": 24,
+    "linkedin_results_per_search": 25,
+    "linkedin_easy_apply_only": null
+  },
+  "review_controls": {
+    "applied_job_keys": [
+      "91624674",
+      "91577887"
+    ],
+    "hidden_job_keys": []
+  },
+  "salary_preferences": {
+    "minimum_salary_yearly": 165000,
+    "minimum_daily_rate": 900
+  },
+  "preference_weights": {
+    "fit": 1.0,
+    "salary": 1.0,
+    "location": 1.0,
+    "work_mode": 1.0,
+    "contract": 1.0,
+    "government": 1.0,
+    "freshness": 1.0
+  },
+  "match_preferences": {
+    "home_location": "Australia",
+    "secondary_location": "Canberra ACT",
+    "prefer_government": false,
+    "prefer_permanent": true,
+    "engagement_type": "both",
+    "preferred_contract_months": 12,
+    "short_contract_months": 6
+  },
+  "llm_profile_brief_mode": "auto",
+  "llm_profile_brief": "Capability profile: agile methodologies (strong, core); devops practices (strong, core); process modeling (strong, core); process assessments (strong, core); multi-client delivery (strong, core); end-to-end analysis (strong, core); discovery and validation (strong, core); data validation (strong, core); bpmn practices (strong, core); acceptance testing (strong, core); requirements management (strong, core); risk coordination (strong, supporting); data management (strong, supporting); primary stakeholder engagement (working, core); exception handling (working, supporting); reporting processes (working, supporting); delivery teams (working, supporting); health it management (working, supporting); provider coordination (working, supporting); discovery initiatives (working, core)",
+  "candidate_summary": "NAME: Roberto Hernan Voto ROLE: Senior Business Analyst / Technical Business Analyst / Scrum Master LOCATION: Australia EXPERIENCE: 20+ years in IT The following tools are explicitly used by Rob Voto: - Jira - Azure DevOps - Trello - Confluence - Enterprise Architect - Visio - Miro - Postman - Power BI (basic) - AWS (solution context) - AI (prompt engineering and LLM-assisted analysis) - Draw.io - Java - Azure - Agile Scrum & Kanban",
+  "star_evidence_text": "",
+  "cv_text": "## Primary CV\nNAME: Roberto Hernan Voto\nROLE: Senior Business Analyst / Technical Business Analyst / Scrum Master\nLOCATION: Australia\nEXPERIENCE: 20+ years in IT\n\nTOOLS (AUTHORITATIVE LIST)\nThe following tools are explicitly used by Rob Voto:\n- Jira\n- Azure DevOps\n- Trello\n- Confluence\n- Enterprise Architect\n- BPMN 2.0\n- Visio\n- Miro\n- Postman\n- SQL\n- Power BI (basic)\n- AWS (solution context)\n- AI (prompt engineering and LLM-assisted analysis)\n- Draw.io\n- Java\n- Azure\n- Agile Scrum & Kanban\n- REST APIs (conceptual)\n- High-level business rules and decision logic\n\n====================================\nEMPLOYMENT HISTORY\n====================================\n\nDepartment of Employment and Workplace Relations (DEWR) - Industry: Federal Government\nSenior Business Analyst - Payments\nDec 2024 - Present\n\n- Senior BA on a large-scale payments transformation and migration program for Disability Employment Services (DES), supporting transition from DES5 to DES6.\n- Analysed and modelled complex provider payment and derived-payment processes, including eligibility checks, rule sequencing, adjustments, exceptions, and system hand-offs.\n- Translated policy intent into system-ready functional definitions, covering decision logic, calculation sequencing, data mappings, and edge cases.\n- Produced BPMN 2.0 AS-IS and TO-BE process models used by policy, development, testing, and data teams to align on payment behaviour.\n- Performed SQL-based data validation and reconciliation to compare legacy and new-system payment outcomes and support defect investigation.\n- Defined detailed acceptance criteria and test scenarios to validate payment accuracy and compliance during migration.\n- Tools: Azure DevOps, Enterprise Architect, SQL, BPMN, Agile Scrum.\n\nAustralian Bureau of Statistics (ABS)\nSenior Business Analyst (EL1)\nApr 2024 - Dec 2024\n\n- Senior BA on a national web-based business data collection and reporting platform.\n- Analysed end-to-end workflows for capturing income, expense, and inventory data from Australian businesses.\n- Designed BPMN AS-IS and TO-BE process models describing data submission, validation, processing, and downstream reporting flows.\n- Clarified interactions between the web application, validation services, APIs, and backend data stores to support development and testing.\n- Supported API definition and performed API testing and validation using Postman.\n- Used SQL extensively for data analysis, validation, and issue investigation.\n- Tools: Jira, SQL, Postman, BPMN, Agile Scrum.\n\nNSW eHealth\nDigital & Infrastructure Business Analyst / Project Coordinator\nMay 2022 - Nov 2023\n\n- Lead Business Analyst across major digital and infrastructure programs within NSW Health.\n- Played a key role in the transition of the NSW Health networking ecosystem to a Secure Service Edge (SSE) architecture across 15+ Local Health Districts.\n- Coordinated requirements, risks, schedules, and delivery across multiple vendors, engineers, and LHD stakeholders.\n- Acted as primary BA on NSW Ambulance initiatives, including infrastructure upgrades and operational support processes.\n- Conducted extensive BPMN 2.0 process modelling for IT Support (including P1/P2 incidents), Procurement, Finance, and operational workflows.\n- Facilitated discovery and validation workshops with eHealth IT managers and NSW Ambulance stakeholders.\n- Produced AS-IS and TO-BE process models used for stakeholder alignment, onboarding, and operational documentation.\n- Tools: Azure DevOps, Jira, BPMN, infrastructure platforms (networking, security), Agile Scrum.\n\nDepartment of Health (Federal)\nDigital Business Analyst\nJul 2021 - May 2022\n\n- Digital BA on a federal aged care financial management and reporting platform supporting subsidised aged care and transition care services.\n- Analysed and defined end-to-end accounting, data capture, and reporting workflows, including provider submissions, validation, and government reporting.\n- Worked on Annual Accountability Reporting (AAR) requirements for the Transition Care Programme, covering both government and private aged-care providers.\n- Produced functional and non-functional requirements to support financial transparency, compliance, and auditability.\n- Facilitated stakeholder workshops with policy teams, delivery teams, and external providers to clarify requirements and reporting obligations.\n- Supported delivery and testing activities until the program reached approximately 75% implementation before cancellation for external reasons.\n- Tools: Azure DevOps, SQL, BPMN, Agile Scrum.\n\nPhoenix DX\nAgile Business Analyst / Consultant\nMay 2020 - Jul 2021\n\n- Agile BA and consultant in a low-code delivery environment (OutSystems).\n- Led discovery, requirements definition, and Agile delivery for multiple client solutions.\n- Strong use of Gherkin BDD (GIVEN / WHEN / THEN) for acceptance criteria.\n- BPMN modelling for process improvement and workflow optimisation.\n- Involvement in API integrations and system-to-system workflows.\n- Tools and platforms: OutSystems, Jira, BPMN, Gherkin BDD, Postman, Agile Scrum & Kanban.\n\nRockstar Coders (USA)\nBusiness Analyst / Scrum Master / Delivery Manager\n2018 - 2020\n\n- Senior BA / SM / Delivery Manager for a US-based digital agency.\n- Worked across dozens of mobile and web products for international clients.\n- Led discovery workshops, UX definition, requirements, and delivery planning.\n- Produced BPMN and Visio process models for business process improvement.\n- Acted as primary client-facing delivery lead across multiple accounts.\n- Tools: Trello, BPMN, Visio, Miro, UX artefacts, Agile Scrum & Kanban.\n\nGlobant\nDigital Business Analyst / Consultant\n2016 - 2018\n\n- Digital BA on enterprise platforms for major global clients.\n- Worked on large-scale digital solutions for Mastercard and Google.\n- Requirements analysis, stakeholder engagement, and delivery support.\n- Involvement in web platforms, integrations, and cloud-based solutions.\n- Tools and practices included Jira, BPMN, API documentation, and cloud-based delivery environments.\n\nFrucor Suntory\nFunctional & Data Analyst\n2015 - 2016\n\n- Functional and data BA on an end-to-end order-to-cash integration program.\n- SAP and EDI-based integrations with major customers (e.g. Woolworths, Domino’s).\n- Data mapping, validation, and coordination across business and technical teams.\n- Tools: SAP, EDI, SQL, data mapping specifications.\n\nAdaptra Consulting\nBusiness Analyst\n2010 - 2012\n\n- Business Analyst and Functional Consultant specialising in Guidewire platforms.\n- Configuration, requirements definition, and pre-sales solution design.\n- Involvement in insurance system integrations and solution architecture.\n- Tools: Guidewire, BPMN, integration specifications.\n\nNSW Department of Education\nSenior Analyst Developer\n2007 - 2010\n\n- Senior Analyst Developer in education systems.\n- Java development and enterprise system integration.\n- Extensive work on SOAP / SOA integrations and backend services.\n- Tools: Java, SOAP/SOA, SQL, enterprise integration frameworks.\n\nNSW Department of Education\nTechnical / Functional Business Analyst\n2012 - 2015\n\n- Technical and Functional BA on large-scale, state-wide education platforms supporting 2,200+ NSW public schools.\n- Worked on major programs including LMBR and ICC, involving system integration, ETL, and large-scale data migration.\n- Performed heavy SQL-based analysis to define data mappings, transformation rules, and validation logic.\n- Modelled BPMN processes and integration workflows covering student enrolment, residency and visa management, and sensitive legal and family information.\n- Supported multi-million-dollar enterprise programs involving multiple legacy systems and vendors.\n- Tools: SQL, BPMN, ETL tooling, enterprise education platforms.\n\nMastercard (Argentina)\nTechnical Business Analyst / Senior Analyst Developer\n2002 - 2006\n\n- Technical BA and developer on enterprise financial systems.\n- Development and integration of Mastercard client-facing platforms.\n- Java / J2EE development and middleware integration.\n- Tools: Java/J2EE, middleware, SQL.\n\nMovistar\nAnalyst Developer\n2002 - 2004\n\n- Analyst Developer role in telecommunications systems.\n- Tools: Java, enterprise telecom platforms.\n\n====================================\nEDUCATION\n====================================\n\n- Bachelor’s Degree (completed)\n\n====================================\nCERTIFICATIONS\n====================================\n\n- Certified Scrum Master (CSM)\n- Certified Associate in Project Management (CAPM)\n- BPMN 2.0 Business Process Modelling\n- OutSystems Associate Reactive Developer\n- Guidewire Certification",
+  "evidence_tiers": {
+    "primary_current_evidence": "NAME: Roberto Hernan Voto\nROLE: Senior Business Analyst / Technical Business Analyst / Scrum Master\nLOCATION: Australia\nEXPERIENCE: 20+ years in IT\n\nTOOLS (AUTHORITATIVE LIST)\nThe following tools are explicitly used by Rob Voto:\n- Jira\n- Azure DevOps\n- Trello\n- Confluence\n- Enterprise Architect\n- BPMN 2.0\n- Visio\n- Miro\n- Postman\n- SQL\n- Power BI (basic)\n- AWS (solution context)\n- AI (prompt engineering and LLM-assisted analysis)\n- Draw.io\n- Java\n- Azure\n- Agile Scrum & Kanban\n- REST APIs (conceptual)\n- High-level business rules and decision logic\n\n====================================\nEMPLOYMENT HISTORY\n====================================\n\nDepartment of Employment and Workplace Relations (DEWR) - Industry: Federal Government\nSenior Business Analyst - Payments\nDec 2024 - Present\n\n- Senior BA on a large-scale payments transformation and migration program for Disability Employment Services (DES), supporting transition from DES5 to DES6.\n- Analysed and modelled complex provider payment and derived-payment processes, including eligibility checks, rule sequencing, adjustments, exceptions, and system hand-offs.\n- Translated policy intent into system-ready functional definitions, covering decision logic, calculation sequencing, data mappings, and edge cases.\n- Produced BPMN 2.0 AS-IS and TO-BE process models used by policy, development, testing, and data teams to align on payment behaviour.\n- Performed SQL-based data validation and reconciliation to compare legacy and new-system payment outcomes and support defect investigation.\n- Defined detailed acceptance criteria and test scenarios to validate payment accuracy and compliance during migration.\n- Tools: Azure DevOps, Enterprise Architect, SQL, BPMN, Agile Scrum.\n\nAustralian Bureau of Statistics (ABS)\nSenior Business Analyst (EL1)\nApr 2024 - Dec 2024\n\n- Senior BA on a national web-based business data collection and reporting platform.\n- Analysed end-to-end workflows for capturing income, expense, and inventory data from Australian businesses.\n- Designed BPMN AS-IS and TO-BE process models describing data submission, validation, processing, and downstream reporting flows.\n- Clarified interactions between the web application, validation services, APIs, and backend data stores to support development and testing.\n- Supported API definition and performed API testing and validation using Postman.\n- Used SQL extensively for data analysis, validation, and issue investigation.\n- Tools: Jira, SQL, Postman, BPMN, Agile Scrum.\n\nNSW eHealth\nDigital & Infrastructure Business Analyst / Project Coordinator\nMay 2022 - Nov 2023\n\n- Lead Business Analyst across major digital and infrastructure programs within NSW Health.\n- Played a key role in the transition of the NSW Health networking ecosystem to a Secure Service Edge (SSE) architecture across 15+ Local Health Districts.\n- Coordinated requirements, risks, schedules, and delivery across multiple vendors, engineers, and LHD stakeholders.\n- Acted as primary BA on NSW Ambulance initiatives, including infrastructure upgrades and operational support processes.\n- Conducted extensive BPMN 2.0 process modelling for IT Support (including P1/P2 incidents), Procurement, Finance, and operational workflows.\n- Facilitated discovery and validation workshops with eHealth IT managers and NSW Ambulance stakeholders.\n- Produced AS-IS and TO-BE process models used for stakeholder alignment, onboarding, and operational documentation.\n- Tools: Azure DevOps, Jira, BPMN, infrastructure platforms (networking, security), Agile Scrum.\n\nDepartment of Health (Federal)\nDigital Business Analyst\nJul 2021 - May 2022\n\n- Digital BA on a federal aged care financial management and reporting platform supporting subsidised aged care and transition care services.\n- Analysed and defined end-to-end accounting, data capture, and reporting workflows, including provider submissions, validation, and government reporting.\n- Worked on Annual Accountability Reporting (AAR) requirements for the Transition Care Programme, covering both government and private aged-care providers.\n- Produced functional and non-functional requirements to support financial transparency, compliance, and auditability.\n- Facilitated stakeholder workshops with policy teams, delivery teams, and external providers to clarify requirements and reporting obligations.\n- Supported delivery and testing activities until the program reached approximately 75% implementation before cancellation for external reasons.\n- Tools: Azure DevOps, SQL, BPMN, Agile Scrum.\n\nPhoenix DX\nAgile Business Analyst / Consultant\nMay 2020 - Jul 2021\n\n- Agile BA and consultant in a low-code delivery environment (OutSystems).\n- Led discovery, requirements definition, and Agile delivery for multiple client solutions.\n- Strong use of Gherkin BDD (GIVEN / WHEN / THEN) for acceptance criteria.\n- BPMN modelling for process improvement and workflow optimisation.\n- Involvement in API integrations and system-to-system workflows.\n- Tools and platforms: OutSystems, Jira, BPMN, Gherkin BDD, Postman, Agile Scrum & Kanban.\n\nRockstar Coders (USA)\nBusiness Analyst / Scrum Master / Delivery Manager\n2018 - 2020\n\n- Senior BA / SM / Delivery Manager for a US-based digital agency.\n- Worked across dozens of mobile and web products for international clients.\n- Led discovery workshops, UX definition, requirements, and delivery planning.\n- Produced BPMN and Visio process models for business process improvement.\n- Acted as primary client-facing delivery lead across multiple accounts.\n- Tools: Trello, BPMN, Visio, Miro, UX artefacts, Agile Scrum & Kanban.\n\nGlobant\nDigital Business Analyst / Consultant\n2016 - 2018\n\n- Digital BA on enterprise platforms for major global clients.\n- Worked on large-scale digital solutions for Mastercard and Google.\n- Requirements analysis, stakeholder engagement, and delivery support.\n- Involvement in web platforms, integrations, and cloud-based solutions.\n- Tools and practices included Jira, BPMN, API documentation, and cloud-based delivery environments.\n\nFrucor Suntory\nFunctional & Data Analyst\n2015 - 2016\n\n- Functional and data BA on an end-to-end order-to-cash integration program.\n- SAP and EDI-based integrations with major customers (e.g. Woolworths, Domino’s).\n- Data mapping, validation, and coordination across business and technical teams.\n- Tools: SAP, EDI, SQL, data mapping specifications.\n\nAdaptra Consulting\nBusiness Analyst\n2010 - 2012\n\n- Business Analyst and Functional Consultant specialising in Guidewire platforms.\n- Configuration, requirements definition, and pre-sales solution design.\n- Involvement in insurance system integrations and solution architecture.\n- Tools: Guidewire, BPMN, integration specifications.\n\nNSW Department of Education\nSenior Analyst Developer\n2007 - 2010\n\n- Senior Analyst Developer in education systems.\n- Java development and enterprise system integration.\n- Extensive work on SOAP / SOA integrations and backend services.\n- Tools: Java, SOAP/SOA, SQL, enterprise integration frameworks.\n\nNSW Department of Education\nTechnical / Functional Business Analyst\n2012 - 2015\n\n- Technical and Functional BA on large-scale, state-wide education platforms supporting 2,200+ NSW public schools.\n- Worked on major programs including LMBR and ICC, involving system integration, ETL, and large-scale data migration.\n- Performed heavy SQL-based analysis to define data mappings, transformation rules, and validation logic.\n- Modelled BPMN processes and integration workflows covering student enrolment, residency and visa management, and sensitive legal and family information.\n- Supported multi-million-dollar enterprise programs involving multiple legacy systems and vendors.\n- Tools: SQL, BPMN, ETL tooling, enterprise education platforms.\n\nMastercard (Argentina)\nTechnical Business Analyst / Senior Analyst Developer\n2002 - 2006\n\n- Technical BA and developer on enterprise financial systems.\n- Development and integration of Mastercard client-facing platforms.\n- Java / J2EE development and middleware integration.\n- Tools: Java/J2EE, middleware, SQL.\n\nMovistar\nAnalyst Developer\n2002 - 2004\n\n- Analyst Developer role in telecommunications systems.\n- Tools: Java, enterprise telecom platforms.\n\n====================================\nEDUCATION\n====================================\n\n- Bachelor’s Degree (completed)\n\n====================================\nCERTIFICATIONS\n====================================\n\n- Certified Scrum Master (CSM)\n- Certified Associate in Project Management (CAPM)\n- BPMN 2.0 Business Process Modelling\n- OutSystems Associate Reactive Developer\n- Guidewire Certification",
+    "secondary_older_evidence": "",
+    "background_optional_evidence": ""
+  },
+  "evidence_tier_weights": {
+    "primary_current_evidence": 1.0,
+    "secondary_older_evidence": 0.55,
+    "background_optional_evidence": 0.25
+  },
+  "capability_profile_rules": [
+    {
+      "name": "agile methodologies",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "agile",
+        "scrum",
+        "kanban",
+        "agile scrum",
+        "scrum kanban"
+      ]
+    },
+    {
+      "name": "devops practices",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "devops",
+        "jira",
+        "azure",
+        "enterprise",
+        "azure devops",
+        "devops enterprise",
+        "devops jira"
+      ]
+    },
+    {
+      "name": "process modeling",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "model"
+      ]
+    },
+    {
+      "name": "process assessments",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "assessment",
+        "to-be"
+      ]
+    },
+    {
+      "name": "multi-client delivery",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "multi-client"
+      ]
+    },
+    {
+      "name": "end-to-end analysis",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "end-to-end",
+        "analysed",
+        "defined",
+        "accounting",
+        "analysed defined",
+        "analysed end-to-end",
+        "defined end-to-end",
+        "end-to-end accounting"
+      ]
+    },
+    {
+      "name": "discovery and validation",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "workshop",
+        "discovery validation",
+        "ehealth",
+        "workshop ehealth",
+        "discovery workshop",
+        "validation workshop"
+      ]
+    },
+    {
+      "name": "data validation",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "reconciliation",
+        "validation reconciliation"
+      ]
+    },
+    {
+      "name": "bpmn practices",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "bpmn",
+        "sql bpmn"
+      ]
+    },
+    {
+      "name": "acceptance testing",
+      "level": "strong",
+      "fit": "core",
+      "aliases": [
+        "acceptance",
+        "criteria test",
+        "test scenario"
+      ]
+    },
+    {
+      "name": "requirements management",
+      "level": "strong",
+      "fit": "core",
+      "aliases": []
+    },
+    {
+      "name": "risk coordination",
+      "level": "strong",
+      "fit": "supporting",
+      "aliases": [
+        "schedule",
+        "requirement risk",
+        "risk schedule"
+      ]
+    },
+    {
+      "name": "data management",
+      "level": "strong",
+      "fit": "supporting",
+      "aliases": [
+        "mapping",
+        "edge",
+        "specification",
+        "transformation",
+        "mapping edge",
+        "mapping specification",
+        "mapping transformation"
+      ]
+    },
+    {
+      "name": "primary stakeholder engagement",
+      "level": "working",
+      "fit": "core",
+      "aliases": [
+        "stakeholder engagement",
+        "client-facing"
+      ]
+    },
+    {
+      "name": "exception handling",
+      "level": "working",
+      "fit": "supporting",
+      "aliases": [
+        "exception",
+        "hand-off",
+        "adjustment",
+        "adjustment exception",
+        "exception hand-off"
+      ]
+    },
+    {
+      "name": "reporting processes",
+      "level": "working",
+      "fit": "supporting",
+      "aliases": []
+    },
+    {
+      "name": "delivery teams",
+      "level": "working",
+      "fit": "supporting",
+      "aliases": [
+        "external"
+      ]
+    },
+    {
+      "name": "health it management",
+      "level": "working",
+      "fit": "supporting",
+      "aliases": [
+        "health it",
+        "health",
+        "ehealth",
+        "ehealth it",
+        "it manager",
+        "manager nsw"
+      ]
+    },
+    {
+      "name": "provider coordination",
+      "level": "working",
+      "fit": "supporting",
+      "aliases": [
+        "provider",
+        "government",
+        "submission",
+        "provider submission",
+        "validation government"
+      ]
+    },
+    {
+      "name": "discovery initiatives",
+      "level": "working",
+      "fit": "core",
+      "aliases": []
+    }
+  ],
+  "cheap_keep_counter_patterns": [],
+  "cheap_reject_metadata_rules": [],
+  "dominant_signal_clusters": [
+    {
+      "name": "agile methodologies",
+      "aliases": [
+        "agile scrum",
+        "bpmn agile scrum",
+        "agile scrum kanban",
+        "scrum kanban",
+        "security agile scrum"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4
+    },
+    {
+      "name": "devops practices",
+      "aliases": [
+        "azure devop",
+        "tool azure devop",
+        "azure devop enterprise",
+        "azure devop jira",
+        "devop enterprise",
+        "devop jira",
+        "tool jira"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5
+    },
+    {
+      "name": "process modeling",
+      "aliases": [
+        "process model",
+        "to-be process model",
+        "process model policy"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4
+    },
+    {
+      "name": "process assessments",
+      "aliases": [
+        "as-is to-be",
+        "as-is to-be process",
+        "to-be process"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4
+    },
+    {
+      "name": "multi-client delivery",
+      "aliases": [
+        "delivery multiple",
+        "agile delivery multiple",
+        "delivery lead multiple",
+        "delivery multiple client",
+        "lead multiple",
+        "multiple client"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4
+    },
+    {
+      "name": "end-to-end analysis",
+      "aliases": [
+        "analysed defined",
+        "analysed defined end-to-end",
+        "analysed end-to-end",
+        "analysed end-to-end workflow",
+        "defined end-to-end",
+        "defined end-to-end accounting",
+        "end-to-end accounting",
+        "end-to-end workflow"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5
+    },
+    {
+      "name": "discovery and validation",
+      "aliases": [
+        "discovery validation",
+        "discovery validation workshop",
+        "discovery workshop",
+        "discovery workshop ux",
+        "validation workshop",
+        "validation workshop ehealth",
+        "workshop ehealth",
+        "workshop ux"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5
+    },
+    {
+      "name": "data validation",
+      "aliases": [
+        "submission validation",
+        "data submission validation",
+        "data validation",
+        "data validation reconciliation",
+        "sql-based data validation",
+        "validation reconciliation"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4
+    }
+  ],
+  "target_title_patterns": [
+    "\\bbusiness\\ analyst\\b",
+    "\\bsenior\\ business\\ analyst\\b",
+    "\\bdigital\\ business\\ analyst\\b",
+    "\\bagile\\ business\\ analyst\\b",
+    "\\bscrum\\ master\\b",
+    "\\bdelivery\\ manager\\b"
+  ],
+  "adjacent_title_patterns": [],
+  "must_not_require_skills": [
+    "prince2 foundation certification",
+    "1-3 years project coordination experience"
+  ],
+  "reject_title_rules": [
+    {
+      "pattern": "\\berp\\b",
+      "reason": "TITLE_BAD_KEYWORD:erp"
+    },
+    {
+      "pattern": "\\bcredit\\s+cards\\b",
+      "reason": "TITLE_BAD_KEYWORD:credit cards"
+    }
+  ],
+  "reject_description_phrase_rules": [],
+  "reject_description_regex_rules": [],
+  "onboarding_settings": {
+    "extraction_lookback_years": 7,
+    "title_extraction_min_months": 6,
+    "max_target_patterns": 8,
+    "max_adjacent_patterns": 6,
+    "title_extraction_lookback_years": 8
+  },
+  "canberra_only_description_patterns": []
+}

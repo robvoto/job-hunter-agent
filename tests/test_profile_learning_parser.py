@@ -39,7 +39,6 @@ Payments
 def test_build_learning_patch_extracts_evidence_and_capabilities():
     patch = build_learning_patch(SAMPLE_CV)
 
-    assert patch.get("candidate_summary")
     assert "evidence_signals" not in patch
     assert patch.get("capability_profile_rules")
     assert any(
@@ -87,6 +86,52 @@ Acme Bank
     assert parsed
     assert parsed[0]["title"] == "Senior Delivery Lead"
     assert parsed[0]["employer"] == "Acme Bank"
+
+
+def test_parse_role_entries_accepts_inline_title_then_employer_before_dates():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Business Analyst - Contoso (2016 - 2020)
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Business Analyst"
+    assert parsed[0]["employer"] == "Contoso"
+
+
+def test_parse_role_entries_collects_followup_bullets_for_inline_roles():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Senior Business Analyst - Payments (2024 - Present)
+- Requirements workshops, process mapping, user stories.
+- Stakeholder management and backlog refinement.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Senior Business Analyst"
+    assert parsed[0]["bullets"] == [
+        "Requirements workshops, process mapping, user stories.",
+        "Stakeholder management and backlog refinement.",
+    ]
+
+
+def test_parse_role_entries_accepts_title_with_dates_only():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Business Analyst (2022 - 2024)
+- Insurance platform delivery, UAT, backlog refinement.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Business Analyst"
+    assert parsed[0]["employer"] == ""
+    assert parsed[0]["bullets"] == ["Insurance platform delivery, UAT, backlog refinement."]
 
 
 def test_parse_role_entries_does_not_swap_title_and_employer_when_dates_come_first():

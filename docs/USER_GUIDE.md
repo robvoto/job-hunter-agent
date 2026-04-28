@@ -94,7 +94,7 @@ Think of settings as the maintenance surface for your profile, not the place whe
 
 `Title targeting`
 
-- target and adjacent title patterns plus search keywords
+- target and secondary title patterns plus search keywords
 - used to keep role targeting configurable per candidate instead of hardcoded in code
 
 `Minimum annual salary` / `Minimum daily rate`
@@ -121,7 +121,7 @@ The dashboard groups jobs by their calculated fit score:
 
 - **Strong match** (85-100): High alignment with core capabilities and experience.
 - **Good match** (70-84): Solid alignment, perhaps missing secondary criteria.
-- **Possible fit** (55-69): Borderline fit or adjacent role.
+- **Possible fit** (55-69): Borderline fit or secondary role.
 - **Stretch** (0-54): Low alignment or significant requirement gaps.
 
 The dashboard groups jobs into:

@@ -639,7 +639,7 @@ def build_risk_and_missing_evidence(
     capability_matches = find_profile_capability_matches(details_text, profile)
 
     if title_reason == "TITLE_POTENTIAL_MATCH":
-        risks.append("Adjacent title match rather than direct target role")
+        risks.append("Secondary title match rather than direct target role")
 
     if capability_matches["must_not"]:
         missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not evidenced")
@@ -914,6 +914,36 @@ def competitive_fit_highlights(record: dict, profile: Optional[dict] = None) -> 
     return dedupe_preserve_order(highlights)[:2]
 
 
+def extract_skill_observations(record: dict, details_text: str, profile: Optional[dict] = None) -> List[dict]:
+    """Return repeated capability-like signals from a kept role for review insights.
+
+    These observations are intentionally conservative: we only emit positively aligned
+    competitive signals from roles we already kept, so Suggested Tuning learns from
+    viable roles rather than from noisy broad matches.
+    """
+    active_profile = profile or load_profile()
+    observations: List[dict] = []
+    seen: Set[str] = set()
+    for signal in competitive_signal_assessments(record, active_profile):
+        if int(signal.get("adjustment", 0) or 0) <= 0:
+            continue
+        skill = compact_whitespace(signal.get("fit_label") or signal.get("name") or "")
+        key = skill.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        observations.append(
+            {
+                "skill": skill,
+                "title": record.get("title"),
+                "company": record.get("company"),
+                "url": record.get("url"),
+                "search_location": record.get("search_location"),
+            }
+        )
+    return observations
+
+
 def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
     existing = [
         compact_whitespace(item)
@@ -1003,7 +1033,7 @@ def score_to_tone_class(score: int) -> str:
 def compact_score_label(label: str) -> str:
     direct_map = {
         "Direct target title match": "Title",
-        "Adjacent title match": "Title",
+        "Secondary title match": "Title",
         "Description fit is excellent": "Description",
         "Description fit is strong": "Description",
         "Description fit is solid": "Description",
@@ -1707,7 +1737,7 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
     if prefix == "LEARNED_REJECT" and cleaned_detail:
         return f"Learned blocker: {cleaned_detail.split(':')[-1].strip()}"
     if prefix == "TITLE_POTENTIAL_MATCH":
-        return "Adjacent title match"
+        return "Secondary title match"
     if prefix == "CARD_SPECIALIST" and cleaned_detail:
         return f"Rejected early from card metadata: {cleaned_detail}"
 
@@ -1796,7 +1826,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     if title_reason == "OK":
         breakdown.append({"label": "Direct target title match", "value": weighted_points(14, weights["fit"])})
     elif title_reason == "TITLE_POTENTIAL_MATCH":
-        breakdown.append({"label": "Adjacent title match", "value": weighted_points(4, weights["fit"])})
+        breakdown.append({"label": "Secondary title match", "value": weighted_points(4, weights["fit"])})
 
     llm_entry = llm_description_fit_entry(record)
     breakdown.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"])})
@@ -4487,7 +4517,7 @@ def render_html(
               <span class="chip"><strong>Good match:</strong> clear fit with fewer caveats</span>
               <span class="chip"><strong>Worth a look:</strong> plausible fit worth reviewing</span>
               <span class="chip"><strong>Stretch:</strong> lower-confidence or borderline fit</span>
-              <span class="chip"><strong>Title match:</strong> direct titles are favored over adjacent titles</span>
+              <span class="chip"><strong>Title match:</strong> direct titles are favored over secondary titles</span>
               <span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span>
               <span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span>
               <span class="chip"><strong>Freshness:</strong> newer roles are favored</span>
@@ -5840,6 +5870,150 @@ def render_html(
     output_file.write_text(html, encoding="utf-8")
 
 
+def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
+    """Extracts basic information from a SEEK job card and returns a normalized record."""
+    title_el = card.query_selector(SELECTOR_TITLE)
+    company_el = card.query_selector(SELECTOR_COMPANY)
+    posted_el = card.query_selector(SELECTOR_POSTED)
+    card_meta = extract_card_metadata(card)
+    card_text = (card.inner_text() or "").strip()
+
+    title = title_el.inner_text().strip() if title_el else ""
+    company = company_el.inner_text().strip() if company_el else "N/A"
+    posted = posted_el.inner_text().strip() if posted_el else ""
+    if not posted:
+        posted = extract_posted_text_from_card(card_text)
+    posted = normalize_posted_text(posted)
+    posted_age_days = parse_seek_posted_age_days(posted)
+    
+    relative_url = title_el.get_attribute("href") if title_el else None
+    full_url = build_full_seek_url(relative_url)
+
+    return {
+        "run_started_at": run_iso,
+        "search_location": search_target["location"],
+        "search_keywords": search_target["keywords"],
+        "search_classifications": ",".join(search_target.get("classification_ids", [])),
+        "source": "seek",
+        "job_key": stable_job_key(full_url) if full_url else None,
+        "title": title,
+        "company": company,
+        "posted": posted,
+        "posted_age_days": posted_age_days,
+        "url": full_url,
+        "location": card_meta["location"],
+        "work_mode": card_meta["work_mode"],
+        "work_type": card_meta["work_type"],
+        "teaser": card_meta["teaser"],
+        "card_salary": card_meta["card_salary"],
+        "decision": "REJECT",
+        "reject_reason": None,
+        "title_reason": None,
+        "content_reason": None,
+        "llm_decision": None,
+        "llm_fit_grade": None,
+        "role_snapshot": "N/A",
+        "fit_highlights": [],
+        "soft_risk_reasons": [],
+        "missing_evidence": [],
+        "competitive_signals": [],
+        "details_length": 0,
+    }
+
+
+def _process_seek_job_details(
+    record: dict, 
+    detail_page, 
+    profile: dict, 
+    title_reason: str
+) -> tuple[bool, str]:
+    """Fetches full job details and performs initial content filtering and metadata enrichment."""
+    details_payload = fetch_job_details_payload(detail_page, record["url"])
+    details_text = str(details_payload.get("text") or "")
+    details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
+    
+    record["details_status"] = details_status
+    record["details_length"] = len(details_text)
+    
+    if details_status != "ok" or not details_text:
+        reject_reason = {
+            "challenge_page": "DETAILS_CHALLENGE_PAGE",
+            "blocked_page": "DETAILS_BLOCKED_PAGE",
+            "navigation_error": "DETAILS_NAVIGATION_ERROR",
+            "empty": "NO_DETAILS",
+        }.get(details_status, "NO_DETAILS")
+        return False, reject_reason
+
+    record["fit_source_text"] = details_text
+    record["full_description"] = details_text
+    record["description_source"] = details_payload.get("source") or "jobAdDetails"
+    source = str(record.get("description_source") or "").strip().lower()
+    is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+    record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
+
+    ok_desc, desc_reason = passes_content_filters(details_text, record["location"], title_reason)
+    if not ok_desc:
+        return False, desc_reason
+
+    ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
+    if not ok_learned:
+        return False, learned_reason
+
+    record["competitive_signals"] = [
+        evaluate_competitive_signal_alignment(signal, profile)
+        for signal in detect_competitive_signals(details_text, profile)
+    ]
+    
+    hard_block_matches = hard_block_entries(record, profile)
+    record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
+    if record["hard_block_reasons"]:
+        return False, f"DESC_HARD_BLOCK:{hard_block_matches[0].get('category') or 'hard_block'}"
+
+    record["salary"] = extract_salary(details_text) or record.get("card_salary", "N/A")
+    detail_work_mode = extract_work_mode(details_text)
+    if detail_work_mode != "N/A":
+        record["work_mode"] = detail_work_mode
+
+    record["role_snapshot"] = build_role_summary(record, details_text, profile)
+    record["fit_highlights"] = build_fit_highlights(record, details_text, profile)
+    record["soft_risk_reasons"], record["missing_evidence"] = build_risk_and_missing_evidence(
+        details_text, title_reason, profile, competitive_signals=record["competitive_signals"]
+    )
+    
+    return True, "OK"
+
+
+def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
+    """Determines the final fit decision based on rules or LLM review."""
+    deterministic_review = deterministic_review_outcome(
+        record, record["fit_highlights"], record["missing_evidence"], record["soft_risk_reasons"]
+    )
+    
+    if deterministic_review is not None:
+        review = deterministic_review
+        source = "rule"
+    else:
+        llm_input_text = record["full_description"][:MAX_LLM_CHARS]
+        llm_fp = build_llm_cache_key(llm_input_text)
+        if NO_LLM_MODE or not llm_is_enabled():
+            review = normalize_llm_review(None)
+            source = "disabled"
+        elif llm_fp in llm_cache:
+            review = normalize_llm_review(llm_cache[llm_fp])
+            source = "cache"
+        else:
+            review = normalize_llm_review(llm_should_consider(llm_input_text))
+            llm_cache[llm_fp] = review
+            source = "llm"
+
+    return {
+        "llm_decision": review["decision"],
+        "llm_fit_grade": review["grade"],
+        "review_source": source,
+        "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT"
+    }
+
+
 def _seek_scrape_to_records(
     profile: dict,
     search_targets: List[dict],
@@ -6173,6 +6347,7 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             record["decision"] = "KEEP"
+                            skill_observations.extend(extract_skill_observations(record, details_text, profile))
 
                             finalize_record(job_history, audit_rows, record, run_iso)
                             kept_records.append(record)

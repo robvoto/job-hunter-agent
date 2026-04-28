@@ -9,7 +9,7 @@ from job_hunter_agent.profile_learning import (
 def test_consistent_lookback_logic():
     # Mock CV text with three roles:
     # 1. Recent and long (target)
-    # 2. Recent and short (adjacent)
+    # 2. Recent and short (secondary)
     # 3. Old (ignored)
     cv_text = f"""
     # Professional Experience
@@ -31,9 +31,9 @@ def test_consistent_lookback_logic():
     result = extract_title_pattern_suggestions(cv_text, settings)
 
     assert any("devop" in pattern and "engineer" in pattern for pattern in result["target_title_patterns"])
-    assert any("consultant" in pattern for pattern in result["adjacent_title_patterns"])
+    assert any("consultant" in pattern for pattern in result["secondary_title_patterns"])
     assert not any("support" in pattern for pattern in result["target_title_patterns"])
-    assert not any("support" in pattern for pattern in result["adjacent_title_patterns"])
+    assert not any("support" in pattern for pattern in result["secondary_title_patterns"])
 
 
 def test_changing_lookback_affects_both_lists():
@@ -59,7 +59,7 @@ def test_changing_lookback_affects_both_lists():
     assert any("project" in pattern for pattern in res_long["target_title_patterns"])
 
 
-def test_month_aware_duration_sends_short_recent_role_to_adjacent():
+def test_month_aware_duration_sends_short_recent_role_to_secondary():
     cv_text = """
     # Professional Experience
     Acme - Delivery Manager (Jan 2024 - Mar 2024)
@@ -74,7 +74,7 @@ def test_month_aware_duration_sends_short_recent_role_to_adjacent():
     result = extract_title_pattern_suggestions(cv_text, settings)
 
     assert not any("delivery" in pattern and "manager" in pattern for pattern in result["target_title_patterns"])
-    assert any("delivery" in pattern and "manager" in pattern for pattern in result["adjacent_title_patterns"])
+    assert any("delivery" in pattern and "manager" in pattern for pattern in result["secondary_title_patterns"])
 
 
 def test_extract_year_range_uses_real_month_span_for_current_role():
@@ -99,7 +99,7 @@ def test_extract_year_range_defaults_to_full_year_when_months_missing():
     assert date_info["duration_months"] == 36
 
 
-def test_current_cv_like_recent_ba_roles_produce_targets_without_adjacent_titles():
+def test_current_cv_like_recent_ba_roles_produce_targets_without_secondary_titles():
     cv_text = """
     # Primary CV
     Department of Employment and Workplace Relations (DEWR) - Industry: Federal Government
@@ -127,12 +127,12 @@ def test_current_cv_like_recent_ba_roles_produce_targets_without_adjacent_titles
         "extraction_lookback_years": 6,
         "title_extraction_min_months": 6,
         "max_target_patterns": 8,
-        "max_adjacent_patterns": 6,
+        "max_secondary_patterns": 6,
     }
 
     result = extract_title_pattern_suggestions(cv_text, settings)
 
-    assert result["adjacent_title_patterns"] == []
+    assert result["secondary_title_patterns"] == []
     assert result["target_title_patterns"] == [
         r"\bbusiness\ analyst\b",
         r"\bsenior\ business\ analyst\b",

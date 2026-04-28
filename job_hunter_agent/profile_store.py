@@ -49,7 +49,7 @@ DEFAULT_ONBOARDING_SETTINGS = {
     "extraction_lookback_years": 8,
     "title_extraction_min_months": 6,
     "max_target_patterns": 8,
-    "max_adjacent_patterns": 6,
+    "max_secondary_patterns": 6,
 }
 
 DEFAULT_SEARCH_SETTINGS = {
@@ -92,7 +92,6 @@ DEFAULT_PROFILE = {
     },
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
-    "candidate_summary": "",
     "star_evidence_text": "",
     "cv_text": "",
     "evidence_tiers": {
@@ -106,7 +105,7 @@ DEFAULT_PROFILE = {
     "cheap_reject_metadata_rules": [],
     "dominant_signal_clusters": [],
     "target_title_patterns": [],
-    "adjacent_title_patterns": [],
+    "secondary_title_patterns": [],
     "must_not_require_skills": [],
     "reject_title_rules": [],
     "reject_description_phrase_rules": [],
@@ -145,10 +144,6 @@ def normalize_multiline_string_list(values: Any) -> list[str]:
             cleaned.append(value)
 
     return cleaned
-
-
-def normalize_candidate_summary(value: Any) -> str:
-    return re.sub(r"\s+", " ", _decode_escaped_newlines(value)).strip()[:1500]
 
 
 def ensure_profile_exists() -> None:
@@ -237,7 +232,7 @@ def load_profile() -> dict[str, Any]:
             merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
                 merged.get("evidence_tier_weights", {})
             )
-            merged["candidate_summary"] = normalize_candidate_summary(merged.get("candidate_summary", ""))
+            merged.pop("candidate_summary", None)
             merged.pop("strengths", None)
             merged["capability_profile_rules"] = normalize_capability_rules(
                 merged.get("capability_profile_rules", [])
@@ -245,8 +240,8 @@ def load_profile() -> dict[str, Any]:
             merged["target_title_patterns"] = normalize_multiline_string_list(
                 merged.get("target_title_patterns", [])
             )
-            merged["adjacent_title_patterns"] = normalize_multiline_string_list(
-                merged.get("adjacent_title_patterns", [])
+            merged["secondary_title_patterns"] = normalize_multiline_string_list(
+                merged.get("secondary_title_patterns", [])
             )
             merged["must_not_require_skills"] = normalize_multiline_string_list(
                 merged.get("must_not_require_skills", [])
@@ -268,7 +263,7 @@ def load_profile() -> dict[str, Any]:
     fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
         fallback.get("evidence_tier_weights", {})
     )
-    fallback["candidate_summary"] = normalize_candidate_summary(fallback.get("candidate_summary", ""))
+    fallback.pop("candidate_summary", None)
     fallback.pop("strengths", None)
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
@@ -300,7 +295,7 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
         normalized.get("evidence_tier_weights", {})
     )
-    normalized["candidate_summary"] = normalize_candidate_summary(normalized.get("candidate_summary", ""))
+    normalized.pop("candidate_summary", None)
     normalized.pop("strengths", None)
     normalized["capability_profile_rules"] = normalize_capability_rules(
         normalized.get("capability_profile_rules", [])
