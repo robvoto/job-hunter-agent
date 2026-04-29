@@ -563,16 +563,16 @@ def has_government_context(text: str) -> bool:
 
 def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
     lowered = compact_whitespace(details_text).lower()
-    matched_core: List[str] = []
-    matched_supporting: List[str] = []
-    matched_low_fit: List[str] = []
+    matched_strong: List[str] = []
+    matched_working: List[str] = []
+    matched_basic: List[str] = []
+    matched_limited_depth: List[str] = []
     matched_must_not: List[str] = []
 
     for rule in profile.get("capability_profile_rules", []):
         if not isinstance(rule, dict):
             continue
         name = str(rule.get("name") or "").strip()
-        fit = str(rule.get("fit") or "").strip().lower()
         level = str(rule.get("level") or "").strip().lower()
         aliases = [str(alias).strip().lower() for alias in expand_capability_terms(rule) if str(alias).strip()]
         if not aliases:
@@ -580,13 +580,14 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         if not any(text_contains_term(lowered, alias) for alias in aliases):
             continue
         label = friendly_capability_label(name)
-        if fit in {"core", "supporting"} and level in {"strong", "working", "basic"}:
-            if fit == "core":
-                matched_core.append(label)
-            else:
-                matched_supporting.append(label)
-        elif fit == "avoid" or level in {"low", "none"}:
-            matched_low_fit.append(label)
+        if level == "strong":
+            matched_strong.append(label)
+        elif level == "working":
+            matched_working.append(label)
+        elif level == "basic":
+            matched_basic.append(label)
+        elif level == "low":
+            matched_limited_depth.append(label)
 
     for skill in profile.get("must_not_require_skills", []):
         cleaned_skill = str(skill).strip().lower()
@@ -594,9 +595,10 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
             matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
 
     return {
-        "core": dedupe_preserve_order(matched_core),
-        "supporting": dedupe_preserve_order(matched_supporting),
-        "low_fit": dedupe_preserve_order(matched_low_fit),
+        "strong": dedupe_preserve_order(matched_strong),
+        "working": dedupe_preserve_order(matched_working),
+        "basic": dedupe_preserve_order(matched_basic),
+        "limited_depth": dedupe_preserve_order(matched_limited_depth),
         "must_not": dedupe_preserve_order(matched_must_not),
     }
 
@@ -653,11 +655,15 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     capability_matches = find_profile_capability_matches(role_bundle, active_profile)
     title_lower = compact_whitespace(record.get("title") or "").lower()
 
-    matched_profile_areas = capability_matches["core"][:3] + capability_matches["supporting"][:2]
+    matched_profile_areas = (
+        capability_matches["strong"][:3]
+        + capability_matches["working"][:2]
+        + capability_matches["basic"][:1]
+    )
     for area in matched_profile_areas:
         label = friendly_capability_label(area)
-        if label and f"Strong capability match: {label}" not in highlights:
-            highlights.append(f"Strong capability match: {label}")
+        if label and f"Capability match: {label}" not in highlights:
+            highlights.append(f"Capability match: {label}")
 
     if has_government_context(lowered):
         highlights.append("Government context")
@@ -677,7 +683,7 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
 
 
 def is_capability_fit_highlight(value: str) -> bool:
-    return compact_whitespace(value).startswith("Strong capability match:")
+    return compact_whitespace(value).startswith("Capability match:")
 
 
 def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
@@ -705,8 +711,10 @@ def build_risk_and_missing_evidence(
     if capability_matches["must_not"]:
         missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not evidenced")
 
-    if capability_matches["low_fit"]:
-        risks.append(f"{list_to_phrase(capability_matches['low_fit'][:2]).capitalize()} looks niche for your background")
+    if capability_matches["limited_depth"]:
+        risks.append(
+            f"{list_to_phrase(capability_matches['limited_depth'][:2]).capitalize()} appears in the role, but your profile marks it as beginner-level"
+        )
 
     risks.extend(description_watchout_reasons(details_text, profile))
 
@@ -809,21 +817,13 @@ def evidence_tier_alignment_score(profile: dict, aliases: List[str]) -> float:
 
 def _capability_rule_strength(rule: dict) -> float:
     level = compact_whitespace(rule.get("level") or "").lower()
-    fit = compact_whitespace(rule.get("fit") or "").lower()
     level_map = {
         "strong": 1.0,
         "working": 0.72,
         "basic": 0.55,
         "low": 0.22,
-        "none": 0.0,
     }
-    fit_bonus = {
-        "core": 0.08,
-        "supporting": 0.0,
-        "contextual": -0.06,
-        "avoid": -0.18,
-    }
-    return max(min(level_map.get(level, 0.45) + fit_bonus.get(fit, 0.0), 1.05), 0.0)
+    return max(min(level_map.get(level, 0.45), 1.0), 0.0)
 
 
 def detect_competitive_signals(details_text: str, profile: Optional[dict] = None) -> List[dict]:
@@ -1435,9 +1435,8 @@ def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
     for rule in profile.get("capability_profile_rules", []):
         if not isinstance(rule, dict):
             continue
-        fit = str(rule.get("fit") or "").strip().lower()
         level = str(rule.get("level") or "").strip().lower()
-        if fit not in {"core", "supporting"} or level not in {"strong", "working", "basic"}:
+        if level not in {"strong", "working", "basic"}:
             continue
         aliases = [str(a).strip().lower() for a in expand_capability_terms(rule) if str(a).strip()]
         if not aliases or not any(text_contains_term(lowered, alias) for alias in aliases):
@@ -1447,7 +1446,7 @@ def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
         combined = max(rule_strength, profile_evidence)
         results.append({
             "label": friendly_capability_label(str(rule.get("name") or "")),
-            "fit": fit,
+            "level": level,
             "combined_strength": combined,
         })
     return results
@@ -1458,7 +1457,7 @@ def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> t
     source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
     scored = capability_scored_matches(source_text, active_profile)
     total = sum(
-        m["combined_strength"] * (4 if m["fit"] == "core" else 2)
+        m["combined_strength"] * {"strong": 4, "working": 3, "basic": 2}.get(str(m.get("level") or ""), 0)
         for m in scored
     )
     score = min(round(total), 20)
@@ -1470,7 +1469,7 @@ def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = N
     """Award a bonus when multiple strong independent signals simultaneously confirm fit.
 
     Conditions: title OK, content OK, HIGH description confidence, LLM grade
-    EXCELLENT or STRONG, 2+ core capability matches, no missing evidence.
+    EXCELLENT or STRONG, 2+ positive capability matches, no missing evidence.
     Soft risks reduce the bonus from 5 to 3 but do not eliminate it.
     """
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
@@ -1480,13 +1479,17 @@ def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = N
     missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
     soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
     matches = capability_matches or capability_match_summary(record)
-    core_count = len(matches.get("core", []))
+    positive_count = (
+        len(matches.get("strong", []))
+        + len(matches.get("working", []))
+        + len(matches.get("basic", []))
+    )
 
     if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
         return None
     if missing_evidence or grade not in {"EXCELLENT", "STRONG"}:
         return None
-    if core_count < 2:
+    if positive_count < 2:
         return None
     bonus = 5 if not soft_risks else 3
     return {"label": "Multiple strong signals align", "value": bonus}
@@ -1699,7 +1702,11 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
 
     if evidence_points < 12:
         capability_matches = capability_match_summary(record)
-        capability_count = len(capability_matches.get("core", [])) + len(capability_matches.get("supporting", []))
+        capability_count = (
+            len(capability_matches.get("strong", []))
+            + len(capability_matches.get("working", []))
+            + len(capability_matches.get("basic", []))
+        )
         gaps.append(f"Only {capability_count} capability evidence match{'es' if capability_count != 1 else ''} counted")
 
     if full_description_confidence(record) == "LOW":
@@ -1767,7 +1774,7 @@ def render_posted_filter_options(records: List[dict], now: Optional[datetime] = 
             and age_days <= threshold
         )
         options.append(
-            f'<option {"selected" if threshold == 1 else ""}>' value="{threshold}">'
+            f'<option {"selected" if threshold == 1 else ""} value="{threshold}">'
             f'{safe_html(posted_filter_option_label(threshold))} ({count})</option>'
         )
     return "".join(options)

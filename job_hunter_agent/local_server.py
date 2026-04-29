@@ -2,6 +2,7 @@ import json
 import hashlib
 import mimetypes
 import re
+import sys
 import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,7 +15,7 @@ from job_hunter_agent.filters import build_title_block_rule, normalize_title_blo
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import DATA_DIR, DOCS_DIR, OUTPUT_DIR, REPO_ROOT, TEMPLATES_DIR
-from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_capability_rules, normalize_search_settings, patch_profile, save_profile
+from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_capability_rules, normalize_onboarding_settings, normalize_search_settings, patch_profile, save_profile
 from job_hunter_agent.profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.source_connector import rebuild_html_dashboard, scrape_jobs_direct
@@ -45,6 +46,7 @@ _STATIC_MIME_OVERRIDES = {
     ".css": "text/css",
     ".js": "text/javascript",
 }
+TEST_MODE = "--test-mode" in set(sys.argv[1:])
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -68,6 +70,13 @@ def _try_mark_run_started() -> bool:
             return False
         _run_in_progress = True
         return True
+
+
+def _render_template(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="ignore").replace(
+        "__JOB_HUNTER_TEST_MODE__",
+        "true" if TEST_MODE else "false",
+    )
 
 
 def _parse_locations_override(value: Any) -> list[str]:
@@ -205,14 +214,6 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
     return normalize_search_settings(current_search_settings)
 
 
-def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
-    try:
-        resolved = int(value)
-    except Exception:
-        resolved = default
-    return max(minimum, min(maximum, resolved))
-
-
 def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, int]:
     source = payload if isinstance(payload, dict) else {}
     if isinstance(source.get("onboarding_settings"), dict):
@@ -224,33 +225,7 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
             source = current
         else:
             return dict(DEFAULT_ONBOARDING_SETTINGS)
-
-    normalized = dict(DEFAULT_ONBOARDING_SETTINGS)
-    normalized["extraction_lookback_years"] = _coerce_int(
-        source.get("extraction_lookback_years"),
-        DEFAULT_ONBOARDING_SETTINGS["extraction_lookback_years"],
-        1,
-        20,
-    )
-    normalized["title_extraction_min_months"] = _coerce_int(
-        source.get("title_extraction_min_months"),
-        DEFAULT_ONBOARDING_SETTINGS["title_extraction_min_months"],
-        1,
-        24,
-    )
-    normalized["max_target_patterns"] = _coerce_int(
-        source.get("max_target_patterns"),
-        DEFAULT_ONBOARDING_SETTINGS["max_target_patterns"],
-        1,
-        20,
-    )
-    normalized["max_secondary_patterns"] = _coerce_int(
-        source.get("max_secondary_patterns"),
-        DEFAULT_ONBOARDING_SETTINGS["max_secondary_patterns"],
-        1,
-        20,
-    )
-    return normalized
+    return normalize_onboarding_settings(source)
 
 
 def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
@@ -1374,13 +1349,13 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     self._redirect("/start")
                     return
                 if SETTINGS_HTML_PATH.exists():
-                    self._send_html(SETTINGS_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
+                    self._send_html(_render_template(SETTINGS_HTML_PATH))
                 else:
                     self._send_html("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
                 return
             if _path in {"/start", "/onboarding"}:
                 if ONBOARDING_HTML_PATH.exists():
-                    self._send_html(ONBOARDING_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
+                    self._send_html(_render_template(ONBOARDING_HTML_PATH))
                 else:
                     self._send_html("<h1>Template missing</h1><p>Missing templates/onboarding.html</p>")
                 return
@@ -1391,7 +1366,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 self._send_html("<h1>Demo page not found</h1>")
                 return
             if WORKSPACE_HTML_PATH.exists():
-                self._send_html(WORKSPACE_HTML_PATH.read_text(encoding="utf-8", errors="ignore"))
+                self._send_html(_render_template(WORKSPACE_HTML_PATH))
             else:
                 self._send_html("<h1>Template missing</h1><p>Missing templates/workspace.html</p>")
             return
@@ -2002,6 +1977,8 @@ class SettingsHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def log_message(self, format: str, *args) -> None:
+        if TEST_MODE:
+            super().log_message(format, *args)
         return
 
 
@@ -2011,6 +1988,7 @@ AdminHandler = SettingsHandler
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), SettingsHandler)
     print(f"Local server running at http://{HOST}:{PORT}")
+    print(f"Test mode:  {'ON (--test-mode)' if TEST_MODE else 'OFF'}")
     print(f"Workspace:  http://{HOST}:{PORT}/")
     print(f"Settings:   http://{HOST}:{PORT}/settings")
     print(f"Onboarding: http://{HOST}:{PORT}/start")

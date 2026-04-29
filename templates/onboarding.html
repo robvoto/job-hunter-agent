@@ -5,8 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Set Up Job Hunter | Job Hunter</title>
   <link rel="stylesheet" href="/static/onboarding-page.css">
+  <style>
+    /* Styling for the new drag & drop zone */
+    .drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.3s ease, background-color 0.3s ease;
+      background-color: #f9f9f9;
+      margin-bottom: 15px; /* Add some space below the drop zone */
+    }
+    .drop-zone:hover {
+      border-color: #007bff; /* Highlight on hover */
+      background-color: #f0f8ff; /* Light background on hover */
+    }
+    .drop-zone p {
+      margin: 0;
+      color: #555;
+      font-size: 1.1em;
+    }
+    .drop-zone-hint {
+      font-size: 0.9em;
+      color: #888;
+      margin-top: 5px;
+    }
+  </style>
 </head>
-<body>
+<body data-test-mode="__JOB_HUNTER_TEST_MODE__">
   <main class="page">
     <section class="hero">
       <div class="hero-kicker">Job Hunter</div>
@@ -27,21 +54,29 @@
           <h2 id="form_title">Upload Your CV</h2>
           <p class="section-copy">Start with the CV that best represents your real experience. We will use it to build your starting profile.</p>
 
-          <div class="support-note workflow-card">
-            <h3 id="workflow_title">How this works</h3>
-            <p id="workflow_intro">This creates the profile Job Hunter uses to find and score relevant jobs for you.</p>
-            <ol class="workflow-steps">
-              <li id="workflow_step_1">You upload one detailed CV.</li>
-              <li id="workflow_step_2">We extract likely job titles, capabilities, and a starter search direction.</li>
-              <li id="workflow_step_3">You review the draft, set search basics, and confirm it before matching starts.</li>
-            </ol>
-            
-          </div>
+          <details class="support-note workflow-card workflow-drawer" id="workflow_summary">
+            <summary class="workflow-drawer-summary">
+              <span id="workflow_title">How this works</span>
+            </summary>
+            <div class="workflow-drawer-body">
+              <p id="workflow_intro">This creates the profile Job Hunter uses to find and score relevant jobs for you.</p>
+              <ol class="workflow-steps">
+                <li id="workflow_step_1">You upload one detailed CV.</li>
+                <li id="workflow_step_2">We extract likely job titles, capabilities, and a starter search direction.</li>
+                <li id="workflow_step_3">You review the draft, set search basics, and confirm it before matching starts.</li>
+              </ol>
+            </div>
+          </details>
 
           <div class="field-stack">
             <div>
               <label class="sr-only" for="primary_cv">Upload your CV</label>
-              <input id="primary_cv" type="file" accept=".docx,.md,.txt" required aria-label="Upload your CV">
+              <div class="drop-zone" id="cv_drop_zone">
+                <input id="primary_cv" type="file" accept=".docx,.md,.txt" required aria-label="Upload your CV" style="display: none;">
+                <p>Drag & drop your CV here, or click to browse</p>
+                <p class="drop-zone-hint">Supported formats: .docx, .md, .txt</p>
+              </div>
+              <div class="help" id="primary_cv_status">No file selected yet.</div>
               <div class="help">Required. Use the most detailed CV you have, not the prettiest final layout.</div>
               <div class="help">Privacy tip: only upload the CV content needed for matching. Remove date of birth, licence numbers, passport details, street address, and other sensitive personal identifiers.</div>
               <details class="guidance-card">
@@ -74,25 +109,42 @@
 
             <div class="setting-row">
               <div class="setting-copy">
-                <label for="os_lookback_years">How far back should we look?</label>
-                <div class="help">We use this when pulling your experience from older roles.</div>
+                <label for="os_capability_strength_preset">How should older experience be treated?</label>
+                <div class="help">Choose the profile style you want. This is the only rebuild decision most people should need.</div>
               </div>
-              <div class="number-input">
-                <input id="os_lookback_years" class="compact-number" type="number" min="1" max="20" step="1" inputmode="numeric" required>
-                <span>years</span>
+              <div>
+                <select id="os_capability_strength_preset">
+                  <option value="recent_focus">Focus on recent experience</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="include_older_experience">Keep older experience visible longer</option>
+                </select>
               </div>
             </div>
 
-            <div class="setting-row">
-              <div class="setting-copy">
-                <label for="os_min_months">Ignore very short roles</label>
-                <div class="help">Roles shorter than this are treated as background context instead of strong role signals.</div>
+            <details class="guidance-accordion" data-test-only hidden>
+              <summary>Advanced rebuild options (usually leave these alone)</summary>
+              <div class="setting-row">
+                <div class="setting-copy">
+                  <label for="os_lookback_years">CV lookback window</label>
+                  <div class="help">How far back Job Hunter should scan your CV for role history and evidence during profile rebuild.</div>
+                </div>
+                <div class="number-input">
+                  <input id="os_lookback_years" class="compact-number" type="number" min="1" max="20" step="1" inputmode="numeric" required>
+                  <span>years</span>
+                </div>
               </div>
-              <div class="number-input">
-                <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
-                <span>months</span>
+
+              <div class="setting-row">
+                <div class="setting-copy">
+                  <label for="os_min_months">Ignore very short roles</label>
+                  <div class="help">Roles shorter than this are treated as background context instead of strong role signals.</div>
+                </div>
+                <div class="number-input">
+                  <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
+                  <span>months</span>
+                </div>
               </div>
-            </div>
+            </details>
           </div>
 
           <div class="actions">
@@ -107,21 +159,21 @@
 
           <div class="review-grid">
             <section class="review-block">
-              <h3>Strong fit job titles</h3>
+              <h3>Primary job titles</h3>
               <p class="help">You can confidently do these roles based on your past experience. These are treated as high-confidence matches.</p>
               <div class="chip-list" id="review_target_titles_list"></div>
               <div class="chip-editor-row">
-                <input id="review_target_titles_input" type="text" placeholder="Add a strong-fit title">
+                <input id="review_target_titles_input" type="text" placeholder="Add a primary title">
                 <button class="secondary" id="review_add_target_title" type="button">Add</button>
               </div>
             </section>
 
             <section class="review-block">
-              <h3>Conditional fit job titles</h3>
+              <h3>Secondary job titles</h3>
               <p class="help">Only include roles where you can prove the fit through specific experience. These require validation before being accepted.</p>
               <div class="chip-list" id="review_secondary_titles_list"></div>
               <div class="chip-editor-row">
-                <input id="review_secondary_titles_input" type="text" placeholder="Add a conditional-fit title">
+                <input id="review_secondary_titles_input" type="text" placeholder="Add a secondary title">
                 <button class="secondary" id="review_add_secondary_title" type="button">Add</button>
               </div>
             </section>

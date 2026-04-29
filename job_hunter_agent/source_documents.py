@@ -11,7 +11,9 @@ from job_hunter_agent.cv_pipeline import run_cv_pipeline
 from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
 from job_hunter_agent.profile_learning import (
+    build_learning_patch,
     extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
+    merge_capability_rules,
     repair_text,
 )
 from job_hunter_agent.profile_store import (
@@ -269,7 +271,19 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["cv_text"] = combined_text
     patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
 
-    patch.update(run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings))
+    pipeline_patch = run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings)
+    learning_patch = build_learning_patch(combined_text, onboarding_settings=active_onboarding_settings)
+    merged_capabilities = merge_capability_rules(
+        pipeline_patch.get("capability_profile_rules", []),
+        learning_patch.get("capability_profile_rules", []),
+    )
+    patch.update(pipeline_patch)
+    for key, value in learning_patch.items():
+        if key in {"cv_text", "capability_profile_rules"}:
+            continue
+        patch[key] = value
+    if merged_capabilities:
+        patch["capability_profile_rules"] = merged_capabilities
 
     brief = build_llm_profile_brief(capability_rules=patch.get("capability_profile_rules") or [])
     if brief:
@@ -277,7 +291,10 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     # --- Apply Search and Engagement Preferences ---
     search_settings = dict(current_profile.get("search_settings") or {})
+    learned_match_preferences = dict(patch.get("match_preferences") or {})
     match_preferences = dict(current_profile.get("match_preferences") or {})
+    if learned_match_preferences:
+        match_preferences.update(learned_match_preferences)
 
     # 1. Keywords
     manual_keywords = str(prefs.get("keywords") or "").strip()
@@ -309,16 +326,16 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
 
-    # Title patterns - always re-extracted during onboarding (no guard needed here)
+    # Title patterns - always rebuilt from parsed role headers during onboarding
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
         patch["target_title_patterns"] = suggestion.get("target_title_patterns") or []
         patch["secondary_title_patterns"] = suggestion.get("secondary_title_patterns") or []
         print(f"[TITLE_PATTERNS] Extracted {len(patch['target_title_patterns'])} target and {len(patch['secondary_title_patterns'])} secondary patterns")
-        if suggestion.get("suggested_search_keywords"):
+        if patch["target_title_patterns"]:
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
-                patch["search_settings"]["keywords"] = str(suggestion["suggested_search_keywords"][0]).strip()
+                patch["search_settings"]["keywords"] = str(patch["target_title_patterns"][0]).strip()
                 print(f"[TITLE_PATTERNS] Pre-filled primary search title: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
@@ -349,26 +366,18 @@ def build_llm_profile_brief(
     lines: list[str] = []
 
     preferred_rules = []
-    avoid_rules = []
     rules = capability_rules if isinstance(capability_rules, list) else []
     for rule in rules:
         if not isinstance(rule, dict):
             continue
         name = str(rule.get("name") or "").strip()
         level = str(rule.get("level") or "").strip()
-        fit = str(rule.get("fit") or "").strip()
         if not name or not level:
             continue
-        line = f"{name} ({level}{', ' + fit if fit else ''})"
-        if fit == "avoid" or level == "none":
-            avoid_rules.append(line)
-        else:
-            preferred_rules.append(line)
+        preferred_rules.append(f"{name} ({level})")
 
     if preferred_rules:
         lines.append("Capability profile: " + "; ".join(preferred_rules[:20]))
-    if avoid_rules:
-        lines.append("Avoid or weak-fit areas: " + "; ".join(avoid_rules[:10]))
 
     return "\n".join(lines).strip()[:3000]
  

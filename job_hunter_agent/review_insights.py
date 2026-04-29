@@ -118,10 +118,10 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 def _choice_label(choice: str) -> str:
     labels = {
-        "core_skill": "Essential",
-        "useful_support": "Helpful",
-        "background_only": "Background",
-        "not_for_me": "Not a fit",
+        "strong": "Expert",
+        "working": "Advanced",
+        "basic": "Intermediate",
+        "low": "Beginner",
     }
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
@@ -130,16 +130,9 @@ def _current_rule_label(rule: dict[str, Any] | None) -> str:
     if not isinstance(rule, dict):
         return "Unclassified"
     level = str(rule.get("level") or "").strip().lower()
-    fit = str(rule.get("fit") or "").strip().lower()
-    if not level and not fit:
+    if not level:
         return "Unclassified"
-    if fit == "avoid" or level == "none":
-        return "Not a fit"
-    if fit == "core":
-        return "Essential"
-    if fit == "supporting":
-        return "Helpful"
-    return "Background"
+    return _choice_label(level)
 
 
 def build_capability_tuning_suggestions(
@@ -192,18 +185,13 @@ def build_capability_tuning_suggestions(
             continue
 
         current_rule = rule_lookup.get(normalized)
-        current_fit = str((current_rule or {}).get("fit") or "").strip().lower()
-        current_level = str((current_rule or {}).get("level") or "").strip().lower()
         skill = str(entry["skill"] or normalized).strip()
 
         if current_rule:
-            # Already classified - skip regardless of level/fit.
+            # Already classified - skip regardless of stored strength.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
-        if count >= 5:
-            recommended_choice = "useful_support"
-        else:
-            recommended_choice = "background_only"
+        recommended_choice = "working" if count >= 5 else "basic"
         headline = f"Classify {skill} as a known capability signal"
         detail = f"Seen in {count} kept role(s) and still unclassified."
 
@@ -273,10 +261,10 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
-                    "headline": f"Low-fit specialist area repeated: {area}",
+                    "headline": f"Beginner-level capability repeated: {area}",
                     "detail": f"{count} role(s) leaned heavily into this capability track.",
-                    "target": "Capability matrix or description exclusions",
-                    "recommendation": "Keep this area as contextual or avoid, and strengthen exclusions only if the noise keeps repeating.",
+                    "target": "Capability matrix or Requirement Exclusions",
+                    "recommendation": "Keep this area in the background unless you want to exclude it explicitly in Requirement Exclusions.",
                     "samples": samples,
                 }
             )
@@ -388,25 +376,13 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
         if not normalized or not choice:
             continue
 
-        if choice == "not_for_me":
-            level = "none"
-            fit = "avoid"
-        elif choice == "background_only":
-            level = "basic"
-            fit = "contextual"
-        elif choice == "core_skill":
-            level = "strong"
-            fit = "core"
-        elif choice == "useful_support":
-            level = "working"
-            fit = "supporting"
-        else:
+        if choice not in {"strong", "working", "basic", "low"}:
             continue
+        level = choice
 
         rule = {
             "name": skill,
             "level": level,
-            "fit": fit,
             "aliases": [],
         }
 
@@ -432,7 +408,6 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             capability_rules[existing_index[normalized]] = {
                 "name": canonical_name,
                 "level": level,
-                "fit": fit,
                 "aliases": merged_aliases,
             }
         else:

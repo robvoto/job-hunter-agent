@@ -102,8 +102,6 @@ def _normalize_reason_token(value: str) -> str:
 def _normalize_level(value: str) -> str:
     level = (value or "").strip().lower()
     aliases = {
-        "none": "none",
-        "no": "none",
         "low": "low",
         "weak": "low",
         "basic": "basic",
@@ -114,27 +112,6 @@ def _normalize_level(value: str) -> str:
         "expert": "strong",
     }
     return aliases.get(level, level or "basic")
-
-
-def _normalize_fit(value: str, level: str) -> str:
-    fit = (value or "").strip().lower()
-    aliases = {
-        "core": "core",
-        "primary": "core",
-        "supporting": "supporting",
-        "secondary": "supporting",
-        "contextual": "contextual",
-        "adjacent": "contextual",
-        "avoid": "avoid",
-        "reject": "avoid",
-    }
-    if fit in aliases:
-        return aliases[fit]
-    if level == "strong":
-        return "core"
-    if level == "working":
-        return "supporting"
-    return "contextual"
 
 
 def _count_alias_hits(text: str, aliases: list[str]) -> tuple[int, int]:
@@ -216,7 +193,6 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
     for rule in capability_rules:
         name = str(rule.get("name") or "").strip()
         level = _normalize_level(str(rule.get("level") or "basic"))
-        fit = _normalize_fit(str(rule.get("fit") or ""), level)
         aliases = expand_capability_terms(rule)
         if not name or not aliases:
             continue
@@ -229,16 +205,10 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
         soft_requirement_match = any(_matches_soft_requirement(description_lower, alias) for alias in aliases)
         reason_token = _normalize_reason_token(name)
 
-        if (fit == "avoid" or level == "none") and (hard_requirement_match or soft_requirement_match or distinct_hits >= 2):
-            return False, f"DESC_CAPABILITY_NONE:{reason_token}"
         if level == "low" and (hard_requirement_match or soft_requirement_match or distinct_hits >= 3):
             return False, f"DESC_CAPABILITY_LOW:{reason_token}"
         if level == "basic" and hard_requirement_match and distinct_hits >= 2:
             return False, f"DESC_CAPABILITY_BASIC:{reason_token}"
-        if fit == "contextual" and hard_requirement_match and distinct_hits >= 2:
-            return False, f"DESC_CAPABILITY_CONTEXT:{reason_token}"
-        if fit == "contextual" and distinct_hits >= 4 and positive_hits <= 2:
-            return False, f"DESC_PRIMARY_FOCUS:{reason_token}"
         if level in {"low", "basic"} and distinct_hits >= 4 and positive_hits <= 2:
             return False, f"DESC_PRIMARY_FOCUS:{reason_token}"
 
@@ -251,9 +221,7 @@ def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple
 
     for rule in profile.get("capability_profile_rules", []):
         name = str(rule.get("name") or "").strip()
-        level = _normalize_level(str(rule.get("level") or "basic"))
-        fit = _normalize_fit(str(rule.get("fit") or ""), level)
-        if not name or fit == "avoid" or level == "none":
+        if not name:
             continue
 
         aliases = expand_capability_terms(rule)

@@ -47,3 +47,21 @@ def test_run_cv_pipeline_current_source_pack_does_not_emit_legacy_title_fragment
     assert "bpmn 20" not in names
     assert any(item["fit"] == "core" for item in output["capability_profile_rules"])
     assert any(item["aliases"] for item in output["capability_profile_rules"])
+
+
+def test_run_cv_pipeline_preserves_questionable_signals_for_review():
+    cv_text = f"""
+# Professional Experience
+Consultant
+Contoso
+{_CURRENT_YEAR} - Present
+Tools: project, tools, technologies
+- Project delivery.
+"""
+
+    output = run_cv_pipeline(cv_text, llm_client=None)
+
+    assert any("project" in item["name"] for item in output["capability_profile_rules"])
+    assert any("project" in item["name"] for item in output["dominant_signal_clusters"])
+    assert any(item["needs_review"] is True for item in output["capability_profile_rules"])
+    assert any(item["needs_review"] is True for item in output["dominant_signal_clusters"])

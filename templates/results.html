@@ -1,4 +1,7 @@
 <style>
+    @keyframes searchWorkingSpin {
+      to { transform: rotate(360deg); }
+    }
     :root {
       --bg: #f6f1e8;
       --panel: #fffdf9;
@@ -266,6 +269,19 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
       border: 1px solid transparent;
+    }
+    .search-status-pill.is-running::before,
+    .search-button.is-working::before {
+      content: "";
+      width: 12px;
+      height: 12px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 999px;
+      animation: searchWorkingSpin 0.9s linear infinite;
+      opacity: 0.55;
+      margin-right: 8px;
+      flex: 0 0 auto;
     }
     .search-status-pill.is-idle {
       background: #f3f4f6;
@@ -1736,6 +1752,7 @@
     async function runSearchNow() {
       const searchSettings = collectSearchSettingsFromForm();
       if (runNowButton) {
+        runNowButton.classList.add('is-working');
         runNowButton.disabled = true;
       }
       if (searchSettingsToggleButton) {
@@ -1771,6 +1788,7 @@
           searchSettingsToggleButton.disabled = false;
         }
         if (runNowButton && !runStatusWasRunning) {
+          runNowButton.classList.remove('is-working');
           runNowButton.disabled = false;
         }
       }

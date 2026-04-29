@@ -6,7 +6,7 @@
   <title>Settings - Job Hunter</title>
   <link rel="stylesheet" href="/static/settings-page.css">
 </head>
-<body>
+<body data-test-mode="__JOB_HUNTER_TEST_MODE__">
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Settings sections">
       <div class="sidebar-brand">
@@ -232,7 +232,7 @@
                   </div>
                 </section>
 
-                <section class="profile-group">
+                <section class="profile-group" data-test-only hidden>
                   <details class="help-drawer">
                     <summary>Captured CV text</summary>
                     <p>Read-only source text extracted from your uploaded CV materials.</p>
@@ -263,7 +263,7 @@
             <div class="advanced-head">
               <div class="panel-kicker">Scoring signals</div>
               <h2>Capability Matrix</h2>
-              <p class="panel-copy">Each row is a capability Job Hunter can use when judging fit.</p>
+              <p class="panel-copy">Each row is a capability Job Hunter can use when judging whether you are a good fit for a role.</p>
             </div>
             <div id="capability_matrix_editor" class="capability-editor"></div>
             <div class="capability-toolbar">
@@ -282,7 +282,7 @@
           <div class="advanced-grid">
             <section class="subpanel">
               <h3>Title Matching</h3>
-              <div class="field-help" style="margin-bottom:12px;">Strong fit job titles are your clearest role directions. Conditional fit job titles can still fit, but they should need stronger evidence before a job feels like a match.</div>
+              <div class="field-help" style="margin-bottom:12px;">Primary job titles are your clearest role directions. Secondary job titles can still fit, but they should need stronger evidence before a job feels like a match.</div>
               <label for="target_title_patterns_add">Target titles</label>
               <div class="badge-editor" data-chip-editor="target_title_patterns">
                 <div id="target_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
@@ -294,11 +294,11 @@
               <textarea id="target_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <div class="field-help">Jobs with these titles should count as direct hits.</div>
 
-              <label for="adjacent_title_patterns_add">Conditional fit job titles</label>
+              <label for="adjacent_title_patterns_add">Secondary job titles</label>
               <div class="badge-editor" data-chip-editor="adjacent_title_patterns">
                 <div id="adjacent_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
-                  <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="Add a conditional-fit title">
+                  <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="Add a secondary title">
                   <button class="secondary" type="button" data-add-chip="adjacent_title_patterns">Add</button>
                 </div>
               </div>

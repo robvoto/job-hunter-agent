@@ -171,13 +171,11 @@ def build_profile_prompt_context() -> str:
                 continue
             name = str(rule.get("name") or "").strip()
             level = str(rule.get("level") or "").strip()
-            fit = str(rule.get("fit") or "").strip()
             raw_aliases = rule.get("aliases", [])
             aliases_list = raw_aliases if isinstance(raw_aliases, list) else []
             aliases = ", ".join(str(alias).strip() for alias in aliases_list[:8] if str(alias).strip())
             if name and level:
-                fit_text = f", {fit}" if fit else ""
-                parts.append(f"- {name}: {level}{fit_text}" + (f" ({aliases})" if aliases else ""))
+                parts.append(f"- {name}: {level}" + (f" ({aliases})" if aliases else ""))
 
     preference_lines = []
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)

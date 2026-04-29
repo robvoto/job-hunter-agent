@@ -6,6 +6,7 @@
   <title>Job Hunter</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
+    @keyframes wsSpin { to { transform: rotate(360deg); } }
     body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #f6f1e8; }
 
     .ws-header {
@@ -69,6 +70,18 @@
     .ws-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+    .ws-btn.is-working::before,
+    .ws-status-pill.is-running::before {
+      content: "";
+      width: 12px;
+      height: 12px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 999px;
+      animation: wsSpin 0.9s linear infinite;
+      opacity: 0.55;
+      flex: 0 0 auto;
     }
     .ws-status-pill {
       font-size: 0.8rem;
@@ -272,7 +285,7 @@
     }
   </style>
 </head>
-<body>
+<body data-test-mode="__JOB_HUNTER_TEST_MODE__">
   <header class="ws-header">
     <span class="ws-brand">Job Hunter</span>
     <div class="ws-header-actions">
@@ -490,6 +503,7 @@
     }
 
     wsRunBtn.addEventListener('click', async () => {
+      wsRunBtn.classList.add('is-working');
       wsRunBtn.disabled = true;
       wsRunBtn.textContent = 'Starting\u2026';
       try {
@@ -501,8 +515,10 @@
         const data = await resp.json();
         updateStatusPill('running', data.last_run_at);
         wsRunBtn.textContent = '\u25cf Search running\u2026';
+        wsRunBtn.classList.remove('is-working');
         startRunPolling();
       } catch {
+        wsRunBtn.classList.remove('is-working');
         wsRunBtn.disabled = false;
         wsRunBtn.textContent = '\u25b6 Run Search';
       }

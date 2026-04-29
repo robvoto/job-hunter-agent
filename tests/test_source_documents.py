@@ -73,6 +73,38 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
     assert result["profile"].get("capability_profile_rules") == []
 
 
+def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, tmp_path):
+    cv_path = tmp_path / "cv.txt"
+    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
+
+    monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
+    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
+    monkeypatch.setattr(
+        source_documents,
+        "extract_title_pattern_suggestions",
+        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+    )
+    monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
+    monkeypatch.setattr(
+        source_documents,
+        "build_learning_patch",
+        lambda text, onboarding_settings=None: {
+            "cv_text": text,
+            "capability_profile_rules": [{"name": "delivery", "level": "working"}],
+            "match_preferences": {"prefer_permanent": True, "home_location": "Sydney"},
+        },
+    )
+
+    result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
+
+    assert result["ok"] is True
+    assert result["profile"].get("capability_profile_rules") == [{"name": "delivery", "level": "working"}]
+    assert result["profile"].get("match_preferences", {})["prefer_permanent"] is True
+    assert result["profile"].get("match_preferences", {})["home_location"] == "Sydney"
+
+
 def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeypatch):
     monkeypatch.setattr(
         llm_gate,

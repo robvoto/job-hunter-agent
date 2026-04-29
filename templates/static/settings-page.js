@@ -1,5 +1,6 @@
 
     const statusEl = document.getElementById('status');
+    const isTestMode = document.body?.dataset.testMode === 'true';
     const runStatusPillEl = document.getElementById('run_status_pill');
     const runLastRunEl = document.getElementById('run_last_run');
     const runNowButton = document.getElementById('run_now');
@@ -14,6 +15,9 @@
     let lastObservedRunStatus = 'idle';
     let suppressDirtyTracking = true;
     let statusHideTimer = null;
+    document.querySelectorAll('[data-test-only]').forEach((element) => {
+      element.hidden = !isTestMode;
+    });
     const listTextAreas = [
       'locations',
       'target_title_patterns',
@@ -26,6 +30,15 @@
       ['reject_title_rules', 'pattern'],
       ['reject_description_phrase_rules', 'phrase'],
     ];
+
+    function settingsField(id) {
+      const aliases = {
+        secondary_title_patterns: 'adjacent_title_patterns',
+        secondary_title_patterns_add: 'adjacent_title_patterns_add',
+        secondary_title_patterns_chips: 'adjacent_title_patterns_chips',
+      };
+      return document.getElementById(id) || document.getElementById(aliases[id] || '');
+    }
 
     function hideStatus() {
       if (!statusEl) return;
@@ -61,7 +74,7 @@
     function capabilityRulesToText(rules) {
       return (rules || []).filter(rule => (rule.name || '').trim() && (rule.level || '').trim()).map(rule => {
         const aliases = (rule.aliases || []).join(', ');
-        return `${rule.name || ''} || ${rule.level || ''} || ${rule.fit || ''} || ${aliases}`;
+        return `${rule.name || ''} || ${rule.level || ''} || ${aliases}`;
       }).join('\n');
     }
 
@@ -78,63 +91,25 @@
     function textToCapabilityRules(value) {
       return toLines(value).map(line => {
         const parts = line.split('||');
-        const aliasesIndex = parts.length >= 4 ? 3 : 2;
         return {
           name: (parts[0] || '').trim(),
           level: (parts[1] || '').trim().toLowerCase(),
-          fit: (parts.length >= 4 ? (parts[2] || '') : '').trim().toLowerCase(),
-          aliases: (parts[aliasesIndex] || '').split(',').map(item => item.trim()).filter(Boolean),
+          aliases: (parts[2] || '').split(',').map(item => item.trim()).filter(Boolean),
         };
       }).filter(rule => rule.name && rule.level);
     }
 
-    const capabilityModeMeta = capabilityUi.capabilityModeMeta || {};
     const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
-
-    const capabilityPriorityMeta = capabilityUi.capabilityPriorityMeta || {};
-
-    const capabilityPriorityOrder = ['core', 'supporting', 'contextual', 'avoid'];
 
     function normalizeCapabilityAliasValue(value) {
       return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
     }
 
-    function capabilityModeFromRule(rule) {
-      const level = String(rule?.level || '').trim().toLowerCase();
-      const fit = String(rule?.fit || '').trim().toLowerCase();
-      if (fit === 'avoid' || level === 'none') return 'not_for_me';
-      if (fit === 'core') return 'core_skill';
-      if (fit === 'supporting') return 'useful_support';
-      return 'background_only';
-    }
-
-    function applyCapabilityModeToRule(rule, mode) {
-      const meta = capabilityModeMeta[mode] || capabilityModeMeta.background_only;
-      const currentLevel = String(rule?.level || '').trim().toLowerCase();
-      return {
-        ...(rule || {}),
-        level: mode === 'not_for_me' ? 'none' : (currentLevel === 'none' ? 'basic' : currentLevel || 'basic'),
-        fit: meta.fit,
-      };
-    }
-
-    function capabilityAliasPreview(aliases) {
-      const cleaned = Array.isArray(aliases) ? aliases.filter(Boolean) : [];
-      if (!cleaned.length) return 'Aliases: none yet';
-      const preview = cleaned.slice(0, 3).join(', ');
-      return cleaned.length > 3
-        ? `Aliases: ${preview}, +${cleaned.length - 3} more`
-        : `Aliases: ${preview}`;
-    }
-
     function normalizeCapabilityRule(rule) {
       const name = String(rule?.name || '').replace(/\s+/g, ' ').trim();
       const rawLevel = String(rule?.level || 'basic').trim().toLowerCase();
-      const rawFit = String(rule?.fit || 'contextual').trim().toLowerCase();
-      const validLevels = new Set(['strong', 'working', 'basic', 'low', 'none']);
-      const validFits = new Set(['core', 'supporting', 'contextual', 'avoid']);
+      const validLevels = new Set(['strong', 'working', 'basic', 'low']);
       const level = validLevels.has(rawLevel) ? rawLevel : 'basic';
-      const fit = validFits.has(rawFit) ? rawFit : 'contextual';
       const aliases = [];
       const seen = new Set();
       for (const value of Array.isArray(rule?.aliases) ? rule.aliases : []) {
@@ -143,33 +118,13 @@
         seen.add(cleaned);
         aliases.push(cleaned);
       }
-      return { name, level, fit, aliases };
+      return { name, level, aliases };
     }
 
     function capabilityStrengthMeta(level) {
       const key = String(level || '').trim().toLowerCase();
-      if (!key || key === 'none') return null;
-      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Intermediate', summary: '' };
-    }
-
-    function renderCapabilityStrengthGuide() {
-      const strengthOrder = ['strong', 'working', 'basic', 'low'];
-      const chips = strengthOrder.map((level) => {
-        const meta = capabilityStrengthMeta(level);
-        if (!meta) return '';
-        return `
-          <span class="suggestion-chip strength-chip ${escapeHtml(meta.tone || `strength-${level}`)}">
-            ${escapeHtml(meta.label)}
-          </span>
-          <span class="capability-strength-guide-copy">${escapeHtml(meta.summary || '')}</span>
-        `;
-      }).join('');
-      return `
-        <div class="capability-strength-guide">
-          <p class="capability-strength-guide-title">${escapeHtml(capabilityUi.strengthGuideTitle || 'Strength shows your depth. Relevance decides how much that capability should influence matching.')}</p>
-          <div class="capability-strength-guide-grid">${chips}</div>
-        </div>
-      `;
+      if (!key) return null;
+      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Intermediate' };
     }
 
     function setCapabilityRuleState(rules) {
@@ -179,7 +134,7 @@
       expandedCapabilityRows = new Set(
         [...expandedCapabilityRows].filter(index => index >= 0 && index < capabilityRuleState.length)
       );
-      document.getElementById('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+      settingsField('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
       renderCapabilityRuleEditor();
     }
 
@@ -188,7 +143,7 @@
         .map(normalizeCapabilityRule)
         .filter(rule => rule.name);
       capabilityRuleState = cleaned;
-      document.getElementById('capability_profile_rules').value = capabilityRulesToText(cleaned);
+      settingsField('capability_profile_rules').value = capabilityRulesToText(cleaned);
       return cleaned;
     }
 
@@ -200,110 +155,84 @@
         return;
       }
       const filterTerm = String(document.getElementById('capability_matrix_filter')?.value || '').trim().toLowerCase();
-      const groups = capabilityPriorityOrder.map(priority => {
-        const rules = capabilityRuleState
-          .map((rule, index) => ({ rule, index }))
-          .filter(item => item.rule.fit === priority)
-          .filter(item => {
-            if (!filterTerm) return true;
-            return item.rule.name.toLowerCase().includes(filterTerm)
-              || item.rule.aliases.some(alias => alias.includes(filterTerm));
-          });
-        return { priority, rules };
-      });
-
-      container.innerHTML = renderCapabilityStrengthGuide() + groups.map(group => {
-        const priorityMeta = capabilityPriorityMeta[group.priority];
-        const rowsHtml = group.rules.length
-          ? group.rules.map(({ rule, index }) => {
-              const strengthMeta = capabilityStrengthMeta(rule.level);
-              const strengthSummary = strengthMeta?.summary || capabilityModeMeta[capabilityModeFromRule(rule)]?.summary || '';
-              return `
-              <details class="capability-row" data-capability-index="${index}"${expandedCapabilityRows.has(index) || filterTerm ? ' open' : ''}>
-                <summary class="capability-row-summary">
-                  <div class="capability-row-summary-main">
-                    <strong class="capability-row-title">${escapeHtml(rule.name || 'Untitled capability')}</strong>
-                    <span class="capability-row-summary-copy">${escapeHtml(capabilityAliasPreview(rule.aliases))}</span>
-                  </div>
-                  <div class="capability-row-summary-meta">
-                    ${strengthMeta ? `<span class="suggestion-chip strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(strengthMeta.label)}</span>` : ''}
-                    <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background')}</span>
-                    <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
-                  </div>
-                </summary>
-                <div class="capability-row-body">
-                  <div class="capability-row-fields">
-                    <div>
-                      <label for="capability_name_${index}">Capability</label>
-                      <input id="capability_name_${index}" type="text" data-capability-field="name" value="${escapeHtml(rule.name)}" placeholder="e.g. Agile delivery">
-                    </div>
-                    <div>
-                      <label for="capability_level_${index}">Strength</label>
-                      <select id="capability_level_${index}" data-capability-field="level">
-                        <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('strong').label)}</option>
-                        <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('working').label)}</option>
-                        <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('basic').label)}</option>
-                        <option value="low"${rule.level === 'low' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('low').label)}</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label for="capability_mode_${index}">${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
-                      <select id="capability_mode_${index}" data-capability-mode>
-                        <option value="core_skill"${capabilityModeFromRule(rule) === 'core_skill' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.core_skill?.label || 'Essential')}</option>
-                        <option value="useful_support"${capabilityModeFromRule(rule) === 'useful_support' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.useful_support?.label || 'Helpful')}</option>
-                        <option value="background_only"${capabilityModeFromRule(rule) === 'background_only' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.background_only?.label || 'Background')}</option>
-                        <option value="not_for_me"${capabilityModeFromRule(rule) === 'not_for_me' ? ' selected' : ''}>${escapeHtml(capabilityModeMeta.not_for_me?.label || 'Not a fit')}</option>
-                      </select>
-                    </div>
-                    <div class="capability-row-actions">
-                      <button class="secondary" type="button" data-remove-capability="${index}">Remove</button>
-                    </div>
-                  </div>
-                  <div class="capability-meta">
-                    ${strengthMeta ? `<span class="suggestion-chip strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(strengthMeta.label)}</span>` : ''}
-                    <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background')}</span>
-                    <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
-                  </div>
-                  <p class="capability-copy">${escapeHtml(strengthSummary)}</p>
-                  <details class="capability-alias-shell">
-                    <summary class="capability-alias-summary">Aliases (${rule.aliases.length})</summary>
-                    <p class="field-help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
-                    <div class="badge-editor">
-                      <div class="badge-editor-list">
-                        ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
-                          <span class="rule-chip">
-                            <span>${escapeHtml(alias)}</span>
-                            <button type="button" data-remove-capability-alias="${index}" data-alias-index="${aliasIndex}" title="Remove ${escapeHtml(alias)}">&#215;</button>
-                          </span>
-                        `).join('') : '<span class="badge-editor-empty">No aliases yet.</span>'}
-                      </div>
-                      <div class="badge-editor-form">
-                        <input type="text" data-capability-alias-input="${index}" placeholder="Add an alias">
-                        <button class="secondary" type="button" data-add-capability-alias="${index}">Add</button>
-                      </div>
-                    </div>
-                  </details>
+      const rows = capabilityRuleState
+        .map((rule, index) => ({ rule, index }))
+        .filter(item => {
+          if (!filterTerm) return true;
+          return item.rule.name.toLowerCase().includes(filterTerm)
+            || item.rule.aliases.some(alias => alias.includes(filterTerm));
+        });
+      const rowsHtml = rows.length
+        ? rows.map(({ rule, index }) => {
+            const aliasText = rule.aliases.length
+              ? `Also known as: ${rule.aliases.join(', ')}`
+              : 'No aliases yet.';
+            const aliasEditorOpen = expandedCapabilityRows.has(index) || !!filterTerm;
+            const aliasEditorHtml = aliasEditorOpen ? `
+              <div class="cap-alias-editor">
+                <div class="cap-alias-chips">
+                  ${rule.aliases.map((alias, aliasIndex) => `
+                    <span class="cap-alias-chip">
+                      ${escapeHtml(alias)}
+                      <button type="button" data-remove-capability-alias="${index}" data-alias-index="${aliasIndex}" title="Remove">&#215;</button>
+                    </span>
+                  `).join('')}
                 </div>
-              </details>
+                <div class="cap-alias-form">
+                  <input type="text" data-capability-alias-input="${index}" placeholder="Add an alias">
+                  <button class="secondary" type="button" data-add-capability-alias="${index}">Add</button>
+                </div>
+              </div>
+            ` : '';
+            return `
+              <div class="cap-row" data-capability-index="${index}">
+                <div class="cap-identity">
+                  <input class="cap-name-input" type="text" data-capability-field="name"
+                         aria-label="Capability name" value="${escapeHtml(rule.name)}"
+                         placeholder="e.g. Agile delivery">
+                  <span class="cap-alias-text" data-toggle-aliases="${index}">${escapeHtml(aliasText)}</span>
+                  ${aliasEditorHtml}
+                </div>
+                <div class="cap-strength">
+                  <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}"
+                          data-capability-field="level" aria-label="Capability strength">
+                    <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert — current, repeated, clearly strongest</option>
+                    <option value="working"${rule.level === 'working' ? ' selected' : ''}>Advanced — independent use, solid evidence</option>
+                    <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Intermediate — usable, not your primary</option>
+                    <option value="low"${rule.level === 'low' ? ' selected' : ''}>Beginner — older or limited</option>
+                  </select>
+                </div>
+                <div class="cap-action">
+                  <button class="cap-remove-btn" type="button" data-remove-capability="${index}"
+                          aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
+                          title="Remove capability">🗑</button>
+                </div>
+              </div>
             `;
-            }).join('')
-          : '<div class="capability-editor-empty-group">No matching capabilities in this group.</div>';
-        return `
-          <section class="capability-group">
-            <div class="capability-group-head">
-              <h4>${escapeHtml(priorityMeta.label)} capabilities</h4>
-              <span class="suggestion-chip">${escapeHtml(String(group.rules.length))} shown</span>
+          }).join('')
+        : '<div class="capability-editor-empty-group">No matching capabilities.</div>';
+
+      container.innerHTML = `
+        <section class="capability-group">
+          <div class="capability-group-head">
+            <h4>Capabilities</h4>
+            <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
+          </div>
+          <div class="cap-table">
+            <div class="cap-table-head">
+              <span>Capability</span>
+              <span>Strength</span>
+              <span></span>
             </div>
-            <p class="capability-group-copy">${escapeHtml(priorityMeta.summary)}</p>
-            <div class="capability-row-list">${rowsHtml}</div>
-          </section>
-        `;
-      }).join('');
+            ${rowsHtml}
+          </div>
+        </section>
+      `;
     }
 
     const chipEditors = {
       target_title_patterns: { kind: 'list', listId: 'target_title_patterns_chips', inputId: 'target_title_patterns_add', emptyText: 'No target titles yet.' },
-      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No conditional-fit titles yet.' },
+      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
       reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },
       reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No blocked description phrases yet.' },
@@ -367,24 +296,24 @@
     }
 
     function getListItems(id) {
-      const field = document.getElementById(id);
+      const field = settingsField(id);
       return field ? toLines(field.value) : [];
     }
 
     function setListItems(id, items) {
-      const field = document.getElementById(id);
+      const field = settingsField(id);
       if (field) field.value = (items || []).join('\n');
     }
 
     function getRuleItems(id) {
       const editor = chipEditors[id];
-      const field = document.getElementById(id);
+      const field = settingsField(id);
       return field && editor ? textToRules(field.value, editor.key) : [];
     }
 
     function setRuleItems(id, items) {
       const editor = chipEditors[id];
-      const field = document.getElementById(id);
+      const field = settingsField(id);
       if (field && editor) field.value = rulesToText(items || [], editor.key);
     }
 
@@ -417,7 +346,7 @@
 
     function renderChipEditor(id) {
       const editor = chipEditors[id];
-      const list = editor ? document.getElementById(editor.listId) : null;
+      const list = editor ? settingsField(editor.listId) : null;
       if (!editor || !list) return;
 
       const isRule = editor.kind === 'rule';
@@ -442,7 +371,7 @@
 
     function addChipValue(id) {
       const editor = chipEditors[id];
-      const input = editor ? document.getElementById(editor.inputId) : null;
+      const input = editor ? settingsField(editor.inputId) : null;
       if (!editor || !input) return false;
       const value = buildChipValue(id, input.value);
       if (!value) return false;
@@ -485,7 +414,7 @@
 
     function flushChipEditorInputs() {
       Object.keys(chipEditors).forEach(id => {
-        const input = document.getElementById(chipEditors[id].inputId);
+        const input = settingsField(chipEditors[id].inputId);
         if (input && input.value.trim()) addChipValue(id);
       });
     }
@@ -515,10 +444,10 @@
       setCapabilityRuleState(profile.capability_profile_rules || []);
       document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
       for (const id of ['target_title_patterns', 'secondary_title_patterns', 'must_not_require_skills']) {
-        document.getElementById(id).value = (profile[id] || []).join('\n');
+        settingsField(id).value = (profile[id] || []).join('\n');
       }
       for (const [id, key] of ruleTextAreas) {
-        document.getElementById(id).value = rulesToText(profile[id], key);
+        settingsField(id).value = rulesToText(profile[id], key);
       }
       renderAdvancedChipEditors();
     }
@@ -758,28 +687,25 @@
     }
 
     function getReviewChoiceMeta(choice) {
-      const emptyMeta = capabilityUi.emptyReviewChoiceMeta || { label: 'Choose an option', summary: 'Pick the simplest description of how this capability fits your target roles.', useWhen: 'Choose the closest option based on your CV and the kept-role examples.', engineEffect: 'Nothing changes until you confirm.' };
-      if (!choice) return emptyMeta;
-      return capabilityModeMeta[choice] || emptyMeta;
+      if (!choice) return { label: 'Choose a strength' };
+      return capabilityStrengthMeta(choice) || { label: 'Choose a strength' };
     }
 
     function renderReviewChoiceGuide(choice) {
       const meta = getReviewChoiceMeta(choice);
       return `
         <strong>${escapeHtml(meta.label)}</strong>
-        <p>${escapeHtml(meta.summary)}</p>
-        <p><strong>When to use:</strong> ${escapeHtml(meta.useWhen)}</p>
-        <p><strong>Engine effect:</strong> <code>${escapeHtml(meta.engineEffect)}</code></p>
+        <p>This sets the capability strength used during matching.</p>
       `;
     }
 
     function reviewOptionMarkup(selectedValue) {
       const options = [
-        ['', 'Choose an option'],
-        ['core_skill', capabilityModeMeta.core_skill?.label || 'Essential'],
-        ['useful_support', capabilityModeMeta.useful_support?.label || 'Helpful'],
-        ['background_only', capabilityModeMeta.background_only?.label || 'Background'],
-        ['not_for_me', capabilityModeMeta.not_for_me?.label || 'Not a fit'],
+        ['', 'Choose a strength'],
+        ['strong', capabilityStrengthMeta('strong')?.label || 'Expert'],
+        ['working', capabilityStrengthMeta('working')?.label || 'Advanced'],
+        ['basic', capabilityStrengthMeta('basic')?.label || 'Intermediate'],
+        ['low', capabilityStrengthMeta('low')?.label || 'Beginner'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -817,7 +743,7 @@
                 <h3>${escapeHtml(item.skill || 'Capability signal')}</h3>
                 <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
                 <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
-                <label>${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
+                <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel || 'How strong is this capability for you?')}</label>
                 <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">${reviewOptionMarkup(item.recommended_choice || '')}</select>
                 <details class="review-choice-guide">
                   <summary>What this choice means</summary>
@@ -923,11 +849,11 @@
         llm_profile_brief_mode: 'auto',
         llm_profile_brief: '',
         capability_profile_rules: collectCapabilityRuleState(),
-        target_title_patterns: toLines(document.getElementById('target_title_patterns').value),
-        secondary_title_patterns: toLines(document.getElementById('secondary_title_patterns').value),
-        must_not_require_skills: toLines(document.getElementById('must_not_require_skills').value),
-        reject_title_rules: textToRules(document.getElementById('reject_title_rules').value, 'pattern'),
-        reject_description_phrase_rules: textToRules(document.getElementById('reject_description_phrase_rules').value, 'phrase'),
+        target_title_patterns: toLines(settingsField('target_title_patterns').value),
+        secondary_title_patterns: toLines(settingsField('secondary_title_patterns').value),
+        must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
+        reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
+        reject_description_phrase_rules: textToRules(settingsField('reject_description_phrase_rules').value, 'phrase'),
       };
     }
 
@@ -982,6 +908,7 @@
     if (runNowButton) {
       runNowButton.addEventListener('click', async () => {
         const originalLabel = runNowButton.textContent;
+        runNowButton.classList.add('is-working');
         runNowButton.disabled = true;
         runNowButton.textContent = 'Starting...';
         try {
@@ -989,6 +916,7 @@
         } catch (error) {
           showStatus(error.message, 'error');
         } finally {
+          runNowButton.classList.remove('is-working');
           runNowButton.disabled = false;
           runNowButton.textContent = originalLabel;
         }
@@ -1167,7 +1095,7 @@
     });
 
     document.getElementById('add_capability_rule')?.addEventListener('click', () => {
-      capabilityRuleState = [...capabilityRuleState, { name: '', level: 'working', fit: 'supporting', aliases: [] }];
+      capabilityRuleState = [...capabilityRuleState, { name: '', level: 'working', aliases: [] }];
       expandedCapabilityRows.add(capabilityRuleState.length - 1);
       renderCapabilityRuleEditor();
       markDirty();
@@ -1188,24 +1116,11 @@
         ...capabilityRuleState[index],
         [key]: key === 'name' ? String(field.value || '').replace(/\s+/g, ' ').trim() : String(field.value || '').trim().toLowerCase(),
       };
-      document.getElementById('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+      settingsField('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
       markDirty();
     });
 
     document.getElementById('capability_matrix_editor')?.addEventListener('change', (event) => {
-      const modeField = event.target.closest('[data-capability-mode]');
-      if (modeField) {
-        const card = modeField.closest('[data-capability-index]');
-        if (!card) return;
-        const index = Number(card.dataset.capabilityIndex);
-        capabilityRuleState[index] = applyCapabilityModeToRule(
-          capabilityRuleState[index],
-          String(modeField.value || '').trim()
-        );
-        renderCapabilityRuleEditor();
-        markDirty();
-        return;
-      }
       const field = event.target.closest('[data-capability-field]');
       if (!field) return;
       const card = field.closest('[data-capability-index]');
@@ -1220,15 +1135,15 @@
       markDirty();
     });
 
-    document.getElementById('capability_matrix_editor')?.addEventListener('toggle', (event) => {
-      const row = event.target.closest('.capability-row');
-      if (!row || event.target !== row) return;
-      const index = Number(row.dataset.capabilityIndex);
-      if (row.open) expandedCapabilityRows.add(index);
-      else expandedCapabilityRows.delete(index);
-    }, true);
-
     document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
+      const toggleAliases = event.target.closest('[data-toggle-aliases]');
+      if (toggleAliases) {
+        const index = Number(toggleAliases.dataset.toggleAliases);
+        if (expandedCapabilityRows.has(index)) expandedCapabilityRows.delete(index);
+        else expandedCapabilityRows.add(index);
+        renderCapabilityRuleEditor();
+        return;
+      }
       const removeCard = event.target.closest('[data-remove-capability]');
       if (removeCard) {
         const index = Number(removeCard.dataset.removeCapability);
@@ -1338,6 +1253,7 @@
 
     async function saveAll() {
       if (!saveAllBtn) return;
+      saveAllBtn.classList.add('is-working');
       saveAllBtn.disabled = true;
       saveAllBtn.textContent = 'Saving...';
       showInlineStatus(globalStatus, 'Saving changes...', 'loading');
@@ -1375,6 +1291,7 @@
         showInlineStatus(globalStatus, err?.message || 'Could not save all settings.', 'error');
         showStatus(err?.message || 'Could not save all settings.', 'error');
       } finally {
+        saveAllBtn.classList.remove('is-working');
         saveAllBtn.disabled = false;
         saveAllBtn.textContent = 'Save All Changes';
       }

@@ -1,18 +1,29 @@
 const statusEl = document.getElementById('status');
+const isTestMode = document.body?.dataset.testMode === 'true';
 const urlParams = new URLSearchParams(window.location.search);
 const isRebuildMode = urlParams.get('mode') === 'rebuild';
 const stepEls = Array.from(document.querySelectorAll('.wizard-step'));
+const heroSectionEl = document.querySelector('.hero');
 const heroStepEl = document.getElementById('hero_step');
 const heroTitleEl = document.getElementById('hero_title');
 const heroCopyEl = document.getElementById('hero_copy');
 const formTitleEl = document.getElementById('form_title');
+const workflowSummaryEl = document.getElementById('workflow_summary');
 const progressFillEl = document.getElementById('wizard_progress_fill');
+const primaryCvInput = document.getElementById('primary_cv');
+const primaryCvDropZone = document.getElementById('cv_drop_zone');
+const primaryCvStatusEl = document.getElementById('primary_cv_status');
 const locationInput = document.getElementById('location_search');
 const addLocationButton = document.getElementById('add_location');
 const locationSuggestions = document.getElementById('location_suggestions');
 const locationQuickPicks = document.getElementById('location_quick_picks');
 const locationSelected = document.getElementById('location_selected');
+const createProfileButton = document.getElementById('create_profile');
 const capabilityUi = window.JobHunterCapabilityUi || {};
+
+document.querySelectorAll('[data-test-only]').forEach((element) => {
+  element.hidden = !isTestMode;
+});
 
 const COMMON_LOCATION_OPTIONS = [
   'Sydney NSW',
@@ -44,17 +55,61 @@ let reviewTargetTitles = [];
 let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
 let lastImportPayload = null;
+let preservedPrimaryCvFile = null;
+let workingStatusTimer = null;
 
 const reviewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
 
-const reviewCapabilityPriorityMeta = capabilityUi.capabilityPriorityMeta || {};
+function saveWizardState() {
+  if (currentStep < 2) {
+    window.sessionStorage.removeItem('jobHunter.onboardingWizard');
+    return;
+  }
+  const engagementInput = document.querySelector('input[name="engagement_pref"]:checked');
+  window.sessionStorage.setItem('jobHunter.onboardingWizard', JSON.stringify({
+    step: currentStep,
+    reviewTargetTitles,
+    reviewSecondaryTitles,
+    reviewCapabilityRules,
+    selectedLocations,
+    searchKeywords: document.getElementById('review_search_keywords')?.value || '',
+    minimumSalaryYearly: document.getElementById('review_minimum_salary_yearly')?.value || '',
+    minimumDailyRate: document.getElementById('review_minimum_daily_rate')?.value || '',
+    engagementType: engagementInput?.value || 'both',
+  }));
+}
 
-const reviewCapabilityPriorityOrder = ['core', 'supporting', 'contextual'];
+function restoreWizardState() {
+  try {
+    const raw = window.sessionStorage.getItem('jobHunter.onboardingWizard');
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    if (!state || state.step < 2) return false;
+    reviewTargetTitles = state.reviewTargetTitles || [];
+    reviewSecondaryTitles = state.reviewSecondaryTitles || [];
+    reviewCapabilityRules = state.reviewCapabilityRules || [];
+    setSelectedLocations(state.selectedLocations || []);
+    setStep(state.step);
+    renderReviewStep();
+    const kwEl = document.getElementById('review_search_keywords');
+    if (kwEl) kwEl.value = state.searchKeywords || '';
+    const salaryEl = document.getElementById('review_minimum_salary_yearly');
+    if (salaryEl) salaryEl.value = state.minimumSalaryYearly || '';
+    const dailyEl = document.getElementById('review_minimum_daily_rate');
+    if (dailyEl) dailyEl.value = state.minimumDailyRate || '';
+    const engEl = document.querySelector(`input[name="engagement_pref"][value="${state.engagementType || 'both'}"]`)
+      || document.querySelector('input[name="engagement_pref"][value="both"]');
+    if (engEl) engEl.checked = true;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const stepMeta = {
   1: {
     title: () => isRebuildMode ? 'Upload Updated CV' : 'Upload Your CV',
-    heroTitle: () => isRebuildMode ? 'Refresh Your Profile' : 'Set Up Your Job Search Profile',
+    heroTitle: () => isRebuildMode ? 'Refresh Your Profile' : 'Set Up Your Job Hunting Profile',
     heroCopy: () => isRebuildMode
       ? 'Upload an updated CV. Job Hunter will refresh your profile, let you review the draft, and keep your wider settings in place until you confirm the new version.'
       : 'Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.',
@@ -77,8 +132,54 @@ const stepMeta = {
 };
 
 function showStatus(message, kind) {
+  if (workingStatusTimer && kind !== 'loading') {
+    window.clearInterval(workingStatusTimer);
+    workingStatusTimer = null;
+  }
   statusEl.textContent = message;
   statusEl.className = message ? `status ${kind}` : 'status';
+}
+
+function startWorkingStatus(messages, stepMs = 1400) {
+  const items = Array.isArray(messages) ? messages.filter(Boolean) : [];
+  if (!items.length) return;
+  if (workingStatusTimer) {
+    window.clearInterval(workingStatusTimer);
+    workingStatusTimer = null;
+  }
+  let index = 0;
+  showStatus(items[0], 'loading');
+  if (items.length === 1) return;
+  workingStatusTimer = window.setInterval(() => {
+    index = (index + 1) % items.length;
+    statusEl.textContent = items[index];
+    statusEl.className = 'status loading';
+  }, stepMs);
+}
+
+function updatePrimaryCvStatus(file) {
+  if (!primaryCvStatusEl) return;
+  if (!file) {
+    primaryCvStatusEl.textContent = 'No file selected yet.';
+    primaryCvStatusEl.classList.remove('is-selected');
+    primaryCvDropZone?.classList.remove('has-file');
+    return;
+  }
+  primaryCvStatusEl.textContent = `Selected file: ${file.name}`;
+  primaryCvStatusEl.classList.add('is-selected');
+  primaryCvDropZone?.classList.add('has-file');
+}
+
+function updateCreateProfileAvailability() {
+  if (!createProfileButton) return;
+  createProfileButton.disabled = !primaryCvInput?.files?.[0];
+}
+
+function restorePrimaryCvSelection(file) {
+  if (!primaryCvInput || !file) return;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  primaryCvInput.files = transfer.files;
 }
 
 function setStep(stepNumber) {
@@ -94,6 +195,14 @@ function setStep(stepNumber) {
   heroStepEl.textContent = `Step ${stepNumber} of ${STEP_COUNT}`;
   heroTitleEl.textContent = meta.heroTitle();
   heroCopyEl.textContent = meta.heroCopy();
+
+  const isDetailStep = stepNumber > 1;
+  if (heroSectionEl) heroSectionEl.classList.toggle('is-compact', isDetailStep);
+  if (workflowSummaryEl) {
+    workflowSummaryEl.hidden = isDetailStep;
+    workflowSummaryEl.style.display = isDetailStep ? 'none' : '';
+  }
+
   if (formTitleEl) formTitleEl.textContent = `Step 1. ${stepMeta[1].title()}`;
   progressFillEl.style.width = `${(stepNumber / STEP_COUNT) * 100}%`;
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -194,9 +303,11 @@ async function fileToPayload(file, label) {
 function onboardingSettingsPayload() {
   const lookbackYears = document.getElementById('os_lookback_years').value.trim();
   const minMonths = document.getElementById('os_min_months').value.trim();
+  const capabilityStrengthPreset = document.getElementById('os_capability_strength_preset').value.trim();
   return {
     extraction_lookback_years: lookbackYears ? Number(lookbackYears) : undefined,
     title_extraction_min_months: minMonths ? Number(minMonths) : undefined,
+    capability_strength_preset: capabilityStrengthPreset || 'balanced',
   };
 }
 
@@ -213,12 +324,16 @@ function searchPreferencesPayload() {
 function validateOnboardingSettings(settings) {
   const lookback = Number(settings.extraction_lookback_years);
   const minMonths = Number(settings.title_extraction_min_months);
+  const preset = String(settings.capability_strength_preset || '').trim();
 
   if (!Number.isInteger(lookback) || lookback < 1 || lookback > 20) {
     throw new Error('Please enter a lookback between 1 and 20 years.');
   }
   if (!Number.isInteger(minMonths) || minMonths < 1 || minMonths > 24) {
     throw new Error('Please enter a short-role threshold between 1 and 24 months.');
+  }
+  if (!['recent_focus', 'balanced', 'include_older_experience'].includes(preset)) {
+    throw new Error('Please choose how older experience should be treated.');
   }
 }
 
@@ -270,12 +385,40 @@ function validatePrimaryFile(file) {
   }
 }
 
+function assignPrimaryCvFile(file) {
+  if (!primaryCvInput || !file) return;
+  restorePrimaryCvSelection(file);
+  preservedPrimaryCvFile = file;
+  updatePrimaryCvStatus(file);
+  updateCreateProfileAvailability();
+}
+
+function handlePrimaryCvDrop(event) {
+  event.preventDefault();
+  if (!primaryCvDropZone) return;
+  primaryCvDropZone.classList.remove('is-dragover');
+  const file = event.dataTransfer?.files?.[0];
+  if (!file) return;
+  try {
+    validatePrimaryFile(file);
+  } catch (error) {
+    showStatus(error.message, 'error');
+    updatePrimaryCvStatus(null);
+    return;
+  }
+  assignPrimaryCvFile(file);
+  showStatus('', '');
+}
+
 function applyProfileDefaults(profile) {
   const onboarding = profile?.onboarding_settings || {};
-  document.getElementById('os_lookback_years').value = String(
-    onboarding.extraction_lookback_years ?? onboarding.title_extraction_lookback_years ?? ''
-  );
-  document.getElementById('os_min_months').value = String(onboarding.title_extraction_min_months ?? '');
+  const lookback = onboarding.extraction_lookback_years ?? 8;
+  const minMonths = onboarding.title_extraction_min_months ?? 6;
+  const preset = onboarding.capability_strength_preset || 'balanced';
+
+  document.getElementById('os_lookback_years').value = String(lookback);
+  document.getElementById('os_min_months').value = String(minMonths);
+  document.getElementById('os_capability_strength_preset').value = String(preset);
 }
 
 function normalizeReviewText(value) {
@@ -312,7 +455,6 @@ function normalizeReviewAlias(value) {
 function normalizeReviewCapability(rule) {
   const name = normalizeReviewText(rule?.name || '');
   const rawLevel = String(rule?.level || 'working').trim().toLowerCase();
-  const rawFit = String(rule?.fit || 'supporting').trim().toLowerCase();
   const level = rawLevel === 'strong'
     ? 'strong'
     : rawLevel === 'working'
@@ -320,7 +462,6 @@ function normalizeReviewCapability(rule) {
       : rawLevel === 'low'
         ? 'low'
         : 'basic';
-  const fit = rawFit === 'core' ? 'core' : rawFit === 'supporting' ? 'supporting' : 'contextual';
   const aliases = [];
   const seen = new Set();
   for (const alias of Array.isArray(rule?.aliases) ? rule.aliases : []) {
@@ -329,25 +470,7 @@ function normalizeReviewCapability(rule) {
     seen.add(cleaned);
     aliases.push(cleaned);
   }
-  return { name, level, fit, aliases };
-}
-
-function renderReviewStrengthGuide() {
-  const strengthOrder = ['strong', 'working', 'basic', 'low'];
-  const chips = strengthOrder.map((level) => {
-    const meta = reviewCapabilityLevelMeta[level];
-    if (!meta) return '';
-    return `
-      <span class="chip-item strength-chip ${escapeHtml(meta.tone || `strength-${level}`)}">${escapeHtml(meta.label || '')}</span>
-      <span class="review-strength-guide-copy">${escapeHtml(meta.summary || '')}</span>
-    `;
-  }).join('');
-  return `
-    <div class="review-strength-guide">
-      <p class="review-strength-guide-title">${escapeHtml(capabilityUi.strengthGuideTitle || 'Strength shows your depth. Relevance decides how much that capability should influence matching.')}</p>
-      <div class="review-strength-guide-grid">${chips}</div>
-    </div>
-  `;
+  return { name, level, aliases };
 }
 
 function dedupeReviewList(values) {
@@ -386,87 +509,94 @@ function renderReviewCapabilities() {
     return;
   }
   const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
-  const groups = reviewCapabilityPriorityOrder.map((priority) => {
-    const rules = reviewCapabilityRules
-      .map((rule, index) => ({ rule, index }))
-      .filter((item) => item.rule.fit === priority)
-      .filter((item) => {
-        if (!filterTerm) return true;
-        return item.rule.name.toLowerCase().includes(filterTerm)
-          || item.rule.aliases.some((alias) => alias.includes(filterTerm));
-      });
-    return { priority, rules };
-  });
-  container.innerHTML = renderReviewStrengthGuide() + groups.map((group) => {
-    const priorityMeta = reviewCapabilityPriorityMeta[group.priority];
-    const rowsHtml = group.rules.length ? group.rules.map(({ rule, index }) => `
-      <article class="review-capability-row" data-review-capability-index="${index}">
-        <div class="review-capability-fields">
-          <div>
-            <label for="review_capability_name_${index}">Capability</label>
-            <input id="review_capability_name_${index}" type="text" data-review-capability-field="name" value="${escapeHtml(rule.name)}">
+  const filteredRules = reviewCapabilityRules
+    .map((rule, index) => ({ rule, index }))
+    .filter((item) => {
+      if (!filterTerm) return true;
+      return item.rule.name.toLowerCase().includes(filterTerm)
+        || item.rule.aliases.some((alias) => alias.includes(filterTerm));
+    });
+  const rowsHtml = filteredRules.length ? filteredRules.map(({ rule, index }) => {
+      const aliasPreview = rule.aliases.slice(0, 3);
+      const remainingAliasCount = Math.max(rule.aliases.length - aliasPreview.length, 0);
+      return `
+      <details class="review-capability-row" data-review-capability-index="${index}"${filterTerm ? ' open' : ''}>
+        <summary class="review-capability-summary">
+          <div class="review-capability-summary-main">
+            <strong class="review-capability-title">${escapeHtml(rule.name || 'Untitled capability')}</strong>
+            <div class="review-capability-preview">
+              ${aliasPreview.length ? aliasPreview.map((alias) => `<span class="chip-item chip-item-subtle">${escapeHtml(alias)}</span>`).join('') : '<span class="chip-empty">No aliases yet.</span>'}
+              ${remainingAliasCount ? `<span class="chip-item chip-item-subtle">+${remainingAliasCount} more</span>` : ''}
+            </div>
           </div>
-          <div>
-            <label for="review_capability_level_${index}">Strength</label>
-            <select id="review_capability_level_${index}" data-review-capability-field="level">
-              <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.strong?.label || 'Expert')}</option>
-              <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.working?.label || 'Advanced')}</option>
-              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.basic?.label || 'Intermediate')}</option>
-              <option value="low"${rule.level === 'low' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.low?.label || 'Beginner')}</option>
-            </select>
+          <div class="review-capability-summary-meta">
+            <span class="chip-item strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate')}</span>
+            <button class="icon-button icon-button-danger" type="button" data-remove-review-capability="${index}" aria-label="Remove ${escapeHtml(rule.name || 'capability')}" title="Remove capability">
+              <span aria-hidden="true">🗑</span>
+            </button>
           </div>
-          <div>
-            <label for="review_capability_fit_${index}">${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
-            <select id="review_capability_fit_${index}" data-review-capability-field="fit">
-              <option value="core"${rule.fit === 'core' ? ' selected' : ''}>${escapeHtml(reviewCapabilityPriorityMeta.core?.label || 'Essential')}</option>
-              <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>${escapeHtml(reviewCapabilityPriorityMeta.supporting?.label || 'Helpful')}</option>
-              <option value="contextual"${rule.fit === 'contextual' ? ' selected' : ''}>${escapeHtml(reviewCapabilityPriorityMeta.contextual?.label || 'Background')}</option>
-            </select>
+        </summary>
+        <div class="review-capability-body">
+          <div class="review-capability-column-head">
+            <span>Capability</span>
+            <span>Strength</span>
+            <span>Action</span>
           </div>
-          <div class="review-capability-actions">
-            <button class="secondary" type="button" data-remove-review-capability="${index}">Remove</button>
+          <div class="review-capability-fields">
+            <div>
+              <input id="review_capability_name_${index}" type="text" data-review-capability-field="name" aria-label="Capability name" value="${escapeHtml(rule.name)}">
+            </div>
+            <div>
+              <select id="review_capability_level_${index}" data-review-capability-field="level" aria-label="Capability strength">
+                <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
+                <option value="working"${rule.level === 'working' ? ' selected' : ''}>Advanced</option>
+                <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Intermediate</option>
+                <option value="low"${rule.level === 'low' ? ' selected' : ''}>Beginner</option>
+              </select>
+            </div>
           </div>
+          <div class="review-capability-meta">
+            <span class="chip-item strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate')}</span>
+            <span class="chip-item">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
+          </div>
+          <p class="review-capability-copy">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.summary || '')}</p>
+          <details class="review-capability-alias-shell">
+            <summary>Aliases (${rule.aliases.length})</summary>
+            <p class="help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
+            <div class="chip-list chip-list-tight">
+              ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
+                <span class="chip-item">
+                  <span>${escapeHtml(alias)}</span>
+                  <button type="button" data-remove-review-alias="${index}" data-review-alias-index="${aliasIndex}" aria-label="Remove ${escapeHtml(alias)}">&#215;</button>
+                </span>
+              `).join('') : '<span class="chip-empty">No aliases yet.</span>'}
+            </div>
+            <div class="chip-editor-row">
+              <input type="text" data-review-alias-input="${index}" placeholder="Add an alias">
+              <button class="secondary" type="button" data-add-review-alias="${index}">Add</button>
+            </div>
+          </details>
         </div>
-        <div class="review-capability-meta">
-          <span class="chip-item strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate')}</span>
-          <span class="chip-item">${escapeHtml(reviewCapabilityPriorityMeta[rule.fit]?.label || 'Helpful')}</span>
-        </div>
-        <p class="review-capability-copy">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.summary || '')}</p>
-        <details>
-          <summary>Aliases (${rule.aliases.length})</summary>
-          <p class="help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
-          <div class="chip-list chip-list-tight">
-            ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
-              <span class="chip-item">
-                <span>${escapeHtml(alias)}</span>
-                <button type="button" data-remove-review-alias="${index}" data-review-alias-index="${aliasIndex}" aria-label="Remove ${escapeHtml(alias)}">&#215;</button>
-              </span>
-            `).join('') : '<span class="chip-empty">No aliases yet.</span>'}
-          </div>
-          <div class="chip-editor-row">
-            <input type="text" data-review-alias-input="${index}" placeholder="Add an alias">
-            <button class="secondary" type="button" data-add-review-alias="${index}">Add</button>
-          </div>
-        </details>
-      </article>
-    `).join('') : '<div class="chip-empty">No matching capabilities in this group.</div>';
-    return `
-      <section class="review-capability-group">
-        <div class="review-capability-group-head">
-          <h4>${escapeHtml(priorityMeta.label)} capabilities</h4>
-          <span class="chip-item">${escapeHtml(String(group.rules.length))} shown</span>
-        </div>
-        <p class="review-capability-group-copy">${escapeHtml(priorityMeta.summary)}</p>
-        <div class="review-capability-row-list">${rowsHtml}</div>
-      </section>
+      </details>
     `;
-  }).join('');
+    }).join('') : '<div class="chip-empty">No matching capabilities found.</div>';
+  container.innerHTML = `
+    <section class="review-capability-group">
+      <div class="review-capability-group-head">
+        <h4>Capabilities</h4>
+        <span class="chip-item">${escapeHtml(String(filteredRules.length))} shown</span>
+      </div>
+      <p class="review-capability-group-copy">Keep current strengths only. Remove old or weak capabilities you do not want driving matching.</p>
+      <div class="review-capability-row-list">${rowsHtml}</div>
+    </section>
+  `;
 }
 
 function renderReviewStep() {
   renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No target titles extracted yet.', 'data-remove-review-target');
-  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No conditional-fit titles extracted yet.', 'data-remove-review-secondary');
+  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No secondary titles extracted yet.', 'data-remove-review-secondary');
   renderReviewCapabilities();
+  saveWizardState();
 }
 
 function updateCheckStep() {
@@ -643,17 +773,25 @@ async function loadProfileDefaults() {
   applyProfileDefaults(profile || {});
 }
 
-document.getElementById('create_profile').addEventListener('click', async (event) => {
+createProfileButton.addEventListener('click', async (event) => {
   const btn = event.currentTarget;
   const originalLabel = btn.textContent;
+  btn.classList.add('is-working');
   btn.disabled = true;
   btn.textContent = isRebuildMode ? 'Refreshing Draft...' : 'Building Draft...';
+  startWorkingStatus([
+    isRebuildMode ? 'Reading your updated CV...' : 'Reading your CV...',
+    'Extracting titles and capabilities...',
+    'Reviewing role history and recency...',
+    'Building your draft profile...',
+  ]);
   try {
     await createProfile();
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {
-    btn.disabled = false;
+    btn.classList.remove('is-working');
+    updateCreateProfileAvailability();
     btn.textContent = originalLabel;
   }
 });
@@ -677,13 +815,20 @@ document.getElementById('continue_to_check').addEventListener('click', () => {
 document.getElementById('confirm_review').addEventListener('click', async (event) => {
   const btn = event.currentTarget;
   const originalLabel = btn.textContent;
+  btn.classList.add('is-working');
   btn.disabled = true;
   btn.textContent = isRebuildMode ? 'Saving Refresh...' : 'Finishing Setup...';
+  startWorkingStatus([
+    'Saving your reviewed profile...',
+    'Applying search basics...',
+    'Finalising setup...',
+  ]);
   try {
     await finishSetup();
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {
+    btn.classList.remove('is-working');
     btn.disabled = false;
     btn.textContent = originalLabel;
   }
@@ -716,7 +861,7 @@ document.getElementById('review_add_secondary_title').addEventListener('click', 
 });
 
 document.getElementById('review_add_capability').addEventListener('click', () => {
-  reviewCapabilityRules = [...reviewCapabilityRules, { name: '', level: 'working', fit: 'supporting', aliases: [] }];
+  reviewCapabilityRules = [...reviewCapabilityRules, { name: '', level: 'working', aliases: [] }];
   renderReviewStep();
 });
 
@@ -836,3 +981,38 @@ locationSelected.addEventListener('click', (event) => {
 renderLocationSuggestions();
 loadProfileDefaults().catch(() => {});
 setStep(1);
+updateCreateProfileAvailability();
+
+if (primaryCvDropZone && primaryCvInput) {
+  primaryCvDropZone.addEventListener('click', () => primaryCvInput.click());
+  primaryCvDropZone.addEventListener('dragenter', (event) => {
+    event.preventDefault();
+    primaryCvDropZone.classList.add('is-dragover');
+  });
+  primaryCvDropZone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    primaryCvDropZone.classList.add('is-dragover');
+  });
+  primaryCvDropZone.addEventListener('dragleave', (event) => {
+    if (event.target === primaryCvDropZone) {
+      primaryCvDropZone.classList.remove('is-dragover');
+    }
+  });
+  primaryCvDropZone.addEventListener('drop', handlePrimaryCvDrop);
+  primaryCvInput.addEventListener('change', () => {
+    const selectedFile = primaryCvInput.files?.[0] || null;
+    if (!selectedFile) {
+      if (preservedPrimaryCvFile) {
+        restorePrimaryCvSelection(preservedPrimaryCvFile);
+        updatePrimaryCvStatus(preservedPrimaryCvFile);
+      } else {
+        updatePrimaryCvStatus(null);
+      }
+      updateCreateProfileAvailability();
+      return;
+    }
+    preservedPrimaryCvFile = selectedFile;
+    updatePrimaryCvStatus(selectedFile);
+    updateCreateProfileAvailability();
+  });
+}

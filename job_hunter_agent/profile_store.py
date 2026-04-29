@@ -50,6 +50,60 @@ DEFAULT_ONBOARDING_SETTINGS = {
     "title_extraction_min_months": 6,
     "max_target_patterns": 8,
     "max_secondary_patterns": 6,
+    "capability_strength_preset": "balanced",
+    "capability_recent_years": 4,
+    "capability_strong_max_years_since_use": 4,
+    "capability_strong_min_months": 36,
+    "capability_strong_min_roles": 2,
+    "capability_working_max_years_since_use": 8,
+    "capability_working_min_months": 18,
+    "capability_working_long_history_max_years_since_use": 12,
+    "capability_working_long_history_min_months": 48,
+    "capability_single_role_old_max_years_since_use": 8,
+    "capability_drop_to_basic_after_years": 12,
+    "capability_max_items": 20,
+}
+
+CAPABILITY_STRENGTH_PRESETS = {
+    "recent_focus": {
+        "capability_recent_years": 3,
+        "capability_strong_max_years_since_use": 3,
+        "capability_strong_min_months": 36,
+        "capability_strong_min_roles": 2,
+        "capability_working_max_years_since_use": 6,
+        "capability_working_min_months": 18,
+        "capability_working_long_history_max_years_since_use": 10,
+        "capability_working_long_history_min_months": 60,
+        "capability_single_role_old_max_years_since_use": 6,
+        "capability_drop_to_basic_after_years": 10,
+        "capability_max_items": 20,
+    },
+    "balanced": {
+        "capability_recent_years": 4,
+        "capability_strong_max_years_since_use": 4,
+        "capability_strong_min_months": 36,
+        "capability_strong_min_roles": 2,
+        "capability_working_max_years_since_use": 8,
+        "capability_working_min_months": 18,
+        "capability_working_long_history_max_years_since_use": 12,
+        "capability_working_long_history_min_months": 48,
+        "capability_single_role_old_max_years_since_use": 8,
+        "capability_drop_to_basic_after_years": 12,
+        "capability_max_items": 20,
+    },
+    "include_older_experience": {
+        "capability_recent_years": 5,
+        "capability_strong_max_years_since_use": 5,
+        "capability_strong_min_months": 30,
+        "capability_strong_min_roles": 2,
+        "capability_working_max_years_since_use": 10,
+        "capability_working_min_months": 12,
+        "capability_working_long_history_max_years_since_use": 15,
+        "capability_working_long_history_min_months": 36,
+        "capability_single_role_old_max_years_since_use": 10,
+        "capability_drop_to_basic_after_years": 15,
+        "capability_max_items": 24,
+    },
 }
 
 DEFAULT_SEARCH_SETTINGS = {
@@ -153,11 +207,128 @@ def ensure_profile_exists() -> None:
     save_profile(DEFAULT_PROFILE)
 
 
+def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        resolved = int(value)
+    except Exception:
+        resolved = default
+    return max(minimum, min(maximum, resolved))
+
+
+def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
+    source = settings if isinstance(settings, dict) else {}
+    raw_preset = str(source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]).strip().lower()
+    capability_strength_preset = raw_preset if raw_preset in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    merged = _deep_merge(copy.deepcopy(DEFAULT_ONBOARDING_SETTINGS), CAPABILITY_STRENGTH_PRESETS[capability_strength_preset])
+    merged = _deep_merge(
+        merged,
+        {
+            "extraction_lookback_years": source.get("extraction_lookback_years"),
+            "title_extraction_min_months": source.get("title_extraction_min_months"),
+            "max_target_patterns": source.get("max_target_patterns"),
+            "max_secondary_patterns": source.get("max_secondary_patterns"),
+            "capability_strength_preset": capability_strength_preset,
+        },
+    )
+    return {
+        "capability_strength_preset": capability_strength_preset,
+        "extraction_lookback_years": _coerce_int(
+            merged.get("extraction_lookback_years"),
+            DEFAULT_ONBOARDING_SETTINGS["extraction_lookback_years"],
+            1,
+            20,
+        ),
+        "title_extraction_min_months": _coerce_int(
+            merged.get("title_extraction_min_months"),
+            DEFAULT_ONBOARDING_SETTINGS["title_extraction_min_months"],
+            1,
+            24,
+        ),
+        "max_target_patterns": _coerce_int(
+            merged.get("max_target_patterns"),
+            DEFAULT_ONBOARDING_SETTINGS["max_target_patterns"],
+            1,
+            20,
+        ),
+        "max_secondary_patterns": _coerce_int(
+            merged.get("max_secondary_patterns"),
+            DEFAULT_ONBOARDING_SETTINGS["max_secondary_patterns"],
+            1,
+            20,
+        ),
+        "capability_recent_years": _coerce_int(
+            merged.get("capability_recent_years"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_recent_years"],
+            1,
+            15,
+        ),
+        "capability_strong_max_years_since_use": _coerce_int(
+            merged.get("capability_strong_max_years_since_use"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_strong_max_years_since_use"],
+            1,
+            20,
+        ),
+        "capability_strong_min_months": _coerce_int(
+            merged.get("capability_strong_min_months"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_strong_min_months"],
+            1,
+            240,
+        ),
+        "capability_strong_min_roles": _coerce_int(
+            merged.get("capability_strong_min_roles"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_strong_min_roles"],
+            1,
+            10,
+        ),
+        "capability_working_max_years_since_use": _coerce_int(
+            merged.get("capability_working_max_years_since_use"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_working_max_years_since_use"],
+            1,
+            25,
+        ),
+        "capability_working_min_months": _coerce_int(
+            merged.get("capability_working_min_months"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_working_min_months"],
+            1,
+            240,
+        ),
+        "capability_working_long_history_max_years_since_use": _coerce_int(
+            merged.get("capability_working_long_history_max_years_since_use"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_working_long_history_max_years_since_use"],
+            1,
+            30,
+        ),
+        "capability_working_long_history_min_months": _coerce_int(
+            merged.get("capability_working_long_history_min_months"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_working_long_history_min_months"],
+            1,
+            360,
+        ),
+        "capability_single_role_old_max_years_since_use": _coerce_int(
+            merged.get("capability_single_role_old_max_years_since_use"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_single_role_old_max_years_since_use"],
+            1,
+            25,
+        ),
+        "capability_drop_to_basic_after_years": _coerce_int(
+            merged.get("capability_drop_to_basic_after_years"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_drop_to_basic_after_years"],
+            1,
+            40,
+        ),
+        "capability_max_items": _coerce_int(
+            merged.get("capability_max_items"),
+            DEFAULT_ONBOARDING_SETTINGS["capability_max_items"],
+            1,
+            50,
+        ),
+    }
+
+
 def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     cleaned: list[dict[str, Any]] = []
     seen_names: set[str] = set()
-    valid_levels = {"strong", "working", "basic", "low", "none"}
-    valid_fits = {"core", "supporting", "contextual", "avoid"}
+    valid_levels = {"strong", "working", "basic", "low"}
     choose_capability_name = None
     derive_job_description_aliases = None
 
@@ -179,11 +350,10 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
             continue
 
         level = str(rule.get("level") or "").strip().lower()
-        fit = str(rule.get("fit") or "").strip().lower()
+        if level == "none":
+            continue
         if level not in valid_levels:
             level = "basic"
-        if fit not in valid_fits:
-            fit = "contextual"
 
         raw_aliases = rule.get("aliases")
         if isinstance(raw_aliases, str):
@@ -221,7 +391,6 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
         cleaned.append({
             "name": name,
             "level": level,
-            "fit": fit,
             "aliases": aliases,
         })
 
@@ -246,6 +415,9 @@ def load_profile() -> dict[str, Any]:
             )
             merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
                 merged.get("evidence_tier_weights", {})
+            )
+            merged["onboarding_settings"] = normalize_onboarding_settings(
+                merged.get("onboarding_settings", {})
             )
             merged.pop("strengths", None)
             merged["capability_profile_rules"] = normalize_capability_rules(
@@ -277,6 +449,9 @@ def load_profile() -> dict[str, Any]:
     fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
         fallback.get("evidence_tier_weights", {})
     )
+    fallback["onboarding_settings"] = normalize_onboarding_settings(
+        fallback.get("onboarding_settings", {})
+    )
     fallback.pop("strengths", None)
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
@@ -307,6 +482,9 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
         normalized.get("evidence_tier_weights", {})
+    )
+    normalized["onboarding_settings"] = normalize_onboarding_settings(
+        normalized.get("onboarding_settings", {})
     )
     normalized.pop("strengths", None)
     normalized["capability_profile_rules"] = normalize_capability_rules(
