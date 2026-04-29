@@ -1,4 +1,41 @@
+import json
+
 from job_hunter_agent import local_server
+
+
+def test_rejection_rule_category_knowledge_file_contains_enabled_entries():
+    payload = json.loads(local_server.REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+
+    assert payload["kind"] == "managed_knowledge"
+    assert any(entry.get("enabled") for entry in payload["entries"])
+    assert "other" in local_server._VALID_REJECTION_RULE_CATEGORIES
+    assert "not me" in local_server._REJECTION_RULE_JUNK_VALUES
+
+
+def test_validate_llm_suggestion_approvals_requires_token_for_cached_suggestion():
+    local_server._rejection_suggestions_cache.clear()
+    local_server._rejection_suggestions_cache["job-1"] = {
+        "suggestions": ["sap"],
+        "approval_tokens": local_server.SettingsHandler._issue_rejection_suggestion_approval_tokens("job-1", ["sap"]),
+    }
+
+    try:
+        local_server.SettingsHandler._validate_llm_suggestion_approvals("job-1", ["sap"], {})
+    except ValueError as exc:
+        assert "Missing explicit approval" in str(exc)
+    else:
+        raise AssertionError("Expected approval validation to fail without token")
+
+
+def test_validate_llm_suggestion_approvals_accepts_matching_token():
+    local_server._rejection_suggestions_cache.clear()
+    tokens = local_server.SettingsHandler._issue_rejection_suggestion_approval_tokens("job-1", ["sap"])
+    local_server._rejection_suggestions_cache["job-1"] = {
+        "suggestions": ["sap"],
+        "approval_tokens": tokens,
+    }
+
+    local_server.SettingsHandler._validate_llm_suggestion_approvals("job-1", ["sap"], tokens)
 
 
 def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(monkeypatch):

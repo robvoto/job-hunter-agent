@@ -4,7 +4,7 @@ import json
 import re
 from typing import Tuple
 
-from job_hunter_agent.capability_matrix import expand_capability_terms
+from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import load_profile
 
@@ -194,16 +194,16 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
     for rule in capability_rules:
         name = str(rule.get("name") or "").strip()
         level = _normalize_level(str(rule.get("level") or "basic"))
-        aliases = expand_capability_terms(rule)
-        if not name or not aliases:
+        canonical = canonical_capability_term(rule)
+        if not name or not canonical:
             continue
 
-        _, distinct_hits = _count_alias_hits(description_lower, aliases)
+        _, distinct_hits = _count_alias_hits(description_lower, [canonical])
         if level in {"strong", "working"}:
             positive_hits += distinct_hits
 
-        hard_requirement_match = any(_matches_hard_requirement(description_lower, alias) for alias in aliases)
-        soft_requirement_match = any(_matches_soft_requirement(description_lower, alias) for alias in aliases)
+        hard_requirement_match = _matches_hard_requirement(description_lower, canonical)
+        soft_requirement_match = _matches_soft_requirement(description_lower, canonical)
         reason_token = _normalize_reason_token(name)
 
         if level == "low" and (hard_requirement_match or soft_requirement_match or distinct_hits >= 3):
@@ -228,19 +228,13 @@ def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple
         if not name:
             continue
 
-        aliases = expand_capability_terms(rule)
-        deduped_aliases: list[str] = []
-        seen_aliases: set[str] = set()
-        for alias in aliases:
-            alias_lower = alias.lower()
-            if alias_lower in seen_aliases:
-                continue
-            seen_aliases.add(alias_lower)
-            deduped_aliases.append(alias)
+        canonical = canonical_capability_term(rule)
+        if not canonical:
+            continue
 
-        _, distinct_hits = _count_alias_hits(description_lower, deduped_aliases)
-        hard_requirement_match = any(_matches_hard_requirement(description_lower, alias) for alias in deduped_aliases)
-        soft_requirement_match = any(_matches_soft_requirement(description_lower, alias) for alias in deduped_aliases)
+        _, distinct_hits = _count_alias_hits(description_lower, [canonical])
+        hard_requirement_match = _matches_hard_requirement(description_lower, canonical)
+        soft_requirement_match = _matches_soft_requirement(description_lower, canonical)
 
         if distinct_hits > 0:
             mention_hits += 1
@@ -296,7 +290,7 @@ def _evaluate_description_confidence(details_text: str, description_lower: str, 
     )
     proof_hits, mention_hits = _count_capability_role_proof(description_lower, profile)
     has_capability_rules = any(
-        str(rule.get("name") or "").strip() and (rule.get("aliases") or rule.get("name"))
+        str(rule.get("name") or "").strip()
         for rule in profile.get("capability_profile_rules", [])
     )
     structurally_thin = text_length < 500 and section_score < 2 and bullet_score < 3

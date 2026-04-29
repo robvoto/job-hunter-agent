@@ -21,6 +21,7 @@ from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 
 ROOT_DIR = REPO_ROOT
 PROFILE_PATH = DATA_DIR / "profile.json"
+SCORING_RULES_PATH = DATA_DIR / "scoring_rules.json"
 MIN_DATE_RANGE_DAYS = 1
 MAX_DATE_RANGE_DAYS = 30
 MIN_PAGES_CAP = 1
@@ -46,6 +47,26 @@ DEFAULT_PREFERENCE_WEIGHTS = {
 }
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
 DEFAULT_LLM_PROFILE_BRIEF_MODE = "auto"
+
+
+def _load_default_scoring_rules() -> dict[str, Any]:
+    payload = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
+    if str(payload.get("kind") or "").strip() != "managed_knowledge":
+        raise ValueError("scoring_rules.json must be managed knowledge")
+    return {
+        "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
+        "llm_grade_points": dict(payload.get("llm_grade_points") or {}),
+        "convergence": dict(payload.get("convergence") or {}),
+        "freshness": dict(payload.get("freshness") or {}),
+        "work_mode": dict(payload.get("work_mode") or {}),
+        "salary": dict(payload.get("salary") or {}),
+        "location": dict(payload.get("location") or {}),
+        "contract": dict(payload.get("contract") or {}),
+        "government": dict(payload.get("government") or {}),
+    }
+
+
+DEFAULT_SCORING_RULES = _load_default_scoring_rules()
 
 DEFAULT_ONBOARDING_SETTINGS = {
     "extraction_lookback_years": 8,
@@ -137,6 +158,7 @@ DEFAULT_PROFILE = {
     "preference_weights": {
         **DEFAULT_PREFERENCE_WEIGHTS,
     },
+    "scoring_rules": copy.deepcopy(DEFAULT_SCORING_RULES),
     "match_levels": [dict(level) for level in DEFAULT_MATCH_LEVELS],
     "match_preferences": {
         "home_location": "",
@@ -149,6 +171,8 @@ DEFAULT_PROFILE = {
     },
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
+    "llm_fit_review_guidance": "",
+    "llm_capability_naming_guidance": "",
     "star_evidence_text": "",
     "cv_text": "",
     "evidence_tiers": {
@@ -332,14 +356,11 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
     cleaned: list[dict[str, Any]] = []
     seen_names: set[str] = set()
     valid_levels = {"strong", "working", "basic", "low"}
-    choose_capability_name = None
     derive_job_description_aliases = None
 
     try:
-        from job_hunter_agent.capability_matrix import choose_capability_name as _choose_capability_name
         from job_hunter_agent.capability_matrix import derive_job_description_aliases as _derive_job_description_aliases
 
-        choose_capability_name = _choose_capability_name
         derive_job_description_aliases = _derive_job_description_aliases
     except Exception:
         pass
@@ -368,8 +389,7 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
         else:
             alias_items = list(raw_aliases or [])
 
-        if choose_capability_name and derive_job_description_aliases:
-            name = choose_capability_name(name, alias_items)
+        if derive_job_description_aliases:
             alias_items = derive_job_description_aliases(name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=8)
 
         name_norm = re.sub(r"\s+", " ", name).strip().lower()
@@ -391,10 +411,15 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
             seen_aliases.add(alias_norm)
             aliases.append(cleaned_alias)
 
+        needs_review = bool(rule.get("needs_review"))
+        if aliases:
+            needs_review = True
+
         cleaned.append({
             "name": name,
             "level": level,
             "aliases": aliases,
+            "needs_review": needs_review,
         })
 
     return cleaned
@@ -409,9 +434,16 @@ def load_profile() -> dict[str, Any]:
             merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
             merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
             merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
+            merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
             merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
             merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
                 merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+            )
+            merged["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
+                merged.get("llm_fit_review_guidance", "")
+            )
+            merged["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
+                merged.get("llm_capability_naming_guidance", "")
             )
             merged["evidence_tiers"] = normalize_evidence_tiers(
                 merged.get("evidence_tiers", {}),
@@ -443,9 +475,16 @@ def load_profile() -> dict[str, Any]:
     fallback["search_settings"] = normalize_search_settings(fallback.get("search_settings", {}))
     fallback["salary_preferences"] = normalize_salary_preferences(fallback.get("salary_preferences", {}))
     fallback["preference_weights"] = normalize_preference_weights(fallback.get("preference_weights", {}))
+    fallback["scoring_rules"] = normalize_scoring_rules(fallback.get("scoring_rules", {}))
     fallback["match_levels"] = normalize_match_levels(fallback.get("match_levels", []))
     fallback["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         fallback.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+    )
+    fallback["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
+        fallback.get("llm_fit_review_guidance", "")
+    )
+    fallback["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
+        fallback.get("llm_capability_naming_guidance", "")
     )
     fallback["evidence_tiers"] = normalize_evidence_tiers(
         fallback.get("evidence_tiers", {}),
@@ -478,9 +517,16 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["search_settings"] = normalize_search_settings(normalized.get("search_settings", {}))
     normalized["salary_preferences"] = normalize_salary_preferences(normalized.get("salary_preferences", {}))
     normalized["preference_weights"] = normalize_preference_weights(normalized.get("preference_weights", {}))
+    normalized["scoring_rules"] = normalize_scoring_rules(normalized.get("scoring_rules", {}))
     normalized["match_levels"] = normalize_match_levels(normalized.get("match_levels", []))
     normalized["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         normalized.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+    )
+    normalized["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
+        normalized.get("llm_fit_review_guidance", "")
+    )
+    normalized["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
+        normalized.get("llm_capability_naming_guidance", "")
     )
     normalized["evidence_tiers"] = normalize_evidence_tiers(
         normalized.get("evidence_tiers", {}),
@@ -584,6 +630,38 @@ def normalize_preference_weights(payload: dict[str, Any] | None) -> dict[str, fl
     return normalized
 
 
+def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
+    source = payload if isinstance(payload, dict) else {}
+    normalized = copy.deepcopy(DEFAULT_SCORING_RULES)
+
+    def _merge(default_value: Any, incoming_value: Any) -> Any:
+        if isinstance(default_value, dict):
+            incoming = incoming_value if isinstance(incoming_value, dict) else {}
+            result: dict[str, Any] = {}
+            for key, child_default in default_value.items():
+                result[key] = _merge(child_default, incoming.get(key))
+            return result
+        if isinstance(default_value, list):
+            if not isinstance(incoming_value, list):
+                return list(default_value)
+            return [str(item).strip().upper() for item in incoming_value if str(item).strip()]
+        if isinstance(default_value, int) and not isinstance(default_value, bool):
+            try:
+                return int(incoming_value)
+            except Exception:
+                return int(default_value)
+        if isinstance(default_value, float):
+            try:
+                return float(incoming_value)
+            except Exception:
+                return float(default_value)
+        return copy.deepcopy(default_value if incoming_value in (None, "") else incoming_value)
+
+    for key, default_value in DEFAULT_SCORING_RULES.items():
+        normalized[key] = _merge(default_value, source.get(key))
+    return normalized
+
+
 def normalize_profile_match_levels(payload: list[dict[str, Any]] | None) -> list[dict[str, object]]:
     normalized = normalize_match_levels(payload)
     return normalized or [dict(level) for level in DEFAULT_MATCH_LEVELS]
@@ -594,6 +672,14 @@ def normalize_llm_profile_brief_mode(value: Any) -> str:
     if normalized == "manual":
         return "manual"
     return DEFAULT_LLM_PROFILE_BRIEF_MODE
+
+
+def normalize_llm_fit_review_guidance(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def normalize_llm_capability_naming_guidance(value: Any) -> str:
+    return str(value or "").strip()
 
 
 def classify_evidence_section_label(label: str) -> str:
@@ -716,6 +802,10 @@ def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:
 
 def get_preference_weights(profile: dict[str, Any]) -> dict[str, float]:
     return normalize_preference_weights(profile.get("preference_weights", {}))
+
+
+def get_scoring_rules(profile: dict[str, Any]) -> dict[str, Any]:
+    return normalize_scoring_rules(profile.get("scoring_rules", {}))
 
 
 def get_match_levels(profile: dict[str, Any]) -> list[dict[str, object]]:

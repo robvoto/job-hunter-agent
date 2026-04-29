@@ -4,7 +4,7 @@ Local-first job discovery and fit-evaluation system.
 
 The product goal is simple: a user gives the app strong source material about their experience, the app builds a working profile, reviews jobs against that profile, and keeps a meaningful shortlist instead of forcing the user to search manually every day.
 
-Current implemented job source:
+Current implemented job sources:
 
 - SEEK
 - LinkedIn
@@ -55,35 +55,50 @@ Set up the environment:
 ```powershell
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
+python -m pip install -r requirements-dev.txt
 python -m playwright install chromium
 ```
 
-Run the job-source connector:
-
-Canonical refresh command:
+Run a fresh job collection and rebuild the dashboard:
 
 ```powershell
 python -m job_hunter_agent.source_connector
 ```
 
-Use this by default when you want fresh job results and a rebuilt dashboard.
+Useful flags:
+
+- `--max-pages 1` for a faster scrape while testing changes
+- `--no-llm` to stay deterministic and avoid live LLM review
+- `--cheap-llm` to force the cheaper review model
+- `--scrape-allow-low` to widen the scrape/dashboard pool
+- `--show-scores` to expose score details in the dashboard
 
 Search design note:
 
 - keep search keywords broad enough to capture relevant roles
 - use title rules, metadata gates, content filters, capability logic, and optional AI review to tighten fit afterward
 
-Rebuild the dashboard from saved local state:
+Rebuild the dashboard from saved local state only:
 
 ```powershell
 python -m job_hunter_agent.source_connector --rebuild-dashboard
 ```
 
+Useful flags:
+
+- `--expand-dashboard` to show more borderline saved jobs
+- `--show-scores` to expose score details while tuning
+
 Run the local web UI:
 
 ```powershell
 python -m job_hunter_agent.local_server
+```
+
+Optional local web UI test mode:
+
+```powershell
+python -m job_hunter_agent.local_server --test-mode
 ```
 
 Run the daily local agent once:
@@ -98,6 +113,11 @@ Most users should think of it like this:
 
 - `python -m job_hunter_agent.source_connector` = canonical refresh command
 - `python -m job_hunter_agent.agent_runner` = optional automation wrapper around the refresh flow
+
+Useful daily-agent flags:
+
+- `--skip-collection` to rebuild/send from current local state only
+- `--no-notify` to build the digest without email or Telegram delivery
 
 Run the daily local agent in loop mode:
 

@@ -30,6 +30,13 @@ What it does:
   Scrapes fresh jobs using your profile settings, reviews them, saves the run,
   and rebuilds the dashboard.
 
+Useful flags:
+  python -m job_hunter_agent.source_connector --max-pages 1
+  python -m job_hunter_agent.source_connector --no-llm
+  python -m job_hunter_agent.source_connector --cheap-llm
+  python -m job_hunter_agent.source_connector --scrape-allow-low
+  python -m job_hunter_agent.source_connector --show-scores
+
 
 Automated agent run:
   python -m job_hunter_agent.agent_runner
@@ -38,6 +45,10 @@ What it does:
   Runs the full agent pipeline: refresh jobs, create a digest, and send
   notifications.
 
+Useful flags:
+  python -m job_hunter_agent.agent_runner --skip-collection
+  python -m job_hunter_agent.agent_runner --no-notify
+
 
 Local web server:
   python -m job_hunter_agent.local_server
@@ -45,7 +56,11 @@ Local web server:
 What it does:
   Starts the browser UI.
 
+Test mode:
+  python -m job_hunter_agent.local_server --test-mode
+
 Open:
+  Onboarding: http://127.0.0.1:8765/start
   Settings:  http://127.0.0.1:8765/settings
   Dashboard: http://127.0.0.1:8765/dashboard
 
@@ -55,6 +70,33 @@ SOURCE CONNECTOR FLAGS
 
 Use these with:
   python -m job_hunter_agent.source_connector
+
+
+--max-pages
+-----------
+
+What it does:
+  Overrides the configured page cap for the current scrape only.
+
+Use when:
+  You want a smaller, faster run while testing.
+
+Example:
+  python -m job_hunter_agent.source_connector --max-pages 1
+
+
+--no-llm
+--------
+
+What it does:
+  Disables live LLM review for the current scrape and keeps the run
+  deterministic.
+
+Use when:
+  You want to avoid API use or isolate deterministic filtering behaviour.
+
+Example:
+  python -m job_hunter_agent.source_connector --no-llm
 
 
 --rebuild-dashboard

@@ -74,7 +74,7 @@
     function capabilityRulesToText(rules) {
       return (rules || []).filter(rule => (rule.name || '').trim() && (rule.level || '').trim()).map(rule => {
         const aliases = (rule.aliases || []).join(', ');
-        return `${rule.name || ''} || ${rule.level || ''} || ${aliases}`;
+        return `${rule.name || ''} || ${rule.level || ''} || ${rule.fit || 'supporting'} || ${aliases}`;
       }).join('\n');
     }
 
@@ -91,10 +91,12 @@
     function textToCapabilityRules(value) {
       return toLines(value).map(line => {
         const parts = line.split('||');
+        const hasFit = parts.length >= 4;
         return {
           name: (parts[0] || '').trim(),
           level: (parts[1] || '').trim().toLowerCase(),
-          aliases: (parts[2] || '').split(',').map(item => item.trim()).filter(Boolean),
+          fit: hasFit ? (parts[2] || 'supporting').trim().toLowerCase() : 'supporting',
+          aliases: (hasFit ? (parts[3] || '') : (parts[2] || '')).split(',').map(item => item.trim()).filter(Boolean),
         };
       }).filter(rule => rule.name && rule.level);
     }
@@ -110,6 +112,11 @@
       const rawLevel = String(rule?.level || 'basic').trim().toLowerCase();
       const validLevels = new Set(['strong', 'working', 'basic', 'low']);
       const level = validLevels.has(rawLevel) ? rawLevel : 'basic';
+
+      const rawFit = String(rule?.fit || 'supporting').trim().toLowerCase();
+      const validFits = new Set(['core', 'supporting']);
+      const fit = validFits.has(rawFit) ? rawFit : 'supporting';
+
       const aliases = [];
       const seen = new Set();
       for (const value of Array.isArray(rule?.aliases) ? rule.aliases : []) {
@@ -118,7 +125,7 @@
         seen.add(cleaned);
         aliases.push(cleaned);
       }
-      return { name, level, aliases };
+      return { name, level, fit, aliases, needs_review: Boolean(rule?.needs_review) || aliases.length > 0 };
     }
 
     function capabilityStrengthMeta(level) {
@@ -164,48 +171,40 @@
         });
       const rowsHtml = rows.length
         ? rows.map(({ rule, index }) => {
-            const aliasText = rule.aliases.length
-              ? `Also known as: ${rule.aliases.join(', ')}`
-              : 'No aliases yet.';
-            const aliasEditorOpen = expandedCapabilityRows.has(index) || !!filterTerm;
-            const aliasEditorHtml = aliasEditorOpen ? `
-              <div class="cap-alias-editor">
-                <div class="cap-alias-chips">
-                  ${rule.aliases.map((alias, aliasIndex) => `
-                    <span class="cap-alias-chip">
-                      ${escapeHtml(alias)}
-                      <button type="button" data-remove-capability-alias="${index}" data-alias-index="${aliasIndex}" title="Remove">&#215;</button>
-                    </span>
-                  `).join('')}
-                </div>
-                <div class="cap-alias-form">
-                  <input type="text" data-capability-alias-input="${index}" placeholder="Add an alias">
-                  <button class="secondary" type="button" data-add-capability-alias="${index}">Add</button>
-                </div>
-              </div>
-            ` : '';
             return `
-              <div class="cap-row" data-capability-index="${index}">
-                <div class="cap-identity">
-                  <input class="cap-name-input" type="text" data-capability-field="name"
-                         aria-label="Capability name" value="${escapeHtml(rule.name)}"
-                         placeholder="e.g. Agile delivery">
-                  <span class="cap-alias-text" data-toggle-aliases="${index}">${escapeHtml(aliasText)}</span>
-                  ${aliasEditorHtml}
+              <div class="cap-row" data-capability-index="${index}" style="display: flex; align-items: center; border-bottom: 1px solid var(--line); padding: 12px 0;">
+                <div class="cap-identity" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.2rem; flex-shrink: 0; opacity: 0.6;">🏷️</span>
+                    <input class="cap-name-input" type="text" data-capability-field="name"
+                           aria-label="Capability name" value="${escapeHtml(rule.name)}"
+                           style="font-size: 18px; font-weight: 700; border: none; background: transparent; padding: 0; width: 100%; outline: none;"
+                           placeholder="e.g. Agile delivery">
+                  </div>
                 </div>
-                <div class="cap-strength">
-                  <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}"
-                          data-capability-field="level" aria-label="Capability strength">
-                    <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert — current, repeated, clearly strongest</option>
-                    <option value="working"${rule.level === 'working' ? ' selected' : ''}>Advanced — independent use, solid evidence</option>
-                    <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Intermediate — usable, not your primary</option>
-                    <option value="low"${rule.level === 'low' ? ' selected' : ''}>Beginner — older or limited</option>
-                  </select>
+                <div class="cap-controls" style="display: flex; align-items: center; gap: 12px; margin-left: 16px; margin-right: 16px; flex-shrink: 0;">
+                  <div class="cap-strength">
+                    <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}"
+                            data-capability-field="level" aria-label="Capability strength" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: white;">
+                      <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
+                      <option value="working"${rule.level === 'working' ? ' selected' : ''}>Advanced</option>
+                      <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Intermediate</option>
+                      <option value="low"${rule.level === 'low' ? ' selected' : ''}>Beginner</option>
+                    </select>
+                  </div>
+                  <div class="cap-relevance">
+                    <select class="cap-fit-select" data-capability-field="fit" aria-label="Capability relevance" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: white;">
+                      <option value="core"${rule.fit === 'core' ? ' selected' : ''}>Core Fit</option>
+                      <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>Supporting</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="cap-action">
                   <button class="cap-remove-btn" type="button" data-remove-capability="${index}"
                           aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
-                          title="Remove capability">🗑</button>
+                          style="background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; transition: opacity 0.2s;"
+                          onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5"
+                          title="Remove capability">🗑️</button>
                 </div>
               </div>
             `;
@@ -219,9 +218,9 @@
             <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
           </div>
           <div class="cap-table">
-            <div class="cap-table-head">
-              <span>Capability</span>
-              <span>Strength</span>
+            <div class="cap-table-head" style="display: flex; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+              <span style="flex: 1;"></span>
+              <span style="width: 272px; text-align: center; margin-right: 40px;">Strength & Relevance</span>
               <span></span>
             </div>
             ${rowsHtml}
@@ -1136,14 +1135,6 @@
     });
 
     document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
-      const toggleAliases = event.target.closest('[data-toggle-aliases]');
-      if (toggleAliases) {
-        const index = Number(toggleAliases.dataset.toggleAliases);
-        if (expandedCapabilityRows.has(index)) expandedCapabilityRows.delete(index);
-        else expandedCapabilityRows.add(index);
-        renderCapabilityRuleEditor();
-        return;
-      }
       const removeCard = event.target.closest('[data-remove-capability]');
       if (removeCard) {
         const index = Number(removeCard.dataset.removeCapability);
@@ -1157,42 +1148,6 @@
         markDirty();
         return;
       }
-      const removeAlias = event.target.closest('[data-remove-capability-alias]');
-      if (removeAlias) {
-        const ruleIndex = Number(removeAlias.dataset.removeCapabilityAlias);
-        const aliasIndex = Number(removeAlias.dataset.aliasIndex);
-        const nextAliases = [...(capabilityRuleState[ruleIndex]?.aliases || [])];
-        nextAliases.splice(aliasIndex, 1);
-        capabilityRuleState[ruleIndex] = { ...capabilityRuleState[ruleIndex], aliases: nextAliases };
-        setCapabilityRuleState(capabilityRuleState);
-        markDirty();
-        return;
-      }
-      const addAlias = event.target.closest('[data-add-capability-alias]');
-      if (!addAlias) return;
-      const ruleIndex = Number(addAlias.dataset.addCapabilityAlias);
-      const input = document.querySelector(`[data-capability-alias-input="${ruleIndex}"]`);
-      const cleaned = normalizeCapabilityAliasValue(input?.value || '');
-      if (!cleaned) return;
-      const aliases = [...(capabilityRuleState[ruleIndex]?.aliases || [])];
-      if (!aliases.includes(cleaned)) aliases.push(cleaned);
-      capabilityRuleState[ruleIndex] = { ...capabilityRuleState[ruleIndex], aliases };
-      setCapabilityRuleState(capabilityRuleState);
-      markDirty();
-    });
-
-    document.getElementById('capability_matrix_editor')?.addEventListener('keydown', (event) => {
-      const input = event.target.closest('[data-capability-alias-input]');
-      if (!input || event.key !== 'Enter') return;
-      event.preventDefault();
-      const ruleIndex = Number(input.dataset.capabilityAliasInput);
-      const cleaned = normalizeCapabilityAliasValue(input.value || '');
-      if (!cleaned) return;
-      const aliases = [...(capabilityRuleState[ruleIndex]?.aliases || [])];
-      if (!aliases.includes(cleaned)) aliases.push(cleaned);
-      capabilityRuleState[ruleIndex] = { ...capabilityRuleState[ruleIndex], aliases };
-      setCapabilityRuleState(capabilityRuleState);
-      markDirty();
     });
 
     // -- Navigation --------------------------------------------

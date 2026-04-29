@@ -21,6 +21,21 @@ const locationSelected = document.getElementById('location_selected');
 const createProfileButton = document.getElementById('create_profile');
 const capabilityUi = window.JobHunterCapabilityUi || {};
 
+function renderLogo() {
+  if (!heroSectionEl) return;
+
+  const img = document.createElement('img');
+  img.src = '/static/job_hunter_img.png';
+  img.alt = 'Job Hunter Logo';
+  img.style.height = '64px';
+  img.style.position = 'absolute';
+  img.style.top = '40px';
+  img.style.right = '40px';
+
+  heroSectionEl.style.position = 'relative';
+  heroSectionEl.appendChild(img);
+}
+
 document.querySelectorAll('[data-test-only]').forEach((element) => {
   element.hidden = !isTestMode;
 });
@@ -158,16 +173,30 @@ function startWorkingStatus(messages, stepMs = 1400) {
 }
 
 function updatePrimaryCvStatus(file) {
-  if (!primaryCvStatusEl) return;
+  const dropZoneContent = document.getElementById('cv_drop_zone_content');
+  if (!primaryCvStatusEl || !dropZoneContent) return;
+
   if (!file) {
     primaryCvStatusEl.textContent = 'No file selected yet.';
     primaryCvStatusEl.classList.remove('is-selected');
     primaryCvDropZone?.classList.remove('has-file');
+    dropZoneContent.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      <p>Drag & drop your CV here, or click to browse</p>
+      <p class="drop-zone-hint">Supported formats: .docx, .pdf, .md, .txt</p>
+    `;
     return;
   }
+
   primaryCvStatusEl.textContent = `Selected file: ${file.name}`;
   primaryCvStatusEl.classList.add('is-selected');
   primaryCvDropZone?.classList.add('has-file');
+
+  dropZoneContent.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+    <p class="file-loaded-label">File Loaded: ${file.name}</p>
+    <p class="drop-zone-hint">Click or drag another file to replace</p>
+  `;
 }
 
 function updateCreateProfileAvailability() {
@@ -204,7 +233,9 @@ function setStep(stepNumber) {
   }
 
   if (formTitleEl) formTitleEl.textContent = `Step 1. ${stepMeta[1].title()}`;
-  progressFillEl.style.width = `${(stepNumber / STEP_COUNT) * 100}%`;
+  const percent = Math.round((stepNumber / STEP_COUNT) * 100);
+  progressFillEl.style.width = `${percent}%`;
+  progressFillEl.textContent = `${percent}% Complete`;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -321,6 +352,14 @@ function searchPreferencesPayload() {
   };
 }
 
+function normalizeOptionalNonNegativeIntegerInput(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  const numeric = Number(text);
+  if (!Number.isFinite(numeric)) return text;
+  return numeric <= 0 ? '' : String(Math.trunc(numeric));
+}
+
 function validateOnboardingSettings(settings) {
   const lookback = Number(settings.extraction_lookback_years);
   const minMonths = Number(settings.title_extraction_min_months);
@@ -364,13 +403,13 @@ function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.minimum_salary_yearly) {
     const yearly = Number(searchPrefs.minimum_salary_yearly);
     if (!Number.isFinite(yearly) || yearly < 0) {
-      throw new Error('Please enter a valid minimum permanent salary.');
+      throw new Error('Please enter a valid minimum permanent salary excluding super.');
     }
   }
   if (searchPrefs.minimum_daily_rate) {
     const daily = Number(searchPrefs.minimum_daily_rate);
     if (!Number.isFinite(daily) || daily < 0) {
-      throw new Error('Please enter a valid minimum contract daily rate.');
+      throw new Error('Please enter a valid minimum contract daily rate excluding super.');
     }
   }
 }
@@ -380,8 +419,8 @@ function validatePrimaryFile(file) {
     throw new Error('Choose your detailed CV first.');
   }
   const name = String(file.name || '').toLowerCase();
-  if (!name.endsWith('.docx') && !name.endsWith('.md') && !name.endsWith('.txt')) {
-    throw new Error('Please upload a .docx, .md, or .txt CV file.');
+  if (!name.endsWith('.docx') && !name.endsWith('.pdf') && !name.endsWith('.md') && !name.endsWith('.txt')) {
+    throw new Error('Please upload a .docx, .pdf, .md, or .txt CV file.');
   }
 }
 
@@ -635,8 +674,8 @@ function hydrateSearchBasics(profile) {
   const matchPreferences = profile?.match_preferences || {};
   const salaryPreferences = profile?.salary_preferences || {};
   document.getElementById('review_search_keywords').value = String(searchSettings.keywords || '').trim();
-  document.getElementById('review_minimum_salary_yearly').value = String(salaryPreferences.minimum_salary_yearly ?? '').trim();
-  document.getElementById('review_minimum_daily_rate').value = String(salaryPreferences.minimum_daily_rate ?? '').trim();
+  document.getElementById('review_minimum_salary_yearly').value = normalizeOptionalNonNegativeIntegerInput(salaryPreferences.minimum_salary_yearly);
+  document.getElementById('review_minimum_daily_rate').value = normalizeOptionalNonNegativeIntegerInput(salaryPreferences.minimum_daily_rate);
   setSelectedLocations(searchSettings.locations || []);
   const engagementType = String(matchPreferences.engagement_type || 'both').trim().toLowerCase();
   const engagementInput = document.querySelector(`input[name="engagement_pref"][value="${engagementType}"]`)
@@ -978,6 +1017,7 @@ locationSelected.addEventListener('click', (event) => {
   removeLocation(button.getAttribute('data-remove-location'));
 });
 
+renderLogo();
 renderLocationSuggestions();
 loadProfileDefaults().catch(() => {});
 setStep(1);

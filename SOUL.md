@@ -259,20 +259,19 @@ The fit score is a 0–100 integer built as a weighted sum of signals. Component
 
 | Component | Range | Weight category |
 |-----------|-------|-----------------|
-| Title signal (direct match / secondary) | 0–14 | `fit` |
-| LLM description grade | −10–20 | `fit` |
-| Content filter pass | 0–8 | `fit` |
-| Full description confidence penalty | 0 or −10 | `fit` |
-| Capability evidence score | 0–18 | `fit` |
-| Calibrated fit alignment bonus | 0, 4, or 6 | `fit` |
+| Title signal (direct match / secondary) | 0–15 | `fit` |
+| LLM description grade | −8–25 | `fit` |
+| Content filter pass | 0–3 | `fit` |
+| Full description confidence penalty | 0 or −8 | `fit` |
+| Capability evidence score | 0–20 | `fit` |
+| Convergence bonus | 0, 3, or 5 | `fit` |
 | Competitive signal adjustments | variable | `fit` |
-| Clean fit bonus | 0 or 2 | `fit` |
-| Freshness | 0–12 | `freshness` |
-| Location preference | −6–4 | `location` |
-| Contract preference | −4–7 | `contract` |
+| Freshness | 0–10 | `freshness` |
+| Location preference | −5–8 | `location` |
+| Contract preference | −5–10 | `contract` |
 | Government preference | 0–4 | `government` |
-| Work mode | −4–2 | `work_mode` |
-| Salary signal | −5–3 | `salary` |
+| Work mode | −2–5 | `work_mode` |
+| Salary signal | −5–7 | `salary` |
 | Already viewed penalty | −3 | unweighted |
 
 Preference weights (default 1.0, max 2.0) multiply all points in their category. They are set from the settings UI.

@@ -128,3 +128,65 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
 
     assert "process mapping: strong, core (process design)" in context
     assert "stakeholder engagement: working" in context
+
+
+def test_build_system_prompt_includes_user_fit_review_guidance(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "llm_profile_brief": "",
+            "llm_fit_review_guidance": "Be open to adjacent delivery roles when the responsibilities are close.",
+            "llm_capability_naming_guidance": "",
+            "star_evidence_text": "",
+            "capability_profile_rules": [],
+            "salary_preferences": {},
+            "match_preferences": {},
+        },
+    )
+    monkeypatch.setattr(llm_gate, "get_evidence_tiers", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_evidence_tier_weights", lambda profile: {})
+
+    prompt = llm_gate.build_system_prompt()
+
+    assert "User fit review guidance:" in prompt
+    assert "Be open to adjacent delivery roles when the responsibilities are close." in prompt
+
+
+def test_build_system_prompt_includes_managed_default_fit_review_guidance(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "llm_profile_brief": "",
+            "llm_fit_review_guidance": "",
+            "llm_capability_naming_guidance": "",
+            "star_evidence_text": "",
+            "capability_profile_rules": [],
+            "salary_preferences": {},
+            "match_preferences": {},
+        },
+    )
+    monkeypatch.setattr(llm_gate, "get_evidence_tiers", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_evidence_tier_weights", lambda profile: {})
+
+    prompt = llm_gate.build_system_prompt()
+
+    assert "Default fit review guidance:" in prompt
+    assert "Grade the full description fit, not just keyword overlap." in prompt
+
+
+def test_build_capability_naming_guidance_includes_user_guidance(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "llm_capability_naming_guidance": "Prefer labels close to business analysis and delivery work.",
+        },
+    )
+
+    prompt = llm_gate.build_capability_naming_guidance()
+
+    assert "Default capability naming guidance:" in prompt
+    assert "User capability naming guidance:" in prompt
+    assert "Prefer labels close to business analysis and delivery work." in prompt

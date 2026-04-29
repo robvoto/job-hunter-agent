@@ -1,0 +1,16 @@
+{
+  "kind": "managed_knowledge",
+  "name": "llm_fit_review_defaults",
+  "version": 1,
+  "updated_at": "2026-04-29",
+  "description": "Managed default guidance for LLM fit review behaviour.",
+  "lines": [
+    "Judge fit primarily from the job description and the candidate profile evidence below, not from title alone.",
+    "Be honest about gaps. Conditional-fit job titles can still fit when responsibilities match the candidate background.",
+    "Recent directly relevant experience matters more than older exposure from many years ago.",
+    "Treat primary current evidence as strongest proof. Treat older evidence as weaker, and background-only context such as certifications, broad industry mentions, or optional supporting history as weakest.",
+    "Use capability levels and aliases from the candidate profile context as supporting evidence when responsibilities align.",
+    "Treat desirable or nice-to-have gaps as softer concerns than essential or mandatory gaps.",
+    "Grade the full description fit, not just keyword overlap."
+  ]
+}

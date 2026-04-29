@@ -172,6 +172,32 @@
                 </section>
 
                 <section class="profile-group">
+                  <details class="help-drawer">
+                    <summary>AI fit review guidance</summary>
+                    <p>Optional. Add your own guidance for how AI should judge fit. This affects AI review behaviour, not deterministic rules.</p>
+                    <div class="field-grid" style="padding: 0 14px 14px;">
+                      <div class="field-block field-span-2">
+                        <label for="llm_fit_review_guidance">AI fit review guidance</label>
+                        <textarea id="llm_fit_review_guidance" placeholder="Example: Be more open to adjacent roles if responsibilities are close to business analysis and delivery leadership."></textarea>
+                      </div>
+                    </div>
+                  </details>
+                </section>
+
+                <section class="profile-group">
+                  <details class="help-drawer">
+                    <summary>AI capability naming guidance</summary>
+                    <p>Optional. Add your own guidance for how AI should label capability clusters during CV learning.</p>
+                    <div class="field-grid" style="padding: 0 14px 14px;">
+                      <div class="field-block field-span-2">
+                        <label for="llm_capability_naming_guidance">AI capability naming guidance</label>
+                        <textarea id="llm_capability_naming_guidance" placeholder="Example: Prefer capability labels that stay close to business analysis, stakeholder, delivery, and process work."></textarea>
+                      </div>
+                    </div>
+                  </details>
+                </section>
+
+                <section class="profile-group">
                   <div class="field-grid">
                     <div class="field-block">
                       <label for="fit_weight">Overall fit</label>
@@ -268,7 +294,7 @@
             <div id="capability_matrix_editor" class="capability-editor"></div>
             <div class="capability-toolbar">
               <div class="capability-toolbar-main">
-                <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities or aliases">
+                <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities">
                 <span class="capability-toolbar-copy">Aliases should use common job-ad wording, not CV sentence fragments.</span>
               </div>
               <button class="secondary" id="add_capability_rule" type="button">Add capability</button>

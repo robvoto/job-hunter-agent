@@ -1,0 +1,69 @@
+{
+  "kind": "managed_knowledge",
+  "name": "scoring_rules",
+  "version": 1,
+  "updated_at": "2026-04-29",
+  "description": "Managed scoring rules used for fit scoring, freshness, salary adjustments, and preference bonuses.",
+  "fit_breakdown": {
+    "hard_block_penalty": -100,
+    "title_direct": 15,
+    "title_secondary": 4,
+    "content_ok": 3,
+    "description_capture_incomplete": -8,
+    "viewed_by_user": -3
+  },
+  "llm_grade_points": {
+    "EXCELLENT": 25,
+    "STRONG": 20,
+    "SOLID": 14,
+    "WEAK": 6,
+    "POOR": 0,
+    "MISMATCH": -8
+  },
+  "convergence": {
+    "eligible_grades": ["EXCELLENT", "STRONG"],
+    "min_positive_matches": 2,
+    "bonus_no_soft_risks": 5,
+    "bonus_with_soft_risks": 3
+  },
+  "freshness": {
+    "last_hour": 10,
+    "last_day": 8,
+    "last_3_days": 5,
+    "last_week": 2,
+    "last_15_days": 1
+  },
+  "work_mode": {
+    "hybrid": 3,
+    "remote": 5,
+    "on_site": -2
+  },
+  "salary": {
+    "meeting_target": 7,
+    "below_target_near_min_ratio": 0.8,
+    "below_target_near_adjustment": -1,
+    "below_target_mid_min_ratio": 0.6,
+    "below_target_mid_adjustment": -3,
+    "below_target_far_adjustment": -5
+  },
+  "location": {
+    "primary_match": 8,
+    "secondary_remote": 4,
+    "secondary_limited_onsite": 0,
+    "secondary_regular_onsite": -3,
+    "secondary_local_onsite": -5,
+    "secondary_match": -1
+  },
+  "contract": {
+    "permanent_match": 10,
+    "permanent_when_contract_preferred": -5,
+    "contract_when_permanent_preferred": -5,
+    "long_with_extension": 9,
+    "long_contract": 8,
+    "medium_contract": 5,
+    "short_contract": -4
+  },
+  "government": {
+    "match_bonus": 4
+  }
+}

@@ -42,14 +42,58 @@ WORKSPACE_HTML_PATH = TEMPLATES_DIR / "workspace.html"
 SETTINGS_HTML_PATH = TEMPLATES_DIR / "settings.html"
 ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
 STATIC_DIR = TEMPLATES_DIR / "static"
+REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH = DATA_DIR / "rejection_rule_categories.json"
 _STATIC_MIME_OVERRIDES = {
     ".css": "text/css",
     ".js": "text/javascript",
+    ".png": "image/png",
 }
 TEST_MODE = "--test-mode" in set(sys.argv[1:])
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
+
+
+def _load_rejection_rule_categories() -> frozenset[str]:
+    payload = json.loads(REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("rejection_rule_categories.json must contain an entries list")
+
+    categories: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("enabled", True) is False:
+            continue
+        value = str(entry.get("value") or "").strip()
+        if value:
+            categories.append(value)
+    if not categories:
+        raise ValueError("rejection_rule_categories.json must define at least one enabled category")
+    return frozenset(categories)
+
+
+_VALID_REJECTION_RULE_CATEGORIES = _load_rejection_rule_categories()
+
+
+def _load_rejection_rule_junk_values() -> frozenset[str]:
+    payload = json.loads(REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+    entries = payload.get("junk_values")
+    if not isinstance(entries, list):
+        raise ValueError("rejection_rule_categories.json must contain a junk_values list")
+
+    junk_values = [
+        str(value).strip().lower()
+        for value in entries
+        if str(value).strip()
+    ]
+    if not junk_values:
+        raise ValueError("rejection_rule_categories.json must define at least one junk value")
+    return frozenset(junk_values)
+
+
+_REJECTION_RULE_JUNK_VALUES = _load_rejection_rule_junk_values()
 
 
 def _set_run_in_progress(value: bool) -> None:
@@ -70,6 +114,10 @@ def _try_mark_run_started() -> bool:
             return False
         _run_in_progress = True
         return True
+
+
+def _normalize_suggestion_phrase(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
 def _render_template(path: Path) -> str:
@@ -309,6 +357,10 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
         if "star_evidence_text" in normalized:
             normalized["star_evidence_text"] = str(normalized.get("star_evidence_text") or "").strip()
+        if "llm_fit_review_guidance" in normalized:
+            normalized["llm_fit_review_guidance"] = str(normalized.get("llm_fit_review_guidance") or "").strip()
+        if "llm_capability_naming_guidance" in normalized:
+            normalized["llm_capability_naming_guidance"] = str(normalized.get("llm_capability_naming_guidance") or "").strip()
         if "cv_text" in normalized:
           new_cv = str(normalized.get("cv_text") or "").strip()
           current_cv = str(current.get("cv_text") or "").strip()
@@ -690,6 +742,50 @@ class SettingsHandler(BaseHTTPRequestHandler):
             json.dumps(rules, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _issue_rejection_suggestion_approval_tokens(job_id: str, suggestions: list[str]) -> dict[str, str]:
+        normalized_job_id = str(job_id or "").strip()
+        tokens: dict[str, str] = {}
+        for suggestion in suggestions:
+            phrase = _normalize_suggestion_phrase(suggestion)
+            if not phrase:
+                continue
+            token = hashlib.sha1(f"{normalized_job_id}|{phrase}".encode("utf-8")).hexdigest()[:16]
+            tokens[phrase] = token
+        return tokens
+
+    @staticmethod
+    def _validate_llm_suggestion_approvals(
+        job_id: str,
+        blockers: list[str],
+        approved_suggestion_tokens: dict[str, str] | None = None,
+    ) -> None:
+        normalized_job_id = str(job_id or "").strip()
+        cached = _rejection_suggestions_cache.get(normalized_job_id)
+        if not isinstance(cached, dict):
+            return
+
+        suggested_terms = {
+            _normalize_suggestion_phrase(item)
+            for item in (cached.get("suggestions") or [])
+            if _normalize_suggestion_phrase(item)
+        }
+        if not suggested_terms:
+            return
+
+        provided = approved_suggestion_tokens if isinstance(approved_suggestion_tokens, dict) else {}
+        expected_tokens = SettingsHandler._issue_rejection_suggestion_approval_tokens(
+            normalized_job_id,
+            list(suggested_terms),
+        )
+        for blocker in blockers:
+            phrase = _normalize_suggestion_phrase(blocker)
+            if not phrase or phrase not in suggested_terms:
+                continue
+            expected = expected_tokens.get(phrase, "")
+            if not expected or str(provided.get(phrase) or "").strip() != expected:
+                raise ValueError(f"Missing explicit approval for suggested blocker: {phrase}")
 
     @classmethod
     def _get_job_description(cls, job_id: str) -> str:
@@ -1342,6 +1438,15 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(404, {"error": "Static asset not found"})
             return
+        if _path.startswith("/data/"):
+            relative = _path.removeprefix("/data/").strip("/")
+            candidate = (DATA_DIR / relative).resolve()
+            data_root = DATA_DIR.resolve()
+            if data_root in candidate.parents and candidate.is_file():
+                self._send_static_file(candidate)
+                return
+            self._send_json(404, {"error": "Data asset not found"})
+            return
         if _path in {"/", "/workspace", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard", "/settings"}:
             if _path in {"/", "/workspace", "/admin", "/profile", "/dashboard", "/settings"} and not _onboarding_complete():
                 self._redirect("/start")
@@ -1502,14 +1607,27 @@ class SettingsHandler(BaseHTTPRequestHandler):
             cached = _rejection_suggestions_cache.get(job_id)
             if isinstance(cached, dict) and cached.get("description_hash") == description_hash:
                 suggestions = cached.get("suggestions") or []
+                if not isinstance(cached.get("approval_tokens"), dict):
+                    cached["approval_tokens"] = self._issue_rejection_suggestion_approval_tokens(job_id, suggestions)
                 print(f"[LLM][REJECTION_SUGGESTIONS][CACHE_HIT] job_id={job_id} suggestions={suggestions}")
             else:
                 suggestions = llm_suggest_rejection_blockers(description)
+                approval_tokens = self._issue_rejection_suggestion_approval_tokens(job_id, suggestions)
                 _rejection_suggestions_cache[job_id] = {
                     "description_hash": description_hash,
                     "suggestions": list(suggestions),
+                    "approval_tokens": approval_tokens,
                 }
-            self._send_json(200, {"other": suggestions} if suggestions else {})
+            approval_tokens = {}
+            if isinstance(_rejection_suggestions_cache.get(job_id), dict):
+                approval_tokens = _rejection_suggestions_cache[job_id].get("approval_tokens") or {}
+            self._send_json(
+                200,
+                {
+                    "other": suggestions,
+                    "approval_tokens": approval_tokens,
+                } if suggestions else {}
+            )
             return
 
         self._send_json(404, {"error": "Not found"})
@@ -1750,6 +1868,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 blockers = payload.get("blockers", [])
                 title_block_phrases = payload.get("title_block_phrases", [])
                 description_block_phrases = payload.get("description_block_phrases", [])
+                approved_suggestion_tokens = payload.get("approved_suggestion_tokens") or {}
                 if not isinstance(blockers, list):
                     raise ValueError("blockers must be a list")
                 if title_block_phrases is None:
@@ -1760,8 +1879,16 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     raise ValueError("title_block_phrases must be a list")
                 if not isinstance(description_block_phrases, list):
                     raise ValueError("description_block_phrases must be a list")
+                if not isinstance(approved_suggestion_tokens, dict):
+                    raise ValueError("approved_suggestion_tokens must be an object")
+                resolved_job_id = str(payload.get("job_id") or payload.get("job_key") or "").strip()
+                self._validate_llm_suggestion_approvals(
+                    resolved_job_id,
+                    [str(item or "") for item in blockers],
+                    approved_suggestion_tokens=approved_suggestion_tokens,
+                )
                 result = self._save_requirement_blockers_feedback(
-                    str(payload.get("job_id") or payload.get("job_key") or "").strip(),
+                    resolved_job_id,
                     url=str(payload.get("url") or "").strip(),
                     title=str(payload.get("job_title") or payload.get("title") or "").strip(),
                     company=str(payload.get("company") or "").strip(),
@@ -1812,15 +1939,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
             )
             return
         if self.path == "/api/rejection-rules":
-            _VALID_CATEGORIES = {
-                "domain", "mandatory_experience", "mandatory_skill",
-                "role_type", "seniority", "work_arrangement",
-                "industry_platform", "clearance_or_regulation", "other",
-                "credential", "clearance", "license", "work_authorization",
-                "language", "location", "regulatory", "platform", "tool", 
-                "product", "security", "specialist_experience", "other_hard_requirement"
-            }
-            _JUNK_VALUES = {"no", "bad", "not me", "yes", "ok", "good", "n/a"}
             try:
                 payload = self._read_json_body()
                 job_id = str(payload.get("job_id") or "").strip()
@@ -1830,14 +1948,23 @@ class SettingsHandler(BaseHTTPRequestHandler):
                     raise ValueError("rules must be a list")
                 validated = []
                 now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+                approved_suggestion_tokens = payload.get("approved_suggestion_tokens") or {}
+                if not isinstance(approved_suggestion_tokens, dict):
+                    raise ValueError("approved_suggestion_tokens must be an object")
+                raw_values = [str(r.get("value") or "").strip() for r in raw_rules if isinstance(r, dict)]
+                self._validate_llm_suggestion_approvals(
+                    job_id,
+                    raw_values,
+                    approved_suggestion_tokens=approved_suggestion_tokens,
+                )
                 for i, r in enumerate(raw_rules):
                     value = str(r.get("value") or "").strip()
                     category = str(r.get("category") or "other").strip()
                     if not value or len(value) < 3:
                         continue
-                    if value.lower() in _JUNK_VALUES:
+                    if value.lower() in _REJECTION_RULE_JUNK_VALUES:
                         continue
-                    if category not in _VALID_CATEGORIES:
+                    if category not in _VALID_REJECTION_RULE_CATEGORIES:
                         category = "other"
                     validated.append({
                         "id": f"{job_id}_{now_iso}_{i}",

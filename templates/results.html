@@ -2498,6 +2498,7 @@
     let _rejectionSavedBlockers = [];
     let _rejectionTitleSuggestions = [];
     let _rejectionDescriptionSuggestions = [];
+    let _rejectionApprovalTokens = {};
 
     const _rejVisibleSuggestionCategories = new Set([
       'other',
@@ -2518,6 +2519,7 @@
       _rejectionSavedBlockers = [];
       _rejectionTitleSuggestions = [];
       _rejectionDescriptionSuggestions = [];
+      _rejectionApprovalTokens = {};
       document.getElementById('rejection-btn-save').textContent = 'Save & Continue';
       document.getElementById('rejection-btn-save').disabled = true;
       document.getElementById('rejection-btn-skip').textContent = 'Continue Without Extra Blocks';
@@ -2553,7 +2555,10 @@
       fetch(`${API_BASE_URL}/api/rejection-suggestions?job_id=${encodeURIComponent(jobKey)}`)
         .then(r => r.json())
         .catch(() => ({}))
-        .then(data => _rejRenderSuggestions(data));
+        .then(data => {
+          _rejectionApprovalTokens = (data && typeof data.approval_tokens === 'object' && data.approval_tokens) ? data.approval_tokens : {};
+          _rejRenderSuggestions(data);
+        });
     }
 
     function _rejSuggestionItems(groups) {
@@ -2755,6 +2760,13 @@
 
     async function _rejPersistMandatoryBlockers(blockers, titleBlockPhrases = [], descriptionBlockPhrases = []) {
       const button = _rejectionPendingButton;
+      const approvedSuggestionTokens = {};
+      blockers.forEach((blocker) => {
+        const key = String(blocker || '').trim().toLowerCase();
+        if (key && _rejectionApprovalTokens[key]) {
+          approvedSuggestionTokens[key] = _rejectionApprovalTokens[key];
+        }
+      });
       const response = await fetch(`${API_BASE_URL}/api/rejection-feedback/mandatory-blockers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2767,6 +2779,7 @@
           blockers,
           title_block_phrases: titleBlockPhrases,
           description_block_phrases: descriptionBlockPhrases,
+          approved_suggestion_tokens: approvedSuggestionTokens,
         }),
       });
       const payload = await response.json().catch(() => ({}));

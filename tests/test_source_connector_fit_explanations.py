@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 from job_hunter_agent import source_connector
 from job_hunter_agent.utils import extract_work_mode
@@ -111,6 +112,14 @@ def test_has_government_context_ignores_privacy_notice_government_id_phrase():
     assert not source_connector.has_government_context(
         "Please do not submit sensitive personal data such as government ID numbers."
     )
+
+
+def test_government_context_knowledge_file_contains_pattern_lists():
+    payload = json.loads(source_connector._GOVERNMENT_CONTEXT_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+
+    assert payload["kind"] == "managed_knowledge"
+    assert "\\bgovernment\\b" in payload["positive_patterns"]
+    assert "\\bgovernment-issued\\s+id(?:entification)?\\b" in payload["false_positive_patterns"]
 
 
 def test_legacy_linkedin_fit_source_text_can_restore_description_confidence():
@@ -263,7 +272,53 @@ def test_fit_score_evidence_uses_full_capability_match_set():
         _capability_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Fit evidence bullets") == 10
+    assert _breakdown_value(breakdown, "Fit evidence bullets") is None
+
+
+def test_fit_score_evidence_does_not_count_alias_only_mentions():
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Lead Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": (
+                "Lead scrum ceremonies, manage kanban flow, coordinate UAT, "
+                "and facilitate workshops with business stakeholders."
+            ),
+            "competitive_signals": [],
+        },
+        _capability_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Fit evidence bullets") is None
+
+
+def test_fit_score_evidence_can_still_count_canonical_capability_mentions():
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Lead Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": (
+                "Lead agile methodologies, acceptance testing, "
+                "and primary stakeholder engagement across delivery teams."
+            ),
+            "competitive_signals": [],
+        },
+        _capability_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Fit evidence bullets") == 12
 
 
 def test_strong_high_confidence_fit_gets_convergence_bonus():
@@ -337,6 +392,40 @@ def test_on_site_role_gets_visible_score_penalty():
     )
 
     assert _breakdown_value(breakdown, "On-site role") == -2
+
+
+def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
+    profile = {
+        **_test_profile(),
+        "scoring_rules": {
+            "fit_breakdown": {
+                "title_direct": 20,
+            },
+            "work_mode": {
+                "hybrid": 6,
+            },
+        },
+    }
+
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        profile,
+    )
+
+    assert _breakdown_value(breakdown, "Direct target title match") == 20
+    assert _breakdown_value(breakdown, "Hybrid work available") == 6
 
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
@@ -599,6 +688,40 @@ def test_salary_fit_ignores_non_comparable_hourly_and_monthly_rates():
     assert source_connector.salary_fit_adjustment({"salary": "$90/hr"}, profile) == 0
     assert source_connector.salary_fit_adjustment({"salary": "$8,000 per month"}, profile) == 0
     assert source_connector.salary_fit_adjustment({"salary": "$650 p/d"}, profile) < 0
+
+
+def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
+    profile = {
+        **_test_profile(),
+        "salary_preferences": {
+            "minimum_salary_yearly": 120000,
+            "minimum_daily_rate": 700,
+        },
+    }
+
+    assert source_connector.salary_fit_adjustment({"salary": "$130k package"}, profile) == 0
+    assert source_connector.salary_fit_adjustment({"salary": "$130k incl super"}, profile) == 0
+    assert source_connector.salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
+
+
+def test_salary_fit_adjustment_can_use_profile_scoring_rule_overrides():
+    profile = {
+        **_test_profile(),
+        "salary_preferences": {
+            "minimum_salary_yearly": 120000,
+            "minimum_daily_rate": 700,
+        },
+        "scoring_rules": {
+            "salary": {
+                "meeting_target": 11,
+                "below_target_near_min_ratio": 0.9,
+                "below_target_near_adjustment": -2,
+            }
+        },
+    }
+
+    assert source_connector.salary_fit_adjustment({"salary": "$130k-$145k p.a."}, profile) == 11
+    assert source_connector.salary_fit_adjustment({"salary": "$110k p.a."}, profile) == -2
 
 
 def test_contract_preference_treats_hyphenated_full_time_as_permanent():

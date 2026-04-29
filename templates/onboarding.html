@@ -7,36 +7,103 @@
   <link rel="stylesheet" href="/static/onboarding-page.css">
   <style>
     /* Styling for the new drag & drop zone */
+
+    /* Modernization Overrides */
+    body {
+      background-color: #f8fafc; /* Lighter, cleaner gray */
+    }
+
+    .panel {
+      border: none !important; /* Remove thick borders */
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Modern depth */
+      border-radius: 12px;
+    }
+
+    /* Vibrant Action Color for Primary Buttons */
+    button.primary {
+      background-color: #2563eb !important; /* Vibrant Action Blue */
+      border-color: #1d4ed8 !important;
+      transition: background-color 0.2s ease;
+    }
+
+    button.primary:hover {
+      background-color: #1d4ed8 !important;
+    }
+
+    /* Enhanced Progress Bar */
+    .wizard-progress {
+      height: 16px !important; /* Thicker bar */
+      background-color: #e2e8f0 !important;
+      border-radius: 999px !important;
+      overflow: hidden;
+      border: 1px solid #cbd5e1;
+    }
+
+    #wizard_progress_fill {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.2);
+      background-color: #10b981 !important; /* Vibrant green for progress */
+    }
+
     .drop-zone {
-      border: 2px dashed #ccc;
+      border: 2px dashed #cbd5e1;
       border-radius: 8px;
-      padding: 40px 20px;
+      padding: 48px 24px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.3s ease, background-color 0.3s ease;
-      background-color: #f9f9f9;
-      margin-bottom: 15px; /* Add some space below the drop zone */
+      transition: all 0.2s ease;
+      background-color: #ffffff;
+      margin-bottom: 20px;
+    }
+    .drop-zone.has-file {
+      border-style: solid;
+      border-color: #10b981;
+      background-color: #f0fdf4;
     }
     .drop-zone:hover {
-      border-color: #007bff; /* Highlight on hover */
-      background-color: #f0f8ff; /* Light background on hover */
+      border-color: #2563eb;
+      background-color: #f8fafc;
+      transform: translateY(-1px);
+    }
+    .upload-icon {
+      color: #94a3b8;
+      margin-bottom: 16px;
+      transition: color 0.2s ease;
+    }
+    .drop-zone:hover .upload-icon {
+      color: #2563eb;
+    }
+    .drop-zone.has-file .upload-icon {
+      color: #10b981;
     }
     .drop-zone p {
       margin: 0;
-      color: #555;
-      font-size: 1.1em;
+      color: #334155;
+      font-size: 1.1rem;
+      font-weight: 500;
     }
     .drop-zone-hint {
-      font-size: 0.9em;
-      color: #888;
-      margin-top: 5px;
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-top: 8px;
+    }
+    .file-loaded-label {
+      color: #059669 !important;
+      font-weight: 700 !important;
     }
   </style>
 </head>
 <body data-test-mode="__JOB_HUNTER_TEST_MODE__">
   <main class="page">
     <section class="hero">
-      <div class="hero-kicker">Job Hunter</div>
       <div class="hero-step" id="hero_step">Step 1 of 4</div>
       <h1 id="hero_title">Set Up Your Job Search Profile</h1>
       <p id="hero_copy">Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.</p>
@@ -44,7 +111,7 @@
 
     <div class="grid">
       <section class="panel">
-        <div class="wizard-progress" aria-hidden="true">
+        <div class="wizard-progress">
           <div class="wizard-progress-bar">
             <span id="wizard_progress_fill"></span>
           </div>
@@ -72,9 +139,12 @@
             <div>
               <label class="sr-only" for="primary_cv">Upload your CV</label>
               <div class="drop-zone" id="cv_drop_zone">
-                <input id="primary_cv" type="file" accept=".docx,.md,.txt" required aria-label="Upload your CV" style="display: none;">
-                <p>Drag & drop your CV here, or click to browse</p>
-                <p class="drop-zone-hint">Supported formats: .docx, .md, .txt</p>
+                <input id="primary_cv" type="file" accept=".docx,.pdf,.md,.txt" required aria-label="Upload your CV" style="display: none;">
+                <div id="cv_drop_zone_content">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  <p>Drag & drop your CV here, or click to browse</p>
+                  <p class="drop-zone-hint">Supported formats: .docx, .pdf, .md, .txt</p>
+                </div>
               </div>
               <div class="help" id="primary_cv_status">No file selected yet.</div>
               <div class="help">Required. Use the most detailed CV you have, not the prettiest final layout.</div>
@@ -182,7 +252,7 @@
           <section class="review-block capability-shell">
             <h3>Capability matrix</h3>
             <p class="help">These are the capabilities Job Hunter picked up from your CV. The capability name is for you. Aliases are alternate terms it can recognise in job ads. Job Hunter should usually suggest these for you.</p>
-            <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities or aliases">
+            <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities">
             <div id="review_capability_cards" class="review-capability-list"></div>
             <div class="actions">
               <button class="secondary" id="review_add_capability" type="button">Add capability</button>
@@ -222,16 +292,16 @@
           <div class="review-grid">
             <section class="review-block">
               <h3>Minimum salary</h3>
-              <label for="review_minimum_salary_yearly">Permanent roles</label>
+              <label for="review_minimum_salary_yearly">Permanent roles (excluding super)</label>
               <input id="review_minimum_salary_yearly" type="number" min="0" step="1000" inputmode="numeric" placeholder="e.g. 140000">
-              <div class="help">Optional. Ignore permanent roles below this yearly salary.</div>
+              <div class="help">Optional. Leave blank if you do not want a minimum. Saved as 0 when not set. This target is your base yearly salary without super and cannot be negative.</div>
             </section>
 
             <section class="review-block">
               <h3>Minimum daily rate</h3>
-              <label for="review_minimum_daily_rate">Contract roles</label>
+              <label for="review_minimum_daily_rate">Contract roles (excluding super)</label>
               <input id="review_minimum_daily_rate" type="number" min="0" step="10" inputmode="numeric" placeholder="e.g. 900">
-              <div class="help">Optional. Ignore contract roles below this daily rate.</div>
+              <div class="help">Optional. Leave blank if you do not want a minimum. Saved as 0 when not set. This target is your daily rate without super and cannot be negative.</div>
             </section>
           </div>
 
@@ -287,11 +357,11 @@
                   <dd id="check_engagement_type"></dd>
                 </div>
                 <div>
-                  <dt>Minimum salary</dt>
+                  <dt>Minimum salary (excluding super)</dt>
                   <dd id="check_salary_yearly"></dd>
                 </div>
                 <div>
-                  <dt>Minimum daily rate</dt>
+                  <dt>Minimum daily rate (excluding super)</dt>
                   <dd id="check_salary_daily"></dd>
                 </div>
               </dl>

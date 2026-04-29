@@ -1,0 +1,24 @@
+{
+  "kind": "managed_knowledge",
+  "name": "government_context_knowledge",
+  "version": 1,
+  "updated_at": "2026-04-29",
+  "description": "Managed regex patterns for identifying government/public-sector job context and known false positives.",
+  "positive_patterns": [
+    "\\bgovernment\\b",
+    "\\bpublic sector\\b",
+    "\\bfederal\\b",
+    "\\baps\\d*\\b",
+    "\\bdepartment\\b",
+    "\\bdepartment of\\b",
+    "\\bministry\\b",
+    "\\bcouncil\\b",
+    "\\bstate government\\b",
+    "\\blocal government\\b",
+    "\\bgovernment agency\\b"
+  ],
+  "false_positive_patterns": [
+    "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
+    "\\bgovernment-issued\\s+id(?:entification)?\\b"
+  ]
+}

@@ -24,6 +24,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright
 
 from job_hunter_agent.capability_matrix import expand_capability_terms
+from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.config import MAX_PAGES_CAP, OUTPUT_HTML
 from job_hunter_agent import dashboard_data
 from job_hunter_agent.filters import (
@@ -46,6 +47,7 @@ from job_hunter_agent.profile_store import (
     get_evidence_tier_weights,
     get_evidence_tiers,
     get_preference_weights,
+    get_scoring_rules,
     get_search_settings,
     load_profile,
 )
@@ -171,6 +173,13 @@ def _salary_max_value(value: str) -> float:
     if dollar_vals:
         return max(dollar_vals)
     return 0.0
+
+
+def _salary_includes_super_or_package(value: str) -> bool:
+    text = str(value or "").strip().lower()
+    if not text or text == "n/a":
+        return False
+    return bool(re.search(r"(?:\bincl\.?\s*super\b|\bincluding\s+super\b|\+\s*super\b|\bsuperannuation\b|\bpackage\b|\bsalary packaging\b)", text))
 
 
 def normalize_posted_text(value: Optional[str]) -> str:
@@ -525,23 +534,32 @@ def friendly_capability_label(name: str) -> str:
     return normalized[:1].upper() + normalized[1:] if normalized else ""
 
 
-_GOVERNMENT_CONTEXT_PATTERNS = (
-    r"\bgovernment\b",
-    r"\bpublic sector\b",
-    r"\bfederal\b",
-    r"\baps\d*\b",
-    r"\bdepartment\b",
-    r"\bdepartment of\b",
-    r"\bministry\b",
-    r"\bcouncil\b",
-    r"\bstate government\b",
-    r"\blocal government\b",
-    r"\bgovernment agency\b",
-)
-_GOVERNMENT_CONTEXT_FALSE_POSITIVE_PATTERNS = (
-    r"\bgovernment\s+id(?:entification)?\s+(?:number|numbers|document|documents)?\b",
-    r"\bgovernment-issued\s+id(?:entification)?\b",
-)
+_GOVERNMENT_CONTEXT_KNOWLEDGE_PATH = DATA_DIR / "government_context_knowledge.json"
+
+
+def _load_government_context_knowledge() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    payload = load_json_dict(_GOVERNMENT_CONTEXT_KNOWLEDGE_PATH)
+    positive_entries = payload.get("positive_patterns")
+    false_positive_entries = payload.get("false_positive_patterns")
+    if not isinstance(positive_entries, list) or not isinstance(false_positive_entries, list):
+        raise ValueError("government_context_knowledge.json must define pattern lists")
+
+    positive_patterns = tuple(
+        str(pattern).strip()
+        for pattern in positive_entries
+        if str(pattern).strip()
+    )
+    false_positive_patterns = tuple(
+        str(pattern).strip()
+        for pattern in false_positive_entries
+        if str(pattern).strip()
+    )
+    if not positive_patterns:
+        raise ValueError("government_context_knowledge.json must define at least one positive pattern")
+    return positive_patterns, false_positive_patterns
+
+
+_GOVERNMENT_CONTEXT_PATTERNS, _GOVERNMENT_CONTEXT_FALSE_POSITIVE_PATTERNS = _load_government_context_knowledge()
 
 
 def text_contains_term(text: str, term: str) -> bool:
@@ -578,10 +596,10 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         name = str(rule.get("name") or "").strip()
         level = str(rule.get("level") or "").strip().lower()
         fit = str(rule.get("fit") or "").strip().lower()
-        aliases = [str(alias).strip().lower() for alias in expand_capability_terms(rule) if str(alias).strip()]
-        if not aliases:
+        canonical = canonical_capability_term(rule)
+        if not canonical:
             continue
-        if not any(text_contains_term(lowered, alias) for alias in aliases):
+        if not text_contains_term(lowered, canonical):
             continue
         label = friendly_capability_label(name)
         if fit == "core":
@@ -847,12 +865,13 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
     for raw_cluster in active_profile.get("dominant_signal_clusters", []):
         if not isinstance(raw_cluster, dict):
             continue
-        aliases = _normalized_aliases(list(raw_cluster.get("aliases") or []))
-        if len(aliases) < 2:
+        canonical = compact_whitespace(raw_cluster.get("name") or "").lower()
+        aliases = [canonical] if canonical else []
+        if not aliases:
             continue
 
         matched_aliases = [alias for alias in aliases if text_contains_term(source_text, alias)]
-        if len(matched_aliases) < int(raw_cluster.get("min_alias_hits", 2) or 2):
+        if len(matched_aliases) < 1:
             continue
 
         snippet_hits = 0
@@ -863,10 +882,7 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
             if alias_hits_in_snippet > 0:
                 snippet_hits += 1
         min_snippet_hits = int(raw_cluster.get("min_snippet_hits", 2) or 2)
-        dense_snippet_alias_hits = int(
-            raw_cluster.get("dense_snippet_alias_hits", max(int(raw_cluster.get("min_alias_hits", 2) or 2) + 2, 4))
-            or max(int(raw_cluster.get("min_alias_hits", 2) or 2) + 2, 4)
-        )
+        dense_snippet_alias_hits = int(raw_cluster.get("dense_snippet_alias_hits", 4) or 4)
         if snippet_hits < min_snippet_hits and max_aliases_in_snippet >= dense_snippet_alias_hits:
             snippet_hits = min_snippet_hits
         if snippet_hits < min_snippet_hits:
@@ -896,14 +912,15 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
 
 
 def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
-    aliases = _normalized_aliases(list(signal.get("aliases") or []))
+    aliases = _normalized_aliases([signal.get("name") or ""])
     capability_best = 0.0
 
     for rule in profile.get("capability_profile_rules", []):
         if not isinstance(rule, dict):
             continue
-        rule_aliases = _normalized_aliases(expand_capability_terms(rule))
-        if not rule_aliases:
+        canonical = canonical_capability_term(rule)
+        rule_aliases = _normalized_aliases([canonical])
+        if not canonical:
             continue
         overlap = sum(1 for alias in aliases if alias in rule_aliases or any(alias in rule_alias or rule_alias in alias for rule_alias in rule_aliases))
         if overlap <= 0:
@@ -1412,9 +1429,11 @@ def profile_recency_multiplier(profile: dict, aliases: List[str]) -> float:
     return 0.3
 
 
-def llm_description_fit_entry(record: dict) -> dict:
+def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> dict:
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     decision = str(record.get("llm_decision") or "").strip().upper()
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
     if not grade:
         fallback_map = {
             "KEEP": "STRONG",
@@ -1424,12 +1443,12 @@ def llm_description_fit_entry(record: dict) -> dict:
         grade = fallback_map.get(decision, "SOLID")
 
     grade_map = {
-        "EXCELLENT": ("Description fit is excellent", 25),
-        "STRONG": ("Description fit is strong", 20),
-        "SOLID": ("Description fit is solid", 14),
-        "WEAK": ("Description fit is mixed", 6),
-        "POOR": ("Description fit is weak", 0),
-        "MISMATCH": ("Description fit is a mismatch", -8),
+        "EXCELLENT": ("Description fit is excellent", int(scoring_rules["llm_grade_points"]["EXCELLENT"])),
+        "STRONG": ("Description fit is strong", int(scoring_rules["llm_grade_points"]["STRONG"])),
+        "SOLID": ("Description fit is solid", int(scoring_rules["llm_grade_points"]["SOLID"])),
+        "WEAK": ("Description fit is mixed", int(scoring_rules["llm_grade_points"]["WEAK"])),
+        "POOR": ("Description fit is weak", int(scoring_rules["llm_grade_points"]["POOR"])),
+        "MISMATCH": ("Description fit is a mismatch", int(scoring_rules["llm_grade_points"]["MISMATCH"])),
     }
     label, value = grade_map.get(grade, grade_map["SOLID"])
     return {"label": label, "value": value}
@@ -1450,11 +1469,11 @@ def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
         level = str(rule.get("level") or "").strip().lower()
         if level not in {"strong", "working", "basic"}:
             continue
-        aliases = [str(a).strip().lower() for a in expand_capability_terms(rule) if str(a).strip()]
-        if not aliases or not any(text_contains_term(lowered, alias) for alias in aliases):
+        canonical = canonical_capability_term(rule)
+        if not canonical or not text_contains_term(lowered, canonical):
             continue
         rule_strength = _capability_rule_strength(rule)
-        profile_evidence = evidence_tier_alignment_score(profile, aliases)
+        profile_evidence = evidence_tier_alignment_score(profile, [canonical])
         combined = max(rule_strength, profile_evidence)
         results.append({
             "label": friendly_capability_label(str(rule.get("name") or "")),
@@ -1477,7 +1496,7 @@ def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> t
     return score, matches
 
 
-def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = None) -> Optional[dict]:
+def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = None, profile: Optional[dict] = None) -> Optional[dict]:
     """Award a bonus when multiple strong independent signals simultaneously confirm fit.
 
     Conditions: title OK, content OK, HIGH description confidence, LLM grade
@@ -1490,7 +1509,10 @@ def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = N
     fit_confidence = full_description_confidence(record)
     missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
     soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
-    matches = capability_matches or capability_match_summary(record)
+    active_profile = profile or load_profile()
+    matches = capability_matches or capability_match_summary(record, active_profile)
+    scoring_rules = get_scoring_rules(active_profile)
+    convergence_rules = scoring_rules["convergence"]
     positive_count = (
         len(matches.get("strong", []))
         + len(matches.get("working", []))
@@ -1499,11 +1521,15 @@ def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = N
 
     if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
         return None
-    if missing_evidence or grade not in {"EXCELLENT", "STRONG"}:
+    if missing_evidence or grade not in set(convergence_rules.get("eligible_grades", [])):
         return None
-    if positive_count < 2:
+    if positive_count < int(convergence_rules.get("min_positive_matches", 2) or 2):
         return None
-    bonus = 5 if not soft_risks else 3
+    bonus = (
+        int(convergence_rules.get("bonus_no_soft_risks", 5) or 5)
+        if not soft_risks
+        else int(convergence_rules.get("bonus_with_soft_risks", 3) or 3)
+    )
     return {"label": "Multiple strong signals align", "value": bonus}
 
 
@@ -1527,6 +1553,8 @@ def deterministic_review_outcome(record: dict, fit_highlights: List[str], missin
 def assess_location_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
+    scoring_rules = get_scoring_rules(active_profile)
+    location_rules = scoring_rules["location"]
     source_text = build_scoring_source_text(record).lower()
     location = compact_whitespace(record.get("location") or "").lower()
     work_mode = compact_whitespace(record.get("work_mode") or "").lower()
@@ -1555,24 +1583,24 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if home_location and _matches_location(home_location):
         label_target = compact_whitespace(home_location)
-        return {"label": f"Location matches primary preference: {label_target}", "value": 8}
+        return {"label": f"Location matches primary preference: {label_target}", "value": int(location_rules["primary_match"])}
 
     if secondary_location and _matches_location(secondary_location):
         label_target = compact_whitespace(secondary_location)
         if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
-            return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": 4}
+            return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": int(location_rules["secondary_remote"])}
         if re.search(r"\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\b", source_text):
-            return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": 0}
+            return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": int(location_rules["secondary_limited_onsite"])}
         if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
-            return {"label": f"Secondary location requires regular onsite attendance: {label_target}", "value": -3}
+            return {"label": f"Secondary location requires regular onsite attendance: {label_target}", "value": int(location_rules["secondary_regular_onsite"])}
 
         secondary_terms = [re.escape(value) for value in _location_variants(secondary_location) if value]
         if secondary_terms and re.search(
             rf"\b(must be based in|must reside in|onsite in)\s+(?:{'|'.join(secondary_terms)})\b",
             source_text,
         ):
-            return {"label": f"Secondary location requires local onsite attendance: {label_target}", "value": -5}
-        return {"label": f"Location matches secondary preference: {label_target}", "value": -1}
+            return {"label": f"Secondary location requires local onsite attendance: {label_target}", "value": int(location_rules["secondary_local_onsite"])}
+        return {"label": f"Location matches secondary preference: {label_target}", "value": int(location_rules["secondary_match"])}
 
     return None
 
@@ -1580,6 +1608,8 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
+    scoring_rules = get_scoring_rules(active_profile)
+    contract_rules = scoring_rules["contract"]
     source_text = build_scoring_source_text(record)
     work_type = compact_whitespace(record.get("work_type") or "").lower()
     preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
@@ -1592,30 +1622,31 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if is_perm:
         if eng_pref == "contract":
-            return {"label": "Permanent role (preference is Contract)", "value": -5}
-        return {"label": "Permanent role", "value": 10}
+            return {"label": "Permanent role (preference is Contract)", "value": int(contract_rules["permanent_when_contract_preferred"])}
+        return {"label": "Permanent role", "value": int(contract_rules["permanent_match"])}
 
     if not is_contract:
         return None
 
     if eng_pref == "permanent":
-        return {"label": "Contract role (preference is Permanent)", "value": -5}
+        return {"label": "Contract role (preference is Permanent)", "value": int(contract_rules["contract_when_permanent_preferred"])}
 
     contract_months = extract_contract_months(source_text)
     if contract_months is None:
         return None
     if contract_months >= preferred_contract_months:
         if "extension" in source_text.lower():
-            return {"label": "12+ month contract with extension potential", "value": 9}
-        return {"label": "12+ month contract", "value": 8}
+            return {"label": "12+ month contract with extension potential", "value": int(contract_rules["long_with_extension"])}
+        return {"label": "12+ month contract", "value": int(contract_rules["long_contract"])}
     if contract_months >= short_contract_months:
-        return {"label": "6-12 month contract", "value": 5}
-    return {"label": "Contract is shorter than preferred", "value": -4}
+        return {"label": "6-12 month contract", "value": int(contract_rules["medium_contract"])}
+    return {"label": "Contract is shorter than preferred", "value": int(contract_rules["short_contract"])}
 
 
 def assess_government_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
+    scoring_rules = get_scoring_rules(active_profile)
     if not preferences.get("prefer_government", True):
         return None
 
@@ -1624,7 +1655,7 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     source_text = build_scoring_source_text(record).lower()
     combined = "\n".join([title, company, source_text])
     if has_government_context(combined) or text_contains_term(combined, "ministerial"):
-        return {"label": "Government context", "value": 4}
+        return {"label": "Government context", "value": int(scoring_rules["government"]["match_bonus"])}
     return None
 
 
@@ -1869,8 +1900,12 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
     salary_text = str(record.get("salary") or "").strip()
     if not salary_text or salary_text == "N/A":
         return 0
+    if _salary_includes_super_or_package(salary_text):
+        return 0
 
     active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    salary_rules = scoring_rules["salary"]
     salary_preferences = active_profile.get("salary_preferences", {})
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
@@ -1889,13 +1924,13 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
         if minimum_daily_rate <= 0 or parsed_value <= 0:
             return 0
         if parsed_value >= minimum_daily_rate:
-            return 7
+            return int(salary_rules["meeting_target"])
         ratio = parsed_value / minimum_daily_rate
-        if ratio >= 0.80:
-            return -1
-        if ratio >= 0.60:
-            return -3
-        return -5
+        if ratio >= float(salary_rules["below_target_near_min_ratio"]):
+            return int(salary_rules["below_target_near_adjustment"])
+        if ratio >= float(salary_rules["below_target_mid_min_ratio"]):
+            return int(salary_rules["below_target_mid_adjustment"])
+        return int(salary_rules["below_target_far_adjustment"])
 
     if is_non_comparable_period:
         return 0
@@ -1903,13 +1938,13 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
     if minimum_salary_yearly <= 0 or parsed_value <= 0:
         return 0
     if parsed_value >= minimum_salary_yearly:
-        return 7
+        return int(salary_rules["meeting_target"])
     ratio = parsed_value / minimum_salary_yearly
-    if ratio >= 0.80:
-        return -1
-    if ratio >= 0.60:
-        return -3
-    return -5
+    if ratio >= float(salary_rules["below_target_near_min_ratio"]):
+        return int(salary_rules["below_target_near_adjustment"])
+    if ratio >= float(salary_rules["below_target_mid_min_ratio"]):
+        return int(salary_rules["below_target_mid_adjustment"])
+    return int(salary_rules["below_target_far_adjustment"])
 
 
 def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -1921,30 +1956,31 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     fit_highlights = [item for item in record.get("fit_highlights", []) if str(item).strip()]
     active_profile = profile or load_profile()
     weights = get_preference_weights(active_profile)
+    scoring_rules = get_scoring_rules(active_profile)
     hard_block_labels = hard_block_reasons(record, active_profile)
     evidence_score, capability_matches = capability_evidence_score(record, active_profile)
 
     if hard_block_labels:
-        return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": -100}]
+        return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"])}]
 
     if title_reason == "OK":
-        breakdown.append({"label": "Direct target title match", "value": weighted_points(15, weights["fit"])})
+        breakdown.append({"label": "Direct target title match", "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"])})
     elif title_reason == "TITLE_POTENTIAL_MATCH":
-        breakdown.append({"label": "Secondary title match", "value": weighted_points(4, weights["fit"])})
+        breakdown.append({"label": "Secondary title match", "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"])})
 
-    llm_entry = llm_description_fit_entry(record)
+    llm_entry = llm_description_fit_entry(record, active_profile)
     breakdown.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"])})
 
     if content_reason == "OK":
-        breakdown.append({"label": "Passed content filters", "value": weighted_points(3, weights["fit"])})
+        breakdown.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"])})
 
     if full_description_confidence(record) == "LOW":
-        breakdown.append({"label": "Description capture incomplete", "value": weighted_points(-8, weights["fit"])})
+        breakdown.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"])})
 
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
 
-    convergence_entry = convergence_bonus_entry(record, capability_matches)
+    convergence_entry = convergence_bonus_entry(record, capability_matches, active_profile)
     if convergence_entry:
         breakdown.append({
             "label": convergence_entry["label"],
@@ -1956,15 +1992,15 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
 
     if posted_age_days is not None:
         if posted_age_days <= (1 / 24):
-            breakdown.append({"label": "Posted within the last hour", "value": weighted_points(10, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last hour", "value": weighted_points(int(scoring_rules["freshness"]["last_hour"]), weights["freshness"])})
         elif posted_age_days <= 1:
-            breakdown.append({"label": "Posted within the last day", "value": weighted_points(8, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last day", "value": weighted_points(int(scoring_rules["freshness"]["last_day"]), weights["freshness"])})
         elif posted_age_days <= 3:
-            breakdown.append({"label": "Posted within the last 3 days", "value": weighted_points(5, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last 3 days", "value": weighted_points(int(scoring_rules["freshness"]["last_3_days"]), weights["freshness"])})
         elif posted_age_days <= 7:
-            breakdown.append({"label": "Posted within the last week", "value": weighted_points(2, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last week", "value": weighted_points(int(scoring_rules["freshness"]["last_week"]), weights["freshness"])})
         elif posted_age_days <= 15:
-            breakdown.append({"label": "Still relatively recent", "value": weighted_points(1, weights["freshness"])})
+            breakdown.append({"label": "Still relatively recent", "value": weighted_points(int(scoring_rules["freshness"]["last_15_days"]), weights["freshness"])})
 
     location_item = assess_location_preference(record, active_profile)
     if location_item:
@@ -1988,11 +2024,11 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         })
 
     if work_mode == "hybrid":
-        breakdown.append({"label": "Hybrid work available", "value": weighted_points(3, weights["work_mode"])})
+        breakdown.append({"label": "Hybrid work available", "value": weighted_points(int(scoring_rules["work_mode"]["hybrid"]), weights["work_mode"])})
     elif work_mode == "remote":
-        breakdown.append({"label": "Remote work available", "value": weighted_points(5, weights["work_mode"])})
+        breakdown.append({"label": "Remote work available", "value": weighted_points(int(scoring_rules["work_mode"]["remote"]), weights["work_mode"])})
     elif work_mode in {"on-site", "onsite", "on site"}:
-        breakdown.append({"label": "On-site role", "value": weighted_points(-2, weights["work_mode"])})
+        breakdown.append({"label": "On-site role", "value": weighted_points(int(scoring_rules["work_mode"]["on_site"]), weights["work_mode"])})
 
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
@@ -2001,7 +2037,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         breakdown.append({"label": "Salary/rate below target", "value": salary_score})
 
     if viewed_by_user(record) and not record.get("applied"):
-        breakdown.append({"label": "Already viewed by you", "value": -3})
+        breakdown.append({"label": "Already viewed by you", "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"])})
 
     return breakdown
 

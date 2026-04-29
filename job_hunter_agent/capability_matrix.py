@@ -21,6 +21,11 @@ def expand_capability_terms(rule: dict[str, Any], max_terms: int = 10) -> list[s
     return terms[:max_terms]
 
 
+def canonical_capability_term(rule: dict[str, Any]) -> str:
+    """Return the canonical searchable term for a capability."""
+    return _clean_term(rule.get("name"))
+
+
 def _term_tokens(value: Any) -> list[str]:
     return [
         token

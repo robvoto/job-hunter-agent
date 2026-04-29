@@ -1,4 +1,5 @@
 from job_hunter_agent import llm_gate
+import json
 
 
 class _FakeResponse:
@@ -45,6 +46,25 @@ def test_normalize_rejection_blocker_suggestions_rejects_soft_skill_kind():
     assert suggestions == ["regulated sector experience"]
 
 
+def test_hard_blocker_kinds_knowledge_file_contains_enabled_entries():
+    payload = json.loads(llm_gate._HARD_BLOCKER_KINDS_PATH.read_text(encoding="utf-8"))
+
+    assert payload["kind"] == "managed_knowledge"
+    assert any(entry.get("enabled") for entry in payload["entries"])
+    assert "platform" in llm_gate.HARD_BLOCKER_KINDS
+    assert "industry" in llm_gate.HARD_BLOCKER_KINDS
+
+
+def test_managed_llm_prompt_knowledge_files_contain_lines():
+    fit_payload = json.loads(llm_gate._FIT_REVIEW_DEFAULTS_PATH.read_text(encoding="utf-8"))
+    capability_payload = json.loads(llm_gate._CAPABILITY_NAMING_DEFAULTS_PATH.read_text(encoding="utf-8"))
+
+    assert fit_payload["kind"] == "managed_knowledge"
+    assert capability_payload["kind"] == "managed_knowledge"
+    assert any(str(line).strip() for line in fit_payload["lines"])
+    assert any(str(line).strip() for line in capability_payload["lines"])
+
+
 def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):
     monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "test-model")
@@ -58,3 +78,6 @@ def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):
 
     assert suggestions == ["specialist platform"]
     assert fake_client.responses.calls
+    system_prompt = fake_client.responses.calls[0]["input"][0]["content"]
+    assert "platform" in system_prompt
+    assert "industry" in system_prompt

@@ -79,6 +79,37 @@ Responsibilities:
     assert reason == "OK"
 
 
+def test_secondary_title_alias_only_mentions_do_not_count_as_role_proof(monkeypatch):
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "capability_profile_rules": [
+                {
+                    "name": "agile methodologies",
+                    "level": "strong",
+                    "fit": "core",
+                    "aliases": ["scrum", "kanban"],
+                },
+            ],
+            "reject_description_phrase_rules": [],
+            "must_not_require_skills": [],
+        },
+    )
+
+    ok, reason = filters.passes_content_filters(
+        """
+Responsibilities:
+- Run scrum ceremonies with delivery teams
+- Support kanban flow reporting
+""",
+        title_reason="TITLE_POTENTIAL_MATCH",
+    )
+
+    assert not ok
+    assert reason == "DESC_ROLE_PROOF_MISSING"
+
+
 def test_direct_title_can_still_reject_overly_vague_description(monkeypatch):
     monkeypatch.setattr(
         filters,

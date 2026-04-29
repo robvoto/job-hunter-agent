@@ -362,10 +362,7 @@ def _build_output(
     seen_signal_names: set[str] = set()
 
     for candidate in candidates:
-        display_name = choose_capability_name(
-            candidate["name"],
-            [candidate["seed"], *candidate["aliases"]],
-        )
+        display_name = str(candidate["name"] or "").strip()
         if not display_name:
             continue
         display_name = re.sub(r"\s+", " ", display_name).strip()

@@ -22,7 +22,12 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from job_hunter_agent.agent_settings import load_agent_settings
-from job_hunter_agent.profile_store import DATA_DIR, get_evidence_tiers, get_evidence_tier_weights, load_profile
+from job_hunter_agent.profile_store import (
+    DATA_DIR,
+    get_evidence_tiers,
+    get_evidence_tier_weights,
+    load_profile,
+)
 
 load_dotenv()
 
@@ -35,6 +40,9 @@ MAX_TOKENS_REJECTION_SUGGESTIONS = 300
 _CHEAP_LLM_MODE = "--cheap-llm" in sys.argv
 
 _PROFILE_PATH = DATA_DIR / "profile.json"
+_HARD_BLOCKER_KINDS_PATH = DATA_DIR / "hard_blocker_kinds.json"
+_FIT_REVIEW_DEFAULTS_PATH = DATA_DIR / "llm_fit_review_defaults.json"
+_CAPABILITY_NAMING_DEFAULTS_PATH = DATA_DIR / "llm_capability_naming_defaults.json"
 _profile_fingerprint_cache: str | None = None
 
 # Cost logging --------------------------------------------------------
@@ -126,23 +134,42 @@ client = OpenAI(api_key=_api_key) if _api_key else None
 ALLOWED_DECISIONS = {"KEEP", "REJECT", "MAYBE"}
 ALLOWED_GRADES = {"EXCELLENT", "STRONG", "SOLID", "WEAK", "POOR", "MISMATCH"}
 DEFAULT_LLM_REVIEW = {"decision": "MAYBE", "grade": "SOLID"}
-HARD_BLOCKER_KINDS = {
-    "credential",
-    "clearance",
-    "license",
-    "work_authorization",
-    "language",
-    "location",
-    "domain",
-    "industry",
-    "regulatory",
-    "platform",
-    "tool",
-    "product",
-    "security",
-    "specialist_experience",
-    "other_hard_requirement",
-}
+
+
+def _load_managed_prompt_lines(path, filename: str) -> tuple[str, ...]:
+    payload = _json_mod.loads(path.read_text(encoding="utf-8"))
+    lines = payload.get("lines")
+    if not isinstance(lines, list):
+        raise ValueError(f"{filename} must contain a lines list")
+    cleaned = tuple(str(line).strip() for line in lines if str(line).strip())
+    if not cleaned:
+        raise ValueError(f"{filename} must define at least one prompt line")
+    return cleaned
+
+
+def _load_hard_blocker_kinds() -> frozenset[str]:
+    payload = _json_mod.loads(_HARD_BLOCKER_KINDS_PATH.read_text(encoding="utf-8"))
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("hard_blocker_kinds.json must contain an entries list")
+
+    kinds: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("enabled", True) is False:
+            continue
+        value = str(entry.get("value") or "").strip()
+        if value:
+            kinds.append(value)
+    if not kinds:
+        raise ValueError("hard_blocker_kinds.json must define at least one enabled kind")
+    return frozenset(kinds)
+
+
+HARD_BLOCKER_KINDS = _load_hard_blocker_kinds()
+FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines(_FIT_REVIEW_DEFAULTS_PATH, "llm_fit_review_defaults.json")
+CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines(_CAPABILITY_NAMING_DEFAULTS_PATH, "llm_capability_naming_defaults.json")
 
 
 def llm_is_enabled() -> bool:
@@ -171,11 +198,17 @@ def build_profile_prompt_context() -> str:
                 continue
             name = str(rule.get("name") or "").strip()
             level = str(rule.get("level") or "").strip()
+            fit = str(rule.get("fit") or "").strip()
             raw_aliases = rule.get("aliases", [])
             aliases_list = raw_aliases if isinstance(raw_aliases, list) else []
             aliases = ", ".join(str(alias).strip() for alias in aliases_list[:8] if str(alias).strip())
             if name and level:
-                parts.append(f"- {name}: {level}" + (f" ({aliases})" if aliases else ""))
+                label = f"- {name}: {level}"
+                if fit:
+                    label += f", {fit}"
+                if aliases:
+                    label += f" ({aliases})"
+                parts.append(label)
 
     preference_lines = []
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
@@ -219,16 +252,37 @@ def build_profile_prompt_context() -> str:
     return "\n".join(part for part in parts if part)
 
 
+def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
+    active_profile = profile if isinstance(profile, dict) else load_profile()
+    parts = ["Default fit review guidance:"]
+    parts.extend(f"- {line}" for line in FIT_REVIEW_DEFAULT_LINES)
+    guidance = str(active_profile.get("llm_fit_review_guidance") or "").strip()
+    if guidance:
+        parts.append("User fit review guidance:")
+        parts.append(guidance[:1200])
+    return "\n".join(parts)
+
+
+def build_capability_naming_guidance(profile: dict[str, Any] | None = None) -> str:
+    active_profile = profile if isinstance(profile, dict) else load_profile()
+    parts = [
+        "You are reviewing and labelling candidate professional capability clusters extracted from a CV.",
+        "",
+        "Default capability naming guidance:",
+    ]
+    parts.extend(f"- {line}" for line in CAPABILITY_NAMING_DEFAULT_LINES)
+    guidance = str(active_profile.get("llm_capability_naming_guidance") or "").strip()
+    if guidance:
+        parts.extend(["", "User capability naming guidance:", guidance[:1200]])
+    parts.extend(["", "Clusters:"])
+    return "\n".join(parts)
+
+
 def build_system_prompt() -> str:
+    profile = load_profile()
     parts = [
         "You are helping decide whether a candidate should apply for a job.",
-        "Judge fit primarily from the job description and the candidate profile evidence below, not from title alone.",
-        "Be honest about gaps. Conditional-fit job titles can still fit when responsibilities match the candidate background.",
-        "Recent directly relevant experience matters more than older exposure from many years ago.",
-        "Treat primary current evidence as strongest proof. Treat older evidence as weaker, and background-only context such as certifications, broad industry mentions, or optional supporting history as weakest.",
-        "Use capability levels and aliases from the candidate profile context as supporting evidence when responsibilities align.",
-        "Treat desirable or nice-to-have gaps as softer concerns than essential or mandatory gaps.",
-        "Grade the full description fit, not just keyword overlap.",
+        build_fit_review_guidance(profile),
         build_profile_prompt_context(),
     ]
     parts.append(
@@ -322,7 +376,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
             "Suggest only concise blocker terms that appear to be hard requirements for this specific job and are not clearly evidenced by the candidate profile.",
             "Hard blockers can be from any field: credentials, clearances, licences, work authorization, language, location, regulated/domain experience, industry background, products, platforms, tools, or specialist experience.",
             "Do not suggest desirable, preferred, nice-to-have, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs.",
-            "Classify each suggestion with one kind from: credential, clearance, license, work_authorization, language, location, domain, industry, regulatory, platform, tool, product, security, specialist_experience, other_hard_requirement.",
+            "Classify each suggestion with one kind from: " + ", ".join(sorted(HARD_BLOCKER_KINDS)) + ".",
             "Return JSON only, in this exact shape: {\"blockers\":[{\"term\":\"term\",\"kind\":\"kind\"}]}. Return an empty array if unsure.",
             build_profile_prompt_context(),
         ]
@@ -377,19 +431,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
     if not payload:
         return []
 
-    prompt = (
-        "You are reviewing and labelling candidate professional capability clusters extracted from a CV.\n\n"
-        "For each cluster, decide if it represents a real transferable professional skill or capability.\n"
-        "If YES — output a clean 1-4 word lowercase label (e.g. 'requirements analysis', 'agile delivery', 'bpmn modelling').\n"
-        "If NO — output exactly the string \"skip\". Skip anything that is: a client name, project name, app name, company name, industry/domain context, achievement description, or circumstantial detail.\n\n"
-        "Additional rules:\n"
-        "- Prefer broad transferable capability names over raw task fragments.\n"
-        "- Do not invent new evidence.\n"
-        "- Do not output tools unless the cluster is clearly about that tool.\n"
-        "- Keep the same order as input.\n"
-        "- Return a JSON array of strings only (labels or \"skip\"), one per input cluster.\n\n"
-        "Clusters:\n"
-    )
+    prompt = build_capability_naming_guidance()
 
     try:
         _model = _get_llm_model()

@@ -1,0 +1,84 @@
+{
+  "kind": "managed_knowledge",
+  "name": "hard_blocker_kinds",
+  "version": 1,
+  "updated_at": "2026-04-29",
+  "description": "Managed blocker kinds the LLM may use when suggesting hard requirement blockers for explicit user approval.",
+  "entries": [
+    {
+      "value": "credential",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "clearance",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "license",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "work_authorization",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "language",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "location",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "domain",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "industry",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "regulatory",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "platform",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "tool",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "product",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "security",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "specialist_experience",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "other_hard_requirement",
+      "enabled": true,
+      "source": "seed"
+    }
+  ]
+}
