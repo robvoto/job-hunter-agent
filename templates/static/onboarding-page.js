@@ -313,7 +313,13 @@ function normalizeReviewCapability(rule) {
   const name = normalizeReviewText(rule?.name || '');
   const rawLevel = String(rule?.level || 'working').trim().toLowerCase();
   const rawFit = String(rule?.fit || 'supporting').trim().toLowerCase();
-  const level = rawLevel === 'strong' ? 'strong' : rawLevel === 'working' ? 'working' : 'basic';
+  const level = rawLevel === 'strong'
+    ? 'strong'
+    : rawLevel === 'working'
+      ? 'working'
+      : rawLevel === 'low'
+        ? 'low'
+        : 'basic';
   const fit = rawFit === 'core' ? 'core' : rawFit === 'supporting' ? 'supporting' : 'contextual';
   const aliases = [];
   const seen = new Set();
@@ -324,6 +330,24 @@ function normalizeReviewCapability(rule) {
     aliases.push(cleaned);
   }
   return { name, level, fit, aliases };
+}
+
+function renderReviewStrengthGuide() {
+  const strengthOrder = ['strong', 'working', 'basic', 'low'];
+  const chips = strengthOrder.map((level) => {
+    const meta = reviewCapabilityLevelMeta[level];
+    if (!meta) return '';
+    return `
+      <span class="chip-item strength-chip ${escapeHtml(meta.tone || `strength-${level}`)}">${escapeHtml(meta.label || '')}</span>
+      <span class="review-strength-guide-copy">${escapeHtml(meta.summary || '')}</span>
+    `;
+  }).join('');
+  return `
+    <div class="review-strength-guide">
+      <p class="review-strength-guide-title">${escapeHtml(capabilityUi.strengthGuideTitle || 'Strength shows your depth. Relevance decides how much that capability should influence matching.')}</p>
+      <div class="review-strength-guide-grid">${chips}</div>
+    </div>
+  `;
 }
 
 function dedupeReviewList(values) {
@@ -373,7 +397,7 @@ function renderReviewCapabilities() {
       });
     return { priority, rules };
   });
-  container.innerHTML = groups.map((group) => {
+  container.innerHTML = renderReviewStrengthGuide() + groups.map((group) => {
     const priorityMeta = reviewCapabilityPriorityMeta[group.priority];
     const rowsHtml = group.rules.length ? group.rules.map(({ rule, index }) => `
       <article class="review-capability-row" data-review-capability-index="${index}">
@@ -385,9 +409,10 @@ function renderReviewCapabilities() {
           <div>
             <label for="review_capability_level_${index}">Strength</label>
             <select id="review_capability_level_${index}" data-review-capability-field="level">
-              <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.strong?.label || 'Strong')}</option>
-              <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.working?.label || 'Solid')}</option>
-              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.basic?.label || 'Some exposure')}</option>
+              <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.strong?.label || 'Expert')}</option>
+              <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.working?.label || 'Advanced')}</option>
+              <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.basic?.label || 'Intermediate')}</option>
+              <option value="low"${rule.level === 'low' ? ' selected' : ''}>${escapeHtml(reviewCapabilityLevelMeta.low?.label || 'Beginner')}</option>
             </select>
           </div>
           <div>
@@ -401,6 +426,10 @@ function renderReviewCapabilities() {
           <div class="review-capability-actions">
             <button class="secondary" type="button" data-remove-review-capability="${index}">Remove</button>
           </div>
+        </div>
+        <div class="review-capability-meta">
+          <span class="chip-item strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate')}</span>
+          <span class="chip-item">${escapeHtml(reviewCapabilityPriorityMeta[rule.fit]?.label || 'Helpful')}</span>
         </div>
         <p class="review-capability-copy">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.summary || '')}</p>
         <details>

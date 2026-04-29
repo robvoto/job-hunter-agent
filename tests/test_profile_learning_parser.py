@@ -1,10 +1,8 @@
-import importlib
+from unittest.mock import patch
 
 from job_hunter_agent import profile_learning
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
-    _collect_phrase_stats,
-    _parse_role_entries,
     build_learning_patch,
     extract_title_pattern_suggestions,
 )
@@ -35,72 +33,63 @@ Process mapping
 Payments
 """
 
-
-def test_build_learning_patch_extracts_evidence_and_capabilities():
-    llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
-    original = llm_gate.name_capability_clusters
-    try:
-        # Mock LLM so the test only checks deterministic extraction, not prompt output
-        llm_gate.name_capability_clusters = lambda clusters, **kwargs: [c.get("name", "") for c in clusters]
-        patch = build_learning_patch(SAMPLE_CV)
-    finally:
-        llm_gate.name_capability_clusters = original
-
-    assert "evidence_signals" not in patch
-    assert patch.get("capability_profile_rules")
-    names = {rule["name"] for rule in patch["capability_profile_rules"]}
-    assert any(
-        term in names
-        for term in {
-            "process mapping", "stakeholder engagement", "requirement workshop",
-            "led requirement workshop", "backlog refinement", "data analysis",
-            "stakeholder interview", "process improvement", "digital transformation",
-        }
-    )
+_LLM_FIXTURE = {
+    "capabilities": [
+        {"name": "stakeholder engagement", "level": "strong", "fit": "core", "aliases": ["stakeholder management"]},
+        {"name": "process mapping", "level": "working", "fit": "core", "aliases": []},
+        {"name": "requirements analysis", "level": "strong", "fit": "core", "aliases": ["requirements gathering"]},
+    ],
+    "target_title_patterns": ["delivery lead"],
+    "secondary_title_patterns": ["project coordinator"],
+    "suggested_search_keywords": ["delivery lead", "business analysis"],
+    "match_preferences": {"prefer_permanent": None, "work_mode_preference": None, "home_location": ""},
+}
 
 
-def test_extract_title_pattern_suggestions_prefers_recent_roles():
-    suggestion = extract_title_pattern_suggestions(SAMPLE_CV, {"extraction_lookback_years": 8})
+def test_build_learning_patch_returns_capabilities_and_cv_text():
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE):
+        patch_result = build_learning_patch(SAMPLE_CV)
 
-    assert suggestion["target_title_patterns"]
-    assert any("delivery lead" in keyword for keyword in suggestion["suggested_search_keywords"])
-
-
-def test_collect_phrase_stats_uses_configured_lookback_for_recent_roles():
-    cv_text = f"""
-# Professional Experience
-Alpha Co - Process Lead ({_CURRENT_YEAR - 7} - {_CURRENT_YEAR - 7})
-- Led process mapping workshops and process mapping documentation.
-
-Beta Co - Process Analyst ({_CURRENT_YEAR - 11} - {_CURRENT_YEAR - 10})
-- Delivered process mapping improvements and process mapping artefacts.
-"""
-
-    roles = _parse_role_entries(cv_text)
-    short_stats = _collect_phrase_stats(cv_text, roles, {"extraction_lookback_years": 5})
-    long_stats = _collect_phrase_stats(cv_text, roles, {"extraction_lookback_years": 8})
-
-    assert len(short_stats["process lead"]["recent_roles"]) == 0
-    assert len(long_stats["process lead"]["recent_roles"]) == 1
+    assert patch_result.get("cv_text")
+    rules = patch_result.get("capability_profile_rules", [])
+    assert rules
+    names = {r["name"] for r in rules}
+    assert "stakeholder engagement" in names
+    assert "process mapping" in names
 
 
-def test_parse_role_entries_accepts_title_and_employer_before_dates():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Senior Delivery Lead
-Acme Bank
-2022 - Present
-- Led workshops
-"""
-    )
+def test_build_learning_patch_returns_empty_when_llm_unavailable():
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={}):
+        patch_result = build_learning_patch(SAMPLE_CV)
 
-    assert parsed
-    assert parsed[0]["title"] == "Senior Delivery Lead"
-    assert parsed[0]["employer"] == "Acme Bank"
+    assert patch_result.get("cv_text")
+    assert not patch_result.get("capability_profile_rules")
 
 
-def test_parse_role_entries_accepts_inline_title_then_employer_before_dates():
+def test_extract_title_pattern_suggestions_returns_llm_patterns():
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE):
+        result = extract_title_pattern_suggestions(SAMPLE_CV, {"extraction_lookback_years": 8})
+
+    assert "delivery lead" in result["target_title_patterns"]
+    assert "delivery lead" in result["suggested_search_keywords"]
+
+
+def test_extract_title_pattern_suggestions_respects_max_limits():
+    fixture = {
+        **_LLM_FIXTURE,
+        "target_title_patterns": ["a", "b", "c", "d", "e"],
+        "secondary_title_patterns": ["x", "y", "z"],
+    }
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
+        result = extract_title_pattern_suggestions(SAMPLE_CV, {"max_target_patterns": 2, "max_secondary_patterns": 1})
+
+    assert len(result["target_title_patterns"]) <= 2
+    assert len(result["secondary_title_patterns"]) <= 1
+
+
+# ── _parse_role_entries: inline format (title/employer set directly) ───────────
+
+def test_parse_role_entries_captures_inline_dash_format_in_header_lines():
     parsed = profile_learning._parse_role_entries(
         """
 # Professional Experience
@@ -109,11 +98,11 @@ Business Analyst - Contoso (2016 - 2020)
     )
 
     assert parsed
-    assert parsed[0]["title"] == "Business Analyst"
-    assert parsed[0]["employer"] == "Contoso"
+    assert "Business Analyst" in parsed[0]["header_lines"]
+    assert "Contoso" in parsed[0]["header_lines"]
 
 
-def test_parse_role_entries_collects_followup_bullets_for_inline_roles():
+def test_parse_role_entries_collects_bullets_for_inline_roles():
     parsed = profile_learning._parse_role_entries(
         """
 # Professional Experience
@@ -124,7 +113,7 @@ Senior Business Analyst - Payments (2024 - Present)
     )
 
     assert parsed
-    assert parsed[0]["title"] == "Senior Business Analyst"
+    assert "Senior Business Analyst" in parsed[0]["header_lines"]
     assert parsed[0]["bullets"] == [
         "Requirements workshops, process mapping, user stories.",
         "Stakeholder management and backlog refinement.",
@@ -146,63 +135,7 @@ Business Analyst (2022 - 2024)
     assert parsed[0]["bullets"] == ["Insurance platform delivery, UAT, backlog refinement."]
 
 
-def test_parse_role_entries_does_not_swap_title_and_employer_when_dates_come_first():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-2022 - Present
-Senior Delivery Lead
-Acme Bank
-- Led workshops
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Senior Delivery Lead"
-    assert parsed[0]["employer"] == "Acme Bank"
-
-
-def test_parse_role_entries_keeps_plain_paragraphs_after_prefix_title_and_dates():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Senior Delivery Lead
-Acme Bank
-2022 - Present
-Led workshops across product and delivery teams.
-Produced process maps and business requirements.
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Senior Delivery Lead"
-    assert parsed[0]["employer"] == "Acme Bank"
-    assert parsed[0]["bullets"] == [
-        "Led workshops across product and delivery teams.",
-        "Produced process maps and business requirements.",
-    ]
-
-
-def test_parse_role_entries_supports_unicode_bullet_markers():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Business Analyst
-Contoso
-2022 - Present
-\u2022 Led workshops
-\u2022 Produced user stories
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["bullets"] == [
-        "Led workshops",
-        "Produced user stories",
-    ]
-
-
-def test_parse_role_entries_accepts_title_pipe_dates_format_with_employer_above():
+def test_parse_role_entries_pipe_format_uses_previous_line_as_employer():
     parsed = profile_learning._parse_role_entries(
         """
 EMPLOYMENT HISTORY
@@ -222,7 +155,79 @@ Produced functional specifications.
     ]
 
 
-def test_parse_role_entries_keeps_employer_from_prefix_lines_in_date_first_layout():
+# ── _parse_role_entries: date-first / prefix format (header_lines used) ───────
+
+def test_parse_role_entries_captures_prefix_lines_as_header_lines():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Senior Delivery Lead
+Acme Bank
+2022 - Present
+- Led workshops
+"""
+    )
+
+    assert parsed
+    assert "Senior Delivery Lead" in parsed[0]["header_lines"]
+    assert "Acme Bank" in parsed[0]["header_lines"]
+
+
+def test_parse_role_entries_captures_post_date_lines_as_header_lines():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+2022 - Present
+Senior Delivery Lead
+Acme Bank
+- Led workshops
+"""
+    )
+
+    assert parsed
+    assert "Senior Delivery Lead" in parsed[0]["header_lines"]
+    assert "Acme Bank" in parsed[0]["header_lines"]
+
+
+def test_parse_role_entries_keeps_plain_paragraphs_after_prefix_in_date_first():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Senior Delivery Lead
+Acme Bank
+2022 - Present
+Led workshops across product and delivery teams.
+Produced process maps and business requirements.
+"""
+    )
+
+    assert parsed
+    assert "Senior Delivery Lead" in parsed[0]["header_lines"]
+    assert "Acme Bank" in parsed[0]["header_lines"]
+    assert parsed[0]["bullets"] == [
+        "Led workshops across product and delivery teams.",
+        "Produced process maps and business requirements.",
+    ]
+
+
+def test_parse_role_entries_supports_unicode_bullet_markers():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Business Analyst
+Contoso
+2022 - Present
+• Led workshops
+• Produced user stories
+"""
+    )
+
+    assert parsed
+    assert "Business Analyst" in parsed[0]["header_lines"]
+    assert parsed[0]["bullets"] == ["Led workshops", "Produced user stories"]
+
+
+def test_parse_role_entries_date_first_layout_captures_employer_in_header_lines():
     parsed = profile_learning._parse_role_entries(
         """
 EMPLOYMENT HISTORY
@@ -235,51 +240,5 @@ Produced onboarding documentation.
     )
 
     assert parsed
-    assert parsed[0]["title"] == "Digital & Infrastructure Business Analyst / Project Coordinator"
-    assert parsed[0]["employer"] == "NSW eHealth"
-
-
-def test_llm_capability_naming_only_renames_selected_clusters():
-    llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
-    original = llm_gate.name_capability_clusters
-
-    try:
-        llm_gate.name_capability_clusters = lambda clusters, **kwargs: ["process modelling"]
-        renamed = profile_learning._apply_llm_capability_names(
-            [
-                {
-                    "name": "process maps",
-                    "level": "working",
-                    "fit": "core",
-                    # "bpmn modelling" grounds "modelling" so the grounding check passes
-                    "aliases": ["workflow redesign", "bpmn", "as-is to-be", "bpmn modelling"],
-                }
-            ]
-        )
-    finally:
-        llm_gate.name_capability_clusters = original
-
-    assert renamed[0]["name"] == "process modelling"
-    assert "process maps" in renamed[0]["aliases"]
-
-
-def test_llm_capability_naming_rejects_tokens_not_grounded_in_source():
-    llm_gate = importlib.import_module("job_hunter_agent.llm_gate")
-    original = llm_gate.name_capability_clusters
-
-    try:
-        llm_gate.name_capability_clusters = lambda clusters: ["analytical scrum"]
-        renamed = profile_learning._apply_llm_capability_names(
-            [
-                {
-                    "name": "analyst scrum",
-                    "level": "working",
-                    "fit": "supporting",
-                    "aliases": ["scrum analyst"],
-                }
-            ]
-        )
-    finally:
-        llm_gate.name_capability_clusters = original
-
-    assert renamed[0]["name"] == "analyst scrum"
+    assert "NSW eHealth" in parsed[0]["header_lines"]
+    assert "Digital & Infrastructure Business Analyst / Project Coordinator" in parsed[0]["header_lines"]

@@ -10,7 +10,9 @@ import hashlib
 import json
 import re
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from job_hunter_agent.paths import REPO_ROOT
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
@@ -46,6 +48,33 @@ _DATE_RANGE_PATTERN = re.compile(
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
+
+
+class _CapabilityExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    level: Literal["strong", "working", "basic"]
+    fit: Literal["core", "supporting", "contextual"]
+    aliases: list[str] = Field(default_factory=list)
+
+
+class _MatchPreferenceExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prefer_permanent: bool | None = None
+    work_mode_preference: Literal["remote", "hybrid", "onsite"] | None = None
+    home_location: str = ""
+
+
+class _CvExtractionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
+    target_title_patterns: list[str] = Field(default_factory=list)
+    secondary_title_patterns: list[str] = Field(default_factory=list)
+    suggested_search_keywords: list[str] = Field(default_factory=list)
+    match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
 
 
 # ── Text repair ────────────────────────────────────────────────────────────────
@@ -88,7 +117,7 @@ def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | Non
     return _resolve_onboarding_int(onboarding_settings, "extraction_lookback_years")
 
 
-# ── Shared text utilities (used by capability_matrix.py and cv_pipeline.py) ──
+# ── Text utilities ─────────────────────────────────────────────────────────────
 
 def _clean_line(text: str) -> str:
     cleaned = re.sub(r"[*_`#]+", " ", str(text or ""))
@@ -107,8 +136,7 @@ def _normalize_token(token: str) -> str:
 
 def _normalize_phrase(text: str) -> str:
     tokens = [_normalize_token(token) for token in re.split(r"\s+", str(text or ""))]
-    tokens = [token for token in tokens if token]
-    return " ".join(tokens).strip()
+    return " ".join(token for token in tokens if token).strip()
 
 
 # ── Structural parsing helpers ─────────────────────────────────────────────────
@@ -146,76 +174,6 @@ def _extract_year_range(text: str) -> dict[str, Any] | None:
         "is_current": is_current,
         "duration_months": duration_months,
     }
-
-
-def _looks_like_title(text: str) -> bool:
-    cleaned = _clean_line(text)
-    lowered = cleaned.lower()
-    if not cleaned or len(cleaned.split()) > 10:
-        return False
-    if re.search(r"\b(degree|certified|certification|university|college|school)\b", lowered):
-        return False
-    if ":" in cleaned:
-        return False
-    if _extract_year_range(cleaned):
-        return False
-    if not re.search(r"[A-Za-z]", cleaned):
-        return False
-    return True
-
-
-def _looks_like_employer(text: str) -> bool:
-    cleaned = _clean_line(text)
-    if not cleaned:
-        return False
-    if _extract_year_range(cleaned):
-        return False
-    if re.search(r"\([A-Z]{2,}\)", cleaned):
-        return True
-    if re.search(r"\b(?:pty|ltd|llc|inc|corp)\b", cleaned, flags=re.IGNORECASE):
-        return True
-    if cleaned.isupper() and len(cleaned.split()) <= 5:
-        return True
-    return False
-
-
-def _is_plausible_role_title(text: str) -> bool:
-    cleaned = _clean_line(text)
-    if not _looks_like_title(cleaned):
-        return False
-    if len(cleaned.split()) < 2:
-        return False
-    if len(cleaned) < 3:
-        return False
-    if cleaned.isupper():
-        return False
-    if re.search(r"\b(profile|summary|skills|tools|technologies|responsibilities|experience)\b", cleaned, flags=re.IGNORECASE):
-        return False
-    return True
-
-
-def _pick_role_title_and_employer(candidate_lines: list[str], prefer_prefix_order: bool = False) -> tuple[str, str]:
-    ordered_lines = [_clean_line(line) for line in candidate_lines if _clean_line(line)]
-    if not ordered_lines:
-        return "", ""
-
-    if len(ordered_lines) == 1:
-        only = ordered_lines[0]
-        if _is_plausible_role_title(only):
-            return only, ""
-        return "", only if _looks_like_employer(only) else ""
-
-    first = ordered_lines[0]
-    second = ordered_lines[1]
-    if prefer_prefix_order and _is_plausible_role_title(first):
-        return first, second if second != first else ""
-    if _looks_like_employer(first) and _is_plausible_role_title(second):
-        return second, first
-    if _is_plausible_role_title(first):
-        return first, second if second != first else ""
-    if _is_plausible_role_title(second):
-        return second, first if first != second else ""
-    return "", ""
 
 
 def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
@@ -276,17 +234,10 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             if date_info:
                 inline_left = _clean_line(inline_match.group("employer"))
                 inline_right = _clean_line(inline_match.group("title"))
-                title = inline_right
-                employer = inline_left
-                if not _is_plausible_role_title(title) and _is_plausible_role_title(employer):
-                    title, employer = employer, title
-                if not _is_plausible_role_title(title):
-                    i = max(j, i + 1)
-                    continue
                 roles.append(
                     {
-                        "title": title,
-                        "employer": employer if employer != title else "",
+                        "title": inline_right,
+                        "employer": inline_left if inline_left != inline_right else "",
                         "header_lines": [item for item in [inline_left, inline_right] if item],
                         "section": current_section,
                         "bullets": bullets,
@@ -307,13 +258,10 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     previous_line = _clean_line(lines[i - 1].strip())
                     if (
                         previous_line
-                        and not previous_line.lstrip().startswith("#")
+                        and not _is_heading_line(lines[i - 1].strip())
                         and not _extract_year_range(previous_line)
                     ):
                         employer = previous_line
-                if not _is_plausible_role_title(title):
-                    i = max(j, i + 1)
-                    continue
                 roles.append(
                     {
                         "title": title,
@@ -332,9 +280,6 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             date_info = _extract_year_range(title_with_dates_match.group("dates"))
             if date_info:
                 title = _clean_line(title_with_dates_match.group("title"))
-                if not _is_plausible_role_title(title):
-                    i += 1
-                    continue
                 bullets, j = collect_role_detail_lines(i + 1)
                 roles.append(
                     {
@@ -390,23 +335,11 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                 candidate_lines.append(look)
             j += 1
 
-        using_prefix_fallback = bool(prefix_candidate_lines) and candidate_lines[:len(prefix_candidate_lines)] == prefix_candidate_lines
-        title, employer = _pick_role_title_and_employer(candidate_lines, prefer_prefix_order=using_prefix_fallback)
-        if title and not _is_plausible_role_title(title):
-            plausible_candidates = [line for line in candidate_lines if _is_plausible_role_title(line)]
-            if plausible_candidates:
-                title = plausible_candidates[0]
-                employer = next((line for line in candidate_lines if line != title), "")
-            else:
-                title = ""
-        if title and not employer and len(prefix_candidate_lines) >= 2:
-            employer = next((line for line in prefix_candidate_lines if line != title), "")
-
-        if title:
+        if candidate_lines:
             roles.append(
                 {
-                    "title": title,
-                    "employer": employer if employer != title else "",
+                    "title": "",
+                    "employer": "",
                     "header_lines": [item for item in candidate_lines if item][:3],
                     "section": current_section,
                     "bullets": bullets,
@@ -418,8 +351,14 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
     deduped: list[dict[str, Any]] = []
     seen: set[tuple[str, int, int]] = set()
     for role in roles:
+        header_key = " | ".join(
+            _normalize_phrase(item)
+            for item in (role.get("header_lines") or [])
+            if _normalize_phrase(item)
+        )
+        role_key = _normalize_phrase(role.get("title", "")) or header_key
         key = (
-            _normalize_phrase(role.get("title", "")),
+            role_key,
             int(role.get("start_year", 0) or 0),
             int(role.get("end_year", 0) or 0),
         )
@@ -482,42 +421,35 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
     evidence_json = json.dumps(evidence_payload, ensure_ascii=True)
     prompt = (
         "Extract structured data from this CV evidence pack.\n\n"
-        "Return JSON matching this schema exactly:\n"
-        '{"capabilities":[{"name":"2-4 word lowercase skill","level":"strong|working|basic",'
-        '"fit":"core|supporting|contextual","aliases":["variant"]}],'
-        '"target_title_patterns":["business analyst"],'
-        '"secondary_title_patterns":["project manager"],'
-        '"suggested_search_keywords":["business analysis"],'
-        '"match_preferences":{"prefer_permanent":null,"work_mode_preference":null,"home_location":""}}\n\n'
+        "Return data that matches the requested response schema exactly.\n\n"
         "Rules:\n"
         f"- Current year is {_CURRENT_YEAR}. Recent means {recent_from} onward.\n"
         "- Treat the evidence pack as the source of truth. Use raw CV text only as fallback context when evidence is incomplete.\n"
-        "- For each role, trust header_lines plus dates and bullets more than the parser's title/employer fields if they appear inconsistent.\n"
+        "- For each role, trust header_lines plus dates and bullets more than any best-effort title/employer fields.\n"
         "- capabilities: transferable professional skills only. Not company/project names, domains, or generic duties. "
-        "Use role titles, bullets, and skill lines as evidence. level=strong if repeated across multiple roles or clearly senior; "
+        "Use explicit role titles when present, plus header_lines and bullets, as evidence. level=strong if repeated across multiple roles or clearly senior; "
         "fit=core if recent and repeated.\n"
         "- target_title_patterns: short searchable patterns from the most recent substantial roles in the lookback window.\n"
         "- secondary_title_patterns: other plausible patterns from the same window.\n"
         "- suggested_search_keywords: 2-4 short phrases describing the candidate's primary expertise.\n"
-        "- match_preferences: infer only from explicit statements; use null if not stated.\n"
+        "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
-        "- Return only valid JSON.\n\n"
+        "- Return only schema-valid output.\n\n"
         f"Evidence pack JSON:\n{evidence_json[:12000]}\n\n"
         f"Raw CV fallback:\n{source_text[:3000]}"
     )
 
     try:
         model = _get_llm_model()
-        resp = client.responses.create(
+        resp = client.responses.parse(
             model=model,
             input=[{"role": "user", "content": prompt}],
+            text_format=_CvExtractionResponse,
             max_output_tokens=900,
         )
         _log_llm_call(resp, "cv_extraction", model)
-        raw = (resp.output_text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1].lstrip("json").strip()
-        result = json.loads(raw)
+        parsed = resp.output_parsed
+        result = parsed.model_dump() if parsed is not None else {}
     except Exception:
         result = {}
 

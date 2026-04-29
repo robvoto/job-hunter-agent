@@ -249,7 +249,7 @@ def test_fit_score_evidence_uses_full_capability_match_set():
     assert _breakdown_value(breakdown, "Fit evidence bullets") == 10
 
 
-def test_strong_high_confidence_fit_gets_calibration_bonus():
+def test_strong_high_confidence_fit_gets_convergence_bonus():
     profile = _capability_profile()
     record = {
         "title": "Business Analyst",
@@ -272,36 +272,8 @@ def test_strong_high_confidence_fit_gets_calibration_bonus():
 
     breakdown = source_connector.fit_score_breakdown(record, profile)
 
-    assert _breakdown_value(breakdown, "Core fit signals align") == 6
+    assert _breakdown_value(breakdown, "Multiple strong signals align") == 5
     assert source_connector.fit_score(record, profile) >= 70
-
-
-def test_clean_solid_fit_gets_small_bonus_into_good_band():
-    profile = _capability_profile()
-    record = {
-        "title": "Business Analyst",
-        "title_reason": "OK",
-        "content_reason": "OK",
-        "llm_fit_grade": "SOLID",
-        "location": "Sydney NSW",
-        "work_type": "Full Time",
-        "work_mode": "Hybrid",
-        "salary": "N/A",
-        "posted_age_days": 1,
-        "full_description": (
-            "Business analyst role covering agile delivery, scrum ceremonies, acceptance criteria, "
-            "user acceptance testing, stakeholder management, and facilitate workshops with delivery teams. "
-        ) * 20,
-        "competitive_signals": [],
-        "missing_evidence": [],
-        "soft_risk_reasons": [],
-    }
-
-    breakdown = source_connector.fit_score_breakdown(record, profile)
-    without_bonus = source_connector.fit_score({**record, "soft_risk_reasons": ["Minor caveat"]}, profile)
-
-    assert _breakdown_value(breakdown, "Clean fit with no clear penalties") == 2
-    assert source_connector.fit_score(record, profile) == without_bonus + 2
 
 
 def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
@@ -347,7 +319,7 @@ def test_on_site_role_gets_visible_score_penalty():
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "On-site role") == -4
+    assert _breakdown_value(breakdown, "On-site role") == -2
 
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
@@ -616,7 +588,7 @@ def test_contract_preference_treats_hyphenated_full_time_as_permanent():
     assert source_connector.assess_contract_preference(
         {"work_type": "Full-time", "salary": "N/A"},
         _test_profile(),
-    ) == {"label": "Permanent role", "value": 7}
+    ) == {"label": "Permanent role", "value": 10}
 
 
 def test_scoring_helpers_ignore_display_only_fit_highlights():
@@ -669,7 +641,7 @@ def test_scoring_helpers_still_use_real_source_text():
     }
     assert source_connector.assess_contract_preference(record, profile) == {
         "label": "12+ month contract with extension potential",
-        "value": 6,
+        "value": 9,
     }
 
 
@@ -753,11 +725,11 @@ def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     assert "All match levels" in options_html
     assert "Strong match only" in options_html
     assert "Good match or better" in options_html
-    assert "Possible fit or better" in options_html
+    assert "Worth a look or better" in options_html
     assert "50+ only" not in options_html
 
 
-def test_posted_filter_options_show_counts_and_skip_duplicate_windows():
+def test_posted_filter_options_show_explicit_day_windows():
     options_html = source_connector.render_posted_filter_options(
         [
             {"posted_age_days": 0.25},
@@ -769,10 +741,38 @@ def test_posted_filter_options_show_counts_and_skip_duplicate_windows():
 
     assert "Any posted date (4)" in options_html
     assert "Posted today (1)" in options_html
-    assert "Recent roles (2)" in options_html
-    assert "This week (3)" in options_html
-    assert "Last two weeks" not in options_html
-    assert "This month" not in options_html
+    assert "Last 3 days (2)" in options_html
+    assert "Last 7 days (3)" in options_html
+    assert "Last 14 days (3)" in options_html
+    assert "Last 30 days (3)" in options_html
+
+
+def test_repeated_listing_history_adds_candidate_warning():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "seek:repeat-1",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "times_seen": 5,
+            "first_seen_at": "2026-03-01T09:00:00+10:00",
+            "last_seen_at": "2026-04-01T09:00:00+10:00",
+        },
+        _test_profile(),
+    )
+
+    assert "Potential Red Flag" in html
+    assert "this same listing has been seen 5 times over 31 days" in html
 
 
 def test_posted_display_anchors_relative_text_to_retrieval_date():

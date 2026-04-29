@@ -100,6 +100,14 @@ REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 MIN_TRUSTED_DESCRIPTION_LENGTH = 600
 TRUSTED_DESCRIPTION_SOURCES = frozenset({"jobaddetails", "body", "linkedin_full_description"})
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
+ARCHIVE_LABEL = "Saved From Earlier Searches"
+ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your dashboard."
+ARCHIVE_CONTEXT_PREFIX = "Saved From Earlier Searches"
+MAX_HISTORY_SIGHTINGS = 24
+REPEATED_LISTING_MIN_TIMES_SEEN = 4
+REPEATED_LISTING_MIN_SPAN_DAYS = 21
+MULTI_LISTING_RED_FLAG_MIN_LISTINGS = 3
+MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = 30
 
 KEEP_SNAPSHOT_FIELDS = (
     "title",
@@ -403,13 +411,62 @@ def infer_role_sector(record: dict, details_text: str) -> dict[str, str]:
 
 def infer_posting_channel(record: dict, details_text: str) -> dict[str, str]:
     company = compact_whitespace(record.get("company") or "").lower()
-    combined = f"{company}\n{compact_whitespace(details_text).lower()}"
-    recruiter_company_match = re.search(r"\b(recruitment|recruiter|staffing|talent)\b", company)
-    recruiter_copy_match = re.search(r"\bour client\b", combined)
-    if recruiter_company_match and recruiter_copy_match:
-        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "high"}
+    title = compact_whitespace(record.get("title") or "").lower()
+    teaser = compact_whitespace(record.get("teaser") or "").lower()
+    description = compact_whitespace(details_text).lower()
+    combined = "\n".join(part for part in [title, company, teaser, description] if part)
+
+    recruiter_company_match = re.search(
+        r"\b(recruitment|recruiter|staffing|resourcing|labour hire|labor hire|executive search|search firm)\b",
+        company,
+    )
+    recruiter_copy_patterns = [
+        r"\bour client\b",
+        r"\bfor our client\b",
+        r"\bon behalf of\b",
+        r"\bclient is seeking\b",
+        r"\bsubmit (?:your )?(?:cv|resume|application)\b",
+        r"\bcontact (?:our )?(?:consultant|recruiter|recruitment team)\b",
+        r"\breference number\b",
+        r"\bshortlisted candidates\b",
+        r"\bimmediate interviews?\b",
+    ]
+    direct_copy_patterns = [
+        r"\babout us\b",
+        r"\babout the company\b",
+        r"\bwho we are\b",
+        r"\bour company\b",
+        r"\bour organisation\b",
+        r"\bour organization\b",
+        r"\bjoin our team\b",
+        r"\bjoin us\b",
+        r"\bwe are looking for\b",
+        r"\bwe are seeking\b",
+    ]
+
+    recruiter_score = 0
+    direct_score = 0
+
     if recruiter_company_match:
+        recruiter_score += 2
+    recruiter_score += sum(1 for pattern in recruiter_copy_patterns if re.search(pattern, combined))
+    direct_score += sum(1 for pattern in direct_copy_patterns if re.search(pattern, combined))
+
+    if company and description:
+        company_pattern = re.escape(company)
+        if re.search(rf"\b(?:at|join|with)\s+{company_pattern}\b", description):
+            direct_score += 1
+        if re.search(rf"\b{company_pattern}\s+is\b", description):
+            direct_score += 1
+
+    if recruiter_score >= 3 and recruiter_score > direct_score:
+        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "high"}
+    if recruiter_score >= 1 and recruiter_score > direct_score:
         return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "medium"}
+    if direct_score >= 3 and recruiter_score == 0:
+        return {"kind": "direct_employer", "label": "Direct employer", "confidence": "high"}
+    if direct_score >= 1 and recruiter_score == 0:
+        return {"kind": "direct_employer", "label": "Direct employer", "confidence": "medium"}
     return {"kind": "unknown", "label": "", "confidence": "unknown"}
 
 
@@ -855,9 +912,9 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     )
 
     dominance_level = int(signal.get("dominance_level", 1) or 1)
-    positive_bonus = int(signal.get("positive_bonus", min(1 + dominance_level, 3)) or min(1 + dominance_level, 3))
-    partial_penalty = int(signal.get("partial_penalty", 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
-    weak_penalty = int(signal.get("weak_penalty", 6 + (dominance_level * 2)) or 6 + (dominance_level * 2))
+    positive_bonus = int(signal.get("positive_bonus", min(1 + dominance_level, 2)) or min(1 + dominance_level, 2))
+    partial_penalty = int(signal.get("partial_penalty", 3 + (dominance_level * 2)) or 3 + (dominance_level * 2))
+    weak_penalty = int(signal.get("weak_penalty", 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
     if dominant_alignment_score >= 0.78:
         adjustment = positive_bonus
         alignment = "strong"
@@ -1201,6 +1258,31 @@ def posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
     return posted_text
 
 
+def current_posted_age_days(record: dict, now: Optional[datetime] = None) -> Optional[float]:
+    posted_age_days = record.get("posted_age_days")
+    if posted_age_days is None:
+        return None
+    try:
+        raw_age_days = float(posted_age_days)
+    except Exception:
+        return None
+
+    reference_time = posted_reference_time(record)
+    if reference_time is None:
+        return max(raw_age_days, 0.0)
+
+    posted_at = posted_datetime_from_age(raw_age_days, reference_time)
+    if posted_at is None:
+        return max(raw_age_days, 0.0)
+
+    current = now or datetime.now().astimezone()
+    try:
+        age_seconds = (current - posted_at).total_seconds()
+    except Exception:
+        return max(raw_age_days, 0.0)
+    return max(age_seconds / 86400, 0.0)
+
+
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
     active_profile = profile or load_profile()
     defaults = {
@@ -1330,12 +1412,12 @@ def llm_description_fit_entry(record: dict) -> dict:
         grade = fallback_map.get(decision, "SOLID")
 
     grade_map = {
-        "EXCELLENT": ("Description fit is excellent", 20),
-        "STRONG": ("Description fit is strong", 16),
-        "SOLID": ("Description fit is solid", 12),
+        "EXCELLENT": ("Description fit is excellent", 25),
+        "STRONG": ("Description fit is strong", 20),
+        "SOLID": ("Description fit is solid", 14),
         "WEAK": ("Description fit is mixed", 6),
         "POOR": ("Description fit is weak", 0),
-        "MISMATCH": ("Description fit is a mismatch", -10),
+        "MISMATCH": ("Description fit is a mismatch", -8),
     }
     label, value = grade_map.get(grade, grade_map["SOLID"])
     return {"label": label, "value": value}
@@ -1347,15 +1429,50 @@ def capability_match_summary(record: dict, profile: Optional[dict] = None) -> Di
     return find_profile_capability_matches(source_text, active_profile)
 
 
+def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
+    lowered = compact_whitespace(source_text).lower()
+    results = []
+    for rule in profile.get("capability_profile_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        fit = str(rule.get("fit") or "").strip().lower()
+        level = str(rule.get("level") or "").strip().lower()
+        if fit not in {"core", "supporting"} or level not in {"strong", "working", "basic"}:
+            continue
+        aliases = [str(a).strip().lower() for a in expand_capability_terms(rule) if str(a).strip()]
+        if not aliases or not any(text_contains_term(lowered, alias) for alias in aliases):
+            continue
+        rule_strength = _capability_rule_strength(rule)
+        profile_evidence = evidence_tier_alignment_score(profile, aliases)
+        combined = max(rule_strength, profile_evidence)
+        results.append({
+            "label": friendly_capability_label(str(rule.get("name") or "")),
+            "fit": fit,
+            "combined_strength": combined,
+        })
+    return results
+
+
 def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> tuple[int, dict]:
-    matches = capability_match_summary(record, profile)
-    core_count = len(matches.get("core", []))
-    supporting_count = len(matches.get("supporting", []))
-    score = min((core_count * 4) + (supporting_count * 2), 18)
+    active_profile = profile or load_profile()
+    source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
+    scored = capability_scored_matches(source_text, active_profile)
+    total = sum(
+        m["combined_strength"] * (4 if m["fit"] == "core" else 2)
+        for m in scored
+    )
+    score = min(round(total), 20)
+    matches = capability_match_summary(record, active_profile)
     return score, matches
 
 
-def calibrated_fit_alignment_entry(record: dict, capability_matches: Optional[dict] = None) -> Optional[dict]:
+def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = None) -> Optional[dict]:
+    """Award a bonus when multiple strong independent signals simultaneously confirm fit.
+
+    Conditions: title OK, content OK, HIGH description confidence, LLM grade
+    EXCELLENT or STRONG, 2+ core capability matches, no missing evidence.
+    Soft risks reduce the bonus from 5 to 3 but do not eliminate it.
+    """
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     title_reason = str(record.get("title_reason") or "").strip().upper()
     content_reason = str(record.get("content_reason") or "").strip().upper()
@@ -1367,39 +1484,12 @@ def calibrated_fit_alignment_entry(record: dict, capability_matches: Optional[di
 
     if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
         return None
-    if missing_evidence:
+    if missing_evidence or grade not in {"EXCELLENT", "STRONG"}:
         return None
-    if grade in {"EXCELLENT", "STRONG"} and core_count >= 2:
-        bonus = 6 if not soft_risks else 4
-        return {"label": "Core fit signals align", "value": bonus}
-    return None
-
-
-def clean_fit_bonus_entry(
-    record: dict,
-    breakdown: List[dict],
-    capability_matches: Optional[dict] = None,
-) -> Optional[dict]:
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    title_reason = str(record.get("title_reason") or "").strip().upper()
-    content_reason = str(record.get("content_reason") or "").strip().upper()
-    fit_confidence = full_description_confidence(record)
-    missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
-    soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
-    matches = capability_matches or capability_match_summary(record)
-    capability_count = len(matches.get("core", [])) + len(matches.get("supporting", []))
-
-    if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
+    if core_count < 2:
         return None
-    if grade not in {"EXCELLENT", "STRONG", "SOLID"}:
-        return None
-    if missing_evidence or soft_risks:
-        return None
-    if capability_count < 3:
-        return None
-    if any(int(item.get("value", 0) or 0) < 0 for item in breakdown):
-        return None
-    return {"label": "Clean fit with no clear penalties", "value": 2}
+    bonus = 5 if not soft_risks else 3
+    return {"label": "Multiple strong signals align", "value": bonus}
 
 
 def deterministic_review_outcome(record: dict, fit_highlights: List[str], missing_evidence: List[str], soft_risk_reasons: List[str]) -> Optional[dict]:
@@ -1450,12 +1540,12 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if home_location and _matches_location(home_location):
         label_target = compact_whitespace(home_location)
-        return {"label": f"Location matches primary preference: {label_target}", "value": 4}
+        return {"label": f"Location matches primary preference: {label_target}", "value": 8}
 
     if secondary_location and _matches_location(secondary_location):
         label_target = compact_whitespace(secondary_location)
         if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
-            return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": 2}
+            return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": 4}
         if re.search(r"\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\b", source_text):
             return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": 0}
         if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
@@ -1466,7 +1556,7 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
             rf"\b(must be based in|must reside in|onsite in)\s+(?:{'|'.join(secondary_terms)})\b",
             source_text,
         ):
-            return {"label": f"Secondary location requires local onsite attendance: {label_target}", "value": -6}
+            return {"label": f"Secondary location requires local onsite attendance: {label_target}", "value": -5}
         return {"label": f"Location matches secondary preference: {label_target}", "value": -1}
 
     return None
@@ -1487,24 +1577,24 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if is_perm:
         if eng_pref == "contract":
-            return {"label": "Permanent role (preference is Contract)", "value": -4}
-        return {"label": "Permanent role", "value": 7}
+            return {"label": "Permanent role (preference is Contract)", "value": -5}
+        return {"label": "Permanent role", "value": 10}
 
     if not is_contract:
         return None
 
     if eng_pref == "permanent":
-        return {"label": "Contract role (preference is Permanent)", "value": -4}
+        return {"label": "Contract role (preference is Permanent)", "value": -5}
 
     contract_months = extract_contract_months(source_text)
     if contract_months is None:
         return None
     if contract_months >= preferred_contract_months:
         if "extension" in source_text.lower():
-            return {"label": "12+ month contract with extension potential", "value": 6}
-        return {"label": "12+ month contract", "value": 5}
+            return {"label": "12+ month contract with extension potential", "value": 9}
+        return {"label": "12+ month contract", "value": 8}
     if contract_months >= short_contract_months:
-        return {"label": "6-12 month contract", "value": 2}
+        return {"label": "6-12 month contract", "value": 5}
     return {"label": "Contract is shorter than preferred", "value": -4}
 
 
@@ -1659,29 +1749,25 @@ def render_score_filter_options(
 def posted_filter_option_label(threshold: int) -> str:
     labels = {
         1: "Posted today",
-        3: "Recent roles",
-        7: "This week",
-        15: "Last two weeks",
-        30: "This month",
+        3: "Last 3 days",
+        7: "Last 7 days",
+        14: "Last 14 days",
+        30: "Last 30 days",
     }
     return labels.get(threshold, f"Last {threshold} days")
 
 
-def render_posted_filter_options(records: List[dict]) -> str:
+def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:
     options = [f'<option value="all">Any posted date ({len(records)})</option>']
-    previous_count = 0
-    for threshold in [1, 3, 7, 15, 30]:
+    for threshold in [1, 3, 7, 14, 30]:
         count = sum(
             1
             for record in records
-            if record.get("posted_age_days") is not None
-            and float(record.get("posted_age_days") or 0) <= threshold
+            if (age_days := current_posted_age_days(record, now)) is not None
+            and age_days <= threshold
         )
-        if count == previous_count:
-            continue
-        previous_count = count
         options.append(
-            f'<option value="{threshold}">'
+            f'<option {"selected" if threshold == 1 else ""}>' value="{threshold}">'
             f'{safe_html(posted_filter_option_label(threshold))} ({count})</option>'
         )
     return "".join(options)
@@ -1779,12 +1865,12 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
         if minimum_daily_rate <= 0 or parsed_value <= 0:
             return 0
         if parsed_value >= minimum_daily_rate:
-            return 3
+            return 7
         ratio = parsed_value / minimum_daily_rate
         if ratio >= 0.80:
-            return -2
+            return -1
         if ratio >= 0.60:
-            return -4
+            return -3
         return -5
 
     if is_non_comparable_period:
@@ -1793,12 +1879,12 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
     if minimum_salary_yearly <= 0 or parsed_value <= 0:
         return 0
     if parsed_value >= minimum_salary_yearly:
-        return 3
+        return 7
     ratio = parsed_value / minimum_salary_yearly
     if ratio >= 0.80:
-        return -2
+        return -1
     if ratio >= 0.60:
-        return -4
+        return -3
     return -5
 
 
@@ -1806,7 +1892,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     breakdown: List[dict] = []
     title_reason = str(record.get("title_reason") or "")
     content_reason = str(record.get("content_reason") or "")
-    posted_age_days = record.get("posted_age_days")
+    posted_age_days = current_posted_age_days(record)
     work_mode = str(record.get("work_mode") or "").lower()
     fit_highlights = [item for item in record.get("fit_highlights", []) if str(item).strip()]
     active_profile = profile or load_profile()
@@ -1818,7 +1904,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": -100}]
 
     if title_reason == "OK":
-        breakdown.append({"label": "Direct target title match", "value": weighted_points(14, weights["fit"])})
+        breakdown.append({"label": "Direct target title match", "value": weighted_points(15, weights["fit"])})
     elif title_reason == "TITLE_POTENTIAL_MATCH":
         breakdown.append({"label": "Secondary title match", "value": weighted_points(4, weights["fit"])})
 
@@ -1826,19 +1912,19 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     breakdown.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"])})
 
     if content_reason == "OK":
-        breakdown.append({"label": "Passed content filters", "value": weighted_points(8, weights["fit"])})
+        breakdown.append({"label": "Passed content filters", "value": weighted_points(3, weights["fit"])})
 
     if full_description_confidence(record) == "LOW":
-        breakdown.append({"label": "Description capture incomplete", "value": weighted_points(-10, weights["fit"])})
+        breakdown.append({"label": "Description capture incomplete", "value": weighted_points(-8, weights["fit"])})
 
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
 
-    calibrated_fit_entry = calibrated_fit_alignment_entry(record, capability_matches)
-    if calibrated_fit_entry:
+    convergence_entry = convergence_bonus_entry(record, capability_matches)
+    if convergence_entry:
         breakdown.append({
-            "label": calibrated_fit_entry["label"],
-            "value": weighted_points(int(calibrated_fit_entry["value"]), weights["fit"]),
+            "label": convergence_entry["label"],
+            "value": weighted_points(int(convergence_entry["value"]), weights["fit"]),
         })
 
     for item in competitive_signal_breakdown(record, active_profile):
@@ -1846,13 +1932,13 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
 
     if posted_age_days is not None:
         if posted_age_days <= (1 / 24):
-            breakdown.append({"label": "Posted within the last hour", "value": weighted_points(12, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last hour", "value": weighted_points(10, weights["freshness"])})
         elif posted_age_days <= 1:
-            breakdown.append({"label": "Posted within the last day", "value": weighted_points(9, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last day", "value": weighted_points(8, weights["freshness"])})
         elif posted_age_days <= 3:
-            breakdown.append({"label": "Posted within the last 3 days", "value": weighted_points(6, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last 3 days", "value": weighted_points(5, weights["freshness"])})
         elif posted_age_days <= 7:
-            breakdown.append({"label": "Posted within the last week", "value": weighted_points(3, weights["freshness"])})
+            breakdown.append({"label": "Posted within the last week", "value": weighted_points(2, weights["freshness"])})
         elif posted_age_days <= 15:
             breakdown.append({"label": "Still relatively recent", "value": weighted_points(1, weights["freshness"])})
 
@@ -1878,11 +1964,11 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         })
 
     if work_mode == "hybrid":
-        breakdown.append({"label": "Hybrid work available", "value": weighted_points(1, weights["work_mode"])})
+        breakdown.append({"label": "Hybrid work available", "value": weighted_points(3, weights["work_mode"])})
     elif work_mode == "remote":
-        breakdown.append({"label": "Remote work available", "value": weighted_points(2, weights["work_mode"])})
+        breakdown.append({"label": "Remote work available", "value": weighted_points(5, weights["work_mode"])})
     elif work_mode in {"on-site", "onsite", "on site"}:
-        breakdown.append({"label": "On-site role", "value": weighted_points(-4, weights["work_mode"])})
+        breakdown.append({"label": "On-site role", "value": weighted_points(-2, weights["work_mode"])})
 
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
@@ -1892,10 +1978,6 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
 
     if viewed_by_user(record) and not record.get("applied"):
         breakdown.append({"label": "Already viewed by you", "value": -3})
-
-    clean_fit_bonus = clean_fit_bonus_entry(record, breakdown, capability_matches)
-    if clean_fit_bonus:
-        breakdown.append({"label": clean_fit_bonus["label"], "value": weighted_points(int(clean_fit_bonus["value"]), weights["fit"])})
 
     return breakdown
 
@@ -2058,6 +2140,97 @@ def is_description_trusted(record: dict) -> bool:
     return full_description_confidence(record) == "HIGH"
 
 
+def history_cluster_key_from_parts(source: Optional[str], company: Optional[str], title: Optional[str]) -> str:
+    source_key = compact_whitespace(source or "").lower()
+    company_key = re.sub(r"[^a-z0-9]+", " ", compact_whitespace(company or "").lower()).strip()
+    title_key = re.sub(r"[^a-z0-9]+", " ", compact_whitespace(title or "").lower()).strip()
+    if not source_key or not company_key or not title_key:
+        return ""
+    return f"{source_key}|{company_key}|{title_key}"
+
+
+def history_cluster_key(record: dict) -> str:
+    source = str(record.get("source") or "").strip().lower()
+    if not source:
+        job_key = str(record.get("job_key") or "")
+        source = "linkedin" if job_key.startswith("linkedin:") else "seek"
+    return history_cluster_key_from_parts(source, record.get("company"), record.get("title"))
+
+
+def build_history_sighting(record: dict, run_iso: str) -> dict:
+    details_text = get_trusted_full_description(record) or compact_whitespace(record.get("teaser") or "")
+    posting_channel = infer_posting_channel(record, details_text).get("kind") or "unknown"
+    return {
+        "seen_at": run_iso,
+        "url": str(record.get("url") or "").strip(),
+        "posted": normalize_posted_text(record.get("posted")),
+        "posted_age_days": record.get("posted_age_days"),
+        "company": str(record.get("company") or "").strip(),
+        "title": str(record.get("title") or "").strip(),
+        "source": str(record.get("source") or "").strip().lower(),
+        "posting_channel": posting_channel,
+    }
+
+
+def build_history_cluster_index(history: Dict[str, dict]) -> Dict[str, dict]:
+    clusters: Dict[str, dict] = {}
+    for job_key, entry in history.items():
+        if not isinstance(entry, dict):
+            continue
+        snapshot = entry.get("last_kept_snapshot") if isinstance(entry.get("last_kept_snapshot"), dict) else {}
+        source = snapshot.get("source") or ("linkedin" if str(job_key).startswith("linkedin:") else "seek")
+        company = snapshot.get("company") or entry.get("company")
+        title = snapshot.get("title") or entry.get("title")
+        cluster_key = history_cluster_key_from_parts(source, company, title)
+        if not cluster_key:
+            continue
+        stats = clusters.setdefault(
+            cluster_key,
+            {
+                "job_keys": set(),
+                "times_seen": 0,
+                "first_seen_at": None,
+                "last_seen_at": None,
+            },
+        )
+        stats["job_keys"].add(str(job_key))
+        stats["times_seen"] += int(entry.get("times_seen", 0) or 0)
+        first_seen = parse_timestamp(entry.get("first_seen_at"))
+        last_seen = parse_timestamp(entry.get("last_seen_at"))
+        if first_seen and (stats["first_seen_at"] is None or first_seen < stats["first_seen_at"]):
+            stats["first_seen_at"] = first_seen
+        if last_seen and (stats["last_seen_at"] is None or last_seen > stats["last_seen_at"]):
+            stats["last_seen_at"] = last_seen
+    return clusters
+
+
+def assess_history_warning_signals(record: dict, history_clusters: Optional[Dict[str, dict]] = None) -> List[str]:
+    warnings: List[str] = []
+    times_seen = int(record.get("times_seen", 0) or 0)
+    first_seen = parse_timestamp(record.get("first_seen_at"))
+    last_seen = parse_timestamp(record.get("last_seen_at"))
+    if first_seen and last_seen:
+        span_days = max((last_seen.date() - first_seen.date()).days, 0)
+        if times_seen >= REPEATED_LISTING_MIN_TIMES_SEEN and span_days >= REPEATED_LISTING_MIN_SPAN_DAYS:
+            warnings.append(
+                f"Potential red flag: this same listing has been seen {times_seen} times over {span_days} days"
+            )
+
+    cluster_key = history_cluster_key(record)
+    cluster_stats = history_clusters.get(cluster_key) if history_clusters and cluster_key else None
+    if cluster_stats:
+        listing_count = len(cluster_stats.get("job_keys", set()))
+        cluster_first_seen = cluster_stats.get("first_seen_at")
+        cluster_last_seen = cluster_stats.get("last_seen_at")
+        if cluster_first_seen and cluster_last_seen:
+            cluster_span_days = max((cluster_last_seen.date() - cluster_first_seen.date()).days, 0)
+            if listing_count >= MULTI_LISTING_RED_FLAG_MIN_LISTINGS and cluster_span_days >= MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS:
+                warnings.append(
+                    f"Potential red flag: the same title from the same poster has appeared across {listing_count} separate listings over {cluster_span_days} days"
+                )
+    return dedupe_preserve_order(warnings)
+
+
 def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> None:
     job_key = record.get("job_key")
     if not job_key:
@@ -2087,6 +2260,12 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
     record["last_seen_at"] = entry.get("last_seen_at")
     record["first_viewed_at"] = entry.get("first_viewed_at")
     record["last_viewed_at"] = entry.get("last_viewed_at")
+    sightings = entry.get("sightings") if isinstance(entry.get("sightings"), list) else []
+    current_sighting = build_history_sighting(record, run_iso)
+    if not sightings or sightings[-1] != current_sighting:
+        sightings = [*sightings, current_sighting][-MAX_HISTORY_SIGHTINGS:]
+    entry["sightings"] = sightings
+    record["history_sightings"] = sightings
 
     if record.get("decision") == "KEEP":
         if not entry.get("first_kept_at"):
@@ -2210,7 +2389,12 @@ def build_dashboard_record_sets(
     )
 
 
-def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applied_pool: Optional[List[dict]] = None) -> str:
+def render_job_card(
+    record: dict,
+    scoring_profile: Optional[dict] = None,
+    applied_pool: Optional[List[dict]] = None,
+    history_clusters: Optional[Dict[str, dict]] = None,
+) -> str:
     active_profile = scoring_profile or load_profile()
     display_record = dict(record)
     
@@ -2279,7 +2463,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applie
     visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=SHOW_SCORING_DEBUG)
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
-    posted_age_days = record.get("posted_age_days")
+    posted_age_days = current_posted_age_days(record)
     salary_value = salary_sort_value(str(display_record.get("salary") or ""))
     salary_fit_state = salary_fit_label(display_record, scoring_profile)
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
@@ -2325,7 +2509,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applie
     elif is_possible_repost:
         badges.append(render_badge("Possible Repost", "badge-warning", "This role looks very similar to one you have already applied to."))
     elif archived:
-        badges.append(render_badge("Previously Kept", "badge-archive", "This role was kept in an earlier run and carried forward into the dashboard."))
+        badges.append(render_badge(ARCHIVE_LABEL, "badge-archive", ARCHIVE_BADGE_TOOLTIP))
     if not applied_record and not seen_by_you:
         badges.append(render_badge("New To You", "badge-new", "You have not opened this role from the dashboard yet."))
     if is_stale:
@@ -2340,6 +2524,12 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applie
     if channel_signal.get("kind") == "recruiter":
         confidence_text = channel_signal.get("confidence") or "inferred"
         badges.append(render_badge("Recruiter", "badge-channel-recruiter", f"Recruiter/intermediary posting inferred with {confidence_text} confidence from the captured job text."))
+    elif channel_signal.get("kind") == "direct_employer":
+        confidence_text = channel_signal.get("confidence") or "inferred"
+        badges.append(render_badge("Direct Employer", "badge-new", f"Direct employer posting inferred with {confidence_text} confidence from the captured job text."))
+    history_warning_signals = assess_history_warning_signals(record, history_clusters)
+    if history_warning_signals:
+        badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))
 
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
@@ -2387,7 +2577,7 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applie
     if hidden_record and record.get("last_hidden_at"):
         context_bits.append(f"Hidden {format_timestamp_label(record.get('last_hidden_at'))}")
     elif archived and record.get("last_kept_at"):
-        context_bits.append(f"Kept from an earlier run {format_timestamp_label(record.get('last_kept_at'))}")
+        context_bits.append(f"{ARCHIVE_CONTEXT_PREFIX} {format_timestamp_label(record.get('last_kept_at'))}")
     context_html = f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>' if context_bits else ""
 
     summary_html = (
@@ -2396,7 +2586,9 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applie
         else ""
     )
     note_bits: List[str] = []
-    if description_issue:
+    if history_warning_signals:
+        note_bits.append(f"Potential red flag: {history_warning_signals[0].removeprefix('Potential red flag: ').strip()}.")
+    elif description_issue:
         note_bits.append("Description issue: full job description was not captured clearly.")
     elif is_possible_repost:
         note_bits.append("Alert: This looks like a role you already marked as applied at this company.")
@@ -2447,6 +2639,13 @@ def render_job_card(record: dict, scoring_profile: Optional[dict] = None, applie
             '<div class="job-insight-group job-insight-warning">'
             '<strong>Description issue</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in description_issue_items)}</ul>'
+            '</div>'
+        )
+    if history_warning_signals:
+        insight_sections.append(
+            '<div class="job-insight-group job-insight-warning">'
+            '<strong>Potential red flags</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in history_warning_signals)}</ul>'
             '</div>'
         )
     if negative_items:
@@ -2574,14 +2773,24 @@ def section_dom_id(title: str) -> str:
     return slug or "matches"
 
 
-def render_section(title: str, records: List[dict], empty_message: str, scoring_profile: Optional[dict] = None, applied_pool: Optional[List[dict]] = None) -> str:
+def render_section(
+    title: str,
+    records: List[dict],
+    empty_message: str,
+    scoring_profile: Optional[dict] = None,
+    applied_pool: Optional[List[dict]] = None,
+    history_clusters: Optional[Dict[str, dict]] = None,
+) -> str:
     if not records:
         return (
             f'<section class="section"><h2>{safe_html(title)}</h2>'
             f'<p class="empty-state">{safe_html(empty_message)}</p></section>'
         )
     dom_id = section_dom_id(title)
-    cards = "".join(render_job_card(record, scoring_profile, applied_pool=applied_pool) for record in records)
+    cards = "".join(
+        render_job_card(record, scoring_profile, applied_pool=applied_pool, history_clusters=history_clusters)
+        for record in records
+    )
     return (
         f'<section class="section job-section" data-section-id="{safe_html(dom_id)}">'
         '<div class="section-head">'
@@ -2670,15 +2879,17 @@ def render_html(
         reference_time,
         scoring_profile,
     )
+    history_clusters = build_history_cluster_index(job_history)
+    shortlist_records = dashboard_records["shortlist_records"]
     current_records = dashboard_records["current_records"]
     recent_archive_records = dashboard_records["recent_archive_records"]
     stale_archive_records = dashboard_records["stale_archive_records"]
     applied_records = dashboard_records["applied_records"]
     hidden_records = dashboard_records["hidden_records"]
-    potential_records = [*current_records, *recent_archive_records, *stale_archive_records]
+    potential_records = shortlist_records
     score_filter_options_html = render_score_filter_options(potential_records, scoring_profile)
-    posted_filter_options_html = render_posted_filter_options(potential_records)
-    shortlist_count = len(current_records) + len(recent_archive_records) + len(stale_archive_records)
+    posted_filter_options_html = render_posted_filter_options(potential_records, reference_time)
+    shortlist_count = len(shortlist_records)
     run_label = run_started_at.strftime("%d %b %Y %I:%M %p")
     dashboard_run_id = str(run_stats.get("run_started_at") or run_started_at.isoformat(timespec="seconds"))
     target_summaries = []
@@ -2721,15 +2932,15 @@ def render_html(
     snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and {view_history_text}."
     hero_summary = (
         f"Last run {run_label} - {run_stats.get('cards_seen', 0)} cards scanned, "
-        f"{len(current_records)} matches found"
+        f"{len(shortlist_records)} shortlist matches shown"
     )
     this_run_cards_html = "".join(
         f'<div class="summary-card"><strong>{safe_html(str(value))}</strong><span>{safe_html(label)}</span></div>'
         for value, label in [
-            (len(current_records), "Matches"),
-            (sum(1 for record in current_records if not viewed_by_user(record)), "New to you"),
-            (sum(1 for record in current_records if viewed_by_user(record)), "Opened by you"),
-            (len(recent_archive_records), "Previously kept"),
+            (len(shortlist_records), "Matches"),
+            (sum(1 for record in shortlist_records if not viewed_by_user(record)), "New to you"),
+            (sum(1 for record in shortlist_records if viewed_by_user(record)), "Opened by you"),
+            (len(recent_archive_records), ARCHIVE_LABEL),
         ]
     )
     crawler_cards_html = "".join(
@@ -2763,39 +2974,28 @@ def render_html(
             "POSTED_FILTER_OPTIONS_HTML": posted_filter_options_html,
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
             "CURRENT_SECTION_HTML": render_section(
-                "Matches From This Run",
-                current_records,
-                "No kept roles from the latest run right now.",
+                "Best Matches",
+                shortlist_records,
+                "No shortlist matches are available right now.",
                 scoring_profile,
                 applied_pool=applied_records,
+                history_clusters=history_clusters,
             ),
-            "RECENT_SECTION_HTML": render_section(
-                "Kept From Earlier Runs",
-                recent_archive_records,
-                "No roles from earlier runs are being carried forward right now.",
-                scoring_profile,
-                applied_pool=applied_records,
-            ),
-            "STALE_DISABLED_ATTR": "disabled" if not stale_archive_records else "",
-            "STALE_TOGGLE_LABEL": "Show" if stale_archive_records else "No",
-            "STALE_COUNT": str(len(stale_archive_records)),
-            "ARCHIVE_STALE_AFTER_DAYS": str(ARCHIVE_STALE_AFTER_DAYS),
-            "STALE_CARDS_HTML": "".join(
-                render_job_card(record, scoring_profile, applied_pool=applied_records)
-                for record in stale_archive_records
-            ),
-            "STALE_EMPTY_STATE_HTML": "" if stale_archive_records else '<p class="empty-state">No older previously kept roles right now.</p>',
+            "RECENT_SECTION_HTML": "",
+            "ARCHIVE_LABEL": safe_html(ARCHIVE_LABEL),
             "APPLIED_SECTION_HTML": render_section(
                 "Applied Jobs",
                 applied_records,
                 "No applied jobs saved yet.",
                 scoring_profile,
+                history_clusters=history_clusters,
             ),
             "HIDDEN_SECTION_HTML": render_section(
                 "Hidden Jobs",
                 hidden_records,
                 "No hidden jobs right now.",
                 scoring_profile,
+                history_clusters=history_clusters,
             ),
             "SEARCH_KEYWORDS_LABEL": safe_html(search_keywords_label),
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),

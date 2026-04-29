@@ -253,13 +253,47 @@ The admin server now also serves the dashboard at:
 
 - `http://127.0.0.1:8765/dashboard`
 
+### Scoring Model
+
+The fit score is a 0–100 integer built as a weighted sum of signals. Components in order:
+
+| Component | Range | Weight category |
+|-----------|-------|-----------------|
+| Title signal (direct match / secondary) | 0–14 | `fit` |
+| LLM description grade | −10–20 | `fit` |
+| Content filter pass | 0–8 | `fit` |
+| Full description confidence penalty | 0 or −10 | `fit` |
+| Capability evidence score | 0–18 | `fit` |
+| Calibrated fit alignment bonus | 0, 4, or 6 | `fit` |
+| Competitive signal adjustments | variable | `fit` |
+| Clean fit bonus | 0 or 2 | `fit` |
+| Freshness | 0–12 | `freshness` |
+| Location preference | −6–4 | `location` |
+| Contract preference | −4–7 | `contract` |
+| Government preference | 0–4 | `government` |
+| Work mode | −4–2 | `work_mode` |
+| Salary signal | −5–3 | `salary` |
+| Already viewed penalty | −3 | unweighted |
+
+Preference weights (default 1.0, max 2.0) multiply all points in their category. They are set from the settings UI.
+
+**Capability evidence score** is the evidence-based component. For each capability rule that matches the job description (fit = core or supporting, level = strong/working/basic):
+
+```
+combined     = max(rule_strength, evidence_tier_alignment_score)
+contribution = combined × fit_weight   # fit_weight: 4 for core, 2 for supporting
+```
+
+`evidence_tier_alignment_score` is computed from the candidate's profile text — recency, how many roles mention it, and how many alias hits appear. A capability with deep recent evidence contributes more than one with a single old mention, even if both are classified the same level.
+
 ### Match Score Bands
 
-The dashboard uses internal scoring (0-100) mapped to human-readable bands:
-- **Strong match** (85-100)
-- **Good match** (70-84)
-- **Possible fit** (55-69) (also referred to as "Worth a look")
-- **Stretch** (0-54)
+| Band | Score |
+|------|-------|
+| Strong match | 85–100 |
+| Good match | 70–84 |
+| Possible fit | 55–69 |
+| Stretch | 0–54 |
 
 ---
 

@@ -1,16 +1,24 @@
 (function () {
   const capabilityLevelMeta = {
     strong: {
-      label: 'Strong',
-      summary: 'Proven strength that should count heavily when a role depends on it.',
+      label: 'Expert',
+      summary: 'Can lead, innovate, and mentor others.',
+      tone: 'strength-strong',
     },
     working: {
-      label: 'Solid',
-      summary: 'Clear evidence, but not one of your main headline strengths.',
+      label: 'Advanced',
+      summary: 'Can handle complex tasks independently.',
+      tone: 'strength-working',
     },
     basic: {
-      label: 'Some exposure',
-      summary: 'Real exposure, but this should stay a light supporting signal.',
+      label: 'Intermediate',
+      summary: 'Can handle routine tasks with minimal help.',
+      tone: 'strength-basic',
+    },
+    low: {
+      label: 'Beginner',
+      summary: 'Learning the basics; needs heavy supervision.',
+      tone: 'strength-low',
     },
   };
 
@@ -73,6 +81,7 @@
     capabilityPriorityMeta,
     capabilityModeMeta,
     capabilityModeOptions: ['core_skill', 'useful_support', 'background_only', 'not_for_me'],
+    strengthGuideTitle: 'Strength shows your depth. Relevance decides how much that capability should influence matching.',
     reviewPromptLabel: 'How relevant is this to your target roles?',
     emptyReviewChoiceMeta: {
       label: 'Choose an option',

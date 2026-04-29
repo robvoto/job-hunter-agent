@@ -546,7 +546,7 @@
     }
     .capability-row-fields {
       display: grid;
-      grid-template-columns: minmax(220px, 1.8fr) minmax(200px, 260px) auto;
+      grid-template-columns: minmax(220px, 1.7fr) minmax(150px, 200px) minmax(200px, 260px) auto;
       gap: 10px;
       align-items: end;
       padding-top: 12px;
@@ -621,6 +621,31 @@
       color: var(--muted);
       font-size: 0.86rem;
     }
+    .capability-strength-guide {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+    .capability-strength-guide-title {
+      margin: 0 0 10px;
+      color: var(--ink);
+      font-size: 0.92rem;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+    .capability-strength-guide-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 10px;
+      align-items: center;
+    }
+    .capability-strength-guide-copy {
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
     .review-list { display: grid; gap: 12px; }
     .tuning-summary {
       display: grid;
@@ -650,6 +675,26 @@
       color: var(--muted);
       font-size: 0.82rem;
       font-weight: 700;
+    }
+    .strength-chip.strength-strong {
+      background: #dcfce7;
+      border-color: #86efac;
+      color: #166534;
+    }
+    .strength-chip.strength-working {
+      background: #dbeafe;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+    .strength-chip.strength-basic {
+      background: #fef3c7;
+      border-color: #fcd34d;
+      color: #92400e;
+    }
+    .strength-chip.strength-low {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #b91c1c;
     }
     .review-card {
       background: white;
@@ -698,6 +743,7 @@
         max-width: 100%;
         justify-content: flex-start;
       }
+      .capability-strength-guide-grid { grid-template-columns: 1fr; }
       .capability-row-fields { grid-template-columns: 1fr 1fr; }
       .capability-row-actions {
         grid-column: 1 / -1;

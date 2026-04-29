@@ -18,9 +18,6 @@ from typing import Any
 from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
-    _GENERIC_PHRASE_STOPWORDS,
-    _is_generic_title_phrase,
-    _is_quality_phrase,
     _normalize_token,
     _normalize_phrase,
     _parse_role_entries,
@@ -28,6 +25,45 @@ from job_hunter_agent.profile_learning import (
     repair_text,
 )
 from job_hunter_agent.profile_store import normalize_capability_rules
+
+_STOPWORDS = {
+    "a", "an", "and", "the", "to", "for", "of", "in", "on", "with", "by", "from", "into",
+    "using", "use", "used", "within", "through", "under", "over", "per", "or", "as", "at",
+    "is", "are", "was", "were", "be", "been", "being", "that", "this", "these", "those",
+    "will", "would", "can", "could", "should", "may",
+}
+_GENERIC_ROLE_TOKENS = {
+    "analyst", "manager", "coordinator", "consultant", "specialist", "developer", "engineer",
+    "architect", "officer", "director", "administrator", "owner", "lead", "executive",
+    "head", "staff", "master",
+}
+_TITLE_MODIFIER_TOKENS = {
+    "senior", "lead", "principal", "technical", "functional", "digital", "delivery", "staff",
+    "junior", "associate", "executive", "chief", "head", "contract", "consulting",
+}
+_PHRASE_BLOCKLIST = {
+    "experience", "responsibility", "responsibilities", "project", "projects", "outcome",
+    "outcomes", "profile", "professional experience", "tools", "technologies", "skills", "summary",
+}
+
+
+def _is_generic_title_phrase(text: str) -> bool:
+    tokens = _normalize_phrase(text).split()
+    return bool(tokens) and all(t in _TITLE_MODIFIER_TOKENS or t in _GENERIC_ROLE_TOKENS for t in tokens)
+
+
+def _is_quality_phrase(text: str) -> bool:
+    cleaned = _normalize_phrase(text)
+    if not cleaned or cleaned in _PHRASE_BLOCKLIST:
+        return False
+    tokens = cleaned.split()
+    if not tokens or len(tokens) > 4:
+        return False
+    if len(tokens) == 1 and len(tokens[0]) < 4:
+        return False
+    if all(t in _STOPWORDS for t in tokens):
+        return False
+    return True
 
 _ACTION_VERBS = {
     "led", "lead", "managed", "manage", "delivered", "deliver",
@@ -131,7 +167,7 @@ def _tool_terms(text: str) -> list[str]:
         ]
         for piece in pieces or [cleaned_part]:
             tokens = [_normalize_token(token) for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", piece)]
-            tokens = [token for token in tokens if token and token not in _GENERIC_PHRASE_STOPWORDS]
+            tokens = [token for token in tokens if token and token not in _STOPWORDS]
             if not tokens:
                 continue
             term = " ".join(tokens[:4]).strip()
@@ -145,7 +181,7 @@ def _ngrams(text: str, excluded_tokens: set[str] | None = None) -> list[str]:
     tokens = [
         _normalize_token(token)
         for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
-        if _normalize_token(token) not in _GENERIC_PHRASE_STOPWORDS
+        if _normalize_token(token) not in _STOPWORDS
         and _normalize_token(token) not in blocked
     ]
     phrases: list[str] = []

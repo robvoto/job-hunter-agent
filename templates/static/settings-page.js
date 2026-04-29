@@ -89,6 +89,7 @@
     }
 
     const capabilityModeMeta = capabilityUi.capabilityModeMeta || {};
+    const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
 
     const capabilityPriorityMeta = capabilityUi.capabilityPriorityMeta || {};
 
@@ -109,9 +110,10 @@
 
     function applyCapabilityModeToRule(rule, mode) {
       const meta = capabilityModeMeta[mode] || capabilityModeMeta.background_only;
+      const currentLevel = String(rule?.level || '').trim().toLowerCase();
       return {
         ...(rule || {}),
-        level: meta.level,
+        level: mode === 'not_for_me' ? 'none' : (currentLevel === 'none' ? 'basic' : currentLevel || 'basic'),
         fit: meta.fit,
       };
     }
@@ -142,6 +144,32 @@
         aliases.push(cleaned);
       }
       return { name, level, fit, aliases };
+    }
+
+    function capabilityStrengthMeta(level) {
+      const key = String(level || '').trim().toLowerCase();
+      if (!key || key === 'none') return null;
+      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Intermediate', summary: '' };
+    }
+
+    function renderCapabilityStrengthGuide() {
+      const strengthOrder = ['strong', 'working', 'basic', 'low'];
+      const chips = strengthOrder.map((level) => {
+        const meta = capabilityStrengthMeta(level);
+        if (!meta) return '';
+        return `
+          <span class="suggestion-chip strength-chip ${escapeHtml(meta.tone || `strength-${level}`)}">
+            ${escapeHtml(meta.label)}
+          </span>
+          <span class="capability-strength-guide-copy">${escapeHtml(meta.summary || '')}</span>
+        `;
+      }).join('');
+      return `
+        <div class="capability-strength-guide">
+          <p class="capability-strength-guide-title">${escapeHtml(capabilityUi.strengthGuideTitle || 'Strength shows your depth. Relevance decides how much that capability should influence matching.')}</p>
+          <div class="capability-strength-guide-grid">${chips}</div>
+        </div>
+      `;
     }
 
     function setCapabilityRuleState(rules) {
@@ -184,10 +212,13 @@
         return { priority, rules };
       });
 
-      container.innerHTML = groups.map(group => {
+      container.innerHTML = renderCapabilityStrengthGuide() + groups.map(group => {
         const priorityMeta = capabilityPriorityMeta[group.priority];
         const rowsHtml = group.rules.length
-          ? group.rules.map(({ rule, index }) => `
+          ? group.rules.map(({ rule, index }) => {
+              const strengthMeta = capabilityStrengthMeta(rule.level);
+              const strengthSummary = strengthMeta?.summary || capabilityModeMeta[capabilityModeFromRule(rule)]?.summary || '';
+              return `
               <details class="capability-row" data-capability-index="${index}"${expandedCapabilityRows.has(index) || filterTerm ? ' open' : ''}>
                 <summary class="capability-row-summary">
                   <div class="capability-row-summary-main">
@@ -195,6 +226,7 @@
                     <span class="capability-row-summary-copy">${escapeHtml(capabilityAliasPreview(rule.aliases))}</span>
                   </div>
                   <div class="capability-row-summary-meta">
+                    ${strengthMeta ? `<span class="suggestion-chip strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(strengthMeta.label)}</span>` : ''}
                     <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background')}</span>
                     <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
                   </div>
@@ -204,6 +236,15 @@
                     <div>
                       <label for="capability_name_${index}">Capability</label>
                       <input id="capability_name_${index}" type="text" data-capability-field="name" value="${escapeHtml(rule.name)}" placeholder="e.g. Agile delivery">
+                    </div>
+                    <div>
+                      <label for="capability_level_${index}">Strength</label>
+                      <select id="capability_level_${index}" data-capability-field="level">
+                        <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('strong').label)}</option>
+                        <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('working').label)}</option>
+                        <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('basic').label)}</option>
+                        <option value="low"${rule.level === 'low' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('low').label)}</option>
+                      </select>
                     </div>
                     <div>
                       <label for="capability_mode_${index}">${escapeHtml(capabilityUi.reviewPromptLabel || 'How relevant is this to your target roles?')}</label>
@@ -219,10 +260,11 @@
                     </div>
                   </div>
                   <div class="capability-meta">
+                    ${strengthMeta ? `<span class="suggestion-chip strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(strengthMeta.label)}</span>` : ''}
                     <span class="suggestion-chip">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.label || 'Background')}</span>
                     <span class="suggestion-chip">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
                   </div>
-                  <p class="capability-copy">${escapeHtml(capabilityModeMeta[capabilityModeFromRule(rule)]?.summary || '')}</p>
+                  <p class="capability-copy">${escapeHtml(strengthSummary)}</p>
                   <details class="capability-alias-shell">
                     <summary class="capability-alias-summary">Aliases (${rule.aliases.length})</summary>
                     <p class="field-help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
@@ -243,7 +285,8 @@
                   </details>
                 </div>
               </details>
-            `).join('')
+            `;
+            }).join('')
           : '<div class="capability-editor-empty-group">No matching capabilities in this group.</div>';
         return `
           <section class="capability-group">

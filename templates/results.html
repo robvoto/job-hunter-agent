@@ -1342,7 +1342,7 @@
                 <select id="scope_filter">
                   <option value="all" selected>All potential jobs</option>
                   <option value="current">Matches this run</option>
-                  <option value="saved">Kept from earlier runs</option>
+                  <option value="saved">Saved From Earlier Searches</option>
                 </select>
               </label>
               <label class="filter-field">
@@ -1358,6 +1358,15 @@
                   <option value="remote">Remote</option>
                   <option value="hybrid">Hybrid</option>
                   <option value="on-site">On-site</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Posting source</span>
+                <select id="posting_channel_filter">
+                  <option value="all">Any</option>
+                  <option value="direct_employer">Direct employer</option>
+                  <option value="recruiter">Recruiter</option>
+                  <option value="unknown">Unknown</option>
                 </select>
               </label>
               <label class="filter-field">
@@ -1383,25 +1392,6 @@
             <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">Dismiss</button>
           </div>
           $CURRENT_SECTION_HTML
-          $RECENT_SECTION_HTML
-          <section class="section job-section" data-section-id="older-saved">
-            <div class="section-head">
-              <h2>Older Previously Kept Jobs</h2>
-              <div class="section-tools">
-                <span class="pagination-label"></span>
-                <button class="pagination-button" type="button" data-page-direction="prev">Prev</button>
-                <button class="pagination-button" type="button" data-page-direction="next">Next</button>
-                <button class="toggle-button" type="button" data-toggle-target="older-archive" $STALE_DISABLED_ATTR>$STALE_TOGGLE_LABEL Older Previously Kept Jobs ($STALE_COUNT)</button>
-              </div>
-            </div>
-            <p class="section-copy">Roles kept from earlier runs are collapsed here once they are more than $ARCHIVE_STALE_AFTER_DAYS days past their last keep, so the dashboard stays focused.</p>
-            <div id="older-archive" hidden>
-              <div class="job-grid">
-                $STALE_CARDS_HTML
-              </div>
-            </div>
-            $STALE_EMPTY_STATE_HTML
-          </section>
         </div>
         <div class="workspace-panel" data-workspace-panel="applied" hidden>
           <section class="section filter-panel">
@@ -1598,6 +1588,7 @@
     const scopeFilter = document.getElementById('scope_filter');
     const postedFilter = document.getElementById('posted_filter');
     const workModeFilter = document.getElementById('work_mode_filter');
+    const postingChannelFilter = document.getElementById('posting_channel_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
     const DEFAULT_SCORE_FILTER_VALUE = $DEFAULT_SCORE_FILTER_MIN_JSON;
@@ -1866,6 +1857,7 @@
         scope: scopeFilter?.value,
         posted: postedFilter?.value,
         workMode: workModeFilter?.value,
+        postingChannel: postingChannelFilter?.value,
         score: scoreFilter?.value,
         salary: salaryFilter?.value,
       };
@@ -1896,6 +1888,7 @@
         setSelectValueIfAvailable(scopeFilter, filters.scope);
         setSelectValueIfAvailable(postedFilter, filters.posted);
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
+        setSelectValueIfAvailable(postingChannelFilter, filters.postingChannel);
         setSelectValueIfAvailable(scoreFilter, filters.score);
         setSelectValueIfAvailable(salaryFilter, filters.salary);
       } catch (e) {}
@@ -1907,6 +1900,7 @@
       if (scopeFilter) scopeFilter.value = 'all';
       if (postedFilter) postedFilter.value = 'all';
       if (workModeFilter) workModeFilter.value = 'all';
+      if (postingChannelFilter) postingChannelFilter.value = 'all';
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
       }
@@ -1975,6 +1969,7 @@
       const scopeMode = scopeFilter?.value || 'all';
       const postedLimit = postedFilter?.value || 'all';
       const workMode = workModeFilter?.value || 'all';
+      const postingChannel = postingChannelFilter?.value || 'all';
       const scoreMode = scoreFilter?.value || 'all';
       const salaryMode = salaryFilter?.value || 'all';
       const activeWorkspace = getActiveWorkspace();
@@ -1983,6 +1978,7 @@
         const cardScope = card.dataset.recordKind || 'current';
         const viewed = card.dataset.viewed === '1';
         const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
+        const cardPostingChannel = (card.dataset.postingChannel || 'unknown').toLowerCase();
         const cardScore = Number(card.dataset.fitScore || 0);
         const postedAge = Number(card.dataset.postedAge || 9999);
         const salaryState = (card.dataset.salaryFit || 'missing').toLowerCase();
@@ -1997,6 +1993,7 @@
           if (scopeMode === 'viewed' && !viewed) visible = false;
           if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
           if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
+          if (postingChannel !== 'all' && cardPostingChannel !== postingChannel) visible = false;
           if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
           if (salaryMode === 'listed' && salaryState === 'missing') visible = false;
           if (salaryMode === 'meets' && salaryState !== 'meets') visible = false;
@@ -2460,7 +2457,7 @@
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, scoreFilter, salaryFilter]) {
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, postingChannelFilter, scoreFilter, salaryFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveDashboardFilters();

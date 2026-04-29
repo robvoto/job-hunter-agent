@@ -53,12 +53,14 @@ def build_history_dashboard_record(
         "seen_before": True,
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
         "times_kept": int(entry.get("times_kept", 0) or 0),
+        "times_seen": int(entry.get("times_seen", 0) or 0),
         "first_kept_at": entry.get("first_kept_at"),
         "last_kept_at": entry.get("last_kept_at"),
         "first_seen_at": entry.get("first_seen_at"),
         "last_seen_at": entry.get("last_seen_at"),
         "first_viewed_at": entry.get("first_viewed_at"),
         "last_viewed_at": entry.get("last_viewed_at"),
+        "history_sightings": entry.get("sightings") if isinstance(entry.get("sightings"), list) else [],
         "archived": True,
         "archived_age_days": archived_age_days,
         "is_stale": archived_age_days is not None and archived_age_days > archive_stale_after_days,
@@ -274,10 +276,12 @@ def build_dashboard_record_sets(
     curated_kept_records = [record for record in kept_records if is_dashboard_eligible_fn(record, profile)]
 
     def _rank_by_fit(record: dict) -> tuple:
+        timestamp = parse_timestamp_fn(record.get("last_kept_at") or record.get("last_seen_at"))
         return (
             -fit_score_fn(record, profile),
             -(1 if not viewed_by_user_fn(record) else 0),
             record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
+            -(timestamp or datetime.min).timestamp() if timestamp else float("-inf"),
         )
 
     def _rank_archive_by_fit(record: dict) -> tuple:
@@ -311,7 +315,12 @@ def build_dashboard_record_sets(
         [record for record in archive_records if record.get("is_stale") and is_dashboard_eligible_fn(record, profile)],
         key=_rank_archive_by_fit,
     )
+    shortlist_records = sorted(
+        [*current_records, *recent_archive_records, *stale_archive_records],
+        key=_rank_by_fit,
+    )
     return {
+        "shortlist_records": shortlist_records,
         "current_records": current_records,
         "archive_records": archive_records,
         "recent_archive_records": recent_archive_records,

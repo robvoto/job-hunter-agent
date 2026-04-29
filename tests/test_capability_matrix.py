@@ -3,130 +3,69 @@ from job_hunter_agent.profile_store import normalize_capability_rules
 from job_hunter_agent.source_connector import find_profile_capability_matches
 
 
-def test_derive_job_description_aliases_converts_phrase_fragments_to_job_terms():
-    aliases = derive_job_description_aliases(
-        "agile methodologies",
-        [
-            "bpmn agile scrum",
-            "agile scrum kanban",
-            "scrum kanban",
-            "security agile scrum",
-        ],
-    )
-
-    assert "agile" in aliases
-    assert "scrum" in aliases
-    assert "kanban" in aliases
-    assert "bpmn agile scrum" not in aliases
+def test_expand_capability_terms_returns_name_and_aliases():
+    terms = expand_capability_terms({
+        "name": "requirements analysis",
+        "aliases": ["requirements gathering", "business requirements"],
+    })
+    assert terms == ["requirements analysis", "requirements gathering", "business requirements"]
 
 
-def test_derive_job_description_aliases_rejects_title_like_mashups():
-    aliases = derive_job_description_aliases(
-        "business analyst scrum",
-        [
-            "analyst scrum",
-            "business analyst scrum master",
-            "scrum master",
-            "scrum analyst",
-        ],
-    )
-
-    assert aliases == ["scrum"]
+def test_expand_capability_terms_deduplicates():
+    terms = expand_capability_terms({
+        "name": "agile delivery",
+        "aliases": ["agile delivery", "scrum", "scrum"],
+    })
+    assert terms == ["agile delivery", "scrum"]
 
 
-def test_derive_job_description_aliases_prefers_stronger_multi_word_terms():
-    aliases = derive_job_description_aliases(
-        "process mapping",
-        [
-            "process design",
-            "as-is to-be",
-            "process maps",
-        ],
-        max_aliases=2,
-    )
-
-    assert "process design" in aliases
-    assert "mapping" not in aliases
+def test_expand_capability_terms_respects_max():
+    terms = expand_capability_terms({"name": "a", "aliases": ["b", "c", "d"]}, max_terms=2)
+    assert terms == ["a", "b"]
 
 
-def test_derive_job_description_aliases_deprioritizes_action_phrases():
+def test_derive_job_description_aliases_excludes_canonical_name():
     aliases = derive_job_description_aliases(
         "stakeholder engagement",
-        [
-            "stakeholder management",
-            "facilitate workshops",
-            "stakeholder engagement",
-        ],
-        max_aliases=2,
+        ["stakeholder management", "stakeholder engagement", "engagement"],
     )
-
+    assert "stakeholder engagement" not in aliases
     assert "stakeholder management" in aliases
-    assert "facilitate workshop" not in aliases
+    assert "engagement" in aliases
 
 
-def test_derive_job_description_aliases_prefers_grounded_phrase_over_abstract_single_word():
-    aliases = derive_job_description_aliases(
-        "requirements elicitation",
-        [
-            "business analysis requirements elicitation",
-            "requirements gathering",
-            "functional requirements",
-        ],
-        max_aliases=1,
-    )
-
-    assert aliases == ["requirement gathering"]
+def test_derive_job_description_aliases_deduplicates():
+    aliases = derive_job_description_aliases("agile", ["scrum", "scrum", "kanban"])
+    assert aliases == ["scrum", "kanban"]
 
 
-def test_choose_capability_name_falls_back_from_title_like_label():
-    assert choose_capability_name(
-        "business analyst scrum",
-        [
-            "analyst scrum",
-            "business analyst scrum master",
-            "scrum master",
-            "scrum analyst",
-        ],
-    ) == "scrum"
+def test_derive_job_description_aliases_respects_max():
+    aliases = derive_job_description_aliases("x", ["a", "b", "c", "d"], max_aliases=2)
+    assert aliases == ["a", "b"]
 
 
-def test_normalize_capability_rules_cleans_existing_title_like_profile_rows():
-    rules = normalize_capability_rules(
-        [
-            {
-                "name": "business analyst scrum",
-                "level": "strong",
-                "fit": "core",
-                "aliases": [
-                    "analyst scrum",
-                    "business analyst scrum master",
-                    "scrum master",
-                    "scrum analyst",
-                ],
-            }
-        ]
-    )
+def test_choose_capability_name_returns_cleaned_name():
+    assert choose_capability_name("Requirements Analysis", []) == "requirements analysis"
 
-    assert rules == [
+
+def test_choose_capability_name_falls_back_to_first_alias():
+    assert choose_capability_name("", ["stakeholder engagement", "stakeholder management"]) == "stakeholder engagement"
+
+
+def test_choose_capability_name_empty_input():
+    assert choose_capability_name("", []) == ""
+
+
+def test_normalize_capability_rules_uses_choose_capability_name():
+    rules = normalize_capability_rules([
         {
-            "name": "scrum",
+            "name": "Stakeholder Engagement",
             "level": "strong",
             "fit": "core",
-            "aliases": [],
+            "aliases": ["stakeholder management"],
         }
-    ]
-
-
-def test_expand_capability_terms_keeps_useful_shortened_name_terms():
-    terms = expand_capability_terms(
-        {
-            "name": "primary stakeholder engagement",
-            "aliases": ["acted primary client-facing", "primary ba"],
-        }
-    )
-
-    assert "primary stakeholder engagement" in terms
-    assert "stakeholder engagement" in terms
+    ])
+    assert rules[0]["name"] == "stakeholder engagement"
 
 
 def test_find_profile_capability_matches_uses_expanded_alias_terms():
@@ -135,18 +74,13 @@ def test_find_profile_capability_matches_uses_expanded_alias_terms():
         {
             "capability_profile_rules": [
                 {
-                    "name": "agile methodologies",
+                    "name": "agile delivery",
                     "level": "strong",
                     "fit": "core",
-                    "aliases": [
-                        "bpmn agile scrum",
-                        "agile scrum kanban",
-                        "scrum kanban",
-                    ],
+                    "aliases": ["scrum", "kanban"],
                 }
             ],
             "must_not_require_skills": [],
         },
     )
-
-    assert matches["core"] == ["Agile methodologies"]
+    assert matches["core"] == ["Agile delivery"]
