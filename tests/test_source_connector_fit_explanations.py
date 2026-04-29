@@ -84,6 +84,23 @@ def test_score_to_match_label_uses_central_match_band_mapping():
     assert source_connector.score_to_match_label(40) == "Stretch"
 
 
+def test_score_labels_and_tones_can_use_profile_match_levels():
+    profile = {
+        **_test_profile(),
+        "match_levels": [
+            {"minimum_score": 90, "label": "Top tier", "description": "highest confidence"},
+            {"minimum_score": 65, "label": "Review next", "description": "good candidates"},
+            {"minimum_score": 40, "label": "Maybe", "description": "review if needed"},
+            {"minimum_score": 0, "label": "Low fit", "description": "least aligned"},
+        ],
+    }
+
+    assert source_connector.score_filter_option_label(90, profile) == "Top tier only"
+    assert source_connector.score_filter_option_label(65, profile) == "Review next or better"
+    assert source_connector.score_to_match_label(67, profile["match_levels"]) == "Review next"
+    assert source_connector.score_to_tone_class(67, profile) == "tone-good"
+
+
 def test_has_government_context_detects_real_public_sector_language():
     assert source_connector.has_government_context(
         "Federal government department delivering a public sector program."
@@ -689,7 +706,7 @@ def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypa
     ]
 
 
-def test_score_filter_thresholds_hide_35_when_no_borderline_roles(monkeypatch):
+def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
@@ -701,7 +718,7 @@ def test_score_filter_thresholds_hide_35_when_no_borderline_roles(monkeypatch):
     assert thresholds == [85, 70, 55]
 
 
-def test_score_filter_thresholds_show_35_when_borderline_roles_are_present(monkeypatch):
+def test_score_filter_thresholds_show_lowest_band_when_borderline_roles_are_present(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
@@ -710,7 +727,7 @@ def test_score_filter_thresholds_show_35_when_borderline_roles_are_present(monke
         include_borderline=False,
     )
 
-    assert thresholds == [85, 70, 55, 35]
+    assert thresholds == [85, 70, 55, 0]
 
 
 def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
@@ -727,6 +744,18 @@ def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     assert "Good match or better" in options_html
     assert "Worth a look or better" in options_html
     assert "50+ only" not in options_html
+
+
+def test_score_filter_options_include_lowest_match_band_when_lower_scores_exist(monkeypatch):
+    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+
+    options_html = source_connector.render_score_filter_options(
+        [{"score": 58}, {"score": 43}],
+        scoring_profile={},
+        include_borderline=False,
+    )
+
+    assert "Stretch or better" in options_html
 
 
 def test_posted_filter_options_show_explicit_day_windows():

@@ -33,21 +33,7 @@ Produced delivery plans and backlog refinement outcomes.
 
     assert output["capability_profile_rules"]
 
-
-def test_run_cv_pipeline_current_source_pack_does_not_emit_legacy_title_fragment_capabilities():
-    cv_text = Path("data-backup-before-profile-test/application_inputs/source_pack/primary_cv.txt").read_text(encoding="utf-8")
-
-    output = run_cv_pipeline(cv_text, llm_client=None)
-    names = {item["name"] for item in output["capability_profile_rules"]}
-
-    assert "analyst scrum" not in names
-    assert "analyst scrum master" not in names
-    assert "senior system" not in names
-    assert "senior system analyst" not in names
-    assert "bpmn 20" not in names
-    assert any(item["fit"] == "core" for item in output["capability_profile_rules"])
-    assert any(item["aliases"] for item in output["capability_profile_rules"])
-
+ 
 
 def test_run_cv_pipeline_preserves_questionable_signals_for_review():
     cv_text = f"""

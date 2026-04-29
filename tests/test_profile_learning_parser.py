@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from job_hunter_agent import profile_learning
@@ -242,3 +243,15 @@ Produced onboarding documentation.
     assert parsed
     assert "NSW eHealth" in parsed[0]["header_lines"]
     assert "Digital & Infrastructure Business Analyst / Project Coordinator" in parsed[0]["header_lines"]
+
+
+def test_role_title_knowledge_file_contains_enabled_entries():
+    payload = json.loads(profile_learning._ROLE_TITLE_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+
+    assert payload["kind"] == "managed_knowledge"
+    assert any(entry.get("enabled") for entry in payload["entries"])
+    assert "analyst" in profile_learning._GENERIC_ROLE_TOKENS
+
+
+def test_role_title_detection_uses_managed_generic_role_tokens():
+    assert profile_learning._looks_like_role_title_line("Operations Support Officer") is True

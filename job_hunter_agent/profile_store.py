@@ -15,6 +15,7 @@ import json
 import re
 from typing import Any
 
+from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 
 
@@ -43,6 +44,7 @@ DEFAULT_PREFERENCE_WEIGHTS = {
     "government": 1.0,
     "freshness": 1.0,
 }
+DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
 DEFAULT_LLM_PROFILE_BRIEF_MODE = "auto"
 
 DEFAULT_ONBOARDING_SETTINGS = {
@@ -135,6 +137,7 @@ DEFAULT_PROFILE = {
     "preference_weights": {
         **DEFAULT_PREFERENCE_WEIGHTS,
     },
+    "match_levels": [dict(level) for level in DEFAULT_MATCH_LEVELS],
     "match_preferences": {
         "home_location": "",
         "secondary_location": "",
@@ -406,6 +409,7 @@ def load_profile() -> dict[str, Any]:
             merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
             merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
             merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
+            merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
             merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
                 merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
             )
@@ -439,6 +443,7 @@ def load_profile() -> dict[str, Any]:
     fallback["search_settings"] = normalize_search_settings(fallback.get("search_settings", {}))
     fallback["salary_preferences"] = normalize_salary_preferences(fallback.get("salary_preferences", {}))
     fallback["preference_weights"] = normalize_preference_weights(fallback.get("preference_weights", {}))
+    fallback["match_levels"] = normalize_match_levels(fallback.get("match_levels", []))
     fallback["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         fallback.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
     )
@@ -473,6 +478,7 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["search_settings"] = normalize_search_settings(normalized.get("search_settings", {}))
     normalized["salary_preferences"] = normalize_salary_preferences(normalized.get("salary_preferences", {}))
     normalized["preference_weights"] = normalize_preference_weights(normalized.get("preference_weights", {}))
+    normalized["match_levels"] = normalize_match_levels(normalized.get("match_levels", []))
     normalized["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         normalized.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
     )
@@ -576,6 +582,11 @@ def normalize_preference_weights(payload: dict[str, Any] | None) -> dict[str, fl
             value = default
         normalized[key] = max(min(value, 2.0), 0.0)
     return normalized
+
+
+def normalize_profile_match_levels(payload: list[dict[str, Any]] | None) -> list[dict[str, object]]:
+    normalized = normalize_match_levels(payload)
+    return normalized or [dict(level) for level in DEFAULT_MATCH_LEVELS]
 
 
 def normalize_llm_profile_brief_mode(value: Any) -> str:
@@ -705,3 +716,7 @@ def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:
 
 def get_preference_weights(profile: dict[str, Any]) -> dict[str, float]:
     return normalize_preference_weights(profile.get("preference_weights", {}))
+
+
+def get_match_levels(profile: dict[str, Any]) -> list[dict[str, object]]:
+    return normalize_profile_match_levels(profile.get("match_levels", []))

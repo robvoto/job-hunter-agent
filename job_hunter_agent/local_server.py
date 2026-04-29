@@ -215,6 +215,12 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
 
 
 def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, int]:
+    allowed_keys = (
+        "extraction_lookback_years",
+        "title_extraction_min_months",
+        "max_target_patterns",
+        "max_secondary_patterns",
+    )
     source = payload if isinstance(payload, dict) else {}
     if isinstance(source.get("onboarding_settings"), dict):
         source = source.get("onboarding_settings") or {}
@@ -224,8 +230,10 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
         if isinstance(current, dict) and current:
             source = current
         else:
-            return dict(DEFAULT_ONBOARDING_SETTINGS)
-    return normalize_onboarding_settings(source)
+            source = dict(DEFAULT_ONBOARDING_SETTINGS)
+
+    normalized = normalize_onboarding_settings(source)
+    return {key: int(normalized[key]) for key in allowed_keys if key in normalized}
 
 
 def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:

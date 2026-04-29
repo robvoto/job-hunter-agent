@@ -24,7 +24,6 @@ from job_hunter_agent.profile_learning import (
     _resolve_extraction_lookback_years,
     repair_text,
 )
-from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
 
 _STOPWORDS = {
     "a", "an", "and", "the", "to", "for", "of", "in", "on", "with", "by", "from", "into",
@@ -32,28 +31,13 @@ _STOPWORDS = {
     "is", "are", "was", "were", "be", "been", "being", "that", "this", "these", "those",
     "will", "would", "can", "could", "should", "may",
 }
-_GENERIC_ROLE_TOKENS = {
-    "analyst", "manager", "coordinator", "consultant", "specialist", "developer", "engineer",
-    "architect", "officer", "director", "administrator", "owner", "lead", "executive",
-    "head", "staff", "master",
-}
-_TITLE_MODIFIER_TOKENS = {
-    "senior", "lead", "principal", "technical", "functional", "digital", "delivery", "staff",
-    "junior", "associate", "executive", "chief", "head", "contract", "consulting",
-}
-def _is_generic_title_phrase(text: str) -> bool:
-    tokens = _normalize_phrase(text).split()
-    return bool(tokens) and all(t in _TITLE_MODIFIER_TOKENS or t in _GENERIC_ROLE_TOKENS for t in tokens)
-
 
 def _is_quality_phrase(text: str) -> bool:
     cleaned = _normalize_phrase(text)
     if not cleaned:
         return False
     tokens = cleaned.split()
-    if not tokens or len(tokens) > 4:
-        return False
-    if len(tokens) == 1 and len(tokens[0]) < 4:
+    if not tokens:
         return False
     if all(t in _STOPWORDS for t in tokens):
         return False
@@ -125,7 +109,7 @@ def _tool_terms(text: str) -> list[str]:
             if not tokens:
                 continue
             term = " ".join(tokens[:4]).strip()
-            if term and _is_quality_phrase(term) and not _is_generic_title_phrase(term):
+            if term and _is_quality_phrase(term):
                 terms.append(term)
     return list(dict.fromkeys(terms))
 
@@ -142,7 +126,7 @@ def _ngrams(text: str, excluded_tokens: set[str] | None = None) -> list[str]:
     for size in (3, 2):
         for index in range(len(tokens) - size + 1):
             phrase = _normalize_phrase(" ".join(tokens[index:index + size]))
-            if phrase and _is_quality_phrase(phrase) and not _is_generic_title_phrase(phrase):
+            if phrase and _is_quality_phrase(phrase):
                 phrases.append(phrase)
     return list(dict.fromkeys(phrases))
 
@@ -156,11 +140,6 @@ def extract_phrases(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
         end_year = int(role.get("end_year") or 0)
         duration_months = max(int(role.get("duration_months") or 0), 0)
         is_current = bool(role.get("is_current"))
-        employer_tokens = {
-            _normalize_token(token)
-            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", str(role.get("employer", "")))
-            if _normalize_token(token)
-        }
         for bullet in role.get("bullets", []):
             tool_terms = _tool_terms(bullet)
             for phrase in tool_terms:
@@ -173,9 +152,7 @@ def extract_phrases(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "is_recent": is_recent,
                     "is_current": is_current,
                 })
-            if tool_terms:
-                continue
-            for phrase in _ngrams(bullet, excluded_tokens=employer_tokens):
+            for phrase in _ngrams(bullet):
                 phrase_items.append({
                     "phrase": phrase,
                     "role_title": title,
@@ -367,11 +344,7 @@ def _rename_top_clusters(candidates: list[dict[str, Any]], llm_client: Any = Non
         renamed = dict(item)
         if index < len(labels):
             label = str(labels[index]).strip().lower()
-            if label == "skip":
-                continue
-            # Basic length check; _is_quality_phrase would over-stem the label
-            words = label.split()
-            if label and 1 <= len(words) <= 5 and not _is_generic_title_phrase(_normalize_phrase(label)):
+            if label:
                 renamed["name"] = label
         renamed_top.append(renamed)
     return renamed_top + candidates[len(top):]
@@ -382,26 +355,11 @@ def _build_output(
     total_roles: int = 0,
     onboarding_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    settings = onboarding_settings or {}
-    capability_max_items = max(
-        1,
-        int(settings.get("capability_max_items", DEFAULT_ONBOARDING_SETTINGS["capability_max_items"]) or DEFAULT_ONBOARDING_SETTINGS["capability_max_items"]),
-    )
     capability_rules: list[dict[str, Any]] = []
     dominant_signal_clusters: list[dict[str, Any]] = []
     must_not_require_skills: list[str] = []
     seen_capability_names: set[str] = set()
     seen_signal_names: set[str] = set()
-
-    def _is_weak_alias(alias: str, capability_name: str) -> bool:
-        alias_tokens = alias.lower().split()
-        capability_tokens = capability_name.lower().split()
-        if len(alias_tokens) == 1 and len(alias_tokens[0]) < 4:
-            return True
-        if len(alias_tokens) == 1 and capability_tokens:
-            if alias_tokens[0] == capability_tokens[0] or alias_tokens[0] == capability_tokens[-1]:
-                return True
-        return False
 
     for candidate in candidates:
         display_name = choose_capability_name(
@@ -429,8 +387,6 @@ def _build_output(
                 continue
             alias_norm = cleaned_alias.lower()
             if alias_norm == display_name_norm or alias_norm in seen_aliases:
-                continue
-            if _is_weak_alias(cleaned_alias, display_name):
                 continue
             seen_aliases.add(alias_norm)
             clean_aliases.append(cleaned_alias)
@@ -466,8 +422,8 @@ def _build_output(
         })
 
     return {
-        "capability_profile_rules": capability_rules[:capability_max_items],
-        "dominant_signal_clusters": dominant_signal_clusters[:8],
+        "capability_profile_rules": capability_rules,
+        "dominant_signal_clusters": dominant_signal_clusters,
         "must_not_require_skills": [],
     }
 

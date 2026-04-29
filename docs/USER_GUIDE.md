@@ -19,6 +19,12 @@ That is the current source connector, not the final limit of the product.
 python -m job_hunter_agent.local_server
 ```
 
+Test/debug mode:
+
+```powershell
+python -m job_hunter_agent.local_server --test-mode
+```
+
 2. Open:
 
 - `http://127.0.0.1:8765/start`
@@ -89,7 +95,7 @@ Think of settings as the maintenance surface for your profile, not the place whe
 
 `Capability rules`
 
-- structured capability names with level, fit, and aliases
+- structured capability names with strength and aliases
 - used by deterministic filtering and the LLM prompt
 
 `Title targeting`
@@ -121,7 +127,6 @@ The dashboard groups jobs by their calculated fit score:
 
 - **Strong match** (85-100): High alignment with core capabilities and experience.
 - **Good match** (70-84): Solid alignment, perhaps missing secondary criteria.
-- **Possible fit** (55-69): Borderline fit or secondary role.
 - **Stretch** (0-54): Low alignment or significant requirement gaps.
 
 The dashboard groups jobs into:

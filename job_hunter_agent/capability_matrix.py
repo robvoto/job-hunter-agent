@@ -66,8 +66,6 @@ def _is_structurally_valid_alias(raw_alias: Any) -> bool:
         return False
     if len(set(alias_tokens)) != len(alias_tokens):
         return False
-    if any(len(token) < 2 for token in alias_tokens):
-        return False
     return True
     # ──────────────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,94 @@
+{
+  "kind": "managed_knowledge",
+  "name": "role_title_knowledge",
+  "version": 1,
+  "updated_at": "2026-04-29",
+  "description": "Managed generic role-title tokens used by deterministic title extraction.",
+  "entries": [
+    {
+      "value": "analyst",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "manager",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "coordinator",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "consultant",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "specialist",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "developer",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "engineer",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "architect",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "officer",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "director",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "administrator",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "owner",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "lead",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "executive",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "head",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "staff",
+      "enabled": true,
+      "source": "seed"
+    },
+    {
+      "value": "master",
+      "enabled": true,
+      "source": "seed"
+    }
+  ]
+}

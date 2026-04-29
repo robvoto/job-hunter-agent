@@ -189,6 +189,7 @@ def matches_missing_requirement(description_text: str, required_term: str) -> bo
 def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:
     capability_rules = profile.get("capability_profile_rules", [])
     positive_hits = 0
+    warning_reason = "OK"
 
     for rule in capability_rules:
         name = str(rule.get("name") or "").strip()
@@ -197,7 +198,7 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
         if not name or not aliases:
             continue
 
-        total_hits, distinct_hits = _count_alias_hits(description_lower, aliases)
+        _, distinct_hits = _count_alias_hits(description_lower, aliases)
         if level in {"strong", "working"}:
             positive_hits += distinct_hits
 
@@ -206,13 +207,16 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
         reason_token = _normalize_reason_token(name)
 
         if level == "low" and (hard_requirement_match or soft_requirement_match or distinct_hits >= 3):
-            return False, f"DESC_CAPABILITY_LOW:{reason_token}"
+            if warning_reason == "OK":
+                warning_reason = f"DESC_CAPABILITY_LOW:{reason_token}"
         if level == "basic" and hard_requirement_match and distinct_hits >= 2:
-            return False, f"DESC_CAPABILITY_BASIC:{reason_token}"
+            if warning_reason == "OK":
+                warning_reason = f"DESC_CAPABILITY_BASIC:{reason_token}"
         if level in {"low", "basic"} and distinct_hits >= 4 and positive_hits <= 2:
-            return False, f"DESC_PRIMARY_FOCUS:{reason_token}"
+            if warning_reason == "OK":
+                warning_reason = f"DESC_PRIMARY_FOCUS:{reason_token}"
 
-    return True, "OK"
+    return True, warning_reason
 
 
 def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple[int, int]:
@@ -234,7 +238,7 @@ def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple
             seen_aliases.add(alias_lower)
             deduped_aliases.append(alias)
 
-        total_hits, distinct_hits = _count_alias_hits(description_lower, deduped_aliases)
+        _, distinct_hits = _count_alias_hits(description_lower, deduped_aliases)
         hard_requirement_match = any(_matches_hard_requirement(description_lower, alias) for alias in deduped_aliases)
         soft_requirement_match = any(_matches_soft_requirement(description_lower, alias) for alias in deduped_aliases)
 
@@ -354,8 +358,6 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
 
     profile = load_profile()
     description_lower = details_text.lower()
-    card_location_lower = (card_location or "").lower()
-
     for rule in profile.get("reject_description_phrase_rules", []):
         phrase = (rule.get("phrase") or "").strip().lower()
         reason = rule.get("reason", f"DESC_REJECT:{phrase}")
@@ -376,6 +378,9 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
             continue
         if matches_missing_requirement(description_lower, skill_lower):
             return False, f"DESC_MANDATORY_SKILL:{_normalize_reason_token(skill_lower)}"
+
+    if capability_reason != "OK":
+        return True, capability_reason
 
     return True, "OK"
 

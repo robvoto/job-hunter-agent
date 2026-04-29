@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from job_hunter_agent.paths import REPO_ROOT
+from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
 
 
@@ -23,11 +23,7 @@ ROOT_DIR = REPO_ROOT
 _VALID_LEVELS = {"strong", "working", "basic", "low"}
 _CURRENT_YEAR = datetime.now().year
 _CURRENT_MONTH = datetime.now().month
-_GENERIC_ROLE_TOKENS = {
-    "analyst", "manager", "coordinator", "consultant", "specialist", "developer", "engineer",
-    "architect", "officer", "director", "administrator", "owner", "lead", "executive",
-    "head", "staff", "master",
-}
+_ROLE_TITLE_KNOWLEDGE_PATH = DATA_DIR / "role_title_knowledge.json"
 
 _MONTH_NAME_TO_NUMBER = {
     "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
@@ -52,6 +48,33 @@ _DATE_RANGE_PATTERN = re.compile(
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
+
+
+def _load_generic_role_tokens() -> frozenset[str]:
+    payload = json.loads(_ROLE_TITLE_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("role_title_knowledge.json must contain an entries list")
+
+    tokens: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("enabled", True) is False:
+            continue
+        token = re.sub(r"[^a-z0-9+#/&-]", "", str(entry.get("value") or "").lower()).strip("-/")
+        if token.endswith("ies") and len(token) > 4:
+            token = token[:-3] + "y"
+        elif token.endswith("s") and len(token) > 4 and not token.endswith("ss") and not token.endswith("is"):
+            token = token[:-1]
+        if token:
+            tokens.append(token)
+    if not tokens:
+        raise ValueError("role_title_knowledge.json must define at least one enabled role token")
+    return frozenset(tokens)
+
+
+_GENERIC_ROLE_TOKENS = _load_generic_role_tokens()
 
 
 class _CapabilityExtraction(BaseModel):
@@ -204,13 +227,29 @@ def _select_role_title_and_employer(candidate_lines: list[str]) -> tuple[str, st
     title_indexes = [index for index, line in enumerate(candidate_lines) if _looks_like_role_title_line(line)]
     if not title_indexes:
         return title, employer
-    title_index = title_indexes[-1]
+
+    strong_title_indexes = [
+        index
+        for index, line in enumerate(candidate_lines)
+        if any(token in _GENERIC_ROLE_TOKENS for token in _pattern_tokens(line))
+    ]
+    if strong_title_indexes:
+        title_index = strong_title_indexes[0]
+    else:
+        title_index = title_indexes[0]
+
     title = candidate_lines[title_index]
     for index in range(title_index - 1, -1, -1):
         line = candidate_lines[index]
         if line != title and not _looks_like_role_title_line(line):
             employer = line
             break
+    if not employer:
+        for index in range(title_index + 1, len(candidate_lines)):
+            line = candidate_lines[index]
+            if line != title and not _looks_like_role_title_line(line):
+                employer = line
+                break
     return title, employer
 
 
@@ -752,17 +791,34 @@ def extract_title_pattern_suggestions(
 ) -> dict[str, list[str]]:
     source_text = repair_text(source_text)
     settings = onboarding_settings or {}
+    lookback_years = _resolve_extraction_lookback_years(settings)
     max_target = _resolve_onboarding_int(settings, "max_target_patterns")
     max_secondary = _resolve_onboarding_int(settings, "max_secondary_patterns")
-    parsed_roles = _parse_role_entries(source_text)
-    title_evidence = _collect_title_evidence(parsed_roles)
-    normalized = _classify_titles_from_evidence(
-        title_evidence,
-        max_target=max_target,
-        max_secondary=max_secondary,
-    )
-    normalized["suggested_search_keywords"] = normalized["target_title_patterns"][:4]
-    return normalized
+    extracted = _llm_extract_from_cv(source_text, lookback_years)
+
+    target_patterns = [
+        _normalize_role_title_value(value)
+        for value in (extracted.get("target_title_patterns") or [])
+        if _normalize_role_title_value(value)
+    ][:max_target]
+    secondary_patterns = [
+        _normalize_role_title_value(value)
+        for value in (extracted.get("secondary_title_patterns") or [])
+        if _normalize_role_title_value(value)
+    ][:max_secondary]
+    suggested_search_keywords = [
+        _clean_line(value).lower()
+        for value in (extracted.get("suggested_search_keywords") or [])
+        if _clean_line(value)
+    ]
+    if not suggested_search_keywords:
+        suggested_search_keywords = target_patterns[:4]
+
+    return {
+        "target_title_patterns": list(dict.fromkeys(target_patterns)),
+        "secondary_title_patterns": list(dict.fromkeys(secondary_patterns)),
+        "suggested_search_keywords": list(dict.fromkeys(suggested_search_keywords))[:4],
+    }
 
 
 def merge_capability_rules(

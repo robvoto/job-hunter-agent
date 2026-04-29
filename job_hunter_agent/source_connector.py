@@ -40,8 +40,9 @@ from job_hunter_agent.job_identity import (
     find_similar_job,
 )
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
-from job_hunter_agent.match_labels import MATCH_LEVELS, score_to_match_label
+from job_hunter_agent.match_labels import score_to_match_level, score_to_match_label
 from job_hunter_agent.profile_store import (
+    get_match_levels,
     get_evidence_tier_weights,
     get_evidence_tiers,
     get_preference_weights,
@@ -563,6 +564,8 @@ def has_government_context(text: str) -> bool:
 
 def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
     lowered = compact_whitespace(details_text).lower()
+    matched_core: List[str] = []
+    matched_supporting: List[str] = []
     matched_strong: List[str] = []
     matched_working: List[str] = []
     matched_basic: List[str] = []
@@ -574,12 +577,17 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
             continue
         name = str(rule.get("name") or "").strip()
         level = str(rule.get("level") or "").strip().lower()
+        fit = str(rule.get("fit") or "").strip().lower()
         aliases = [str(alias).strip().lower() for alias in expand_capability_terms(rule) if str(alias).strip()]
         if not aliases:
             continue
         if not any(text_contains_term(lowered, alias) for alias in aliases):
             continue
         label = friendly_capability_label(name)
+        if fit == "core":
+            matched_core.append(label)
+        elif fit == "supporting":
+            matched_supporting.append(label)
         if level == "strong":
             matched_strong.append(label)
         elif level == "working":
@@ -595,6 +603,8 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
             matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
 
     return {
+        "core": dedupe_preserve_order(matched_core),
+        "supporting": dedupe_preserve_order(matched_supporting),
         "strong": dedupe_preserve_order(matched_strong),
         "working": dedupe_preserve_order(matched_working),
         "basic": dedupe_preserve_order(matched_basic),
@@ -1081,12 +1091,14 @@ def salary_fit_label(record: dict, profile: Optional[dict] = None) -> str:
     return "listed"
 
 
-def score_to_tone_class(score: int) -> str:
-    if score >= 85:
+def score_to_tone_class(score: int, profile: Optional[dict] = None) -> str:
+    match_levels = get_match_levels(profile or load_profile())
+    match_level = score_to_match_level(score, match_levels)
+    if match_levels and match_level == match_levels[0]:
         return "tone-strong"
-    if score >= 70:
+    if len(match_levels) > 1 and match_level == match_levels[1]:
         return "tone-good"
-    if score >= 55:
+    if len(match_levels) > 2 and match_level == match_levels[2]:
         return "tone-borderline"
     return "tone-low"
 
@@ -1715,9 +1727,12 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
     return dedupe_preserve_order(gaps)[:max_items]
 
 
-def score_filter_option_label(threshold: int) -> str:
-    label = score_to_match_label(threshold)
-    if threshold >= 85:
+def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = None) -> str:
+    active_profile = scoring_profile or load_profile()
+    match_levels = get_match_levels(active_profile)
+    label = score_to_match_label(threshold, match_levels)
+    highest_threshold = max(int(level.get("minimum_score", 0) or 0) for level in match_levels)
+    if threshold >= highest_threshold:
         return f"{label} only"
     return f"{label} or better"
 
@@ -1730,10 +1745,11 @@ def score_filter_thresholds(
     active_profile = scoring_profile or load_profile()
     show_borderline = EXPANDED_POOL_MODE if include_borderline is None else bool(include_borderline)
     scores = [fit_score(record, active_profile) for record in records]
-
-    thresholds = [85, 70, 55]
-    if show_borderline or any(score < 50 for score in scores):
-        thresholds.append(35)
+    match_levels = get_match_levels(active_profile)
+    thresholds = [int(level.get("minimum_score", 0) or 0) for level in match_levels if int(level.get("minimum_score", 0) or 0) > 0]
+    lowest_band_threshold = int(match_levels[-1].get("minimum_score", 0) or 0) if match_levels else 0
+    if (show_borderline or any(score < (thresholds[-1] if thresholds else 0) for score in scores)) and lowest_band_threshold not in thresholds:
+        thresholds.append(lowest_band_threshold)
     return thresholds
 
 
@@ -1743,12 +1759,13 @@ def render_score_filter_options(
     default_min: int = DEFAULT_SCORE_FILTER_MIN,
     include_borderline: Optional[bool] = None,
 ) -> str:
+    active_profile = scoring_profile or load_profile()
     options = ['<option value="all">All match levels</option>']
-    for threshold in score_filter_thresholds(records, scoring_profile, include_borderline=include_borderline):
+    for threshold in score_filter_thresholds(records, active_profile, include_borderline=include_borderline):
         selected_attr = " selected" if int(default_min) == threshold else ""
         options.append(
             f'<option value="{threshold}"{selected_attr}>'
-            f'{safe_html(score_filter_option_label(threshold))}</option>'
+            f'{safe_html(score_filter_option_label(threshold, active_profile))}</option>'
         )
     return "".join(options)
 
@@ -2464,8 +2481,9 @@ def render_job_card(
     display_record["soft_risk_reasons"] = soft_risk_reasons
     display_record["missing_evidence"] = missing_evidence
     fit_points = fit_score(display_record, scoring_profile)
-    fit_label = score_to_match_label(fit_points)
-    fit_tone_class = score_to_tone_class(fit_points)
+    match_levels = get_match_levels(scoring_profile or load_profile())
+    fit_label = score_to_match_label(fit_points, match_levels)
+    fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
     visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=SHOW_SCORING_DEBUG)
     description_issue = fit_confidence_level == "LOW"
@@ -2847,10 +2865,12 @@ def _render_results_fragment(context: dict[str, str]) -> str:
     return template.safe_substitute(context)
 
 
-def _render_match_level_guide_html() -> str:
+def _render_match_level_guide_html(profile: Optional[dict] = None) -> str:
+    active_profile = profile or load_profile()
+    match_levels = get_match_levels(active_profile)
     guide_bits = [
         f'<span class="chip"><strong>{safe_html(str(level["label"]))}:</strong> {safe_html(str(level["description"]))}</span>'
-        for level in MATCH_LEVELS
+        for level in match_levels
     ]
     guide_bits.extend([
         '<span class="chip"><strong>Title match:</strong> direct titles are favored over secondary titles</span>',
@@ -2905,11 +2925,11 @@ def render_html(
         target_summaries.append(f"{location}: pages {page_label}")
     testing_mode_notes = []
     if LOW_SCRAPE_MODE:
-        testing_mode_notes.append(f"Scrape allow-low mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better.")
+        testing_mode_notes.append(f"Scrape allow-low mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better.")
     elif DASHBOARD_DEBUG_MODE:
-        testing_mode_notes.append(f"Dashboard debug mode is on, showing scores and keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better without a fresh scrape.")
+        testing_mode_notes.append(f"Dashboard debug mode is on, showing scores and keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better without a fresh scrape.")
     elif EXPAND_DASHBOARD_MODE:
-        testing_mode_notes.append(f"Expanded dashboard view is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better without a fresh scrape.")
+        testing_mode_notes.append(f"Expanded dashboard view is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better without a fresh scrape.")
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         testing_mode_notes.append("Viewed history has been reset, so all roles are shown as unseen.")
         
@@ -2936,7 +2956,7 @@ def render_html(
     li_results = scoring_profile.get("search_settings", {}).get("linkedin_results_per_search", 25)
     
     view_history_text = "treats all roles as New To You" if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "preserves your viewed history"
-    snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE)} or better and {view_history_text}."
+    snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better and {view_history_text}."
     hero_summary = (
         f"Last run {run_label} - {run_stats.get('cards_seen', 0)} cards scanned, "
         f"{len(shortlist_records)} shortlist matches shown"
@@ -3020,7 +3040,7 @@ def render_html(
             "SNAPSHOT_HELPER": safe_html(snapshot_helper),
             "TESTING_MODE_NOTE": safe_html(testing_mode_note),
             "TOP_REJECT_REASONS_HTML": top_reject_reasons_html,
-            "MATCH_LEVEL_GUIDE_HTML": _render_match_level_guide_html(),
+            "MATCH_LEVEL_GUIDE_HTML": _render_match_level_guide_html(active_profile),
             "DASHBOARD_RUN_ID_JSON": json.dumps(dashboard_run_id),
             "SEARCH_SETTINGS_JSON": search_settings_json,
             "DEFAULT_SCORE_FILTER_MIN_JSON": json.dumps(str(DEFAULT_SCORE_FILTER_MIN)),
