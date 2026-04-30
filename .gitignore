@@ -36,3 +36,7 @@ appData-dontupload.txt
 *.code-workspace
 data/ALIAS_LOGIC_RATIONALE.md
 .gitignore
+MAIN LOGOS IMG.png
+job_hunter_img.png
+templates/static/job_hunter_img2.png
+.gitignore
