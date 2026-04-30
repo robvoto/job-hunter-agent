@@ -226,6 +226,65 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
     assert highlights == []
 
 
+def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
+    monkeypatch.setattr(
+        source_connector,
+        "load_registry",
+        lambda: {
+            "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
+            "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
+            "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
+            "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
+            "delivery": {"signal": "delivery", "decision": "evidence_only", "original_texts": ["delivery"]},
+        },
+    )
+
+    matches = source_connector.reviewed_signal_matches_for_text(
+        "Stakeholder management, Jira, banking, project, and delivery are all mentioned in the role."
+    )
+
+    assert matches == {
+        "matched": ["stakeholder management", "jira"],
+        "evidence_only": ["delivery"],
+        "ignored": ["project"],
+        "unresolved": ["banking"],
+    }
+
+
+def test_fit_score_breakdown_adds_positive_reviewed_signal_matches_only(monkeypatch):
+    monkeypatch.setattr(
+        source_connector,
+        "load_registry",
+        lambda: {
+            "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
+            "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
+            "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
+        },
+    )
+
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Lead Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Contract/Temp",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "competitive_signals": [],
+            "full_description": "Jira and banking domain experience are helpful in this project role.",
+            "fit_source_text": "Jira and banking domain experience are helpful in this project role.",
+            "description_source": "jobAdDetails",
+            "details_status": "ok",
+        },
+        _test_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Reviewed signal matches") == 1
+
+
 def test_fit_score_evidence_ignores_display_only_fit_highlights():
     breakdown = source_connector.fit_score_breakdown(
         {
@@ -452,6 +511,50 @@ def test_job_card_shows_negative_score_factors_without_debug_mode():
     assert "<strong>What lowers it</strong>" in html
     assert "On-site role" in html
     assert "Score penalties" not in html
+
+
+def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
+    monkeypatch.setattr(
+        source_connector,
+        "load_registry",
+        lambda: {
+            "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
+            "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
+            "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
+            "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
+        },
+    )
+
+    html = source_connector.render_job_card(
+        {
+            "job_key": "test-reviewed-signals",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Strong stakeholder management, Jira, banking exposure, and project coordination needed.",
+            "fit_source_text": "Strong stakeholder management, Jira, banking exposure, and project coordination needed.",
+            "description_source": "jobAdDetails",
+            "details_status": "ok",
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "<strong>Matched signals</strong>" in html
+    assert "<li>stakeholder management</li>" in html
+    assert "<li>jira</li>" in html
+    assert "<strong>Unresolved signals</strong>" in html
+    assert "<li>banking</li>" in html
+    assert "<strong>Ignored</strong>" in html
+    assert "<li>project</li>" in html
 
 
 def test_job_card_uses_score_tone_as_card_accent_class():

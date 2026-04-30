@@ -13,6 +13,57 @@
       background: var(--bg-page);
     }
 
+    .hero-shell {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .hero-copy-shell {
+      flex: 1 1 620px;
+      min-width: 0;
+    }
+
+    .hero-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .brand-logo {
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+      flex-shrink: 0;
+      border-radius: 12px;
+    }
+
+    .brand-lockup {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .brand-eyebrow {
+      margin: 0;
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .brand-title {
+      margin: 0;
+      color: var(--ink);
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
     .panel {
       border: 1px solid var(--border-subtle) !important;
       box-shadow: var(--shadow-soft) !important;
@@ -30,26 +81,106 @@
       background-color: var(--accent-hover) !important;
     }
 
+    .hero-progress {
+      margin-top: 22px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .hero-progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hero-progress-step {
+      color: var(--ink);
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .hero-progress-percent {
+      color: var(--accent);
+      font-size: 0.92rem;
+      font-weight: 800;
+    }
+
     .wizard-progress {
-      height: 16px !important;
-      background-color: var(--border-subtle) !important;
+      height: 12px !important;
+      background-color: rgba(255, 255, 255, 0.08) !important;
       border-radius: 999px !important;
       overflow: hidden;
-      border: 1px solid var(--border-subtle);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     #wizard_progress_fill {
+      display: block;
+      height: 100%;
+      min-width: 0;
+      transition: width 0.35s ease;
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.2);
+      background: linear-gradient(90deg, #f58020 0%, #ff9c4a 100%) !important;
+    }
+
+    .wizard-progress-steps {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .wizard-progress-step {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 0.65rem;
-      font-weight: 800;
-      color: white;
-      text-transform: uppercase;
-      letter-spacing: 0.025em;
-      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-      box-shadow: inset 0 1px rgba(255, 255, 255, 0.2);
-      background-color: #10b981 !important;
+      gap: 8px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+
+    .wizard-progress-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.18);
+      background: transparent;
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+
+    .wizard-progress-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .wizard-progress-step.is-active,
+    .wizard-progress-step.is-complete {
+      color: var(--ink);
+    }
+
+    .wizard-progress-step.is-active .wizard-progress-dot {
+      border-color: #f58020;
+      background: #f58020;
+      box-shadow: 0 0 0 4px rgba(245, 128, 32, 0.18);
+    }
+
+    .wizard-progress-step.is-complete .wizard-progress-dot {
+      border-color: #f58020;
+      background: transparent;
+    }
+
+    @media (max-width: 720px) {
+      .wizard-progress-steps {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     .drop-zone {
@@ -110,11 +241,34 @@
 <body data-test-mode="__JOB_HUNTER_TEST_MODE__">
   <main class="page">
     <section class="hero">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
-        <div>
-          <div class="hero-step" id="hero_step">Step 1 of 4</div>
+      <div class="hero-shell">
+        <div class="hero-copy-shell">
+          <div class="hero-brand-row">
+            <img src="/static/job_hunter_img.png" alt="Job Hunter Logo" class="brand-logo">
+            <div class="brand-lockup">
+              <p class="brand-eyebrow">Job Hunter</p>
+              <p class="brand-title">Profile Setup</p>
+            </div>
+          </div>
           <h1 id="hero_title">Set Up Your Job Search Profile</h1>
           <p id="hero_copy">Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.</p>
+          <div class="hero-progress" aria-label="Profile setup progress">
+            <div class="hero-progress-meta">
+              <span class="hero-progress-step" id="hero_progress_step">Step 1 of 4</span>
+              <span class="hero-progress-percent" id="hero_progress_percent">25%</span>
+            </div>
+            <div class="wizard-progress wizard-progress-hero">
+              <div class="wizard-progress-bar">
+                <span id="wizard_progress_fill"></span>
+              </div>
+            </div>
+            <ol class="wizard-progress-steps">
+              <li class="wizard-progress-step is-active"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Upload CV</span></li>
+              <li class="wizard-progress-step"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Review Draft</span></li>
+              <li class="wizard-progress-step"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Search Basics</span></li>
+              <li class="wizard-progress-step"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Check Setup</span></li>
+            </ol>
+          </div>
         </div>
         <div class="theme-switcher-widget">
           <span>Theme test:</span>
@@ -129,12 +283,6 @@
 
     <div class="grid">
       <section class="panel">
-        <div class="wizard-progress">
-          <div class="wizard-progress-bar">
-            <span id="wizard_progress_fill"></span>
-          </div>
-        </div>
-
         <section class="wizard-step is-active" data-step="1">
           <h2 id="form_title">Upload Your CV</h2>
           <p class="section-copy">Start with the CV that best represents your real experience. We will use it to build your starting profile.</p>

@@ -188,10 +188,10 @@
                   </div>
                   <details style="flex-shrink: 0;">
                     <summary style="font-size: 0.75rem; color: #f97316; cursor: pointer; list-style: none; opacity: 0.8;">
-                      ${aliasCount} CV Keywords
+                      ${aliasCount} background keywords
                     </summary>
                     <div style="position: absolute; background: #1a1b1e; border: 1px solid var(--line); padding: 8px; z-index: 100; border-radius: 4px; font-size: 0.8rem; margin-top: 4px;">
-                       ${(rule.aliases || []).join(', ') || 'No keywords'}
+                       ${(rule.aliases || []).join(', ') || 'No background keywords'}
                     </div>
                   </details>
                 </div>
@@ -655,33 +655,43 @@
       lastObservedRunStatus = normalized;
     }
 
-    function ensureRunStatusPolling(shouldPoll) {
-      if (shouldPoll) {
-        if (runStatusPollHandle) return;
-        runStatusPollHandle = window.setInterval(() => {
-          loadRunStatus().catch(() => {});
-        }, 10000);
-        return;
-      }
-      if (runStatusPollHandle) {
-        window.clearInterval(runStatusPollHandle);
-        runStatusPollHandle = null;
-      }
+    function setRunButtonState(isRunning) {
+      if (!runNowButton) return;
+      runNowButton.disabled = Boolean(isRunning);
+      runNowButton.classList.toggle('is-working', Boolean(isRunning));
+      runNowButton.textContent = isRunning ? 'Run in progress...' : 'Run Search Now';
     }
 
-    async function loadRunStatus() {
-      const previousStatus = lastObservedRunStatus;
+    function stopRunPolling() {
+      if (!runStatusPollHandle) return;
+      window.clearInterval(runStatusPollHandle);
+      runStatusPollHandle = null;
+    }
+
+    async function checkRunStatus() {
       const response = await fetch('/api/run-status');
       if (!response.ok) throw new Error('Could not load run status');
       const payload = await response.json();
       const status = payload.status === 'running' ? 'running' : 'idle';
       setRunStatus(status, payload.last_run_at || '');
-      ensureRunStatusPolling(status === 'running');
-      if (previousStatus === 'running' && status === 'idle') {
-        await loadRunStats().catch(() => {});
-        showStatus('Run complete. Go back to results to see the latest matches.', 'ok');
-      }
-      return payload;
+      return status;
+    }
+
+    function startRunPolling() {
+      if (runStatusPollHandle) return;
+      runStatusPollHandle = window.setInterval(async () => {
+        try {
+          const status = await checkRunStatus();
+          if (status === 'running') {
+            setRunButtonState(true);
+            return;
+          }
+          stopRunPolling();
+          setRunButtonState(false);
+          window.location.reload();
+        } catch (_) {
+        }
+      }, 10000);
     }
 
     function escapeHtml(value) {
@@ -893,7 +903,8 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not start run');
       setRunStatus('running', payload.last_run_at || '');
-      ensureRunStatusPolling(true);
+      setRunButtonState(true);
+      startRunPolling();
       showStatus('Background run started. Return to results when complete.', 'ok');
       return payload;
     }
@@ -913,18 +924,13 @@
 
     if (runNowButton) {
       runNowButton.addEventListener('click', async () => {
-        const originalLabel = runNowButton.textContent;
-        runNowButton.classList.add('is-working');
-        runNowButton.disabled = true;
-        runNowButton.textContent = 'Starting...';
+        setRunButtonState(true);
         try {
           await runSearchNow();
         } catch (error) {
+          stopRunPolling();
+          setRunButtonState(false);
           showStatus(error.message, 'error');
-        } finally {
-          runNowButton.classList.remove('is-working');
-          runNowButton.disabled = false;
-          runNowButton.textContent = originalLabel;
         }
       });
     }
@@ -1265,8 +1271,16 @@
       loadAgentSettings(),
       loadRunStats(),
       loadReviewData(),
-      loadRunStatus(),
     ]).then(() => {
+        return checkRunStatus();
+    }).then((status) => {
+        if (status === 'running') {
+          setRunButtonState(true);
+          startRunPolling();
+        } else {
+          stopRunPolling();
+          setRunButtonState(false);
+        }
         initSliders();
         suppressDirtyTracking = false;
         clearDirty();
@@ -1418,7 +1432,8 @@
         _srData = await resp.json();
         renderSignalRegistry();
       } catch (err) {
-        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message}</p>`;
+        _srLoaded = false;
+      panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} — click Signals again to retry.</p>`;
       }
     }
 

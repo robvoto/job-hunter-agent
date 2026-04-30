@@ -4,9 +4,10 @@ const urlParams = new URLSearchParams(window.location.search);
 const isRebuildMode = urlParams.get('mode') === 'rebuild';
 const stepEls = Array.from(document.querySelectorAll('.wizard-step'));
 const heroSectionEl = document.querySelector('.hero');
-const heroStepEl = document.getElementById('hero_step');
 const heroTitleEl = document.getElementById('hero_title');
 const heroCopyEl = document.getElementById('hero_copy');
+const heroProgressStepEl = document.getElementById('hero_progress_step');
+const heroProgressPercentEl = document.getElementById('hero_progress_percent');
 const formTitleEl = document.getElementById('form_title');
 const workflowSummaryEl = document.getElementById('workflow_summary');
 const progressFillEl = document.getElementById('wizard_progress_fill');
@@ -26,9 +27,10 @@ const capabilityUi = window.JobHunterCapabilityUi || {};
 // Helper function to apply primary button theme
 function applyPrimaryButtonTheme(button) {
   if (button) {
-    button.style.backgroundColor = '#F58020';
-    button.style.borderColor = '#F58020';
-    button.style.color = '#FFFFFF';
+    button.style.backgroundColor = '#f58020';
+    button.style.borderColor = '#f58020';
+    button.style.color = '#000';
+    button.style.fontWeight = '700';
   }
 }
 
@@ -64,77 +66,7 @@ function applyInputBorderStyle(inputElement) {
   }
 }
 
-function renderLogo() {
-  if (!heroSectionEl || !heroStepEl || !heroTitleEl) return;
-
-  // Cluster the Logo and the Step Pill in the top-left for a solid "navigation" feel
-  const header = document.createElement('div');
-  header.style.display = 'flex';
-  header.style.alignItems = 'center';
-  header.style.gap = '12px';
-  header.style.marginBottom = '20px';
-  header.style.zIndex = '100';
-
-  const img = document.createElement('img');
-  img.src = '/static/job_hunter_img.png';
-  img.alt = 'Job Hunter Logo'; 
-  img.className = 'brand-logo';
-  img.style.maxHeight = '45px';
-  img.style.width = 'auto';
-  img.style.objectFit = 'contain';
-  
-  // Reset step pill positioning to work within the flex container
-  heroStepEl.style.position = 'static';
-  heroStepEl.style.margin = '0';
-  heroStepEl.style.backgroundColor = '#1e1e1e'; // Pill Styling: background
-  heroStepEl.style.color = '#f58020'; // Pill Styling: text
-  heroStepEl.style.border = '1px solid #f58020'; // Pill Styling: border
-    
-  header.appendChild(img);
-  header.appendChild(heroStepEl);
-  
-  heroSectionEl.style.position = 'relative';
-  heroSectionEl.insertBefore(header, heroTitleEl); // Layout Hierarchy: Insert brand row before h1
-}
-
-document.querySelectorAll('[data-test-only]').forEach((element) => {
-  element.hidden = !isTestMode;
-});
-
-const COMMON_LOCATION_OPTIONS = [
-  'Sydney NSW',
-  'Melbourne VIC',
-  'Brisbane QLD',
-  'Perth WA',
-  'Adelaide SA',
-  'Canberra ACT',
-  'Hobart TAS',
-  'Darwin NT',
-  'New South Wales',
-  'Victoria',
-  'Queensland',
-  'Western Australia',
-  'South Australia',
-  'Tasmania',
-  'Australian Capital Territory',
-  'Northern Territory',
-];
-
-const REVIEW_STEP = 2;
-const SEARCH_STEP = 3;
-const CHECK_STEP = 4;
-const STEP_COUNT = 4;
-
-let currentStep = 1;
-let selectedLocations = [];
-let reviewTargetTitles = [];
-let reviewSecondaryTitles = [];
-let reviewCapabilityRules = [];
-let lastImportPayload = null;
-let preservedPrimaryCvFile = null;
-let workingStatusTimer = null;
-
-const reviewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
+iewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
 
 function saveWizardState() {
   if (currentStep < 2) {
@@ -290,7 +222,6 @@ function setStep(stepNumber) {
   });
 
   const meta = stepMeta[stepNumber];
-  heroStepEl.textContent = `Step ${stepNumber} of ${STEP_COUNT}`;
   heroTitleEl.textContent = meta.heroTitle();
   heroCopyEl.textContent = meta.heroCopy();
 
@@ -303,11 +234,16 @@ function setStep(stepNumber) {
 
   if (formTitleEl) formTitleEl.textContent = `Step 1. ${stepMeta[1].title()}`;
   const percent = Math.round((stepNumber / STEP_COUNT) * 100);
-  progressFillEl.style.width = `${percent}%`;
-  progressFillEl.textContent = `${percent}% Complete`;
-  progressFillEl.style.backgroundColor = '#f58020'; // Set Progress Bar color
-  progressFillEl.style.color = '#000000'; // Ensure percentage text is legible against orange
-  
+  if (heroProgressStepEl) heroProgressStepEl.textContent = `Step ${stepNumber} of ${STEP_COUNT}`;
+  if (heroProgressPercentEl) heroProgressPercentEl.textContent = `${percent}%`;
+  if (progressFillEl) {
+    progressFillEl.style.width = `${percent}%`;
+  }
+  document.querySelectorAll('.wizard-progress-step').forEach((el, idx) => {
+    const s = idx + 1;
+    el.classList.toggle('is-active', s === stepNumber);
+    el.classList.toggle('is-complete', s < stepNumber);
+  });
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1149,7 +1085,6 @@ function addSalaryInfoIcons() {
   });
 }
 
-renderLogo();
 renderLocationSuggestions();
 loadProfileDefaults().catch(() => {});
 setStep(1);
@@ -1185,9 +1120,8 @@ if (primaryCvDropZone && primaryCvInput) {
       if (!primaryCvInput.files?.[0]) {
         primaryCvDropZone.style.border = '1px dashed #444';
       } else {
-        primaryCvDropZone.style.border = '1px solid #F58020';
-      }
-      primaryCvDropZone.style.boxShadow = 'none';
+       }
+CvDropZone.style.boxShadow = 'none';
     }
   });
   primaryCvDropZone.addEventListener('drop', handlePrimaryCvDrop);

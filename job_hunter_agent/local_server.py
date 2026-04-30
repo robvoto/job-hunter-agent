@@ -1448,7 +1448,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Data asset not found"})
             return
         if _path in {"/", "/workspace", "/admin", "/profile", "/demo", "/start", "/onboarding", "/dashboard", "/settings"}:
-            if _path in {"/", "/workspace", "/admin", "/profile", "/dashboard", "/settings"} and not _onboarding_complete():
+            if _path in {"/", "/workspace", "/admin", "/profile", "/dashboard"} and not _onboarding_complete():
                 self._redirect("/start")
                 return
             if _path in {"/admin", "/profile"}:
@@ -1458,7 +1458,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 self._redirect("/")
                 return
             if _path == "/settings":
-                if not _onboarding_complete():
+                if not TEST_MODE and not _onboarding_complete():
                     self._redirect("/start")
                     return
                 if SETTINGS_HTML_PATH.exists():

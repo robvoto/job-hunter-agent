@@ -224,5 +224,25 @@
         "notes": "smoke test note"
       }
     ]
+  },
+  "facilitation": {
+    "signal": "facilitation",
+    "normalized_key": "facilitation",
+    "original_texts": [
+      "facilitation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T10:36:51.304263+00:00",
+        "notes": ""
+      }
+    ]
   }
 }

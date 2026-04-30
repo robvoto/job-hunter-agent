@@ -52,6 +52,7 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.review_insights import build_review_data
+from job_hunter_agent.signal_registry import load_registry
 from job_hunter_agent.scrapers.seek import (
     SELECTOR_CARDS,
     SELECTOR_COMPANY,
@@ -111,6 +112,7 @@ REPEATED_LISTING_MIN_TIMES_SEEN = 4
 REPEATED_LISTING_MIN_SPAN_DAYS = 21
 MULTI_LISTING_RED_FLAG_MIN_LISTINGS = 3
 MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = 30
+REVIEWED_SIGNAL_MATCH_SCORE_CAP = 4
 
 KEEP_SNAPSHOT_FIELDS = (
     "title",
@@ -140,6 +142,7 @@ KEEP_SNAPSHOT_FIELDS = (
     "missing_evidence",
     "competitive_signals",
     "hard_block_reasons",
+    "reviewed_signal_matches",
 )
 
 
@@ -580,6 +583,70 @@ def has_government_context(text: str) -> bool:
     return any(re.search(pattern, lowered) for pattern in _GOVERNMENT_CONTEXT_PATTERNS)
 
 
+def _reviewed_signal_terms(record: dict[str, Any]) -> list[str]:
+    values = [record.get("signal"), *(record.get("original_texts") or [])]
+    terms: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = compact_whitespace(value or "")
+        normalized = cleaned.lower()
+        if not cleaned or normalized in seen:
+            continue
+        seen.add(normalized)
+        terms.append(cleaned)
+    return terms
+
+
+def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
+    lowered = compact_whitespace(details_text).lower()
+    buckets = {
+        "matched": [],
+        "evidence_only": [],
+        "ignored": [],
+        "unresolved": [],
+    }
+    if not lowered:
+        return buckets
+
+    for record in load_registry().values():
+        if not isinstance(record, dict):
+            continue
+        signal = compact_whitespace(record.get("signal") or "")
+        decision = compact_whitespace(record.get("decision") or "review").lower()
+        if not signal or decision not in {"use", "evidence_only", "ignore", "review"}:
+            continue
+        terms = _reviewed_signal_terms(record)
+        if not terms or not any(text_contains_term(lowered, term) for term in terms):
+            continue
+        label = compact_whitespace(signal).lower()
+        if decision == "use":
+            buckets["matched"].append(label)
+        elif decision == "evidence_only":
+            buckets["evidence_only"].append(label)
+        elif decision == "ignore":
+            buckets["ignored"].append(label)
+        else:
+            buckets["unresolved"].append(label)
+
+    return {
+        key: dedupe_preserve_order(values)
+        for key, values in buckets.items()
+    }
+
+
+def reviewed_signal_match_summary(record: dict, profile: Optional[dict] = None) -> dict[str, list[str]]:
+    existing = record.get("reviewed_signal_matches")
+    if isinstance(existing, dict):
+        return {
+            "matched": dedupe_preserve_order(existing.get("matched") or []),
+            "evidence_only": dedupe_preserve_order(existing.get("evidence_only") or []),
+            "ignored": dedupe_preserve_order(existing.get("ignored") or []),
+            "unresolved": dedupe_preserve_order(existing.get("unresolved") or []),
+        }
+    source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
+    return reviewed_signal_matches_for_text(source_text)
+
+
 def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
     lowered = compact_whitespace(details_text).lower()
     matched_core: List[str] = []
@@ -596,10 +663,10 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         name = str(rule.get("name") or "").strip()
         level = str(rule.get("level") or "").strip().lower()
         fit = str(rule.get("fit") or "").strip().lower()
-        canonical = canonical_capability_term(rule)
-        if not canonical:
+        terms = expand_capability_terms(rule)
+        if not terms:
             continue
-        if not text_contains_term(lowered, canonical):
+        if not any(text_contains_term(lowered, term) for term in terms):
             continue
         label = friendly_capability_label(name)
         if fit == "core":
@@ -684,14 +751,23 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     title_lower = compact_whitespace(record.get("title") or "").lower()
 
     matched_profile_areas = (
-        capability_matches["strong"][:3]
-        + capability_matches["working"][:2]
-        + capability_matches["basic"][:1]
+        [("Strong capability match", area) for area in capability_matches["strong"][:3]]
+        + [("Capability match", area) for area in capability_matches["working"][:2]]
+        + [("Capability match", area) for area in capability_matches["basic"][:1]]
     )
-    for area in matched_profile_areas:
+    for prefix, area in matched_profile_areas:
         label = friendly_capability_label(area)
-        if label and f"Capability match: {label}" not in highlights:
-            highlights.append(f"Capability match: {label}")
+        entry = f"{prefix}: {label}" if label else ""
+        if entry and entry not in highlights:
+            highlights.append(entry)
+
+    reviewed_signal_matches = reviewed_signal_match_summary(
+        {**record, "reviewed_signal_matches": record.get("reviewed_signal_matches") or reviewed_signal_matches_for_text(role_bundle)}
+    )
+    for signal in reviewed_signal_matches["matched"][:3]:
+        label = friendly_capability_label(signal)
+        if label and f"Matched signal: {label}" not in highlights:
+            highlights.append(f"Matched signal: {label}")
 
     if has_government_context(lowered):
         highlights.append("Government context")
@@ -711,7 +787,8 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
 
 
 def is_capability_fit_highlight(value: str) -> bool:
-    return compact_whitespace(value).startswith("Capability match:")
+    normalized = compact_whitespace(value)
+    return normalized.startswith("Capability match:") or normalized.startswith("Strong capability match:")
 
 
 def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
@@ -1959,6 +2036,7 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     scoring_rules = get_scoring_rules(active_profile)
     hard_block_labels = hard_block_reasons(record, active_profile)
     evidence_score, capability_matches = capability_evidence_score(record, active_profile)
+    reviewed_signal_matches = reviewed_signal_match_summary(record, active_profile)
 
     if hard_block_labels:
         return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"])}]
@@ -1979,6 +2057,13 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
 
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
+
+    reviewed_signal_match_count = len(reviewed_signal_matches["matched"])
+    if reviewed_signal_match_count:
+        breakdown.append({
+            "label": "Reviewed signal matches",
+            "value": weighted_points(min(reviewed_signal_match_count, REVIEWED_SIGNAL_MATCH_SCORE_CAP), weights["fit"]),
+        })
 
     convergence_entry = convergence_bonus_entry(record, capability_matches, active_profile)
     if convergence_entry:
@@ -2662,12 +2747,41 @@ def render_job_card(
         if note_bits
         else ""
     )
+    reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
     insight_sections = []
     if visible_reasons:
         insight_sections.append(
             '<div class="job-insight-group">'
             '<strong>Why it fits</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in visible_reasons)}</ul>'
+            '</div>'
+        )
+    if reviewed_signal_matches["matched"]:
+        insight_sections.append(
+            '<div class="job-insight-group">'
+            '<strong>Matched signals</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["matched"])}</ul>'
+            '</div>'
+        )
+    if reviewed_signal_matches["unresolved"]:
+        insight_sections.append(
+            '<div class="job-insight-group is-secondary">'
+            '<strong>Unresolved signals</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["unresolved"])}</ul>'
+            '</div>'
+        )
+    if reviewed_signal_matches["evidence_only"]:
+        insight_sections.append(
+            '<div class="job-insight-group is-secondary">'
+            '<strong>Evidence only</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["evidence_only"])}</ul>'
+            '</div>'
+        )
+    if reviewed_signal_matches["ignored"]:
+        insight_sections.append(
+            '<div class="job-insight-group is-secondary">'
+            '<strong>Ignored</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["ignored"])}</ul>'
             '</div>'
         )
     visible_penalties = negative_score_reasons(score_breakdown, include_values=SHOW_SCORING_DEBUG)
@@ -3137,6 +3251,7 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
         "soft_risk_reasons": [],
         "missing_evidence": [],
         "competitive_signals": [],
+        "reviewed_signal_matches": {"matched": [], "evidence_only": [], "ignored": [], "unresolved": []},
         "details_length": 0,
     }
 
@@ -3183,6 +3298,7 @@ def _process_seek_job_details(
         evaluate_competitive_signal_alignment(signal, profile)
         for signal in detect_competitive_signals(details_text, profile)
     ]
+    record["reviewed_signal_matches"] = reviewed_signal_matches_for_text(details_text)
     
     hard_block_matches = hard_block_entries(record, profile)
     record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
