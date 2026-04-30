@@ -34,3 +34,5 @@ appData-dontupload.txt
 .vscode/
 .idea/
 *.code-workspace
+data/ALIAS_LOGIC_RATIONALE.md
+.gitignore
