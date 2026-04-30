@@ -36,6 +36,8 @@ let reviewTargetTitles = [];
 let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
 let selectedLocations = [];
+let selectedReviewCapabilityIndexes = new Set();
+let showAllReviewCapabilities = false;
 
 function saveWizardState() {
   if (currentStep < 2) {
@@ -495,7 +497,7 @@ function normalizeReviewCapability(rule) {
     seen.add(cleaned);
     aliases.push(cleaned);
   }
-  return { name, level, aliases };
+  return { name, level, aliases, needs_review: Boolean(rule?.needs_review) };
 }
 
 function dedupeReviewList(values) {
@@ -526,113 +528,6 @@ function renderReviewChipList(elementId, values, emptyLabel, removeAttribute) {
   `).join('');
 }
 
-function renderReviewCapabilities() {
-  const container = document.getElementById('review_capability_cards');
-  if (!container) return;
-  if (!reviewCapabilityRules.length) {
-    container.innerHTML = '<div class="chip-empty">No capability rows yet. Add one if you want to tune the matrix before continuing.</div>';
-    return;
-  }
-  const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
-  const filteredRules = reviewCapabilityRules
-    .map((rule, index) => ({ rule, index }))
-    .filter((item) => {
-      if (!filterTerm) return true;
-      return item.rule.name.toLowerCase().includes(filterTerm)
-        || (isTestMode && item.rule.aliases.some((alias) => alias.includes(filterTerm)));
-    });
-  const rowsHtml = filteredRules.length ? filteredRules.map(({ rule, index }) => {
-      const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      const aliasPreview = rule.aliases.slice(0, 3);
-      const remainingAliasCount = Math.max(rule.aliases.length - aliasPreview.length, 0);
-      const strengthLabel = reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate';
-      const aliasCountLabel = `${rule.aliases.length} CV Keyword${rule.aliases.length === 1 ? '' : 's'}`;
-      const aliasSummaryHtml = isTestMode ? `
-            <div class="review-capability-preview capability-aliases">
-              ${aliasPreview.length ? aliasPreview.map((alias) => `<span class="chip-item chip-item-subtle alias-tag">${escapeHtml(alias)}</span>`).join('') : '<span class="chip-empty">No aliases yet.</span>'}
-              ${remainingAliasCount ? `<span class="chip-item chip-item-subtle alias-tag">+${remainingAliasCount} more</span>` : ''}
-            </div>
-      ` : '';
-      const aliasEditorHtml = isTestMode ? `
-          <details class="review-capability-alias-shell capability-aliases">
-            <summary>CV keywords (${rule.aliases.length})</summary>
-            <p class="help">These are background CV terms Job Hunter mapped into this capability. Review them only in test mode.</p>
-            <div class="chip-list chip-list-tight">
-              ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
-                <span class="chip-item">
-                  <span>${escapeHtml(alias)}</span>
-                  <button type="button" data-remove-review-alias="${index}" data-review-alias-index="${aliasIndex}" aria-label="Remove ${escapeHtml(alias)}">&#215;</button>
-                </span>
-              `).join('') : '<span class="chip-empty">No aliases yet.</span>'}
-            </div>
-            <div class="chip-editor-row">
-              <input type="text" data-review-alias-input="${index}" placeholder="Add a CV keyword">
-              <button class="secondary" type="button" data-add-review-alias="${index}">Add</button>
-            </div>
-          </details>
-      ` : '';
-      return `
-      <details class="review-capability-row" data-review-capability-index="${index}"${filterTerm ? ' open' : ''}>
-        <summary class="review-capability-summary">
-          <div class="review-capability-summary-main">
-            <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
-            <div class="review-capability-summary-support">
-              <span class="review-capability-strength review-capability-strength-${escapeHtml(rule.level)}">
-                <span class="review-capability-strength-dot" aria-hidden="true"></span>
-                <span>${escapeHtml(strengthLabel)}</span>
-              </span>
-              ${isTestMode ? `<span class="review-capability-count capability-aliases">${escapeHtml(aliasCountLabel)}</span>` : ''}
-            </div>
-            ${aliasSummaryHtml}
-          </div>
-          <div class="review-capability-summary-meta">
-            <button class="icon-button icon-button-danger" type="button" data-remove-review-capability="${index}" aria-label="Remove ${escapeHtml(rule.name || 'capability')}" title="Remove capability">
-              <span aria-hidden="true">🗑</span>
-            </button>
-          </div>
-        </summary>
-        <div class="review-capability-body">
-          <div class="review-capability-column-head">
-            <span>Capability</span>
-            <span>Strength</span>
-          </div>
-          <div class="review-capability-fields">
-            <div>
-              <div class="review-capability-name" aria-label="Capability name">${escapeHtml(titleCaseName || 'Untitled capability')}</div>
-            </div>
-            <div>
-              <select id="review_capability_level_${index}" data-review-capability-field="level" aria-label="Capability strength">
-                <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
-                <option value="working"${rule.level === 'working' ? ' selected' : ''}>Advanced</option>
-                <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Intermediate</option>
-                <option value="low"${rule.level === 'low' ? ' selected' : ''}>Beginner</option>
-              </select>
-            </div>
-          </div>
-          <p class="review-capability-copy">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.summary || '')}</p>
-          ${aliasEditorHtml}
-        </div>
-      </details>
-    `;
-    }).join('') : '<div class="chip-empty">No matching capabilities found.</div>';
-  container.innerHTML = `
-    <section class="review-capability-group">
-      <div class="review-capability-group-head">
-        <h4>Capabilities</h4>
-        <span class="review-capability-count">${escapeHtml(String(filteredRules.length))} shown</span>
-      </div>
-      <p class="review-capability-group-copy">Keep current strengths only. Remove old or weak capabilities you do not want driving matching.</p>
-      <div class="review-capability-row-list">${rowsHtml}</div>
-    </section>
-  `;
-}
-
-function renderReviewStep() {
-  renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No target titles extracted yet.', 'data-remove-review-target');
-  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No secondary titles extracted yet.', 'data-remove-review-secondary');
-  renderReviewCapabilities();
-  saveWizardState();
-}
 
 function updateCheckStep() {
   const searchPrefs = searchPreferencesPayload();
@@ -658,13 +553,6 @@ function updateCheckStep() {
     : 'Not provided';
 }
 
-function hydrateDraftStep(profile) {
-  reviewTargetTitles = dedupeReviewList(profile?.target_title_patterns || []);
-  reviewSecondaryTitles = dedupeReviewList(profile?.secondary_title_patterns || []);
-  reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
-  renderReviewStep();
-}
-
 function hydrateSearchBasics(profile) {
   const searchSettings = profile?.search_settings || {};
   const matchPreferences = profile?.match_preferences || {};
@@ -678,6 +566,209 @@ function hydrateSearchBasics(profile) {
     || document.querySelector('input[name="engagement_pref"][value="both"]');
   if (engagementInput) engagementInput.checked = true;
   updateCompensationVisibility();
+}
+
+function updateReviewCapability(index, patch) {
+  if (!reviewCapabilityRules[index]) return;
+  reviewCapabilityRules[index] = {
+    ...reviewCapabilityRules[index],
+    ...patch,
+  };
+}
+
+function removeReviewCapability(index) {
+  reviewCapabilityRules.splice(index, 1);
+  selectedReviewCapabilityIndexes = new Set(
+    [...selectedReviewCapabilityIndexes]
+      .filter((value) => value !== index)
+      .map((value) => (value > index ? value - 1 : value))
+  );
+}
+
+function applyReviewCapabilityAction(index, action) {
+  if (!reviewCapabilityRules[index]) return;
+  if (action === 'remove') {
+    removeReviewCapability(index);
+    renderReviewStep();
+    return;
+  }
+  if (action === 'keep') {
+    const level = reviewCapabilityRules[index].level === 'low' ? 'working' : reviewCapabilityRules[index].level;
+    updateReviewCapability(index, { level, needs_review: false });
+  } else if (action === 'basic') {
+    updateReviewCapability(index, { level: 'basic', needs_review: false });
+  } else if (action === 'review') {
+    updateReviewCapability(index, { needs_review: true });
+  }
+  renderReviewStep();
+}
+
+function applyBulkReviewCapabilityAction(action) {
+  const selectedIndexes = [...selectedReviewCapabilityIndexes].sort((left, right) => right - left);
+  if (!selectedIndexes.length) return;
+  for (const index of selectedIndexes) {
+    if (action === 'remove') {
+      removeReviewCapability(index);
+      continue;
+    }
+    if (!reviewCapabilityRules[index]) continue;
+    if (action === 'keep') {
+      const level = reviewCapabilityRules[index].level === 'low' ? 'working' : reviewCapabilityRules[index].level;
+      updateReviewCapability(index, { level, needs_review: false });
+    } else if (action === 'basic') {
+      updateReviewCapability(index, { level: 'basic', needs_review: false });
+    }
+  }
+  if (action === 'remove') {
+    selectedReviewCapabilityIndexes.clear();
+  }
+  renderReviewStep();
+}
+
+function selectVisibleReviewCapabilities() {
+  const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
+  const orderedRules = reviewCapabilityRules
+    .map((rule, index) => ({ rule, index }))
+    .sort((left, right) => {
+      const leftReview = left.rule.needs_review ? 0 : 1;
+      const rightReview = right.rule.needs_review ? 0 : 1;
+      if (leftReview !== rightReview) return leftReview - rightReview;
+      return left.rule.name.localeCompare(right.rule.name);
+    })
+    .filter((item) => !filterTerm || item.rule.name.toLowerCase().includes(filterTerm));
+  const visibleRules = filterTerm || showAllReviewCapabilities ? orderedRules : orderedRules.slice(0, 12);
+  visibleRules.forEach(({ index }) => selectedReviewCapabilityIndexes.add(index));
+  renderReviewCapabilities();
+}
+
+function clearSelectedReviewCapabilities() {
+  selectedReviewCapabilityIndexes.clear();
+  renderReviewCapabilities();
+}
+
+function toggleSelectedReviewCapability(index, checked) {
+  if (checked) {
+    selectedReviewCapabilityIndexes.add(index);
+  } else {
+    selectedReviewCapabilityIndexes.delete(index);
+  }
+  renderReviewCapabilities();
+}
+
+function renderReviewCapabilities() {
+  const container = document.getElementById('review_capability_cards');
+  if (!container) return;
+  if (!reviewCapabilityRules.length) {
+    container.innerHTML = '<div class="chip-empty">No capabilities found yet.</div>';
+    return;
+  }
+  const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
+  const orderedRules = reviewCapabilityRules
+    .map((rule, index) => ({ rule, index }))
+    .sort((left, right) => {
+      const leftReview = left.rule.needs_review ? 0 : 1;
+      const rightReview = right.rule.needs_review ? 0 : 1;
+      if (leftReview !== rightReview) return leftReview - rightReview;
+      const levelRank = { strong: 0, working: 1, basic: 2, low: 3 };
+      const leftLevel = levelRank[left.rule.level] ?? 9;
+      const rightLevel = levelRank[right.rule.level] ?? 9;
+      if (leftLevel !== rightLevel) return leftLevel - rightLevel;
+      return left.rule.name.localeCompare(right.rule.name);
+    })
+    .filter((item) => {
+      if (!filterTerm) return true;
+      return item.rule.name.toLowerCase().includes(filterTerm);
+    });
+  const visibleRules = filterTerm || showAllReviewCapabilities ? orderedRules : orderedRules.slice(0, 12);
+  const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
+  const selectedVisibleCount = visibleRules.filter(({ index }) => selectedReviewCapabilityIndexes.has(index)).length;
+  const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
+    const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    const strengthLabel = reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate';
+    const reasonText = reviewCapabilityLevelMeta[rule.level]?.summary || '';
+    const selectedClass = selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
+    const keepActive = rule.level === 'strong' || rule.level === 'working';
+    const basicActive = rule.level === 'basic';
+    const debugHtml = isTestMode && rule.aliases.length ? `
+      <details class="review-capability-debug capability-aliases">
+        <summary>Debug aliases</summary>
+        <div class="chip-list chip-list-tight">
+          ${rule.aliases.map((alias) => `<span class="chip-item chip-item-subtle alias-tag">${escapeHtml(alias)}</span>`).join('')}
+        </div>
+      </details>
+    ` : '';
+    return `
+      <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
+        <label class="review-capability-select">
+          <input type="checkbox" data-select-review-capability="${index}" ${selectedReviewCapabilityIndexes.has(index) ? 'checked' : ''} aria-label="Select ${escapeHtml(titleCaseName || 'capability')}">
+        </label>
+        <div class="review-capability-main">
+          <div class="review-capability-head">
+            <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
+            <span class="review-capability-strength review-capability-strength-${escapeHtml(rule.level)}">
+              <span class="review-capability-strength-dot" aria-hidden="true"></span>
+              <span>${escapeHtml(strengthLabel)}</span>
+            </span>
+          </div>
+          ${reasonText ? `<p class="review-capability-copy">${escapeHtml(reasonText)}</p>` : ''}
+          ${debugHtml}
+        </div>
+        <div class="review-capability-actions">
+          <button class="review-capability-action${keepActive ? ' is-active' : ''}" type="button" data-review-capability-action="keep" data-review-capability-index="${index}">Keep</button>
+          <button class="review-capability-action${basicActive ? ' is-active' : ''}" type="button" data-review-capability-action="basic" data-review-capability-index="${index}">Mark as basic</button>
+          <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}">Remove</button>
+        </div>
+      </article>
+    `;
+  }).join('') : '<div class="chip-empty">No matching capabilities found.</div>';
+  const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
+  const footerHtml = hiddenCount > 0 ? `
+    <div class="review-capability-footer">
+      <button class="secondary" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))} capabilities</button>
+    </div>
+  ` : '';
+  container.innerHTML = `
+    <section class="review-capability-group">
+      <div class="review-capability-group-head">
+        <h4>Capabilities</h4>
+        <span class="review-capability-count">${escapeHtml(String(visibleRules.length))} shown${hiddenCount ? ` of ${escapeHtml(String(orderedRules.length))}` : ''}</span>
+      </div>
+      <p class="review-capability-group-copy">Focus on what should drive matching. Keep strong capabilities, downgrade weak ones, and remove noise.</p>
+      <div class="review-capability-toolbar">
+        <div class="review-capability-toolbar-main">
+          <span class="review-capability-toolbar-copy">${selectedVisibleCount ? `${selectedVisibleCount} visible item${selectedVisibleCount === 1 ? '' : 's'} selected` : 'Select capabilities to apply bulk actions.'}</span>
+          <div class="review-capability-bulk-actions">
+            <button class="secondary" type="button" data-review-select-visible="true">Select shown</button>
+            <button class="secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>Clear selection</button>
+            <button class="secondary" type="button" data-review-bulk-action="keep"${bulkDisabled}>Keep selected</button>
+            <button class="secondary" type="button" data-review-bulk-action="basic"${bulkDisabled}>Mark selected as basic</button>
+            <button class="secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>Remove selected</button>
+          </div>
+        </div>
+      </div>
+      <div class="review-capability-row-list">${rowsHtml}</div>
+      ${footerHtml}
+    </section>
+  `;
+}
+
+function renderReviewStep() {
+  selectedReviewCapabilityIndexes = new Set(
+    [...selectedReviewCapabilityIndexes].filter((index) => index >= 0 && index < reviewCapabilityRules.length)
+  );
+  renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No target titles extracted yet.', 'data-remove-review-target');
+  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No secondary titles extracted yet.', 'data-remove-review-secondary');
+  renderReviewCapabilities();
+  saveWizardState();
+}
+
+function hydrateDraftStep(profile) {
+  reviewTargetTitles = dedupeReviewList(profile?.target_title_patterns || []);
+  reviewSecondaryTitles = dedupeReviewList(profile?.secondary_title_patterns || []);
+  reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
+  selectedReviewCapabilityIndexes.clear();
+  showAllReviewCapabilities = false;
+  renderReviewStep();
 }
 
 function buildCompletionRedirectState(payload, searchPrefs) {
@@ -896,21 +987,8 @@ document.getElementById('review_add_secondary_title').addEventListener('click', 
   renderReviewStep();
 });
 
-document.getElementById('review_add_capability').addEventListener('click', () => {
-  const rawName = window.prompt('Add capability', '');
-  const cleaned = normalizeReviewText(rawName || '');
-  if (!cleaned) return;
-  const exists = reviewCapabilityRules.some((rule) => normalizeReviewText(rule.name).toLowerCase() === cleaned.toLowerCase());
-  if (exists) {
-    showStatus('That capability is already listed.', 'error');
-    return;
-  }
-  reviewCapabilityRules = [...reviewCapabilityRules, { name: cleaned, level: 'working', aliases: [] }];
-  showStatus('', '');
-  renderReviewStep();
-});
-
 document.getElementById('review_capability_filter').addEventListener('input', () => {
+  showAllReviewCapabilities = false;
   renderReviewCapabilities();
 });
 
@@ -927,61 +1005,45 @@ document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
     renderReviewStep();
     return;
   }
-  const removeCapability = event.target.closest('[data-remove-review-capability]');
-  if (removeCapability) {
-    reviewCapabilityRules.splice(Number(removeCapability.dataset.removeReviewCapability), 1);
-    renderReviewStep();
+  const capabilityAction = event.target.closest('[data-review-capability-action]');
+  if (capabilityAction) {
+    applyReviewCapabilityAction(
+      Number(capabilityAction.dataset.reviewCapabilityIndex),
+      capabilityAction.dataset.reviewCapabilityAction,
+    );
     return;
   }
-  const removeAlias = event.target.closest('[data-remove-review-alias]');
-  if (removeAlias) {
-    const ruleIndex = Number(removeAlias.dataset.removeReviewAlias);
-    const aliasIndex = Number(removeAlias.dataset.reviewAliasIndex);
-    const aliases = [...(reviewCapabilityRules[ruleIndex]?.aliases || [])];
-    aliases.splice(aliasIndex, 1);
-    reviewCapabilityRules[ruleIndex] = { ...reviewCapabilityRules[ruleIndex], aliases };
-    renderReviewStep();
+  const bulkAction = event.target.closest('[data-review-bulk-action]');
+  if (bulkAction) {
+    applyBulkReviewCapabilityAction(bulkAction.dataset.reviewBulkAction);
     return;
   }
-  const addAlias = event.target.closest('[data-add-review-alias]');
-  if (!addAlias) return;
-  const ruleIndex = Number(addAlias.dataset.addReviewAlias);
-  const input = document.querySelector(`[data-review-alias-input="${ruleIndex}"]`);
-  const cleaned = normalizeReviewAlias(input?.value || '');
-  if (!cleaned) return;
-  const aliases = [...(reviewCapabilityRules[ruleIndex]?.aliases || [])];
-  if (!aliases.includes(cleaned)) aliases.push(cleaned);
-  reviewCapabilityRules[ruleIndex] = { ...reviewCapabilityRules[ruleIndex], aliases };
-  renderReviewStep();
+  if (event.target.closest('[data-review-select-visible]')) {
+    selectVisibleReviewCapabilities();
+    return;
+  }
+  if (event.target.closest('[data-review-clear-selection]')) {
+    clearSelectedReviewCapabilities();
+    return;
+  }
+  if (event.target.closest('[data-review-show-all]')) {
+    showAllReviewCapabilities = true;
+    renderReviewCapabilities();
+  }
 });
 
 document.querySelector('[data-step="2"]').addEventListener('change', (event) => {
-  const field = event.target.closest('[data-review-capability-field]');
-  if (!field) return;
-  const card = field.closest('[data-review-capability-index]');
-  if (!card) return;
-  const index = Number(card.dataset.reviewCapabilityIndex);
-  const key = field.dataset.reviewCapabilityField;
-  reviewCapabilityRules[index] = {
-    ...reviewCapabilityRules[index],
-    [key]: String(field.value || '').trim().toLowerCase(),
-  };
-  renderReviewStep();
+  const selectionInput = event.target.closest('[data-select-review-capability]');
+  if (selectionInput) {
+    toggleSelectedReviewCapability(
+      Number(selectionInput.dataset.selectReviewCapability),
+      Boolean(selectionInput.checked),
+    );
+    return;
+  }
 });
 
 document.querySelector('[data-step="2"]').addEventListener('keydown', (event) => {
-  const aliasInput = event.target.closest('[data-review-alias-input]');
-  if (aliasInput && event.key === 'Enter') {
-    event.preventDefault();
-    const ruleIndex = Number(aliasInput.dataset.reviewAliasInput);
-    const cleaned = normalizeReviewAlias(aliasInput.value || '');
-    if (!cleaned) return;
-    const aliases = [...(reviewCapabilityRules[ruleIndex]?.aliases || [])];
-    if (!aliases.includes(cleaned)) aliases.push(cleaned);
-    reviewCapabilityRules[ruleIndex] = { ...reviewCapabilityRules[ruleIndex], aliases };
-    renderReviewStep();
-    return;
-  }
   if (event.key === 'Enter' && event.target.id === 'review_target_titles_input') {
     event.preventDefault();
     document.getElementById('review_add_target_title').click();
@@ -1059,8 +1121,8 @@ function addSalaryInfoIcons() {
 renderLocationSuggestions();
 loadProfileDefaults().catch(() => {});
 setStep(1);
-updateCompensationVisibility();
 updateCreateProfileAvailability();
+updateCompensationVisibility();
 addSalaryInfoIcons();
 
 if (primaryCvDropZone && primaryCvInput) {

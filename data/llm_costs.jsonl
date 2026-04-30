@@ -235,3 +235,9 @@
 {"ts": "2026-04-30T13:09:19Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 761, "tok_out": 87, "cost_usd": 0.000166, "session_usd": 0.000754}
 {"ts": "2026-04-30T13:15:12Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 761, "tok_out": 103, "cost_usd": 0.000176, "session_usd": 0.000176}
 {"ts": "2026-04-30T13:15:16Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1939, "tok_out": 198, "cost_usd": 0.00041, "session_usd": 0.000586}
+{"ts": "2026-04-30T13:32:01Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 780, "tok_out": 108, "cost_usd": 0.000182, "session_usd": 0.000936}
+{"ts": "2026-04-30T13:32:07Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1972, "tok_out": 172, "cost_usd": 0.000399, "session_usd": 0.001335}
+{"ts": "2026-04-30T14:06:43Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 780, "tok_out": 110, "cost_usd": 0.000183, "session_usd": 0.000183}
+{"ts": "2026-04-30T14:06:49Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1972, "tok_out": 213, "cost_usd": 0.000424, "session_usd": 0.000607}
+{"ts": "2026-04-30T23:23:39Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 780, "tok_out": 104, "cost_usd": 0.000179, "session_usd": 0.000179}
+{"ts": "2026-04-30T23:23:45Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1972, "tok_out": 187, "cost_usd": 0.000408, "session_usd": 0.000587}
