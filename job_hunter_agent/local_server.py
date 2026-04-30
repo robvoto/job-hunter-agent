@@ -1803,7 +1803,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 raw_minimum_daily_rate = payload.get("minimum_daily_rate")
                 capability_rules = normalize_capability_rules(payload.get("capability_profile_rules") or [])
                 if not target:
-                    raise ValueError("target_title_patterns must not be empty")
+                    raise ValueError("Primary job title must not be empty")
                 if keyword and (len(keyword) < 2 or len(keyword) > 120):
                     raise ValueError("Please keep the primary search title between 2 and 120 characters.")
                 if not locations:

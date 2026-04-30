@@ -793,28 +793,27 @@ def extract_title_pattern_suggestions(
 ) -> dict[str, list[str]]:
     source_text = repair_text(source_text)
     settings = onboarding_settings or {}
-    lookback_years = _resolve_extraction_lookback_years(settings)
     max_target = _resolve_onboarding_int(settings, "max_target_patterns")
     max_secondary = _resolve_onboarding_int(settings, "max_secondary_patterns")
-    extracted = _llm_extract_from_cv(source_text, lookback_years)
+    roles = _parse_role_entries(source_text)
+    title_evidence = _collect_title_evidence(roles)
+    classified = _classify_titles_from_evidence(
+        title_evidence,
+        max_target=max_target,
+        max_secondary=max_secondary,
+    )
 
     target_patterns = [
         _normalize_role_title_value(value)
-        for value in (extracted.get("target_title_patterns") or [])
+        for value in (classified.get("target_title_patterns") or [])
         if _normalize_role_title_value(value)
     ][:max_target]
     secondary_patterns = [
         _normalize_role_title_value(value)
-        for value in (extracted.get("secondary_title_patterns") or [])
+        for value in (classified.get("secondary_title_patterns") or [])
         if _normalize_role_title_value(value)
     ][:max_secondary]
-    suggested_search_keywords = [
-        _clean_line(value).lower()
-        for value in (extracted.get("suggested_search_keywords") or [])
-        if _clean_line(value)
-    ]
-    if not suggested_search_keywords:
-        suggested_search_keywords = target_patterns[:4]
+    suggested_search_keywords = target_patterns[:4]
 
     return {
         "target_title_patterns": list(dict.fromkeys(target_patterns)),

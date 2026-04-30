@@ -244,5 +244,2805 @@
         "notes": ""
       }
     ]
+  },
+  "workflow management": {
+    "signal": "workflow management",
+    "normalized_key": "workflow management",
+    "original_texts": [
+      "workflow management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "rule development": {
+    "signal": "rule development",
+    "normalized_key": "rule development",
+    "original_texts": [
+      "rule development"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "process management": {
+    "signal": "process management",
+    "normalized_key": "process management",
+    "original_texts": [
+      "process management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "management": {
+    "signal": "management",
+    "normalized_key": "management",
+    "original_texts": [
+      "management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "consulting": {
+    "signal": "consulting",
+    "normalized_key": "consulting",
+    "original_texts": [
+      "consulting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "system integration": {
+    "signal": "system integration",
+    "normalized_key": "system integration",
+    "original_texts": [
+      "system integration"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "agile management": {
+    "signal": "agile management",
+    "normalized_key": "agile management",
+    "original_texts": [
+      "agile management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "app ios/android": {
+    "signal": "app ios/android",
+    "normalized_key": "app ios/android",
+    "original_texts": [
+      "app ios/android"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "bpmn process": {
+    "signal": "bpmn process",
+    "normalized_key": "bpmn process",
+    "original_texts": [
+      "bpmn process"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery tony": {
+    "signal": "delivery tony",
+    "normalized_key": "delivery tony",
+    "original_texts": [
+      "delivery tony"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "estate non-profit": {
+    "signal": "estate non-profit",
+    "normalized_key": "estate non-profit",
+    "original_texts": [
+      "estate non-profit"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "led saas": {
+    "signal": "led saas",
+    "normalized_key": "led saas",
+    "original_texts": [
+      "led saas"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "gpt group": {
+    "signal": "gpt group",
+    "normalized_key": "gpt group",
+    "original_texts": [
+      "gpt group"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "across client": {
+    "signal": "across client",
+    "normalized_key": "across client",
+    "original_texts": [
+      "across client"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "enhancement supporting": {
+    "signal": "enhancement supporting",
+    "normalized_key": "enhancement supporting",
+    "original_texts": [
+      "enhancement supporting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "global user": {
+    "signal": "global user",
+    "normalized_key": "global user",
+    "original_texts": [
+      "global user"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "mobile consulting": {
+    "signal": "mobile consulting",
+    "normalized_key": "mobile consulting",
+    "original_texts": [
+      "mobile consulting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "case ensure": {
+    "signal": "case ensure",
+    "normalized_key": "case ensure",
+    "original_texts": [
+      "case ensure"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "bpmn improving": {
+    "signal": "bpmn improving",
+    "normalized_key": "bpmn improving",
+    "original_texts": [
+      "bpmn improving"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery involving": {
+    "signal": "delivery involving",
+    "normalized_key": "delivery involving",
+    "original_texts": [
+      "delivery involving"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "digital health": {
+    "signal": "digital health",
+    "normalized_key": "digital health",
+    "original_texts": [
+      "digital health"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "director m": {
+    "signal": "director m",
+    "normalized_key": "director m",
+    "original_texts": [
+      "director m"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "booking solution": {
+    "signal": "booking solution",
+    "normalized_key": "booking solution",
+    "original_texts": [
+      "booking solution"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "management reporting": {
+    "signal": "management reporting",
+    "normalized_key": "management reporting",
+    "original_texts": [
+      "management reporting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "produced bpmn": {
+    "signal": "produced bpmn",
+    "normalized_key": "produced bpmn",
+    "original_texts": [
+      "produced bpmn"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "breakthrough app": {
+    "signal": "breakthrough app",
+    "normalized_key": "breakthrough app",
+    "original_texts": [
+      "breakthrough app"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "cloud-hosted platform": {
+    "signal": "cloud-hosted platform",
+    "normalized_key": "cloud-hosted platform",
+    "original_texts": [
+      "cloud-hosted platform"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "defined business": {
+    "signal": "defined business",
+    "normalized_key": "defined business",
+    "original_texts": [
+      "defined business"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery coordination": {
+    "signal": "delivery coordination",
+    "normalized_key": "delivery coordination",
+    "original_texts": [
+      "delivery coordination"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "digital platform": {
+    "signal": "digital platform",
+    "normalized_key": "digital platform",
+    "original_texts": [
+      "digital platform"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "engagement delivery": {
+    "signal": "engagement delivery",
+    "normalized_key": "engagement delivery",
+    "original_texts": [
+      "engagement delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "evolution cloud-hosted": {
+    "signal": "evolution cloud-hosted",
+    "normalized_key": "evolution cloud-hosted",
+    "original_texts": [
+      "evolution cloud-hosted"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "led end-to-end": {
+    "signal": "led end-to-end",
+    "normalized_key": "led end-to-end",
+    "original_texts": [
+      "led end-to-end"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "migration enhancement": {
+    "signal": "migration enhancement",
+    "normalized_key": "migration enhancement",
+    "original_texts": [
+      "migration enhancement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "product migration": {
+    "signal": "product migration",
+    "normalized_key": "product migration",
+    "original_texts": [
+      "product migration"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "robbin breakthrough": {
+    "signal": "robbin breakthrough",
+    "normalized_key": "robbin breakthrough",
+    "original_texts": [
+      "robbin breakthrough"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "australian disability": {
+    "signal": "australian disability",
+    "normalized_key": "australian disability",
+    "original_texts": [
+      "australian disability"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "ambulance process": {
+    "signal": "ambulance process",
+    "normalized_key": "ambulance process",
+    "original_texts": [
+      "ambulance process"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "ambulance relocation": {
+    "signal": "ambulance relocation",
+    "normalized_key": "ambulance relocation",
+    "original_texts": [
+      "ambulance relocation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "as-is to-be": {
+    "signal": "as-is to-be",
+    "normalized_key": "as-is to-be",
+    "original_texts": [
+      "as-is to-be"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "automation tracking": {
+    "signal": "automation tracking",
+    "normalized_key": "automation tracking",
+    "original_texts": [
+      "automation tracking"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "capture workflow": {
+    "signal": "capture workflow",
+    "normalized_key": "capture workflow",
+    "original_texts": [
+      "capture workflow"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "clarity response": {
+    "signal": "clarity response",
+    "normalized_key": "clarity response",
+    "original_texts": [
+      "clarity response"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "concurrent program": {
+    "signal": "concurrent program",
+    "normalized_key": "concurrent program",
+    "original_texts": [
+      "concurrent program"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "coordinated large-scale": {
+    "signal": "coordinated large-scale",
+    "normalized_key": "coordinated large-scale",
+    "original_texts": [
+      "coordinated large-scale"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "covering data": {
+    "signal": "covering data",
+    "normalized_key": "covering data",
+    "original_texts": [
+      "covering data"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "design end-to-end": {
+    "signal": "design end-to-end",
+    "normalized_key": "design end-to-end",
+    "original_texts": [
+      "design end-to-end"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "including sse": {
+    "signal": "including sse",
+    "normalized_key": "including sse",
+    "original_texts": [
+      "including sse"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "led requirement": {
+    "signal": "led requirement",
+    "normalized_key": "led requirement",
+    "original_texts": [
+      "led requirement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "nsw ambulance": {
+    "signal": "nsw ambulance",
+    "normalized_key": "nsw ambulance",
+    "original_texts": [
+      "nsw ambulance"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "across all": {
+    "signal": "across all",
+    "normalized_key": "across all",
+    "original_texts": [
+      "across all"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "agile delivery": {
+    "signal": "agile delivery",
+    "normalized_key": "agile delivery",
+    "original_texts": [
+      "agile delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "ba delivery": {
+    "signal": "ba delivery",
+    "normalized_key": "ba delivery",
+    "original_texts": [
+      "ba delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "onboarded onto": {
+    "signal": "onboarded onto",
+    "normalized_key": "onboarded onto",
+    "original_texts": [
+      "onboarded onto"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.110048+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "acceptance criteria": {
+    "signal": "acceptance criteria",
+    "normalized_key": "acceptance criteria",
+    "original_texts": [
+      "acceptance criteria"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "australia employment": {
+    "signal": "australia employment",
+    "normalized_key": "australia employment",
+    "original_texts": [
+      "australia employment"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "community covering": {
+    "signal": "community covering",
+    "normalized_key": "community covering",
+    "original_texts": [
+      "community covering"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "definition delivery": {
+    "signal": "definition delivery",
+    "normalized_key": "definition delivery",
+    "original_texts": [
+      "definition delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "end-to-end implementation": {
+    "signal": "end-to-end implementation",
+    "normalized_key": "end-to-end implementation",
+    "original_texts": [
+      "end-to-end implementation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "engineer qa": {
+    "signal": "engineer qa",
+    "normalized_key": "engineer qa",
+    "original_texts": [
+      "engineer qa"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "across procurement": {
+    "signal": "across procurement",
+    "normalized_key": "across procurement",
+    "original_texts": [
+      "across procurement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "critical p1/p2": {
+    "signal": "critical p1/p2",
+    "normalized_key": "critical p1/p2",
+    "original_texts": [
+      "critical p1/p2"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "improvement producing": {
+    "signal": "improvement producing",
+    "normalized_key": "improvement producing",
+    "original_texts": [
+      "improvement producing"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "lhd director": {
+    "signal": "lhd director",
+    "normalized_key": "lhd director",
+    "original_texts": [
+      "lhd director"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "lhds nsw": {
+    "signal": "lhds nsw",
+    "normalized_key": "lhds nsw",
+    "original_texts": [
+      "lhds nsw"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "m digital": {
+    "signal": "m digital",
+    "normalized_key": "m digital",
+    "original_texts": [
+      "m digital"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "network transformation": {
+    "signal": "network transformation",
+    "normalized_key": "network transformation",
+    "original_texts": [
+      "network transformation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "aid request": {
+    "signal": "aid request",
+    "normalized_key": "aid request",
+    "original_texts": [
+      "aid request"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "co-led design": {
+    "signal": "co-led design",
+    "normalized_key": "co-led design",
+    "original_texts": [
+      "co-led design"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "configuration messaging": {
+    "signal": "configuration messaging",
+    "normalized_key": "configuration messaging",
+    "original_texts": [
+      "configuration messaging"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "covering workflow": {
+    "signal": "covering workflow",
+    "normalized_key": "covering workflow",
+    "original_texts": [
+      "covering workflow"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "defined requirement": {
+    "signal": "defined requirement",
+    "normalized_key": "defined requirement",
+    "original_texts": [
+      "defined requirement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "behaviour structured": {
+    "signal": "behaviour structured",
+    "normalized_key": "behaviour structured",
+    "original_texts": [
+      "behaviour structured"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "calculation validation": {
+    "signal": "calculation validation",
+    "normalized_key": "calculation validation",
+    "original_texts": [
+      "calculation validation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "complex policy": {
+    "signal": "complex policy",
+    "normalized_key": "complex policy",
+    "original_texts": [
+      "complex policy"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "des supporting": {
+    "signal": "des supporting",
+    "normalized_key": "des supporting",
+    "original_texts": [
+      "des supporting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "disability employment": {
+    "signal": "disability employment",
+    "normalized_key": "disability employment",
+    "original_texts": [
+      "disability employment"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "employment program": {
+    "signal": "employment program",
+    "normalized_key": "employment program",
+    "original_texts": [
+      "employment program"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "employment remote": {
+    "signal": "employment remote",
+    "normalized_key": "employment remote",
+    "original_texts": [
+      "employment remote"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "legacy transition": {
+    "signal": "legacy transition",
+    "normalized_key": "legacy transition",
+    "original_texts": [
+      "legacy transition"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "raes targeting": {
+    "signal": "raes targeting",
+    "normalized_key": "raes targeting",
+    "original_texts": [
+      "raes targeting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "remote australia": {
+    "signal": "remote australia",
+    "normalized_key": "remote australia",
+    "original_texts": [
+      "remote australia"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivered across": {
+    "signal": "delivered across",
+    "normalized_key": "delivered across",
+    "original_texts": [
+      "delivered across"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "incident workflow": {
+    "signal": "incident workflow",
+    "normalized_key": "incident workflow",
+    "original_texts": [
+      "incident workflow"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "management solution covering": {
+    "signal": "management solution covering",
+    "normalized_key": "management solution covering",
+    "original_texts": [
+      "management solution covering"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "mapping improvement": {
+    "signal": "mapping improvement",
+    "normalized_key": "mapping improvement",
+    "original_texts": [
+      "mapping improvement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "redesigned critical": {
+    "signal": "redesigned critical",
+    "normalized_key": "redesigned critical",
+    "original_texts": [
+      "redesigned critical"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "aunz aid": {
+    "signal": "aunz aid",
+    "normalized_key": "aunz aid",
+    "original_texts": [
+      "aunz aid"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "consistent sprint": {
+    "signal": "consistent sprint",
+    "normalized_key": "consistent sprint",
+    "original_texts": [
+      "consistent sprint"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery desk": {
+    "signal": "delivery desk",
+    "normalized_key": "delivery desk",
+    "original_texts": [
+      "delivery desk"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "enabling consistent": {
+    "signal": "enabling consistent",
+    "normalized_key": "enabling consistent",
+    "original_texts": [
+      "enabling consistent"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "full end-to-end": {
+    "signal": "full end-to-end",
+    "normalized_key": "full end-to-end",
+    "original_texts": [
+      "full end-to-end"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "gis platform": {
+    "signal": "gis platform",
+    "normalized_key": "gis platform",
+    "original_texts": [
+      "gis platform"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "group covering": {
+    "signal": "group covering",
+    "normalized_key": "group covering",
+    "original_texts": [
+      "group covering"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "independently led": {
+    "signal": "independently led",
+    "normalized_key": "independently led",
+    "original_texts": [
+      "independently led"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "low-code independently": {
+    "signal": "low-code independently",
+    "normalized_key": "low-code independently",
+    "original_texts": [
+      "low-code independently"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "relief management": {
+    "signal": "relief management",
+    "normalized_key": "relief management",
+    "original_texts": [
+      "relief management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "clearly structured": {
+    "signal": "clearly structured",
+    "normalized_key": "clearly structured",
+    "original_texts": [
+      "clearly structured"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "defined payment": {
+    "signal": "defined payment",
+    "normalized_key": "defined payment",
+    "original_texts": [
+      "defined payment"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "edge case": {
+    "signal": "edge case",
+    "normalized_key": "edge case",
+    "original_texts": [
+      "edge case"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "ensure business": {
+    "signal": "ensure business",
+    "normalized_key": "ensure business",
+    "original_texts": [
+      "ensure business"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "fixed go-live": {
+    "signal": "fixed go-live",
+    "normalized_key": "fixed go-live",
+    "original_texts": [
+      "fixed go-live"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "migration scenario": {
+    "signal": "migration scenario",
+    "normalized_key": "migration scenario",
+    "original_texts": [
+      "migration scenario"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "national employment": {
+    "signal": "national employment",
+    "normalized_key": "national employment",
+    "original_texts": [
+      "national employment"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "rule migration": {
+    "signal": "rule migration",
+    "normalized_key": "rule migration",
+    "original_texts": [
+      "rule migration"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "story acceptance": {
+    "signal": "story acceptance",
+    "normalized_key": "story acceptance",
+    "original_texts": [
+      "story acceptance"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "led nsw": {
+    "signal": "led nsw",
+    "normalized_key": "led nsw",
+    "original_texts": [
+      "led nsw"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "backlog across": {
+    "signal": "backlog across",
+    "normalized_key": "backlog across",
+    "original_texts": [
+      "backlog across"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "client engagement": {
+    "signal": "client engagement",
+    "normalized_key": "client engagement",
+    "original_texts": [
+      "client engagement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "crm integration": {
+    "signal": "crm integration",
+    "normalized_key": "crm integration",
+    "original_texts": [
+      "crm integration"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "employee management": {
+    "signal": "employee management",
+    "normalized_key": "employee management",
+    "original_texts": [
+      "employee management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "led ba": {
+    "signal": "led ba",
+    "normalized_key": "led ba",
+    "original_texts": [
+      "led ba"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "malaysian ngo": {
+    "signal": "malaysian ngo",
+    "normalized_key": "malaysian ngo",
+    "original_texts": [
+      "malaysian ngo"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "platform serco group": {
+    "signal": "platform serco group",
+    "normalized_key": "platform serco group",
+    "original_texts": [
+      "platform serco group"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "prioritised backlog": {
+    "signal": "prioritised backlog",
+    "normalized_key": "prioritised backlog",
+    "original_texts": [
+      "prioritised backlog"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "rapidly onboarded": {
+    "signal": "rapidly onboarded",
+    "normalized_key": "rapidly onboarded",
+    "original_texts": [
+      "rapidly onboarded"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "structured prioritised": {
+    "signal": "structured prioritised",
+    "normalized_key": "structured prioritised",
+    "original_texts": [
+      "structured prioritised"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "build testing": {
+    "signal": "build testing",
+    "normalized_key": "build testing",
+    "original_texts": [
+      "build testing"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery team": {
+    "signal": "delivery team",
+    "normalized_key": "delivery team",
+    "original_texts": [
+      "delivery team"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "led definition": {
+    "signal": "led definition",
+    "normalized_key": "led definition",
+    "original_texts": [
+      "led definition"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "partnered engineer": {
+    "signal": "partnered engineer",
+    "normalized_key": "partnered engineer",
+    "original_texts": [
+      "partnered engineer"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "system logic": {
+    "signal": "system logic",
+    "normalized_key": "system logic",
+    "original_texts": [
+      "system logic"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "translated complex": {
+    "signal": "translated complex",
+    "normalized_key": "translated complex",
+    "original_texts": [
+      "translated complex"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:28.111050+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "requirements analysis": {
+    "signal": "requirements analysis",
+    "normalized_key": "requirements analysis",
+    "original_texts": [
+      "requirements analysis"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "bpmn 2.0 process modelling": {
+    "signal": "bpmn 2.0 process modelling",
+    "normalized_key": "bpmn 2.0 process modelling",
+    "original_texts": [
+      "bpmn 2.0 process modelling"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "agile / scrum delivery": {
+    "signal": "agile / scrum delivery",
+    "normalized_key": "agile / scrum delivery",
+    "original_texts": [
+      "agile / scrum delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data rules and workflow design": {
+    "signal": "data rules and workflow design",
+    "normalized_key": "data rules and workflow design",
+    "original_texts": [
+      "data rules and workflow design"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "business rules and validation": {
+    "signal": "business rules and validation",
+    "normalized_key": "business rules and validation",
+    "original_texts": [
+      "business rules and validation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "user stories and acceptance criteria": {
+    "signal": "user stories and acceptance criteria",
+    "normalized_key": "user stories and acceptance criteria",
+    "original_texts": [
+      "user stories and acceptance criteria"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "solution design": {
+    "signal": "solution design",
+    "normalized_key": "solution design",
+    "original_texts": [
+      "solution design"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "workflow orchestration": {
+    "signal": "workflow orchestration",
+    "normalized_key": "workflow orchestration",
+    "original_texts": [
+      "workflow orchestration"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "enterprise systems and integrations": {
+    "signal": "enterprise systems and integrations",
+    "normalized_key": "enterprise systems and integrations",
+    "original_texts": [
+      "enterprise systems and integrations"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "agentic ai / llm applications": {
+    "signal": "agentic ai / llm applications",
+    "normalized_key": "agentic ai / llm applications",
+    "original_texts": [
+      "agentic ai / llm applications"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:04:34.477757+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "business rules": {
+    "signal": "business rules",
+    "normalized_key": "business rules",
+    "original_texts": [
+      "business rules"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:09:19.146516+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "management systems": {
+    "signal": "management systems",
+    "normalized_key": "management systems",
+    "original_texts": [
+      "management systems"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:09:19.146516+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "legacy systems": {
+    "signal": "legacy systems",
+    "normalized_key": "legacy systems",
+    "original_texts": [
+      "legacy systems"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:09:19.146516+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "process modeling": {
+    "signal": "process modeling",
+    "normalized_key": "process modeling",
+    "original_texts": [
+      "process modeling"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:09:19.146516+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "financial management": {
+    "signal": "financial management",
+    "normalized_key": "financial management",
+    "original_texts": [
+      "financial management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:15:12.412973+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "modeling": {
+    "signal": "modeling",
+    "normalized_key": "modeling",
+    "original_texts": [
+      "modeling"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:15:12.412973+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "solution design and gap analysis": {
+    "signal": "solution design and gap analysis",
+    "normalized_key": "solution design and gap analysis",
+    "original_texts": [
+      "solution design and gap analysis"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T13:15:16.594655+00:00",
+        "notes": ""
+      }
+    ]
   }
 }

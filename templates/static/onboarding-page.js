@@ -6,8 +6,6 @@ const stepEls = Array.from(document.querySelectorAll('.wizard-step'));
 const heroSectionEl = document.querySelector('.hero');
 const heroTitleEl = document.getElementById('hero_title');
 const heroCopyEl = document.getElementById('hero_copy');
-const heroProgressStepEl = document.getElementById('hero_progress_step');
-const heroProgressPercentEl = document.getElementById('hero_progress_percent');
 const formTitleEl = document.getElementById('form_title');
 const workflowSummaryEl = document.getElementById('workflow_summary');
 const progressFillEl = document.getElementById('wizard_progress_fill');
@@ -23,50 +21,21 @@ const salaryYearlyBlock = document.getElementById('salary_yearly_block');
 const salaryDailyBlock = document.getElementById('salary_daily_block');
 const createProfileButton = document.getElementById('create_profile');
 const capabilityUi = window.JobHunterCapabilityUi || {};
+const reviewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
+const STEP_COUNT = 4;
+const REVIEW_STEP = 2;
+const SEARCH_STEP = 3;
+const CHECK_STEP = 4;
+const COMMON_LOCATION_OPTIONS = [];
 
-// Helper function to apply primary button theme
-function applyPrimaryButtonTheme(button) {
-  if (button) {
-    button.style.backgroundColor = '#f58020';
-    button.style.borderColor = '#f58020';
-    button.style.color = '#000';
-    button.style.fontWeight = '700';
-  }
-}
-
-// Helper function to apply secondary button theme
-function applySecondaryButtonTheme(button) {
-  if (button) {
-    button.style.backgroundColor = 'transparent';
-    button.style.borderColor = '#6B7280'; // Muted gray border
-    button.style.color = '#D1D5DB'; // Lighter text for contrast
-  }
-}
-
-
-// Helper function to apply input border theme
-function applyInputBorderStyle(inputElement) {
-  if (inputElement) {
-    inputElement.style.border = '1px solid var(--input-border, #2A2A2A)';
-    inputElement.style.borderRadius = '4px';
-    inputElement.style.backgroundColor = 'transparent';
-    inputElement.style.color = 'var(--text, #e2e8f0)';
-    inputElement.style.padding = '8px 12px';
-    inputElement.style.transition = 'border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out';
-
-    inputElement.addEventListener('focus', () => {
-      inputElement.style.borderColor = 'var(--brand-color, #F58020)';
-      inputElement.style.boxShadow = '0 0 0 2px var(--brand-color-shadow, rgba(245, 128, 32, 0.5))';
-    });
-
-    inputElement.addEventListener('blur', () => {
-      inputElement.style.borderColor = 'var(--input-border, #2A2A2A)';
-      inputElement.style.boxShadow = 'none';
-    });
-  }
-}
-
-iewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
+let currentStep = 1;
+let workingStatusTimer = null;
+let preservedPrimaryCvFile = null;
+let lastImportPayload = null;
+let reviewTargetTitles = [];
+let reviewSecondaryTitles = [];
+let reviewCapabilityRules = [];
+let selectedLocations = [];
 
 function saveWizardState() {
   if (currentStep < 2) {
@@ -173,31 +142,35 @@ function updatePrimaryCvStatus(file) {
     primaryCvStatusEl.textContent = 'No file selected yet.';
     primaryCvStatusEl.classList.remove('is-selected');
     primaryCvDropZone?.classList.remove('has-file');
-    primaryCvDropZone.style.backgroundColor = '#0d0e12';
-    primaryCvDropZone.style.border = '1px dashed #444';
-    primaryCvDropZone.style.boxShadow = 'none';
     dropZoneContent.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #D1D1D1;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      <div class="drop-zone-content-shell">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon" style="margin-bottom: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">Drag & drop your CV here, or click to browse</p>
-        <p class="drop-zone-hint" style="margin-top: 8px; color: #D1D1D1; opacity: 0.6;">Supported formats: .docx, .pdf, .md, .txt</p>
+        <p class="drop-zone-hint" style="margin-top: 8px;">Supported formats: .docx, .pdf, .md, .txt</p>
       </div>
     `;
+    resetPrimaryCvDropZoneAppearance();
     return;
   }
 
   primaryCvStatusEl.textContent = `Selected file: ${file.name}`;
   primaryCvStatusEl.classList.add('is-selected');
-  primaryCvDropZone.style.backgroundColor = '#0d0e12';
-  primaryCvDropZone.style.border = '1px solid #F58020';
-  primaryCvDropZone.style.boxShadow = 'none';
   primaryCvDropZone?.classList.add('has-file');
+  resetPrimaryCvDropZoneAppearance();
 
   dropZoneContent.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
     <p class="file-loaded-label">File Loaded: ${file.name}</p>
     <p class="drop-zone-hint">Click or drag another file to replace</p>
   `;
+}
+
+function resetPrimaryCvDropZoneAppearance() {
+  if (!primaryCvDropZone) return;
+  primaryCvDropZone.classList.remove('is-dragover');
+  primaryCvDropZone.style.backgroundColor = '';
+  primaryCvDropZone.style.border = '';
+  primaryCvDropZone.style.boxShadow = 'none';
 }
 
 function updateCreateProfileAvailability() {
@@ -234,8 +207,6 @@ function setStep(stepNumber) {
 
   if (formTitleEl) formTitleEl.textContent = `Step 1. ${stepMeta[1].title()}`;
   const percent = Math.round((stepNumber / STEP_COUNT) * 100);
-  if (heroProgressStepEl) heroProgressStepEl.textContent = `Step ${stepNumber} of ${STEP_COUNT}`;
-  if (heroProgressPercentEl) heroProgressPercentEl.textContent = `${percent}%`;
   if (progressFillEl) {
     progressFillEl.style.width = `${percent}%`;
   }
@@ -1048,9 +1019,9 @@ function movePrivacyTip() {
   if (privacyTipEl && primaryCvDropZone) {
     const calloutBox = document.createElement('div');
     calloutBox.className = 'privacy-callout'; // Add a class for styling
-    calloutBox.style.backgroundColor = '#FFFBEB'; // Light amber background
-    calloutBox.style.color = '#78350F'; // Darker text for contrast
-    calloutBox.style.border = '1px solid #FCD34D'; // Amber border
+    calloutBox.style.backgroundColor = 'var(--state-warning-bg)';
+    calloutBox.style.color = 'var(--state-warning-text)';
+    calloutBox.style.border = '1px solid var(--state-warning-border)';
     calloutBox.style.padding = '12px';
     calloutBox.style.marginBottom = '20px';
     calloutBox.style.borderRadius = '8px';
@@ -1077,7 +1048,7 @@ function addSalaryInfoIcons() {
       infoIcon.title = 'Excluding super';
       infoIcon.style.marginLeft = '8px';
       infoIcon.style.cursor = 'help';
-      infoIcon.style.color = '#9CA3AF'; // Muted gray color
+      infoIcon.style.color = 'var(--muted)';
       infoIcon.style.fontSize = '1rem';
       infoIcon.style.verticalAlign = 'middle';
       input.parentNode.insertBefore(infoIcon, input.nextSibling);
@@ -1093,10 +1064,7 @@ updateCreateProfileAvailability();
 addSalaryInfoIcons();
 
 if (primaryCvDropZone && primaryCvInput) {
-  // Apply initial border cleanup to drop zone
-  primaryCvDropZone.style.backgroundColor = '#0d0e12';
-  primaryCvDropZone.style.border = '1px dashed #444';
-  primaryCvDropZone.style.boxShadow = 'none';
+  resetPrimaryCvDropZoneAppearance();
 
   movePrivacyTip(); // Call the privacy tip function here to ensure it runs after DOM is ready and elements are defined
 
@@ -1105,23 +1073,18 @@ if (primaryCvDropZone && primaryCvInput) {
   primaryCvDropZone.addEventListener('dragenter', (event) => {
     event.preventDefault();
     primaryCvDropZone.classList.add('is-dragover');
-    primaryCvDropZone.style.border = '1px solid #F58020';
-    primaryCvDropZone.style.boxShadow = '0 0 12px rgba(245, 128, 32, 0.15)';
+    primaryCvDropZone.style.borderColor = 'var(--accent)';
+    primaryCvDropZone.style.boxShadow = '0 0 12px color-mix(in srgb, var(--accent) 20%, transparent)';
   });
   primaryCvDropZone.addEventListener('dragover', (event) => {
     event.preventDefault();
     primaryCvDropZone.classList.add('is-dragover');
-    primaryCvDropZone.style.border = '1px solid #F58020';
-    primaryCvDropZone.style.boxShadow = '0 0 12px rgba(245, 128, 32, 0.15)';
+    primaryCvDropZone.style.borderColor = 'var(--accent)';
+    primaryCvDropZone.style.boxShadow = '0 0 12px color-mix(in srgb, var(--accent) 20%, transparent)';
   });
   primaryCvDropZone.addEventListener('dragleave', (event) => {
     if (event.target === primaryCvDropZone) {
-      primaryCvDropZone.classList.remove('is-dragover');
-      if (!primaryCvInput.files?.[0]) {
-        primaryCvDropZone.style.border = '1px dashed #444';
-      } else {
-       }
-CvDropZone.style.boxShadow = 'none';
+      resetPrimaryCvDropZoneAppearance();
     }
   });
   primaryCvDropZone.addEventListener('drop', handlePrimaryCvDrop);
@@ -1142,24 +1105,3 @@ CvDropZone.style.boxShadow = 'none';
     updateCreateProfileAvailability();
   });
 }
-
-// Apply button theme to all primary buttons after initial setup
-applyPrimaryButtonTheme(createProfileButton);
-applyPrimaryButtonTheme(document.getElementById('continue_to_search_basics'));
-applyPrimaryButtonTheme(document.getElementById('continue_to_check')); // "Continue" button on Screen 3
-applyPrimaryButtonTheme(document.getElementById('confirm_review'));
-
-// Apply secondary button theme to all back buttons
-applySecondaryButtonTheme(document.getElementById('back_to_upload'));
-applySecondaryButtonTheme(document.getElementById('back_to_review'));
-applySecondaryButtonTheme(document.getElementById('back_to_review_footer'));
-applySecondaryButtonTheme(document.getElementById('back_to_search_basics'));
-applySecondaryButtonTheme(document.getElementById('back_to_search_basics_footer'));
-
-
-
-// Apply input border theme to relevant inputs on Screen 3
-applyInputBorderStyle(document.getElementById('review_search_keywords'));
-applyInputBorderStyle(document.getElementById('location_search'));
-applyInputBorderStyle(document.getElementById('review_minimum_salary_yearly'));
-applyInputBorderStyle(document.getElementById('review_minimum_daily_rate'));
