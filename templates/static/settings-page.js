@@ -110,7 +110,7 @@
     function normalizeCapabilityRule(rule) {
       const name = String(rule?.name || '').replace(/\s+/g, ' ').trim();
       const rawLevel = String(rule?.level || 'basic').trim().toLowerCase();
-      const validLevels = new Set(['strong', 'working', 'basic', 'low']);
+      const validLevels = new Set(['strong', 'working', 'basic']);
       const level = validLevels.has(rawLevel) ? rawLevel : 'basic';
 
       const rawFit = String(rule?.fit || 'supporting').trim().toLowerCase();
@@ -131,7 +131,7 @@
     function capabilityStrengthMeta(level) {
       const key = String(level || '').trim().toLowerCase();
       if (!key) return null;
-      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Intermediate' };
+      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Basic' };
     }
 
     function setCapabilityRuleState(rules) {
@@ -171,39 +171,47 @@
         });
       const rowsHtml = rows.length
         ? rows.map(({ rule, index }) => {
+            const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const aliasCount = (rule.aliases || []).length;
             return `
-              <div class="cap-row" data-capability-index="${index}" style="display: flex; align-items: center; border-bottom: 1px solid var(--line); padding: 12px 0;">
-                <div class="cap-identity" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+              <div class="cap-row" data-capability-index="${index}" 
+                   style="display: flex; align-items: center; height: 40px; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 0 8px; background: transparent; transition: background 0.2s;"
+                   onmouseover="this.style.background='rgba(255,255,255,0.04)'" 
+                   onmouseout="this.style.background='transparent'">
+                <div class="cap-identity" style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.2rem; flex-shrink: 0; opacity: 0.6;">🏷️</span>
-                    <input class="cap-name-input" type="text" data-capability-field="name"
-                           aria-label="Capability name" value="${escapeHtml(rule.name)}"
-                           style="font-size: 18px; font-weight: 700; border: none; background: transparent; padding: 0; width: 100%; outline: none;"
-                           placeholder="e.g. Agile delivery">
+                    <span style="font-size: 1rem; flex-shrink: 0; opacity: 0.4;">🏷️</span>
+                    <input class="cap-name-input" type="text" data-capability-field="name" aria-label="Capability name" 
+                           value="${escapeHtml(titleCaseName)}" 
+                           style="font-size: 0.95rem; font-weight: 500; border: none; background: transparent; padding: 0; width: 100%; outline: none; color: #e2e8f0;" 
+                           placeholder="e.g. Agile Delivery">
                   </div>
+                  <details style="flex-shrink: 0;">
+                    <summary style="font-size: 0.75rem; color: #f97316; cursor: pointer; list-style: none; opacity: 0.8;">
+                      ${aliasCount} CV Keywords
+                    </summary>
+                    <div style="position: absolute; background: #1a1b1e; border: 1px solid var(--line); padding: 8px; z-index: 100; border-radius: 4px; font-size: 0.8rem; margin-top: 4px;">
+                       ${(rule.aliases || []).join(', ') || 'No keywords'}
+                    </div>
+                  </details>
                 </div>
-                <div class="cap-controls" style="display: flex; align-items: center; gap: 12px; margin-left: 16px; margin-right: 16px; flex-shrink: 0;">
+                <div class="cap-controls" style="display: flex; align-items: center; gap: 12px; margin-left: 12px; flex-shrink: 0;">
                   <div class="cap-strength">
-                    <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}"
-                            data-capability-field="level" aria-label="Capability strength" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: white;">
+                    <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}" 
+                            data-capability-field="level" aria-label="Capability strength" 
+                            style="padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: #0b0c10; color: var(--text); font-size: 0.85rem;">
                       <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
-                      <option value="working"${rule.level === 'working' ? ' selected' : ''}>Advanced</option>
-                      <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Intermediate</option>
-                      <option value="low"${rule.level === 'low' ? ' selected' : ''}>Beginner</option>
-                    </select>
-                  </div>
-                  <div class="cap-relevance">
-                    <select class="cap-fit-select" data-capability-field="fit" aria-label="Capability relevance" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: white;">
-                      <option value="core"${rule.fit === 'core' ? ' selected' : ''}>Core Fit</option>
-                      <option value="supporting"${rule.fit === 'supporting' ? ' selected' : ''}>Supporting</option>
+                      <option value="working"${rule.level === 'working' ? ' selected' : ''}>Intermediate</option>
+                      <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Basic</option>
                     </select>
                   </div>
                 </div>
-                <div class="cap-action">
+                <div class="cap-action" style="width: 32px; text-align: right;">
                   <button class="cap-remove-btn" type="button" data-remove-capability="${index}"
                           aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
-                          style="background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; transition: opacity 0.2s;"
-                          onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5"
+                          style="background: transparent; border: none; font-size: 1rem; cursor: pointer; opacity: 0.3; transition: all 0.2s;"
+                          onmouseover="this.style.opacity=1; this.style.color='#ef4444'" 
+                          onmouseout="this.style.opacity=0.3; this.style.color='inherit'"
                           title="Remove capability">🗑️</button>
                 </div>
               </div>
@@ -214,14 +222,14 @@
       container.innerHTML = `
         <section class="capability-group">
           <div class="capability-group-head">
-            <h4>Capabilities</h4>
+            <h4 style="color: #f97316;">Capabilities</h4>
             <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
           </div>
-          <div class="cap-table">
-            <div class="cap-table-head" style="display: flex; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+          <div class="cap-table" style="border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; background: rgba(0,0,0,0.2);">
+            <div class="cap-table-head" style="display: flex; height: 32px; align-items: center; padding: 0 8px; border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
               <span style="flex: 1;"></span>
-              <span style="width: 272px; text-align: center; margin-right: 40px;">Strength & Relevance</span>
-              <span></span>
+              <span style="width: 110px; text-align: center; margin-right: 32px;">Strength</span>
+              <span style="width: 32px;"></span>
             </div>
             ${rowsHtml}
           </div>
@@ -702,9 +710,8 @@
       const options = [
         ['', 'Choose a strength'],
         ['strong', capabilityStrengthMeta('strong')?.label || 'Expert'],
-        ['working', capabilityStrengthMeta('working')?.label || 'Advanced'],
-        ['basic', capabilityStrengthMeta('basic')?.label || 'Intermediate'],
-        ['low', capabilityStrengthMeta('low')?.label || 'Beginner'],
+        ['working', capabilityStrengthMeta('working')?.label || 'Intermediate'],
+        ['basic', capabilityStrengthMeta('basic')?.label || 'Basic'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -1264,5 +1271,162 @@
         suppressDirtyTracking = false;
         clearDirty();
     }).catch(error => showStatus(error.message, 'error'));
+
+    // ── Signal Registry ───────────────────────────────────────────────
+    let _srData = null;
+    let _srFilter = 'needs_review';
+    let _srLoaded = false;
+
+    const SR_DECISION_LABELS = {
+      review: 'Needs Review',
+      use: 'Use',
+      ignore: 'Ignore',
+      evidence_only: 'Evidence Only',
+    };
+    const SR_SCOPE_LABELS = {
+      global: 'Global',
+      role_specific: 'Role-specific',
+      domain_specific: 'Domain-specific',
+    };
+
+    function srFilteredSignals() {
+      const all = (_srData && _srData.signals) || [];
+      if (_srFilter === 'all') return all;
+      if (_srFilter === 'needs_review') return all.filter(s => s.needs_review);
+      return all.filter(s => s.decision === _srFilter);
+    }
+
+    function renderSignalRegistry() {
+      const panel = document.getElementById('signal_registry_panel');
+      if (!panel || !_srData) return;
+      const all = (_srData && _srData.signals) || [];
+      const counts = {
+        all: all.length,
+        needs_review: all.filter(s => s.needs_review).length,
+        use: all.filter(s => s.decision === 'use').length,
+        ignore: all.filter(s => s.decision === 'ignore').length,
+        evidence_only: all.filter(s => s.decision === 'evidence_only').length,
+      };
+      const filters = [
+        { key: 'needs_review', label: `Needs Review (${counts.needs_review})` },
+        { key: 'use',          label: `Use (${counts.use})` },
+        { key: 'ignore',       label: `Ignore (${counts.ignore})` },
+        { key: 'evidence_only',label: `Evidence Only (${counts.evidence_only})` },
+        { key: 'all',          label: `All (${counts.all})` },
+      ];
+      const filterHtml = filters.map(f =>
+        `<button type="button" class="sr-filter-btn${_srFilter === f.key ? ' is-active' : ''}" data-sr-filter="${f.key}">${f.label}</button>`
+      ).join('');
+      const visible = srFilteredSignals();
+      const rowsHtml = visible.length === 0
+        ? '<p class="help" style="padding:24px 0;">No signals match this filter.</p>'
+        : visible.map(s => {
+            const key = s.normalized_key || s.signal.toLowerCase();
+            const safeKey = key.replace(/[^a-z0-9]/g, '_');
+            const origTexts = (s.original_texts || [s.signal]).join(', ');
+            const showOrig = origTexts !== s.signal;
+            const decisionOpts = ['review','use','ignore','evidence_only'].map(d =>
+              `<option value="${d}"${s.decision === d ? ' selected' : ''}>${SR_DECISION_LABELS[d] || d}</option>`
+            ).join('');
+            const scopeOpts = ['global','role_specific','domain_specific'].map(sc =>
+              `<option value="${sc}"${s.scope === sc ? ' selected' : ''}>${SR_SCOPE_LABELS[sc] || sc}</option>`
+            ).join('');
+            const historyRows = (s.history || []).map(h => {
+              const ts = (h.timestamp || '').replace('T', ' ').substring(0, 19);
+              return `<tr><td>${ts}</td><td>${h.decision}</td><td>${h.source}</td><td>${h.notes || ''}</td></tr>`;
+            }).join('');
+            const historyHtml = historyRows
+              ? `<details class="sr-history"><summary>History (${(s.history || []).length})</summary><table class="sr-history-table"><thead><tr><th>When</th><th>Decision</th><th>Source</th><th>Notes</th></tr></thead><tbody>${historyRows}</tbody></table></details>`
+              : '';
+            const safeNotes = (s.notes || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+            return `
+<div class="sr-row" data-sr-key="${key}">
+  <div class="sr-row-header">
+    <span class="sr-signal-name">${s.signal}</span>
+    ${s.needs_review ? '<span class="sr-badge sr-badge-review">needs review</span>' : ''}
+  </div>
+  ${showOrig ? `<div class="sr-originals">Seen as: ${origTexts}</div>` : ''}
+  <div class="sr-controls">
+    <label>Decision<select class="sr-decision" data-sr-key="${key}">${decisionOpts}</select></label>
+    <label>Scope<select class="sr-scope" data-sr-key="${key}">${scopeOpts}</select></label>
+    <label>Notes<input type="text" class="sr-notes" data-sr-key="${key}" value="${safeNotes}" placeholder="Optional notes"></label>
+    <button type="button" class="primary sr-save-btn" data-sr-key="${key}">Save</button>
+    <span class="sr-row-status" id="sr_status_${safeKey}"></span>
+  </div>
+  ${historyHtml}
+</div>`;
+          }).join('');
+
+      panel.innerHTML = `
+<div class="sr-header">
+  <p class="help">Review signals extracted from your CV. Decide how each signal is used in job matching. Changes are saved immediately per signal.</p>
+</div>
+<div class="sr-filters">${filterHtml}</div>
+<div class="sr-list">${rowsHtml}</div>`;
+
+      panel.querySelectorAll('.sr-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          _srFilter = btn.dataset.srFilter;
+          renderSignalRegistry();
+        });
+      });
+
+      panel.querySelectorAll('.sr-save-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const key = btn.dataset.srKey;
+          const safeKey = key.replace(/[^a-z0-9]/g, '_');
+          const row = panel.querySelector(`.sr-row[data-sr-key="${key}"]`);
+          const decision = row.querySelector('.sr-decision').value;
+          const scope = row.querySelector('.sr-scope').value;
+          const notes = row.querySelector('.sr-notes').value.trim();
+          const statusEl = document.getElementById('sr_status_' + safeKey);
+          btn.disabled = true;
+          if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'sr-row-status'; }
+          try {
+            const resp = await fetch('/api/signal-registry', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key, decision, scope, notes }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Could not save');
+            const sig = (_srData.signals || []).find(s => (s.normalized_key || s.signal.toLowerCase()) === key);
+            if (sig) {
+              sig.decision = data.signal.decision;
+              sig.scope = data.signal.scope;
+              sig.notes = data.signal.notes;
+              sig.needs_review = data.signal.needs_review;
+              sig.history = data.signal.history;
+            }
+            if (statusEl) { statusEl.textContent = 'Saved'; statusEl.className = 'sr-row-status is-ok'; }
+            setTimeout(renderSignalRegistry, 900);
+          } catch (err) {
+            if (statusEl) { statusEl.textContent = err.message || 'Error'; statusEl.className = 'sr-row-status is-error'; }
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function loadSignalRegistry() {
+      const panel = document.getElementById('signal_registry_panel');
+      if (!panel) return;
+      panel.innerHTML = '<p class="help">Loading signals…</p>';
+      try {
+        const resp = await fetch('/api/signal-registry');
+        if (!resp.ok) throw new Error('Could not load signal registry');
+        _srData = await resp.json();
+        renderSignalRegistry();
+      } catch (err) {
+        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message}</p>`;
+      }
+    }
+
+    document.querySelector('.nav-item[data-section="section-signals"]')?.addEventListener('click', () => {
+      if (!_srLoaded) {
+        _srLoaded = true;
+        loadSignalRegistry();
+      }
+    });
 
   

@@ -4,7 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Settings - Job Hunter</title>
+  <link rel="stylesheet" href="/static/themes.css">
   <link rel="stylesheet" href="/static/settings-page.css">
+  <script src="/static/theme-switcher.js"></script>
+  <style>
+    /* Hide aliases when not in test mode */
+    [data-test-mode="false"] .test-only,
+    [data-test-mode="false"] .capability-aliases,
+    [data-test-mode="false"] .alias-tag {
+      display: none !important;
+    }
+  </style>
 </head>
 <body data-test-mode="__JOB_HUNTER_TEST_MODE__">
   <div class="settings-container">
@@ -18,6 +28,7 @@
         <button class="nav-item" type="button" data-section="section-matrix">Capability Matrix</button>
         <button class="nav-item" type="button" data-section="section-rules">Rules</button>
         <button class="nav-item" type="button" data-section="section-alerts">Alerts &amp; AI</button>
+        <button class="nav-item" type="button" data-section="section-signals">Signals</button>
         <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise">Optimise</button>
       </div>
       <a href="/" class="nav-item-back">View Dashboard</a>
@@ -29,6 +40,14 @@
           <div class="hero-text">
             <h1>Settings</h1>
             <p>Configure search behavior, salary, alerts, matching, and review what the agent is learning.</p>
+          </div>
+          <div class="theme-switcher-widget" style="margin-left:auto;flex-shrink:0;">
+            <span>Theme test:</span>
+            <select id="theme_picker" aria-label="Select theme">
+              <option value="soft-professional">Soft Professional</option>
+              <option value="bold-aggressive">Bold Aggressive</option>
+              <option value="dark-professional">Dark Professional</option>
+            </select>
           </div>
         </section>
 
@@ -295,7 +314,7 @@
             <div class="capability-toolbar">
               <div class="capability-toolbar-main">
                 <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities">
-                <span class="capability-toolbar-copy">Aliases should use common job-ad wording, not CV sentence fragments.</span>
+                <span class="capability-toolbar-copy"><span class="test-only">Aliases should use common job-ad wording, not CV sentence fragments.</span></span>
               </div>
               <button class="secondary" id="add_capability_rule" type="button">Add capability</button>
             </div>
@@ -309,7 +328,7 @@
             <section class="subpanel">
               <h3>Title Matching</h3>
               <div class="field-help" style="margin-bottom:12px;">Primary job titles are your clearest role directions. Secondary job titles can still fit, but they should need stronger evidence before a job feels like a match.</div>
-              <label for="target_title_patterns_add">Target titles</label>
+              <label for="target_title_patterns_add">Primary Job Titles</label>
               <div class="badge-editor" data-chip-editor="target_title_patterns">
                 <div id="target_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
@@ -433,6 +452,13 @@
               </select>
               <div class="help">Used for fit decisions and CV extraction.</div>
             </section>
+          </div>
+        </section>
+
+        <section id="section-signals" class="settings-group">
+          <h2 class="section-title">Signal Review</h2>
+          <div id="signal_registry_panel">
+            <p class="help">Select "Signals" in the sidebar to load.</p>
           </div>
         </section>
 

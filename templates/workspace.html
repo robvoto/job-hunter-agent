@@ -4,10 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Job Hunter</title>
+  <link rel="stylesheet" href="/static/themes.css">
+  <script src="/static/theme-switcher.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     @keyframes wsSpin { to { transform: rotate(360deg); } }
-    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #f6f1e8; }
+    body { 
+      margin: 0; 
+      font-family: "Segoe UI", Arial, sans-serif; 
+      background: #0B0C10; /* Deep Charcoal */
+      color: #FFFFFF;
+    }
 
     .ws-header {
       display: flex;
@@ -15,8 +22,8 @@
       justify-content: space-between;
       padding: 0 24px;
       height: 54px;
-      background: #fffdf9;
-      border-bottom: 1px solid #e9ddcf;
+      background: #0B0C10;
+      border-bottom: 1px solid #1F2128;
       gap: 16px;
       position: sticky;
       top: 0;
@@ -26,7 +33,7 @@
       font-size: 1.05rem;
       font-weight: 800;
       letter-spacing: -0.02em;
-      color: #182231;
+      color: var(--text-primary);
       white-space: nowrap;
     }
     .ws-header-actions {
@@ -41,7 +48,7 @@
       gap: 10px;
       padding-left: 14px;
       margin-left: 4px;
-      border-left: 1px solid #e9ddcf;
+      border-left: 1px solid var(--border-subtle);
     }
     .ws-btn {
       border-radius: 999px;
@@ -50,7 +57,7 @@
       font-size: 0.86rem;
       font-weight: 700;
       cursor: pointer;
-      border: 1px solid #e9ddcf;
+      border: 1px solid var(--border-subtle);
       text-decoration: none;
       display: inline-flex;
       align-items: center;
@@ -59,13 +66,13 @@
       transition: opacity 120ms;
     }
     .ws-btn-primary {
-      background: #14532d;
-      color: white !important;
-      border-color: #14532d;
+      background: #F58020; /* Logo Orange */
+      color: #FFFFFF !important;
+      border-color: #F58020;
     }
     .ws-btn-secondary {
-      background: white;
-      color: #1d4ed8 !important;
+      background: var(--bg-surface);
+      color: var(--accent-2) !important;
     }
     .ws-btn:disabled {
       opacity: 0.6;
@@ -289,6 +296,14 @@
   <header class="ws-header">
     <span class="ws-brand">Job Hunter</span>
     <div class="ws-header-actions">
+      <div class="theme-switcher-widget">
+        <span>Theme test:</span>
+        <select id="theme_picker" aria-label="Select theme">
+          <option value="soft-professional">Soft Professional</option>
+          <option value="bold-aggressive">Bold Aggressive</option>
+          <option value="dark-professional">Dark Professional</option>
+        </select>
+      </div>
       <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
       <div class="ws-run-group">
         <span class="ws-status-pill" id="ws_status_pill">Loading...</span>

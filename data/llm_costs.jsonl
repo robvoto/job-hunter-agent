@@ -219,3 +219,12 @@
 {"ts": "2026-04-29T11:25:38Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 585, "tok_out": 66, "cost_usd": 0.000127, "session_usd": 0.000234}
 {"ts": "2026-04-29T11:25:41Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 585, "tok_out": 44, "cost_usd": 0.000114, "session_usd": 0.000348}
 {"ts": "2026-04-29T11:25:43Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 585, "tok_out": 42, "cost_usd": 0.000113, "session_usd": 0.000461}
+{"ts": "2026-04-30T07:37:10Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1142, "tok_out": 29, "cost_usd": 0.000189, "session_usd": 0.000189}
+{"ts": "2026-04-30T07:39:40Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 780, "tok_out": 112, "cost_usd": 0.000184, "session_usd": 0.000373}
+{"ts": "2026-04-30T07:39:45Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1972, "tok_out": 206, "cost_usd": 0.000419, "session_usd": 0.000792}
+{"ts": "2026-04-30T07:52:31Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 780, "tok_out": 107, "cost_usd": 0.000181, "session_usd": 0.000973}
+{"ts": "2026-04-30T08:21:05Z", "purpose": "cv_extraction", "model": "gpt-4o-mini", "tok_in": 1142, "tok_out": 31, "cost_usd": 0.00019, "session_usd": 0.00019}
+{"ts": "2026-04-30T09:42:15Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 273, "tok_out": 28, "cost_usd": 5.8e-05, "session_usd": 5.8e-05}
+{"ts": "2026-04-30T09:42:17Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 222, "tok_out": 18, "cost_usd": 4.4e-05, "session_usd": 0.000102}
+{"ts": "2026-04-30T09:51:53Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 273, "tok_out": 22, "cost_usd": 5.4e-05, "session_usd": 5.4e-05}
+{"ts": "2026-04-30T09:51:54Z", "purpose": "capability_naming", "model": "gpt-4o-mini", "tok_in": 222, "tok_out": 18, "cost_usd": 4.4e-05, "session_usd": 9.8e-05}

@@ -6,19 +6,14 @@
       summary: 'Use this when the capability is current, repeated, and clearly one of your strongest areas.',
     },
     working: {
-      label: 'Advanced',
+      label: 'Intermediate',
       tone: 'strength-working',
-      summary: 'Use this when you can work independently with the capability and have solid recent evidence.',
+      summary: 'Professional proficiency. Independent execution with solid recent evidence in production environments.',
     },
     basic: {
-      label: 'Intermediate',
+      label: 'Basic',
       tone: 'strength-basic',
       summary: 'Use this when you have usable experience, but it is not one of your strongest current signals.',
-    },
-    low: {
-      label: 'Beginner',
-      tone: 'strength-low',
-      summary: 'Use this when the capability is older, lighter, or only shows up in limited evidence.',
     },
   };
 

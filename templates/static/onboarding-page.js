@@ -18,22 +18,83 @@ const addLocationButton = document.getElementById('add_location');
 const locationSuggestions = document.getElementById('location_suggestions');
 const locationQuickPicks = document.getElementById('location_quick_picks');
 const locationSelected = document.getElementById('location_selected');
+const salaryYearlyBlock = document.getElementById('salary_yearly_block');
+const salaryDailyBlock = document.getElementById('salary_daily_block');
 const createProfileButton = document.getElementById('create_profile');
 const capabilityUi = window.JobHunterCapabilityUi || {};
 
+// Helper function to apply primary button theme
+function applyPrimaryButtonTheme(button) {
+  if (button) {
+    button.style.backgroundColor = '#F58020';
+    button.style.borderColor = '#F58020';
+    button.style.color = '#FFFFFF';
+  }
+}
+
+// Helper function to apply secondary button theme
+function applySecondaryButtonTheme(button) {
+  if (button) {
+    button.style.backgroundColor = 'transparent';
+    button.style.borderColor = '#6B7280'; // Muted gray border
+    button.style.color = '#D1D5DB'; // Lighter text for contrast
+  }
+}
+
+
+// Helper function to apply input border theme
+function applyInputBorderStyle(inputElement) {
+  if (inputElement) {
+    inputElement.style.border = '1px solid var(--input-border, #2A2A2A)';
+    inputElement.style.borderRadius = '4px';
+    inputElement.style.backgroundColor = 'transparent';
+    inputElement.style.color = 'var(--text, #e2e8f0)';
+    inputElement.style.padding = '8px 12px';
+    inputElement.style.transition = 'border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out';
+
+    inputElement.addEventListener('focus', () => {
+      inputElement.style.borderColor = 'var(--brand-color, #F58020)';
+      inputElement.style.boxShadow = '0 0 0 2px var(--brand-color-shadow, rgba(245, 128, 32, 0.5))';
+    });
+
+    inputElement.addEventListener('blur', () => {
+      inputElement.style.borderColor = 'var(--input-border, #2A2A2A)';
+      inputElement.style.boxShadow = 'none';
+    });
+  }
+}
+
 function renderLogo() {
-  if (!heroSectionEl) return;
+  if (!heroSectionEl || !heroStepEl || !heroTitleEl) return;
+
+  // Cluster the Logo and the Step Pill in the top-left for a solid "navigation" feel
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.alignItems = 'center';
+  header.style.gap = '12px';
+  header.style.marginBottom = '20px';
+  header.style.zIndex = '100';
 
   const img = document.createElement('img');
   img.src = '/static/job_hunter_img.png';
-  img.alt = 'Job Hunter Logo';
-  img.style.height = '64px';
-  img.style.position = 'absolute';
-  img.style.top = '40px';
-  img.style.right = '40px';
-
+  img.alt = 'Job Hunter Logo'; 
+  img.className = 'brand-logo';
+  img.style.maxHeight = '45px';
+  img.style.width = 'auto';
+  img.style.objectFit = 'contain';
+  
+  // Reset step pill positioning to work within the flex container
+  heroStepEl.style.position = 'static';
+  heroStepEl.style.margin = '0';
+  heroStepEl.style.backgroundColor = '#1e1e1e'; // Pill Styling: background
+  heroStepEl.style.color = '#f58020'; // Pill Styling: text
+  heroStepEl.style.border = '1px solid #f58020'; // Pill Styling: border
+    
+  header.appendChild(img);
+  header.appendChild(heroStepEl);
+  
   heroSectionEl.style.position = 'relative';
-  heroSectionEl.appendChild(img);
+  heroSectionEl.insertBefore(header, heroTitleEl); // Layout Hierarchy: Insert brand row before h1
 }
 
 document.querySelectorAll('[data-test-only]').forEach((element) => {
@@ -180,16 +241,24 @@ function updatePrimaryCvStatus(file) {
     primaryCvStatusEl.textContent = 'No file selected yet.';
     primaryCvStatusEl.classList.remove('is-selected');
     primaryCvDropZone?.classList.remove('has-file');
+    primaryCvDropZone.style.backgroundColor = '#0d0e12';
+    primaryCvDropZone.style.border = '1px dashed #444';
+    primaryCvDropZone.style.boxShadow = 'none';
     dropZoneContent.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-      <p>Drag & drop your CV here, or click to browse</p>
-      <p class="drop-zone-hint">Supported formats: .docx, .pdf, .md, .txt</p>
+      <div style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #D1D1D1;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">Drag & drop your CV here, or click to browse</p>
+        <p class="drop-zone-hint" style="margin-top: 8px; color: #D1D1D1; opacity: 0.6;">Supported formats: .docx, .pdf, .md, .txt</p>
+      </div>
     `;
     return;
   }
 
   primaryCvStatusEl.textContent = `Selected file: ${file.name}`;
   primaryCvStatusEl.classList.add('is-selected');
+  primaryCvDropZone.style.backgroundColor = '#0d0e12';
+  primaryCvDropZone.style.border = '1px solid #F58020';
+  primaryCvDropZone.style.boxShadow = 'none';
   primaryCvDropZone?.classList.add('has-file');
 
   dropZoneContent.innerHTML = `
@@ -236,6 +305,10 @@ function setStep(stepNumber) {
   const percent = Math.round((stepNumber / STEP_COUNT) * 100);
   progressFillEl.style.width = `${percent}%`;
   progressFillEl.textContent = `${percent}% Complete`;
+  progressFillEl.style.backgroundColor = '#f58020'; // Set Progress Bar color
+  progressFillEl.style.color = '#000000'; // Ensure percentage text is legible against orange
+  
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -350,6 +423,12 @@ function searchPreferencesPayload() {
     minimum_salary_yearly: document.getElementById('review_minimum_salary_yearly')?.value.trim() || '',
     minimum_daily_rate: document.getElementById('review_minimum_daily_rate')?.value.trim() || '',
   };
+}
+
+function updateCompensationVisibility() {
+  const engagementType = String(document.querySelector('input[name="engagement_pref"]:checked')?.value || 'both').trim().toLowerCase();
+  if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType === 'contract';
+  if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType === 'permanent';
 }
 
 function normalizeOptionalNonNegativeIntegerInput(value) {
@@ -500,7 +579,7 @@ function normalizeReviewCapability(rule) {
       ? 'working'
       : rawLevel === 'low'
         ? 'low'
-        : 'basic';
+      : 'basic';
   const aliases = [];
   const seen = new Set();
   for (const alias of Array.isArray(rule?.aliases) ? rule.aliases : []) {
@@ -553,23 +632,53 @@ function renderReviewCapabilities() {
     .filter((item) => {
       if (!filterTerm) return true;
       return item.rule.name.toLowerCase().includes(filterTerm)
-        || item.rule.aliases.some((alias) => alias.includes(filterTerm));
+        || (isTestMode && item.rule.aliases.some((alias) => alias.includes(filterTerm)));
     });
   const rowsHtml = filteredRules.length ? filteredRules.map(({ rule, index }) => {
+      const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       const aliasPreview = rule.aliases.slice(0, 3);
       const remainingAliasCount = Math.max(rule.aliases.length - aliasPreview.length, 0);
+      const strengthLabel = reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate';
+      const aliasCountLabel = `${rule.aliases.length} CV Keyword${rule.aliases.length === 1 ? '' : 's'}`;
+      const aliasSummaryHtml = isTestMode ? `
+            <div class="review-capability-preview capability-aliases">
+              ${aliasPreview.length ? aliasPreview.map((alias) => `<span class="chip-item chip-item-subtle alias-tag">${escapeHtml(alias)}</span>`).join('') : '<span class="chip-empty">No aliases yet.</span>'}
+              ${remainingAliasCount ? `<span class="chip-item chip-item-subtle alias-tag">+${remainingAliasCount} more</span>` : ''}
+            </div>
+      ` : '';
+      const aliasEditorHtml = isTestMode ? `
+          <details class="review-capability-alias-shell capability-aliases">
+            <summary>CV keywords (${rule.aliases.length})</summary>
+            <p class="help">These are background CV terms Job Hunter mapped into this capability. Review them only in test mode.</p>
+            <div class="chip-list chip-list-tight">
+              ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
+                <span class="chip-item">
+                  <span>${escapeHtml(alias)}</span>
+                  <button type="button" data-remove-review-alias="${index}" data-review-alias-index="${aliasIndex}" aria-label="Remove ${escapeHtml(alias)}">&#215;</button>
+                </span>
+              `).join('') : '<span class="chip-empty">No aliases yet.</span>'}
+            </div>
+            <div class="chip-editor-row">
+              <input type="text" data-review-alias-input="${index}" placeholder="Add a CV keyword">
+              <button class="secondary" type="button" data-add-review-alias="${index}">Add</button>
+            </div>
+          </details>
+      ` : '';
       return `
       <details class="review-capability-row" data-review-capability-index="${index}"${filterTerm ? ' open' : ''}>
         <summary class="review-capability-summary">
           <div class="review-capability-summary-main">
-            <strong class="review-capability-title">${escapeHtml(rule.name || 'Untitled capability')}</strong>
-            <div class="review-capability-preview">
-              ${aliasPreview.length ? aliasPreview.map((alias) => `<span class="chip-item chip-item-subtle">${escapeHtml(alias)}</span>`).join('') : '<span class="chip-empty">No aliases yet.</span>'}
-              ${remainingAliasCount ? `<span class="chip-item chip-item-subtle">+${remainingAliasCount} more</span>` : ''}
+            <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
+            <div class="review-capability-summary-support">
+              <span class="review-capability-strength review-capability-strength-${escapeHtml(rule.level)}">
+                <span class="review-capability-strength-dot" aria-hidden="true"></span>
+                <span>${escapeHtml(strengthLabel)}</span>
+              </span>
+              ${isTestMode ? `<span class="review-capability-count capability-aliases">${escapeHtml(aliasCountLabel)}</span>` : ''}
             </div>
+            ${aliasSummaryHtml}
           </div>
           <div class="review-capability-summary-meta">
-            <span class="chip-item strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate')}</span>
             <button class="icon-button icon-button-danger" type="button" data-remove-review-capability="${index}" aria-label="Remove ${escapeHtml(rule.name || 'capability')}" title="Remove capability">
               <span aria-hidden="true">🗑</span>
             </button>
@@ -579,11 +688,10 @@ function renderReviewCapabilities() {
           <div class="review-capability-column-head">
             <span>Capability</span>
             <span>Strength</span>
-            <span>Action</span>
           </div>
           <div class="review-capability-fields">
             <div>
-              <input id="review_capability_name_${index}" type="text" data-review-capability-field="name" aria-label="Capability name" value="${escapeHtml(rule.name)}">
+              <div class="review-capability-name" aria-label="Capability name">${escapeHtml(titleCaseName || 'Untitled capability')}</div>
             </div>
             <div>
               <select id="review_capability_level_${index}" data-review-capability-field="level" aria-label="Capability strength">
@@ -594,27 +702,8 @@ function renderReviewCapabilities() {
               </select>
             </div>
           </div>
-          <div class="review-capability-meta">
-            <span class="chip-item strength-chip strength-${escapeHtml(rule.level)}">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate')}</span>
-            <span class="chip-item">${escapeHtml(String(rule.aliases.length))} alias${rule.aliases.length === 1 ? '' : 'es'}</span>
-          </div>
           <p class="review-capability-copy">${escapeHtml(reviewCapabilityLevelMeta[rule.level]?.summary || '')}</p>
-          <details class="review-capability-alias-shell">
-            <summary>Aliases (${rule.aliases.length})</summary>
-            <p class="help">These are alternate job-ad terms Job Hunter can match to this capability. Job Hunter should usually suggest them for you. Only add one if an obvious term is missing.</p>
-            <div class="chip-list chip-list-tight">
-              ${rule.aliases.length ? rule.aliases.map((alias, aliasIndex) => `
-                <span class="chip-item">
-                  <span>${escapeHtml(alias)}</span>
-                  <button type="button" data-remove-review-alias="${index}" data-review-alias-index="${aliasIndex}" aria-label="Remove ${escapeHtml(alias)}">&#215;</button>
-                </span>
-              `).join('') : '<span class="chip-empty">No aliases yet.</span>'}
-            </div>
-            <div class="chip-editor-row">
-              <input type="text" data-review-alias-input="${index}" placeholder="Add an alias">
-              <button class="secondary" type="button" data-add-review-alias="${index}">Add</button>
-            </div>
-          </details>
+          ${aliasEditorHtml}
         </div>
       </details>
     `;
@@ -623,7 +712,7 @@ function renderReviewCapabilities() {
     <section class="review-capability-group">
       <div class="review-capability-group-head">
         <h4>Capabilities</h4>
-        <span class="chip-item">${escapeHtml(String(filteredRules.length))} shown</span>
+        <span class="review-capability-count">${escapeHtml(String(filteredRules.length))} shown</span>
       </div>
       <p class="review-capability-group-copy">Keep current strengths only. Remove old or weak capabilities you do not want driving matching.</p>
       <div class="review-capability-row-list">${rowsHtml}</div>
@@ -681,6 +770,7 @@ function hydrateSearchBasics(profile) {
   const engagementInput = document.querySelector(`input[name="engagement_pref"][value="${engagementType}"]`)
     || document.querySelector('input[name="engagement_pref"][value="both"]');
   if (engagementInput) engagementInput.checked = true;
+  updateCompensationVisibility();
 }
 
 function buildCompletionRedirectState(payload, searchPrefs) {
@@ -900,7 +990,16 @@ document.getElementById('review_add_secondary_title').addEventListener('click', 
 });
 
 document.getElementById('review_add_capability').addEventListener('click', () => {
-  reviewCapabilityRules = [...reviewCapabilityRules, { name: '', level: 'working', aliases: [] }];
+  const rawName = window.prompt('Add capability', '');
+  const cleaned = normalizeReviewText(rawName || '');
+  if (!cleaned) return;
+  const exists = reviewCapabilityRules.some((rule) => normalizeReviewText(rule.name).toLowerCase() === cleaned.toLowerCase());
+  if (exists) {
+    showStatus('That capability is already listed.', 'error');
+    return;
+  }
+  reviewCapabilityRules = [...reviewCapabilityRules, { name: cleaned, level: 'working', aliases: [] }];
+  showStatus('', '');
   renderReviewStep();
 });
 
@@ -949,19 +1048,6 @@ document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
   renderReviewStep();
 });
 
-document.querySelector('[data-step="2"]').addEventListener('input', (event) => {
-  const field = event.target.closest('[data-review-capability-field]');
-  if (!field) return;
-  const card = field.closest('[data-review-capability-index]');
-  if (!card) return;
-  const index = Number(card.dataset.reviewCapabilityIndex);
-  const key = field.dataset.reviewCapabilityField;
-  reviewCapabilityRules[index] = {
-    ...reviewCapabilityRules[index],
-    [key]: key === 'name' ? normalizeReviewText(field.value) : String(field.value || '').trim().toLowerCase(),
-  };
-});
-
 document.querySelector('[data-step="2"]').addEventListener('change', (event) => {
   const field = event.target.closest('[data-review-capability-field]');
   if (!field) return;
@@ -971,7 +1057,7 @@ document.querySelector('[data-step="2"]').addEventListener('change', (event) => 
   const key = field.dataset.reviewCapabilityField;
   reviewCapabilityRules[index] = {
     ...reviewCapabilityRules[index],
-    [key]: key === 'name' ? normalizeReviewText(field.value) : String(field.value || '').trim().toLowerCase(),
+    [key]: String(field.value || '').trim().toLowerCase(),
   };
   renderReviewStep();
 });
@@ -1011,31 +1097,97 @@ locationQuickPicks.addEventListener('click', (event) => {
   if (!button) return;
   addLocation(button.getAttribute('data-location'));
 });
+document.querySelectorAll('input[name="engagement_pref"]').forEach((input) => {
+  input.addEventListener('change', updateCompensationVisibility);
+});
 locationSelected.addEventListener('click', (event) => {
   const button = event.target.closest('[data-remove-location]');
   if (!button) return;
   removeLocation(button.getAttribute('data-remove-location'));
 });
 
+// Function to move privacy tip into a callout box
+function movePrivacyTip() {
+  const privacyTipEl = document.getElementById('privacy_tip'); // Assuming an ID for the privacy tip
+  if (privacyTipEl && primaryCvDropZone) {
+    const calloutBox = document.createElement('div');
+    calloutBox.className = 'privacy-callout'; // Add a class for styling
+    calloutBox.style.backgroundColor = '#FFFBEB'; // Light amber background
+    calloutBox.style.color = '#78350F'; // Darker text for contrast
+    calloutBox.style.border = '1px solid #FCD34D'; // Amber border
+    calloutBox.style.padding = '12px';
+    calloutBox.style.marginBottom = '20px';
+    calloutBox.style.borderRadius = '8px';
+    calloutBox.style.fontSize = '0.9em';
+
+    calloutBox.innerHTML = privacyTipEl.innerHTML; // Move content
+    privacyTipEl.parentNode.removeChild(privacyTipEl); // Remove original element
+    primaryCvDropZone.parentNode.insertBefore(calloutBox, primaryCvDropZone);
+  }
+}
+
+// Function to add small info icons to salary fields to explain "Excluding super"
+function addSalaryInfoIcons() {
+  const salaryFields = [
+    'review_minimum_salary_yearly',
+    'review_minimum_daily_rate'
+  ];
+
+  salaryFields.forEach(id => {
+    const input = document.getElementById(id);
+    if (input) {
+      const infoIcon = document.createElement('span');
+      infoIcon.innerHTML = '&#9432;'; // Info icon character (i)
+      infoIcon.title = 'Excluding super';
+      infoIcon.style.marginLeft = '8px';
+      infoIcon.style.cursor = 'help';
+      infoIcon.style.color = '#9CA3AF'; // Muted gray color
+      infoIcon.style.fontSize = '1rem';
+      infoIcon.style.verticalAlign = 'middle';
+      input.parentNode.insertBefore(infoIcon, input.nextSibling);
+    }
+  });
+}
+
 renderLogo();
 renderLocationSuggestions();
 loadProfileDefaults().catch(() => {});
 setStep(1);
+updateCompensationVisibility();
 updateCreateProfileAvailability();
+addSalaryInfoIcons();
 
 if (primaryCvDropZone && primaryCvInput) {
+  // Apply initial border cleanup to drop zone
+  primaryCvDropZone.style.backgroundColor = '#0d0e12';
+  primaryCvDropZone.style.border = '1px dashed #444';
+  primaryCvDropZone.style.boxShadow = 'none';
+
+  movePrivacyTip(); // Call the privacy tip function here to ensure it runs after DOM is ready and elements are defined
+
+  // Existing event listeners for primaryCvDropZone
   primaryCvDropZone.addEventListener('click', () => primaryCvInput.click());
   primaryCvDropZone.addEventListener('dragenter', (event) => {
     event.preventDefault();
     primaryCvDropZone.classList.add('is-dragover');
+    primaryCvDropZone.style.border = '1px solid #F58020';
+    primaryCvDropZone.style.boxShadow = '0 0 12px rgba(245, 128, 32, 0.15)';
   });
   primaryCvDropZone.addEventListener('dragover', (event) => {
     event.preventDefault();
     primaryCvDropZone.classList.add('is-dragover');
+    primaryCvDropZone.style.border = '1px solid #F58020';
+    primaryCvDropZone.style.boxShadow = '0 0 12px rgba(245, 128, 32, 0.15)';
   });
   primaryCvDropZone.addEventListener('dragleave', (event) => {
     if (event.target === primaryCvDropZone) {
       primaryCvDropZone.classList.remove('is-dragover');
+      if (!primaryCvInput.files?.[0]) {
+        primaryCvDropZone.style.border = '1px dashed #444';
+      } else {
+        primaryCvDropZone.style.border = '1px solid #F58020';
+      }
+      primaryCvDropZone.style.boxShadow = 'none';
     }
   });
   primaryCvDropZone.addEventListener('drop', handlePrimaryCvDrop);
@@ -1056,3 +1208,24 @@ if (primaryCvDropZone && primaryCvInput) {
     updateCreateProfileAvailability();
   });
 }
+
+// Apply button theme to all primary buttons after initial setup
+applyPrimaryButtonTheme(createProfileButton);
+applyPrimaryButtonTheme(document.getElementById('continue_to_search_basics'));
+applyPrimaryButtonTheme(document.getElementById('continue_to_check')); // "Continue" button on Screen 3
+applyPrimaryButtonTheme(document.getElementById('confirm_review'));
+
+// Apply secondary button theme to all back buttons
+applySecondaryButtonTheme(document.getElementById('back_to_upload'));
+applySecondaryButtonTheme(document.getElementById('back_to_review'));
+applySecondaryButtonTheme(document.getElementById('back_to_review_footer'));
+applySecondaryButtonTheme(document.getElementById('back_to_search_basics'));
+applySecondaryButtonTheme(document.getElementById('back_to_search_basics_footer'));
+
+
+
+// Apply input border theme to relevant inputs on Screen 3
+applyInputBorderStyle(document.getElementById('review_search_keywords'));
+applyInputBorderStyle(document.getElementById('location_search'));
+applyInputBorderStyle(document.getElementById('review_minimum_salary_yearly'));
+applyInputBorderStyle(document.getElementById('review_minimum_daily_rate'));

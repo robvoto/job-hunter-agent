@@ -252,3 +252,19 @@ Return only:
 - removed
 - remaining
 - validation
+
+----
+14. Themes
+- Themes must only affect colours, backgrounds, borders, and visual styles.
+- Do not change layout, spacing, or structure when applying themes.
+- All theme variables must be centralised (single source of truth).
+- Do not duplicate or scatter theme logic across files.
+
+15 Backlog handling
+
+- Use `BACKLOG.md` for task state.
+- Before starting a backlog item, verify the current code state.
+- When a backlog item is completed, move it to the `Done` section in `BACKLOG.md`.
+- Never execute or re-open items already listed under `Done`.
+- Treat `Done` as historical record only.
+- Do not modify BACKLOG.md structure or wording beyond moving items between sections.

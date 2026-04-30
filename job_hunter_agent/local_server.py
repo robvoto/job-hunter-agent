@@ -1630,9 +1630,41 @@ class SettingsHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if _path == "/api/signal-registry":
+            from job_hunter_agent.signal_registry import load_registry
+            registry = load_registry()
+            signals = sorted(
+                registry.values(),
+                key=lambda r: (not r.get("needs_review", True), str(r.get("signal", "")).lower()),
+            )
+            self._send_json(200, {"signals": signals, "total": len(signals)})
+            return
+
         self._send_json(404, {"error": "Not found"})
 
     def do_PATCH(self) -> None:
+        if self.path == "/api/signal-registry":
+            try:
+                from job_hunter_agent.signal_registry import update_signal
+                body = self._read_json_body()
+                key = str(body.get("key") or "").strip()
+                decision = str(body.get("decision") or "").strip()
+                scope = str(body.get("scope") or "global").strip()
+                notes = str(body.get("notes") or "").strip()
+                if not key or not decision:
+                    self._send_json(400, {"error": "key and decision are required"})
+                    return
+                updated = update_signal(key, decision, scope, notes)
+                if updated is None:
+                    self._send_json(404, {"error": f"Signal '{key}' not found in registry"})
+                    return
+                self._send_json(200, {"ok": True, "signal": updated})
+            except ValueError as exc:
+                self._send_json(400, {"error": str(exc)})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
         if self.path == "/api/agent-settings":
             try:
                 current = load_agent_settings(create_if_missing=True)

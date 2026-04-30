@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import Any
 
 from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases
+from job_hunter_agent.signal_registry import register_signals
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     _normalize_token,
@@ -452,6 +453,8 @@ def run_cv_pipeline(
     candidates = score_and_promote(clusters, onboarding_settings=onboarding_settings)
     candidates = _rename_top_clusters(candidates, llm_client=llm_client)
     output = _build_output(candidates, total_roles=len(roles), onboarding_settings=onboarding_settings)
+
+    register_signals([r["name"] for r in output.get("capability_profile_rules", [])])
 
     print(
         f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "

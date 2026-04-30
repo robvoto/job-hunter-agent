@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
+from job_hunter_agent.signal_registry import register_signals
 
 
 ROOT_DIR = REPO_ROOT
@@ -776,6 +777,7 @@ def build_learning_patch(
     capabilities = _validate_capabilities(extracted.get("capabilities", []))
     if capabilities:
         patch["capability_profile_rules"] = capabilities
+        register_signals([c["name"] for c in capabilities])
 
     raw_prefs = extracted.get("match_preferences") or {}
     match_prefs = {k: v for k, v in raw_prefs.items() if v is not None and v != ""}

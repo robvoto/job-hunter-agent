@@ -3,19 +3,22 @@
       to { transform: rotate(360deg); }
     }
     :root {
-      --bg: #f6f1e8;
-      --panel: #fffdf9;
-      --card: #fffdfa;
-      --ink: #182231;
-      --muted: #667085;
-      --line: #e9ddcf;
-      --accent: #14532d;
-      --accent-soft: #e7f7eb;
-      --warm: #9a3412;
+      /* Shared variables come from themes.css (loaded in workspace.html).
+         Only results-specific variables are defined here. */
+      --panel:     var(--bg-surface);
+      --card:      var(--bg-surface);
+
+      /* Dark Professional Palette Overrides */
+      --bg-page: #0B0C10;
+      --bg-surface: #0B0C10;
+      --accent: #F58020;
+      --text-primary: #FFFFFF;
+      --muted: #9DA5B1;
+      --border-subtle: #1F2128;
+      --warm:      #9a3412;
       --warm-soft: #fff0e6;
-      --cool: #1d4ed8;
-      --cool-soft: #edf3ff;
-      --shadow: 0 16px 38px rgba(45, 34, 20, 0.08);
+      --cool:      var(--accent-2);
+      --cool-soft: var(--accent-soft);
       --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
       --sans: Aptos, "Trebuchet MS", sans-serif;
     }
@@ -23,11 +26,8 @@
     body {
       margin: 0;
       font-family: var(--sans);
-      background:
-        radial-gradient(circle at top left, rgba(20, 83, 45, 0.07), transparent 28%),
-        radial-gradient(circle at top right, rgba(154, 52, 18, 0.06), transparent 22%),
-        var(--bg);
-      color: var(--ink);
+      background: var(--bg-page);
+      color: var(--text-primary);
     }
     .page {
       max-width: 1360px;
@@ -72,10 +72,10 @@
       margin-top: 0;
     }
     .snapshot-rail {
-      background: rgba(255, 253, 249, 0.94);
-      border: 1px solid var(--line);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
       border-radius: 24px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-soft);
       padding: 22px;
     }
     .snapshot-section + .snapshot-section {
@@ -93,10 +93,10 @@
       color: #7a5f46;
     }
     .side-panel {
-      background: rgba(255, 253, 249, 0.9);
-      border: 1px solid var(--line);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
       border-radius: 20px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-soft);
       overflow: hidden;
     }
     .side-panel summary {
@@ -169,8 +169,8 @@
       gap: 12px;
     }
     .summary-card {
-      background: rgba(255, 255, 255, 0.82);
-      border: 1px solid rgba(233, 221, 207, 0.8);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
       border-radius: 16px;
       padding: 14px 14px 12px;
       min-height: 92px;
@@ -415,13 +415,17 @@
     .job-card {
       --card-accent: rgba(214, 198, 178, 0.85);
       --card-accent-bg: rgba(214, 198, 178, 0.06);
-      background: rgba(255, 253, 250, 0.98);
-      border: 1px solid var(--line);
-      border-left: 5px solid var(--card-accent);
-      border-radius: 24px;
-      padding: 20px 22px 18px;
-      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-      background-image: linear-gradient(90deg, var(--card-accent-bg), rgba(255, 253, 250, 0) 34%);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border-subtle);
+      border-radius: 0;
+      padding: 24px 22px;
+      box-shadow: none;
+      background-image: none;
+      transition: background-color 0.2s ease;
+    }
+    .job-card:hover {
+      background-color: rgba(255, 255, 255, 0.04); /* Subtle #FFFFFF0A equivalent */
     }
     .job-card.tone-strong {
       --card-accent: #16a34a;
@@ -635,10 +639,12 @@
       color: var(--ink);
       text-decoration: none;
       font-family: var(--serif);
-      font-size: 1.6rem;
+      font-size: 1.4rem;
       font-weight: 500;
       line-height: 1.16;
       margin-bottom: 6px;
+      text-transform: capitalize; /* Ensures Title Case appearance */
+      color: var(--accent);
     }
     .job-link:hover { text-decoration: underline; }
     .job-company { 
@@ -648,8 +654,9 @@
       margin-top: 4px;
     }
     .match-tile {
-      min-width: 124px;
-      align-self: flex-start;
+      min-width: 110px;
+      margin-left: auto; /* Push to the right */
+      align-self: center;
       border-radius: 18px;
       padding: 12px 14px 11px;
       text-align: center;

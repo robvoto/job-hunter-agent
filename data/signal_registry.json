@@ -1,0 +1,228 @@
+{
+  "backlog management": {
+    "signal": "backlog management",
+    "normalized_key": "backlog management",
+    "original_texts": [
+      "backlog management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:15.478492+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "stakeholder engagement": {
+    "signal": "stakeholder engagement",
+    "normalized_key": "stakeholder engagement",
+    "original_texts": [
+      "stakeholder engagement"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:15.478492+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery planning": {
+    "signal": "delivery planning",
+    "normalized_key": "delivery planning",
+    "original_texts": [
+      "delivery planning"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:15.478492+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "team facilitation": {
+    "signal": "team facilitation",
+    "normalized_key": "team facilitation",
+    "original_texts": [
+      "team facilitation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:15.478492+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "project delivery": {
+    "signal": "project delivery",
+    "normalized_key": "project delivery",
+    "original_texts": [
+      "project delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:15.478492+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "skip": {
+    "signal": "skip",
+    "normalized_key": "skip",
+    "original_texts": [
+      "skip"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:17.815516+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "project management": {
+    "signal": "project management",
+    "normalized_key": "project management",
+    "original_texts": [
+      "project management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:42:17.815516+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "planning": {
+    "signal": "planning",
+    "normalized_key": "planning",
+    "original_texts": [
+      "planning"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:51:53.076961+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "team leadership": {
+    "signal": "team leadership",
+    "normalized_key": "team leadership",
+    "original_texts": [
+      "team leadership"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:51:53.076961+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "delivery management": {
+    "signal": "delivery management",
+    "normalized_key": "delivery management",
+    "original_texts": [
+      "delivery management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:51:53.076961+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "test signal smoke": {
+    "signal": "test signal smoke",
+    "normalized_key": "test signal smoke",
+    "original_texts": [
+      "test signal smoke"
+    ],
+    "decision": "use",
+    "scope": "global",
+    "source": "system",
+    "needs_review": false,
+    "notes": "smoke test note",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-04-30T09:52:03.137645+00:00",
+        "notes": ""
+      },
+      {
+        "decision": "use",
+        "source": "user",
+        "timestamp": "2026-04-30T09:52:03.156642+00:00",
+        "notes": "smoke test note"
+      }
+    ]
+  }
+}
