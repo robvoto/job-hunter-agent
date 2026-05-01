@@ -1,8 +1,24 @@
 """Shared base class and helpers for all job source connectors."""
 
+import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Any, Optional, Set
+
+
+def keywords_to_search_string(keywords: str) -> str:
+    """Convert comma-separated keywords stored in profile to a boolean OR search string.
+
+    "Senior Business Analyst, Scrum Master" -> "Senior Business Analyst OR Scrum Master"
+    Already-OR-joined strings are returned unchanged.
+    """
+    raw = str(keywords or "").strip()
+    if not raw:
+        return raw
+    parts = [p.strip() for p in re.split(r",\s*", raw) if p.strip()]
+    if len(parts) <= 1:
+        return raw
+    return " OR ".join(parts)
 
 
 class BaseJobScraper(ABC):

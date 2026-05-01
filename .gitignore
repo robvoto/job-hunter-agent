@@ -42,3 +42,5 @@ templates/static/job_hunter_img2.png
 .gitignore
 BACKLOG.md
 .gitignore
+data/SCORING_RATIONALE.md
+data/TITLE_SELECTION_RATIONALE.md

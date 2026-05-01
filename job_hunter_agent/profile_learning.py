@@ -14,15 +14,39 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
+from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
 from job_hunter_agent.signal_registry import register_signals
 
 
 ROOT_DIR = REPO_ROOT
 
+CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
+
 _VALID_LEVELS = {"strong", "working", "basic", "low"}
 _CURRENT_YEAR = datetime.now().year
+
+
+def _cap_log(msg: str) -> None:
+    print(msg)
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        with CAP_DEBUG_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(msg + "\n")
+    except Exception as exc:
+        print(f"[CAP_LOG ERROR] could not write capability_debug.log: {exc}")
+
+
+def clear_capability_debug_log() -> None:
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        CAP_DEBUG_LOG.write_text(
+            f"# capability_debug.log — onboarding run {datetime.utcnow().isoformat()}Z\n",
+            encoding="utf-8",
+        )
+        print(f"[CAP_LOG] capability_debug.log reset at {CAP_DEBUG_LOG}")
+    except Exception as exc:
+        print(f"[CAP_LOG ERROR] could not reset capability_debug.log: {exc}")
 _CURRENT_MONTH = datetime.now().month
 _ROLE_TITLE_KNOWLEDGE_PATH = DATA_DIR / "role_title_knowledge.json"
 
@@ -535,7 +559,9 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
         f"- Current year is {_CURRENT_YEAR}. Recent means {recent_from} onward.\n"
         "- Treat the evidence pack as the source of truth. Use raw CV text only as fallback context when evidence is incomplete.\n"
         "- For each role, trust header_lines plus dates and bullets more than any best-effort title/employer fields.\n"
-        "- capabilities: transferable professional skills only. Not company/project names, domains, or generic duties. "
+        "- capabilities: extract 8–15 transferable professional skills when the evidence supports them. "
+        "Not company names, employer names, job titles, or raw phrase fragments. "
+        "Each capability must be a named skill or practice area grounded in the CV bullets or role headers. "
         "Use explicit role titles when present, plus header_lines and bullets, as evidence. "
         "Set level=strong only for current or recent strengths that are repeated and clearly senior. "
         "Older evidence should usually be working or basic unless the CV still shows current depth.\n"
@@ -552,7 +578,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
             model=model,
             input=[{"role": "user", "content": prompt}],
             text_format=_CvExtractionResponse,
-            max_output_tokens=900,
+            max_output_tokens=1500,
         )
         _log_llm_call(resp, "cv_extraction", model)
         parsed = resp.output_parsed
@@ -566,23 +592,36 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
 
 def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
     result = []
+    rejected: list[str] = []
+    _cap_log(f"[CAP_VALIDATE] LLM returned {len(raw or [])} raw capability candidate(s)")
     for item in raw or []:
         if not isinstance(item, dict):
+            rejected.append("<non-dict>")
             continue
         name = str(item.get("name") or "").strip().lower()
         level = str(item.get("level") or "basic").strip().lower()
         aliases = [str(a).strip().lower() for a in (item.get("aliases") or []) if str(a).strip()]
         if not name:
+            rejected.append("<empty name>")
             continue
         name_tokens = re.findall(r"[a-z0-9]+", name)
         if name_tokens and len(name_tokens) <= 3 and name_tokens[-1] in _GENERIC_ROLE_TOKENS:
+            rejected.append(f"{name} [generic-role-token filter]")
             continue
         result.append({
             "name": name,
             "level": level if level in _VALID_LEVELS else "basic",
             "aliases": aliases[:6],
         })
-    return result[:20]
+    capped = result[:20]
+    cap_overflow = result[20:]
+    if cap_overflow:
+        rejected.extend(f"{r['name']} [cap-20 overflow]" for r in cap_overflow)
+    kept_names = [r["name"] for r in capped]
+    _cap_log(f"[CAP_VALIDATE] kept {len(capped)}: {kept_names}")
+    if rejected:
+        _cap_log(f"[CAP_VALIDATE] rejected {len(rejected)}: {rejected}")
+    return capped
 
 
 def _pattern_tokens(value: str) -> tuple[str, ...]:
@@ -718,7 +757,7 @@ def _classify_titles_from_evidence(
             break
 
     return {
-        "target_title_patterns": primary,
+        "primary_job_title_pattern": primary,
         "secondary_title_patterns": secondary,
     }
 
@@ -774,7 +813,10 @@ def build_learning_patch(
 
     patch: dict[str, Any] = {"cv_text": source_text}
 
-    capabilities = _validate_capabilities(extracted.get("capabilities", []))
+    raw_caps = extracted.get("capabilities", [])
+    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capabilities before validation")
+    capabilities = _validate_capabilities(raw_caps)
+    _cap_log(f"[BUILD_LEARNING_PATCH] {len(capabilities)} capability rule(s) will be written to capability_profile_rules")
     if capabilities:
         patch["capability_profile_rules"] = capabilities
         register_signals([c["name"] for c in capabilities])
@@ -805,7 +847,7 @@ def extract_title_pattern_suggestions(
 
     target_patterns = [
         _normalize_role_title_value(value)
-        for value in (classified.get("target_title_patterns") or [])
+        for value in (classified.get("primary_job_title_pattern") or [])
         if _normalize_role_title_value(value)
     ][:max_target]
     secondary_patterns = [
@@ -816,7 +858,7 @@ def extract_title_pattern_suggestions(
     suggested_search_keywords = target_patterns[:4]
 
     return {
-        "target_title_patterns": list(dict.fromkeys(target_patterns)),
+        "primary_job_title_pattern": list(dict.fromkeys(target_patterns)),
         "secondary_title_patterns": list(dict.fromkeys(secondary_patterns)),
         "suggested_search_keywords": list(dict.fromkeys(suggested_search_keywords))[:4],
     }

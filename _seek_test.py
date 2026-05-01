@@ -1,0 +1,20 @@
+from playwright.sync_api import sync_playwright
+from job_hunter_agent.scrapers.seek import SELECTOR_CARDS
+
+url = 'https://www.seek.com.au/jobs?keywords=senior+business+analyst&where=Sydney&daterange=3&sortMode=ListedDate'
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page(viewport={'width': 1400, 'height': 900})
+    try:
+        page.goto(url, wait_until='domcontentloaded')
+        page.wait_for_selector(SELECTOR_CARDS, timeout=10000)
+        cards = page.query_selector_all(SELECTOR_CARDS)
+        print(f'Cards found: {len(cards)}')
+        if cards:
+            title_el = cards[0].query_selector('[data-automation="jobTitle"]')
+            print('First title:', title_el.inner_text() if title_el else 'N/A')
+    except Exception as exc:
+        print(f'ERROR: {type(exc).__name__}: {exc}')
+        body = page.text_content('body') or ''
+        print('Body snippet:', body[:500])
+    browser.close()

@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 
 from job_hunter_agent.config import MAX_PAGES_CAP  # noqa: F401 - re-exported for callers
 from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.scrapers.base import keywords_to_search_string
 from job_hunter_agent.utils import extract_work_mode, set_query_param
 
 # ---------------------------------------------------------------------------
@@ -109,7 +110,7 @@ def extract_card_metadata(card) -> dict:
 
 def build_seek_search_targets(profile: dict, configured_date_range: int, sort_newest_first: bool) -> List[dict]:
     search_settings = get_search_settings(profile)
-    keywords = str(search_settings.get("keywords") or "").strip()
+    keywords = keywords_to_search_string(search_settings.get("keywords") or "")
     locations = _dedupe_preserve_order(
         [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     ) or [""]

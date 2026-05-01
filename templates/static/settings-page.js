@@ -1,7 +1,6 @@
 
     const statusEl = document.getElementById('status');
     const isTestMode = document.body?.dataset.testMode === 'true';
-    const runStatusPillEl = document.getElementById('run_status_pill');
     const runLastRunEl = document.getElementById('run_last_run');
     const runNowButton = document.getElementById('run_now');
     const rebuildProfileButton = document.getElementById('rebuild_profile');
@@ -20,7 +19,7 @@
     });
     const listTextAreas = [
       'locations',
-      'primary_job_title_patterns',
+      'primary_job_title_pattern',
       'secondary_title_patterns',
       'classification_ids',
       'must_not_require_skills',
@@ -238,7 +237,7 @@
     }
 
     const chipEditors = {
-      primary_job_title_patterns: { kind: 'list', listId: 'primary_job_title_patterns_chips', inputId: 'primary_job_title_patterns_add', emptyText: 'No job primary titles yet.' },
+      primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No job primary titles yet.' },
       secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
       reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },
@@ -279,7 +278,7 @@
     }
 
     function friendlyListLabel(id, value) {
-      if (id === 'primary_job_title_patterns' || id === 'secondary_title_patterns') {
+      if (id === 'primary_job_title_pattern' || id === 'secondary_title_patterns') {
         return patternToLabel(value) || value;
       }
       return normalizePlainPhrase(value);
@@ -337,7 +336,7 @@
     function buildChipValue(id, rawValue) {
       const raw = normalizePlainPhrase(rawValue);
       if (!raw) return null;
-      if (id === 'primary_job_title_patterns' || id === 'secondary_title_patterns') return titlePhraseToPattern(raw);
+      if (id === 'primary_job_title_pattern' || id === 'secondary_title_patterns') return titlePhraseToPattern(raw);
       if (id === 'must_not_require_skills') return raw;
       if (id === 'reject_title_rules') {
         const phrase = normalizeTitleBlockPhrase(raw);
@@ -450,7 +449,7 @@
       document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness ?? 1);
       setCapabilityRuleState(profile.capability_profile_rules || []);
       document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
-      for (const id of ['primary_job_title_patterns', 'secondary_title_patterns', 'must_not_require_skills']) {
+      for (const id of ['primary_job_title_pattern', 'secondary_title_patterns', 'must_not_require_skills']) {
         settingsField(id).value = (profile[id] || []).join('\n');
       }
       for (const [id, key] of ruleTextAreas) {
@@ -459,15 +458,18 @@
       renderAdvancedChipEditors();
     }
 
+    const chipHtmlIdAliases = { adjacent_title_patterns: 'secondary_title_patterns' };
+    function resolveChipEditorId(id) { return chipHtmlIdAliases[id] || id; }
+
     document.addEventListener('click', async e => {
       const addBtn = e.target.closest('[data-add-chip]');
       if (addBtn) {
-        addChipValue(addBtn.dataset.addChip);
+        addChipValue(resolveChipEditorId(addBtn.dataset.addChip));
         return;
       }
       const removeBtn = e.target.closest('[data-remove-chip]');
       if (removeBtn) {
-        removeChipValue(removeBtn.dataset.removeChip, Number(removeBtn.dataset.chipIndex));
+        removeChipValue(resolveChipEditorId(removeBtn.dataset.removeChip), Number(removeBtn.dataset.chipIndex));
       }
     });
 
@@ -475,7 +477,7 @@
       const input = e.target.closest('[data-chip-input]');
       if (!input || e.key !== 'Enter') return;
       e.preventDefault();
-      addChipValue(input.dataset.chipInput);
+      addChipValue(resolveChipEditorId(input.dataset.chipInput));
     });
 
     function renderTelegramSubscribers(subscribers) {
@@ -640,19 +642,24 @@
       const stats = await response.json();
       renderRunStats(stats);
     }
-
-    function setRunStatus(status, lastRunAt) {
-      const normalized = status === 'running' ? 'running' : 'idle';
-      runStatusPillEl.textContent = normalized === 'running' ? 'Running...' : 'Idle';
-      runStatusPillEl.className = `status-pill ${normalized}`;
-      
-      let dateLabel = '';
-      if (lastRunAt) {
-        const d = new Date(lastRunAt);
-        dateLabel = isNaN(d.valueOf()) ? lastRunAt : d.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  
+    async function checkRunStatus() {
+      try {
+        const resp = await fetch('/api/run-status');
+        const data = await resp.json();
+        const normalized = data.status === 'running' ? 'running' : 'idle';
+        lastObservedRunStatus = normalized;
+        if (runStatusPillEl) {
+          runStatusPillEl.textContent = normalized === 'running' ? 'Running...' : 'Idle';
+          runStatusPillEl.className = `status-pill ${normalized}`;
+        }
+        if (runLastRunEl && data.last_run_at) {
+          runLastRunEl.textContent = `Last run: ${data.last_run_at}`;
+        }
+        return normalized;
+      } catch {
+        return 'idle';
       }
-      runLastRunEl.textContent = dateLabel ? `Last run: ${dateLabel}` : 'Ready to search';
-      lastObservedRunStatus = normalized;
     }
 
     function setRunButtonState(isRunning) {
@@ -666,15 +673,6 @@
       if (!runStatusPollHandle) return;
       window.clearInterval(runStatusPollHandle);
       runStatusPollHandle = null;
-    }
-
-    async function checkRunStatus() {
-      const response = await fetch('/api/run-status');
-      if (!response.ok) throw new Error('Could not load run status');
-      const payload = await response.json();
-      const status = payload.status === 'running' ? 'running' : 'idle';
-      setRunStatus(status, payload.last_run_at || '');
-      return status;
     }
 
     function startRunPolling() {
@@ -752,7 +750,7 @@
       const capabilityHtml = capabilitySuggestions.length ? `
         <div class="tuning-group">
           <h3>Capability signals from viable roles</h3>
-          <p class="tuning-group-copy">Repeated skills from kept roles that need a decision before the engine uses them in matching.</p>
+          <p class="tuning-group-copy">Repeated skills from kept roles that need a decision before the engine can learn how to classify them consistently.</p>
           <div class="review-list">
             ${capabilitySuggestions.map(item => `
               <div class="review-card">
@@ -865,7 +863,7 @@
         llm_profile_brief_mode: 'auto',
         llm_profile_brief: '',
         capability_profile_rules: collectCapabilityRuleState(),
-        primary_job_title_patterns: toLines(settingsField('primary_job_title_patterns').value),
+        primary_job_title_pattern: toLines(settingsField('primary_job_title_pattern').value),
         secondary_title_patterns: toLines(settingsField('secondary_title_patterns').value),
         must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
         reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
@@ -973,23 +971,7 @@
         btn.disabled = false;
         btn.textContent = originalLabel;
       }
-    });
-
-    document.getElementById('refresh_review')?.addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      const originalLabel = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Refreshing...';
-      try {
-        await Promise.all([loadRunStats(), loadReviewData()]);
-        showStatus('Review data refreshed.', 'ok', { autoHideMs: 3000 });
-      } catch (error) {
-        showStatus(error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalLabel;
-      }
-    });
+    }); 
 
     document.getElementById('open_telegram_connect')?.addEventListener('click', async (e) => {
       const btn = e.currentTarget;
@@ -1272,15 +1254,7 @@
       loadRunStats(),
       loadReviewData(),
     ]).then(() => {
-        return checkRunStatus();
-    }).then((status) => {
-        if (status === 'running') {
-          setRunButtonState(true);
-          startRunPolling();
-        } else {
-          stopRunPolling();
-          setRunButtonState(false);
-        }
+        setRunButtonState(false);
         initSliders();
         suppressDirtyTracking = false;
         clearDirty();
@@ -1290,133 +1264,320 @@
     let _srData = null;
     let _srFilter = 'needs_review';
     let _srLoaded = false;
+    let _srSearch = '';
+    let _srCategoryFilter = 'all';
+    let _srSort = 'needs_review_first';
+    const _srBusyKeys = new Set();
+    const _srInlineStatus = {};
 
-    const SR_DECISION_LABELS = {
-      review: 'Needs Review',
-      use: 'Use',
-      ignore: 'Ignore',
-      evidence_only: 'Evidence Only',
+    const SR_REVIEW_STATE_LABELS = {
+      needs_review: 'Needs review',
+      approved: 'Approved',
+      ignored: 'Ignored',
     };
-    const SR_SCOPE_LABELS = {
-      global: 'Global',
-      role_specific: 'Role-specific',
-      domain_specific: 'Domain-specific',
-    };
+
+    function srSignalKey(signal) {
+      return String(signal.normalized_key || signal.signal || '').trim().toLowerCase();
+    }
+
+    function srReviewState(signal) {
+      const decision = String(signal?.decision || 'review').trim().toLowerCase();
+      if (decision === 'ignore') return 'ignored';
+      if (decision === 'use') return 'approved';
+      return 'needs_review';
+    }
+
+    function srSignalNotes(signal) {
+      return String(signal?.notes || '').trim();
+    }
+
+    function srSignalAliases(signal) {
+      const canonical = String(signal?.signal || '').trim().toLowerCase();
+      const values = Array.isArray(signal?.original_texts) ? signal.original_texts : [];
+      const deduped = [];
+      values.forEach(value => {
+        const cleaned = String(value || '').trim();
+        if (!cleaned) return;
+        const normalized = cleaned.toLowerCase();
+        if (normalized === canonical) return;
+        if (deduped.some(item => item.toLowerCase() === normalized)) return;
+        deduped.push(cleaned);
+      });
+      return deduped;
+    }
+
+    function srSuggestedCategory(_signal) {
+      return null;
+    }
+
+    function srTargetFile(_signal, _category) {
+      return null;
+    }
+
+    function srUpdatedTimestamp(signal) {
+      const history = Array.isArray(signal?.history) ? signal.history : [];
+      const latest = history.length ? history[history.length - 1] : null;
+      const raw = String(latest?.timestamp || '').trim();
+      const parsed = raw ? Date.parse(raw) : NaN;
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    function srCounts(signals) {
+      return signals.reduce((acc, signal) => {
+        const state = srReviewState(signal);
+        acc.all += 1;
+        if (state === 'approved') acc.approved += 1;
+        else if (state === 'ignored') acc.ignored += 1;
+        else acc.needs_review += 1;
+        return acc;
+      }, {
+        all: 0,
+        needs_review: 0,
+        approved: 0,
+        ignored: 0,
+      });
+    }
+
+    function srCategoryOptions(signals) {
+      return Array.from(new Set(
+        signals.map(signal => srSuggestedCategory(signal)).filter(Boolean)
+      )).sort((a, b) => a.localeCompare(b));
+    }
+
+    function srMatchesSearch(signal) {
+      if (!_srSearch) return true;
+      const searchText = [
+        signal.signal || '',
+        ...(Array.isArray(signal.original_texts) ? signal.original_texts : []),
+        srSignalNotes(signal),
+        srSuggestedCategory(signal) || '',
+      ].join(' ').toLowerCase();
+      return searchText.includes(_srSearch);
+    }
 
     function srFilteredSignals() {
-      const all = (_srData && _srData.signals) || [];
-      if (_srFilter === 'all') return all;
-      if (_srFilter === 'needs_review') return all.filter(s => s.needs_review);
-      return all.filter(s => s.decision === _srFilter);
+      const all = Array.isArray(_srData?.signals) ? _srData.signals : [];
+      return all.filter(signal => {
+        const state = srReviewState(signal);
+        if (_srFilter !== 'all' && state !== _srFilter) return false;
+        if (_srCategoryFilter !== 'all' && (srSuggestedCategory(signal) || '') !== _srCategoryFilter) return false;
+        return srMatchesSearch(signal);
+      }).sort((left, right) => {
+        if (_srSort === 'name_az') {
+          return String(left.signal || '').localeCompare(String(right.signal || ''));
+        }
+        if (_srSort === 'recently_updated') {
+          return srUpdatedTimestamp(right) - srUpdatedTimestamp(left)
+            || String(left.signal || '').localeCompare(String(right.signal || ''));
+        }
+        const stateRank = {
+          needs_review: 0,
+          approved: 1,
+          ignored: 2,
+        };
+        return stateRank[srReviewState(left)] - stateRank[srReviewState(right)]
+          || String(left.signal || '').localeCompare(String(right.signal || ''));
+      });
+    }
+
+    function srInlineState(key) {
+      return _srInlineStatus[key] || null;
+    }
+
+    function srSetInlineState(key, text, kind = 'info', autoClearMs = 0) {
+      _srInlineStatus[key] = { text, kind };
+      renderSignalRegistry();
+      if (autoClearMs > 0) {
+        window.setTimeout(() => {
+          const current = _srInlineStatus[key];
+          if (current && current.text === text && current.kind === kind) {
+            delete _srInlineStatus[key];
+            renderSignalRegistry();
+          }
+        }, autoClearMs);
+      }
+    }
+
+    async function srPatchSignal(key, payload, successText = 'Saved') {
+      if (_srBusyKeys.has(key)) return;
+      _srBusyKeys.add(key);
+      srSetInlineState(key, 'Saving...', 'info');
+      try {
+        const resp = await fetch('/api/signal-registry', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Could not save');
+        const signals = Array.isArray(_srData?.signals) ? _srData.signals : [];
+        const match = signals.find(signal => srSignalKey(signal) === key);
+        if (match) {
+          match.decision = data.signal.decision;
+          match.scope = data.signal.scope;
+          match.notes = data.signal.notes;
+          match.needs_review = data.signal.needs_review;
+          match.history = data.signal.history;
+        }
+        srSetInlineState(key, successText, 'ok', 1400);
+      } catch (error) {
+        srSetInlineState(key, error.message || 'Could not save', 'error');
+        showStatus(error.message || 'Could not save signal review.', 'error');
+      } finally {
+        _srBusyKeys.delete(key);
+        renderSignalRegistry();
+      }
     }
 
     function renderSignalRegistry() {
       const panel = document.getElementById('signal_registry_panel');
       if (!panel || !_srData) return;
-      const all = (_srData && _srData.signals) || [];
-      const counts = {
-        all: all.length,
-        needs_review: all.filter(s => s.needs_review).length,
-        use: all.filter(s => s.decision === 'use').length,
-        ignore: all.filter(s => s.decision === 'ignore').length,
-        evidence_only: all.filter(s => s.decision === 'evidence_only').length,
-      };
+      const all = Array.isArray(_srData.signals) ? _srData.signals : [];
+      const counts = srCounts(all);
       const filters = [
         { key: 'needs_review', label: `Needs Review (${counts.needs_review})` },
-        { key: 'use',          label: `Use (${counts.use})` },
-        { key: 'ignore',       label: `Ignore (${counts.ignore})` },
-        { key: 'evidence_only',label: `Evidence Only (${counts.evidence_only})` },
-        { key: 'all',          label: `All (${counts.all})` },
+        { key: 'approved', label: `Approved (${counts.approved})` },
+        { key: 'ignored', label: `Ignored (${counts.ignored})` },
+        { key: 'all', label: `All (${counts.all})` },
       ];
-      const filterHtml = filters.map(f =>
-        `<button type="button" class="sr-filter-btn${_srFilter === f.key ? ' is-active' : ''}" data-sr-filter="${f.key}">${f.label}</button>`
-      ).join('');
+      const categoryOptions = srCategoryOptions(all);
       const visible = srFilteredSignals();
-      const rowsHtml = visible.length === 0
-        ? '<p class="help" style="padding:24px 0;">No signals match this filter.</p>'
-        : visible.map(s => {
-            const key = s.normalized_key || s.signal.toLowerCase();
-            const safeKey = key.replace(/[^a-z0-9]/g, '_');
-            const origTexts = (s.original_texts || [s.signal]).join(', ');
-            const showOrig = origTexts !== s.signal;
-            const decisionOpts = ['review','use','ignore','evidence_only'].map(d =>
-              `<option value="${d}"${s.decision === d ? ' selected' : ''}>${SR_DECISION_LABELS[d] || d}</option>`
-            ).join('');
-            const scopeOpts = ['global','role_specific','domain_specific'].map(sc =>
-              `<option value="${sc}"${s.scope === sc ? ' selected' : ''}>${SR_SCOPE_LABELS[sc] || sc}</option>`
-            ).join('');
-            const historyRows = (s.history || []).map(h => {
-              const ts = (h.timestamp || '').replace('T', ' ').substring(0, 19);
-              return `<tr><td>${ts}</td><td>${h.decision}</td><td>${h.source}</td><td>${h.notes || ''}</td></tr>`;
-            }).join('');
-            const historyHtml = historyRows
-              ? `<details class="sr-history"><summary>History (${(s.history || []).length})</summary><table class="sr-history-table"><thead><tr><th>When</th><th>Decision</th><th>Source</th><th>Notes</th></tr></thead><tbody>${historyRows}</tbody></table></details>`
-              : '';
-            const safeNotes = (s.notes || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      const cardsHtml = visible.length === 0
+        ? '<p class="help signal-empty">No signals match the current view.</p>'
+        : visible.map(signal => {
+            const key = srSignalKey(signal);
+            const state = srReviewState(signal);
+            const aliases = srSignalAliases(signal);
+            const category = srSuggestedCategory(signal);
+            const targetFile = srTargetFile(signal, category);
+            const inlineState = srInlineState(key);
+            const notes = srSignalNotes(signal);
+            const isBusy = _srBusyKeys.has(key);
             return `
-<div class="sr-row" data-sr-key="${key}">
-  <div class="sr-row-header">
-    <span class="sr-signal-name">${s.signal}</span>
-    ${s.needs_review ? '<span class="sr-badge sr-badge-review">needs review</span>' : ''}
+<article class="signal-card" data-sr-key="${escapeHtml(key)}">
+  <div class="signal-card-top">
+    <div class="signal-card-headline">
+      <h3>${escapeHtml(signal.signal || 'Unnamed signal')}</h3>
+      ${aliases.length ? `<p class="signal-card-meta">Seen as: ${escapeHtml(aliases.join(', '))}</p>` : ''}
+    </div>
+    <div class="signal-card-pills">
+      <span class="signal-pill signal-pill-${escapeHtml(state)}">${escapeHtml(SR_REVIEW_STATE_LABELS[state] || 'Needs review')}</span>
+      ${category ? `<span class="signal-pill signal-pill-secondary">Suggested: ${escapeHtml(category)}</span>` : ''}
+    </div>
   </div>
-  ${showOrig ? `<div class="sr-originals">Seen as: ${origTexts}</div>` : ''}
-  <div class="sr-controls">
-    <label>Decision<select class="sr-decision" data-sr-key="${key}">${decisionOpts}</select></label>
-    <label>Scope<select class="sr-scope" data-sr-key="${key}">${scopeOpts}</select></label>
-    <label>Notes<input type="text" class="sr-notes" data-sr-key="${key}" value="${safeNotes}" placeholder="Optional notes"></label>
-    <button type="button" class="primary sr-save-btn" data-sr-key="${key}">Save</button>
-    <span class="sr-row-status" id="sr_status_${safeKey}"></span>
+  <div class="signal-card-grid">
+    <label class="signal-field">
+      <span>Category</span>
+      <select class="signal-input" disabled>
+        <option>${escapeHtml(category || 'Not assigned yet')}</option>
+      </select>
+    </label>
+    <label class="signal-field">
+      <span>Target file</span>
+      <input class="signal-input" type="text" value="${escapeHtml(targetFile || 'Pending')}" readonly>
+    </label>
+    <label class="signal-field signal-field-notes">
+      <span>Notes</span>
+      <input class="signal-input signal-notes" type="text" data-sr-key="${escapeHtml(key)}" value="${escapeHtml(notes)}" placeholder="Optional note"${isBusy ? ' disabled' : ''}>
+    </label>
+    <div class="signal-actions" aria-label="Review actions">
+      <button type="button" class="signal-action signal-action-ignore${state === 'ignored' ? ' is-active' : ''}" data-sr-key="${escapeHtml(key)}" data-sr-action="ignore" aria-label="Ignore ${escapeHtml(signal.signal || 'signal')}"${isBusy ? ' disabled' : ''}>&#10005;</button>
+      <button type="button" class="signal-action signal-action-approve${state === 'approved' ? ' is-active' : ''}" data-sr-key="${escapeHtml(key)}" data-sr-action="approve" aria-label="Approve ${escapeHtml(signal.signal || 'signal')}"${isBusy ? ' disabled' : ''}>&#10003;</button>
+    </div>
   </div>
-  ${historyHtml}
-</div>`;
+  <div class="signal-card-footer">
+    <span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(inlineState?.text || '')}</span>
+  </div>
+</article>`;
           }).join('');
 
       panel.innerHTML = `
-<div class="sr-header">
-  <p class="help">Review signals extracted from your CV. Decide how each signal is used in job matching. Changes are saved immediately per signal.</p>
+<div class="sr-hero">
+  <p class="sr-hero-copy">Review extracted signals, approve what should be learned, and ignore the rest.</p>
 </div>
-<div class="sr-filters">${filterHtml}</div>
-<div class="sr-list">${rowsHtml}</div>`;
+<div class="sr-filters">
+  ${filters.map(filter => `<button type="button" class="sr-filter-btn${_srFilter === filter.key ? ' is-active' : ''}" data-sr-filter="${escapeHtml(filter.key)}">${escapeHtml(filter.label)}</button>`).join('')}
+</div>
+<div class="sr-toolbar">
+  <input id="sr_search" class="sr-search" type="search" value="${escapeHtml(_srSearch)}" placeholder="Search signals">
+  <select id="sr_category_filter" class="sr-select"${categoryOptions.length ? '' : ' disabled'}>
+    <option value="all">All categories</option>
+    ${categoryOptions.map(option => `<option value="${escapeHtml(option)}"${_srCategoryFilter === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
+  </select>
+  <select id="sr_sort" class="sr-select">
+    <option value="needs_review_first"${_srSort === 'needs_review_first' ? ' selected' : ''}>Needs review first</option>
+    <option value="name_az"${_srSort === 'name_az' ? ' selected' : ''}>A-Z</option>
+    <option value="recently_updated"${_srSort === 'recently_updated' ? ' selected' : ''}>Recently updated</option>
+  </select>
+</div>
+<div class="sr-list">${cardsHtml}</div>`;
 
-      panel.querySelectorAll('.sr-filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          _srFilter = btn.dataset.srFilter;
+      panel.querySelectorAll('.sr-filter-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          _srFilter = button.dataset.srFilter || 'needs_review';
           renderSignalRegistry();
         });
       });
 
-      panel.querySelectorAll('.sr-save-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const key = btn.dataset.srKey;
-          const safeKey = key.replace(/[^a-z0-9]/g, '_');
-          const row = panel.querySelector(`.sr-row[data-sr-key="${key}"]`);
-          const decision = row.querySelector('.sr-decision').value;
-          const scope = row.querySelector('.sr-scope').value;
-          const notes = row.querySelector('.sr-notes').value.trim();
-          const statusEl = document.getElementById('sr_status_' + safeKey);
-          btn.disabled = true;
-          if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'sr-row-status'; }
-          try {
-            const resp = await fetch('/api/signal-registry', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key, decision, scope, notes }),
-            });
-            const data = await resp.json();
-            if (!resp.ok) throw new Error(data.error || 'Could not save');
-            const sig = (_srData.signals || []).find(s => (s.normalized_key || s.signal.toLowerCase()) === key);
-            if (sig) {
-              sig.decision = data.signal.decision;
-              sig.scope = data.signal.scope;
-              sig.notes = data.signal.notes;
-              sig.needs_review = data.signal.needs_review;
-              sig.history = data.signal.history;
-            }
-            if (statusEl) { statusEl.textContent = 'Saved'; statusEl.className = 'sr-row-status is-ok'; }
-            setTimeout(renderSignalRegistry, 900);
-          } catch (err) {
-            if (statusEl) { statusEl.textContent = err.message || 'Error'; statusEl.className = 'sr-row-status is-error'; }
-            btn.disabled = false;
+      panel.querySelector('#sr_search')?.addEventListener('input', event => {
+        const cursor = typeof event.target.selectionStart === 'number'
+          ? event.target.selectionStart
+          : String(event.target.value || '').length;
+        _srSearch = String(event.target.value || '').trim().toLowerCase();
+        renderSignalRegistry();
+        const nextInput = panel.querySelector('#sr_search');
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.setSelectionRange(cursor, cursor);
+        }
+      });
+
+      panel.querySelector('#sr_category_filter')?.addEventListener('change', event => {
+        _srCategoryFilter = String(event.target.value || 'all');
+        renderSignalRegistry();
+      });
+
+      panel.querySelector('#sr_sort')?.addEventListener('change', event => {
+        _srSort = String(event.target.value || 'needs_review_first');
+        renderSignalRegistry();
+      });
+
+      panel.querySelectorAll('.signal-action').forEach(button => {
+        button.addEventListener('click', async () => {
+          const key = button.dataset.srKey || '';
+          const signal = all.find(item => srSignalKey(item) === key);
+          if (!signal) return;
+          const row = button.closest('.signal-card');
+          const notes = String(row?.querySelector('.signal-notes')?.value || srSignalNotes(signal)).trim();
+          const decision = button.dataset.srAction === 'approve' ? 'use' : 'ignore';
+          await srPatchSignal(key, {
+            key,
+            decision,
+            scope: signal.scope || 'global',
+            notes,
+          }, decision === 'use' ? 'Approved' : 'Ignored');
+        });
+      });
+
+      panel.querySelectorAll('.signal-notes').forEach(input => {
+        const saveNotes = async () => {
+          const key = input.dataset.srKey || '';
+          const signal = all.find(item => srSignalKey(item) === key);
+          if (!signal) return;
+          const nextNotes = String(input.value || '').trim();
+          if (nextNotes === srSignalNotes(signal)) return;
+          await srPatchSignal(key, {
+            key,
+            decision: signal.decision || 'review',
+            scope: signal.scope || 'global',
+            notes: nextNotes,
+          }, 'Note saved');
+        };
+        input.addEventListener('blur', saveNotes);
+        input.addEventListener('keydown', event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            input.blur();
           }
         });
       });
@@ -1425,7 +1586,7 @@
     async function loadSignalRegistry() {
       const panel = document.getElementById('signal_registry_panel');
       if (!panel) return;
-      panel.innerHTML = '<p class="help">Loading signals…</p>';
+      panel.innerHTML = '<p class="help">Loading learning review…</p>';
       try {
         const resp = await fetch('/api/signal-registry');
         if (!resp.ok) throw new Error('Could not load signal registry');
@@ -1433,7 +1594,7 @@
         renderSignalRegistry();
       } catch (err) {
         _srLoaded = false;
-      panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} — click Signals again to retry.</p>`;
+      panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} — click Learning again to retry.</p>`;
       }
     }
 

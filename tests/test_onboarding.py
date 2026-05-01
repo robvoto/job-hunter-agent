@@ -131,7 +131,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):

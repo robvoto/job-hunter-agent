@@ -12,7 +12,7 @@ from typing import List, Set
 from job_hunter_agent.filters import passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules, passes_title_filters
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
+from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
 from job_hunter_agent.utils import extract_salary, extract_work_mode
 
 
@@ -284,7 +284,7 @@ class LinkedInScraper(BaseJobScraper):
 
     def _build_search_targets(self) -> List[dict]:
         search_settings = get_search_settings(self.profile)
-        keywords = str(search_settings.get("keywords") or "").strip()
+        keywords = keywords_to_search_string(search_settings.get("keywords") or "")
         locations = [
             str(loc).strip()
             for loc in search_settings.get("locations", [])

@@ -3,7 +3,7 @@
   "name": "role_title_knowledge",
   "version": 1,
   "updated_at": "2026-04-29",
-  "description": "Managed generic role-title tokens used by deterministic title extraction.",
+  "description": "Generic role title tokens used to help detect job titles during parsing. These are not user roles and do not define target positions.",
   "entries": [
     {
       "value": "analyst",

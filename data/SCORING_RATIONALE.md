@@ -6,9 +6,11 @@ Private reference doc. Not committed to the repo.
 
 ## Design principle
 
-Each component's point value is derived from a **fixed budget allocation** — a defined percentage of the 100-point ceiling — based on that component's importance in the hiring decision. Values are not tuned to produce target scores; they are the natural consequence of the budget.
+Each component's point value is derived from a **fixed budget allocation** - a defined percentage of the 100-point ceiling - based on that component's importance in the hiring decision. Values are not tuned to produce target scores; they are the natural consequence of the budget.
 
 If a component produces an unexpected score, look at whether the *budget allocation* is wrong, not the raw number. Changing the number without changing the allocation rationale would reintroduce the same drift this design replaced.
+
+Reviewed signal decisions from `signal_registry.json` are intentionally excluded from scoring. Approving a signal means "learn how to classify or map this term next time", not "boost any job that happens to mention this word". Those signals remain available for explanation and later promotion into normalized profile rules, but they do not contribute points directly.
 
 ---
 

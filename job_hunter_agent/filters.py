@@ -320,8 +320,8 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
     profile = load_profile()
     title_lower = title.strip().lower()
 
-    target_patterns = profile.get("target_title_patterns", [])
-    adjacent_patterns = profile.get("adjacent_title_patterns", [])
+    target_patterns = profile.get("primary_job_title_pattern", [])
+    adjacent_patterns = profile.get("secondary_title_patterns", [])
     is_direct_match = _matches_any(title_lower, target_patterns)
     is_adjacent_match = _matches_any(title_lower, adjacent_patterns)
 
@@ -405,7 +405,7 @@ def passes_quick_card_filters(
     )
     counter_patterns = profile.get("cheap_keep_counter_patterns", [])
     counter_hits = sum(1 for pattern in counter_patterns if pattern and re.search(pattern, combined))
-    direct_target_title = _matches_any(title_lower, profile.get("target_title_patterns", []))
+    direct_target_title = _matches_any(title_lower, profile.get("primary_job_title_pattern", []))
 
     for rule in profile.get("cheap_reject_metadata_rules", []):
         pattern = rule.get("pattern", "")
@@ -422,7 +422,7 @@ def passes_quick_card_filters(
         if not pattern or not haystack or not re.search(pattern, haystack):
             continue
 
-        title_has_specialist_signal = bool(re.search(pattern, title_lower))
+        title_has_specialist_signal = bool(re.search(pattern, title_lower)) 
         unusually_strong_counter = direct_target_title and counter_hits >= 4 and not title_has_specialist_signal
         if unusually_strong_counter:
             continue

@@ -12,6 +12,7 @@ from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
 from job_hunter_agent.profile_learning import (
     build_learning_patch,
+    clear_capability_debug_log,
     extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
     merge_capability_rules,
     repair_text,
@@ -35,7 +36,7 @@ SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json
 
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
-    "target_title_patterns",
+    "primary_job_title_pattern",
     "secondary_title_patterns",
     "reject_title_rules",
     "capability_profile_rules",
@@ -289,6 +290,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # --- Reset persisted onboarding-owned fields before fresh extraction starts ---
     patch_profile(build_onboarding_reset_patch(active_onboarding_settings))
     clear_onboarding_runtime_outputs()
+    clear_capability_debug_log()
 
     # --- Build a fresh onboarding patch from clean defaults ---
     patch = build_onboarding_reset_patch(active_onboarding_settings)
@@ -353,21 +355,22 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Title patterns - always rebuilt from parsed role headers during onboarding
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
-        patch["target_title_patterns"] = suggestion.get("target_title_patterns") or []
+        patch["primary_job_title_pattern"] = suggestion.get("primary_job_title_pattern") or []
         patch["secondary_title_patterns"] = suggestion.get("secondary_title_patterns") or []
-        print(f"[TITLE_PATTERNS] Extracted {len(patch['target_title_patterns'])} target and {len(patch['secondary_title_patterns'])} secondary patterns")
-        if patch["target_title_patterns"]:
+        print(f"[TITLE_PATTERNS] Extracted {len(patch['primary_job_title_pattern'])} target and {len(patch['secondary_title_patterns'])} secondary patterns")
+        all_titles = list(patch.get("primary_job_title_pattern") or []) + list(patch.get("secondary_title_patterns") or [])
+        if all_titles:
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
-                patch["search_settings"]["keywords"] = str(patch["target_title_patterns"][0]).strip()
-                print(f"[TITLE_PATTERNS] Pre-filled primary search title: {patch['search_settings']['keywords']}")
+                patch["search_settings"]["keywords"] = ", ".join(t for t in all_titles if t)
+                print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
 
     profile = patch_profile(patch)
 
     extraction_counts = {
-        "target_titles": len(patch.get("target_title_patterns") or []),
+        "target_titles": len(patch.get("primary_job_title_pattern") or []),
         "secondary_titles": len(patch.get("secondary_title_patterns") or []),
         "capabilities": len(patch.get("capability_profile_rules") or []),
         "dominant_signal_clusters": len(patch.get("dominant_signal_clusters") or []),

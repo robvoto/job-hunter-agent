@@ -15,6 +15,7 @@ import json
 import re
 from typing import Any
 
+from job_hunter_agent.agent_settings import load_agent_settings
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 
@@ -25,7 +26,6 @@ SCORING_RULES_PATH = DATA_DIR / "scoring_rules.json"
 MIN_DATE_RANGE_DAYS = 1
 MAX_DATE_RANGE_DAYS = 30
 MIN_PAGES_CAP = 1
-MAX_PAGES_CAP_HARD_LIMIT = 25
 DEFAULT_EVIDENCE_TIERS = {
     "primary_current_evidence": "",
     "secondary_older_evidence": "",
@@ -185,7 +185,7 @@ DEFAULT_PROFILE = {
     "cheap_keep_counter_patterns": [],
     "cheap_reject_metadata_rules": [],
     "dominant_signal_clusters": [],
-    "target_title_patterns": [],
+    "primary_job_title_pattern": [],
     "secondary_title_patterns": [],
     "must_not_require_skills": [],
     "reject_title_rules": [],
@@ -459,8 +459,8 @@ def load_profile() -> dict[str, Any]:
             merged["capability_profile_rules"] = normalize_capability_rules(
                 merged.get("capability_profile_rules", [])
             )
-            merged["target_title_patterns"] = normalize_multiline_string_list(
-                merged.get("target_title_patterns", [])
+            merged["primary_job_title_pattern"] = normalize_multiline_string_list(
+                merged.get("primary_job_title_pattern", [])
             )
             merged["secondary_title_patterns"] = normalize_multiline_string_list(
                 merged.get("secondary_title_patterns", [])
@@ -500,8 +500,8 @@ def load_profile() -> dict[str, Any]:
     fallback["capability_profile_rules"] = normalize_capability_rules(
         fallback.get("capability_profile_rules", [])
     )
-    fallback["target_title_patterns"] = normalize_multiline_string_list(
-        fallback.get("target_title_patterns", [])
+    fallback["primary_job_title_pattern"] = normalize_multiline_string_list(
+        fallback.get("primary_job_title_pattern", [])
     )
     fallback["adjacent_title_patterns"] = normalize_multiline_string_list(
         fallback.get("adjacent_title_patterns", [])
@@ -542,8 +542,8 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["capability_profile_rules"] = normalize_capability_rules(
         normalized.get("capability_profile_rules", [])
     )
-    normalized["target_title_patterns"] = normalize_multiline_string_list(
-        normalized.get("target_title_patterns", [])
+    normalized["primary_job_title_pattern"] = normalize_multiline_string_list(
+        normalized.get("primary_job_title_pattern", [])
     )
     normalized["adjacent_title_patterns"] = normalize_multiline_string_list(
         normalized.get("adjacent_title_patterns", [])
@@ -585,9 +585,10 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         merged["date_range_days"] = DEFAULT_SEARCH_SETTINGS["date_range_days"]
 
     try:
+        max_pages_hard_limit = load_agent_settings().get("scraping", {}).get("max_pages_hard_limit", 25)
         merged["max_pages_cap"] = max(
             MIN_PAGES_CAP,
-            min(int(merged.get("max_pages_cap", DEFAULT_SEARCH_SETTINGS["max_pages_cap"])), MAX_PAGES_CAP_HARD_LIMIT),
+            min(int(merged.get("max_pages_cap", DEFAULT_SEARCH_SETTINGS["max_pages_cap"])), int(max_pages_hard_limit)),
         )
     except Exception:
         merged["max_pages_cap"] = DEFAULT_SEARCH_SETTINGS["max_pages_cap"]

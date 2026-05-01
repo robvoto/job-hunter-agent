@@ -29,7 +29,7 @@ Title selection happens during onboarding/rebuild.
 
 Its job is to decide:
 
-- which titles belong in `target_title_patterns`
+- which titles belong in `primary_job_title_pattern`
 - which titles belong in `secondary_title_patterns`
 - which title should seed search keywords when the user has not entered one manually
 
@@ -159,7 +159,7 @@ This is a core rule of strict mode.
 
 ### Primary titles
 
-A title can go into `target_title_patterns` only if:
+A title can go into `primary_job_title_pattern` only if:
 
 - it appears in a current or recent role
 - and it has strong structural evidence

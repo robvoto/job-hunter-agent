@@ -33,7 +33,7 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
@@ -63,7 +63,7 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
 
@@ -84,7 +84,7 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_title_patterns": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
     monkeypatch.setattr(

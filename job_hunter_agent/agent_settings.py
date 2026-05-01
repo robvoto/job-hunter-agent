@@ -52,6 +52,9 @@ DEFAULT_AGENT_SETTINGS = {
     "llm": {
         "model": "gpt-4o-mini",
     },
+    "scraping": {
+        "max_pages_hard_limit": 25,
+    },
 }
 
 
@@ -122,6 +125,12 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
         "last_update_id": max(0, int(telegram.get("last_update_id", 0) or 0)),
         "subscribers": normalized_subscribers,
     }
+
+    scraping = settings.get("scraping", {})
+    settings["scraping"] = {
+        "max_pages_hard_limit": max(1, int(scraping.get("max_pages_hard_limit", 25) or 25)),
+    }
+
     return settings
 
 

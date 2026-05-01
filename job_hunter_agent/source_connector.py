@@ -112,7 +112,6 @@ REPEATED_LISTING_MIN_TIMES_SEEN = 4
 REPEATED_LISTING_MIN_SPAN_DAYS = 21
 MULTI_LISTING_RED_FLAG_MIN_LISTINGS = 3
 MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = 30
-REVIEWED_SIGNAL_MATCH_SCORE_CAP = 4
 
 KEEP_SNAPSHOT_FIELDS = (
     "title",
@@ -2058,13 +2057,6 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     if evidence_score:
         breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
 
-    reviewed_signal_match_count = len(reviewed_signal_matches["matched"])
-    if reviewed_signal_match_count:
-        breakdown.append({
-            "label": "Reviewed signal matches",
-            "value": weighted_points(min(reviewed_signal_match_count, REVIEWED_SIGNAL_MATCH_SCORE_CAP), weights["fit"]),
-        })
-
     convergence_entry = convergence_bonus_entry(record, capability_matches, active_profile)
     if convergence_entry:
         breakdown.append({
@@ -3386,6 +3378,10 @@ def _seek_scrape_to_records(
                 classification_ids = ",".join(search_target.get("classification_ids", []))
                 current_page_num = 1
 
+                print(f"Location: {search_location}")
+                print(f"Keywords: {search_keywords}")
+                print(f"classification_ids: {classification_ids}")
+                
                 while current_page_num <= configured_max_pages:
                     page_url = set_page_param(base_search_url, current_page_num) if current_page_num > 1 else base_search_url
 
@@ -3410,66 +3406,13 @@ def _seek_scrape_to_records(
                         break
 
                     page_has_fresh_card = False
-
+                    
                     for card in job_cards:
-                        title = ""
-                        company = "N/A"
-                        record = {
-                            "run_started_at": run_iso,
-                            "search_location": search_location,
-                            "search_keywords": search_keywords,
-                            "search_classifications": classification_ids,
-                            "page": current_page_num,
-                            "source": "seek",
-                            "job_key": None,
-                            "title": "",
-                            "company": company,
-                            "posted": "N/A",
-                            "posted_age_days": None,
-                            "url": None,
-                            "salary": "N/A",
-                            "location": "N/A",
-                            "work_mode": "N/A",
-                            "work_type": "N/A",
-                            "teaser": "N/A",
-                            "decision": "REJECT",
-                            "reject_reason": None,
-                            "title_reason": None,
-                            "content_reason": None,
-                            "llm_decision": None,
-                            "llm_fit_grade": None,
-                            "role_snapshot": "N/A",
-                            "fit_highlights": [],
-                            "soft_risk_reasons": [],
-                            "missing_evidence": [],
-                            "competitive_signals": [],
-                            "details_length": 0,
-                        }
-
                         try:
-                            title_el = card.query_selector(SELECTOR_TITLE)
-                            company_el = card.query_selector(SELECTOR_COMPANY)
-                            posted_el = card.query_selector(SELECTOR_POSTED)
-                            card_meta = extract_card_metadata(card)
-                            card_text = (card.inner_text() or "").strip()
-
-                            title = title_el.inner_text().strip() if title_el else ""
-                            company = company_el.inner_text().strip() if company_el else "N/A"
-                            posted = posted_el.inner_text().strip() if posted_el else ""
-                            if not posted:
-                                posted = extract_posted_text_from_card(card_text)
-                            posted = normalize_posted_text(posted)
-                            posted_age_days = parse_seek_posted_age_days(posted)
-                            record.update({
-                                "title": title,
-                                "company": company,
-                                "posted": posted,
-                                "posted_age_days": posted_age_days,
-                                "location": card_meta["location"],
-                                "work_mode": card_meta["work_mode"],
-                                "work_type": card_meta["work_type"],
-                                "teaser": card_meta["teaser"],
-                            })
+                            record = _extract_seek_card_data(card, search_target, run_iso)
+                            record["page"] = current_page_num
+                            title, company = record["title"], record["company"]
+                            posted_age_days = record["posted_age_days"]
 
                             if posted_age_days is None or posted_age_days <= configured_date_range:
                                 page_has_fresh_card = True
@@ -3482,216 +3425,75 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            relative_url = title_el.get_attribute("href") if title_el else None
-                            full_url = build_full_seek_url(relative_url)
-                            record["url"] = full_url
-                            record["job_key"] = stable_job_key(full_url)
-                            if not full_url:
+                            if not record["url"]:
                                 print(f"REJECTED (card) [NO_URL] {title} @ {company}")
                                 record["reject_reason"] = "NO_URL"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if record["job_key"] in applied_job_keys:
+                            job_key = record["job_key"]
+                            if job_key in applied_job_keys:
                                 print(f"SKIP (applied) {title} @ {company}")
-                                record["decision"] = "SKIP"
-                                record["reject_reason"] = "ALREADY_APPLIED"
+                                record.update({"decision": "SKIP", "reject_reason": "ALREADY_APPLIED"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if record["job_key"] in hidden_job_keys:
+                            if job_key in hidden_job_keys:
                                 print(f"SKIP (hidden) {title} @ {company}")
-                                record["decision"] = "SKIP"
-                                record["reject_reason"] = "MANUALLY_HIDDEN"
+                                record.update({"decision": "SKIP", "reject_reason": "MANUALLY_HIDDEN"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if (
-                                enforce_posted_age_limit
-                                and posted_age_days is not None
-                                and posted_age_days > configured_date_range
-                            ):
-                                print(
-                                    f"REJECTED (posted) [POSTED_TOO_OLD:{configured_date_range}] "
-                                    f"{title} @ {company} | {posted}"
-                                )
+                            if enforce_posted_age_limit and posted_age_days is not None and posted_age_days > configured_date_range:
+                                print(f"REJECTED (posted) [POSTED_TOO_OLD:{configured_date_range}] {title} @ {company}")
                                 record["reject_reason"] = f"POSTED_TOO_OLD:{configured_date_range}"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if full_url in seen_urls:
+                            if record["url"] in seen_urls:
                                 print(f"SKIP (duplicate) {title} @ {company}")
-                                record["decision"] = "SKIP"
-                                record["reject_reason"] = "DUPLICATE_URL"
+                                record.update({"decision": "SKIP", "reject_reason": "DUPLICATE_URL"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
-                            seen_urls.add(full_url)
+                            seen_urls.add(record["url"])
 
                             if not SKIP_QUICK_CARD_GATE_FOR_TESTING:
-                                ok_card, card_reason = passes_quick_card_filters(
-                                    title=title,
-                                    teaser=card_meta["teaser"],
-                                    company=company,
-                                    location=record["location"],
-                                    work_mode=record["work_mode"],
-                                    work_type=record["work_type"],
-                                    salary=card_meta["card_salary"],
-                                )
+                                ok_card, card_reason = passes_quick_card_filters(title=title, teaser=record["teaser"], company=company, location=record["location"], work_mode=record["work_mode"], work_type=record["work_type"], salary=record.get("card_salary", "N/A"))
                                 if not ok_card:
                                     print(f"REJECTED (card gate) [{card_reason}] {title} @ {company}")
                                     record["reject_reason"] = card_reason
                                     finalize_record(job_history, audit_rows, record, run_iso)
                                     continue
 
-                            history_entry = job_history.get(record["job_key"] or "", {})
+                            history_entry = job_history.get(job_key or "", {})
                             if can_reuse_kept_job(history_entry, record, profile):
                                 record = apply_kept_job_reuse(record, history_entry)
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 kept_records.append(record)
-                                print(
-                                    f"KEPT (history reuse): {title} @ {company} | {posted} | "
-                                    f"{record['location']} | {record['work_type']} | {record['salary']}"
-                                )
+                                print(f"KEPT (history reuse): {title} @ {company}")
                                 continue
 
-                            details_payload = fetch_job_details_payload(detail_page, full_url)
-                            details_text = str(details_payload.get("text") or "")
-                            details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
-                            record["details_status"] = details_status
-                            record["details_length"] = len(details_text)
-                            if details_status != "ok" or not details_text:
-                                reject_reason = {
-                                    "challenge_page": "DETAILS_CHALLENGE_PAGE",
-                                    "blocked_page": "DETAILS_BLOCKED_PAGE",
-                                    "navigation_error": "DETAILS_NAVIGATION_ERROR",
-                                    "empty": "NO_DETAILS",
-                                }.get(details_status, "NO_DETAILS")
-                                print(f"REJECTED (details) [{reject_reason}] {title} @ {company} | {full_url}")
+                            ok_details, reject_reason = _process_seek_job_details(record, detail_page, profile, title_reason)
+                            if not ok_details:
+                                print(f"REJECTED (details/content) [{reject_reason}] {title} @ {company}")
                                 record["reject_reason"] = reject_reason
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
-                            record["fit_source_text"] = details_text
-                            record["full_description"] = details_text
-                            record["description_source"] = details_payload.get("source") or "jobAdDetails"
-                            source = str(record.get("description_source") or "").strip().lower()
-                            is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
-                            record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
 
-                            ok_desc, desc_reason = passes_content_filters(
-                                details_text,
-                                record["location"],
-                                record.get("title_reason", ""),
-                            )
-                            record["content_reason"] = desc_reason
-                            if not ok_desc:
-                                print(f"REJECTED (content) [{desc_reason}] {title} @ {company}")
-                                record["reject_reason"] = desc_reason
+                            fit_eval = _evaluate_job_fit(record, profile, llm_cache)
+                            record.update(fit_eval)
+                            
+                            if record["decision"] == "REJECT":
+                                print(f"REJECTED ({record['review_source']}) {title} @ {company}")
+                                record["reject_reason"] = "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
-                            ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
-                            if not ok_learned:
-                                record["content_reason"] = learned_reason
-                                record["reject_reason"] = learned_reason
-                                print(f"REJECTED (learned rule) [{learned_reason}] {title} @ {company}")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            record["competitive_signals"] = [
-                                evaluate_competitive_signal_alignment(signal, profile)
-                                for signal in detect_competitive_signals(details_text, profile)
-                            ]
-                            hard_block_matches = hard_block_entries(
-                                {
-                                    "fit_source_text": details_text,
-                                    "competitive_signals": record.get("competitive_signals"),
-                                },
-                                profile,
-                            )
-                            record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
-                            if record["hard_block_reasons"]:
-                                hard_block_category = hard_block_matches[0].get("category") or "hard_block"
-                                record["content_reason"] = f"DESC_HARD_BLOCK:{hard_block_category}"
-                                record["reject_reason"] = record["content_reason"]
-                                print(
-                                    f"REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | "
-                                    f"{'; '.join(record['hard_block_reasons'])}"
-                                )
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            salary = extract_salary(details_text)
-                            if salary == "N/A":
-                                salary = card_meta["card_salary"]
-                            record["salary"] = salary
-                            detail_work_mode = extract_work_mode(details_text)
-                            if detail_work_mode != "N/A":
-                                record["work_mode"] = detail_work_mode
-                            record["role_snapshot"] = build_role_summary(record, details_text, profile)
-                            record["fit_highlights"] = build_fit_highlights(record, details_text, profile)
-                            record["soft_risk_reasons"], record["missing_evidence"] = build_risk_and_missing_evidence(
-                                details_text,
-                                title_reason,
-                                profile,
-                                competitive_signals=record.get("competitive_signals") if isinstance(record.get("competitive_signals"), list) else None,
-                            )
-
-                            deterministic_review = deterministic_review_outcome(
-                                record,
-                                record["fit_highlights"],
-                                record["missing_evidence"],
-                                record["soft_risk_reasons"],
-                            )
-                            if deterministic_review is not None:
-                                llm_review = deterministic_review
-                                review_source = "rule"
-                                print(f"[REVIEW][RULE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                            else:
-                                llm_input_text = details_text[:MAX_LLM_CHARS]
-                                llm_fp = build_llm_cache_key(llm_input_text)
-
-                                if NO_LLM_MODE:
-                                    llm_review = normalize_llm_review(None)
-                                    review_source = "no_llm_flag"
-                                    print(f"[REVIEW][NO_LLM_FLAG] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                                elif not llm_is_enabled():
-                                    llm_review = normalize_llm_review(None)
-                                    review_source = "disabled"
-                                    print(f"[REVIEW][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                                elif llm_fp in llm_cache:
-                                    llm_review = normalize_llm_review(llm_cache[llm_fp])
-                                    review_source = "cache"
-                                    print(f"[REVIEW][CACHE] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                                else:
-                                    llm_review = normalize_llm_review(llm_should_consider(llm_input_text))
-                                    llm_cache[llm_fp] = llm_review
-                                    review_source = "llm"
-                                    print(f"[REVIEW][LLM] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-
-                            record["llm_decision"] = llm_review["decision"]
-                            record["llm_fit_grade"] = llm_review["grade"]
-                            record["review_source"] = review_source
-                            if SHOW_SCORES_MODE:
-                                test_score_breakdown = fit_score_breakdown(record, profile)
-                                print(
-                                    f"[TEST][SCORE] {title} @ {company} | "
-                                    f"{fit_score(record, profile)}/100 | "
-                                    f"{format_score_breakdown_for_console(test_score_breakdown)}"
-                                )
-                            if review_source == "rule" and llm_review["decision"] == "REJECT":
-                                print(f"REJECTED (deterministic) [DET_REJECT] {title} @ {company}")
-                                record["reject_reason"] = "DET_REJECT"
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-                            record["decision"] = "KEEP"
-                            skill_observations.extend(extract_skill_observations(record, details_text, profile))
-
+                            
+                            skill_observations.extend(extract_skill_observations(record, record["full_description"], profile))
                             finalize_record(job_history, audit_rows, record, run_iso)
                             kept_records.append(record)
-                            print(
-                                f"KEPT: {title} @ {company} | {posted} | "
-                                f"{record['location']} | {record['work_type']} | {salary} | "
-                                f"{'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}"
-                            )
+                            print(f"KEPT: {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
+
                         except Exception as exc:
                             record["reject_reason"] = f"CARD_EXCEPTION:{type(exc).__name__}"
                             print(f"REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}")

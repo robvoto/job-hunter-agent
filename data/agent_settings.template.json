@@ -1,4 +1,5 @@
 {
+  "_help": "Template file with default values for agent settings. Used for initialization only.",
   "dashboard_url": "http://127.0.0.1:8765/dashboard",
   "schedule": {
     "daily_time_local": "08:30",

@@ -16,9 +16,10 @@ from collections import defaultdict
 from typing import Any
 
 from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases
-from job_hunter_agent.signal_registry import register_signals
+
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
+    _cap_log,
     _normalize_token,
     _normalize_phrase,
     _parse_role_entries,
@@ -439,12 +440,13 @@ def run_cv_pipeline(
     candidates = _rename_top_clusters(candidates, llm_client=llm_client)
     output = _build_output(candidates, total_roles=len(roles), onboarding_settings=onboarding_settings)
 
-    register_signals([r["name"] for r in output.get("dominant_signal_clusters", [])])
-
-    print(
+    dominant = output.get("dominant_signal_clusters", [])
+    _cap_log(
         f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "
         f"{len(clusters)} clusters -> {len(candidates)} candidates -> "
-        f"{len(output.get('capability_profile_rules', []))} cap rules, "
-        f"{len(output.get('dominant_signal_clusters', []))} dominant clusters"
+        f"0 cap rules (deterministic path suppressed), "
+        f"{len(dominant)} dominant signal clusters (evidence/review only)"
     )
+    if dominant:
+        _cap_log(f"[CV_PIPELINE] dominant signal names: {[r['name'] for r in dominant]}")
     return _strip_internal_keys(output)

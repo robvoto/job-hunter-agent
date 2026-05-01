@@ -3,7 +3,7 @@
   "name": "scoring_rules",
   "version": 1,
   "updated_at": "2026-04-29",
-  "description": "Managed scoring rules used for fit scoring, freshness, salary adjustments, and preference bonuses.",
+  "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "fit_breakdown": {
     "hard_block_penalty": -100,
     "title_direct": 15,

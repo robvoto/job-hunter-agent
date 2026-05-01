@@ -20,6 +20,7 @@ const reviewCapabilityCountEl = document.getElementById('review_capability_count
 const salaryYearlyBlock = document.getElementById('salary_yearly_block');
 const salaryDailyBlock = document.getElementById('salary_daily_block');
 const createProfileButton = document.getElementById('create_profile');
+const stepNavButtons = Array.from(document.querySelectorAll('[data-step-nav]'));
 const onbTestPanel = document.getElementById('onb_test_panel');
 const onbTestTrigger = document.getElementById('onb_test_trigger');
 const onbTestMenu = document.getElementById('onb_test_menu');
@@ -47,6 +48,41 @@ let reviewCapabilityRules = [];
 let selectedLocations = [];
 let selectedReviewCapabilityIndexes = new Set();
 let reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+let maxUnlockedStep = 1;
+
+function hasDraftProfileState() {
+  return Boolean(
+    lastImportPayload
+    || reviewTargetTitles.length
+    || reviewSecondaryTitles.length
+    || reviewCapabilityRules.length
+  );
+}
+
+function hasSearchBasicsState() {
+  return Boolean(
+    hasDraftProfileState()
+    && (
+      selectedLocations.length
+      || String(document.getElementById('review_search_keywords')?.value || '').trim()
+    )
+  );
+}
+
+function refreshStepNavigation() {
+  const unlockedStep = Math.max(
+    1,
+    maxUnlockedStep,
+    hasDraftProfileState() ? REVIEW_STEP : 1,
+    hasSearchBasicsState() ? SEARCH_STEP : 1,
+  );
+  maxUnlockedStep = Math.min(STEP_COUNT, unlockedStep);
+  stepNavButtons.forEach((button) => {
+    const step = Number(button.dataset.stepNav || 0);
+    button.disabled = !step || step > maxUnlockedStep;
+    button.setAttribute('aria-current', step === currentStep ? 'step' : 'false');
+  });
+}
 
 function setTestMenuOpen(open) {
   if (!onbTestMenu || !onbTestTrigger) {
@@ -86,21 +122,24 @@ function resetOnboardingWizardState() {
   reviewCapabilityRules = [];
   selectedReviewCapabilityIndexes.clear();
   reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+  maxUnlockedStep = 1;
   window.sessionStorage.removeItem(WIZARD_STATE_KEY);
   const filterInput = document.getElementById('review_capability_filter');
   if (filterInput) filterInput.value = '';
   const reviewCards = document.getElementById('review_capability_cards');
   if (reviewCards) reviewCards.innerHTML = '';
+  refreshStepNavigation();
 }
 
 function saveWizardState() {
-  if (currentStep < 2) {
+  if (currentStep < 2 && !hasDraftProfileState()) {
     window.sessionStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
   const engagementInput = document.querySelector('input[name="engagement_pref"]:checked');
   window.sessionStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: currentStep,
+    maxUnlockedStep,
     reviewTargetTitles,
     reviewSecondaryTitles,
     reviewCapabilityRules,
@@ -118,10 +157,15 @@ function restoreWizardState() {
     const raw = window.sessionStorage.getItem(WIZARD_STATE_KEY);
     if (!raw) return false;
     const state = JSON.parse(raw);
-    if (!state || state.step < 2) return false;
+    const savedTargets = Array.isArray(state?.reviewTargetTitles) ? state.reviewTargetTitles : [];
+    const savedSecondary = Array.isArray(state?.reviewSecondaryTitles) ? state.reviewSecondaryTitles : [];
+    const savedCapabilities = Array.isArray(state?.reviewCapabilityRules) ? state.reviewCapabilityRules : [];
+    const hasSavedDraft = Boolean(savedTargets.length || savedSecondary.length || savedCapabilities.length);
+    if (!state || (!hasSavedDraft && state.step < 2)) return false;
     reviewTargetTitles = state.reviewTargetTitles || [];
     reviewSecondaryTitles = state.reviewSecondaryTitles || [];
     reviewCapabilityRules = state.reviewCapabilityRules || [];
+    maxUnlockedStep = Math.max(1, Math.min(STEP_COUNT, Number(state.maxUnlockedStep) || 1));
     reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0
       ? Number(state.reviewCapabilityVisibleCount)
       : INITIAL_CAPABILITY_VISIBLE_COUNT;
@@ -278,7 +322,12 @@ function setStep(stepNumber, options = {}) {
     workflowSummaryEl.style.display = isDetailStep ? 'none' : '';
   }
 
-  if (formTitleEl) formTitleEl.textContent = `Step 1. ${stepMeta[1].title()}`;
+  if (stepNumber === 1 && preservedPrimaryCvFile) {
+    restorePrimaryCvSelection(preservedPrimaryCvFile);
+    updatePrimaryCvStatus(preservedPrimaryCvFile);
+  }
+
+  if (formTitleEl) formTitleEl.textContent = `Step ${stepNumber}. ${meta.title()}`;
   const percent = Math.round((stepNumber / STEP_COUNT) * 100);
   if (progressFillEl) {
     progressFillEl.style.width = `${percent}%`;
@@ -288,6 +337,8 @@ function setStep(stepNumber, options = {}) {
     el.classList.toggle('is-active', s === stepNumber);
     el.classList.toggle('is-complete', s < stepNumber);
   });
+  refreshStepNavigation();
+  updateCreateProfileAvailability();
 
   if (persist) {
     saveWizardState();
@@ -497,6 +548,7 @@ function assignPrimaryCvFile(file) {
   preservedPrimaryCvFile = file;
   updatePrimaryCvStatus(file);
   updateCreateProfileAvailability();
+  refreshStepNavigation();
 }
 
 function handlePrimaryCvDrop(event) {
@@ -713,7 +765,8 @@ function renderReviewCapabilities() {
     .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
     .filter((item) => {
       if (!filterTerm) return true;
-      return item.rule.name.toLowerCase().includes(filterTerm);
+      return item.rule.name.toLowerCase().includes(filterTerm)
+        || item.rule.aliases.some((alias) => alias.includes(filterTerm));
     });
   const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, reviewCapabilityVisibleCount);
   const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
@@ -724,6 +777,13 @@ function renderReviewCapabilities() {
   }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    const aliasHtml = rule.aliases.length && isTestMode
+      ? `
+        <div class="review-capability-aliases capability-aliases test-only" aria-label="Background keywords">
+          ${rule.aliases.map((alias) => `<span class="review-capability-alias alias-tag">${escapeHtml(patternToLabel(alias) || alias)}</span>`).join('')}
+        </div>
+      `
+      : '';
     const selectedClass = selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
     return `
       <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
@@ -732,6 +792,7 @@ function renderReviewCapabilities() {
             <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
             <span class="review-capability-selected-badge" aria-hidden="true">Selected</span>
           </span>
+          ${aliasHtml}
         </div>
         <div class="review-capability-actions" role="group" aria-label="Actions for ${escapeHtml(titleCaseName || 'capability')}">
           <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}" aria-label="Remove ${escapeHtml(titleCaseName || 'capability')}" title="Remove ${escapeHtml(titleCaseName || 'capability')}">
@@ -783,7 +844,7 @@ function renderReviewStep() {
 }
 
 function hydrateDraftStep(profile) {
-  reviewTargetTitles = dedupeReviewList(profile?.target_title_patterns || []);
+  reviewTargetTitles = dedupeReviewList(profile?.primary_job_title_pattern || []);
   reviewSecondaryTitles = dedupeReviewList(profile?.secondary_title_patterns || []);
   reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
   selectedReviewCapabilityIndexes.clear();
@@ -793,8 +854,8 @@ function hydrateDraftStep(profile) {
 
 function buildCompletionRedirectState(payload, searchPrefs) {
   const profile = payload?.profile || {};
-  const targets = Array.isArray(profile.target_title_patterns)
-    ? profile.target_title_patterns.slice(0, 4).map((value) => String(value || '').trim()).filter(Boolean)
+  const targets = Array.isArray(profile.primary_job_title_pattern)
+    ? profile.primary_job_title_pattern.slice(0, 4).map((value) => String(value || '').trim()).filter(Boolean)
     : [];
   const locations = Array.isArray(searchPrefs?.locations)
     ? searchPrefs.locations.map((value) => String(value || '').trim()).filter(Boolean)
@@ -852,6 +913,7 @@ async function createProfile() {
   }
 
   lastImportPayload = payload;
+  maxUnlockedStep = Math.max(maxUnlockedStep, REVIEW_STEP);
   hydrateDraftStep(payload.profile || {});
   hydrateSearchBasics(payload.profile || {});
   setStep(REVIEW_STEP);
@@ -867,6 +929,7 @@ function continueFromReview() {
   if (!reviewTargetTitles.length) {
     throw new Error('Please keep at least one target title before continuing.');
   }
+  maxUnlockedStep = Math.max(maxUnlockedStep, SEARCH_STEP);
   renderReviewStep();
   setStep(SEARCH_STEP);
   showStatus('', '');
@@ -875,6 +938,7 @@ function continueFromReview() {
 function continueFromSearchBasics() {
   const searchPrefs = searchPreferencesPayload();
   validateSearchPreferences(searchPrefs);
+  maxUnlockedStep = Math.max(maxUnlockedStep, CHECK_STEP);
   updateCheckStep();
   setStep(CHECK_STEP);
   showStatus('', '');
@@ -896,7 +960,7 @@ async function finishSetup() {
       engagement_type: searchPrefs.engagement_type,
       minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
       minimum_daily_rate: searchPrefs.minimum_daily_rate,
-      target_title_patterns: reviewTargetTitles,
+      primary_job_title_pattern: reviewTargetTitles,
       secondary_title_patterns: reviewSecondaryTitles,
       capability_profile_rules: reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
     }),
@@ -1045,13 +1109,26 @@ document.getElementById('confirm_review').addEventListener('click', async (event
   }
 });
 
-document.getElementById('back_to_upload').addEventListener('click', () => setStep(1));
-document.getElementById('back_to_review').addEventListener('click', () => setStep(REVIEW_STEP));
+document.getElementById('back_to_upload_footer').addEventListener('click', () => setStep(1));
 document.getElementById('back_to_review_footer').addEventListener('click', () => setStep(REVIEW_STEP));
-document.getElementById('back_to_search_basics').addEventListener('click', () => setStep(SEARCH_STEP));
 document.getElementById('back_to_search_basics_footer').addEventListener('click', () => setStep(SEARCH_STEP));
 document.getElementById('edit_draft_profile').addEventListener('click', () => setStep(REVIEW_STEP));
 document.getElementById('edit_search_basics').addEventListener('click', () => setStep(SEARCH_STEP));
+stepNavButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (button.disabled) return;
+    const targetStep = Number(button.dataset.stepNav || 0);
+    if (!targetStep || targetStep === currentStep) return;
+    setStep(targetStep);
+  });
+});
+document.querySelector('.wizard-progress-steps')?.addEventListener('click', (event) => {
+  const trigger = event.target.closest('[data-step-nav]');
+  if (!trigger || trigger.disabled) return;
+  const targetStep = Number(trigger.dataset.stepNav || 0);
+  if (!targetStep || targetStep === currentStep) return;
+  setStep(targetStep);
+});
 
 document.getElementById('review_add_target_title').addEventListener('click', () => {
   const input = document.getElementById('review_target_titles_input');
@@ -1223,6 +1300,8 @@ loadProfileDefaults().catch(() => {});
 if (!restoreWizardState()) {
   setStep(1, { scroll: false });
 }
+refreshStepNavigation();
+updatePrimaryCvStatus(primaryCvInput?.files?.[0] || preservedPrimaryCvFile || null);
 updateCreateProfileAvailability();
 updateCompensationVisibility();
 addSalaryInfoIcons();

@@ -135,7 +135,7 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
         filters,
         "load_profile",
         lambda: {
-            "target_title_patterns": [r"\bbusiness\ analyst\b"],
+            "primary_job_title_patterns": [r"\bbusiness\ analyst\b"],
             "secondary_title_patterns": [],
             "reject_title_rules": [],
         },

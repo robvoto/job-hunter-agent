@@ -251,7 +251,7 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
     }
 
 
-def test_fit_score_breakdown_adds_positive_reviewed_signal_matches_only(monkeypatch):
+def test_fit_score_breakdown_does_not_score_reviewed_signal_matches(monkeypatch):
     monkeypatch.setattr(
         source_connector,
         "load_registry",
@@ -282,7 +282,7 @@ def test_fit_score_breakdown_adds_positive_reviewed_signal_matches_only(monkeypa
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Reviewed signal matches") == 1
+    assert _breakdown_value(breakdown, "Reviewed signal matches") is None
 
 
 def test_fit_score_evidence_ignores_display_only_fit_highlights():

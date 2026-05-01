@@ -28,7 +28,7 @@
         <button class="nav-item" type="button" data-section="section-matrix">Capability Matrix</button>
         <button class="nav-item" type="button" data-section="section-rules">Rules</button>
         <button class="nav-item" type="button" data-section="section-alerts">Alerts &amp; AI</button>
-        <button class="nav-item" type="button" data-section="section-signals">Signals</button>
+        <button class="nav-item" type="button" data-section="section-signals">Learning</button>
         <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise">Optimise</button>
       </div>
       <a href="/" class="nav-item-back">View Dashboard</a>
@@ -92,8 +92,8 @@
               </select>
 
               <label for="max_pages_cap">Max pages to check</label>
-              <input id="max_pages_cap" type="number" min="1" max="25">
-              <div class="help">A hard cap of 25 pages is always enforced.</div>
+              <input id="max_pages_cap" type="number" min="1">
+              <div class="help">Pages checked per search per location. Ceiling is set in agent_settings.json → scraping.max_pages_hard_limit (default 25).</div>
 
               <label for="enforce_posted_age_limit">Strictly reject older ads</label>
               <select id="enforce_posted_age_limit">
@@ -139,11 +139,7 @@
               <div class="search-operations-grid">
                 <section class="search-operation-card">
                   <h3>Manual run</h3>
-                  <p>Use this when you want fresh results immediately with the current settings on this page.</p>
-                  <div class="search-operation-status">
-                    <span class="status-pill idle" id="run_status_pill">Checking status...</span>
-                    <div class="help" id="run_last_run">Checking whether a search is running...</div>
-                  </div>
+                  <p>Use this when you want fresh results immediately with the current settings on this page. The search may take several minutes depending on your configuration</p>
                   <div class="panel-actions search-operation-actions">
                     <button class="primary" id="run_now" type="button">Run Search Now</button>
                   </div>
@@ -328,15 +324,15 @@
             <section class="subpanel">
               <h3>Title Matching</h3>
               <div class="field-help" style="margin-bottom:12px;">Primary job titles are your clearest role directions. Secondary job titles can still fit, but they should need stronger evidence before a job feels like a match.</div>
-              <label for="target_title_patterns_add">Primary Job Titles</label>
-              <div class="badge-editor" data-chip-editor="target_title_patterns">
-                <div id="target_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
+              <label for="primary_job_title_pattern_add">Primary Job Titles</label>
+              <div class="badge-editor" data-chip-editor="primary_job_title_pattern">
+                <div id="primary_job_title_pattern_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
-                  <input id="target_title_patterns_add" type="text" data-chip-input="target_title_patterns" placeholder="Add a title">
-                  <button class="secondary" type="button" data-add-chip="target_title_patterns">Add</button>
+                  <input id="primary_job_title_pattern_add" type="text" data-chip-input="primary_job_title_pattern" placeholder="Add a title">
+                  <button class="secondary" type="button" data-add-chip="primary_job_title_pattern">Add</button>
                 </div>
               </div>
-              <textarea id="target_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <textarea id="primary_job_title_pattern" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <div class="field-help">Jobs with these titles should count as direct hits.</div>
 
               <label for="adjacent_title_patterns_add">Secondary job titles</label>
@@ -456,9 +452,9 @@
         </section>
 
         <section id="section-signals" class="settings-group">
-          <h2 class="section-title">Signal Review</h2>
+          <h2 class="section-title">Learning Review</h2>
           <div id="signal_registry_panel">
-            <p class="help">Select "Signals" in the sidebar to load.</p>
+            <p class="help">Select "Learning" in the sidebar to load.</p>
           </div>
         </section>
 

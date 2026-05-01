@@ -143,16 +143,42 @@
     }
 
     .panel {
-      border: 1px solid var(--border-subtle) !important;
+      border: 1px solid #E5E7EB !important;
       box-shadow: var(--shadow-soft) !important;
       border-radius: var(--radius-lg) !important;
+    }
+
+    button {
+      border-radius: 8px !important;
     }
 
     button.primary {
       background-color: var(--accent) !important;
       border-color: var(--accent-hover) !important;
       color: var(--button-text) !important;
-      transition: background-color 0.2s ease;
+      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="search"],
+    select {
+      border: 1px solid #E5E7EB !important;
+      border-radius: 8px !important;
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid var(--accent) !important;
+      outline-offset: 2px !important;
+    }
+
+    .capability-shell {
+      border: 1px solid #E5E7EB !important;
+      border-radius: 8px !important;
     }
 
     button.primary:hover {
@@ -192,13 +218,37 @@
     }
 
     .wizard-progress-step {
+      min-width: 0;
+    }
+
+    .wizard-progress-nav {
+      width: 100%;
       display: flex;
       align-items: center;
       gap: 8px;
-      min-width: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
       color: var(--muted);
+      font: inherit;
       font-size: 0.84rem;
       font-weight: 600;
+      text-align: left;
+    }
+
+    .wizard-progress-nav:not(:disabled) {
+      cursor: pointer;
+    }
+
+    .wizard-progress-nav:disabled {
+      cursor: default;
+    }
+
+    .wizard-progress-nav:not(:disabled):hover .wizard-progress-label,
+    .wizard-progress-nav:not(:disabled):focus-visible .wizard-progress-label {
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
 
     .wizard-progress-dot {
@@ -356,10 +406,26 @@
               </div>
             </div>
             <ol class="wizard-progress-steps">
-              <li class="wizard-progress-step is-active"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Upload CV</span></li>
-              <li class="wizard-progress-step"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Review Draft</span></li>
-              <li class="wizard-progress-step"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Search Basics</span></li>
-              <li class="wizard-progress-step"><span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Check Setup</span></li>
+              <li class="wizard-progress-step is-active">
+                <button class="wizard-progress-nav" type="button" data-step-nav="1">
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Upload CV</span>
+                </button>
+              </li>
+              <li class="wizard-progress-step">
+                <button class="wizard-progress-nav" type="button" data-step-nav="2">
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Review Draft</span>
+                </button>
+              </li>
+              <li class="wizard-progress-step">
+                <button class="wizard-progress-nav" type="button" data-step-nav="3">
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Search Basics</span>
+                </button>
+              </li>
+              <li class="wizard-progress-step">
+                <button class="wizard-progress-nav" type="button" data-step-nav="4">
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Check Setup</span>
+                </button>
+              </li>
             </ol>
           </div>
         </div>
@@ -493,7 +559,6 @@
         </section>
 
         <section class="wizard-step" data-step="2" hidden>
-          <button class="back-link" id="back_to_upload" type="button">Back</button>
           <h2>Review Draft Profile</h2>
           <p class="section-copy">Check the job titles and capabilities Job Hunter learned from your CV. Fix the role direction before you move on to search basics.</p>
 
@@ -528,19 +593,19 @@
             </div>
             <div id="review_capability_cards" class="review-capability-list"></div>
             <div class="actions">
+              <button class="secondary" id="back_to_upload_footer" type="button">Back</button>
               <button class="primary" id="continue_to_search_basics" type="button">Continue</button>
             </div>
           </section>
         </section>
 
         <section class="wizard-step" data-step="3" hidden>
-          <button class="back-link" id="back_to_review" type="button">Back</button>
           <h2>Set Search Basics</h2>
           <p class="section-copy">Set the minimum information Job Hunter needs to search safely and score roles in the right direction.</p>
 
-          <label for="review_search_keywords">Primary search title</label>
+          <label for="review_search_keywords">Search titles</label>
           <input id="review_search_keywords" type="text" placeholder="We will prefill this from your CV when possible">
-          <div class="help">Use one clear role title for searches. You can keep the extracted one or replace it with the direction you actually want.</div>
+          <div class="help">If you work across more than one role type, separate them with a comma — e.g. Senior Business Analyst, Scrum Master. Each title will be searched using OR.</div>
 
           <label for="location_search">Where should we search?</label>
           <div class="location-picker">
@@ -584,7 +649,6 @@
         </section>
 
         <section class="wizard-step" data-step="4" hidden>
-          <button class="back-link" id="back_to_search_basics" type="button">Back</button>
           <h2>Check Your Setup</h2>
           <p class="section-copy">Make sure this looks right. When you finish, onboarding is complete and Settings will unlock.</p>
 

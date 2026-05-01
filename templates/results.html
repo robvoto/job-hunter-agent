@@ -1513,10 +1513,6 @@
 
           <section class="snapshot-section">
             <h2 class="snapshot-heading">Search Operations</h2>
-            <div class="search-status-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-              <span class="snapshot-meta-label">Status</span>
-              <span class="search-status-pill is-idle" id="run_status_pill" title="Background scraper status">Idle</span>
-            </div>
             <button class="search-button search-button-primary" style="width: 100%;" type="button" id="run_now_button">Run Search Now</button>
             <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
             <p class="snapshot-helper" style="margin-top: 10px;">Daily automation schedule and notification targets are configured in the <a href="/settings" target="_blank">Settings Console</a>.</p>
@@ -1658,16 +1654,6 @@
       searchSettingsMessage.classList.toggle('is-error', Boolean(isError && message));
     }
 
-    function setRunStatusPill(status) {
-      if (!runStatusPill) {
-        return;
-      }
-      const isRunning = status === 'running';
-      runStatusPill.textContent = isRunning ? 'Running...' : 'Idle';
-      runStatusPill.classList.toggle('is-running', isRunning);
-      runStatusPill.classList.toggle('is-idle', !isRunning);
-    }
-
     function renderSearchSettingsReadonly(settings) {
       const normalized = normalizeSearchSettingsInput(settings);
       if (searchKeywordsCurrent) {
@@ -1734,7 +1720,7 @@
         }
         const payload = await response.json().catch(() => ({}));
         const isRunning = payload?.status === 'running';
-        setRunStatusPill(isRunning ? 'running' : 'idle');
+        
         if (runNowButton) {
           runNowButton.disabled = isRunning;
         }
@@ -1779,7 +1765,6 @@
         }
 
         renderSearchSettingsReadonly(searchSettings);
-        setRunStatusPill('running');
         runStatusWasRunning = true;
         startRunStatusPolling();
         if (payload?.status === 'running') {
@@ -1788,7 +1773,6 @@
           setSearchSettingsMessage('Scrape started. The dashboard will reload when it finishes.');
         }
       } catch (error) {
-        setRunStatusPill('idle');
         setSearchSettingsMessage(error.message || 'Could not start scrape.', true);
       } finally {
         if (searchSettingsToggleButton) {
@@ -2492,7 +2476,6 @@
 
     renderSearchSettingsReadonly(INITIAL_SEARCH_SETTINGS);
     renderSearchSettingsForm(INITIAL_SEARCH_SETTINGS);
-    setRunStatusPill('idle');
     loadDashboardFilters();
     syncRunStatus();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);

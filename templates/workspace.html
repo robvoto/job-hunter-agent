@@ -144,8 +144,7 @@
       opacity: 0.6;
       cursor: not-allowed;
     }
-    .ws-btn.is-working::before,
-    .ws-status-pill.is-running::before {
+    .ws-btn.is-working::before {
       content: "";
       width: 12px;
       height: 12px;
@@ -156,22 +155,7 @@
       opacity: 0.55;
       flex: 0 0 auto;
     }
-    .ws-status-pill {
-      font-size: 0.8rem;
-      font-weight: 700;
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid #d1d5db;
-      color: #4b5563;
-      background: #f3f4f6;
-      white-space: nowrap;
-    }
-    .ws-status-pill.is-running {
-      background: #dcfce7;
-      color: #166534;
-      border-color: #86efac;
-    }
-    .ws-flash-mount {
+.ws-flash-mount {
       padding: 16px 22px 0;
     }
     .ws-flash-card {
@@ -381,7 +365,6 @@
       </div>
       <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
       <div class="ws-run-group">
-        <span class="ws-status-pill" id="ws_status_pill">Loading...</span>
         <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
       </div>
     </div>
@@ -392,7 +375,6 @@
   </div>
 
   <script>
-    const wsStatusPill = document.getElementById('ws_status_pill');
     const wsRunBtn = document.getElementById('ws_run_btn');
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const resultsMount = document.getElementById('results-mount');
@@ -573,17 +555,7 @@
       }
     }
 
-    function updateStatusPill(status, lastRunAt) {
-      if (status === 'running') {
-        wsStatusPill.textContent = '\u25cf Search running\u2026';
-        wsStatusPill.className = 'ws-status-pill is-running';
-      } else {
-        wsStatusPill.textContent = lastRunAt ? 'Search ready' : 'Never run yet';
-        wsStatusPill.className = 'ws-status-pill';
-      }
-    }
-
-    if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
+if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
       wsTestPanel.hidden = false;
 
       wsTestTrigger.addEventListener('click', () => {
@@ -644,8 +616,7 @@
       try {
         const resp = await fetch('/api/run-status');
         const data = await resp.json();
-        updateStatusPill(data.status, data.last_run_at);
-        return data.status;
+        return data.status === 'running' ? 'running' : 'idle';
       } catch {
         return 'idle';
       }
@@ -698,7 +669,6 @@
           body: '{}',
         });
         const data = await resp.json();
-        updateStatusPill('running', data.last_run_at);
         wsRunBtn.textContent = '\u25cf Search running\u2026';
         wsRunBtn.classList.remove('is-working');
         startRunPolling();

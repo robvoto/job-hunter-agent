@@ -289,7 +289,7 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
 
 def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
     current = profile if isinstance(profile, dict) else load_profile()
-    target_titles = [str(value).strip() for value in current.get("target_title_patterns", []) if str(value).strip()]
+    target_titles = [str(value).strip() for value in current.get("primary_job_title_pattern", []) if str(value).strip()]
     search_settings = normalize_search_settings(current.get("search_settings", {}))
     locations = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     keywords = str(search_settings.get("keywords") or "").strip()
@@ -309,7 +309,7 @@ def _run_scrape_job() -> None:
 class SettingsHandler(BaseHTTPRequestHandler):
     MATCHING_RULE_PROFILE_KEYS = {
         "capability_profile_rules",
-        "target_title_patterns",
+        "primary_job_title_pattern",
         "secondary_title_patterns",
         "must_not_require_skills",
         "reject_title_rules",
@@ -1862,7 +1862,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
         if self.path == "/api/onboarding/confirm-profile-signals":
             try:
                 payload = self._read_json_body()
-                target = [str(p).strip() for p in payload.get("target_title_patterns", []) if str(p).strip()]
+                target = [str(p).strip() for p in payload.get("primary_job_title_pattern", []) if str(p).strip()]
                 secondary = [str(p).strip() for p in payload.get("secondary_title_patterns", []) if str(p).strip()]
                 keyword = str(payload.get("search_keyword") or "").strip()
                 locations = [str(value).strip() for value in payload.get("search_locations", []) if str(value).strip()]
@@ -1894,7 +1894,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 except Exception as exc:
                     raise ValueError("Minimum contract daily rate must be a whole number.") from exc
                 profile_patch: dict = {
-                    "target_title_patterns": target,
+                    "primary_job_title_pattern": target,
                     "secondary_title_patterns": secondary,
                 }
                 if capability_rules:

@@ -714,6 +714,27 @@ button,
   word-break: break-word;
 }
 
+.review-capability-aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.review-capability-alias {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
 .review-capability-selected-badge {
   display: none;
   align-items: center;

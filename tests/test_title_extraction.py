@@ -37,7 +37,7 @@ def test_extract_year_range_defaults_to_full_year_when_months_missing():
 def test_extract_title_pattern_suggestions_returns_llm_patterns():
     fixture = {
         "capabilities": [],
-        "target_title_patterns": ["senior devops engineer", "devops engineer"],
+        "primary_job_title_pattern": ["senior devops engineer", "devops engineer"],
         "secondary_title_patterns": ["technical consultant"],
         "suggested_search_keywords": ["devops", "cloud infrastructure"],
         "match_preferences": {},
@@ -45,7 +45,7 @@ def test_extract_title_pattern_suggestions_returns_llm_patterns():
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
         result = extract_title_pattern_suggestions("some cv", {"extraction_lookback_years": 8})
 
-    assert "senior devops engineer" in result["target_title_patterns"]
+    assert "senior devops engineer" in result["primary_job_title_pattern"]
     assert "technical consultant" in result["secondary_title_patterns"]
 
 
@@ -54,7 +54,7 @@ def test_extract_title_pattern_suggestions_empty_when_llm_returns_nothing():
         result = extract_title_pattern_suggestions("some cv")
 
     assert result == {
-        "target_title_patterns": [],
+        "primary_job_title_pattern": [],
         "secondary_title_patterns": [],
         "suggested_search_keywords": [],
     }
@@ -62,7 +62,7 @@ def test_extract_title_pattern_suggestions_empty_when_llm_returns_nothing():
 
 def test_extract_title_pattern_suggestions_respects_max_target_patterns():
     fixture = {
-        "target_title_patterns": ["a", "b", "c", "d", "e"],
+        "primary_job_title_pattern": ["a", "b", "c", "d", "e"],
         "secondary_title_patterns": ["x", "y"],
         "suggested_search_keywords": [],
         "capabilities": [],
@@ -71,7 +71,7 @@ def test_extract_title_pattern_suggestions_respects_max_target_patterns():
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
         result = extract_title_pattern_suggestions("cv", {"max_target_patterns": 2, "max_secondary_patterns": 1})
 
-    assert len(result["target_title_patterns"]) <= 2
+    assert len(result["primary_job_title_pattern"]) <= 2
     assert len(result["secondary_title_patterns"]) <= 1
 
 
