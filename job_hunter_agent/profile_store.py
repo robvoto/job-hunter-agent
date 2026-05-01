@@ -17,12 +17,19 @@ from typing import Any
 
 from job_hunter_agent.agent_settings import load_agent_settings
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
-from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
+from job_hunter_agent.paths import (
+    DATA_DIR,
+    FIT_REVIEW_DEFAULTS_PATH,
+    HARD_BLOCKER_KINDS_PATH,
+    LLM_CAPABILITY_NAMING_DEFAULTS_PATH,
+    LLM_COSTS_PATH,
+    PROFILE_PATH,
+    REPO_ROOT,
+    SCORING_RULES_PATH,
+)
 
 
-ROOT_DIR = REPO_ROOT
-PROFILE_PATH = DATA_DIR / "profile.json"
-SCORING_RULES_PATH = DATA_DIR / "scoring_rules.json"
+ROOT_DIR = REPO_ROOT 
 MIN_DATE_RANGE_DAYS = 1
 MAX_DATE_RANGE_DAYS = 30
 MIN_PAGES_CAP = 1
@@ -503,8 +510,8 @@ def load_profile() -> dict[str, Any]:
     fallback["primary_job_title_pattern"] = normalize_multiline_string_list(
         fallback.get("primary_job_title_pattern", [])
     )
-    fallback["adjacent_title_patterns"] = normalize_multiline_string_list(
-        fallback.get("adjacent_title_patterns", [])
+    fallback["secondary_title_patterns"] = normalize_multiline_string_list(
+        fallback.get("secondary_title_patterns", [])
     )
     fallback["must_not_require_skills"] = normalize_multiline_string_list(
         fallback.get("must_not_require_skills", [])
@@ -545,8 +552,8 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized["primary_job_title_pattern"] = normalize_multiline_string_list(
         normalized.get("primary_job_title_pattern", [])
     )
-    normalized["adjacent_title_patterns"] = normalize_multiline_string_list(
-        normalized.get("adjacent_title_patterns", [])
+    normalized["secondary_title_patterns"] = normalize_multiline_string_list(
+        normalized.get("secondary_title_patterns", [])
     )
     normalized["must_not_require_skills"] = normalize_multiline_string_list(
         normalized.get("must_not_require_skills", [])

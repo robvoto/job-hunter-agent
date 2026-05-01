@@ -8,10 +8,8 @@ decision unchanged.
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
-
-_REGISTRY_PATH = Path(__file__).parent.parent / "data" / "signal_registry.json"
+from job_hunter_agent.paths import SIGNAL_REGISTRY_PATH as _REGISTRY_PATH
 
 
 def _now_iso() -> str:
@@ -99,56 +97,81 @@ def register_signals(signal_names: list[str], source: str = "system") -> None:
     if changed:
         save_registry(registry)
 
+VALID_LEARNING_STATUSES = {"review", "approved", "ignored"}
 
-_VALID_DECISIONS = {"use", "ignore", "evidence_only", "review"}
+VALID_SIGNAL_CATEGORIES = {
+    "government_context",
+    "capability_concept",
+    "role_title_token",
+    "generic_noise",
+}
+
+CATEGORY_TARGET_FILES = {
+    "government_context": "government_context_knowledge.json",
+    "capability_concept": "capability_knowledge.json",
+    "role_title_token": "role_title_knowledge.json",
+    "generic_noise": "",
+} 
 _VALID_SCOPES = {"global", "role_specific", "domain_specific"}
 
 
 def update_signal(
     key: str,
-    decision: str,
-    scope: str = "global",
-    notes: str = "",
-    source: str = "user",
+    learning_status: str,
+    suggested_category: str = "",
+    scope: str = "",
+    target_file: str = "",
+    notes: str = "", 
 ) -> dict[str, Any] | None:
-    """Update decision, scope, and notes for a registered signal.
-
-    Returns the updated record, or None if the key is not found.
-    Raises ValueError for invalid decision or scope values.
-    Appends a history entry on every update.
-    """
+    """Update learning review metadata for a registered signal."""
     key = str(key or "").strip().lower()
-    decision = str(decision or "").strip()
-    scope = str(scope or "global").strip()
+    learning_status = str(learning_status or "").strip()
+    suggested_category = str(suggested_category or "").strip()
+    target_file = str(target_file or "").strip()
     notes = str(notes or "").strip()
+
     if not key:
         return None
-    if decision not in _VALID_DECISIONS:
-        raise ValueError(f"Invalid decision '{decision}'. Must be one of: {sorted(_VALID_DECISIONS)}")
-    if scope not in _VALID_SCOPES:
-        raise ValueError(f"Invalid scope '{scope}'. Must be one of: {sorted(_VALID_SCOPES)}")
+
+    if learning_status not in VALID_LEARNING_STATUSES:
+      raise ValueError(f"Invalid learning_status '{learning_status}'.")
+
+    if suggested_category and suggested_category not in VALID_SIGNAL_CATEGORIES:
+      raise ValueError(f"Invalid suggested_category '{suggested_category}'.")
+
+    expected_target = CATEGORY_TARGET_FILES.get(suggested_category, "")
+    if target_file != expected_target:
+      raise ValueError(
+        f"Invalid target_file '{target_file}' for category '{suggested_category}'."
+    )
+
     registry = load_registry()
     record = registry.get(key)
     if record is None:
         return None
-    record["decision"] = decision
-    record["scope"] = scope
+
+    record["learning_status"] = learning_status 
+    record["suggested_category"] = suggested_category
+    record["target_file"] = target_file
     record["notes"] = notes
-    record["needs_review"] = decision == "review"
+    record["needs_review"] = learning_status == "review"
+
     record.setdefault("history", []).append({
-        "decision": decision,
-        "source": source,
+        "learning_status": learning_status,
+        "suggested_category": suggested_category,
+        "target_file": target_file,
+        "scope": scope, 
         "timestamp": _now_iso(),
         "notes": notes,
     })
+
     save_registry(registry)
     return record
 
-
-def get_decision(signal_name: str) -> str:
-    """Return the registry decision for a signal, defaulting to 'review'."""
+def get_learning_status(signal_name: str) -> str:
+    """Return the registry learning status for a signal, defaulting to 'review'."""
     key = str(signal_name or "").strip().lower()
     if not key:
         return "review"
     record = load_registry().get(key)
-    return str(record.get("decision", "review")) if record else "review"
+    return str(record.get("learning_status", "review")) if record else "review"

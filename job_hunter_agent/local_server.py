@@ -9,13 +9,32 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from job_hunter_agent.agent_settings import DEFAULT_AGENT_SETTINGS, load_agent_settings, save_agent_settings
-from job_hunter_agent.config import OUTPUT_HTML
+from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
 from job_hunter_agent.filters import build_title_block_rule, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
-from job_hunter_agent.paths import DATA_DIR, DOCS_DIR, OUTPUT_DIR, REPO_ROOT, TEMPLATES_DIR
+from job_hunter_agent.paths import (
+    AUDIT_RECORDS_PATH,
+    DASHBOARD_PATH,
+    DATA_DIR,
+    JOB_HISTORY_PATH,
+    OUTPUT_DIR,
+    REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH,
+    REJECTION_RULES_PATH,
+    REPO_ROOT as ROOT_DIR,
+    REVIEW_DATA_PATH,
+    RUN_STATS_PATH,
+    SETTINGS_HTML_PATH,
+    SHOWCASE_PATH,
+    STATIC_DIR,
+    WORKSPACE_HTML_PATH,
+    ONBOARDING_HTML_PATH,
+)
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS, DEFAULT_PROFILE, load_profile, normalize_capability_rules, normalize_onboarding_settings, normalize_search_settings, patch_profile, save_profile
 from job_hunter_agent.profile_store import build_evidence_tiers_from_sections, get_evidence_tiers
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
@@ -30,22 +49,6 @@ from job_hunter_agent.source_documents import (
     save_source_materials,
 )
 
-
-HOST = "127.0.0.1"
-PORT = 8765
-ROOT_DIR = REPO_ROOT
-AUDIT_RECORDS_PATH = OUTPUT_DIR / "audit_records.json"
-RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
-REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
-JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
-SHOWCASE_PATH = DOCS_DIR / "SHOWCASE.html"
-DASHBOARD_PATH = ROOT_DIR / OUTPUT_HTML
-REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
-WORKSPACE_HTML_PATH = TEMPLATES_DIR / "workspace.html"
-SETTINGS_HTML_PATH = TEMPLATES_DIR / "settings.html"
-ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
-STATIC_DIR = TEMPLATES_DIR / "static"
-REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH = DATA_DIR / "rejection_rule_categories.json"
 _STATIC_MIME_OVERRIDES = {
     ".css": "text/css",
     ".js": "text/javascript",
@@ -1554,18 +1557,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
         if _path == "/api/health":
             self._send_json(200, {"ok": True})
             return
-        if _path == "/api/run-status":
-            last_run = _read_last_run_timestamp()
-            self._send_json(
-                200,
-                {
-                    "ok": True,
-                    "status": "running" if _is_run_in_progress() else "idle",
-                    "last_run_at": last_run,
-                    "has_run": last_run is not None,
-                },
-            )
-            return
         if _path == "/api/run-stats":
             if RUN_STATS_PATH.exists():
                 try:
@@ -1689,57 +1680,72 @@ class SettingsHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_PATCH(self) -> None:
-        if self.path == "/api/signal-registry":
-            try:
-                from job_hunter_agent.signal_registry import update_signal
-                body = self._read_json_body()
-                key = str(body.get("key") or "").strip()
-                decision = str(body.get("decision") or "").strip()
-                scope = str(body.get("scope") or "global").strip()
-                notes = str(body.get("notes") or "").strip()
-                if not key or not decision:
-                    self._send_json(400, {"error": "key and decision are required"})
-                    return
-                updated = update_signal(key, decision, scope, notes)
-                if updated is None:
-                    self._send_json(404, {"error": f"Signal '{key}' not found in registry"})
-                    return
-                self._send_json(200, {"ok": True, "signal": updated})
-            except ValueError as exc:
-                self._send_json(400, {"error": str(exc)})
-            except Exception as exc:
-                self._send_json(400, {"error": str(exc)})
-            return
-
-        if self.path == "/api/agent-settings":
-            try:
-                current = load_agent_settings(create_if_missing=True)
-                patch = self._sanitize_agent_settings_payload(self._read_json_body())
-                telegram_patch = patch.get("telegram", {})
-                if not str(telegram_patch.get("bot_token") or "").strip():
-                    telegram_patch.pop("bot_token", None)
-                current.setdefault("telegram", {}).update(telegram_patch)
-                current.setdefault("llm", {}).update(patch.get("llm", {}))
-                current.setdefault("schedule", {}).update(patch.get("schedule", {}))
-                updated = save_agent_settings(current)
-            except Exception as exc:
-                self._send_json(400, {"error": str(exc)})
-                return
-            self._send_json(200, self._public_agent_settings_payload(updated))
-            return
-        if self.path != "/api/profile":
-            self._send_json(404, {"error": "Not found"})
-            return
+      if self.path == "/api/signal-registry":
         try:
-            current = load_profile()
-            patch = self._normalize_profile_patch_for_save(current, self._read_json_body())
-            updated = patch_profile(patch)
-            if self._patch_affects_matching_rules(patch):
-                self._rebuild_dashboard_after_rule_change("profile matching rules saved")
+            from job_hunter_agent.signal_registry import update_signal
+
+            body = self._read_json_body()
+            key = str(body.get("key") or "").strip()
+            learning_status = str(body.get("learning_status") or "pending").strip()
+            suggested_category = str(body.get("suggested_category") or "").strip()
+            target_file = str(body.get("target_file") or "").strip()
+            scope = str(body.get("scope") or "global").strip()
+            notes = str(body.get("notes") or "").strip()
+
+            if not key:
+                self._send_json(400, {"error": "key is required"})
+                return
+
+            updated = update_signal(
+                key=key,
+                learning_status=learning_status,
+                suggested_category=suggested_category,
+                scope=scope,
+                target_file=target_file,
+                notes=notes, 
+            )
+
+            if updated is None:
+                self._send_json(404, {"error": f"Signal '{key}' not found in registry"})
+                return
+
+            self._send_json(200, {"ok": True, "signal": updated})
+
+        except ValueError as exc:
+            self._send_json(400, {"error": str(exc)})
         except Exception as exc:
             self._send_json(400, {"error": str(exc)})
-            return
-        self._send_json(200, updated)
+        return
+
+      if self.path == "/api/agent-settings":
+          try:
+              current = load_agent_settings(create_if_missing=True)
+              patch = self._sanitize_agent_settings_payload(self._read_json_body())
+              telegram_patch = patch.get("telegram", {})
+              if not str(telegram_patch.get("bot_token") or "").strip():
+                  telegram_patch.pop("bot_token", None)
+              current.setdefault("telegram", {}).update(telegram_patch)
+              current.setdefault("llm", {}).update(patch.get("llm", {}))
+              current.setdefault("schedule", {}).update(patch.get("schedule", {}))
+              updated = save_agent_settings(current)
+          except Exception as exc:
+              self._send_json(400, {"error": str(exc)})
+              return
+          self._send_json(200, self._public_agent_settings_payload(updated))
+          return
+      if self.path != "/api/profile":
+          self._send_json(404, {"error": "Not found"})
+          return
+      try:
+          current = load_profile()
+          patch = self._normalize_profile_patch_for_save(current, self._read_json_body())
+          updated = patch_profile(patch)
+          if self._patch_affects_matching_rules(patch):
+              self._rebuild_dashboard_after_rule_change("profile matching rules saved")
+      except Exception as exc:
+          self._send_json(400, {"error": str(exc)})
+          return
+      self._send_json(200, updated)
 
     def do_PUT(self) -> None:
         if self.path == "/api/profile":

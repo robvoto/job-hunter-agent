@@ -21,9 +21,14 @@ from typing import Any, Dict
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from job_hunter_agent.agent_settings import load_agent_settings
+from job_hunter_agent.agent_settings import load_agent_settings, DEFAULT_AGENT_SETTINGS
 from job_hunter_agent.profile_store import (
     DATA_DIR,
+    FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
+    HARD_BLOCKER_KINDS_PATH as _HARD_BLOCKER_KINDS_PATH,
+    LLM_CAPABILITY_NAMING_DEFAULTS_PATH as _CAPABILITY_NAMING_DEFAULTS_PATH,
+    LLM_COSTS_PATH as _LLM_COSTS_PATH,
+    PROFILE_PATH as _PROFILE_PATH,
     get_evidence_tiers,
     get_evidence_tier_weights,
     load_profile,
@@ -39,14 +44,14 @@ MAX_TOKENS_REJECTION_SUGGESTIONS = 300
 # Cheap-llm flag: mirrors the same argv check in source_connector
 _CHEAP_LLM_MODE = "--cheap-llm" in sys.argv
 
-_PROFILE_PATH = DATA_DIR / "profile.json"
-_HARD_BLOCKER_KINDS_PATH = DATA_DIR / "hard_blocker_kinds.json"
-_FIT_REVIEW_DEFAULTS_PATH = DATA_DIR / "llm_fit_review_defaults.json"
-_CAPABILITY_NAMING_DEFAULTS_PATH = DATA_DIR / "llm_capability_naming_defaults.json"
+# Model configuration
+MODEL_CHEAP = "gpt-4o-mini"
+MODEL_FALLBACK = DEFAULT_AGENT_SETTINGS["llm"]["model"]
+
+
 _profile_fingerprint_cache: str | None = None
 
 # Cost logging --------------------------------------------------------
-_LLM_COSTS_PATH = DATA_DIR / "llm_costs.jsonl"
 _PRICING_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
     "gpt-4o-mini-2024-07-18":  {"input": 0.15,  "output": 0.60},
@@ -107,12 +112,12 @@ def _profile_fingerprint() -> str:
 
 
 def _get_llm_model() -> str:
-    """Return the configured model, falling back to gpt-4.1-mini.
-    In cheap-llm mode uses gpt-4o-mini to reduce cost when evaluating more jobs.
+    """Return the configured model, falling back to MODEL_FALLBACK.
+    In cheap-llm mode uses MODEL_CHEAP to reduce cost when evaluating more jobs.
     """
     if _CHEAP_LLM_MODE:
-        return "gpt-4o-mini"
-    return load_agent_settings().get("llm", {}).get("model", "gpt-4.1-mini")
+        return MODEL_CHEAP
+    return load_agent_settings().get("llm", {}).get("model", MODEL_FALLBACK)
 
 
 _llm_model_logged = False

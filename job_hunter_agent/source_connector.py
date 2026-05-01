@@ -65,7 +65,19 @@ from job_hunter_agent.scrapers.seek import (
     stable_job_key,
     build_full_seek_url,
 )
-from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT, TEMPLATES_DIR
+from job_hunter_agent.paths import (
+    AUDIT_RECORDS_PATH as DEBUG_JSON_PATH,
+    DATA_DIR,
+    GOVERNMENT_CONTEXT_KNOWLEDGE_PATH as _GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
+    JOB_HISTORY_PATH,
+    LLM_CACHE_PATH,
+    OUTPUT_DIR,
+    REPO_ROOT as ROOT_DIR,
+    RESULTS_TEMPLATE_PATH,
+    REVIEW_DATA_PATH,
+    RUN_STATS_PATH,
+    TEMPLATES_DIR,
+)
 from job_hunter_agent.utils import (
     extract_salary,
     extract_work_mode,
@@ -75,12 +87,9 @@ from job_hunter_agent.utils import (
 )
 
 
-ROOT_DIR = REPO_ROOT
-RESULTS_TEMPLATE_PATH = TEMPLATES_DIR / "results.html"
 MAX_LLM_CHARS = 3000
 ARCHIVE_STALE_AFTER_DAYS = 15
 HIDDEN_REVIEW_DAYS = 30
-AUTO_REFRESH_SECONDS = 60
 CLI_FLAGS = set(sys.argv[1:])
 _max_pages_arg = next((sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--max-pages"), None)
 CLI_MAX_PAGES_CAP = int(_max_pages_arg) if _max_pages_arg and _max_pages_arg.isdigit() else None
@@ -96,11 +105,6 @@ SHOW_SCORES_MODE = "--show-scores" in CLI_FLAGS or DASHBOARD_DEBUG_MODE
 SHOW_SCORING_DEBUG = SHOW_SCORES_MODE
 DASHBOARD_MIN_SCORE = 35 if EXPANDED_POOL_MODE else 50
 DEFAULT_SCORE_FILTER_MIN = DASHBOARD_MIN_SCORE
-LLM_CACHE_PATH = DATA_DIR / "llm_cache.json"
-DEBUG_JSON_PATH = OUTPUT_DIR / "audit_records.json"
-JOB_HISTORY_PATH = DATA_DIR / "job_history.json"
-RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
-REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
 MIN_TRUSTED_DESCRIPTION_LENGTH = 600
 TRUSTED_DESCRIPTION_SOURCES = frozenset({"jobaddetails", "body", "linkedin_full_description"})
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
@@ -534,10 +538,6 @@ def build_role_summary(record: dict, details_text: str, profile: Optional[dict] 
 def friendly_capability_label(name: str) -> str:
     normalized = compact_whitespace(name).lower()
     return normalized[:1].upper() + normalized[1:] if normalized else ""
-
-
-_GOVERNMENT_CONTEXT_KNOWLEDGE_PATH = DATA_DIR / "government_context_knowledge.json"
-
 
 def _load_government_context_knowledge() -> tuple[tuple[str, ...], tuple[str, ...]]:
     payload = load_json_dict(_GOVERNMENT_CONTEXT_KNOWLEDGE_PATH)
@@ -2919,7 +2919,7 @@ def render_job_card(
             '</div>'
             '</div>'
             '<span class="block-status" aria-live="polite"></span>'
-            if (not applied_record and not hidden_record and _block_phrases_list) else ""
+            if (not applied_record and not hidden_record and _block_phrases_list) else "" 
         )
         + f'<div class="job-company">{company}</div>'
         '</div>'
@@ -3067,11 +3067,11 @@ def render_html(
         target_summaries.append(f"{location}: pages {page_label}")
     testing_mode_notes = []
     if LOW_SCRAPE_MODE:
-        testing_mode_notes.append(f"Scrape allow-low mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better.")
+        testing_mode_notes.append(f"Scrape allow-low mode is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(scoring_profile))} or better.")
     elif DASHBOARD_DEBUG_MODE:
-        testing_mode_notes.append(f"Dashboard debug mode is on, showing scores and keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better without a fresh scrape.")
+        testing_mode_notes.append(f"Dashboard debug mode is on, showing scores and keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(scoring_profile))} or better without a fresh scrape.")
     elif EXPAND_DASHBOARD_MODE:
-        testing_mode_notes.append(f"Expanded dashboard view is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better without a fresh scrape.")
+        testing_mode_notes.append(f"Expanded dashboard view is on, keeping roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(scoring_profile))} or better without a fresh scrape.")
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         testing_mode_notes.append("Viewed history has been reset, so all roles are shown as unseen.")
         
@@ -3098,7 +3098,7 @@ def render_html(
     li_results = scoring_profile.get("search_settings", {}).get("linkedin_results_per_search", 25)
     
     view_history_text = "treats all roles as New To You" if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "preserves your viewed history"
-    snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(active_profile))} or better and {view_history_text}."
+    snapshot_helper = f"Shortlist currently keeps roles at {score_to_match_label(DASHBOARD_MIN_SCORE, get_match_levels(scoring_profile))} or better and {view_history_text}."
     hero_summary = (
         f"Last run {run_label} - {run_stats.get('cards_seen', 0)} cards scanned, "
         f"{len(shortlist_records)} shortlist matches shown"
@@ -3182,7 +3182,7 @@ def render_html(
             "SNAPSHOT_HELPER": safe_html(snapshot_helper),
             "TESTING_MODE_NOTE": safe_html(testing_mode_note),
             "TOP_REJECT_REASONS_HTML": top_reject_reasons_html,
-            "MATCH_LEVEL_GUIDE_HTML": _render_match_level_guide_html(active_profile),
+            "MATCH_LEVEL_GUIDE_HTML": _render_match_level_guide_html(scoring_profile),
             "DASHBOARD_RUN_ID_JSON": json.dumps(dashboard_run_id),
             "SEARCH_SETTINGS_JSON": search_settings_json,
             "DEFAULT_SCORE_FILTER_MIN_JSON": json.dumps(str(DEFAULT_SCORE_FILTER_MIN)),

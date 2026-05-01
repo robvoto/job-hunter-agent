@@ -1,7 +1,6 @@
 
     const statusEl = document.getElementById('status');
     const isTestMode = document.body?.dataset.testMode === 'true';
-    const runLastRunEl = document.getElementById('run_last_run');
     const runNowButton = document.getElementById('run_now');
     const rebuildProfileButton = document.getElementById('rebuild_profile');
     const capabilityUi = window.JobHunterCapabilityUi || {};
@@ -10,8 +9,6 @@
     let loadedProfile = null;
     let capabilityRuleState = [];
     let expandedCapabilityRows = new Set();
-    let runStatusPollHandle = null;
-    let lastObservedRunStatus = 'idle';
     let suppressDirtyTracking = true;
     let statusHideTimer = null;
     document.querySelectorAll('[data-test-only]').forEach((element) => {
@@ -643,53 +640,11 @@
       renderRunStats(stats);
     }
   
-    async function checkRunStatus() {
-      try {
-        const resp = await fetch('/api/run-status');
-        const data = await resp.json();
-        const normalized = data.status === 'running' ? 'running' : 'idle';
-        lastObservedRunStatus = normalized;
-        if (runStatusPillEl) {
-          runStatusPillEl.textContent = normalized === 'running' ? 'Running...' : 'Idle';
-          runStatusPillEl.className = `status-pill ${normalized}`;
-        }
-        if (runLastRunEl && data.last_run_at) {
-          runLastRunEl.textContent = `Last run: ${data.last_run_at}`;
-        }
-        return normalized;
-      } catch {
-        return 'idle';
-      }
-    }
-
     function setRunButtonState(isRunning) {
       if (!runNowButton) return;
       runNowButton.disabled = Boolean(isRunning);
       runNowButton.classList.toggle('is-working', Boolean(isRunning));
       runNowButton.textContent = isRunning ? 'Run in progress...' : 'Run Search Now';
-    }
-
-    function stopRunPolling() {
-      if (!runStatusPollHandle) return;
-      window.clearInterval(runStatusPollHandle);
-      runStatusPollHandle = null;
-    }
-
-    function startRunPolling() {
-      if (runStatusPollHandle) return;
-      runStatusPollHandle = window.setInterval(async () => {
-        try {
-          const status = await checkRunStatus();
-          if (status === 'running') {
-            setRunButtonState(true);
-            return;
-          }
-          stopRunPolling();
-          setRunButtonState(false);
-          window.location.reload();
-        } catch (_) {
-        }
-      }, 10000);
     }
 
     function escapeHtml(value) {
@@ -900,9 +855,6 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not start run');
-      setRunStatus('running', payload.last_run_at || '');
-      setRunButtonState(true);
-      startRunPolling();
       showStatus('Background run started. Return to results when complete.', 'ok');
       return payload;
     }
@@ -922,12 +874,9 @@
 
     if (runNowButton) {
       runNowButton.addEventListener('click', async () => {
-        setRunButtonState(true);
         try {
           await runSearchNow();
         } catch (error) {
-          stopRunPolling();
-          setRunButtonState(false);
           showStatus(error.message, 'error');
         }
       });
@@ -1254,7 +1203,6 @@
       loadRunStats(),
       loadReviewData(),
     ]).then(() => {
-        setRunButtonState(false);
         initSliders();
         suppressDirtyTracking = false;
         clearDirty();
