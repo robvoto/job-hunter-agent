@@ -260,3 +260,50 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
 
     assert started == [{"daemon": True, "name": "job-hunter-dashboard-rebuild"}]
     assert rebuilds == ["profile matching rules saved; applying saved filters to current dashboard"]
+
+
+def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):
+    saved_profiles = []
+    saved_materials = []
+
+    monkeypatch.setattr(local_server, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
+    monkeypatch.setattr(local_server, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
+    monkeypatch.setattr(local_server, "JOB_HISTORY_PATH", tmp_path / "job_history.json")
+    monkeypatch.setattr(local_server, "REVIEW_DATA_PATH", tmp_path / "review_data.json")
+    monkeypatch.setattr(local_server, "RUN_STATS_PATH", tmp_path / "run_stats.json")
+    monkeypatch.setattr(local_server, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    monkeypatch.setattr(local_server, "REJECTION_RULES_PATH", tmp_path / "rejection_rules.json")
+    monkeypatch.setattr(local_server, "DASHBOARD_PATH", tmp_path / "dashboard.html")
+    monkeypatch.setattr(local_server, "SOURCE_PACK_DIR", tmp_path / "source_pack")
+
+    local_server.SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
+    (local_server.SOURCE_PACK_DIR / "primary_cv.txt").write_text("cv", encoding="utf-8")
+    local_server.DASHBOARD_PATH.write_text("old dashboard", encoding="utf-8")
+
+    result = local_server.SettingsHandler._reset_current_user_state()
+
+    assert result["ok"] is True
+    assert result["redirect_to"] == "/start"
+    assert saved_profiles == [local_server.DEFAULT_PROFILE]
+    assert saved_materials == [local_server.DEFAULT_SOURCE_MATERIALS]
+    assert not local_server.SOURCE_PACK_DIR.exists()
+    assert not local_server.DASHBOARD_PATH.exists()
+    assert local_server.JOB_HISTORY_PATH.read_text(encoding="utf-8").strip() == "{}"
+    assert local_server.REVIEW_DATA_PATH.read_text(encoding="utf-8").strip() == "{}"
+    assert local_server.RUN_STATS_PATH.read_text(encoding="utf-8").strip() == "{}"
+    assert local_server.AUDIT_RECORDS_PATH.read_text(encoding="utf-8").strip() == "[]"
+    assert local_server.REJECTION_RULES_PATH.read_text(encoding="utf-8").strip() == "[]"
+
+
+def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
+    calls = []
+
+    def fake_save_registry(payload):
+        calls.append(payload)
+
+    monkeypatch.setattr("job_hunter_agent.signal_registry.save_registry", fake_save_registry)
+
+    result = local_server.SettingsHandler._reset_global_learning()
+
+    assert result["ok"] is True
+    assert calls == [{}]

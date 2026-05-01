@@ -576,7 +576,7 @@ button,
 }
 
 .review-capability-filter {
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .review-capability-list {
@@ -585,11 +585,20 @@ button,
   margin-top: 14px;
 }
 
+.review-capability-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+#review_capability_cards .review-capability-group,
 .review-capability-group {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  padding: 18px;
+  display: block !important;
+  padding: 0 !important;
+  width: 100% !important;
 }
 
 .review-capability-group-head,
@@ -599,19 +608,28 @@ button,
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .review-capability-group-copy {
-  margin: 10px 0 0;
+  margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.5;
 }
 
+#review_capability_cards .review-capability-toolbar,
 .review-capability-toolbar {
-  display: grid;
-  gap: 10px;
-  margin-top: 16px;
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-muted) 65%, var(--bg-surface));
+  width: 100%;
+  position: sticky;
+  bottom: 16px;
+  z-index: 2;
+  box-shadow: var(--shadow-soft);
 }
 
 .review-capability-toolbar-main {
@@ -625,6 +643,7 @@ button,
 .review-capability-toolbar-copy {
   color: var(--muted);
   font-size: 0.86rem;
+  font-weight: 600;
 }
 
 .review-capability-bulk-actions {
@@ -633,51 +652,58 @@ button,
   gap: 8px;
 }
 
-.review-capability-row-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 4px;
+.review-capability-bulk-actions .secondary {
+  min-height: 38px;
+  padding-inline: 14px;
 }
 
+#review_capability_cards .review-capability-row-list,
+.review-capability-row-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+#review_capability_cards .review-capability-row,
 .review-capability-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  padding: 14px;
+  width: 100%;
+  gap: 10px;
+  padding: 10px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+
+.review-capability-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-soft) 22%, var(--bg-surface));
 }
 
 .review-capability-row.is-selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
-.review-capability-select {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 4px;
-}
-
-.review-capability-select input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 28%, var(--bg-surface));
 }
 
 .review-capability-main {
+  display: grid;
+  gap: 4px;
   min-width: 0;
+  margin: 0;
 }
 
 .review-capability-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .review-capability-title {
@@ -685,6 +711,26 @@ button,
   font-size: 0.98rem;
   line-height: 1.35;
   color: var(--ink);
+  word-break: break-word;
+}
+
+.review-capability-selected-badge {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--button-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.review-capability-row.is-selected .review-capability-selected-badge {
+  display: inline-flex;
 }
 
 .review-capability-state {
@@ -716,41 +762,62 @@ button,
 
 .review-capability-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
   justify-content: flex-end;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  flex: 0 0 auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.review-capability-row:hover .review-capability-actions,
+.review-capability-row:focus-within .review-capability-actions,
+.review-capability-row.is-selected .review-capability-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .review-capability-action {
-  padding: 8px 12px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 0.82rem;
-  font-weight: 700;
+  color: var(--muted);
   cursor: pointer;
 }
 
-.review-capability-action.is-active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg-surface));
+.review-capability-action:hover {
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--bg-surface));
+}
+
+.review-capability-action-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .review-capability-action-danger {
-  color: var(--state-error-text);
-  border-color: var(--state-error-border);
-  background: var(--state-error-bg);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg-muted) 72%, var(--bg-surface));
 }
 
+#review_capability_cards .review-capability-footer,
 .review-capability-footer {
   display: flex;
-  justify-content: center;
-  margin-top: 8px;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  width: 100%;
 }
 
-.review-capability-strength,
 .review-capability-count {
   display: inline-flex;
   align-items: center;
@@ -765,40 +832,17 @@ button,
   font-weight: 700;
 }
 
-.review-capability-strength-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: currentColor;
-  flex: 0 0 auto;
+.review-capability-count.is-selected {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-subtle));
 }
 
-.review-capability-strength-strong {
-  color: var(--state-success-text);
-}
-
-.review-capability-strength-working {
-  color: var(--state-info-text);
-}
-
-.review-capability-strength-basic {
-  color: #92400e;
-}
-
-.review-capability-strength-low {
-  color: #b91c1c;
-}
-
-.review-capability-debug {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.review-capability-debug summary {
-  cursor: pointer;
+.review-capability-footer-link {
+  background: transparent;
+  border: 0;
   color: var(--accent-2);
-  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 [data-theme="dark-professional"] .review-capability-group {
@@ -807,34 +851,22 @@ button,
   border-color: rgba(88, 166, 255, 0.16);
 }
 
-[data-theme="dark-professional"] .review-capability-group-head h4,
-[data-theme="dark-professional"] .review-capability-debug > summary {
+[data-theme="dark-professional"] .review-capability-group-head h4 {
   color: var(--text-primary);
 }
 
 [data-theme="dark-professional"] .chip-item-subtle,
 [data-theme="dark-professional"] .review-capability-count,
-[data-theme="dark-professional"] .review-capability-strength,
 [data-theme="dark-professional"] .review-capability-state {
   background: rgba(28, 33, 40, 0.9);
   border-color: rgba(249, 115, 22, 0.28);
   color: var(--text-primary);
 }
 
-[data-theme="dark-professional"] .review-capability-strength-strong {
-  color: var(--state-success-text);
-}
-
-[data-theme="dark-professional"] .review-capability-strength-working {
-  color: var(--state-info-text);
-}
-
-[data-theme="dark-professional"] .review-capability-strength-basic {
-  color: #f7b267;
-}
-
-[data-theme="dark-professional"] .review-capability-strength-low {
-  color: #ff9b8a;
+[data-theme="dark-professional"] .review-capability-toolbar,
+[data-theme="dark-professional"] .review-capability-actions {
+  background: rgba(18, 23, 30, 0.92);
+  border-color: rgba(88, 166, 255, 0.16);
 }
 
 .location-picker {
@@ -971,15 +1003,21 @@ button,
   }
 
   .review-capability-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
   }
 
-  .review-capability-select {
-    justify-content: flex-start;
-    padding-top: 0;
+  .review-capability-topbar {
+    align-items: stretch;
   }
 
   .review-capability-actions {
     justify-content: flex-start;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .review-capability-main {
+    align-items: flex-start;
   }
 }

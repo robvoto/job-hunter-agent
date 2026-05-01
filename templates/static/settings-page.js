@@ -238,7 +238,7 @@
     }
 
     const chipEditors = {
-      primary_job_title_patterns: { kind: 'list', listId: 'primary_job_title_patterns_chips', inputId: 'primary_job_title_patterns_add', emptyText: 'No target titles yet.' },
+      primary_job_title_patterns: { kind: 'list', listId: 'primary_job_title_patterns_chips', inputId: 'primary_job_title_patterns_add', emptyText: 'No job primary titles yet.' },
       secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
       reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },

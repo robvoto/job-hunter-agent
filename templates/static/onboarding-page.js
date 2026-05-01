@@ -1,5 +1,4 @@
 const statusEl = document.getElementById('status');
-const isTestMode = document.body?.dataset.testMode === 'true';
 const urlParams = new URLSearchParams(window.location.search);
 const isRebuildMode = urlParams.get('mode') === 'rebuild';
 const stepEls = Array.from(document.querySelectorAll('.wizard-step'));
@@ -17,16 +16,26 @@ const addLocationButton = document.getElementById('add_location');
 const locationSuggestions = document.getElementById('location_suggestions');
 const locationQuickPicks = document.getElementById('location_quick_picks');
 const locationSelected = document.getElementById('location_selected');
+const reviewCapabilityCountEl = document.getElementById('review_capability_count');
 const salaryYearlyBlock = document.getElementById('salary_yearly_block');
 const salaryDailyBlock = document.getElementById('salary_daily_block');
 const createProfileButton = document.getElementById('create_profile');
-const capabilityUi = window.JobHunterCapabilityUi || {};
-const reviewCapabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
+const onbTestPanel = document.getElementById('onb_test_panel');
+const onbTestTrigger = document.getElementById('onb_test_trigger');
+const onbTestMenu = document.getElementById('onb_test_menu');
+const onbResetUserBtn = document.getElementById('onb_reset_user_btn');
+const onbResetLearningBtn = document.getElementById('onb_reset_learning_btn');
 const STEP_COUNT = 4;
 const REVIEW_STEP = 2;
 const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
 const COMMON_LOCATION_OPTIONS = [];
+const WIZARD_STATE_KEY = 'jobHunter.onboardingWizard';
+const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
+const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
+const INITIAL_CAPABILITY_VISIBLE_COUNT = 12;
+const CAPABILITY_VISIBLE_INCREMENT = 24;
+const isTestMode = document.body.dataset.testMode === 'true';
 
 let currentStep = 1;
 let workingStatusTimer = null;
@@ -37,19 +46,65 @@ let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
 let selectedLocations = [];
 let selectedReviewCapabilityIndexes = new Set();
-let showAllReviewCapabilities = false;
+let reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+
+function setTestMenuOpen(open) {
+  if (!onbTestMenu || !onbTestTrigger) {
+    return;
+  }
+  onbTestMenu.classList.toggle('is-open', Boolean(open));
+  onbTestTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function clearOnboardingBrowserState() {
+  try {
+    window.sessionStorage.removeItem(WIZARD_STATE_KEY);
+    window.sessionStorage.removeItem(ONBOARDING_WELCOME_KEY);
+  } catch {}
+  try {
+    window.localStorage.removeItem(ONBOARDING_WELCOME_OPT_OUT_KEY);
+  } catch {}
+}
+
+async function postTestAction(path) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Request failed');
+  }
+  return payload;
+}
+
+function resetOnboardingWizardState() {
+  lastImportPayload = null;
+  reviewTargetTitles = [];
+  reviewSecondaryTitles = [];
+  reviewCapabilityRules = [];
+  selectedReviewCapabilityIndexes.clear();
+  reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+  window.sessionStorage.removeItem(WIZARD_STATE_KEY);
+  const filterInput = document.getElementById('review_capability_filter');
+  if (filterInput) filterInput.value = '';
+  const reviewCards = document.getElementById('review_capability_cards');
+  if (reviewCards) reviewCards.innerHTML = '';
+}
 
 function saveWizardState() {
   if (currentStep < 2) {
-    window.sessionStorage.removeItem('jobHunter.onboardingWizard');
+    window.sessionStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
   const engagementInput = document.querySelector('input[name="engagement_pref"]:checked');
-  window.sessionStorage.setItem('jobHunter.onboardingWizard', JSON.stringify({
+  window.sessionStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: currentStep,
     reviewTargetTitles,
     reviewSecondaryTitles,
     reviewCapabilityRules,
+    reviewCapabilityVisibleCount,
     selectedLocations,
     searchKeywords: document.getElementById('review_search_keywords')?.value || '',
     minimumSalaryYearly: document.getElementById('review_minimum_salary_yearly')?.value || '',
@@ -60,15 +115,18 @@ function saveWizardState() {
 
 function restoreWizardState() {
   try {
-    const raw = window.sessionStorage.getItem('jobHunter.onboardingWizard');
+    const raw = window.sessionStorage.getItem(WIZARD_STATE_KEY);
     if (!raw) return false;
     const state = JSON.parse(raw);
     if (!state || state.step < 2) return false;
     reviewTargetTitles = state.reviewTargetTitles || [];
     reviewSecondaryTitles = state.reviewSecondaryTitles || [];
     reviewCapabilityRules = state.reviewCapabilityRules || [];
+    reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0
+      ? Number(state.reviewCapabilityVisibleCount)
+      : INITIAL_CAPABILITY_VISIBLE_COUNT;
+    setStep(state.step, { scroll: false, persist: false });
     setSelectedLocations(state.selectedLocations || []);
-    setStep(state.step);
     renderReviewStep();
     const kwEl = document.getElementById('review_search_keywords');
     if (kwEl) kwEl.value = state.searchKeywords || '';
@@ -79,10 +137,22 @@ function restoreWizardState() {
     const engEl = document.querySelector(`input[name="engagement_pref"][value="${state.engagementType || 'both'}"]`)
       || document.querySelector('input[name="engagement_pref"][value="both"]');
     if (engEl) engEl.checked = true;
+    updateCompensationVisibility();
+    if (state.step >= CHECK_STEP) {
+      updateCheckStep();
+    }
+    saveWizardState();
     return true;
   } catch {
     return false;
   }
+}
+
+function formatExtractionSummary(counts) {
+  const targetTitles = Number(counts?.target_titles || 0);
+  const secondaryTitles = Number(counts?.secondary_titles || 0);
+  const capabilities = Number(counts?.capabilities || 0);
+  return `Fresh onboarding run started. Extracted ${targetTitles} primary title${targetTitles === 1 ? '' : 's'}, ${secondaryTitles} secondary title${secondaryTitles === 1 ? '' : 's'}, and ${capabilities} capabilit${capabilities === 1 ? 'y' : 'ies'} from the current run only.`;
 }
 
 const stepMeta = {
@@ -187,7 +257,8 @@ function restorePrimaryCvSelection(file) {
   primaryCvInput.files = transfer.files;
 }
 
-function setStep(stepNumber) {
+function setStep(stepNumber, options = {}) {
+  const { scroll = true, persist = true } = options;
   currentStep = stepNumber;
   stepEls.forEach((el) => {
     const step = Number(el.dataset.step);
@@ -218,7 +289,12 @@ function setStep(stepNumber) {
     el.classList.toggle('is-complete', s < stepNumber);
   });
 
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (persist) {
+    saveWizardState();
+  }
+  if (scroll) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 function normalizeLocationValue(value) {
@@ -269,6 +345,7 @@ function setSelectedLocations(values) {
   }
   selectedLocations = deduped;
   renderSelectedLocations();
+  saveWizardState();
 }
 
 function addLocation(value) {
@@ -290,12 +367,14 @@ function addLocation(value) {
   locationInput.value = '';
   showStatus('', '');
   renderSelectedLocations();
+  saveWizardState();
 }
 
 function removeLocation(value) {
   const key = locationKey(value);
   selectedLocations = selectedLocations.filter((item) => locationKey(item) !== key);
   renderSelectedLocations();
+  saveWizardState();
 }
 
 async function fileToPayload(file, label) {
@@ -481,14 +560,7 @@ function normalizeReviewAlias(value) {
 
 function normalizeReviewCapability(rule) {
   const name = normalizeReviewText(rule?.name || '');
-  const rawLevel = String(rule?.level || 'working').trim().toLowerCase();
-  const level = rawLevel === 'strong'
-    ? 'strong'
-    : rawLevel === 'working'
-      ? 'working'
-      : rawLevel === 'low'
-        ? 'low'
-      : 'basic';
+  const level = normalizeReviewText(rule?.level || '').toLowerCase();
   const aliases = [];
   const seen = new Set();
   for (const alias of Array.isArray(rule?.aliases) ? rule.aliases : []) {
@@ -497,7 +569,7 @@ function normalizeReviewCapability(rule) {
     seen.add(cleaned);
     aliases.push(cleaned);
   }
-  return { name, level, aliases, needs_review: Boolean(rule?.needs_review) };
+  return { name, level, aliases };
 }
 
 function dedupeReviewList(values) {
@@ -568,14 +640,6 @@ function hydrateSearchBasics(profile) {
   updateCompensationVisibility();
 }
 
-function updateReviewCapability(index, patch) {
-  if (!reviewCapabilityRules[index]) return;
-  reviewCapabilityRules[index] = {
-    ...reviewCapabilityRules[index],
-    ...patch,
-  };
-}
-
 function removeReviewCapability(index) {
   reviewCapabilityRules.splice(index, 1);
   selectedReviewCapabilityIndexes = new Set(
@@ -583,22 +647,13 @@ function removeReviewCapability(index) {
       .filter((value) => value !== index)
       .map((value) => (value > index ? value - 1 : value))
   );
+  reviewCapabilityVisibleCount = Math.max(reviewCapabilityVisibleCount - 1, INITIAL_CAPABILITY_VISIBLE_COUNT);
 }
 
 function applyReviewCapabilityAction(index, action) {
   if (!reviewCapabilityRules[index]) return;
   if (action === 'remove') {
     removeReviewCapability(index);
-    renderReviewStep();
-    return;
-  }
-  if (action === 'keep') {
-    const level = reviewCapabilityRules[index].level === 'low' ? 'working' : reviewCapabilityRules[index].level;
-    updateReviewCapability(index, { level, needs_review: false });
-  } else if (action === 'basic') {
-    updateReviewCapability(index, { level: 'basic', needs_review: false });
-  } else if (action === 'review') {
-    updateReviewCapability(index, { needs_review: true });
   }
   renderReviewStep();
 }
@@ -607,17 +662,8 @@ function applyBulkReviewCapabilityAction(action) {
   const selectedIndexes = [...selectedReviewCapabilityIndexes].sort((left, right) => right - left);
   if (!selectedIndexes.length) return;
   for (const index of selectedIndexes) {
-    if (action === 'remove') {
-      removeReviewCapability(index);
-      continue;
-    }
-    if (!reviewCapabilityRules[index]) continue;
-    if (action === 'keep') {
-      const level = reviewCapabilityRules[index].level === 'low' ? 'working' : reviewCapabilityRules[index].level;
-      updateReviewCapability(index, { level, needs_review: false });
-    } else if (action === 'basic') {
-      updateReviewCapability(index, { level: 'basic', needs_review: false });
-    }
+    if (action !== 'remove') continue;
+    removeReviewCapability(index);
   }
   if (action === 'remove') {
     selectedReviewCapabilityIndexes.clear();
@@ -629,14 +675,9 @@ function selectVisibleReviewCapabilities() {
   const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
   const orderedRules = reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
-    .sort((left, right) => {
-      const leftReview = left.rule.needs_review ? 0 : 1;
-      const rightReview = right.rule.needs_review ? 0 : 1;
-      if (leftReview !== rightReview) return leftReview - rightReview;
-      return left.rule.name.localeCompare(right.rule.name);
-    })
+    .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
     .filter((item) => !filterTerm || item.rule.name.toLowerCase().includes(filterTerm));
-  const visibleRules = filterTerm || showAllReviewCapabilities ? orderedRules : orderedRules.slice(0, 12);
+  const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, reviewCapabilityVisibleCount);
   visibleRules.forEach(({ index }) => selectedReviewCapabilityIndexes.add(index));
   renderReviewCapabilities();
 }
@@ -659,64 +700,46 @@ function renderReviewCapabilities() {
   const container = document.getElementById('review_capability_cards');
   if (!container) return;
   if (!reviewCapabilityRules.length) {
+    if (reviewCapabilityCountEl) {
+      reviewCapabilityCountEl.textContent = '0 shown';
+      reviewCapabilityCountEl.classList.remove('is-selected');
+    }
     container.innerHTML = '<div class="chip-empty">No capabilities found yet.</div>';
     return;
   }
   const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
   const orderedRules = reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
-    .sort((left, right) => {
-      const leftReview = left.rule.needs_review ? 0 : 1;
-      const rightReview = right.rule.needs_review ? 0 : 1;
-      if (leftReview !== rightReview) return leftReview - rightReview;
-      const levelRank = { strong: 0, working: 1, basic: 2, low: 3 };
-      const leftLevel = levelRank[left.rule.level] ?? 9;
-      const rightLevel = levelRank[right.rule.level] ?? 9;
-      if (leftLevel !== rightLevel) return leftLevel - rightLevel;
-      return left.rule.name.localeCompare(right.rule.name);
-    })
+    .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
     .filter((item) => {
       if (!filterTerm) return true;
       return item.rule.name.toLowerCase().includes(filterTerm);
     });
-  const visibleRules = filterTerm || showAllReviewCapabilities ? orderedRules : orderedRules.slice(0, 12);
+  const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, reviewCapabilityVisibleCount);
   const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
   const selectedVisibleCount = visibleRules.filter(({ index }) => selectedReviewCapabilityIndexes.has(index)).length;
+  if (reviewCapabilityCountEl) {
+    reviewCapabilityCountEl.textContent = `${visibleRules.length} shown${hiddenCount ? ` of ${orderedRules.length}` : ''}`;
+    reviewCapabilityCountEl.classList.toggle('is-selected', selectedReviewCapabilityIndexes.size > 0);
+  }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    const strengthLabel = reviewCapabilityLevelMeta[rule.level]?.label || 'Intermediate';
-    const reasonText = reviewCapabilityLevelMeta[rule.level]?.summary || '';
     const selectedClass = selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
-    const keepActive = rule.level === 'strong' || rule.level === 'working';
-    const basicActive = rule.level === 'basic';
-    const debugHtml = isTestMode && rule.aliases.length ? `
-      <details class="review-capability-debug capability-aliases">
-        <summary>Debug aliases</summary>
-        <div class="chip-list chip-list-tight">
-          ${rule.aliases.map((alias) => `<span class="chip-item chip-item-subtle alias-tag">${escapeHtml(alias)}</span>`).join('')}
-        </div>
-      </details>
-    ` : '';
     return `
       <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
-        <label class="review-capability-select">
-          <input type="checkbox" data-select-review-capability="${index}" ${selectedReviewCapabilityIndexes.has(index) ? 'checked' : ''} aria-label="Select ${escapeHtml(titleCaseName || 'capability')}">
-        </label>
         <div class="review-capability-main">
-          <div class="review-capability-head">
+          <span class="review-capability-head">
             <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
-            <span class="review-capability-strength review-capability-strength-${escapeHtml(rule.level)}">
-              <span class="review-capability-strength-dot" aria-hidden="true"></span>
-              <span>${escapeHtml(strengthLabel)}</span>
-            </span>
-          </div>
-          ${reasonText ? `<p class="review-capability-copy">${escapeHtml(reasonText)}</p>` : ''}
-          ${debugHtml}
+            <span class="review-capability-selected-badge" aria-hidden="true">Selected</span>
+          </span>
         </div>
-        <div class="review-capability-actions">
-          <button class="review-capability-action${keepActive ? ' is-active' : ''}" type="button" data-review-capability-action="keep" data-review-capability-index="${index}">Keep</button>
-          <button class="review-capability-action${basicActive ? ' is-active' : ''}" type="button" data-review-capability-action="basic" data-review-capability-index="${index}">Mark as basic</button>
-          <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}">Remove</button>
+        <div class="review-capability-actions" role="group" aria-label="Actions for ${escapeHtml(titleCaseName || 'capability')}">
+          <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}" aria-label="Remove ${escapeHtml(titleCaseName || 'capability')}" title="Remove ${escapeHtml(titleCaseName || 'capability')}">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-action-icon">
+              <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 10h2v8H7v-8Zm1 11h8a2 2 0 0 0 2-2V8H6v11a2 2 0 0 0 2 2Z" fill="currentColor"/>
+            </svg>
+            <span class="sr-only">Remove</span>
+          </button>
         </div>
       </article>
     `;
@@ -724,30 +747,27 @@ function renderReviewCapabilities() {
   const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
   const footerHtml = hiddenCount > 0 ? `
     <div class="review-capability-footer">
-      <button class="secondary" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))} capabilities</button>
+      <button class="secondary" type="button" data-review-show-more="true">Show ${escapeHtml(String(Math.min(CAPABILITY_VISIBLE_INCREMENT, hiddenCount)))} more</button>
+      <button class="secondary review-capability-footer-link" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))}</button>
+    </div>
+  ` : '';
+  const toolbarHtml = selectedReviewCapabilityIndexes.size ? `
+    <div class="review-capability-toolbar">
+      <div class="review-capability-toolbar-main">
+        <span class="review-capability-toolbar-copy">${selectedVisibleCount} shown selected</span>
+        <div class="review-capability-bulk-actions">
+          <button class="secondary" type="button" data-review-select-visible="true">Select shown</button>
+          <button class="secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>Clear selection</button>
+          <button class="secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>Remove selected</button>
+        </div>
+      </div>
     </div>
   ` : '';
   container.innerHTML = `
     <section class="review-capability-group">
-      <div class="review-capability-group-head">
-        <h4>Capabilities</h4>
-        <span class="review-capability-count">${escapeHtml(String(visibleRules.length))} shown${hiddenCount ? ` of ${escapeHtml(String(orderedRules.length))}` : ''}</span>
-      </div>
-      <p class="review-capability-group-copy">Focus on what should drive matching. Keep strong capabilities, downgrade weak ones, and remove noise.</p>
-      <div class="review-capability-toolbar">
-        <div class="review-capability-toolbar-main">
-          <span class="review-capability-toolbar-copy">${selectedVisibleCount ? `${selectedVisibleCount} visible item${selectedVisibleCount === 1 ? '' : 's'} selected` : 'Select capabilities to apply bulk actions.'}</span>
-          <div class="review-capability-bulk-actions">
-            <button class="secondary" type="button" data-review-select-visible="true">Select shown</button>
-            <button class="secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>Clear selection</button>
-            <button class="secondary" type="button" data-review-bulk-action="keep"${bulkDisabled}>Keep selected</button>
-            <button class="secondary" type="button" data-review-bulk-action="basic"${bulkDisabled}>Mark selected as basic</button>
-            <button class="secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>Remove selected</button>
-          </div>
-        </div>
-      </div>
       <div class="review-capability-row-list">${rowsHtml}</div>
       ${footerHtml}
+      ${toolbarHtml}
     </section>
   `;
 }
@@ -756,7 +776,7 @@ function renderReviewStep() {
   selectedReviewCapabilityIndexes = new Set(
     [...selectedReviewCapabilityIndexes].filter((index) => index >= 0 && index < reviewCapabilityRules.length)
   );
-  renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No target titles extracted yet.', 'data-remove-review-target');
+  renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No primary job titles extracted yet.', 'data-remove-review-target');
   renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No secondary titles extracted yet.', 'data-remove-review-secondary');
   renderReviewCapabilities();
   saveWizardState();
@@ -767,7 +787,7 @@ function hydrateDraftStep(profile) {
   reviewSecondaryTitles = dedupeReviewList(profile?.secondary_title_patterns || []);
   reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
   selectedReviewCapabilityIndexes.clear();
-  showAllReviewCapabilities = false;
+  reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
   renderReviewStep();
 }
 
@@ -805,6 +825,7 @@ async function createProfile() {
 
   validatePrimaryFile(primary);
   validateOnboardingSettings(onboardingSettings);
+  resetOnboardingWizardState();
 
   if (isRebuildMode) {
     const confirmed = window.confirm(
@@ -834,7 +855,12 @@ async function createProfile() {
   hydrateDraftStep(payload.profile || {});
   hydrateSearchBasics(payload.profile || {});
   setStep(REVIEW_STEP);
-  showStatus('Your draft profile is ready. Review the role direction before you continue.', 'ok');
+  showStatus(
+    payload?.fresh_onboarding_run_started
+      ? formatExtractionSummary(payload.extraction_counts || {})
+      : 'Your draft profile is ready. Review the role direction before you continue.',
+    'ok',
+  );
 }
 
 function continueFromReview() {
@@ -900,6 +926,63 @@ async function loadProfileDefaults() {
   applyProfileDefaults(profile || {});
 }
 
+if (isTestMode && onbTestPanel && onbTestTrigger && onbTestMenu) {
+  onbTestPanel.hidden = false;
+
+  onbTestTrigger.addEventListener('click', () => {
+    setTestMenuOpen(!onbTestMenu.classList.contains('is-open'));
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!onbTestPanel.contains(event.target)) {
+      setTestMenuOpen(false);
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      setTestMenuOpen(false);
+    }
+  });
+
+  onbResetUserBtn?.addEventListener('click', async () => {
+    const confirmed = window.confirm(
+      'Reset current user?\n\n'
+      + 'This clears the current profile, onboarding state, uploaded CV state, local review feedback, and job history.\n\n'
+      + 'Shared learned signals will be preserved.'
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setTestMenuOpen(false);
+      const payload = await postTestAction('/api/test/reset-user');
+      clearOnboardingBrowserState();
+      window.location.href = payload.redirect_to || '/start';
+    } catch (error) {
+      window.alert(error.message || 'Could not reset current user.');
+    }
+  });
+
+  onbResetLearningBtn?.addEventListener('click', async () => {
+    const confirmed = window.confirm(
+      'Reset global learning?\n\n'
+      + 'This wipes the shared learned signal memory for every test user.\n\n'
+      + 'This is dangerous and cannot be undone.'
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setTestMenuOpen(false);
+      const payload = await postTestAction('/api/test/reset-learning');
+      window.alert(payload.message || 'Global learning reset.');
+    } catch (error) {
+      window.alert(error.message || 'Could not reset global learning.');
+    }
+  });
+}
+
 createProfileButton.addEventListener('click', async (event) => {
   const btn = event.currentTarget;
   const originalLabel = btn.textContent;
@@ -907,6 +990,7 @@ createProfileButton.addEventListener('click', async (event) => {
   btn.disabled = true;
   btn.textContent = isRebuildMode ? 'Refreshing Draft...' : 'Building Draft...';
   startWorkingStatus([
+    'Fresh onboarding run started.',
     isRebuildMode ? 'Reading your updated CV...' : 'Reading your CV...',
     'Extracting titles and capabilities...',
     'Reviewing role history and recency...',
@@ -988,8 +1072,8 @@ document.getElementById('review_add_secondary_title').addEventListener('click', 
 });
 
 document.getElementById('review_capability_filter').addEventListener('input', () => {
-  showAllReviewCapabilities = false;
   renderReviewCapabilities();
+  saveWizardState();
 });
 
 document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
@@ -1027,20 +1111,36 @@ document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
     return;
   }
   if (event.target.closest('[data-review-show-all]')) {
-    showAllReviewCapabilities = true;
+    reviewCapabilityVisibleCount = reviewCapabilityRules.length;
     renderReviewCapabilities();
+    saveWizardState();
+    return;
+  }
+  if (event.target.closest('[data-review-show-more]')) {
+    reviewCapabilityVisibleCount = Math.min(
+      reviewCapabilityVisibleCount + CAPABILITY_VISIBLE_INCREMENT,
+      reviewCapabilityRules.length,
+    );
+    renderReviewCapabilities();
+    saveWizardState();
+    return;
+  }
+  const capabilityRow = event.target.closest('[data-review-capability-index]');
+  if (
+    capabilityRow
+    && !event.target.closest('button')
+  ) {
+    const index = Number(capabilityRow.dataset.reviewCapabilityIndex);
+    const nextChecked = !selectedReviewCapabilityIndexes.has(index);
+    toggleSelectedReviewCapability(index, nextChecked);
   }
 });
 
-document.querySelector('[data-step="2"]').addEventListener('change', (event) => {
-  const selectionInput = event.target.closest('[data-select-review-capability]');
-  if (selectionInput) {
-    toggleSelectedReviewCapability(
-      Number(selectionInput.dataset.selectReviewCapability),
-      Boolean(selectionInput.checked),
-    );
-    return;
-  }
+document.querySelectorAll(
+  '#review_search_keywords, #review_minimum_salary_yearly, #review_minimum_daily_rate, input[name="engagement_pref"]'
+).forEach((input) => {
+  input.addEventListener('input', saveWizardState);
+  input.addEventListener('change', saveWizardState);
 });
 
 document.querySelector('[data-step="2"]').addEventListener('keydown', (event) => {
@@ -1120,7 +1220,9 @@ function addSalaryInfoIcons() {
 
 renderLocationSuggestions();
 loadProfileDefaults().catch(() => {});
-setStep(1);
+if (!restoreWizardState()) {
+  setStep(1, { scroll: false });
+}
 updateCreateProfileAvailability();
 updateCompensationVisibility();
 addSalaryInfoIcons();

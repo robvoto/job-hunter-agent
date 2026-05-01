@@ -50,6 +50,72 @@
       margin-left: 4px;
       border-left: 1px solid var(--border-subtle);
     }
+    .ws-test-panel {
+      position: relative;
+    }
+    .ws-test-trigger {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 0.15em;
+    }
+    .ws-test-trigger:hover,
+    .ws-test-trigger[aria-expanded="true"] {
+      color: var(--text-primary);
+    }
+    .ws-test-menu {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      min-width: 196px;
+      padding: 8px;
+      border-radius: 16px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      box-shadow: 0 18px 40px rgba(12, 18, 28, 0.18);
+      display: none;
+      z-index: 220;
+    }
+    .ws-test-menu.is-open {
+      display: block;
+    }
+    .ws-test-menu-title {
+      padding: 4px 8px 8px;
+      color: var(--text-muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .ws-test-menu-separator {
+      height: 1px;
+      margin: 0 4px 6px;
+      background: var(--border-subtle);
+    }
+    .ws-test-action {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: transparent;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 0.88rem;
+      text-align: left;
+      cursor: pointer;
+    }
+    .ws-test-action:hover {
+      background: var(--bg-muted);
+    }
+    .ws-test-action-danger {
+      color: #b42318;
+    }
     .ws-btn {
       border-radius: 999px;
       padding: 8px 16px;
@@ -304,6 +370,15 @@
           <option value="dark-professional">Dark Professional</option>
         </select>
       </div>
+      <div class="ws-test-panel" id="ws_test_panel" hidden>
+        <button class="ws-test-trigger" id="ws_test_trigger" type="button" aria-haspopup="true" aria-expanded="false">&#128736; Test</button>
+        <div class="ws-test-menu" id="ws_test_menu" role="menu" aria-label="Test actions">
+          <div class="ws-test-menu-title">&#128736; Test</div>
+          <div class="ws-test-menu-separator" aria-hidden="true"></div>
+          <button class="ws-test-action" id="ws_reset_user_btn" type="button" role="menuitem">Reset User</button>
+          <button class="ws-test-action ws-test-action-danger" id="ws_reset_learning_btn" type="button" role="menuitem">Reset Learning (&#9888;)</button>
+        </div>
+      </div>
       <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
       <div class="ws-run-group">
         <span class="ws-status-pill" id="ws_status_pill">Loading...</span>
@@ -321,10 +396,48 @@
     const wsRunBtn = document.getElementById('ws_run_btn');
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const resultsMount = document.getElementById('results-mount');
+    const wsTestPanel = document.getElementById('ws_test_panel');
+    const wsTestTrigger = document.getElementById('ws_test_trigger');
+    const wsTestMenu = document.getElementById('ws_test_menu');
+    const wsResetUserBtn = document.getElementById('ws_reset_user_btn');
+    const wsResetLearningBtn = document.getElementById('ws_reset_learning_btn');
     const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
     const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
+    const ONBOARDING_WIZARD_KEY = 'jobHunter.onboardingWizard';
+    const isTestMode = document.body.dataset.testMode === 'true';
     let runPollHandle = null;
     let runWasRunning = false;
+
+    function setTestMenuOpen(open) {
+      if (!wsTestMenu || !wsTestTrigger) {
+        return;
+      }
+      wsTestMenu.classList.toggle('is-open', Boolean(open));
+      wsTestTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function clearOnboardingBrowserState() {
+      try {
+        window.sessionStorage.removeItem(ONBOARDING_WELCOME_KEY);
+        window.sessionStorage.removeItem(ONBOARDING_WIZARD_KEY);
+      } catch {}
+      try {
+        window.localStorage.removeItem(ONBOARDING_WELCOME_OPT_OUT_KEY);
+      } catch {}
+    }
+
+    async function postTestAction(path) {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Request failed');
+      }
+      return payload;
+    }
 
     function consumeOnboardingWelcomeState() {
       try {
@@ -468,6 +581,63 @@
         wsStatusPill.textContent = lastRunAt ? 'Search ready' : 'Never run yet';
         wsStatusPill.className = 'ws-status-pill';
       }
+    }
+
+    if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
+      wsTestPanel.hidden = false;
+
+      wsTestTrigger.addEventListener('click', () => {
+        setTestMenuOpen(!wsTestMenu.classList.contains('is-open'));
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!wsTestPanel.contains(event.target)) {
+          setTestMenuOpen(false);
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          setTestMenuOpen(false);
+        }
+      });
+
+      wsResetUserBtn?.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Reset current user?\n\n'
+          + 'This clears the current profile, onboarding state, uploaded CV state, local review feedback, and job history.\n\n'
+          + 'Shared learned signals will be preserved.'
+        );
+        if (!confirmed) {
+          return;
+        }
+        try {
+          setTestMenuOpen(false);
+          const payload = await postTestAction('/api/test/reset-user');
+          clearOnboardingBrowserState();
+          window.location.href = payload.redirect_to || '/start';
+        } catch (error) {
+          window.alert(error.message || 'Could not reset current user.');
+        }
+      });
+
+      wsResetLearningBtn?.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Reset global learning?\n\n'
+          + 'This wipes the shared learned signal memory for every test user.\n\n'
+          + 'This is dangerous and cannot be undone.'
+        );
+        if (!confirmed) {
+          return;
+        }
+        try {
+          setTestMenuOpen(false);
+          const payload = await postTestAction('/api/test/reset-learning');
+          window.alert(payload.message || 'Global learning reset.');
+        } catch (error) {
+          window.alert(error.message || 'Could not reset global learning.');
+        }
+      });
     }
 
     async function checkRunStatus() {
