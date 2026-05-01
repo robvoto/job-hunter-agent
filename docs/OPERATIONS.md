@@ -85,7 +85,7 @@ It currently supports:
 - `data/application_inputs/`
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_costs.jsonl`
+- `data/llm_costs.json`
 - `data/application_materials.json`
 - `TODO.txt`
 

@@ -188,7 +188,7 @@ These are intended to stay local and ignored:
 - `data/application_materials.json`
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_costs.jsonl`
+- `data/llm_costs.json`
 - `output/rejection_rules.json`
 - `output/`
 

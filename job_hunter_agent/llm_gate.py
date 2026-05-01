@@ -482,7 +482,7 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def get_cost_summary() -> dict[str, Any]:
-    """Read llm_costs.jsonl and return totals by purpose - useful for debugging."""
+    """Read llm_costs.json and return totals by purpose - useful for debugging."""
     totals: dict[str, dict[str, Any]] = {}
     try:
         with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:
