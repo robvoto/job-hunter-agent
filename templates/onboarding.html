@@ -67,6 +67,80 @@
       align-self: flex-start;
       margin-left: auto;
     }
+    .hero-tools {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-left: auto;
+      flex-wrap: wrap;
+    }
+    .onb-test-panel {
+      position: relative;
+      align-self: flex-start;
+    }
+    .onb-test-trigger {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 0.15em;
+    }
+    .onb-test-trigger:hover,
+    .onb-test-trigger[aria-expanded="true"] {
+      color: var(--text-primary);
+    }
+    .onb-test-menu {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      min-width: 196px;
+      padding: 8px;
+      border-radius: 16px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      box-shadow: 0 18px 40px rgba(12, 18, 28, 0.18);
+      display: none;
+      z-index: 220;
+    }
+    .onb-test-menu.is-open {
+      display: block;
+    }
+    .onb-test-menu-title {
+      padding: 4px 8px 8px;
+      color: var(--text-muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .onb-test-menu-separator {
+      height: 1px;
+      margin: 0 4px 6px;
+      background: var(--border-subtle);
+    }
+    .onb-test-action {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: transparent;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 0.88rem;
+      text-align: left;
+      cursor: pointer;
+    }
+    .onb-test-action:hover {
+      background: var(--bg-muted);
+    }
+    .onb-test-action-danger {
+      color: #b42318;
+    }
 
     .panel {
       border: 1px solid var(--border-subtle) !important;
@@ -158,6 +232,10 @@
         gap: 16px;
       }
 
+      .hero-tools {
+        margin-left: 0;
+      }
+
       .theme-switcher-widget {
         margin-left: 0;
       }
@@ -220,6 +298,41 @@
     [data-test-mode="false"] .alias-tag {
       display: none !important;
     }
+
+    /* Step 2 Review UI Improvements */
+    .review-block {
+      margin-bottom: 20px;
+    }
+
+    /* Fix search bar: constrain width and tighten connection to the list */
+    .review-capability-filter {
+      max-width: 320px;
+      margin-bottom: 0 !important;
+      display: block;
+    }
+
+    /* Reduce height of items and move actions (Remove buttons) closer to text */
+    .chip-list {
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    /* Target dynamically generated items like chips and capability rows */
+    .chip, 
+    .capability-card,
+    .review-capability-list > * {
+      padding: 4px 10px !important; /* Reduce vertical height */
+      display: flex !important;
+      align-items: center;
+      justify-content: flex-start !important; /* Align actions next to text */
+      gap: 8px !important; /* Minimize eye travel between text and button */
+      min-height: unset !important;
+    }
+
+    .review-capability-list {
+      display: grid;
+      gap: 6px;
+    }
   </style>
 </head>
 <body data-test-mode="__JOB_HUNTER_TEST_MODE__">
@@ -250,13 +363,24 @@
             </ol>
           </div>
         </div>
-        <div class="theme-switcher-widget">
-          <span>Theme test:</span>
-          <select id="theme_picker" aria-label="Select theme">
-            <option value="soft-professional">Soft Professional</option>
-            <option value="bold-aggressive">Bold Aggressive</option>
-            <option value="dark-professional">Dark Professional</option>
-          </select>
+        <div class="hero-tools">
+          <div class="onb-test-panel test-only" id="onb_test_panel" hidden>
+            <button class="onb-test-trigger" id="onb_test_trigger" type="button" aria-haspopup="true" aria-expanded="false">&#128736; Test</button>
+            <div class="onb-test-menu" id="onb_test_menu" role="menu" aria-label="Test actions">
+              <div class="onb-test-menu-title">&#128736; Test</div>
+              <div class="onb-test-menu-separator" aria-hidden="true"></div>
+              <button class="onb-test-action" id="onb_reset_user_btn" type="button" role="menuitem">Reset User</button>
+              <button class="onb-test-action onb-test-action-danger" id="onb_reset_learning_btn" type="button" role="menuitem">Reset Learning (&#9888;)</button>
+            </div>
+          </div>
+          <div class="theme-switcher-widget">
+            <span>Theme test:</span>
+            <select id="theme_picker" aria-label="Select theme">
+              <option value="soft-professional">Soft Professional</option>
+              <option value="bold-aggressive">Bold Aggressive</option>
+              <option value="dark-professional">Dark Professional</option>
+            </select>
+          </div>
         </div>
       </div>
     </section>
@@ -337,7 +461,7 @@
               </div>
             </div>
 
-            <details class="guidance-accordion" data-test-only hidden>
+            <details class="guidance-accordion test-only" data-test-only>
               <summary>Advanced rebuild options (usually leave these alone)</summary>
               <div class="setting-row">
                 <div class="setting-copy">
@@ -396,9 +520,12 @@
           </div>
 
           <section class="review-block capability-shell">
-            <h3>Capability matrix</h3>
-            <p class="help">These are the capabilities Job Hunter picked up from your CV. Confirm the useful ones, downgrade weak ones, and remove noise.</p>
-            <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities">
+            <h3>Capabilities</h3>
+            <p class="help">Please keep only capabilities that clearly belong to your profile.</p>
+            <div class="review-capability-topbar">
+              <span id="review_capability_count" class="review-capability-count" aria-live="polite">0 shown</span>
+              <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities">
+            </div>
             <div id="review_capability_cards" class="review-capability-list"></div>
             <div class="actions">
               <button class="primary" id="continue_to_search_basics" type="button">Continue</button>
@@ -469,11 +596,11 @@
               </div>
               <dl class="check-list">
                 <div>
-                  <dt>Target titles</dt>
+                  <dt>Primary job titles</dt>
                   <dd id="check_target_titles"></dd>
                 </div>
                 <div>
-                  <dt>Conditional fit job titles</dt>
+                  <dt>Secondary job titles</dt>
                   <dd id="check_secondary_titles"></dd>
                 </div>
                 <div>
@@ -524,7 +651,6 @@
     </div>
   </main>
 
-  <script src="/static/capability-ui.js"></script>
   <script src="/static/onboarding-page.js"></script>
 </body>
 </html>

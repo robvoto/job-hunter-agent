@@ -356,11 +356,8 @@ def _build_output(
     total_roles: int = 0,
     onboarding_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    capability_rules: list[dict[str, Any]] = []
     dominant_signal_clusters: list[dict[str, Any]] = []
-    must_not_require_skills: list[str] = []
-    seen_capability_names: set[str] = set()
-    seen_signal_names: set[str] = set()
+    seen_names: set[str] = set()
 
     for candidate in candidates:
         display_name = str(candidate["name"] or "").strip()
@@ -389,22 +386,10 @@ def _build_output(
             seen_aliases.add(alias_norm)
             clean_aliases.append(cleaned_alias)
 
-        if not display_name_norm or display_name_norm in seen_capability_names:
+        if not display_name_norm or display_name_norm in seen_names:
             continue
-        seen_capability_names.add(display_name_norm)
+        seen_names.add(display_name_norm)
 
-        needs_review = True
-
-        capability_rules.append({
-            "name": display_name,
-            "level": candidate["level"],
-            "aliases": clean_aliases,
-            "needs_review": needs_review,
-        })
-
-        if display_name_norm in seen_signal_names:
-            continue
-        seen_signal_names.add(display_name_norm)
         signal_aliases = clean_aliases[:]
         if len(signal_aliases) < 2:
             signal_aliases = list(dict.fromkeys([display_name, *signal_aliases]))
@@ -416,11 +401,11 @@ def _build_output(
             "min_alias_hits": 2 if len(signal_aliases) >= 2 else 1,
             "min_snippet_hits": 2,
             "dense_snippet_alias_hits": max(len(signal_aliases) // 2 + 2, 4),
-            "needs_review": needs_review,
+            "needs_review": True,
         })
 
     return {
-        "capability_profile_rules": capability_rules,
+        "capability_profile_rules": [],
         "dominant_signal_clusters": dominant_signal_clusters,
         "must_not_require_skills": [],
     }
@@ -454,7 +439,7 @@ def run_cv_pipeline(
     candidates = _rename_top_clusters(candidates, llm_client=llm_client)
     output = _build_output(candidates, total_roles=len(roles), onboarding_settings=onboarding_settings)
 
-    register_signals([r["name"] for r in output.get("capability_profile_rules", [])])
+    register_signals([r["name"] for r in output.get("dominant_signal_clusters", [])])
 
     print(
         f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "

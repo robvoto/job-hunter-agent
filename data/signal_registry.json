@@ -5364,5 +5364,705 @@
         "notes": ""
       }
     ]
+  },
+  "scrum master": {
+    "signal": "scrum master",
+    "normalized_key": "scrum master",
+    "original_texts": [
+      "scrum master"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T00:27:41.806253+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "user story development": {
+    "signal": "user story development",
+    "normalized_key": "user story development",
+    "original_texts": [
+      "user story development"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T00:27:41.806253+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "healthcare management": {
+    "signal": "healthcare management",
+    "normalized_key": "healthcare management",
+    "original_texts": [
+      "healthcare management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T00:27:41.806253+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "agile project delivery": {
+    "signal": "agile project delivery",
+    "normalized_key": "agile project delivery",
+    "original_texts": [
+      "agile project delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T00:27:41.806253+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "network coordination": {
+    "signal": "network coordination",
+    "normalized_key": "network coordination",
+    "original_texts": [
+      "network coordination"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T00:36:59.886069+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "healthcare innovation": {
+    "signal": "healthcare innovation",
+    "normalized_key": "healthcare innovation",
+    "original_texts": [
+      "healthcare innovation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T00:36:59.886069+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "workshop facilitation": {
+    "signal": "workshop facilitation",
+    "normalized_key": "workshop facilitation",
+    "original_texts": [
+      "workshop facilitation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:06.359334+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "stakeholder management": {
+    "signal": "stakeholder management",
+    "normalized_key": "stakeholder management",
+    "original_texts": [
+      "stakeholder management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:06.359334+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "user story creation": {
+    "signal": "user story creation",
+    "normalized_key": "user story creation",
+    "original_texts": [
+      "user story creation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:06.359334+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "process mapping": {
+    "signal": "process mapping",
+    "normalized_key": "process mapping",
+    "original_texts": [
+      "process mapping"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:06.359334+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "requirement gathering": {
+    "signal": "requirement gathering",
+    "normalized_key": "requirement gathering",
+    "original_texts": [
+      "requirement gathering"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:06.359334+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data modelling": {
+    "signal": "data modelling",
+    "normalized_key": "data modelling",
+    "original_texts": [
+      "data modelling"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data analysis": {
+    "signal": "data analysis",
+    "normalized_key": "data analysis",
+    "original_texts": [
+      "data analysis"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "automation": {
+    "signal": "automation",
+    "normalized_key": "automation",
+    "original_texts": [
+      "automation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data visualization": {
+    "signal": "data visualization",
+    "normalized_key": "data visualization",
+    "original_texts": [
+      "data visualization"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data cleansing": {
+    "signal": "data cleansing",
+    "normalized_key": "data cleansing",
+    "original_texts": [
+      "data cleansing"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "reporting": {
+    "signal": "reporting",
+    "normalized_key": "reporting",
+    "original_texts": [
+      "reporting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data integration": {
+    "signal": "data integration",
+    "normalized_key": "data integration",
+    "original_texts": [
+      "data integration"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:11.303821+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "sql": {
+    "signal": "sql",
+    "normalized_key": "sql",
+    "original_texts": [
+      "sql"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:15.943166+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "business intelligence tools": {
+    "signal": "business intelligence tools",
+    "normalized_key": "business intelligence tools",
+    "original_texts": [
+      "business intelligence tools"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:15.943166+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "reporting automation": {
+    "signal": "reporting automation",
+    "normalized_key": "reporting automation",
+    "original_texts": [
+      "reporting automation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:15.943166+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "etl support": {
+    "signal": "etl support",
+    "normalized_key": "etl support",
+    "original_texts": [
+      "etl support"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:15.943166+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "excel modelling": {
+    "signal": "excel modelling",
+    "normalized_key": "excel modelling",
+    "original_texts": [
+      "excel modelling"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:15.943166+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "dashboard reporting": {
+    "signal": "dashboard reporting",
+    "normalized_key": "dashboard reporting",
+    "original_texts": [
+      "dashboard reporting"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:15.943166+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "facilitation skills": {
+    "signal": "facilitation skills",
+    "normalized_key": "facilitation skills",
+    "original_texts": [
+      "facilitation skills"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:59.117592+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "quality assurance": {
+    "signal": "quality assurance",
+    "normalized_key": "quality assurance",
+    "original_texts": [
+      "quality assurance"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:59.117592+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "written communication": {
+    "signal": "written communication",
+    "normalized_key": "written communication",
+    "original_texts": [
+      "written communication"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:24:59.117592+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "data management": {
+    "signal": "data management",
+    "normalized_key": "data management",
+    "original_texts": [
+      "data management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:25:05.053024+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "multitasking": {
+    "signal": "multitasking",
+    "normalized_key": "multitasking",
+    "original_texts": [
+      "multitasking"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:55:17.769119+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "role management": {
+    "signal": "role management",
+    "normalized_key": "role management",
+    "original_texts": [
+      "role management"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:55:17.769119+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "agile/scrum delivery": {
+    "signal": "agile/scrum delivery",
+    "normalized_key": "agile/scrum delivery",
+    "original_texts": [
+      "agile/scrum delivery"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T01:55:22.146843+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "multi-tasking": {
+    "signal": "multi-tasking",
+    "normalized_key": "multi-tasking",
+    "original_texts": [
+      "multi-tasking"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T02:25:01.887658+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "strategic transformation": {
+    "signal": "strategic transformation",
+    "normalized_key": "strategic transformation",
+    "original_texts": [
+      "strategic transformation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T02:25:01.887658+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "process documentation": {
+    "signal": "process documentation",
+    "normalized_key": "process documentation",
+    "original_texts": [
+      "process documentation"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T02:25:01.887658+00:00",
+        "notes": ""
+      }
+    ]
+  },
+  "business process modelling": {
+    "signal": "business process modelling",
+    "normalized_key": "business process modelling",
+    "original_texts": [
+      "business process modelling"
+    ],
+    "decision": "review",
+    "scope": "global",
+    "source": "system",
+    "needs_review": true,
+    "notes": "",
+    "history": [
+      {
+        "decision": "review",
+        "source": "system",
+        "timestamp": "2026-05-01T02:25:06.230881+00:00",
+        "notes": ""
+      }
+    ]
   }
 }

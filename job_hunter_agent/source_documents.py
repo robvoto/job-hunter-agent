@@ -49,6 +49,11 @@ ONBOARDING_RESET_FIELDS = (
     "cheap_reject_metadata_rules",
 )
 
+ONBOARDING_RESET_OUTPUTS = (
+    (REVIEW_DATA_PATH, "review_data.json"),
+    (RUN_STATS_PATH, "run_stats.json"),
+)
+
 DEFAULT_SOURCE_MATERIALS = {
     "profile_sources": [],
     "cv_variants": [],
@@ -214,6 +219,27 @@ def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     return [item for item in sources if item.get("label") and item.get("path")]
 
 
+def build_onboarding_reset_patch(onboarding_settings: dict[str, Any] | None = None) -> dict[str, Any]:
+    patch: dict[str, Any] = {
+        field: copy.deepcopy(DEFAULT_PROFILE[field])
+        for field in ONBOARDING_RESET_FIELDS
+        if field in DEFAULT_PROFILE
+    }
+    if onboarding_settings is not None:
+        patch["onboarding_settings"] = copy.deepcopy(onboarding_settings)
+    return patch
+
+
+def clear_onboarding_runtime_outputs() -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for reset_path, label in ONBOARDING_RESET_OUTPUTS:
+        try:
+            reset_path.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
+            print(f"[ONBOARDING] {label} reset")
+        except Exception as exc:
+            print(f"[ONBOARDING] Could not reset {label}: {exc}")
+
+
 def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | None = None, onboarding_settings: dict | None = None) -> dict[str, Any]:
     """Collect source documents, reset onboarding fields, re-extract everything, save.
 
@@ -260,12 +286,12 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     current_profile = load_profile()
     active_onboarding_settings = onboarding_settings or current_profile.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
 
-    # --- Reset: start with DEFAULT_PROFILE values for all onboarding-owned fields ---
-    patch: dict[str, Any] = {
-        field: copy.deepcopy(DEFAULT_PROFILE[field])
-        for field in ONBOARDING_RESET_FIELDS
-        if field in DEFAULT_PROFILE
-    }
+    # --- Reset persisted onboarding-owned fields before fresh extraction starts ---
+    patch_profile(build_onboarding_reset_patch(active_onboarding_settings))
+    clear_onboarding_runtime_outputs()
+
+    # --- Build a fresh onboarding patch from clean defaults ---
+    patch = build_onboarding_reset_patch(active_onboarding_settings)
 
     # --- Extract fresh from combined_text ---
     patch["cv_text"] = combined_text
@@ -273,17 +299,15 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     pipeline_patch = run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings)
     learning_patch = build_learning_patch(combined_text, onboarding_settings=active_onboarding_settings)
-    merged_capabilities = merge_capability_rules(
-        pipeline_patch.get("capability_profile_rules", []),
-        learning_patch.get("capability_profile_rules", []),
-    )
     patch.update(pipeline_patch)
     for key, value in learning_patch.items():
         if key in {"cv_text", "capability_profile_rules"}:
             continue
         patch[key] = value
-    if merged_capabilities:
-        patch["capability_profile_rules"] = merged_capabilities
+    patch["capability_profile_rules"] = merge_capability_rules(
+        [],
+        learning_patch.get("capability_profile_rules", []),
+    )
 
     brief = build_llm_profile_brief(capability_rules=patch.get("capability_profile_rules") or [])
     if brief:
@@ -342,21 +366,27 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     profile = patch_profile(patch)
 
-    # Reset stale output files so tuning suggestions and run stats don't persist after a full rebuild.
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    for reset_path, label in ((REVIEW_DATA_PATH, "review_data.json"), (RUN_STATS_PATH, "run_stats.json")):
-        try:
-            reset_path.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
-            print(f"[ONBOARDING] {label} reset")
-        except Exception as exc:
-            print(f"[ONBOARDING] Could not reset {label}: {exc}")
+    extraction_counts = {
+        "target_titles": len(patch.get("target_title_patterns") or []),
+        "secondary_titles": len(patch.get("secondary_title_patterns") or []),
+        "capabilities": len(patch.get("capability_profile_rules") or []),
+        "dominant_signal_clusters": len(patch.get("dominant_signal_clusters") or []),
+    }
 
     return {
         "ok": True,
-        "message": f"Onboarding complete. Imported {len(imported_sources)} source document(s) into profile.json.",
+        "message": (
+            "Fresh onboarding run started. "
+            f"Imported {len(imported_sources)} source document(s) and extracted "
+            f"{extraction_counts['target_titles']} primary title(s), "
+            f"{extraction_counts['secondary_titles']} secondary title(s), and "
+            f"{extraction_counts['capabilities']} capability row(s) from the current run only."
+        ),
         "profile": profile,
         "imported_sources": imported_sources,
         "missing_sources": missing_sources,
+        "fresh_onboarding_run_started": True,
+        "extraction_counts": extraction_counts,
     }
 
 

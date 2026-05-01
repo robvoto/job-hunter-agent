@@ -2,6 +2,7 @@ import json
 import hashlib
 import mimetypes
 import re
+import shutil
 import sys
 import threading
 from datetime import datetime
@@ -20,6 +21,8 @@ from job_hunter_agent.profile_store import build_evidence_tiers_from_sections, g
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.source_connector import rebuild_html_dashboard, scrape_jobs_direct
 from job_hunter_agent.source_documents import (
+    DEFAULT_SOURCE_MATERIALS,
+    SOURCE_PACK_DIR,
     build_llm_profile_brief,
     load_source_materials,
     persist_uploaded_source_pack,
@@ -394,6 +397,49 @@ class SettingsHandler(BaseHTTPRequestHandler):
             json.dumps(history, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _write_json_file(path: Path, payload: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @classmethod
+    def _reset_current_user_state(cls) -> dict[str, Any]:
+        save_profile(DEFAULT_PROFILE)
+        save_source_materials(DEFAULT_SOURCE_MATERIALS)
+
+        if SOURCE_PACK_DIR.exists():
+            shutil.rmtree(SOURCE_PACK_DIR)
+
+        cls._write_json_file(JOB_HISTORY_PATH, {})
+        cls._write_json_file(REVIEW_DATA_PATH, {})
+        cls._write_json_file(RUN_STATS_PATH, {})
+        cls._write_json_file(AUDIT_RECORDS_PATH, [])
+        cls._write_json_file(REJECTION_RULES_PATH, [])
+
+        try:
+            DASHBOARD_PATH.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "message": "Current user state reset. Shared learning was preserved.",
+            "redirect_to": "/start",
+        }
+
+    @staticmethod
+    def _reset_global_learning() -> dict[str, Any]:
+        from job_hunter_agent.signal_registry import save_registry
+
+        save_registry({})
+        return {
+            "ok": True,
+            "message": "Global learning reset. Shared learned signals were cleared.",
+        }
 
     @staticmethod
     def _sanitize_agent_settings_payload(payload: dict) -> dict:
@@ -1715,6 +1761,28 @@ class SettingsHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_POST(self) -> None:
+        if self.path == "/api/test/reset-user":
+            if not TEST_MODE:
+                self._send_json(403, {"error": "Test mode only"})
+                return
+            try:
+                result = self._reset_current_user_state()
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
+            return
+        if self.path == "/api/test/reset-learning":
+            if not TEST_MODE:
+                self._send_json(403, {"error": "Test mode only"})
+                return
+            try:
+                result = self._reset_global_learning()
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, result)
+            return
         if self.path == "/api/run":
             try:
                 payload = self._read_json_body()
