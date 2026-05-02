@@ -13,7 +13,7 @@ from job_hunter_agent.filters import passes_content_filters, passes_quick_card_f
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
-from job_hunter_agent.utils import extract_salary, extract_work_mode
+from job_hunter_agent.utils import extract_salary, extract_work_mode, repair_text
 
 
 class LinkedInScraper(BaseJobScraper):
@@ -84,8 +84,9 @@ class LinkedInScraper(BaseJobScraper):
                     run_iso=self.run_iso,
                 )
 
-                title = record.get("title", "")
-                company = record.get("company", "N/A")
+                title = repair_text(record.get("title", ""))
+                company = repair_text(record.get("company", "N/A"))
+                record["title"], record["company"] = title, company
 
                 if not record.get("job_key"):
                     record["reject_reason"] = "NO_JOB_KEY"
@@ -130,6 +131,7 @@ class LinkedInScraper(BaseJobScraper):
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 
+                record["teaser"] = repair_text(record.get("teaser", ""))
                 # Quick card gate
                 ok_card, card_reason = passes_quick_card_filters(
                     title=title,
@@ -160,6 +162,7 @@ class LinkedInScraper(BaseJobScraper):
                     record["reject_reason"] = "NO_DETAILS"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
+                details_text = repair_text(details_text)
                 record["fit_source_text"] = details_text
                 record["full_description"] = details_text
                 record["description_source"] = "linkedin_full_description"

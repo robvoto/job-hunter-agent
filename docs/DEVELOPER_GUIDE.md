@@ -138,9 +138,7 @@ Do not accidentally commit:
 - `data/agent_settings.json`
 - `data/agent_state.json`
 - `data/llm_costs.json`
-- `output/rejection_rules.json`
-- `data/application_inputs/`
-- `data/application_materials.json`
+- `output/rejection_rules.json` 
 - `TODO.txt`
 - `.venv/`
 

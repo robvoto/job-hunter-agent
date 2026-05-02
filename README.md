@@ -160,10 +160,7 @@ Logic and core modules reside in the `job_hunter_agent/` package.
 
 - `data/profile.json`
   Runtime source of truth for matching.
-
-- `data/application_materials.template.json`
-  Example local-only source-material manifest.
-
+ 
 - `data/agent_settings.template.json`
   Starter template for daily-agent scheduling and notification delivery.
 
@@ -183,9 +180,7 @@ These are intended to stay local and ignored:
 - `TODO.txt`
 - `data/profile.json`
 - `data/job_history.json`
-- `data/llm_cache.json`
-- `data/application_inputs/`
-- `data/application_materials.json`
+- `data/llm_cache.json` 
 - `data/agent_settings.json`
 - `data/agent_state.json`
 - `data/llm_costs.json`

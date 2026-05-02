@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
 from job_hunter_agent.profile_store import DEFAULT_ONBOARDING_SETTINGS
 from job_hunter_agent.signal_registry import register_signals
+from job_hunter_agent.utils import repair_text
 
 
 ROOT_DIR = REPO_ROOT
@@ -126,22 +127,6 @@ class _CvExtractionResponse(BaseModel):
 
 
 # ── Text repair ────────────────────────────────────────────────────────────────
-
-def repair_text(text: str) -> str:
-    if not text:
-        return ""
-    repaired = text.replace("\r\n", "\n")
-    if "Ã¢" in repaired or "Ãƒ" in repaired:
-        try:
-            candidate = repaired.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-            if candidate.count("Ã¢") < repaired.count("Ã¢"):
-                repaired = candidate
-        except Exception:
-            pass
-    for source, target in {"—": "-", "–": "-", "→": "->"}.items():
-        repaired = repaired.replace(source, target)
-    return repaired.strip()
-
 
 # ── Settings resolution ────────────────────────────────────────────────────────
 

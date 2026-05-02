@@ -128,8 +128,7 @@ Do not move the project back to pane-based scraping unless there is a very stron
 | `scraper_base.py` | Shared base logic for all scrapers |
 | `utils.py` | Shared parsing and URL helpers |
 | `config.py` | Global configuration and scrape tuning |
-| `data/profile.json` | Runtime source of truth for the candidate profile |
-| `data/application_materials.template.json` | Starter manifest for local-only CV / instructions / application inputs |
+| `data/profile.json` | Runtime source of truth for the candidate profile | inputs |
 | `data/agent_settings.template.json` | Starter template for local agent scheduling and notifier config |
 | `data/job_history.json` | Seen/applied/hidden history support |
 | `data/llm_cache.json` | Cached LLM decisions |
@@ -310,10 +309,8 @@ Keep personal and local-only:
 - `data/job_history.json`
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_cache.json`
-- `data/application_inputs/`
-- `data/llm_costs.json`
-- `data/application_materials.json`
+- `data/llm_cache.json` 
+- `data/llm_costs.json` 
 - `TODO.txt`
 - `.venv/`
 

@@ -28,11 +28,7 @@ from job_hunter_agent.profile_store import (
 
 ROOT_DIR = REPO_ROOT
 REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
-RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
-APPLICATION_INPUTS_DIR = DATA_DIR / "application_inputs"
-SOURCE_PACK_DIR = APPLICATION_INPUTS_DIR / "source_pack"
-SOURCE_MATERIALS_PATH = DATA_DIR / "application_materials.json"
-SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json"
+RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"  
 
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
@@ -105,45 +101,7 @@ def _normalize_cv_variants(items: Any) -> list[dict[str, Any]]:
                 "use_for": use_for,
             })
     return normalized
-
-
-def normalize_source_materials(payload: Any) -> dict[str, Any]:
-    base = dict(DEFAULT_SOURCE_MATERIALS)
-    if not isinstance(payload, dict):
-        return base
-    base["profile_sources"] = _normalize_profile_sources(payload.get("profile_sources", []))
-    base["cv_variants"] = _normalize_cv_variants(payload.get("cv_variants", []))
-    return base
-
-
-def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
-    if SOURCE_MATERIALS_PATH.exists():
-        try:
-            payload = json.loads(SOURCE_MATERIALS_PATH.read_text(encoding="utf-8"))
-            return normalize_source_materials(payload)
-        except Exception:
-            return dict(DEFAULT_SOURCE_MATERIALS)
-
-    if create_if_missing and SOURCE_MATERIALS_TEMPLATE_PATH.exists():
-        try:
-            payload = json.loads(SOURCE_MATERIALS_TEMPLATE_PATH.read_text(encoding="utf-8"))
-            normalized = normalize_source_materials(payload)
-            save_source_materials(normalized)
-            return normalized
-        except Exception:
-            pass
-    return dict(DEFAULT_SOURCE_MATERIALS)
-
-
-def save_source_materials(payload: Any) -> dict[str, Any]:
-    normalized = normalize_source_materials(payload)
-    SOURCE_MATERIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SOURCE_MATERIALS_PATH.write_text(
-        json.dumps(normalized, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return normalized
-
+ 
 
 def _read_docx_text(path: Path) -> str:
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}

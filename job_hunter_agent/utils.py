@@ -1,13 +1,60 @@
 # utils.py
 
 import re
+import sys
 from html import escape
-from typing import Optional
+from typing import Optional, Any
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 
 def safe_html(text: str) -> str:
     return escape(text or "", quote=True)
+
+
+def repair_text(text: str) -> str:
+    """Fix common encoding mojibake and normalize special characters for clean dashboard rendering."""
+    if not text:
+        return ""
+
+    # 1. Normalize line endings and common high-unicode whitespace/dashes
+    repaired = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    
+    replacements = {
+        "\u00a0": " ",      # Non-breaking space
+        "\u2013": "-",      # En dash
+        "\u2014": "-",      # Em dash
+        "\u2011": "-",      # Non-breaking hyphen
+        "\u2018": "'",      # Left single quote
+        "\u2019": "'",      # Right single quote
+        "\u201c": '"',      # Left double quote
+        "\u201d": '"',      # Right double quote
+        "\u2022": "*",      # Bullet point
+        "\u2026": "...",    # Ellipsis
+        "\u2192": "->",     # Right arrow
+    }
+    for old, new in replacements.items():
+        repaired = repaired.replace(old, new)
+
+    # 2. Fix Mojibake: UTF-8 bytes accidentally interpreted as Latin-1/CP1252
+    # Patterns like "Ã¢" or "â€" (typical of double-encoding or bad decoding)
+    if "Ã¢" in repaired or "Ãƒ" in repaired or "â€" in repaired:
+        try:
+            # Attempt to re-encode the mangled string back to bytes as latin1
+            # (which recovers the original raw UTF-8 bytes) then decode as utf-8.
+            # This fixes "â€™" becoming "'" and similar.
+            candidate = repaired.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
+            # Only apply if we actually reduced the count of suspicious 'Ã' characters
+            # or if the length changed significantly (indicating multi-byte recovery).
+            if candidate.count("Ã") < repaired.count("Ã") or len(candidate) < len(repaired):
+                repaired = candidate
+        except Exception:
+            pass
+
+    # 3. Strip any remaining non-printable control chars except \n and \t
+    # (Avoids weird glyphs in some browsers)
+    repaired = "".join(ch for ch in repaired if ch.isprintable() or ch in "\n\t")
+
+    return repaired.strip()
 
 
 def set_query_param(url: str, key: str, value: str | int) -> str:

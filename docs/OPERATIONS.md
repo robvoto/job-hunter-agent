@@ -81,12 +81,10 @@ It currently supports:
 
 - `data/profile.json`
 - `data/job_history.json`
-- `data/llm_cache.json`
-- `data/application_inputs/`
+- `data/llm_cache.json` 
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_costs.json`
-- `data/application_materials.json`
+- `data/llm_costs.json` 
 - `TODO.txt`
 
 ## Moving The Project
@@ -97,9 +95,7 @@ If moving to another machine and you want to preserve local state, bring:
 
 - `data/profile.json`
 - optionally `data/job_history.json`
-- optionally `data/llm_cache.json`
-- optionally `data/application_inputs/`
-- optionally `data/application_materials.json`
+- optionally `data/llm_cache.json` 
 
 ## LLM Runtime
 

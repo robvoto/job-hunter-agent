@@ -83,6 +83,7 @@ from job_hunter_agent.utils import (
     extract_work_mode,
     parse_seek_posted_age_days,
     safe_html,
+    repair_text,
     set_page_param,
 )
 
@@ -2183,25 +2184,25 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         snapshot = {}
 
     if record.get("posted") in {None, "", "N/A"}:
-        record["posted"] = snapshot.get("posted") or "N/A"
+        record["posted"] = repair_text(snapshot.get("posted") or "N/A")
     if record.get("posted_age_days") is None and snapshot.get("posted_age_days") is not None:
         record["posted_age_days"] = snapshot.get("posted_age_days")
     if record.get("salary") in {None, "", "N/A"}:
-        record["salary"] = snapshot.get("salary") or "N/A"
+        record["salary"] = repair_text(snapshot.get("salary") or "N/A")
     if record.get("teaser") in {None, "", "N/A"}:
-        record["teaser"] = snapshot.get("teaser") or "N/A"
+        record["teaser"] = repair_text(snapshot.get("teaser") or "N/A")
     if record.get("location") in {None, "", "N/A"}:
-        record["location"] = snapshot.get("location") or "N/A"
+        record["location"] = repair_text(snapshot.get("location") or "N/A")
     if record.get("work_mode") in {None, "", "N/A"}:
-        record["work_mode"] = snapshot.get("work_mode") or "N/A"
+        record["work_mode"] = repair_text(snapshot.get("work_mode") or "N/A")
     if record.get("work_type") in {None, "", "N/A"}:
-        record["work_type"] = snapshot.get("work_type") or "N/A"
+        record["work_type"] = repair_text(snapshot.get("work_type") or "N/A")
     if record.get("role_snapshot") in {None, "", "N/A"}:
-        record["role_snapshot"] = snapshot.get("role_snapshot") or "N/A"
+        record["role_snapshot"] = repair_text(snapshot.get("role_snapshot") or "N/A")
     if not compact_whitespace(record.get("fit_source_text") or ""):
-        record["fit_source_text"] = snapshot.get("fit_source_text") or ""
+        record["fit_source_text"] = repair_text(snapshot.get("fit_source_text") or "")
     if not compact_whitespace(record.get("full_description") or ""):
-        record["full_description"] = snapshot.get("full_description") or ""
+        record["full_description"] = repair_text(snapshot.get("full_description") or "")
     if not record.get("fit_confidence"):
         record["fit_confidence"] = snapshot.get("fit_confidence") or ""
     if not record.get("fit_highlights"):
@@ -3204,8 +3205,8 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
     card_meta = extract_card_metadata(card)
     card_text = (card.inner_text() or "").strip()
 
-    title = title_el.inner_text().strip() if title_el else ""
-    company = company_el.inner_text().strip() if company_el else "N/A"
+    title = repair_text(title_el.inner_text().strip()) if title_el else ""
+    company = repair_text(company_el.inner_text().strip()) if company_el else "N/A"
     posted = posted_el.inner_text().strip() if posted_el else ""
     if not posted:
         posted = extract_posted_text_from_card(card_text)
@@ -3230,7 +3231,7 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
         "location": card_meta["location"],
         "work_mode": card_meta["work_mode"],
         "work_type": card_meta["work_type"],
-        "teaser": card_meta["teaser"],
+        "teaser": repair_text(card_meta["teaser"]),
         "card_salary": card_meta["card_salary"],
         "decision": "REJECT",
         "reject_reason": None,
@@ -3258,6 +3259,7 @@ def _process_seek_job_details(
     details_payload = fetch_job_details_payload(detail_page, record["url"])
     details_text = str(details_payload.get("text") or "")
     details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
+    details_text = repair_text(details_text)
     
     record["details_status"] = details_status
     record["details_length"] = len(details_text)
