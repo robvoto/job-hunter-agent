@@ -50,6 +50,31 @@
       margin-left: 4px;
       border-left: 1px solid var(--border-subtle);
     }
+    .ws-last-run {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    @keyframes wsRunPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .ws-run-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 22px;
+      background: rgba(245, 128, 32, 0.08);
+      border-bottom: 1px solid rgba(245, 128, 32, 0.2);
+      font-size: 0.84rem;
+      color: #F58020;
+      font-weight: 600;
+    }
+    .ws-run-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #F58020;
+      animation: wsRunPulse 1.2s ease-in-out infinite;
+      flex: 0 0 auto;
+    }
     .ws-test-panel {
       position: relative;
     }
@@ -365,10 +390,15 @@
       </div>
       <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
       <div class="ws-run-group">
+        <span class="ws-last-run" id="ws_last_run" hidden></span>
         <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
       </div>
     </div>
   </header>
+  <div class="ws-run-indicator" id="ws_run_indicator" hidden>
+    <span class="ws-run-indicator-dot"></span>
+    Search is running &mdash; this can take a few minutes. Results will appear automatically when done.
+  </div>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div id="results-mount">
     <div id="results-loading">Loading results...</div>
@@ -388,7 +418,8 @@
     const ONBOARDING_WIZARD_KEY = 'jobHunter.onboardingWizard';
     const isTestMode = document.body.dataset.testMode === 'true';
     let runPollHandle = null;
-    let runWasRunning = false;
+    const wsRunIndicator = document.getElementById('ws_run_indicator');
+    const wsLastRun = document.getElementById('ws_last_run');
 
     function setTestMenuOpen(open) {
       if (!wsTestMenu || !wsTestTrigger) {
@@ -612,14 +643,64 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
       });
     }
 
-    async function checkRunStatus() {
+    async function getRunStats() {
       try {
-        const resp = await fetch('/api/run-status');
-        const data = await resp.json();
-        return data.status === 'running' ? 'running' : 'idle';
+        const resp = await fetch('/api/run-stats');
+        if (!resp.ok) return null;
+        return await resp.json();
       } catch {
-        return 'idle';
+        return null;
       }
+    }
+
+    function formatLastRun(isoStr) {
+      if (!isoStr) return '';
+      try {
+        const d = new Date(isoStr);
+        return 'Last run: ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          + ' \u00b7 ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      } catch {
+        return 'Last run: ' + isoStr;
+      }
+    }
+
+    function setRunningState(running) {
+      if (running) {
+        wsRunBtn.disabled = true;
+        wsRunBtn.classList.add('is-working');
+        wsRunBtn.textContent = 'Searching\u2026';
+        if (wsRunIndicator) wsRunIndicator.hidden = false;
+      } else {
+        wsRunBtn.disabled = false;
+        wsRunBtn.classList.remove('is-working');
+        wsRunBtn.textContent = '\u25b6 Run Search';
+        if (wsRunIndicator) wsRunIndicator.hidden = true;
+      }
+    }
+
+    function updateLastRun(isoStr) {
+      if (!wsLastRun) return;
+      if (isoStr) {
+        wsLastRun.textContent = formatLastRun(isoStr);
+        wsLastRun.hidden = false;
+      } else {
+        wsLastRun.hidden = true;
+      }
+    }
+
+    function startRunPolling(prevFinishedAt) {
+      if (runPollHandle) return;
+      runPollHandle = setInterval(async () => {
+        const stats = await getRunStats();
+        const finishedAt = stats && stats.run_finished_at;
+        if (finishedAt && finishedAt !== prevFinishedAt) {
+          clearInterval(runPollHandle);
+          runPollHandle = null;
+          setRunningState(false);
+          updateLastRun(finishedAt);
+          await loadResults();
+        }
+      }, 5000);
     }
 
     async function loadResults() {
@@ -639,56 +720,32 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
       }
     }
 
-    function startRunPolling() {
-      if (runPollHandle) return;
-      runWasRunning = false;
-      runPollHandle = setInterval(async () => {
-        const status = await checkRunStatus();
-        if (status === 'running') {
-          runWasRunning = true;
-          wsRunBtn.disabled = true;
-          wsRunBtn.textContent = '\u25cf Search running\u2026';
-        } else if (runWasRunning) {
-          clearInterval(runPollHandle);
-          runPollHandle = null;
-          wsRunBtn.disabled = false;
-          wsRunBtn.textContent = '\u25b6 Run Search';
-          window.location.reload();
-        }
-      }, 10000);
-    }
-
     wsRunBtn.addEventListener('click', async () => {
-      wsRunBtn.classList.add('is-working');
-      wsRunBtn.disabled = true;
-      wsRunBtn.textContent = 'Starting\u2026';
+      if (runPollHandle) return;
+      setRunningState(true);
       try {
+        const stats = await getRunStats();
+        const prevFinishedAt = stats && stats.run_finished_at;
         const resp = await fetch('/api/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: '{}',
         });
         const data = await resp.json();
-        wsRunBtn.textContent = '\u25cf Search running\u2026';
-        wsRunBtn.classList.remove('is-working');
-        startRunPolling();
+        if (!data.ok) throw new Error(data.error || 'Failed to start run');
+        startRunPolling(prevFinishedAt);
       } catch {
-        wsRunBtn.classList.remove('is-working');
-        wsRunBtn.disabled = false;
-        wsRunBtn.textContent = '\u25b6 Run Search';
+        setRunningState(false);
       }
     });
 
     (async () => {
       renderOnboardingWelcome();
-      const status = await checkRunStatus();
-      if (status === 'running') {
-        wsRunBtn.disabled = true;
-        wsRunBtn.textContent = '\u25cf Search running\u2026';
-        startRunPolling();
+      const stats = await getRunStats();
+      if (stats && stats.run_finished_at) {
+        updateLastRun(stats.run_finished_at);
       }
       await loadResults();
-      setInterval(checkRunStatus, 30000);
     })();
   </script>
 </body>

@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(cd \"e:\\\\Programming\\\\job-hunter-agent\"; git log --oneline --all -- job_hunter_agent/cv_pipeline.py job_hunter_agent/source_documents.py | Select-Object -First 10)",
-      "PowerShell(grep -A 10 -B 10 \"title\")"
+      "PowerShell(*)",
+      "Bash(*)"
     ]
   }
 }

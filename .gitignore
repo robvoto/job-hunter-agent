@@ -44,3 +44,5 @@ BACKLOG.md
 .gitignore
 data/SCORING_RATIONALE.md
 data/TITLE_SELECTION_RATIONALE.md
+.claude/settings.json
+HARD_CODED_JUDGEMENT_BACKLOG.md

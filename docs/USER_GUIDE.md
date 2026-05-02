@@ -250,7 +250,5 @@ Simple rule:
 - `TODO.txt`
 
 These are also local-only if used:
-
-- `data/application_inputs/`
-- `data/application_materials.json`
+ 
 - `.venv/`
