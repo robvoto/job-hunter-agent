@@ -1,20 +1,18 @@
 <!doctype html>
 <html lang="en">
 <head>
+  
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Job Hunter</title>
+  <!--
+  <span class="ws-brand">
+  <img src="/static/job_hunter_img.png" alt="" class="ws-brand-icon">
+  <span>Job Hunter</span>
+</span-->
   <link rel="stylesheet" href="/static/themes.css">
   <script src="/static/theme-switcher.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    @keyframes wsSpin { to { transform: rotate(360deg); } }
-    body { 
-      margin: 0; 
-      font-family: "Segoe UI", Arial, sans-serif; 
-      background: #0B0C10; /* Deep Charcoal */
-      color: #FFFFFF;
-    }
 
     .ws-header {
       display: flex;
@@ -22,58 +20,35 @@
       justify-content: space-between;
       padding: 0 24px;
       height: 54px;
-      background: #0B0C10;
-      border-bottom: 1px solid #1F2128;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
       gap: 16px;
       position: sticky;
       top: 0;
       z-index: 200;
-    }
+    } 
     .ws-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       font-size: 1.05rem;
       font-weight: 800;
       letter-spacing: -0.02em;
       color: var(--text-primary);
       white-space: nowrap;
     }
+
+    .ws-brand-icon {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
     .ws-header-actions {
       display: flex;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
-    }
-    .ws-run-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding-left: 14px;
-      margin-left: 4px;
-      border-left: 1px solid var(--border-subtle);
-    }
-    .ws-last-run {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    @keyframes wsRunPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .ws-run-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 22px;
-      background: rgba(245, 128, 32, 0.08);
-      border-bottom: 1px solid rgba(245, 128, 32, 0.2);
-      font-size: 0.84rem;
-      color: #F58020;
-      font-weight: 600;
-    }
-    .ws-run-indicator-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #F58020;
-      animation: wsRunPulse 1.2s ease-in-out infinite;
-      flex: 0 0 auto;
     }
     .ws-test-panel {
       position: relative;
@@ -103,7 +78,7 @@
       border-radius: 16px;
       border: 1px solid var(--border-subtle);
       background: var(--bg-surface);
-      box-shadow: 0 18px 40px rgba(12, 18, 28, 0.18);
+      box-shadow: var(--shadow-soft);
       display: none;
       z-index: 220;
     }
@@ -138,48 +113,6 @@
     .ws-test-action:hover {
       background: var(--bg-muted);
     }
-    .ws-test-action-danger {
-      color: #b42318;
-    }
-    .ws-btn {
-      border-radius: 999px;
-      padding: 8px 16px;
-      font: inherit;
-      font-size: 0.86rem;
-      font-weight: 700;
-      cursor: pointer;
-      border: 1px solid var(--border-subtle);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      white-space: nowrap;
-      transition: opacity 120ms;
-    }
-    .ws-btn-primary {
-      background: #F58020; /* Logo Orange */
-      color: #FFFFFF !important;
-      border-color: #F58020;
-    }
-    .ws-btn-secondary {
-      background: var(--bg-surface);
-      color: var(--accent-2) !important;
-    }
-    .ws-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .ws-btn.is-working::before {
-      content: "";
-      width: 12px;
-      height: 12px;
-      border: 2px solid currentColor;
-      border-right-color: transparent;
-      border-radius: 999px;
-      animation: wsSpin 0.9s linear infinite;
-      opacity: 0.55;
-      flex: 0 0 auto;
-    }
 .ws-flash-mount {
       padding: 16px 22px 0;
     }
@@ -187,12 +120,12 @@
       display: none;
       max-width: 1200px;
       margin: 0 auto;
-      background:
-        radial-gradient(circle at top left, rgba(20, 83, 45, 0.16), transparent 32%),
-        linear-gradient(135deg, #fff8ee 0%, #fffdfa 58%, #eef6ff 100%);
-      border: 1px solid #e4d4bf;
+      background: 
+        radial-gradient(circle at top left, var(--state-success-bg), transparent 32%),
+        var(--bg-surface);
+      border: 1px solid var(--border-subtle);
       border-radius: 26px;
-      box-shadow: 0 24px 58px rgba(24, 34, 49, 0.12);
+    box-shadow: var(--shadow-soft);
       overflow: hidden;
     }
     .ws-flash-card.is-visible {
@@ -214,24 +147,23 @@
       font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #14532d;
+      color: var(--state-success-text);
     }
     .ws-flash-title {
       margin: 0 0 12px;
       font-size: clamp(1.8rem, 3vw, 2.5rem);
       line-height: 1;
       letter-spacing: -0.04em;
-      color: #182231;
+      color: var(--text-primary);
     }
     .ws-flash-copy {
-      margin: 0;
-      color: #495466;
+      color: var(--text-muted);
       line-height: 1.65;
       font-size: 1rem;
     }
     .ws-flash-subcopy {
       margin-top: 10px;
-      color: #5f6b7b;
+      color: var(--text-muted);
       line-height: 1.6;
       font-size: 0.94rem;
     }
@@ -245,8 +177,8 @@
       opacity: 0;
       padding: 14px 14px 15px;
       border-radius: 18px;
-      background: rgba(255, 255, 255, 0.8);
-      border: 1px solid rgba(219, 206, 188, 0.95);
+      background: var(--bg-muted);
+      border: 1px solid var(--border-subtle);
       transform: translateY(10px);
       animation: wsFlashItemIn 520ms ease forwards;
     }
@@ -260,38 +192,37 @@
       margin: 0 0 6px;
       font-size: 0.88rem;
       font-weight: 800;
-      color: #182231;
+      color: var(--text-primary);
     }
     .ws-flash-step-copy {
-      margin: 0;
       font-size: 0.9rem;
       line-height: 1.5;
-      color: #5b6470;
+      color: var(--text-muted);
     }
     .ws-flash-note {
       margin-top: 16px;
       padding: 12px 14px;
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.75);
-      border: 1px solid rgba(219, 206, 188, 0.95);
-      color: #425064;
+      background: var(--state-info-bg);
+      border: 1px solid var(--state-info-border);
+      color: var(--state-info-text);
       font-size: 0.9rem;
       line-height: 1.55;
     }
     .ws-flash-side {
       padding: 20px;
       border-radius: 22px;
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(223, 209, 189, 0.96);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
     }
     .ws-flash-side h2 {
       margin: 0 0 10px;
       font-size: 1.02rem;
-      color: #182231;
+      color: var(--text-primary);
     }
     .ws-flash-side p {
       margin: 0 0 12px;
-      color: #5b6470;
+      color: var(--text-muted);
       line-height: 1.6;
       font-size: 0.93rem;
     }
@@ -301,29 +232,18 @@
       gap: 10px;
       margin-top: 16px;
     }
-    .ws-flash-dismiss {
-      border-radius: 999px;
-      padding: 8px 14px;
-      font: inherit;
-      font-size: 0.84rem;
-      font-weight: 700;
-      cursor: pointer;
-      border: 1px solid #d6c7af;
-      background: #fffdf9;
-      color: #29435c;
-    }
     .ws-flash-optout {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       margin-top: 16px;
-      color: #5b6470;
+      color: var(--text-muted);
       font-size: 0.9rem;
       cursor: pointer;
     }
     .ws-flash-optout input {
       margin: 0;
-      accent-color: #14532d;
+      accent-color: var(--accent);
     }
     @keyframes wsFlashCardIn {
       from {
@@ -350,7 +270,7 @@
     #results-mount { min-height: calc(100vh - 54px); }
     #results-loading {
       padding: 64px 24px;
-      color: #667085;
+      color: var(--text-muted);
       text-align: center;
       font-size: 0.95rem;
     }
@@ -367,9 +287,12 @@
     }
   </style>
 </head>
-<body data-test-mode="__JOB_HUNTER_TEST_MODE__">
+<body data-test-mode="__JOB_HUNTER_DEBUG_MODE__">
   <header class="ws-header">
-    <span class="ws-brand">Job Hunter</span>
+    <span class="ws-brand">
+      <img src="/static/job_hunter_img.png" class="ws-brand-icon">
+      <span>Job Hunter</span>
+    </span>
     <div class="ws-header-actions">
       <div class="theme-switcher-widget">
         <span>Theme test:</span>
@@ -385,27 +308,18 @@
           <div class="ws-test-menu-title">&#128736; Test</div>
           <div class="ws-test-menu-separator" aria-hidden="true"></div>
           <button class="ws-test-action" id="ws_reset_user_btn" type="button" role="menuitem">Reset User</button>
-          <button class="ws-test-action ws-test-action-danger" id="ws_reset_learning_btn" type="button" role="menuitem">Reset Learning (&#9888;)</button>
+          <button class="ws-test-action" id="ws_reset_learning_btn" type="button" role="menuitem" style="color: var(--state-error-text);">Reset Learning (&#9888;)</button>
         </div>
       </div>
-      <a href="/settings" class="ws-btn ws-btn-secondary">&#9881; Settings</a>
-      <div class="ws-run-group">
-        <span class="ws-last-run" id="ws_last_run" hidden></span>
-        <button class="ws-btn ws-btn-primary" id="ws_run_btn" type="button">&#9654; Run Search</button>
-      </div>
+      <a href="/settings" class="btn btn-secondary" style="font-size: 0.86rem; padding: 8px 16px;">&#9881; Settings</a>
     </div>
   </header>
-  <div class="ws-run-indicator" id="ws_run_indicator" hidden>
-    <span class="ws-run-indicator-dot"></span>
-    Search is running &mdash; this can take a few minutes. Results will appear automatically when done.
-  </div>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div id="results-mount">
     <div id="results-loading">Loading results...</div>
   </div>
 
   <script>
-    const wsRunBtn = document.getElementById('ws_run_btn');
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const resultsMount = document.getElementById('results-mount');
     const wsTestPanel = document.getElementById('ws_test_panel');
@@ -417,9 +331,6 @@
     const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
     const ONBOARDING_WIZARD_KEY = 'jobHunter.onboardingWizard';
     const isTestMode = document.body.dataset.testMode === 'true';
-    let runPollHandle = null;
-    const wsRunIndicator = document.getElementById('ws_run_indicator');
-    const wsLastRun = document.getElementById('ws_last_run');
 
     function setTestMenuOpen(open) {
       if (!wsTestMenu || !wsTestTrigger) {
@@ -543,7 +454,7 @@
                 </div>
                 <div class="ws-flash-step">
                   <p class="ws-flash-step-title">2. Run a search when ready</p>
-                  <p class="ws-flash-step-copy">Use the <strong>Run Search</strong> button in the top bar to fetch fresh roles. It can take a few minutes, and this dashboard will refresh when the run finishes.</p>
+                  <p class="ws-flash-step-copy">Use <strong>Run Search Now</strong> in the Search Operations panel to fetch fresh roles. It can take a few minutes, and this dashboard will refresh when the run finishes.</p>
                 </div>
                 <div class="ws-flash-step">
                   <p class="ws-flash-step-title">3. Schedule or tune things in Settings</p>
@@ -555,11 +466,11 @@
             <aside class="ws-flash-side">
               <h2>Quick start</h2>
               <p>This intro is just a handoff so you know where you are. Once dismissed, the dashboard below becomes the main thing you work from.</p>
-              <p>If you already have saved roles, browse them now. If not, use the top-bar run button and wait here while the dashboard refreshes with fresh matches. If you prefer, you can set a daily schedule instead.</p>
+              <p>If you already have saved roles, browse them now. If not, use Run Search Now in the Search Operations panel and wait here while the dashboard refreshes with fresh matches. If you prefer, you can set a daily schedule instead.</p>
               <div class="ws-flash-actions">
-                <a href="/settings#schedule-panel" class="ws-btn ws-btn-secondary">Set Daily Schedule</a>
-                <a href="/settings" class="ws-btn ws-btn-secondary">Open Settings</a>
-                <button class="ws-flash-dismiss" id="ws_flash_dismiss" type="button">Got it</button>
+                  <a href="/settings#schedule-panel" class="btn btn-secondary" style="font-size: 0.84rem; padding: 8px 14px;">Set Daily Schedule</a>
+                  <a href="/settings" class="btn btn-secondary" style="font-size: 0.84rem; padding: 8px 14px;">Open Settings</a>
+                  <button class="btn btn-secondary" id="ws_flash_dismiss" type="button" style="font-size: 0.84rem; padding: 8px 14px;">Got it</button>
               </div>
               <label class="ws-flash-optout" for="ws_flash_opt_out">
                 <input type="checkbox" id="ws_flash_opt_out">
@@ -643,71 +554,11 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
       });
     }
 
-    async function getRunStats() {
-      try {
-        const resp = await fetch('/api/run-stats');
-        if (!resp.ok) return null;
-        return await resp.json();
-      } catch {
-        return null;
-      }
-    }
-
-    function formatLastRun(isoStr) {
-      if (!isoStr) return '';
-      try {
-        const d = new Date(isoStr);
-        return 'Last run: ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          + ' \u00b7 ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      } catch {
-        return 'Last run: ' + isoStr;
-      }
-    }
-
-    function setRunningState(running) {
-      if (running) {
-        wsRunBtn.disabled = true;
-        wsRunBtn.classList.add('is-working');
-        wsRunBtn.textContent = 'Searching\u2026';
-        if (wsRunIndicator) wsRunIndicator.hidden = false;
-      } else {
-        wsRunBtn.disabled = false;
-        wsRunBtn.classList.remove('is-working');
-        wsRunBtn.textContent = '\u25b6 Run Search';
-        if (wsRunIndicator) wsRunIndicator.hidden = true;
-      }
-    }
-
-    function updateLastRun(isoStr) {
-      if (!wsLastRun) return;
-      if (isoStr) {
-        wsLastRun.textContent = formatLastRun(isoStr);
-        wsLastRun.hidden = false;
-      } else {
-        wsLastRun.hidden = true;
-      }
-    }
-
-    function startRunPolling(prevFinishedAt) {
-      if (runPollHandle) return;
-      runPollHandle = setInterval(async () => {
-        const stats = await getRunStats();
-        const finishedAt = stats && stats.run_finished_at;
-        if (finishedAt && finishedAt !== prevFinishedAt) {
-          clearInterval(runPollHandle);
-          runPollHandle = null;
-          setRunningState(false);
-          updateLastRun(finishedAt);
-          await loadResults();
-        }
-      }, 5000);
-    }
-
     async function loadResults() {
       try {
         const resp = await fetch('/api/results-html');
         if (!resp.ok) {
-          resultsMount.innerHTML = '<div style="padding:64px 24px;color:#667085;text-align:center;">Run a search first to see results.</div>';
+          resultsMount.innerHTML = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;">Run a search first to see results.</div>';
           return;
         }
         const html = await resp.text();
@@ -716,35 +567,12 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
         const frag = range.createContextualFragment(html);
         resultsMount.appendChild(frag);
       } catch {
-        resultsMount.innerHTML = '<div style="padding:64px 24px;color:#667085;text-align:center;">Could not load results. Try refreshing the page.</div>';
+        resultsMount.innerHTML = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;">Could not load results. Try refreshing the page.</div>';
       }
     }
 
-    wsRunBtn.addEventListener('click', async () => {
-      if (runPollHandle) return;
-      setRunningState(true);
-      try {
-        const stats = await getRunStats();
-        const prevFinishedAt = stats && stats.run_finished_at;
-        const resp = await fetch('/api/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-        });
-        const data = await resp.json();
-        if (!data.ok) throw new Error(data.error || 'Failed to start run');
-        startRunPolling(prevFinishedAt);
-      } catch {
-        setRunningState(false);
-      }
-    });
-
     (async () => {
       renderOnboardingWelcome();
-      const stats = await getRunStats();
-      if (stats && stats.run_finished_at) {
-        updateLastRun(stats.run_finished_at);
-      }
       await loadResults();
     })();
   </script>

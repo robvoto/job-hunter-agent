@@ -1,28 +1,27 @@
-from typing import Final
+import json
+from typing import Final, Any
+from job_hunter_agent.paths import MATCH_LEVEL_DEFAULTS_PATH
 
 
-MATCH_LEVELS: Final[list[dict[str, object]]] = [
-    {
-        "minimum_score": 85,
-        "label": "Strong match",
-        "description": "strongest fit signals",
-    },
-    {
-        "minimum_score": 70,
-        "label": "Good match",
-        "description": "clear fit with fewer caveats",
-    },
-    {
-        "minimum_score": 55,
-        "label": "Worth a look",
-        "description": "plausible fit worth reviewing",
-    },
-    {
-        "minimum_score": 0,
-        "label": "Stretch",
-        "description": "lower-confidence or borderline fit",
-    },
-]
+def _load_default_levels() -> list[dict[str, Any]]:
+    """Load default match levels from JSON."""
+    if not MATCH_LEVEL_DEFAULTS_PATH.exists():
+        raise FileNotFoundError(f"Missing required knowledge file: {MATCH_LEVEL_DEFAULTS_PATH}")
+
+    try:
+        payload = json.loads(MATCH_LEVEL_DEFAULTS_PATH.read_text(encoding="utf-8"))
+        entries = payload.get("entries")
+        if isinstance(entries, list) and entries:
+            return entries
+    except Exception as exc:
+        raise ValueError(
+            f"Failed to load match levels from {MATCH_LEVEL_DEFAULTS_PATH}: {exc}"
+        ) from exc
+
+    raise ValueError(f"Knowledge file {MATCH_LEVEL_DEFAULTS_PATH} must contain a non-empty entries list")
+
+
+MATCH_LEVELS: Final[list[dict[str, Any]]] = _load_default_levels()
 
 
 def normalize_match_levels(levels: object) -> list[dict[str, object]]:

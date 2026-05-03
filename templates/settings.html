@@ -14,13 +14,29 @@
     [data-test-mode="false"] .alias-tag {
       display: none !important;
     }
+
+    .sidebar-brand-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar-brand-icon {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
   </style>
 </head>
-<body data-test-mode="__JOB_HUNTER_TEST_MODE__">
+<body data-test-mode="__JOB_HUNTER_DEBUG_MODE__">
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Settings sections">
       <div class="sidebar-brand">
-        <h1>Job Hunter</h1>
+        <h1 class="sidebar-brand-title">
+          <img src="/static/job_hunter_img.png" alt="" class="sidebar-brand-icon">
+          <span>Job Hunter</span>
+        </h1>
       </div>
       <div class="sidebar-nav">
         <button class="nav-item is-active" type="button" data-section="section-search">Search</button>
@@ -63,6 +79,10 @@
               <input id="keywords" type="text" placeholder="e.g. Business Analyst">
               <div class="help">Use one clear job title here. This is the source query used to fetch candidate roles before CV-based scoring and capability rules refine them.</div>
 
+              <label for="dashboard_minimum_score">Dashboard results minimum score</label>
+              <input id="dashboard_minimum_score" type="number" min="0" max="100">
+              <div class="help">Dashboard shortlist keeps roles at or above this fit score. This changes visibility after scoring, not how many source pages are scraped.</div>
+
               <label for="minimum_salary_yearly">Minimum annual salary</label>
               <input id="minimum_salary_yearly" type="number" min="0" step="1000">
               <div class="help">Used when permanent roles list salary. Set 0 to ignore.</div>
@@ -78,9 +98,9 @@
               <textarea id="locations" placeholder="One location per line"></textarea>
               <div class="help">Use source-specific location text you actually want to search.</div>
 
-              <label for="classification_ids">Classification IDs</label>
-              <textarea id="classification_ids" placeholder="One id per line"></textarea>
-              <div class="help">Broad pre-filter before fit logic runs.</div>
+              <label for="classification_ids" hidden>Classification IDs</label>
+              <textarea id="classification_ids" placeholder="One id per line" hidden></textarea>
+              <div class="help" hidden>Broad pre-filter before fit logic runs.</div>
 
               <label for="date_range_days">How far back to search</label>
               <select id="date_range_days">
@@ -91,9 +111,9 @@
                 <option value="30">Last 30 days</option>
               </select>
 
-              <label for="max_pages_cap">Max pages to check</label>
-              <input id="max_pages_cap" type="number" min="1">
-              <div class="help">Pages checked per search per location. Ceiling is set in agent_settings.json → scraping.max_pages_hard_limit (default 25).</div>
+              <label for="seek_max_pages">Max pages to check</label>
+              <input id="seek_max_pages" type="number" min="1" max="10">
+              <div class="help">Saved SEEK page limit used by manual and scheduled runs. Allowed range is 1 to 10.</div>
 
               <label for="enforce_posted_age_limit">Strictly reject older ads</label>
               <select id="enforce_posted_age_limit">
@@ -285,13 +305,13 @@
             </div>
 
             <aside class="profile-side">
-              <section class="panel side-panel" style="border: 2px solid #f87171; background: #fff5f5;">
-                <div class="panel-kicker" style="color:#b91c1c;">Danger</div>
-                <h2 style="color:#7f1d1d;">Full Profile Rebuild</h2>
-                <p class="panel-copy" style="color:#7f1d1d; font-weight:700;">This overwrites your current machine profile.</p>
+              <section class="panel side-panel" style="border: 2px solid var(--state-error-border); background: var(--state-error-bg);">
+                <div class="panel-kicker" style="color: var(--state-error-text);">Danger</div>
+                <h2 style="color: var(--state-error-text);">Full Profile Rebuild</h2>
+                <p class="panel-copy" style="color: var(--state-error-text); font-weight:700;">This overwrites your current machine profile.</p>
                 <p class="panel-copy">Only use this when you actually want to rebuild extracted profile data from source documents.</p>
                 <div class="panel-actions">
-                  <button class="secondary" id="rebuild_profile" type="button" style="border-color:#b91c1c; color:#b91c1c; background:#fff;">Start Full Rebuild</button>
+                  <button class="btn btn-secondary" id="rebuild_profile" type="button" style="border-color: var(--state-error-text); color: var(--state-error-text);">Start Full Rebuild</button>
                 </div>
               </section>
             </aside>
@@ -398,7 +418,7 @@
           <div class="grid">
             <section class="panel">
               <h2>Telegram Alerts</h2>
-              <div class="panel-kicker" style="color:#b91c1c;">Personal bot only</div>
+              <div class="panel-kicker" style="color: var(--state-error-text);">Personal bot only</div>
               <div class="help">These settings should use their own Telegram bot. Do not share one bot across different people unless you want them all receiving the same alerts.</div>
               <div class="help">New to Telegram bots? Use <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">BotFather</a> to create the bot, or read Telegram's official <a href="https://core.telegram.org/bots/tutorial" target="_blank" rel="noreferrer">bot setup guide</a>.</div>
               <label for="telegram_enabled">Telegram alerts enabled</label>
@@ -452,7 +472,7 @@
         </section>
 
         <section id="section-signals" class="settings-group">
-          <h2 class="section-title">Learning Review</h2>
+          <h2 class="section-title">Learning</h2>
           <div id="signal_registry_panel">
             <p class="help">Select "Learning" in the sidebar to load.</p>
           </div>
@@ -497,5 +517,7 @@
 
   <script src="/static/capability-ui.js"></script>
   <script src="/static/settings-page.js"></script>
+  <script src="/static/settings-review-panel.js"></script>
+  <script src="/static/settings-signal-registry.js"></script>
 </body>
 </html>

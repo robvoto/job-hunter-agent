@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from job_hunter_agent.agent_settings import DEFAULT_AGENT_SETTINGS, load_agent_settings, save_agent_settings
+from job_hunter_agent.agent_settings import DEFAULT_AGENT_SETTINGS, load_agent_settings, load_agent_state, save_agent_settings
 from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
 from job_hunter_agent.filters import build_title_block_rule, normalize_title_block_phrase, passes_saved_rejection_rules, suggest_title_block_phrase
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
@@ -54,7 +54,7 @@ _STATIC_MIME_OVERRIDES = {
     ".js": "text/javascript",
     ".png": "image/png",
 }
-TEST_MODE = "--test-mode" in set(sys.argv[1:])
+DEBUG_MODE = "--debug-mode" in set(sys.argv[1:])
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -128,8 +128,8 @@ def _normalize_suggestion_phrase(value: Any) -> str:
 
 def _render_template(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore").replace(
-        "__JOB_HUNTER_TEST_MODE__",
-        "true" if TEST_MODE else "false",
+        "__JOB_HUNTER_DEBUG_MODE__",
+        "true" if DEBUG_MODE else "false",
     )
 
 
@@ -230,13 +230,20 @@ def _validate_required_onboarding_inputs(
 
 
 def _read_last_run_timestamp() -> str | None:
-    if not RUN_STATS_PATH.exists():
-        return None
     try:
-        payload = json.loads(RUN_STATS_PATH.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            return None
-        return str(payload.get("run_finished_at") or payload.get("run_started_at") or "").strip() or None
+        if RUN_STATS_PATH.exists():
+            payload = json.loads(RUN_STATS_PATH.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                timestamp = str(
+                    payload.get("last_run_attempt_at")
+                    or payload.get("run_finished_at")
+                    or payload.get("run_started_at")
+                    or ""
+                ).strip()
+                if timestamp:
+                    return timestamp
+        state = load_agent_state()
+        return str(state.get("last_agent_run_at") or "").strip() or None
     except Exception:
         return None
 
@@ -253,8 +260,8 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
         overrides["locations"] = _parse_locations_override(source.get("locations"))
     if "date_range_days" in source:
         overrides["date_range_days"] = source.get("date_range_days")
-    if "max_pages_cap" in source:
-        overrides["max_pages_cap"] = source.get("max_pages_cap")
+    if "seek_max_pages" in source:
+        overrides["seek_max_pages"] = source.get("seek_max_pages")
     if "linkedin_hours_old" in source:
         overrides["linkedin_hours_old"] = source.get("linkedin_hours_old")
     if "linkedin_results_per_search" in source:
@@ -306,6 +313,16 @@ def _run_scrape_job() -> None:
         print(f"[RUN][ERROR] {type(exc).__name__}: {exc}")
     finally:
         _set_run_in_progress(False)
+
+def _rebuild_dashboard_for_debug_mode() -> None:
+    if not DEBUG_MODE:
+        return
+    if not DASHBOARD_PATH.exists() and not RUN_STATS_PATH.exists() and not AUDIT_RECORDS_PATH.exists():
+        return
+    try:
+        rebuild_html_dashboard(reason="local server debug mode startup")
+    except Exception as exc:
+        print(f"[DASHBOARD][WARN] Could not rebuild for debug mode: {type(exc).__name__}: {exc}")
 
 
 
@@ -436,9 +453,9 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _reset_global_learning() -> dict[str, Any]:
-        from job_hunter_agent.signal_registry import save_registry
+        from job_hunter_agent.signal_registry import clear_signal_learning_state
 
-        save_registry({})
+        clear_signal_learning_state()
         return {
             "ok": True,
             "message": "Global learning reset. Shared learned signals were cleared.",
@@ -446,12 +463,16 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _sanitize_agent_settings_payload(payload: dict) -> dict:
+        dashboard = payload.get("dashboard", {}) if isinstance(payload, dict) else {}
         telegram = payload.get("telegram", {}) if isinstance(payload, dict) else {}
         llm = payload.get("llm", {}) if isinstance(payload, dict) else {}
         schedule_payload = payload.get("schedule") if isinstance(payload, dict) else None
         _allowed_models = {"gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1", "gpt-4o"}
         model = str(llm.get("model") or "").strip()
         sanitized = {
+            "dashboard": {
+                "minimum_score": max(0, min(int(dashboard.get("minimum_score", 55) or 55), 100)),
+            },
             "telegram": {
                 "enabled": bool(telegram.get("enabled", False)),
                 "bot_token": str(telegram.get("bot_token") or "").strip(),
@@ -487,11 +508,27 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _public_agent_settings_payload(settings: dict) -> dict:
+        dashboard = settings.get("dashboard", {}) if isinstance(settings, dict) else {}
         telegram = settings.get("telegram", {}) if isinstance(settings, dict) else {}
         llm = settings.get("llm", {}) if isinstance(settings, dict) else {}
         schedule = settings.get("schedule", {}) if isinstance(settings, dict) else {}
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
+            "dashboard": {
+                "minimum_score": max(
+                    0,
+                    min(
+                        int(
+                            dashboard.get(
+                                "minimum_score",
+                                DEFAULT_AGENT_SETTINGS["dashboard"]["minimum_score"],
+                            )
+                            or DEFAULT_AGENT_SETTINGS["dashboard"]["minimum_score"]
+                        ),
+                        100,
+                    ),
+                ),
+            },
             "schedule": {
                 "daily_time_local": str(
                     schedule.get("daily_time_local")
@@ -1183,6 +1220,20 @@ class SettingsHandler(BaseHTTPRequestHandler):
             profile["must_not_require_skills"] = existing_blockers
             save_profile(profile)
 
+        from job_hunter_agent.signal_registry import register_signals
+
+        register_signals([
+            {
+                "signal": blocker,
+                "category": "hard_blocker_concept",
+                "source": "user feedback",
+                "context": [item for item in [title, company] if str(item).strip()],
+                "evidence": cleaned_blockers,
+                "needs_review": True,
+            }
+            for blocker in cleaned_blockers
+        ])
+
         title_result: dict[str, Any] | None = None
         description_result: dict[str, Any] | None = None
         applied_title_block_phrases: list[str] = []
@@ -1507,7 +1558,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 self._redirect("/")
                 return
             if _path == "/settings":
-                if not TEST_MODE and not _onboarding_complete():
+                if not DEBUG_MODE and not _onboarding_complete():
                     self._redirect("/start")
                     return
                 if SETTINGS_HTML_PATH.exists():
@@ -1534,7 +1585,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
             return
         if _path == "/api/results-html":
             if not DASHBOARD_PATH.exists():
-                body = '<div style="padding:64px 24px;color:#667085;text-align:center;font-family:sans-serif;">No results yet - run a search first.</div>'.encode("utf-8")
+                body = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;font-family:var(--sans);">No results yet - run a search first.</div>'.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -1567,6 +1618,18 @@ class SettingsHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
             self._send_json(200, {})
+            return
+        if _path == "/api/run-status":
+            last_run = _read_last_run_timestamp()
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "status": "running" if _is_run_in_progress() else "idle",
+                    "last_run_at": last_run,
+                    "has_run": last_run is not None,
+                },
+            )
             return
         if _path == "/api/review-data":
             if REVIEW_DATA_PATH.exists():
@@ -1668,13 +1731,30 @@ class SettingsHandler(BaseHTTPRequestHandler):
             return
 
         if _path == "/api/signal-registry":
-            from job_hunter_agent.signal_registry import load_registry
+            from job_hunter_agent.signal_registry import (
+                CATEGORY_LABELS,
+                VALID_SIGNAL_CATEGORIES,
+                load_registry,
+            )
             registry = load_registry()
             signals = sorted(
                 registry.values(),
-                key=lambda r: (not r.get("needs_review", True), str(r.get("signal", "")).lower()),
+                key=lambda r: str(r.get("signal", "")).lower(),
             )
-            self._send_json(200, {"signals": signals, "total": len(signals)})
+            self._send_json(
+                200,
+                {
+                    "signals": signals,
+                    "total": len(signals),
+                    "categories": [
+                        {
+                            "key": category,
+                            "label": CATEGORY_LABELS.get(category, category.replace("_", " ").title()),
+                        }
+                        for category in sorted(VALID_SIGNAL_CATEGORIES)
+                    ],
+                },
+            )
             return
 
         self._send_json(404, {"error": "Not found"})
@@ -1682,33 +1762,41 @@ class SettingsHandler(BaseHTTPRequestHandler):
     def do_PATCH(self) -> None:
       if self.path == "/api/signal-registry":
         try:
-            from job_hunter_agent.signal_registry import update_signal
+            from job_hunter_agent.signal_registry import set_signal_category
 
             body = self._read_json_body()
             key = str(body.get("key") or "").strip()
-            learning_status = str(body.get("learning_status") or "pending").strip()
-            suggested_category = str(body.get("suggested_category") or "").strip()
-            target_file = str(body.get("target_file") or "").strip()
-            scope = str(body.get("scope") or "global").strip()
-            notes = str(body.get("notes") or "").strip()
+            category = str(body.get("category") or "").strip()
 
             if not key:
                 self._send_json(400, {"error": "key is required"})
                 return
 
-            updated = update_signal(
-                key=key,
-                learning_status=learning_status,
-                suggested_category=suggested_category,
-                scope=scope,
-                target_file=target_file,
-                notes=notes, 
-            )
+            action = str(body.get("action") or "category").strip().lower()
+            if action == "approve":
+                from job_hunter_agent.signal_registry import approve_signal
 
+                updated = approve_signal(key, category=category)
+                if updated is None:
+                    self._send_json(404, {"error": f"Signal '{key}' not found in registry"})
+                    return
+                self._send_json(200, {"ok": True, "signal": updated})
+                return
+
+            if action == "ignore":
+                from job_hunter_agent.signal_registry import ignore_signal
+
+                updated = ignore_signal(key)
+                if updated is None:
+                    self._send_json(404, {"error": f"Signal '{key}' not found in registry"})
+                    return
+                self._send_json(200, {"ok": True, "signal": updated})
+                return
+
+            updated = set_signal_category(key, category)
             if updated is None:
                 self._send_json(404, {"error": f"Signal '{key}' not found in registry"})
                 return
-
             self._send_json(200, {"ok": True, "signal": updated})
 
         except ValueError as exc:
@@ -1724,6 +1812,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
               telegram_patch = patch.get("telegram", {})
               if not str(telegram_patch.get("bot_token") or "").strip():
                   telegram_patch.pop("bot_token", None)
+              current.setdefault("dashboard", {}).update(patch.get("dashboard", {}))
               current.setdefault("telegram", {}).update(telegram_patch)
               current.setdefault("llm", {}).update(patch.get("llm", {}))
               current.setdefault("schedule", {}).update(patch.get("schedule", {}))
@@ -1768,7 +1857,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         if self.path == "/api/test/reset-user":
-            if not TEST_MODE:
+            if not DEBUG_MODE:
                 self._send_json(403, {"error": "Test mode only"})
                 return
             try:
@@ -1779,7 +1868,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
             self._send_json(200, result)
             return
         if self.path == "/api/test/reset-learning":
-            if not TEST_MODE:
+            if not DEBUG_MODE:
                 self._send_json(403, {"error": "Test mode only"})
                 return
             try:
@@ -2218,7 +2307,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def log_message(self, format: str, *args) -> None:
-        if TEST_MODE:
+        if DEBUG_MODE:
             super().log_message(format, *args)
         return
 
@@ -2227,9 +2316,10 @@ AdminHandler = SettingsHandler
 
 
 if __name__ == "__main__":
+    _rebuild_dashboard_for_debug_mode()
     server = ThreadingHTTPServer((HOST, PORT), SettingsHandler)
     print(f"Local server running at http://{HOST}:{PORT}")
-    print(f"Test mode:  {'ON (--test-mode)' if TEST_MODE else 'OFF'}")
+    print(f"Debug mode:  {'ON (--debug-mode)' if DEBUG_MODE else 'OFF'}")
     print(f"Workspace:  http://{HOST}:{PORT}/")
     print(f"Settings:   http://{HOST}:{PORT}/settings")
     print(f"Onboarding: http://{HOST}:{PORT}/start")

@@ -9,11 +9,11 @@ import re
 import sys
 from typing import List, Set
 
-from job_hunter_agent.filters import passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules, passes_title_filters
+from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules
 from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
-from job_hunter_agent.utils import extract_salary, extract_work_mode, repair_text
+from job_hunter_agent.utils import extract_salary, extract_work_mode
 
 
 class LinkedInScraper(BaseJobScraper):
@@ -39,6 +39,7 @@ class LinkedInScraper(BaseJobScraper):
             MIN_TRUSTED_DESCRIPTION_LENGTH,
             TRUSTED_DESCRIPTION_SOURCES,
             build_fit_highlights,
+            build_job_learning_signals,
             build_risk_and_missing_evidence,
             build_role_summary,
             can_reuse_kept_job,
@@ -51,6 +52,9 @@ class LinkedInScraper(BaseJobScraper):
             finalize_record,
             hard_block_entries,
             hard_block_reasons,
+            find_hard_block_matches,
+            register_signals,
+            register_hard_blocker_learning_from_rejection,
         )
 
         kept_records: List[dict] = []
@@ -63,7 +67,7 @@ class LinkedInScraper(BaseJobScraper):
             return kept_records, audit_rows, skill_observations
 
         for target in targets:
-            print(f"\n[LinkedIn] Searching: {target['search_term']} | {target['location']}")
+            print(f"\n[LinkedIn] Searching: {target['search_term']} | {target['location']} (Targeting up to {target['results_wanted']} results)")
             try:
                 rows = self._fetch_jobspy(target)
             except Exception as exc:
@@ -74,7 +78,7 @@ class LinkedInScraper(BaseJobScraper):
                 print(f"[LinkedIn] No results for {target['location']}")
                 continue
 
-            print(f"[LinkedIn] {len(rows)} results from jobspy")
+            print(f"[LinkedIn] Fetched {len(rows)} raw listings. Starting filter and score pipeline...")
 
             for _, row in rows.iterrows():
                 record = normalize_jobspy_record(
@@ -84,9 +88,8 @@ class LinkedInScraper(BaseJobScraper):
                     run_iso=self.run_iso,
                 )
 
-                title = repair_text(record.get("title", ""))
-                company = repair_text(record.get("company", "N/A"))
-                record["title"], record["company"] = title, company
+                title = record.get("title", "")
+                company = record.get("company", "N/A")
 
                 if not record.get("job_key"):
                     record["reject_reason"] = "NO_JOB_KEY"
@@ -99,8 +102,11 @@ class LinkedInScraper(BaseJobScraper):
                     continue
 
                 # Title filter
-                ok_title, title_reason = passes_title_filters(title)
+                title_analysis = analyze_title_filters(title, self.profile)
+                ok_title = bool(title_analysis.get("ok"))
+                title_reason = str(title_analysis.get("reason") or "")
                 record["title_reason"] = title_reason
+                record["title_match_metadata"] = title_analysis
                 if not ok_title:
                     print(f"[LinkedIn] REJECTED (title) [{title_reason}] {title}")
                     record["reject_reason"] = title_reason
@@ -131,7 +137,6 @@ class LinkedInScraper(BaseJobScraper):
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 
-                record["teaser"] = repair_text(record.get("teaser", ""))
                 # Quick card gate
                 ok_card, card_reason = passes_quick_card_filters(
                     title=title,
@@ -162,7 +167,6 @@ class LinkedInScraper(BaseJobScraper):
                     record["reject_reason"] = "NO_DETAILS"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
-                details_text = repair_text(details_text)
                 record["fit_source_text"] = details_text
                 record["full_description"] = details_text
                 record["description_source"] = "linkedin_full_description"
@@ -179,12 +183,19 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 record["content_reason"] = desc_reason
                 if not ok_desc:
+                    if desc_reason.startswith("DESC_HARD_BLOCK_KNOWLEDGE"):
+                        record["hard_block_reasons"] = [
+                            match.get("value") or match.get("matched_term") or ""
+                            for match in find_hard_block_matches(details_text)
+                        ]
+                    register_hard_blocker_learning_from_rejection(record, desc_reason, details_text)
                     print(f"[LinkedIn] REJECTED (content) [{desc_reason}] {title} @ {company}")
                     record["reject_reason"] = desc_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
                 ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
                 if not ok_learned:
+                    register_hard_blocker_learning_from_rejection(record, learned_reason, details_text)
                     record["content_reason"] = learned_reason
                     record["reject_reason"] = learned_reason
                     print(f"[LinkedIn] REJECTED (learned rule) [{learned_reason}] {title} @ {company}")
@@ -217,6 +228,12 @@ class LinkedInScraper(BaseJobScraper):
                     hard_block_category = hard_block_matches[0].get("category") or "hard_block"
                     record["content_reason"] = f"DESC_HARD_BLOCK:{hard_block_category}"
                     record["reject_reason"] = record["content_reason"]
+                    register_hard_blocker_learning_from_rejection(
+                        record,
+                        record["content_reason"],
+                        details_text,
+                        hard_block_matches,
+                    )
                     print(
                         f"[LinkedIn] REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | "
                         f"{'; '.join(record['hard_block_reasons'])}"
@@ -268,7 +285,11 @@ class LinkedInScraper(BaseJobScraper):
                     continue
 
                 record["decision"] = "KEEP"
-                skill_observations.extend(extract_skill_observations(record, details_text, self.profile))
+                record_skill_observations = extract_skill_observations(record, details_text, self.profile)
+                skill_observations.extend(record_skill_observations)
+                pending_signals = build_job_learning_signals(record, record_skill_observations, self.profile)
+                if pending_signals:
+                    register_signals(pending_signals)
                 finalize_record(self.job_history, audit_rows, record, self.run_iso)
                 kept_records.append(record)
                 print(

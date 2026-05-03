@@ -1,7 +1,7 @@
 # SOUL.md - Job Hunter Agent
 
 > This file is the project source of truth for AI assistants working in this repo.
-> Keep it updated as the project evolves. Last updated: April 2026.
+> Keep it updated as the project evolves. Last updated: May 2026.
 > Repo target name: `job-hunter-agent`
 > Repo URL: https://github.com/robvoto/job-hunter-agent
 
@@ -310,7 +310,7 @@ Keep personal and local-only:
 - `data/agent_settings.json`
 - `data/agent_state.json`
 - `data/llm_cache.json` 
-- `data/llm_costs.json` 
+- `data/llm_costs.jsonl` 
 - `TODO.txt`
 - `.venv/`
 

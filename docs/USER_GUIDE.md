@@ -22,7 +22,7 @@ python -m job_hunter_agent.local_server
 Test/debug mode:
 
 ```powershell
-python -m job_hunter_agent.local_server --test-mode
+python -m job_hunter_agent.local_server --debug-mode
 ```
 
 2. Open:
@@ -127,6 +127,7 @@ The dashboard groups jobs by their calculated fit score:
 
 - **Strong match** (85-100): High alignment with core capabilities and experience.
 - **Good match** (70-84): Solid alignment, perhaps missing secondary criteria.
+- **Possible fit** (55-69): Plausible fit worth reviewing.
 - **Stretch** (0-54): Low alignment or significant requirement gaps.
 
 The dashboard groups jobs into:
@@ -187,33 +188,28 @@ python -m job_hunter_agent.test_runner
 
 - refreshes jobs
 - rebuilds the dashboard
-- updates local run outputs
+- updates local run outputs 
 
-`python -m job_hunter_agent.source_connector --rebuild-dashboard`
+Use Settings to widen source coverage instead.
 
-- rebuilds the dashboard from saved local state only
-- useful when UI behavior changed and you want the latest HTML without a fresh scrape
-
-`python -m job_hunter_agent.source_connector --scrape-allow-low`
-
-- runs a wider scrape to catch borderline matches
-- widens both SEEK and LinkedIn source windows
-- lowers the shortlist threshold
+- raise `How far back to search` for SEEK if you want a broader SEEK pass
+- raise `How far back to search (hours)` for LinkedIn if you want a broader LinkedIn pass
+- lower `Dashboard results minimum score` if you want more borderline roles to stay visible
 
 Important:
 
 - some specialist-domain requirements can now hard-block a role entirely
 - if a source page comes back as a challenge or invalid detail page, the app rejects it instead of scoring it from bad text
 
-`python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard`
+`python -m job_hunter_agent.source_connector --rebuild-dashboard
 
-- rebuilds the dashboard showing borderline "Stretch" roles (score 35+)
 - does not run a fresh scrape
 
 `python -m job_hunter_agent.source_connector --rebuild-dashboard --debug-dashboard`
 
 - rebuilds the dashboard from saved local state only
 - shows expanded score/debug details and borderline roles
+- shows raw score numbers (e.g. 72/100) directly on cards
 - does not run a fresh scrape or AI review
 
 `python -m job_hunter_agent.source_connector --reset-new-to-you`
@@ -221,16 +217,13 @@ Important:
 - resets the 'Viewed' status for all jobs so they appear as "New To You"
 - useful for testing how roles evaluate visually
 
-`python -m job_hunter_agent.source_connector --show-scores`
-
-- shows raw score numbers (e.g. 72/100) directly on cards
 - expands the fit breakdown section showing exactly how points were added/subtracted
 
-`python -m job_hunter_agent.source_connector --max-pages 1`
+Set `SEEK -> Max pages to check` in Settings.
 
-- limits the scraper to checking only the first page of results per location
-- overrides the maximum pages setting in your profile temporarily
-- highly recommended for testing new filters quickly without doing a full run
+- saved in your profile and used by both manual and scheduled runs
+- clamped server-side to 1..10 even if someone sends a larger value manually
+- use `1` there when you want a fast SEEK test run
 
 `python -m job_hunter_agent.agent_runner`
 

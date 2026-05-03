@@ -1,4 +1,4 @@
-
+﻿
     const statusEl = document.getElementById('status');
     const isTestMode = document.body?.dataset.testMode === 'true';
     const runNowButton = document.getElementById('run_now');
@@ -149,8 +149,8 @@
       settingsField('capability_profile_rules').value = capabilityRulesToText(cleaned);
       return cleaned;
     }
-
-    function renderCapabilityRuleEditor() {
+ 
+        function renderCapabilityRuleEditor() {
       const container = document.getElementById('capability_matrix_editor');
       if (!container) return;
       if (!capabilityRuleState.length) {
@@ -171,22 +171,20 @@
             const aliasCount = (rule.aliases || []).length;
             return `
               <div class="cap-row" data-capability-index="${index}" 
-                   style="display: flex; align-items: center; height: 40px; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 0 8px; background: transparent; transition: background 0.2s;"
-                   onmouseover="this.style.background='rgba(255,255,255,0.04)'" 
-                   onmouseout="this.style.background='transparent'">
-                <div class="cap-identity" style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;">
+                   style="display: flex; align-items: center; height: 40px; border-bottom: 1px solid var(--border-subtle); padding: 0 8px; background: transparent; transition: background 0.2s;">
+                
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1rem; flex-shrink: 0; opacity: 0.4;">🏷️</span>
+                    <span style="font-size: 1rem; flex-shrink: 0; opacity: 0.4;">ðŸ·ï¸</span>
                     <input class="cap-name-input" type="text" data-capability-field="name" aria-label="Capability name" 
                            value="${escapeHtml(titleCaseName)}" 
-                           style="font-size: 0.95rem; font-weight: 500; border: none; background: transparent; padding: 0; width: 100%; outline: none; color: #e2e8f0;" 
+                           style="font-size: 0.95rem; font-weight: 500; border: none; background: transparent; padding: 0; width: 100%; outline: none; color: var(--text-primary);" 
                            placeholder="e.g. Agile Delivery">
                   </div>
                   <details style="flex-shrink: 0;">
-                    <summary style="font-size: 0.75rem; color: #f97316; cursor: pointer; list-style: none; opacity: 0.8;">
+                    <summary style="font-size: 0.75rem; color: var(--accent); cursor: pointer; list-style: none; opacity: 0.8;">
                       ${aliasCount} background keywords
                     </summary>
-                    <div style="position: absolute; background: #1a1b1e; border: 1px solid var(--line); padding: 8px; z-index: 100; border-radius: 4px; font-size: 0.8rem; margin-top: 4px;">
+                    <div style="position: absolute; background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 8px; z-index: 100; border-radius: var(--radius-sm); font-size: 0.8rem; margin-top: 4px;">
                        ${(rule.aliases || []).join(', ') || 'No background keywords'}
                     </div>
                   </details>
@@ -195,7 +193,7 @@
                   <div class="cap-strength">
                     <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}" 
                             data-capability-field="level" aria-label="Capability strength" 
-                            style="padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: #0b0c10; color: var(--text); font-size: 0.85rem;">
+                            style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); font-size: 0.85rem;">
                       <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
                       <option value="working"${rule.level === 'working' ? ' selected' : ''}>Intermediate</option>
                       <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Basic</option>
@@ -206,9 +204,9 @@
                   <button class="cap-remove-btn" type="button" data-remove-capability="${index}"
                           aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
                           style="background: transparent; border: none; font-size: 1rem; cursor: pointer; opacity: 0.3; transition: all 0.2s;"
-                          onmouseover="this.style.opacity=1; this.style.color='#ef4444'" 
-                          onmouseout="this.style.opacity=0.3; this.style.color='inherit'"
-                          title="Remove capability">🗑️</button>
+                          onmouseover="this.style.opacity=1; this.style.color='var(--state-error-text)'" 
+                          onmouseout="this.style.opacity=0.3; this.style.color='var(--text-muted)'"
+                          title="Remove capability">ðŸ—‘ï¸</button>
                 </div>
               </div>
             `;
@@ -218,11 +216,11 @@
       container.innerHTML = `
         <section class="capability-group">
           <div class="capability-group-head">
-            <h4 style="color: #f97316;">Capabilities</h4>
+            <h4 style="color: var(--accent);">Capabilities</h4>
             <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
           </div>
-          <div class="cap-table" style="border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; background: rgba(0,0,0,0.2);">
-            <div class="cap-table-head" style="display: flex; height: 32px; align-items: center; padding: 0 8px; border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+          <div class="cap-table" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface-dim);">
+            <div class="cap-table-head" style="display: flex; height: 32px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); color: var(--muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
               <span style="flex: 1;"></span>
               <span style="width: 110px; text-align: center; margin-right: 32px;">Strength</span>
               <span style="width: 32px;"></span>
@@ -232,6 +230,20 @@
         </section>
       `;
     }
+
+    // Attach listener globally to document so that it actually catches the non-bubbling 'toggle' event [3]
+    document.addEventListener('toggle', function(e) {
+      if (e.target.tagName === 'DETAILS' && e.target.open) {
+        // Find all details elements strictly inside your matrix container
+        const allDetails = document.querySelectorAll('#capability_matrix_editor details');
+        allDetails.forEach(details => {
+          if (details !== e.target && details.open) {
+            details.open = false;
+          }
+        });
+      }
+    }, true); // The 'true' activates event capturing which safely bypasses the bubbling restriction [3]
+
 
     const chipEditors = {
       primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No job primary titles yet.' },
@@ -427,7 +439,7 @@
       document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\n');
       document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
       document.getElementById('date_range_days').value = String(profile.search_settings?.date_range_days ?? '');
-      document.getElementById('max_pages_cap').value = String(profile.search_settings?.max_pages_cap ?? '');
+      document.getElementById('seek_max_pages').value = String(profile.search_settings?.seek_max_pages ?? 10);
       document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
       document.getElementById('linkedin_hours_old').value = String(profile.search_settings?.linkedin_hours_old ?? 24);
@@ -527,6 +539,8 @@
 
     function fillAgentSettings(settings) {
       loadedAgentSettings = settings || {};
+      const dashboard = settings?.dashboard || {};
+      document.getElementById('dashboard_minimum_score').value = String(dashboard.minimum_score ?? 55);
       const schedule = settings?.schedule || {};
       document.getElementById('schedule_daily_time_local').value = schedule.daily_time_local || '08:30';
       const telegram = settings?.telegram || {};
@@ -553,6 +567,9 @@
     function collectAgentSettings() {
       const currentSchedule = loadedAgentSettings?.schedule || {};
       return {
+        dashboard: {
+          minimum_score: Number(document.getElementById('dashboard_minimum_score').value || 55),
+        },
         schedule: {
           daily_time_local: document.getElementById('schedule_daily_time_local').value || '08:30',
           loop_sleep_seconds: Number(currentSchedule.loop_sleep_seconds || 300),
@@ -612,7 +629,8 @@
 
     function renderRunStats(stats) {
       const panel = document.getElementById('run_stats_panel');
-      if (!stats || !stats.run_started_at) {
+      const lastAttemptAt = stats?.last_run_attempt_at || stats?.run_started_at || '';
+      if (!stats || !lastAttemptAt) {
         panel.innerHTML = '<p>No run stats yet. Run the current job-source connector once and reload this page.</p>';
         return;
       }
@@ -623,7 +641,7 @@
         .map(([name, pages]) => `<li><strong>${name}</strong>: pages ${pages.join(', ')}</li>`)
         .join('');
       panel.innerHTML = `
-        <p><strong>Run:</strong> ${stats.run_started_at}</p>
+        <p><strong>Last attempt:</strong> ${lastAttemptAt}</p>
         <p><strong>Pages crawled:</strong> ${stats.page_count} | <strong>Cards seen:</strong> ${stats.cards_seen} | <strong>Detail pages opened:</strong> ${stats.detail_fetches} | <strong>Keep rate:</strong> ${(Number(stats.keep_rate || 0) * 100).toFixed(1)}%</p>
         <p><strong>Search window:</strong> last ${stats.search_window_days} day(s) | <strong>Prefer newest jobs first:</strong> ${stats.sort_newest_first ? 'Yes' : 'No'}</p>
         <p><strong>Search targets:</strong></p>
@@ -655,254 +673,6 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
-
-    function getReviewChoiceMeta(choice) {
-      if (!choice) return { label: 'Choose a strength' };
-      return capabilityStrengthMeta(choice) || { label: 'Choose a strength' };
-    }
-
-    function renderReviewChoiceGuide(choice) {
-      const meta = getReviewChoiceMeta(choice);
-      return `
-        <strong>${escapeHtml(meta.label)}</strong>
-        <p>This sets the capability strength used during matching.</p>
-      `;
-    }
-
-    function reviewOptionMarkup(selectedValue) {
-      const options = [
-        ['', 'Choose a strength'],
-        ['strong', capabilityStrengthMeta('strong')?.label || 'Expert'],
-        ['working', capabilityStrengthMeta('working')?.label || 'Intermediate'],
-        ['basic', capabilityStrengthMeta('basic')?.label || 'Basic'],
-      ];
-      return options.map(([value, label]) => {
-        const selected = value === selectedValue ? ' selected' : '';
-        return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
-      }).join('');
-    }
-
-    function suggestionExamplesMarkup(items, emptyLabel) {
-      if (!items || !items.length) return `<p>${escapeHtml(emptyLabel)}</p>`;
-      return `<ul>${items.map(item => `
-        <li>
-          <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noreferrer">${escapeHtml(item.title || 'Untitled role')}</a>
-          ${item.company ? ` - ${escapeHtml(item.company)}` : ''}
-          ${item.search_location ? ` (${escapeHtml(item.search_location)})` : ''}
-        </li>
-      `).join('')}</ul>`;
-    }
-
-    function renderSuggestedTuning(suggestions) {
-      const panel = document.getElementById('tuning_suggestions_panel');
-      const capabilitySuggestions = suggestions.capability_suggestions || [];
-      const ruleSuggestions = suggestions.rule_suggestions || [];
-      const summary = suggestions.summary || {};
-      if (!capabilitySuggestions.length && !ruleSuggestions.length) {
-        panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capability signals and repeat junk-role patterns will show up here for confirmation.</p>';
-        return;
-      }
-      const capabilityHtml = capabilitySuggestions.length ? `
-        <div class="tuning-group">
-          <h3>Capability signals from viable roles</h3>
-          <p class="tuning-group-copy">Repeated skills from kept roles that need a decision before the engine can learn how to classify them consistently.</p>
-          <div class="review-list">
-            ${capabilitySuggestions.map(item => `
-              <div class="review-card">
-                <h3>${escapeHtml(item.skill || 'Capability signal')}</h3>
-                <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
-                <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
-                <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel || 'How strong is this capability for you?')}</label>
-                <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">${reviewOptionMarkup(item.recommended_choice || '')}</select>
-                <details class="review-choice-guide">
-                  <summary>What this choice means</summary>
-                  <div class="review-choice-guide-body">${renderReviewChoiceGuide(item.recommended_choice || '')}</div>
-                </details>
-                <details class="review-examples">
-                  <summary>Examples from kept roles</summary>
-                  <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this signal yet.')}</div>
-                </details>
-                <div class="card-actions" style="margin-top:10px;">
-                  <button class="primary confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">Confirm</button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : '';
-
-      const actionableRules = ruleSuggestions.filter(item => !(item.reason || '').startsWith('TITLE_NOT_TARGET') && !(item.reason || '').startsWith('TITLE_BAD_KEYWORD'));
-      const workingFilters = ruleSuggestions.filter(item => (item.reason || '').startsWith('TITLE_BAD_KEYWORD'));
-
-      function ruleCardMarkup(item) {
-        return `
-          <div class="review-card">
-            <h3>${escapeHtml(item.headline || item.reason || 'Rule signal')}</h3>
-            <p>${escapeHtml(item.detail || '')}</p>
-            <div class="suggestion-meta">
-              <span class="suggestion-chip">Target: ${escapeHtml(item.target || 'Matching rules')}</span>
-              <span class="suggestion-chip">Count: ${escapeHtml(String(item.count || 0))}</span>
-            </div>
-            <p><strong>Suggested action:</strong> ${escapeHtml(item.recommendation || 'Review this signal and decide whether the matching rules need refinement.')}</p>
-            <p>Examples:</p>
-            ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this signal yet.')}
-            ${(item.reason || '').startsWith('DESC_CAPABILITY_LOW') ? `
-            <div class="card-actions" style="margin-top:10px;">
-              <button class="secondary add-phrase-exclusion-btn" data-reason="${escapeHtml(item.reason || '')}" style="font-size:0.9rem;padding:8px 16px;border-color:#f87171;color:#9a3412;">Add to exclusions</button>
-            </div>` : ''}
-            ${(item.reason || '').startsWith('TITLE_BAD_KEYWORD') ? `
-            <div class="card-actions" style="margin-top:10px;">
-              <button class="secondary dismiss-rule-card-btn" style="font-size:0.9rem;padding:8px 16px;">Dismiss</button>
-            </div>` : ''}
-          </div>`;
-      }
-
-      const ruleHtml = (actionableRules.length || workingFilters.length) ? `
-        <div class="tuning-group">
-          <h3>Repeated junk-role signals</h3>
-          <p class="tuning-group-copy">Patterns from rejects that are worth keeping, strengthening, or watching before you touch search keywords.</p>
-          ${actionableRules.length ? `<div class="review-list">${actionableRules.map(ruleCardMarkup).join('')}</div>` : ''}
-          ${workingFilters.length ? `
-          <details style="margin-top:14px;">
-            <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;">Filters already working correctly (${workingFilters.length})</summary>
-            <div class="review-list" style="margin-top:10px;">${workingFilters.map(ruleCardMarkup).join('')}</div>
-          </details>` : ''}
-        </div>
-      ` : '';
-
-      panel.innerHTML = `
-        <div class="tuning-summary">
-          <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.capability_count || capabilitySuggestions.length || 0))}</strong><span>Capability suggestions</span></div>
-          <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.rule_count || ruleSuggestions.length || 0))}</strong><span>Rule signals to review</span></div>
-        </div>
-        ${capabilityHtml}
-        ${ruleHtml}
-      `;
-    }
-
-    async function loadReviewData() {
-      const response = await fetch('/api/review-data');
-      if (!response.ok) { renderSuggestedTuning({ capability_suggestions: [], rule_suggestions: [], summary: {} }); return; }
-      const payload = await response.json();
-      renderSuggestedTuning(payload.suggested_tuning || { capability_suggestions: [], rule_suggestions: [], summary: {} });
-    }
-
-    function collectProfile() {
-      flushChipEditorInputs();
-      return {
-        search_settings: {
-          keywords: document.getElementById('keywords').value.trim(),
-          locations: toLines(document.getElementById('locations').value),
-          classification_ids: toLines(document.getElementById('classification_ids').value),
-          date_range_days: Number(document.getElementById('date_range_days').value),
-          max_pages_cap: Number(document.getElementById('max_pages_cap').value),
-          enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
-          sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
-          linkedin_hours_old: Number(document.getElementById('linkedin_hours_old').value) || 24,
-          linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
-          linkedin_easy_apply_only: (() => { const v = document.getElementById('linkedin_easy_apply_only').value; return v === '' ? null : v === 'true'; })(),
-        },
-        salary_preferences: {
-          minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value || 0),
-          minimum_daily_rate: Number(document.getElementById('minimum_daily_rate').value || 0),
-        },
-        preference_weights: {
-          fit: Number(document.getElementById('fit_weight').value || 1),
-          salary: Number(document.getElementById('salary_weight').value || 1),
-          location: Number(document.getElementById('location_weight').value || 1),
-          work_mode: Number(document.getElementById('work_mode_weight').value || 1),
-          contract: Number(document.getElementById('contract_weight').value || 1),
-          government: Number(document.getElementById('government_weight').value || 1),
-          freshness: Number(document.getElementById('freshness_weight').value || 1),
-        },
-        llm_profile_brief_mode: 'auto',
-        llm_profile_brief: '',
-        capability_profile_rules: collectCapabilityRuleState(),
-        primary_job_title_pattern: toLines(settingsField('primary_job_title_pattern').value),
-        secondary_title_patterns: toLines(settingsField('secondary_title_patterns').value),
-        must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
-        reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
-        reject_description_phrase_rules: textToRules(settingsField('reject_description_phrase_rules').value, 'phrase'),
-      };
-    }
-
-    async function patchProfile(payload, successMessage) {
-      const response = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload.error || 'Could not save profile');
-      }
-      const updated = await response.json();
-      fillForm(updated);
-      showStatus(successMessage, 'ok');
-      return updated;
-    }
-
-    async function runSearchNow() {
-      const profile = collectProfile();
-      await patchProfile(
-        { search_settings: profile.search_settings, salary_preferences: profile.salary_preferences },
-        'Search settings saved to profile.json.'
-      );
-      const response = await fetch('/api/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ search_settings: profile.search_settings }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Could not start run');
-      showStatus('Background run started. Return to results when complete.', 'ok');
-      return payload;
-    }
-
-    async function applyOneSkipDecision(skill, choice) {
-      const response = await fetch('/api/tuning-decisions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decisions: [{ skill, choice }] }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Could not apply');
-      return payload;
-    }
-
-    // -- Event listeners ---------------------------------------
-
-    if (runNowButton) {
-      runNowButton.addEventListener('click', async () => {
-        try {
-          await runSearchNow();
-        } catch (error) {
-          showStatus(error.message, 'error');
-        }
-      });
-    }
-
-    if (rebuildProfileButton) {
-      rebuildProfileButton.addEventListener('click', () => {
-        window.location.href = '/start?mode=rebuild';
-      });
-    }
-
-    document.getElementById('refresh_review_data')?.addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      const originalLabel = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Refreshing...';
-      try {
-        await loadReviewData();
-        showStatus('Suggested tuning refreshed.', 'ok', { autoHideMs: 3000 });
-      } catch (error) {
-        showStatus(error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalLabel;
-      }
-    });
 
     document.getElementById('reload')?.addEventListener('click', async (e) => {
       const btn = e.currentTarget;
@@ -968,73 +738,6 @@
         btn.disabled = false;
         btn.textContent = originalLabel;
       }
-    });
-
-    document.getElementById('tuning_suggestions_panel').addEventListener('change', (e) => {
-      const select = e.target.closest('.skill-choice');
-      if (!select) return;
-      const card = select.closest('.review-card');
-      const guideBody = card?.querySelector('.review-choice-guide-body');
-      if (!guideBody) return;
-      guideBody.innerHTML = renderReviewChoiceGuide(select.value || '');
-    });
-
-    document.getElementById('tuning_suggestions_panel').addEventListener('click', async (e) => {
-      const btn = e.target.closest('.confirm-skill-btn');
-      if (!btn) return;
-      const card = btn.closest('.review-card');
-      const select = card?.querySelector('.skill-choice');
-      const skill = btn.dataset.skill;
-      const choice = select?.value;
-      if (!skill || !choice) return;
-      btn.disabled = true;
-      btn.textContent = 'Saving\u2026';
-      try {
-        const result = await applyOneSkipDecision(skill, choice);
-        card.style.opacity = '0.4';
-        card.style.pointerEvents = 'none';
-        btn.textContent = 'Applied';
-        if (result && result.profile) fillForm(result.profile);
-        await loadReviewData();
-      } catch (error) {
-        btn.disabled = false;
-        btn.textContent = 'Confirm';
-        showStatus(error.message, 'error');
-      }
-    });
-
-    document.getElementById('tuning_suggestions_panel').addEventListener('click', async (e) => {
-      const btn = e.target.closest('.add-phrase-exclusion-btn');
-      if (!btn) return;
-      const card = btn.closest('.review-card');
-      const reason = btn.dataset.reason || '';
-      const suffix = reason.split(':').slice(1).join(':').replace(/_/g, ' ').trim().toLowerCase();
-      if (!suffix) return;
-      btn.disabled = true;
-      btn.textContent = 'Saving\u2026';
-      try {
-        const response = await fetch('/api/rule/phrase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phrase: suffix, reason: 'low-fit specialist area' }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || 'Could not add rule');
-        card.style.opacity = '0.4';
-        card.style.pointerEvents = 'none';
-        btn.textContent = 'Added';
-      } catch (error) {
-        btn.disabled = false;
-        btn.textContent = 'Add to exclusions';
-        showStatus(error.message, 'error');
-      }
-    });
-
-    document.getElementById('tuning_suggestions_panel').addEventListener('click', (e) => {
-      const btn = e.target.closest('.dismiss-rule-card-btn');
-      if (!btn) return;
-      const card = btn.closest('.review-card');
-      if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; btn.textContent = 'Dismissed'; }
     });
 
     document.getElementById('add_capability_rule')?.addEventListener('click', () => {
@@ -1201,356 +904,10 @@
       loadProfile(),
       loadAgentSettings(),
       loadRunStats(),
-      loadReviewData(),
     ]).then(() => {
         initSliders();
         suppressDirtyTracking = false;
         clearDirty();
     }).catch(error => showStatus(error.message, 'error'));
 
-    // ── Signal Registry ───────────────────────────────────────────────
-    let _srData = null;
-    let _srFilter = 'needs_review';
-    let _srLoaded = false;
-    let _srSearch = '';
-    let _srCategoryFilter = 'all';
-    let _srSort = 'needs_review_first';
-    const _srBusyKeys = new Set();
-    const _srInlineStatus = {};
 
-    const SR_REVIEW_STATE_LABELS = {
-      needs_review: 'Needs review',
-      approved: 'Approved',
-      ignored: 'Ignored',
-    };
-
-    function srSignalKey(signal) {
-      return String(signal.normalized_key || signal.signal || '').trim().toLowerCase();
-    }
-
-    function srReviewState(signal) {
-      const decision = String(signal?.decision || 'review').trim().toLowerCase();
-      if (decision === 'ignore') return 'ignored';
-      if (decision === 'use') return 'approved';
-      return 'needs_review';
-    }
-
-    function srSignalNotes(signal) {
-      return String(signal?.notes || '').trim();
-    }
-
-    function srSignalAliases(signal) {
-      const canonical = String(signal?.signal || '').trim().toLowerCase();
-      const values = Array.isArray(signal?.original_texts) ? signal.original_texts : [];
-      const deduped = [];
-      values.forEach(value => {
-        const cleaned = String(value || '').trim();
-        if (!cleaned) return;
-        const normalized = cleaned.toLowerCase();
-        if (normalized === canonical) return;
-        if (deduped.some(item => item.toLowerCase() === normalized)) return;
-        deduped.push(cleaned);
-      });
-      return deduped;
-    }
-
-    function srSuggestedCategory(_signal) {
-      return null;
-    }
-
-    function srTargetFile(_signal, _category) {
-      return null;
-    }
-
-    function srUpdatedTimestamp(signal) {
-      const history = Array.isArray(signal?.history) ? signal.history : [];
-      const latest = history.length ? history[history.length - 1] : null;
-      const raw = String(latest?.timestamp || '').trim();
-      const parsed = raw ? Date.parse(raw) : NaN;
-      return Number.isNaN(parsed) ? 0 : parsed;
-    }
-
-    function srCounts(signals) {
-      return signals.reduce((acc, signal) => {
-        const state = srReviewState(signal);
-        acc.all += 1;
-        if (state === 'approved') acc.approved += 1;
-        else if (state === 'ignored') acc.ignored += 1;
-        else acc.needs_review += 1;
-        return acc;
-      }, {
-        all: 0,
-        needs_review: 0,
-        approved: 0,
-        ignored: 0,
-      });
-    }
-
-    function srCategoryOptions(signals) {
-      return Array.from(new Set(
-        signals.map(signal => srSuggestedCategory(signal)).filter(Boolean)
-      )).sort((a, b) => a.localeCompare(b));
-    }
-
-    function srMatchesSearch(signal) {
-      if (!_srSearch) return true;
-      const searchText = [
-        signal.signal || '',
-        ...(Array.isArray(signal.original_texts) ? signal.original_texts : []),
-        srSignalNotes(signal),
-        srSuggestedCategory(signal) || '',
-      ].join(' ').toLowerCase();
-      return searchText.includes(_srSearch);
-    }
-
-    function srFilteredSignals() {
-      const all = Array.isArray(_srData?.signals) ? _srData.signals : [];
-      return all.filter(signal => {
-        const state = srReviewState(signal);
-        if (_srFilter !== 'all' && state !== _srFilter) return false;
-        if (_srCategoryFilter !== 'all' && (srSuggestedCategory(signal) || '') !== _srCategoryFilter) return false;
-        return srMatchesSearch(signal);
-      }).sort((left, right) => {
-        if (_srSort === 'name_az') {
-          return String(left.signal || '').localeCompare(String(right.signal || ''));
-        }
-        if (_srSort === 'recently_updated') {
-          return srUpdatedTimestamp(right) - srUpdatedTimestamp(left)
-            || String(left.signal || '').localeCompare(String(right.signal || ''));
-        }
-        const stateRank = {
-          needs_review: 0,
-          approved: 1,
-          ignored: 2,
-        };
-        return stateRank[srReviewState(left)] - stateRank[srReviewState(right)]
-          || String(left.signal || '').localeCompare(String(right.signal || ''));
-      });
-    }
-
-    function srInlineState(key) {
-      return _srInlineStatus[key] || null;
-    }
-
-    function srSetInlineState(key, text, kind = 'info', autoClearMs = 0) {
-      _srInlineStatus[key] = { text, kind };
-      renderSignalRegistry();
-      if (autoClearMs > 0) {
-        window.setTimeout(() => {
-          const current = _srInlineStatus[key];
-          if (current && current.text === text && current.kind === kind) {
-            delete _srInlineStatus[key];
-            renderSignalRegistry();
-          }
-        }, autoClearMs);
-      }
-    }
-
-    async function srPatchSignal(key, payload, successText = 'Saved') {
-      if (_srBusyKeys.has(key)) return;
-      _srBusyKeys.add(key);
-      srSetInlineState(key, 'Saving...', 'info');
-      try {
-        const resp = await fetch('/api/signal-registry', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Could not save');
-        const signals = Array.isArray(_srData?.signals) ? _srData.signals : [];
-        const match = signals.find(signal => srSignalKey(signal) === key);
-        if (match) {
-          match.decision = data.signal.decision;
-          match.scope = data.signal.scope;
-          match.notes = data.signal.notes;
-          match.needs_review = data.signal.needs_review;
-          match.history = data.signal.history;
-        }
-        srSetInlineState(key, successText, 'ok', 1400);
-      } catch (error) {
-        srSetInlineState(key, error.message || 'Could not save', 'error');
-        showStatus(error.message || 'Could not save signal review.', 'error');
-      } finally {
-        _srBusyKeys.delete(key);
-        renderSignalRegistry();
-      }
-    }
-
-    function renderSignalRegistry() {
-      const panel = document.getElementById('signal_registry_panel');
-      if (!panel || !_srData) return;
-      const all = Array.isArray(_srData.signals) ? _srData.signals : [];
-      const counts = srCounts(all);
-      const filters = [
-        { key: 'needs_review', label: `Needs Review (${counts.needs_review})` },
-        { key: 'approved', label: `Approved (${counts.approved})` },
-        { key: 'ignored', label: `Ignored (${counts.ignored})` },
-        { key: 'all', label: `All (${counts.all})` },
-      ];
-      const categoryOptions = srCategoryOptions(all);
-      const visible = srFilteredSignals();
-      const cardsHtml = visible.length === 0
-        ? '<p class="help signal-empty">No signals match the current view.</p>'
-        : visible.map(signal => {
-            const key = srSignalKey(signal);
-            const state = srReviewState(signal);
-            const aliases = srSignalAliases(signal);
-            const category = srSuggestedCategory(signal);
-            const targetFile = srTargetFile(signal, category);
-            const inlineState = srInlineState(key);
-            const notes = srSignalNotes(signal);
-            const isBusy = _srBusyKeys.has(key);
-            return `
-<article class="signal-card" data-sr-key="${escapeHtml(key)}">
-  <div class="signal-card-top">
-    <div class="signal-card-headline">
-      <h3>${escapeHtml(signal.signal || 'Unnamed signal')}</h3>
-      ${aliases.length ? `<p class="signal-card-meta">Seen as: ${escapeHtml(aliases.join(', '))}</p>` : ''}
-    </div>
-    <div class="signal-card-pills">
-      <span class="signal-pill signal-pill-${escapeHtml(state)}">${escapeHtml(SR_REVIEW_STATE_LABELS[state] || 'Needs review')}</span>
-      ${category ? `<span class="signal-pill signal-pill-secondary">Suggested: ${escapeHtml(category)}</span>` : ''}
-    </div>
-  </div>
-  <div class="signal-card-grid">
-    <label class="signal-field">
-      <span>Category</span>
-      <select class="signal-input" disabled>
-        <option>${escapeHtml(category || 'Not assigned yet')}</option>
-      </select>
-    </label>
-    <label class="signal-field">
-      <span>Target file</span>
-      <input class="signal-input" type="text" value="${escapeHtml(targetFile || 'Pending')}" readonly>
-    </label>
-    <label class="signal-field signal-field-notes">
-      <span>Notes</span>
-      <input class="signal-input signal-notes" type="text" data-sr-key="${escapeHtml(key)}" value="${escapeHtml(notes)}" placeholder="Optional note"${isBusy ? ' disabled' : ''}>
-    </label>
-    <div class="signal-actions" aria-label="Review actions">
-      <button type="button" class="signal-action signal-action-ignore${state === 'ignored' ? ' is-active' : ''}" data-sr-key="${escapeHtml(key)}" data-sr-action="ignore" aria-label="Ignore ${escapeHtml(signal.signal || 'signal')}"${isBusy ? ' disabled' : ''}>&#10005;</button>
-      <button type="button" class="signal-action signal-action-approve${state === 'approved' ? ' is-active' : ''}" data-sr-key="${escapeHtml(key)}" data-sr-action="approve" aria-label="Approve ${escapeHtml(signal.signal || 'signal')}"${isBusy ? ' disabled' : ''}>&#10003;</button>
-    </div>
-  </div>
-  <div class="signal-card-footer">
-    <span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(inlineState?.text || '')}</span>
-  </div>
-</article>`;
-          }).join('');
-
-      panel.innerHTML = `
-<div class="sr-hero">
-  <p class="sr-hero-copy">Review extracted signals, approve what should be learned, and ignore the rest.</p>
-</div>
-<div class="sr-filters">
-  ${filters.map(filter => `<button type="button" class="sr-filter-btn${_srFilter === filter.key ? ' is-active' : ''}" data-sr-filter="${escapeHtml(filter.key)}">${escapeHtml(filter.label)}</button>`).join('')}
-</div>
-<div class="sr-toolbar">
-  <input id="sr_search" class="sr-search" type="search" value="${escapeHtml(_srSearch)}" placeholder="Search signals">
-  <select id="sr_category_filter" class="sr-select"${categoryOptions.length ? '' : ' disabled'}>
-    <option value="all">All categories</option>
-    ${categoryOptions.map(option => `<option value="${escapeHtml(option)}"${_srCategoryFilter === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
-  </select>
-  <select id="sr_sort" class="sr-select">
-    <option value="needs_review_first"${_srSort === 'needs_review_first' ? ' selected' : ''}>Needs review first</option>
-    <option value="name_az"${_srSort === 'name_az' ? ' selected' : ''}>A-Z</option>
-    <option value="recently_updated"${_srSort === 'recently_updated' ? ' selected' : ''}>Recently updated</option>
-  </select>
-</div>
-<div class="sr-list">${cardsHtml}</div>`;
-
-      panel.querySelectorAll('.sr-filter-btn').forEach(button => {
-        button.addEventListener('click', () => {
-          _srFilter = button.dataset.srFilter || 'needs_review';
-          renderSignalRegistry();
-        });
-      });
-
-      panel.querySelector('#sr_search')?.addEventListener('input', event => {
-        const cursor = typeof event.target.selectionStart === 'number'
-          ? event.target.selectionStart
-          : String(event.target.value || '').length;
-        _srSearch = String(event.target.value || '').trim().toLowerCase();
-        renderSignalRegistry();
-        const nextInput = panel.querySelector('#sr_search');
-        if (nextInput) {
-          nextInput.focus();
-          nextInput.setSelectionRange(cursor, cursor);
-        }
-      });
-
-      panel.querySelector('#sr_category_filter')?.addEventListener('change', event => {
-        _srCategoryFilter = String(event.target.value || 'all');
-        renderSignalRegistry();
-      });
-
-      panel.querySelector('#sr_sort')?.addEventListener('change', event => {
-        _srSort = String(event.target.value || 'needs_review_first');
-        renderSignalRegistry();
-      });
-
-      panel.querySelectorAll('.signal-action').forEach(button => {
-        button.addEventListener('click', async () => {
-          const key = button.dataset.srKey || '';
-          const signal = all.find(item => srSignalKey(item) === key);
-          if (!signal) return;
-          const row = button.closest('.signal-card');
-          const notes = String(row?.querySelector('.signal-notes')?.value || srSignalNotes(signal)).trim();
-          const decision = button.dataset.srAction === 'approve' ? 'use' : 'ignore';
-          await srPatchSignal(key, {
-            key,
-            decision,
-            scope: signal.scope || 'global',
-            notes,
-          }, decision === 'use' ? 'Approved' : 'Ignored');
-        });
-      });
-
-      panel.querySelectorAll('.signal-notes').forEach(input => {
-        const saveNotes = async () => {
-          const key = input.dataset.srKey || '';
-          const signal = all.find(item => srSignalKey(item) === key);
-          if (!signal) return;
-          const nextNotes = String(input.value || '').trim();
-          if (nextNotes === srSignalNotes(signal)) return;
-          await srPatchSignal(key, {
-            key,
-            decision: signal.decision || 'review',
-            scope: signal.scope || 'global',
-            notes: nextNotes,
-          }, 'Note saved');
-        };
-        input.addEventListener('blur', saveNotes);
-        input.addEventListener('keydown', event => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            input.blur();
-          }
-        });
-      });
-    }
-
-    async function loadSignalRegistry() {
-      const panel = document.getElementById('signal_registry_panel');
-      if (!panel) return;
-      panel.innerHTML = '<p class="help">Loading learning review…</p>';
-      try {
-        const resp = await fetch('/api/signal-registry');
-        if (!resp.ok) throw new Error('Could not load signal registry');
-        _srData = await resp.json();
-        renderSignalRegistry();
-      } catch (err) {
-        _srLoaded = false;
-      panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} — click Learning again to retry.</p>`;
-      }
-    }
-
-    document.querySelector('.nav-item[data-section="section-signals"]')?.addEventListener('click', () => {
-      if (!_srLoaded) {
-        _srLoaded = true;
-        loadSignalRegistry();
-      }
-    });
-
-  

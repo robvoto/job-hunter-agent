@@ -156,6 +156,9 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
 def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
     sanitized = local_server.AdminHandler._sanitize_agent_settings_payload(
         {
+            "dashboard": {
+                "minimum_score": 150,
+            },
             "schedule": {
                 "daily_time_local": "09:45",
                 "loop_sleep_seconds": 30,
@@ -163,6 +166,9 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         }
     )
 
+    assert sanitized["dashboard"] == {
+        "minimum_score": 100,
+    }
     assert sanitized["schedule"] == {
         "daily_time_local": "09:45",
         "loop_sleep_seconds": 60,
@@ -170,6 +176,9 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
 
     public_payload = local_server.AdminHandler._public_agent_settings_payload(
         {
+            "dashboard": {
+                "minimum_score": 61,
+            },
             "schedule": {
                 "daily_time_local": "09:45",
                 "loop_sleep_seconds": 120,
@@ -177,6 +186,9 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         }
     )
 
+    assert public_payload["dashboard"] == {
+        "minimum_score": 61,
+    }
     assert public_payload["schedule"] == {
         "daily_time_local": "09:45",
         "loop_sleep_seconds": 120,
@@ -262,6 +274,21 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
     assert rebuilds == ["profile matching rules saved; applying saved filters to current dashboard"]
 
 
+def test_rebuild_dashboard_for_debug_mode_runs_once_when_data_exists(monkeypatch, tmp_path):
+    rebuilds = []
+
+    monkeypatch.setattr(local_server, "DEBUG_MODE", True)
+    monkeypatch.setattr(local_server, "DASHBOARD_PATH", tmp_path / "dashboard.html")
+    monkeypatch.setattr(local_server, "RUN_STATS_PATH", tmp_path / "run_stats.json")
+    monkeypatch.setattr(local_server, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    local_server.RUN_STATS_PATH.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(local_server, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
+
+    local_server._rebuild_dashboard_for_debug_mode()
+
+    assert rebuilds == ["local server debug mode startup"]
+
+
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):
     saved_profiles = []
     saved_materials = []
@@ -298,12 +325,12 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
 def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
     calls = []
 
-    def fake_save_registry(payload):
-        calls.append(payload)
+    def fake_clear_signal_learning_state():
+        calls.append(True)
 
-    monkeypatch.setattr("job_hunter_agent.signal_registry.save_registry", fake_save_registry)
+    monkeypatch.setattr("job_hunter_agent.signal_registry.clear_signal_learning_state", fake_clear_signal_learning_state)
 
     result = local_server.SettingsHandler._reset_global_learning()
 
     assert result["ok"] is True
-    assert calls == [{}]
+    assert calls == [True]

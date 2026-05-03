@@ -53,7 +53,7 @@ Run the local UI:
 python -m job_hunter_agent.local_server
 
 # test/debug mode
-python -m job_hunter_agent.local_server --test-mode
+python -m job_hunter_agent.local_server --debug-mode
 ```
 
 ## Dashboard Model
@@ -84,7 +84,7 @@ It currently supports:
 - `data/llm_cache.json` 
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_costs.json` 
+- `data/llm_costs.jsonl` 
 - `TODO.txt`
 
 ## Moving The Project

@@ -1,4 +1,5 @@
 from job_hunter_agent import filters
+from job_hunter_agent import hard_blocker_knowledge
 
 
 def test_missing_requirement_detector_separates_required_from_desirable():
@@ -135,7 +136,7 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
         filters,
         "load_profile",
         lambda: {
-            "primary_job_title_patterns": [r"\bbusiness\ analyst\b"],
+            "primary_job_title_pattern": [r"\bbusiness\ analyst\b"],
             "secondary_title_patterns": [],
             "reject_title_rules": [],
         },
@@ -151,3 +152,106 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
     assert reason_lead == "OK"
     assert ok_ai is True
     assert reason_ai == "OK"
+
+
+def test_approved_hard_blocker_knowledge_rejects_mandatory_requirement_text(tmp_path, monkeypatch):
+    knowledge_path = tmp_path / "hard_blocker_knowledge.json"
+    knowledge_path.write_text(
+        """
+        {
+          "kind": "managed_knowledge",
+          "name": "hard_blocker_knowledge",
+          "version": 1,
+          "entries": [
+            {"value": "mandatory coding", "aliases": ["hands-on coding required"]}
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "capability_profile_rules": [],
+            "reject_description_phrase_rules": [],
+            "must_not_require_skills": [],
+        },
+    )
+
+    ok, reason = filters.passes_content_filters(
+        "Hands-on coding required for this role.",
+        title_reason="OK",
+    )
+
+    assert ok is False
+    assert reason == "DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"
+
+
+def test_approved_hard_blocker_knowledge_does_not_reject_desirable_only_text(tmp_path, monkeypatch):
+    knowledge_path = tmp_path / "hard_blocker_knowledge.json"
+    knowledge_path.write_text(
+        """
+        {
+          "kind": "managed_knowledge",
+          "name": "hard_blocker_knowledge",
+          "version": 1,
+          "entries": [
+            {"value": "mandatory coding", "aliases": ["hands-on coding required"]}
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "capability_profile_rules": [],
+            "reject_description_phrase_rules": [],
+            "must_not_require_skills": [],
+        },
+    )
+
+    ok, reason = filters.passes_content_filters(
+        "Hands-on coding required would be desirable for this role.",
+        title_reason="OK",
+    )
+
+    assert ok is True
+    assert reason == "OK"
+
+
+def test_empty_hard_blocker_knowledge_does_not_break_filtering(tmp_path, monkeypatch):
+    knowledge_path = tmp_path / "hard_blocker_knowledge.json"
+    knowledge_path.write_text(
+        """
+        {
+          "kind": "managed_knowledge",
+          "name": "hard_blocker_knowledge",
+          "version": 1,
+          "entries": []
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "capability_profile_rules": [],
+            "reject_description_phrase_rules": [],
+            "must_not_require_skills": [],
+        },
+    )
+
+    ok, reason = filters.passes_content_filters(
+        "Hands-on coding required for this role.",
+        title_reason="OK",
+    )
+
+    assert ok is True
+    assert reason == "OK"

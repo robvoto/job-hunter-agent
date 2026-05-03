@@ -67,11 +67,9 @@ python -m job_hunter_agent.source_connector
 
 Useful flags:
 
-- `--max-pages 1` for a faster scrape while testing changes
 - `--no-llm` to stay deterministic and avoid live LLM review
 - `--cheap-llm` to force the cheaper review model
-- `--scrape-allow-low` to widen the scrape/dashboard pool
-- `--show-scores` to expose score details in the dashboard
+- `--debug-mode` to show extra dashboard scoring detail
 
 Search design note:
 
@@ -85,10 +83,7 @@ python -m job_hunter_agent.source_connector --rebuild-dashboard
 ```
 
 Useful flags:
-
-- `--expand-dashboard` to show more borderline saved jobs
-- `--show-scores` to expose score details while tuning
-
+  
 Run the local web UI:
 
 ```powershell
@@ -98,7 +93,7 @@ python -m job_hunter_agent.local_server
 Optional local web UI test mode:
 
 ```powershell
-python -m job_hunter_agent.local_server --test-mode
+python -m job_hunter_agent.local_server --debug-mode
 ```
 
 Run the daily local agent once:
@@ -183,7 +178,7 @@ These are intended to stay local and ignored:
 - `data/llm_cache.json` 
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_costs.json`
+- `data/llm_costs.jsonl`
 - `output/rejection_rules.json`
 - `output/`
 

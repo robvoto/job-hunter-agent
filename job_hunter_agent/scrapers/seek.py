@@ -8,7 +8,6 @@ import re
 from typing import List, Optional
 from urllib.parse import urljoin
 
-from job_hunter_agent.config import MAX_PAGES_CAP  # noqa: F401 - re-exported for callers
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import keywords_to_search_string
 from job_hunter_agent.utils import extract_work_mode, set_query_param

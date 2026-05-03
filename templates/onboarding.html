@@ -103,7 +103,7 @@
       border-radius: 16px;
       border: 1px solid var(--border-subtle);
       background: var(--bg-surface);
-      box-shadow: 0 18px 40px rgba(12, 18, 28, 0.18);
+      box-shadow: var(--shadow-deep);
       display: none;
       z-index: 220;
     }
@@ -139,35 +139,23 @@
       background: var(--bg-muted);
     }
     .onb-test-action-danger {
-      color: #b42318;
+      color: var(--state-error-text);
     }
 
     .panel {
-      border: 1px solid #E5E7EB !important;
-      box-shadow: var(--shadow-soft) !important;
-      border-radius: var(--radius-lg) !important;
-    }
-
-    button {
-      border-radius: 8px !important;
-    }
-
-    button.primary {
-      background-color: var(--accent) !important;
-      border-color: var(--accent-hover) !important;
-      color: var(--button-text) !important;
-      transition: background-color 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      border-radius: var(--radius-lg);
     }
 
     input[type="text"],
     input[type="number"],
     input[type="search"],
     select {
-      border: 1px solid #E5E7EB !important;
-      border-radius: 8px !important;
-      padding-top: 8px !important;
-      padding-bottom: 8px !important;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding-top: 8px;
+      padding-bottom: 8px;
     }
 
     input:focus,
@@ -177,12 +165,8 @@
     }
 
     .capability-shell {
-      border: 1px solid #E5E7EB !important;
-      border-radius: 8px !important;
-    }
-
-    button.primary:hover {
-      background-color: var(--accent-hover) !important;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
     }
 
     .hero-progress {
@@ -192,11 +176,11 @@
     }
 
     .wizard-progress {
-      height: 12px !important;
-      background-color: rgba(255, 255, 255, 0.08) !important;
-      border-radius: 999px !important;
+      height: 12px;
+      background-color: var(--bg-muted);
+      border-radius: 999px;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-subtle);
     }
 
     #wizard_progress_fill {
@@ -204,8 +188,8 @@
       height: 100%;
       min-width: 0;
       transition: width 0.35s ease;
-      box-shadow: inset 0 1px rgba(255, 255, 255, 0.2);
-      background: linear-gradient(90deg, #f58020 0%, #ff9c4a 100%) !important;
+      box-shadow: var(--shadow-inset);
+      background: var(--accent) !important;
     }
 
     .wizard-progress-steps {
@@ -255,25 +239,22 @@
       width: 12px;
       height: 12px;
       border-radius: 999px;
-      border: 2px solid rgba(255, 255, 255, 0.18);
+      border: 2px solid color-mix(in srgb, var(--button-text) 18%, transparent);
       background: transparent;
-      flex-shrink: 0;
-      transition: all 0.2s ease;
     }
-
     .wizard-progress-step.is-active,
     .wizard-progress-step.is-complete {
       color: var(--ink);
     }
 
     .wizard-progress-step.is-active .wizard-progress-dot {
-      border-color: #f58020;
-      background: #f58020;
-      box-shadow: 0 0 0 4px rgba(245, 128, 32, 0.18);
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
     }
 
     .wizard-progress-step.is-complete .wizard-progress-dot {
-      border-color: #f58020;
+      border-color: var(--accent);
       background: transparent;
     }
 
@@ -385,7 +366,7 @@
     }
   </style>
 </head>
-<body data-test-mode="__JOB_HUNTER_TEST_MODE__">
+<body data-test-mode="__JOB_HUNTER_DEBUG_MODE__">
   <main class="page">
     <section class="hero">
       <div class="hero-shell">
@@ -393,8 +374,7 @@
           <div class="hero-brand-row">
             <img src="/static/job_hunter_img.png" alt="Job Hunter Logo" class="brand-logo">
             <div class="brand-lockup">
-              <p class="brand-eyebrow">Job Hunter</p>
-              <p class="brand-title">Profile Setup</p>
+              <p class="brand-eyebrow">Job Hunter</p>              
             </div>
           </div>
           <h1 id="hero_title">Set Up Your Job Search Profile</h1>
@@ -554,7 +534,7 @@
           </div>
 
           <div class="actions">
-            <button class="primary" id="create_profile" type="button">Build Draft Profile</button>
+            <button class="btn btn-primary" id="create_profile" type="button">Build Draft Profile</button>
           </div>
         </section>
 
@@ -593,8 +573,8 @@
             </div>
             <div id="review_capability_cards" class="review-capability-list"></div>
             <div class="actions">
-              <button class="secondary" id="back_to_upload_footer" type="button">Back</button>
-              <button class="primary" id="continue_to_search_basics" type="button">Continue</button>
+              <button class="btn btn-secondary" id="back_to_upload_footer" type="button">Back</button>
+              <button class="btn btn-primary" id="continue_to_search_basics" type="button">Continue</button>
             </div>
           </section>
         </section>
@@ -643,8 +623,8 @@
           </div>
 
           <div class="actions">
-            <button class="secondary" id="back_to_review_footer" type="button">Back</button>
-            <button class="primary" id="continue_to_check" type="button">Continue</button>
+            <button class="btn btn-secondary" id="back_to_review_footer" type="button">Back</button>
+            <button class="btn btn-primary" id="continue_to_check" type="button">Continue</button>
           </div>
         </section>
 
@@ -705,8 +685,8 @@
           </div>
 
           <div class="actions">
-            <button class="secondary" id="back_to_search_basics_footer" type="button">Back</button>
-            <button class="primary" id="confirm_review" type="button">Finish Setup</button>
+            <button class="btn btn-secondary" id="back_to_search_basics_footer" type="button">Back</button>
+            <button class="btn btn-primary" id="confirm_review" type="button">Finish Setup</button>
           </div>
         </section>
 
@@ -716,5 +696,6 @@
   </main>
 
   <script src="/static/onboarding-page.js"></script>
+  <script src="/static/onboarding-flow.js"></script>
 </body>
 </html>

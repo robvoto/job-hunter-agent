@@ -15,12 +15,11 @@ import json
 import re
 from typing import Any
 
-from job_hunter_agent.agent_settings import load_agent_settings
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.paths import (
     DATA_DIR,
     FIT_REVIEW_DEFAULTS_PATH,
-    HARD_BLOCKER_KINDS_PATH,
+    HARD_BLOCKER_RULES_PATH,
     LLM_CAPABILITY_NAMING_DEFAULTS_PATH,
     LLM_COSTS_PATH,
     PROFILE_PATH,
@@ -32,7 +31,12 @@ from job_hunter_agent.paths import (
 ROOT_DIR = REPO_ROOT 
 MIN_DATE_RANGE_DAYS = 1
 MAX_DATE_RANGE_DAYS = 30
-MIN_PAGES_CAP = 1
+MIN_SEEK_PAGES = 1
+MAX_SEEK_PAGES = 10
+MIN_LINKEDIN_HOURS_OLD = 1
+MAX_LINKEDIN_HOURS_OLD = 168
+MIN_LINKEDIN_RESULTS_PER_SEARCH = 5
+MAX_LINKEDIN_RESULTS_PER_SEARCH = 100
 DEFAULT_EVIDENCE_TIERS = {
     "primary_current_evidence": "",
     "secondary_older_evidence": "",
@@ -141,11 +145,11 @@ DEFAULT_SEARCH_SETTINGS = {
     "locations": [],
     "classification_ids": [],
     "date_range_days": 3,
-    "max_pages_cap": 10,
+    "seek_max_pages": 10,
     "enforce_posted_age_limit": True,
     "sort_newest_first": True,
     "linkedin_hours_old": 24,
-    "linkedin_results_per_search": 25,
+    "linkedin_results_per_search": 50,
     "linkedin_easy_apply_only": None,
 }
 
@@ -592,13 +596,39 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         merged["date_range_days"] = DEFAULT_SEARCH_SETTINGS["date_range_days"]
 
     try:
-        max_pages_hard_limit = load_agent_settings().get("scraping", {}).get("max_pages_hard_limit", 25)
-        merged["max_pages_cap"] = max(
-            MIN_PAGES_CAP,
-            min(int(merged.get("max_pages_cap", DEFAULT_SEARCH_SETTINGS["max_pages_cap"])), int(max_pages_hard_limit)),
+        merged["seek_max_pages"] = max(
+            MIN_SEEK_PAGES,
+            min(int(merged.get("seek_max_pages", DEFAULT_SEARCH_SETTINGS["seek_max_pages"])), MAX_SEEK_PAGES),
         )
     except Exception:
-        merged["max_pages_cap"] = DEFAULT_SEARCH_SETTINGS["max_pages_cap"]
+        merged["seek_max_pages"] = DEFAULT_SEARCH_SETTINGS["seek_max_pages"]
+
+    try:
+        merged["linkedin_hours_old"] = max(
+            MIN_LINKEDIN_HOURS_OLD,
+            min(
+                int(merged.get("linkedin_hours_old", DEFAULT_SEARCH_SETTINGS["linkedin_hours_old"])),
+                MAX_LINKEDIN_HOURS_OLD,
+            ),
+        )
+    except Exception:
+        merged["linkedin_hours_old"] = DEFAULT_SEARCH_SETTINGS["linkedin_hours_old"]
+
+    try:
+        merged["linkedin_results_per_search"] = max(
+            MIN_LINKEDIN_RESULTS_PER_SEARCH,
+            min(
+                int(
+                    merged.get(
+                        "linkedin_results_per_search",
+                        DEFAULT_SEARCH_SETTINGS["linkedin_results_per_search"],
+                    )
+                ),
+                MAX_LINKEDIN_RESULTS_PER_SEARCH,
+            ),
+        )
+    except Exception:
+        merged["linkedin_results_per_search"] = DEFAULT_SEARCH_SETTINGS["linkedin_results_per_search"]
 
     merged["enforce_posted_age_limit"] = bool(merged.get("enforce_posted_age_limit", True))
     merged["sort_newest_first"] = bool(merged.get("sort_newest_first", True))
@@ -607,6 +637,19 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
     merged["classification_ids"] = [
         str(value).strip() for value in merged.get("classification_ids", []) if str(value).strip()
     ]
+    easy_apply_only = merged.get("linkedin_easy_apply_only")
+    if easy_apply_only is None or easy_apply_only == "":
+        merged["linkedin_easy_apply_only"] = None
+    elif isinstance(easy_apply_only, str):
+        normalized_easy_apply_only = easy_apply_only.strip().lower()
+        if normalized_easy_apply_only == "true":
+            merged["linkedin_easy_apply_only"] = True
+        elif normalized_easy_apply_only == "false":
+            merged["linkedin_easy_apply_only"] = False
+        else:
+            merged["linkedin_easy_apply_only"] = None
+    else:
+        merged["linkedin_easy_apply_only"] = bool(easy_apply_only)
     return merged
 
 

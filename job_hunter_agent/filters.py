@@ -2,11 +2,13 @@
 
 import json
 import re
-from typing import Tuple
+from typing import Any, Tuple
 
 from job_hunter_agent.capability_matrix import canonical_capability_term
+from job_hunter_agent.hard_blocker_knowledge import find_hard_block_matches
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import load_profile
+from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
 
 
 
@@ -16,6 +18,127 @@ TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\
 
 def _matches_any(text: str, patterns: list[str]) -> bool:
     return any(re.search(pattern, text) for pattern in patterns if pattern)
+
+
+def _normalize_title_pattern_text(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    raw = raw.replace(r"\b", " ").replace(r"\B", " ").replace(r"\A", " ").replace(r"\Z", " ")
+    raw = raw.replace("\\", " ")
+    decomposition = decompose_title_text(raw)
+    return str(decomposition.get("base_role") or decomposition.get("normalized_title") or normalize_title_text(raw)).strip()
+
+
+def _find_matching_title_pattern(text: str, patterns: list[str]) -> str:
+    normalized_text = decompose_title_text(text).get("base_role") or normalize_title_text(text)
+    if not normalized_text:
+        return ""
+    for pattern in patterns:
+        cleaned = _normalize_title_pattern_text(pattern)
+        if not cleaned:
+            continue
+        if normalized_text == cleaned:
+            return cleaned
+        if re.search(rf"\b{re.escape(cleaned)}\b", normalized_text):
+            return cleaned
+        if re.search(rf"\b{re.escape(normalized_text)}\b", cleaned):
+            return cleaned
+    return ""
+
+
+def _matches_normalized_title(text: str, patterns: list[str]) -> bool:
+    return bool(_find_matching_title_pattern(text, patterns))
+
+
+def _title_match_family_text(text: str) -> str:
+    decomposition = decompose_title_text(text)
+    return str(decomposition.get("base_role") or decomposition.get("normalized_title") or "").strip()
+
+
+def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "ok": False,
+        "reason": "TITLE_EMPTY",
+        "normalized_title": "",
+        "base_role": "",
+        "seniority_modifiers": [],
+        "variant_terms": "",
+        "match_family": "",
+        "matched_pattern": "",
+        "title_seniority": "plain",
+        "primary_pattern_has_seniority": False,
+        "seniority_adjustment": 0,
+        "warning_reason": "",
+    }
+    if not title:
+        return result
+
+    profile = profile if isinstance(profile, dict) else load_profile()
+    decomposition = decompose_title_text(title)
+    normalized_title = str(decomposition.get("normalized_title") or "").strip()
+    base_role = _title_match_family_text(title)
+    target_patterns = profile.get("primary_job_title_pattern", [])
+    adjacent_patterns = profile.get("secondary_title_patterns", [])
+    matched_primary_pattern = ""
+    primary_pattern_has_seniority = False
+    for pattern in target_patterns:
+        cleaned_pattern = _normalize_title_pattern_text(pattern)
+        if not cleaned_pattern:
+            continue
+        if not matched_primary_pattern and _find_matching_title_pattern(base_role, [pattern]):
+            matched_primary_pattern = cleaned_pattern
+        if decompose_title_text(pattern).get("seniority_modifiers"):
+            if _find_matching_title_pattern(base_role, [pattern]):
+                primary_pattern_has_seniority = True
+    matched_secondary_pattern = _find_matching_title_pattern(base_role, adjacent_patterns)
+    is_direct_match = bool(matched_primary_pattern)
+    is_adjacent_match = bool(matched_secondary_pattern)
+    title_seniority = "plain"
+    if any(token in {"junior", "graduate", "associate"} for token in decomposition.get("seniority_modifiers") or []):
+        title_seniority = "lower"
+    elif decomposition.get("seniority_modifiers"):
+        title_seniority = "preferred"
+
+    result.update(
+        {
+            "normalized_title": normalized_title,
+            "base_role": base_role,
+            "seniority_modifiers": list(decomposition.get("seniority_modifiers") or []),
+            "variant_terms": str(decomposition.get("variant_terms") or "").strip(),
+            "matched_pattern": matched_primary_pattern or matched_secondary_pattern,
+            "title_seniority": title_seniority,
+            "primary_pattern_has_seniority": primary_pattern_has_seniority,
+            "warning_reason": "TITLE_SENIORITY_VARIANT" if decomposition.get("seniority_modifiers") else "",
+            "seniority_adjustment": 0,
+        }
+    )
+    if result["primary_pattern_has_seniority"]:
+        if title_seniority == "lower":
+            result["seniority_adjustment"] = -5
+        elif title_seniority == "preferred":
+            result["seniority_adjustment"] = 3
+
+    if not is_direct_match and not is_adjacent_match:
+        result["reason"] = "TITLE_NOT_TARGET"
+        return result
+
+    if is_direct_match:
+        if _has_numeric_title_level(normalized_title):
+            result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "primary"})
+            return result
+        result.update({"ok": True, "reason": "OK", "match_family": "primary"})
+        return result
+
+    for rule in profile.get("reject_title_rules", []):
+        pattern = rule.get("pattern", "")
+        reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
+        if pattern and re.search(pattern, normalized_title):
+            result["reason"] = reason
+            return result
+
+    result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "secondary"})
+    return result
 
 
 def normalize_title_block_phrase(value: str) -> str:
@@ -154,6 +277,33 @@ def _matches_soft_requirement(text: str, alias: str) -> bool:
         rf"{escaped_alias}.{{0,35}}(experience|knowledge|understanding|proficiency)",
     ]
     return any(re.search(pattern, text) for pattern in patterns)
+
+
+def matches_mandatory_requirement(description_text: str, required_term: str) -> bool:
+    description_lower = (description_text or "").lower()
+    skill_lower = (required_term or "").strip().lower()
+    if not description_lower or not skill_lower:
+        return False
+
+    escaped_skill = re.escape(skill_lower)
+    term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
+    hard_requirement_re = re.compile(r"\b(required|requires|required to|essential|must have|mandatory|need to have|needs to have)\b")
+
+    def hard_requirement_matches(context: str) -> bool:
+        for hard_match in hard_requirement_re.finditer(context):
+            prefix = context[max(0, hard_match.start() - 5):hard_match.start()]
+            if re.search(r"\bnot\s+$", prefix):
+                continue
+            return True
+        return False
+
+    for match in re.finditer(term_pattern, description_lower):
+        start = max(match.start() - 45, 0)
+        end = min(match.end() + 45, len(description_lower))
+        context = description_lower[start:end]
+        if hard_requirement_matches(context):
+            return True
+    return False
 
 
 def matches_missing_requirement(description_text: str, required_term: str) -> bool:
@@ -314,32 +464,8 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
     Title-based gatekeeping.
     Returns (True, "OK") if title is acceptable, else (False, "REASON").
     """
-    if not title:
-        return False, "TITLE_EMPTY"
-
-    profile = load_profile()
-    title_lower = title.strip().lower()
-
-    target_patterns = profile.get("primary_job_title_pattern", [])
-    adjacent_patterns = profile.get("secondary_title_patterns", [])
-    is_direct_match = _matches_any(title_lower, target_patterns)
-    is_adjacent_match = _matches_any(title_lower, adjacent_patterns)
-
-    if not is_direct_match and not is_adjacent_match:
-        return False, "TITLE_NOT_TARGET"
-
-    if is_direct_match and _has_numeric_title_level(title_lower):
-        return True, "TITLE_POTENTIAL_MATCH"
-
-    for rule in profile.get("reject_title_rules", []):
-        pattern = rule.get("pattern", "")
-        reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
-        if pattern and re.search(pattern, title_lower):
-            return False, reason
-
-    if is_direct_match:
-        return True, "OK"
-    return True, "TITLE_POTENTIAL_MATCH"
+    analysis = analyze_title_filters(title)
+    return bool(analysis["ok"]), str(analysis["reason"])
 
 
 def passes_content_filters(details_text: str, card_location: str = "", title_reason: str = "") -> Tuple[bool, str]:
@@ -357,6 +483,12 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
         reason = rule.get("reason", f"DESC_REJECT:{phrase}")
         if phrase and phrase in description_lower:
             return False, reason
+
+    for match in find_hard_block_matches(details_text):
+        if matches_mandatory_requirement(details_text, match.get("matched_term") or ""):
+            token = _normalize_reason_token(match.get("value") or match.get("matched_term") or "")
+            if token:
+                return False, f"DESC_HARD_BLOCK_KNOWLEDGE:{token}"
 
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
     if not ok_capability:
@@ -387,13 +519,13 @@ def passes_quick_card_filters(
     work_mode: str = "",
     work_type: str = "",
     salary: str = "",
-) -> Tuple[bool, str]:
+    ) -> Tuple[bool, str]:
     profile = load_profile()
-    title_lower = (title or "").strip().lower()
+    normalized_title = normalize_title_text(title)
     teaser_lower = (teaser or "").strip().lower()
     combined = "\n".join(
         part for part in [
-            title_lower,
+            normalized_title,
             teaser_lower,
             (company or "").strip().lower(),
             (location or "").strip().lower(),
@@ -405,7 +537,7 @@ def passes_quick_card_filters(
     )
     counter_patterns = profile.get("cheap_keep_counter_patterns", [])
     counter_hits = sum(1 for pattern in counter_patterns if pattern and re.search(pattern, combined))
-    direct_target_title = _matches_any(title_lower, profile.get("primary_job_title_pattern", []))
+    direct_target_title = _matches_normalized_title(normalized_title, profile.get("primary_job_title_pattern", []))
 
     for rule in profile.get("cheap_reject_metadata_rules", []):
         pattern = rule.get("pattern", "")
@@ -413,16 +545,16 @@ def passes_quick_card_filters(
         scope = str(rule.get("scope") or "title_or_teaser").strip().lower()
         haystack = teaser_lower
         if scope == "title":
-            haystack = title_lower
+            haystack = normalized_title
         elif scope == "teaser":
             haystack = teaser_lower
         else:
-            haystack = "\n".join(part for part in [title_lower, teaser_lower] if part)
+            haystack = "\n".join(part for part in [normalized_title, teaser_lower] if part)
 
         if not pattern or not haystack or not re.search(pattern, haystack):
             continue
 
-        title_has_specialist_signal = bool(re.search(pattern, title_lower)) 
+        title_has_specialist_signal = bool(re.search(pattern, normalized_title)) 
         unusually_strong_counter = direct_target_title and counter_hits >= 4 and not title_has_specialist_signal
         if unusually_strong_counter:
             continue

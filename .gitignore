@@ -46,3 +46,7 @@ data/SCORING_RATIONALE.md
 data/TITLE_SELECTION_RATIONALE.md
 .claude/settings.json
 HARD_CODED_JUDGEMENT_BACKLOG.md
+docs/RUN_COMMANDS.txt
+data/CAPABILITY_AGING_RATIONALE.md
+.gitignore
+venv activate.ps1 

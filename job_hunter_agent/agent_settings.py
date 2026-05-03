@@ -20,6 +20,9 @@ AGENT_STATE_PATH = DATA_DIR / "agent_state.json"
 
 DEFAULT_AGENT_SETTINGS = {
     "dashboard_url": "http://127.0.0.1:8765/dashboard",
+    "dashboard": {
+        "minimum_score": 55,
+    },
     "schedule": {
         "daily_time_local": "08:30",
         "loop_sleep_seconds": 300,
@@ -52,9 +55,6 @@ DEFAULT_AGENT_SETTINGS = {
     "llm": {
         "model": "gpt-4o-mini",
     },
-    "scraping": {
-        "max_pages_hard_limit": 25,
-    },
 }
 
 
@@ -71,6 +71,23 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
     settings = _deep_merge(copy.deepcopy(DEFAULT_AGENT_SETTINGS), payload if isinstance(payload, dict) else {})
 
     settings["dashboard_url"] = str(settings.get("dashboard_url") or "").strip()
+
+    dashboard = settings.get("dashboard", {})
+    settings["dashboard"] = {
+        "minimum_score": max(
+            0,
+            min(
+                int(
+                    dashboard.get(
+                        "minimum_score",
+                        DEFAULT_AGENT_SETTINGS["dashboard"]["minimum_score"],
+                    )
+                    or DEFAULT_AGENT_SETTINGS["dashboard"]["minimum_score"]
+                ),
+                100,
+            ),
+        ),
+    }
 
     schedule = settings.get("schedule", {})
     settings["schedule"] = {
@@ -126,11 +143,6 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
         "subscribers": normalized_subscribers,
     }
 
-    scraping = settings.get("scraping", {})
-    settings["scraping"] = {
-        "max_pages_hard_limit": max(1, int(scraping.get("max_pages_hard_limit", 25) or 25)),
-    }
-
     return settings
 
 
@@ -164,6 +176,14 @@ def save_agent_settings(payload: Any) -> dict[str, Any]:
         encoding="utf-8",
     )
     return normalized
+
+
+def get_dashboard_minimum_score(settings: Any | None = None) -> int:
+    if isinstance(settings, dict):
+        active_settings = normalize_agent_settings(settings)
+    else:
+        active_settings = load_agent_settings(create_if_missing=True)
+    return int(active_settings["dashboard"]["minimum_score"])
 
 
 def load_agent_state() -> dict[str, Any]:

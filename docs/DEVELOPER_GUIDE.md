@@ -102,7 +102,7 @@ Current band mapping:
 
 - `85-100` -> `Strong match`
 - `70-84` -> `Good match`
-- `55-69` -> `Possible fit` (or "Worth a look")
+- `55-69` -> `Possible fit`
 - `0-54` -> `Stretch`
 
 Hard blockers:
@@ -137,7 +137,7 @@ Do not accidentally commit:
 - `data/capability_profile.txt`
 - `data/agent_settings.json`
 - `data/agent_state.json`
-- `data/llm_costs.json`
+- `data/llm_costs.jsonl`
 - `output/rejection_rules.json` 
 - `TODO.txt`
 - `.venv/`

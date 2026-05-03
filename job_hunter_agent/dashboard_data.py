@@ -356,7 +356,7 @@ def build_run_stats(
     run_finished_at: datetime,
     date_range_days: int,
     sort_newest_first: bool,
-    max_pages_cap: int,
+    seek_max_pages: int,
 ) -> dict:
     search_targets: dict[str, set[int]] = {}
     reject_counts: dict[str, int] = {}
@@ -389,7 +389,7 @@ def build_run_stats(
         "run_finished_at": run_finished_at.isoformat(timespec="seconds"),
         "search_window_days": date_range_days,
         "sort_newest_first": sort_newest_first,
-        "max_pages_cap": max_pages_cap,
+        "seek_max_pages": seek_max_pages,
         "search_targets": {
             location: sorted(pages)
             for location, pages in sorted(search_targets.items())

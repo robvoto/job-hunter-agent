@@ -9,6 +9,7 @@
   --bg-page:      #f8f5f0;
   --bg-surface:   #fffdf8;
   --bg-muted:     #f4f0e8;
+  --scrim:        rgba(31, 41, 51, 0.35);
   --text-primary: #1f2933;
   --text-muted:   #5b6470;
   --border-subtle:#e6dccd;
@@ -36,6 +37,22 @@
   --state-neutral-bg: #f8fafc;
   --state-neutral-border: #cbd5e1;
   --state-neutral-text: #475569;
+  --tone-strong:   var(--state-success-text);
+  --tone-good:     var(--state-info-text);
+  --tone-possible: var(--state-warning-text);
+  --tone-stretch:  var(--state-error-text);
+  --opacity-low:   0.3;
+  --opacity-med:   0.4;
+  --opacity-high:  0.8;
+  --progress-track:   color-mix(in srgb, var(--text-muted) 15%, transparent);
+  --insight-bg:       var(--state-info-bg);
+  --insight-border:   var(--state-info-border);
+  --block-bg:         var(--state-error-bg);
+  --block-text:       var(--state-error-text);
+  --tone-strong-bg:   color-mix(in srgb, var(--tone-strong) 8%, transparent);
+  --tone-good-bg:     color-mix(in srgb, var(--tone-good) 8%, transparent);
+  --tone-possible-bg: color-mix(in srgb, var(--tone-possible) 10%, transparent);
+  --tone-stretch-bg:  color-mix(in srgb, var(--tone-stretch) 8%, transparent);
 
   /* Legacy aliases — existing CSS uses these names */
   --bg:      var(--bg-page);
@@ -45,6 +62,14 @@
   --line:    var(--border-subtle);
   --shadow:  var(--shadow-soft);
   --accent-2:#1d4ed8;
+  --cool:    var(--accent-2);
+  --sans:    "Segoe UI", Aptos, Arial, sans-serif;
+  --serif:   "Iowan Old Style", Georgia, serif;
+  --bg-panel-glass:     var(--bg-surface);
+  --border-panel-glass: var(--border-subtle);
+  --bg-toolbar-glass:   var(--bg-surface);
+  --bg-chip-subtle:     #f7f4ee;
+  --border-chip-subtle: var(--border-subtle);
 }
 
 /* ── Bold Aggressive ── */
@@ -52,6 +77,7 @@
   --bg-page:      #f0f0f0;
   --bg-surface:   #ffffff;
   --bg-muted:     #f5f5f5;
+  --scrim:        rgba(0, 0, 0, 0.45);
   --text-primary: #0a0a0a;
   --text-muted:   #444444;
   --border-subtle:#c0c0c0;
@@ -79,6 +105,24 @@
   --state-neutral-bg: #f8fafc;
   --state-neutral-border: #cbd5e1;
   --state-neutral-text: #475569;
+  --tone-strong:   var(--state-success-text);
+  --tone-good:     var(--state-info-text);
+  --tone-possible: var(--state-warning-text);
+  --tone-stretch:  var(--state-error-text);
+  --opacity-low:   0.3;
+  --opacity-med:   0.4;
+  --opacity-high:  0.8;
+  --tone-strong-bg:   color-mix(in srgb, var(--tone-strong) 8%, transparent);
+  --tone-good-bg:     color-mix(in srgb, var(--tone-good) 8%, transparent);
+  --tone-possible-bg: color-mix(in srgb, var(--tone-possible) 10%, transparent);
+  --tone-stretch-bg:  color-mix(in srgb, var(--tone-stretch) 8%, transparent);
+  --progress-track:   color-mix(in srgb, var(--text-muted) 15%, transparent);
+  --insight-bg:       var(--state-info-bg);
+  --insight-border:   var(--state-info-border);
+  --block-bg:         var(--state-error-bg);
+  --block-text:       var(--state-error-text);
+  --sans:    "Segoe UI", Aptos, Arial, sans-serif;
+  --serif:   "Iowan Old Style", Georgia, serif;
 
   --bg:      var(--bg-page);
   --card:    var(--bg-surface);
@@ -87,6 +131,12 @@
   --line:    var(--border-subtle);
   --shadow:  var(--shadow-soft);
   --accent-2:#2563eb;
+  --cool:    var(--accent-2);
+  --bg-panel-glass:     var(--bg-surface);
+  --border-panel-glass: var(--border-subtle);
+  --bg-toolbar-glass:   var(--bg-surface);
+  --bg-chip-subtle:     #f7f4ee;
+  --border-chip-subtle: var(--border-subtle);
 }
 
 /* ── Dark Professional ── */
@@ -94,6 +144,7 @@
   --bg-page:      #0d1117;
   --bg-surface:   #161b22;
   --bg-muted:     #1c2128;
+  --scrim:        rgba(0, 0, 0, 0.65);
   --text-primary: #e6edf3;
   --text-muted:   #8b949e;
   --border-subtle:#30363d;
@@ -121,6 +172,22 @@
   --state-neutral-bg: #1c2128;
   --state-neutral-border: #484f58;
   --state-neutral-text: #c9d1d9;
+  --tone-strong:   var(--state-success-text);
+  --tone-good:     var(--state-info-text);
+  --tone-possible: var(--state-warning-text);
+  --tone-stretch:  var(--state-error-text);
+  --opacity-low:   0.3;
+  --opacity-med:   0.4;
+  --opacity-high:  0.8;
+  --progress-track:   color-mix(in srgb, var(--text-muted) 15%, transparent);
+  --insight-bg:       var(--state-info-bg);
+  --insight-border:   var(--state-info-border);
+  --block-bg:         var(--state-error-bg);
+  --block-text:       var(--state-error-text);
+  --tone-strong-bg:   color-mix(in srgb, var(--tone-strong) 15%, transparent);
+  --tone-good-bg:     color-mix(in srgb, var(--tone-good) 15%, transparent);
+  --tone-possible-bg: color-mix(in srgb, var(--tone-possible) 20%, transparent);
+  --tone-stretch-bg:  color-mix(in srgb, var(--tone-stretch) 15%, transparent);
 
   --bg:      var(--bg-page);
   --card:    var(--bg-surface);
@@ -129,7 +196,51 @@
   --line:    var(--border-subtle);
   --shadow:  var(--shadow-soft);
   --accent-2:#58a6ff;
+  --cool:    var(--accent-2);
+  --bg-panel-glass:     linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 98%, transparent), color-mix(in srgb, var(--bg-page) 96%, transparent));
+  --border-panel-glass: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  --bg-toolbar-glass:   color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  --bg-chip-subtle:     color-mix(in srgb, var(--bg-muted) 90%, transparent);
+  --border-chip-subtle: color-mix(in srgb, var(--accent) 28%, transparent);
 }
+
+/* ── Layout & Surfaces ── */
+body {
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+/* ── Unified Button System ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.95; }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary { background: var(--accent); color: var(--button-text); border-color: var(--accent); box-shadow: var(--shadow-soft); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.btn-secondary { background: var(--bg-surface); color: var(--accent-2); border-color: var(--border-subtle); }
+.btn-secondary:hover:not(:disabled) { background: var(--bg-muted); }
+
+.btn-danger { background: var(--state-error-bg); color: var(--state-error-text); border-color: var(--state-error-border); }
 
 /* ── Theme Switcher Widget ── */
 .theme-switcher-widget {

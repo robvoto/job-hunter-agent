@@ -158,6 +158,7 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
         "decision": "REJECT",
         "reject_reason": None,
         "title_reason": None,
+        "title_match_metadata": {},
         "content_reason": None,
         "llm_decision": None,
         "llm_fit_grade": None,

@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from job_hunter_agent.profile_learning import (
     _CURRENT_MONTH,
     _CURRENT_YEAR,
@@ -34,24 +32,42 @@ def test_extract_year_range_defaults_to_full_year_when_months_missing():
 
 # ── extract_title_pattern_suggestions: LLM-delegated ─────────────────────────
 
-def test_extract_title_pattern_suggestions_returns_llm_patterns():
-    fixture = {
-        "capabilities": [],
-        "primary_job_title_pattern": ["senior devops engineer", "devops engineer"],
-        "secondary_title_patterns": ["technical consultant"],
-        "suggested_search_keywords": ["devops", "cloud infrastructure"],
-        "match_preferences": {},
-    }
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
-        result = extract_title_pattern_suggestions("some cv", {"extraction_lookback_years": 8})
+def test_extract_title_pattern_suggestions_returns_deterministic_patterns():
+    cv_text = """
+    # Professional Experience
+    Senior DevOps Engineer
+    Acme Cloud
+    2023 - Present
+    - Built deployment pipelines.
+
+    Technical Consultant
+    Blue Sky Consulting
+    2012 - 2015
+    - Supported client delivery.
+    """
+    result = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 8})
 
     assert "senior devops engineer" in result["primary_job_title_pattern"]
-    assert "technical consultant" in result["secondary_title_patterns"]
+    assert "technical consultant" in result["primary_job_title_pattern"]
+    assert result["secondary_title_patterns"] == ["devops engineer"]
 
 
-def test_extract_title_pattern_suggestions_empty_when_llm_returns_nothing():
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={}):
-        result = extract_title_pattern_suggestions("some cv")
+def test_extract_title_pattern_suggestions_adds_seniority_base_to_secondary():
+    cv_text = """
+    # Professional Experience
+    Senior Business Analyst
+    Acme
+    2024 - Present
+    - Led requirements workshops.
+    """
+    result = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 8})
+
+    assert "senior business analyst" in result["primary_job_title_pattern"]
+    assert "business analyst" in result["secondary_title_patterns"]
+
+
+def test_extract_title_pattern_suggestions_empty_when_no_role_headers():
+    result = extract_title_pattern_suggestions("some cv")
 
     assert result == {
         "primary_job_title_pattern": [],
@@ -61,28 +77,38 @@ def test_extract_title_pattern_suggestions_empty_when_llm_returns_nothing():
 
 
 def test_extract_title_pattern_suggestions_respects_max_target_patterns():
-    fixture = {
-        "primary_job_title_pattern": ["a", "b", "c", "d", "e"],
-        "secondary_title_patterns": ["x", "y"],
-        "suggested_search_keywords": [],
-        "capabilities": [],
-        "match_preferences": {},
-    }
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
-        result = extract_title_pattern_suggestions("cv", {"max_target_patterns": 2, "max_secondary_patterns": 1})
+    cv_text = """
+    # Professional Experience
+    Lead Analyst
+    Acme
+    2024 - Present
+    - Current role.
 
-    assert len(result["primary_job_title_pattern"]) <= 2
+    Project Coordinator
+    Beta
+    2022 - 2024
+    - Previous role.
+
+    Operations Officer
+    Gamma
+    2018 - 2022
+    - Older role.
+    """
+    result = extract_title_pattern_suggestions(cv_text, {"max_target_patterns": 1, "max_secondary_patterns": 1})
+
+    assert len(result["primary_job_title_pattern"]) <= 1
     assert len(result["secondary_title_patterns"]) <= 1
 
 
-def test_extract_title_pattern_suggestions_passes_lookback_years_to_llm():
-    captured = {}
+def test_extract_title_pattern_suggestions_ignores_lookback_years():
+    cv_text = """
+    # Professional Experience
+    Senior DevOps Engineer
+    Acme Cloud
+    2023 - Present
+    - Built deployment pipelines.
+    """
+    first = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 5})
+    second = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 8})
 
-    def fake_extract(source_text, lookback_years):
-        captured["lookback_years"] = lookback_years
-        return {}
-
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", side_effect=fake_extract):
-        extract_title_pattern_suggestions("cv", {"extraction_lookback_years": 5})
-
-    assert captured["lookback_years"] == 5
+    assert first == second

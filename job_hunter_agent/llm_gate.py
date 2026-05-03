@@ -25,7 +25,7 @@ from job_hunter_agent.agent_settings import load_agent_settings, DEFAULT_AGENT_S
 from job_hunter_agent.profile_store import (
     DATA_DIR,
     FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
-    HARD_BLOCKER_KINDS_PATH as _HARD_BLOCKER_KINDS_PATH,
+    HARD_BLOCKER_RULES_PATH as _HARD_BLOCKER_RULES_PATH,
     LLM_CAPABILITY_NAMING_DEFAULTS_PATH as _CAPABILITY_NAMING_DEFAULTS_PATH,
     LLM_COSTS_PATH as _LLM_COSTS_PATH,
     PROFILE_PATH as _PROFILE_PATH,
@@ -152,11 +152,11 @@ def _load_managed_prompt_lines(path, filename: str) -> tuple[str, ...]:
     return cleaned
 
 
-def _load_hard_blocker_kinds() -> frozenset[str]:
-    payload = _json_mod.loads(_HARD_BLOCKER_KINDS_PATH.read_text(encoding="utf-8"))
+def _load_hard_blocker_rules() -> frozenset[str]:
+    payload = _json_mod.loads(_HARD_BLOCKER_RULES_PATH.read_text(encoding="utf-8"))
     entries = payload.get("entries")
     if not isinstance(entries, list):
-        raise ValueError("hard_blocker_kinds.json must contain an entries list")
+        raise ValueError("hard_blocker_rules.json must contain an entries list")
 
     kinds: list[str] = []
     for entry in entries:
@@ -168,11 +168,12 @@ def _load_hard_blocker_kinds() -> frozenset[str]:
         if value:
             kinds.append(value)
     if not kinds:
-        raise ValueError("hard_blocker_kinds.json must define at least one enabled kind")
+        raise ValueError("hard_blocker_rules.json must define at least one enabled kind")
     return frozenset(kinds)
 
 
-HARD_BLOCKER_KINDS = _load_hard_blocker_kinds()
+def _hard_blocker_rules() -> frozenset[str]:
+    return _load_hard_blocker_rules()
 FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines(_FIT_REVIEW_DEFAULTS_PATH, "llm_fit_review_defaults.json")
 CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines(_CAPABILITY_NAMING_DEFAULTS_PATH, "llm_capability_naming_defaults.json")
 
@@ -347,7 +348,7 @@ def normalize_rejection_blocker_suggestions(value: Any, max_items: int = 6) -> l
         if not isinstance(item, dict):
             continue
         kind = re.sub(r"[^a-z_]+", "_", str(item.get("kind") or "").strip().lower()).strip("_")
-        if kind not in HARD_BLOCKER_KINDS:
+        if kind not in _hard_blocker_rules():
             continue
         phrase = re.sub(r"\s+", " ", str(item.get("term") or "").strip().lower())
         if not phrase:
@@ -381,7 +382,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
             "Suggest only concise blocker terms that appear to be hard requirements for this specific job and are not clearly evidenced by the candidate profile.",
             "Hard blockers can be from any field: credentials, clearances, licences, work authorization, language, location, regulated/domain experience, industry background, products, platforms, tools, or specialist experience.",
             "Do not suggest desirable, preferred, nice-to-have, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs.",
-            "Classify each suggestion with one kind from: " + ", ".join(sorted(HARD_BLOCKER_KINDS)) + ".",
+            "Classify each suggestion with one kind from: " + ", ".join(sorted(_hard_blocker_rules())) + ".",
             "Return JSON only, in this exact shape: {\"blockers\":[{\"term\":\"term\",\"kind\":\"kind\"}]}. Return an empty array if unsure.",
             build_profile_prompt_context(),
         ]
@@ -482,7 +483,7 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def get_cost_summary() -> dict[str, Any]:
-    """Read llm_costs.json and return totals by purpose - useful for debugging."""
+    """Read llm_costs.jsonl and return totals by purpose - useful for debugging."""
     totals: dict[str, dict[str, Any]] = {}
     try:
         with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:
