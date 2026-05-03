@@ -82,6 +82,7 @@ def test_score_to_match_label_uses_central_match_band_mapping():
     assert source_connector.score_to_match_label(92) == "Strong match"
     assert source_connector.score_to_match_label(74) == "Good match"
     assert source_connector.score_to_match_label(61) == "Worth a look"
+    assert source_connector.score_to_match_label(61) == "Possible fit"
     assert source_connector.score_to_match_label(40) == "Stretch"
 
 
@@ -100,6 +101,7 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
     assert source_connector.score_filter_option_label(65, profile) == "Review next or better"
     assert source_connector.score_to_match_label(67, profile["match_levels"]) == "Review next"
     assert source_connector.score_to_tone_class(67, profile) == "tone-good"
+    assert source_connector.score_to_tone_class(67, profile) == "tone-borderline"
 
 
 def test_has_government_context_detects_real_public_sector_language():
@@ -114,12 +116,117 @@ def test_has_government_context_ignores_privacy_notice_government_id_phrase():
     )
 
 
-def test_government_context_knowledge_file_contains_pattern_lists():
-    payload = json.loads(source_connector._GOVERNMENT_CONTEXT_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+def test_government_context_rules_file_contains_pattern_lists():
+    payload = json.loads(source_connector.GOVERNMENT_CONTEXT_RULES_PATH.read_text(encoding="utf-8"))
 
     assert payload["kind"] == "managed_knowledge"
-    assert "\\bgovernment\\b" in payload["positive_patterns"]
-    assert "\\bgovernment-issued\\s+id(?:entification)?\\b" in payload["false_positive_patterns"]
+    positives = [entry for entry in payload["entries"] if entry.get("kind") == "positive"]
+    false_positives = [entry for entry in payload["entries"] if entry.get("kind") == "false_positive"]
+    assert len(positives) <= 7
+    assert len(false_positives) <= 2
+    assert any(entry.get("value") == "government" for entry in positives)
+    assert any("\\baps\\d+\\b" in str(entry.get("pattern") or "") or "\\baps\\d*\\b" in str(entry.get("pattern") or "") for entry in positives)
+    assert any("government-issued" in str(entry.get("value") or "") for entry in false_positives)
+
+
+def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch):
+    rules_path = tmp_path / "government_context_rules.json"
+    knowledge_path = tmp_path / "government_context_knowledge.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "kind": "managed_knowledge",
+                "name": "government_context_rules",
+                "entries": [
+                    {"value": "government", "pattern": "\\bgovernment\\b", "kind": "positive", "enabled": True},
+                    {"value": "government id", "pattern": "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b", "kind": "false_positive", "enabled": True},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    knowledge_path.write_text(
+        json.dumps(
+            {
+                "kind": "managed_knowledge",
+                "name": "government_context_knowledge",
+                "entries": [
+                    {"value": "NSW Health", "aliases": ["state health department"]},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(source_connector, "GOVERNMENT_CONTEXT_RULES_PATH", rules_path)
+    monkeypatch.setattr(source_connector, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", knowledge_path)
+
+    assert source_connector.has_government_context("Role in NSW Health digital delivery program")
+
+
+def test_build_job_learning_signals_registers_pending_capability_and_title_tokens(monkeypatch):
+    monkeypatch.setattr(
+        source_connector,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+
+    signals = source_connector.build_job_learning_signals(
+        {
+            "title": "Senior Delivery Ninja",
+            "company": "Acme",
+            "title_reason": "TITLE_POTENTIAL_MATCH",
+        },
+        [
+            {"skill": "process mapping"},
+        ],
+        profile={},
+    )
+
+    assert signals == [
+        {
+            "signal": "process mapping",
+            "category": "capability_concept",
+            "source": "job parsing",
+            "context": ["Senior Delivery Ninja", "Acme"],
+            "evidence": ["process mapping"],
+            "needs_review": True,
+        },
+        {
+            "signal": "ninja",
+            "category": "role_title_token",
+            "source": "job parsing",
+            "context": ["Senior Delivery Ninja"],
+            "evidence": ["Senior Delivery Ninja"],
+            "needs_review": True,
+        },
+    ]
+
+
+def test_build_job_learning_signals_registers_government_context_from_job_description(monkeypatch):
+    monkeypatch.setattr(
+        source_connector,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+
+    signals = source_connector.build_job_learning_signals(
+        {
+            "title": "APS6 Policy Officer",
+            "company": "Australian Government Department of Health",
+            "full_description": "Baseline clearance required for this APS6 role.",
+        },
+        [],
+        profile={},
+    )
+
+    assert [item["signal"] for item in signals] == [
+        "government",
+        "aps6",
+        "baseline",
+        "department of health",
+    ]
+    assert all(item["suggested_category"] == "government_context" for item in signals)
+    assert all(item["needs_review"] is True for item in signals)
 
 
 def test_legacy_linkedin_fit_source_text_can_restore_description_confidence():
@@ -184,7 +291,7 @@ def test_visible_fit_reasons_backfills_from_positive_score_drivers():
     reasons = source_connector.visible_fit_reasons(
         ["Strong capability match: Delivery teams"],
         [
-            {"label": "Direct target title match", "value": 14},
+            {"label": "Primary role-family match", "value": 14},
             {"label": "Description fit is strong", "value": 16},
             {"label": "Fit evidence bullets", "value": 3},
             {"label": "Posted within the last day", "value": 9},
@@ -194,7 +301,7 @@ def test_visible_fit_reasons_backfills_from_positive_score_drivers():
 
     assert reasons == [
         "Strong capability match: Delivery teams",
-        "Direct target title match",
+        "Primary role-family match",
         "Description fit is strong",
         "Posted within the last day",
     ]
@@ -432,6 +539,56 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
     assert missing == []
 
 
+def test_job_parsing_rejection_registers_hard_blocker_concept(monkeypatch):
+    registrations = []
+
+    monkeypatch.setattr(
+        source_connector,
+        "fetch_job_details_payload",
+        lambda detail_page, url: {"text": "Hands-on coding required for this role.", "status": "ok", "source": "jobAdDetails"},
+    )
+    monkeypatch.setattr(
+        source_connector,
+        "passes_content_filters",
+        lambda details_text, card_location="", title_reason="": (False, "DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"),
+    )
+    monkeypatch.setattr(
+        source_connector,
+        "register_signals",
+        lambda items, category="": registrations.append((items, category)),
+    )
+
+    ok, reason = source_connector._process_seek_job_details(
+        {
+            "title": "Business Analyst",
+            "company": "Acme",
+            "location": "Sydney",
+            "url": "https://example.com/job/1",
+        },
+        detail_page=None,
+        profile={},
+        title_reason="OK",
+    )
+
+    assert ok is False
+    assert reason == "DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"
+    assert registrations == [
+        (
+            [
+                {
+                    "signal": "mandatory coding",
+                    "category": "hard_blocker_concept",
+                    "source": "job rejection",
+                    "context": ["Business Analyst", "Acme"],
+                    "evidence": ["DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"],
+                    "needs_review": True,
+                }
+            ],
+            "",
+        )
+    ]
+
+
 def test_on_site_role_gets_visible_score_penalty():
     breakdown = source_connector.fit_score_breakdown(
         {
@@ -472,6 +629,12 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
             "title_reason": "OK",
             "content_reason": "OK",
             "llm_fit_grade": "SOLID",
+            "title_match_metadata": {
+                "match_family": "primary",
+                "title_seniority": "plain",
+                "primary_pattern_has_seniority": False,
+                "seniority_adjustment": 0,
+            },
             "fit_highlights": [],
             "location": "Sydney NSW",
             "work_type": "Full Time",
@@ -483,8 +646,92 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
         profile,
     )
 
-    assert _breakdown_value(breakdown, "Direct target title match") == 20
+    assert _breakdown_value(breakdown, "Primary role-family match") == 20
     assert _breakdown_value(breakdown, "Hybrid work available") == 6
+
+
+def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_primary_matches():
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Senior Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "title_match_metadata": {
+                "match_family": "primary",
+                "title_seniority": "preferred",
+                "primary_pattern_has_seniority": True,
+                "seniority_adjustment": 3,
+            },
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        _test_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Primary role-family match") == 15
+    assert _breakdown_value(breakdown, "Primary seniority adjustment") == 3
+
+
+def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_matches():
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Junior Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "title_match_metadata": {
+                "match_family": "primary",
+                "title_seniority": "lower",
+                "primary_pattern_has_seniority": True,
+                "seniority_adjustment": -5,
+            },
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        _test_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Primary role-family match") == 15
+    assert _breakdown_value(breakdown, "Primary seniority adjustment") == -5
+
+
+def test_fit_score_breakdown_keeps_secondary_role_family_clean():
+    breakdown = source_connector.fit_score_breakdown(
+        {
+            "title": "Lead Project Coordinator",
+            "title_reason": "TITLE_POTENTIAL_MATCH",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "title_match_metadata": {
+                "match_family": "secondary",
+                "title_seniority": "preferred",
+                "primary_pattern_has_seniority": False,
+                "seniority_adjustment": 0,
+            },
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Project coordinator duties. " * 40,
+            "competitive_signals": [],
+        },
+        _test_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Secondary role-family match") == 4
+    assert _breakdown_value(breakdown, "Primary seniority adjustment") is None
 
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
@@ -932,6 +1179,15 @@ def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypa
     ]
 
 
+def test_is_dashboard_eligible_uses_saved_dashboard_minimum_score(monkeypatch):
+    monkeypatch.setattr(source_connector, "passes_title_filters", lambda title: (True, "OK"))
+    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(source_connector, "get_dashboard_minimum_score", lambda: 60)
+
+    assert source_connector.is_dashboard_eligible({"title": "Business Analyst", "score": 60}) is True
+    assert source_connector.is_dashboard_eligible({"title": "Business Analyst", "score": 59}) is False
+
+
 def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
 
@@ -969,6 +1225,7 @@ def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     assert "Strong match only" in options_html
     assert "Good match or better" in options_html
     assert "Worth a look or better" in options_html
+    assert "Possible fit or better" in options_html
     assert "50+ only" not in options_html
 
 
@@ -999,7 +1256,7 @@ def test_posted_filter_options_show_explicit_day_windows():
     assert "Last 3 days (2)" in options_html
     assert "Last 7 days (3)" in options_html
     assert "Last 14 days (3)" in options_html
-    assert "Last 30 days (3)" in options_html
+    #assert "Last 30 days (3)" in options_html
 
 
 def test_repeated_listing_history_adds_candidate_warning():

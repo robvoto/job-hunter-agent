@@ -12,7 +12,7 @@ def test_build_llm_profile_brief_ignores_malformed_capability_rules():
         ]
     )
 
-    assert "process mapping (strong, core)" in brief
+    assert "process mapping (strong)" in brief
 
 
 def test_build_llm_profile_brief_handles_non_list_input():
@@ -66,6 +66,11 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
         lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
+    monkeypatch.setattr(
+        source_documents,
+        "build_learning_patch",
+        lambda text, onboarding_settings=None, source_sections=None: {"cv_text": text},
+    )
 
     result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
 
@@ -90,7 +95,7 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
     monkeypatch.setattr(
         source_documents,
         "build_learning_patch",
-        lambda text, onboarding_settings=None: {
+        lambda text, onboarding_settings=None, source_sections=None: {
             "cv_text": text,
             "capability_profile_rules": [{"name": "delivery", "level": "working"}],
             "match_preferences": {"prefer_permanent": True, "home_location": "Sydney"},
@@ -103,6 +108,58 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
     assert result["profile"].get("capability_profile_rules") == [{"name": "delivery", "level": "working"}]
     assert result["profile"].get("match_preferences", {})["prefer_permanent"] is True
     assert result["profile"].get("match_preferences", {})["home_location"] == "Sydney"
+
+
+def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    cv_path = tmp_path / "cv.txt"
+    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
+
+    monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
+    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
+    monkeypatch.setattr(
+        source_documents,
+        "extract_title_pattern_suggestions",
+        lambda text, settings: {
+            "primary_job_title_pattern": ["platform lead"],
+            "secondary_title_patterns": ["delivery analyst"],
+            "suggested_search_keywords": ["platform lead"],
+        },
+    )
+    monkeypatch.setattr(
+        source_documents,
+        "build_role_title_review_signals",
+        lambda titles, source_sections=None: [
+            {
+                "signal": "Delivery Analyst",
+                "category": "role_title_token",
+                "source": "CV parsing",
+                "context": ["Experience: Delivery Analyst"],
+                "evidence": ["Delivery Analyst"],
+                "needs_review": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(source_documents, "register_signals", lambda items: captured.setdefault("signals", items))
+    monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
+    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings=None, source_sections=None: {"cv_text": text, "capability_profile_rules": []})
+
+    result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
+
+    assert result["ok"] is True
+    assert captured["signals"] == [
+        {
+            "signal": "Delivery Analyst",
+            "category": "role_title_token",
+            "source": "CV parsing",
+            "context": ["Experience: Delivery Analyst"],
+            "evidence": ["Delivery Analyst"],
+            "needs_review": True,
+        }
+    ]
 
 
 def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeypatch):

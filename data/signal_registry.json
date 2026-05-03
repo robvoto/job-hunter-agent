@@ -5,19 +5,16 @@
     "original_texts": [
       "business rules and validation"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "bpmn 2.0 process modelling": {
     "signal": "bpmn 2.0 process modelling",
@@ -25,19 +22,16 @@
     "original_texts": [
       "bpmn 2.0 process modelling"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "stakeholder engagement": {
     "signal": "stakeholder engagement",
@@ -45,19 +39,24 @@
     "original_texts": [
       "stakeholder engagement"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "capability_concept",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T06:29:03.026842+00:00",
+        "category": "capability_concept"
       }
-    ]
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "stakeholder engagement"
+    ],
+    "needs_review": true
   },
   "agile / scrum delivery": {
     "signal": "agile / scrum delivery",
@@ -65,19 +64,16 @@
     "original_texts": [
       "agile / scrum delivery"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "requirements for ai systems": {
     "signal": "requirements for ai systems",
@@ -85,19 +81,16 @@
     "original_texts": [
       "requirements for ai systems"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "sql and data analysis": {
     "signal": "sql and data analysis",
@@ -105,19 +98,16 @@
     "original_texts": [
       "sql and data analysis"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "solution design and gap analysis": {
     "signal": "solution design and gap analysis",
@@ -125,19 +115,16 @@
     "original_texts": [
       "solution design and gap analysis"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "user stories and acceptance criteria": {
     "signal": "user stories and acceptance criteria",
@@ -145,19 +132,16 @@
     "original_texts": [
       "user stories and acceptance criteria"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "workflow orchestration": {
     "signal": "workflow orchestration",
@@ -165,19 +149,16 @@
     "original_texts": [
       "workflow orchestration"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "test automation": {
     "signal": "test automation",
@@ -185,19 +166,16 @@
     "original_texts": [
       "test automation"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "training and documentation": {
     "signal": "training and documentation",
@@ -205,19 +183,16 @@
     "original_texts": [
       "training and documentation"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "project management": {
     "signal": "project management",
@@ -225,19 +200,16 @@
     "original_texts": [
       "project management"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.092857+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "legacy system integration": {
     "signal": "legacy system integration",
@@ -245,19 +217,16 @@
     "original_texts": [
       "legacy system integration"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "change management": {
     "signal": "change management",
@@ -265,19 +234,16 @@
     "original_texts": [
       "change management"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
   },
   "communication skills": {
     "signal": "communication skills",
@@ -285,18 +251,645 @@
     "original_texts": [
       "communication skills"
     ],
-    "decision": "review",
-    "scope": "global",
-    "source": "system",
-    "needs_review": true,
-    "notes": "",
+    "category": "",
+    "suggested_category": "",
     "history": [
       {
-        "decision": "review",
-        "source": "system",
-        "timestamp": "2026-05-01T09:02:51.293458+00:00",
-        "notes": ""
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
       }
-    ]
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "team leadership": {
+    "signal": "team leadership",
+    "normalized_key": "team leadership",
+    "original_texts": [
+      "team leadership"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "agile methodologies": {
+    "signal": "agile methodologies",
+    "normalized_key": "agile methodologies",
+    "original_texts": [
+      "agile methodologies"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T06:29:03.026842+00:00",
+        "category": "capability_concept"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "agile methodologies"
+    ],
+    "needs_review": true
+  },
+  "process improvement": {
+    "signal": "process improvement",
+    "normalized_key": "process improvement",
+    "original_texts": [
+      "process improvement"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T09:13:20.803261+00:00",
+        "category": "capability_concept"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "process improvement"
+    ],
+    "needs_review": true
+  },
+  "resource allocation": {
+    "signal": "resource allocation",
+    "normalized_key": "resource allocation",
+    "original_texts": [
+      "resource allocation"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T09:13:20.803261+00:00",
+        "category": "capability_concept"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "resource allocation"
+    ],
+    "needs_review": true
+  },
+  "risk management": {
+    "signal": "risk management",
+    "normalized_key": "risk management",
+    "original_texts": [
+      "risk management"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T09:13:20.803261+00:00",
+        "category": "capability_concept"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "risk management"
+    ],
+    "needs_review": true
+  },
+  "performance tracking": {
+    "signal": "performance tracking",
+    "normalized_key": "performance tracking",
+    "original_texts": [
+      "performance tracking"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "delivery management": {
+    "signal": "delivery management",
+    "normalized_key": "delivery management",
+    "original_texts": [
+      "delivery management"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "project planning": {
+    "signal": "project planning",
+    "normalized_key": "project planning",
+    "original_texts": [
+      "project planning"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "budgeting and forecasting": {
+    "signal": "budgeting and forecasting",
+    "normalized_key": "budgeting and forecasting",
+    "original_texts": [
+      "budgeting and forecasting"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "stakeholder communication": {
+    "signal": "stakeholder communication",
+    "normalized_key": "stakeholder communication",
+    "original_texts": [
+      "stakeholder communication"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "budget management": {
+    "signal": "budget management",
+    "normalized_key": "budget management",
+    "original_texts": [
+      "budget management"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "cross-functional collaboration": {
+    "signal": "cross-functional collaboration",
+    "normalized_key": "cross-functional collaboration",
+    "original_texts": [
+      "cross-functional collaboration"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T06:29:03.026842+00:00",
+        "category": "capability_concept"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "cross-functional collaboration"
+    ],
+    "needs_review": true
+  },
+  "operational strategy": {
+    "signal": "operational strategy",
+    "normalized_key": "operational strategy",
+    "original_texts": [
+      "operational strategy"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "performance optimization": {
+    "signal": "performance optimization",
+    "normalized_key": "performance optimization",
+    "original_texts": [
+      "performance optimization"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      },
+      {
+        "action": "categorized",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00",
+        "category": "capability_concept"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "performance optimization"
+    ],
+    "needs_review": true
+  },
+  "process mapping": {
+    "signal": "process mapping",
+    "normalized_key": "process mapping",
+    "original_texts": [
+      "process mapping"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "requirements analysis": {
+    "signal": "requirements analysis",
+    "normalized_key": "requirements analysis",
+    "original_texts": [
+      "requirements analysis"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "strategic planning": {
+    "signal": "strategic planning",
+    "normalized_key": "strategic planning",
+    "original_texts": [
+      "strategic planning"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "platform management": {
+    "signal": "platform management",
+    "normalized_key": "platform management",
+    "original_texts": [
+      "platform management"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "project coordination": {
+    "signal": "project coordination",
+    "normalized_key": "project coordination",
+    "original_texts": [
+      "project coordination"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "llm applications": {
+    "signal": "llm applications",
+    "normalized_key": "llm applications",
+    "original_texts": [
+      "llm applications"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "prompt engineering": {
+    "signal": "prompt engineering",
+    "normalized_key": "prompt engineering",
+    "original_texts": [
+      "prompt engineering"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "solution design": {
+    "signal": "solution design",
+    "normalized_key": "solution design",
+    "original_texts": [
+      "solution design"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "process modelling (bpmn 2.0)": {
+    "signal": "process modelling (bpmn 2.0)",
+    "normalized_key": "process modelling (bpmn 2.0)",
+    "original_texts": [
+      "process modelling (bpmn 2.0)"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "integration analysis": {
+    "signal": "integration analysis",
+    "normalized_key": "integration analysis",
+    "original_texts": [
+      "integration analysis"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "etl development": {
+    "signal": "etl development",
+    "normalized_key": "etl development",
+    "original_texts": [
+      "etl development"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "field-level data mapping": {
+    "signal": "field-level data mapping",
+    "normalized_key": "field-level data mapping",
+    "original_texts": [
+      "field-level data mapping"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "automated workflow design": {
+    "signal": "automated workflow design",
+    "normalized_key": "automated workflow design",
+    "original_texts": [
+      "automated workflow design"
+    ],
+    "category": "",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:31.093858+00:00"
+      }
+    ],
+    "source": "system",
+    "needs_review": true
+  },
+  "budgeting": {
+    "signal": "budgeting",
+    "normalized_key": "budgeting",
+    "original_texts": [
+      "budgeting"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:50.534115+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "budgeting"
+    ],
+    "needs_review": true
+  },
+  "performance monitoring": {
+    "signal": "performance monitoring",
+    "normalized_key": "performance monitoring",
+    "original_texts": [
+      "performance monitoring"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T01:21:50.534115+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "performance monitoring"
+    ],
+    "needs_review": true
+  },
+  "system integration": {
+    "signal": "system integration",
+    "normalized_key": "system integration",
+    "original_texts": [
+      "system integration"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T06:28:55.552119+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "system integration"
+    ],
+    "needs_review": true
+  },
+  "technical strategy": {
+    "signal": "technical strategy",
+    "normalized_key": "technical strategy",
+    "original_texts": [
+      "technical strategy"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T06:28:55.552119+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "technical strategy"
+    ],
+    "needs_review": true
+  },
+  "customer relationship management": {
+    "signal": "customer relationship management",
+    "normalized_key": "customer relationship management",
+    "original_texts": [
+      "customer relationship management"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T09:13:20.803261+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "customer relationship management"
+    ],
+    "needs_review": true
+  },
+  "sap": {
+    "signal": "sap",
+    "normalized_key": "sap",
+    "original_texts": [
+      "sap"
+    ],
+    "category": "hard_blocker_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-03T11:48:59.733704+00:00"
+      }
+    ],
+    "source": "user feedback",
+    "context": [
+      "Business Analyst - SAP"
+    ],
+    "evidence": [
+      "sap"
+    ],
+    "needs_review": true
   }
 }

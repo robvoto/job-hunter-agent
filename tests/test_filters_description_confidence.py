@@ -163,7 +163,7 @@ def test_approved_hard_blocker_knowledge_rejects_mandatory_requirement_text(tmp_
           "name": "hard_blocker_knowledge",
           "version": 1,
           "entries": [
-            {"value": "mandatory coding", "aliases": ["hands-on coding required"]}
+            {"value": "hands on coding", "aliases": ["hands-on coding required"]}
           ]
         }
         """.strip(),
@@ -186,7 +186,7 @@ def test_approved_hard_blocker_knowledge_rejects_mandatory_requirement_text(tmp_
     )
 
     assert ok is False
-    assert reason == "DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"
+    assert reason == "DESC_HARD_BLOCK_KNOWLEDGE:hands_on_coding"
 
 
 def test_approved_hard_blocker_knowledge_does_not_reject_desirable_only_text(tmp_path, monkeypatch):
@@ -198,7 +198,7 @@ def test_approved_hard_blocker_knowledge_does_not_reject_desirable_only_text(tmp
           "name": "hard_blocker_knowledge",
           "version": 1,
           "entries": [
-            {"value": "mandatory coding", "aliases": ["hands-on coding required"]}
+            {"value": "hands on coding", "aliases": ["hands-on coding required"]}
           ]
         }
         """.strip(),
@@ -216,7 +216,7 @@ def test_approved_hard_blocker_knowledge_does_not_reject_desirable_only_text(tmp
     )
 
     ok, reason = filters.passes_content_filters(
-        "Hands-on coding required would be desirable for this role.",
+        "Hands-on coding experience would be desirable for this role.",
         title_reason="OK",
     )
 

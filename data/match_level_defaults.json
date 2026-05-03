@@ -1,0 +1,26 @@
+{
+  "kind": "managed_knowledge",
+  "name": "match_level_defaults",
+  "entries": [
+    {
+      "minimum_score": 85,
+      "label": "Strong match",
+      "description": "strongest fit signals"
+    },
+    {
+      "minimum_score": 70,
+      "label": "Good match",
+      "description": "clear fit with fewer caveats"
+    },
+    {
+      "minimum_score": 55,
+      "label": "Possible fit",
+      "description": "plausible fit worth reviewing"
+    },
+    {
+      "minimum_score": 0,
+      "label": "Stretch",
+      "description": "lower-confidence or borderline fit"
+    }
+  ]
+}

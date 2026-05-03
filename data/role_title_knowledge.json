@@ -2,93 +2,20 @@
   "kind": "managed_knowledge",
   "name": "role_title_knowledge",
   "version": 1,
-  "updated_at": "2026-04-29",
-  "description": "Generic role title tokens used to help detect job titles during parsing. These are not user roles and do not define target positions.",
+  "updated_at": "2026-05-03",
+  "description": "Approved role title concepts used to improve title parsing and review flows.",
   "entries": [
-    {
-      "value": "analyst",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "manager",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "coordinator",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "consultant",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "specialist",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "developer",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "engineer",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "architect",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "officer",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "director",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "administrator",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "owner",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "lead",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "executive",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "head",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "staff",
-      "enabled": true,
-      "source": "seed"
-    },
-    {
-      "value": "master",
-      "enabled": true,
-      "source": "seed"
-    }
+    {"value": "analyst"},
+    {"value": "manager"},
+    {"value": "coordinator"},
+    {"value": "consultant"},
+    {"value": "specialist"},
+    {"value": "developer"},
+    {"value": "engineer"},
+    {"value": "architect"},
+    {"value": "officer"},
+    {"value": "director"},
+    {"value": "administrator"},
+    {"value": "owner"}
   ]
 }

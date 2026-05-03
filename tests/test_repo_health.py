@@ -1,7 +1,7 @@
 from pathlib import Path
 import importlib
 
-from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS
+from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS, normalize_search_settings
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -15,6 +15,23 @@ def test_default_search_settings_are_candidate_agnostic():
     assert DEFAULT_SEARCH_SETTINGS["keywords"] == ""
     assert DEFAULT_SEARCH_SETTINGS["locations"] == []
     assert DEFAULT_SEARCH_SETTINGS["classification_ids"] == []
+    assert DEFAULT_SEARCH_SETTINGS["seek_max_pages"] == 10
+
+
+def test_search_settings_clamp_source_fetch_limits():
+    normalized = normalize_search_settings(
+        {
+            "seek_max_pages": 100,
+            "linkedin_hours_old": 999,
+            "linkedin_results_per_search": 1,
+            "linkedin_easy_apply_only": "false",
+        }
+    )
+
+    assert normalized["seek_max_pages"] == 10
+    assert normalized["linkedin_hours_old"] == 168
+    assert normalized["linkedin_results_per_search"] == 5
+    assert normalized["linkedin_easy_apply_only"] is False
 
 
 def test_default_match_preferences_are_neutral():

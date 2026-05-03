@@ -50,3 +50,4 @@ docs/RUN_COMMANDS.txt
 data/CAPABILITY_AGING_RATIONALE.md
 .gitignore
 venv activate.ps1 
+docs/RUN_COMMANDS.txt

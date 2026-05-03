@@ -31,12 +31,10 @@ What it does:
   and rebuilds the dashboard.
 
 Useful flags:
-  python -m job_hunter_agent.source_connector --max-pages 1
   python -m job_hunter_agent.source_connector --no-llm
   python -m job_hunter_agent.source_connector --cheap-llm
-  python -m job_hunter_agent.source_connector --scrape-allow-low
-  python -m job_hunter_agent.source_connector --show-scores
-
+  python -m job_hunter_agent.source_connector --debug-mode
+  
 
 Automated agent run:
   python -m job_hunter_agent.agent_runner
@@ -57,7 +55,7 @@ What it does:
   Starts the browser UI.
 
 Test mode:
-  python -m job_hunter_agent.local_server --test-mode
+  python -m job_hunter_agent.local_server --debug-mode
 
 Open:
   Onboarding: http://127.0.0.1:8765/start
@@ -70,19 +68,6 @@ SOURCE CONNECTOR FLAGS
 
 Use these with:
   python -m job_hunter_agent.source_connector
-
-
---max-pages
------------
-
-What it does:
-  Overrides the configured page cap for the current scrape only.
-
-Use when:
-  You want a smaller, faster run while testing.
-
-Example:
-  python -m job_hunter_agent.source_connector --max-pages 1
 
 
 --no-llm
@@ -113,42 +98,6 @@ Example:
   python -m job_hunter_agent.source_connector --rebuild-dashboard
 
 
---expand-dashboard
-------------------
-
-What it does:
-  Expands what the dashboard is willing to show from saved data by lowering the
-  dashboard score floor from 50 to 35.
-
-Important:
-  This is not the same as --scrape-allow-low. It is dashboard-only. It does not
-  scrape job sites, does not run AI review, and does not switch the LLM model.
-
-Use when:
-  You want to inspect borderline jobs already saved from a previous run.
-
-Best example:
-  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard
-
-
---scrape-allow-low
-------------------
-
-What it does:
-  Runs a fresh scrape with a wider dashboard pool. It lowers the dashboard score
-  floor from 50 to 35.
-
-Use when:
-  You want to find more borderline matches from job sites, not just re-display
-  saved data.
-
-Example:
-  python -m job_hunter_agent.source_connector --scrape-allow-low
-
-Fast test example:
-  python -m job_hunter_agent.source_connector --scrape-allow-low --max-pages 1
-
-
 --cheap-llm
 -----------
 
@@ -162,21 +111,6 @@ Example:
   python -m job_hunter_agent.source_connector --cheap-llm
 
 
---show-scores
--------------
-
-What it does:
-  Shows raw score numbers on job cards and expands the fit breakdown.
-
-Use when:
-  You are tuning filters or trying to understand why roles are only scoring
-  "Worth a look".
-
-Examples:
-  python -m job_hunter_agent.source_connector --show-scores
-  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard --show-scores
-
-
 --reset-new-to-you
 ------------------
 
@@ -188,19 +122,6 @@ Use when:
 
 Example:
   python -m job_hunter_agent.source_connector --rebuild-dashboard --reset-new-to-you
-
-
---max-pages <number>
---------------------
-
-What it does:
-  Temporarily overrides the "Max pages to check" profile setting for this run.
-
-Use when:
-  You want a quick scrape without waiting for the full page limit.
-
-Example:
-  python -m job_hunter_agent.source_connector --max-pages 1
 
 
 --no-llm
@@ -261,27 +182,19 @@ QUICK WORKFLOWS
 Fast UI/dashboard check, no scrape:
   python -m job_hunter_agent.source_connector --rebuild-dashboard
 
-Show borderline saved jobs, no scrape:
-  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard
+Fresh cheaper AI model:
+  python -m job_hunter_agent.source_connector --cheap-llm
 
-Show borderline saved jobs with visible scores:
-  python -m job_hunter_agent.source_connector --rebuild-dashboard --expand-dashboard --show-scores
-
-Fresh scrape-allow-low:
-  python -m job_hunter_agent.source_connector --scrape-allow-low
-
-Fresh scrape-allow-low, cheaper AI model:
-  python -m job_hunter_agent.source_connector --scrape-allow-low --cheap-llm
-
-Fresh scrape-allow-low, one page only:
-  python -m job_hunter_agent.source_connector --scrape-allow-low --max-pages 1
+Fresh smaller SEEK scrape:
+  Set SEEK "Max pages to check" to 1 in Settings, then run:
+  python -m job_hunter_agent.source_connector
 
 
 QUICK NOTES
 ===========
 
-- If the right panel says "Test mode ON", you are looking at a test-mode dashboard.
+- If the right panel says "Debug mode ON", you are looking at a debug-mode dashboard.
 - Run `python -m job_hunter_agent.source_connector` to get back to a normal dashboard.
-- Console logs show whether scrape allow low, score display, LLM disablement, and page overrides are active.
+- Console logs show whether dashboard debug mode, cheap LLM mode, or LLM disablement are active.
 - If you save profile changes in settings, the next scrape will use them.
 - If settings save feedback does not look right, restart the local server with `python -m job_hunter_agent.local_server`.

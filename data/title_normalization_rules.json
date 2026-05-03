@@ -1,0 +1,28 @@
+{
+  "kind": "rules",
+  "name": "title_normalization_rules",
+  "version": 1,
+  "updated_at": "2026-05-03",
+  "seniority_modifiers": [
+    "junior",
+    "mid",
+    "senior",
+    "lead",
+    "principal",
+    "head",
+    "chief",
+    "executive"
+  ],
+  "abbreviation_expansions": {
+    "sr": "senior",
+    "jr": "junior",
+    "ba": "business analyst",
+    "po": "product owner"
+  },
+  "normalization": {
+    "collapse_spaces": true,
+    "strip_outer_punctuation": true,
+    "lowercase_for_matching": true,
+    "preserve_original_for_display": true
+  }
+}

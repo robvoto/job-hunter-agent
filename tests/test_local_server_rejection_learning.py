@@ -1,6 +1,7 @@
 import json
 
 from job_hunter_agent import local_server
+from job_hunter_agent import signal_registry
 
 
 def test_rejection_rule_category_knowledge_file_contains_enabled_entries():
@@ -45,6 +46,7 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
     }
     rebuilds = []
     events = []
+    registrations = []
 
     monkeypatch.setattr(local_server, "load_profile", lambda: profile)
     monkeypatch.setattr(local_server, "save_profile", lambda payload: payload)
@@ -68,6 +70,11 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
         local_server.SettingsHandler,
         "_rebuild_dashboard_after_rule_change",
         staticmethod(lambda reason="": rebuilds.append(reason)),
+    )
+    monkeypatch.setattr(
+        signal_registry,
+        "register_signals",
+        lambda items, category="": registrations.append((items, category)),
     )
 
     result = local_server.SettingsHandler._save_requirement_blockers_feedback(
@@ -93,6 +100,21 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
     ]
     assert rebuilds == []
     assert events[0][0][0] == "block_requirement"
+    assert registrations == [
+        (
+            [
+                {
+                    "signal": "sap",
+                    "category": "hard_blocker_concept",
+                    "source": "user feedback",
+                    "context": ["Business Analyst - SAP"],
+                    "evidence": ["sap"],
+                    "needs_review": True,
+                }
+            ],
+            "",
+        )
+    ]
 
 
 def test_save_requirement_blockers_feedback_skips_title_followup_when_kept_history_matches(monkeypatch):

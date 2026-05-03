@@ -1,6 +1,9 @@
 {
-  "_help": "Template file with default values for agent settings. Used for initialization only.",
+  "_help": "Template file with default values for agent settings and dashboard display controls. Used for initialization only.",
   "dashboard_url": "http://127.0.0.1:8765/dashboard",
+  "dashboard": {
+    "minimum_score": 55
+  },
   "schedule": {
     "daily_time_local": "08:30",
     "loop_sleep_seconds": 300

@@ -1,84 +1,69 @@
 {
   "kind": "managed_knowledge",
-  "name": "hard_blocker_kinds",
+  "name": "hard_blocker_rules",
   "version": 1,
   "updated_at": "2026-04-29",
   "description": "Managed blocker kinds the LLM may use when suggesting hard requirement blockers for explicit user approval.",
   "entries": [
     {
       "value": "credential",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true      
     },
     {
       "value": "clearance",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "license",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "work_authorization",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "language",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "location",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "domain",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "industry",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "regulatory",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "platform",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "tool",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "product",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "security",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "specialist_experience",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     },
     {
       "value": "other_hard_requirement",
-      "enabled": true,
-      "source": "seed"
+      "enabled": true
     }
   ]
 }

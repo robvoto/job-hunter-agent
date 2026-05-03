@@ -37,7 +37,7 @@ Final score is clamped to 0–100.
 |------|-------|-----------------|
 | Strong match | 85–100 | Core fit 50+, good logistics, recency, convergence |
 | Good match | 70–84 | Core fit 40+, decent logistics, some freshness |
-| Worth a look | 55–69 | Either title or strong LLM, reasonable logistics |
+| Possible fit | 55–69 | Either title or strong LLM, reasonable logistics |
 | Stretch | 0–54 | Low-confidence fit or significant gaps |
 
 Thresholds are derived from the budget: reaching 85 requires title + STRONG/EXCELLENT LLM + substantial capability evidence + good logistics + recency. They are not arbitrary; they reflect what a "genuine fit" looks like across all dimensions simultaneously.

@@ -9,7 +9,7 @@ Run commands relevant to this logic:
 python -m job_hunter_agent.local_server
 
 # test/debug mode for rebuild internals and local diagnostics
-python -m job_hunter_agent.local_server --test-mode
+python -m job_hunter_agent.local_server --debug-mode
 ```
 
 ---
