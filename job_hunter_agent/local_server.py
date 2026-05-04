@@ -1220,20 +1220,6 @@ class SettingsHandler(BaseHTTPRequestHandler):
             profile["must_not_require_skills"] = existing_blockers
             save_profile(profile)
 
-        from job_hunter_agent.signal_registry import register_signals
-
-        register_signals([
-            {
-                "signal": blocker,
-                "category": "hard_blocker_concept",
-                "source": "user feedback",
-                "context": [item for item in [title, company] if str(item).strip()],
-                "evidence": cleaned_blockers,
-                "needs_review": True,
-            }
-            for blocker in cleaned_blockers
-        ])
-
         title_result: dict[str, Any] | None = None
         description_result: dict[str, Any] | None = None
         applied_title_block_phrases: list[str] = []

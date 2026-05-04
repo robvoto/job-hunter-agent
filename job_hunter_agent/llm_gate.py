@@ -25,7 +25,6 @@ from job_hunter_agent.agent_settings import load_agent_settings, DEFAULT_AGENT_S
 from job_hunter_agent.profile_store import (
     DATA_DIR,
     FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
-    HARD_BLOCKER_RULES_PATH as _HARD_BLOCKER_RULES_PATH,
     LLM_CAPABILITY_NAMING_DEFAULTS_PATH as _CAPABILITY_NAMING_DEFAULTS_PATH,
     LLM_COSTS_PATH as _LLM_COSTS_PATH,
     PROFILE_PATH as _PROFILE_PATH,
@@ -33,6 +32,7 @@ from job_hunter_agent.profile_store import (
     get_evidence_tier_weights,
     load_profile,
 )
+from job_hunter_agent.paths import REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH as _REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH
 
 load_dotenv()
 
@@ -153,10 +153,10 @@ def _load_managed_prompt_lines(path, filename: str) -> tuple[str, ...]:
 
 
 def _load_hard_blocker_rules() -> frozenset[str]:
-    payload = _json_mod.loads(_HARD_BLOCKER_RULES_PATH.read_text(encoding="utf-8"))
+    payload = _json_mod.loads(_REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
     entries = payload.get("entries")
     if not isinstance(entries, list):
-        raise ValueError("hard_blocker_rules.json must contain an entries list")
+        raise ValueError("rejection_rule_categories.json must contain an entries list")
 
     kinds: list[str] = []
     for entry in entries:
@@ -168,7 +168,7 @@ def _load_hard_blocker_rules() -> frozenset[str]:
         if value:
             kinds.append(value)
     if not kinds:
-        raise ValueError("hard_blocker_rules.json must define at least one enabled kind")
+        raise ValueError("rejection_rule_categories.json must define at least one enabled kind")
     return frozenset(kinds)
 
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Main job-source connector and dashboard builder.
 
 Main goals:
@@ -30,8 +30,6 @@ from job_hunter_agent.config import OUTPUT_HTML
 from job_hunter_agent import dashboard_data
 from job_hunter_agent.filters import (
     analyze_title_filters,
-    matches_missing_requirement,
-    matches_mandatory_requirement,
     passes_content_filters,
     passes_quick_card_filters,
     passes_saved_rejection_rules,
@@ -39,7 +37,7 @@ from job_hunter_agent.filters import (
     suggest_title_block_phrase,
     suggest_title_block_phrases,
 )
-from job_hunter_agent.hard_blocker_knowledge import find_hard_block_matches, load_hard_blocker_knowledge
+from job_hunter_agent.hard_blocker_rules import find_hard_block_matches, generalize_hard_block_pattern
 from job_hunter_agent.job_identity import (
     deduplicate_across_sources,
     find_similar_job,
@@ -92,1756 +90,149 @@ from job_hunter_agent.utils import (
     safe_html,
     set_page_param,
 )
+from job_hunter_agent.salary_utils import (
+    salary_sort_value,
+    _salary_max_value,
+    _salary_includes_super_or_package,
+)
+from job_hunter_agent.io_utils import (
+    normalize_posted_text,
+    configure_console_output,
+    load_json_dict,
+    load_json_list,
+    save_json,
+    load_llm_cache,
+    save_llm_cache,
+    load_job_history,
+    save_job_history,
+    write_debug_json,
+    write_run_stats,
+    write_run_attempt,
+    write_review_data,
+)
+from job_hunter_agent.text_processing import (
+    dedupe_preserve_order,
+    compact_whitespace,
+    split_text_snippets,
+    list_to_phrase,
+    summarize_snippet,
+    synthesize_role_snapshot,
+    description_summary_snippet,
+    build_role_summary,
+)
+from job_hunter_agent.role_analysis import (
+    friendly_capability_label,
+    role_text_bundle,
+    text_contains_term,
+    has_government_context,
+    infer_role_sector,
+    infer_posting_channel,
+)
+from job_hunter_agent.scoring_utils import (
+    weighted_points,
+    build_scoring_source_text,
+    extract_contract_months,
+    find_profile_experience_year_in_text,
+    find_profile_experience_year,
+    profile_recency_multiplier,
+)
+from job_hunter_agent.description_trust import (
+    MIN_TRUSTED_DESCRIPTION_LENGTH,
+    TRUSTED_DESCRIPTION_SOURCES,
+    get_trusted_full_description,
+    full_description_confidence,
+    is_description_trusted,
+)
+from job_hunter_agent.capability_matching import (
+    reviewed_signal_matches_for_text,
+    reviewed_signal_match_summary,
+    find_profile_capability_matches,
+    description_watchout_reasons,
+    is_capability_fit_highlight,
+    capability_fit_highlights,
+    build_risk_and_missing_evidence,
+    _normalized_aliases,
+    evidence_tier_alignment_score,
+)
+from job_hunter_agent.signal_detection import (
+    detect_competitive_signals,
+    evaluate_competitive_signal_alignment,
+    competitive_signal_assessments,
+    competitive_fit_highlights,
+    extract_skill_observations,
+    build_job_learning_signals,
+    hard_block_entries,
+    hard_block_reasons,
+)
+from job_hunter_agent.preferences import (
+    get_match_preferences,
+    assess_location_preference,
+    assess_contract_preference,
+    assess_government_preference,
+    salary_fit_adjustment,
+)
+from job_hunter_agent.score_labels import (
+    salary_fit_label,
+    score_to_tone_class,
+    compact_score_label,
+    format_score_breakdown_for_console,
+    render_badge,
+    viewed_badge_html,
+)
+from job_hunter_agent.posting_utils import (
+    parse_timestamp,
+    days_since,
+    normalize_job_key,
+    get_manual_skip_sets,
+    format_timestamp_label,
+    posted_datetime_from_age,
+    format_posted_date_label,
+    relative_posted_age_label,
+    posted_reference_time,
+    is_relative_posted_text,
+    posted_display_label,
+    current_posted_age_days,
+)
 
+
+from job_hunter_agent.fit_scoring import (
+    build_fit_highlights,
+    capability_evidence_score,
+    capability_match_summary,
+    capability_scored_matches,
+    competitive_signal_breakdown,
+    convergence_bonus_entry,
+    fit_score,
+    fit_score_breakdown,
+    llm_description_fit_entry,
+)
+from job_hunter_agent.history import (
+    ARCHIVE_STALE_AFTER_DAYS,
+    HIDDEN_REVIEW_DAYS,
+    KEEP_SNAPSHOT_FIELDS,
+    TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
+    apply_kept_job_reuse,
+    assess_history_warning_signals,
+    build_history_cluster_index,
+    build_history_sighting,
+    build_keep_snapshot,
+    can_reuse_kept_job,
+    finalize_record,
+    history_cluster_key,
+    history_cluster_key_from_parts,
+    update_job_history,
+    viewed_by_user,
+)
 
 MAX_LLM_CHARS = 3000
-ARCHIVE_STALE_AFTER_DAYS = 15
-HIDDEN_REVIEW_DAYS = 30
-MIN_TRUSTED_DESCRIPTION_LENGTH = 600
 CLI_FLAGS = set(sys.argv[1:])
 NO_LLM_MODE = "--no-llm" in CLI_FLAGS
 CHEAP_LLM_MODE = "--cheap-llm" in CLI_FLAGS
 DASHBOARD_DEBUG_MODE = "--debug-mode" in CLI_FLAGS
-TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = "--reset-new-to-you" in CLI_FLAGS
-TRUSTED_DESCRIPTION_SOURCES = frozenset({"jobaddetails", "body", "linkedin_full_description"})
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
 ARCHIVE_LABEL = "Saved From Earlier Searches"
 ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your dashboard."
 ARCHIVE_CONTEXT_PREFIX = "Saved From Earlier Searches"
-MAX_HISTORY_SIGHTINGS = 24
-REPEATED_LISTING_MIN_TIMES_SEEN = 4
-REPEATED_LISTING_MIN_SPAN_DAYS = 21
-MULTI_LISTING_RED_FLAG_MIN_LISTINGS = 3
-MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = 30
-
-KEEP_SNAPSHOT_FIELDS = (
-    "title",
-    "company",
-    "url",
-    "posted",
-    "posted_age_days",
-    "salary",
-    "work_mode",
-    "location",
-    "work_type",
-    "teaser",
-    "title_reason",
-    "content_reason",
-    "llm_decision",
-    "llm_fit_grade",
-    "search_location",
-    "search_keywords",
-    "fit_source_text",
-    "full_description",
-    "fit_confidence",
-    "details_status",
-    "description_source",
-    "role_snapshot",
-    "fit_highlights",
-    "soft_risk_reasons",
-    "missing_evidence",
-    "competitive_signals",
-    "hard_block_reasons",
-    "reviewed_signal_matches",
-)
-
-
-def salary_sort_value(value: str) -> float:
-    """Return a single numeric value for sorting (uses the lower bound of ranges)."""
-    if not value or value == "N/A":
-        return 0.0
-    text = value.lower().replace(",", "").strip()
-    match = re.search(r"(\d+(?:\.\d+)?)\s*k", text)
-    if match:
-        return float(match.group(1)) * 1000
-    match = re.search(r"\$(\d+(?:\.\d+)?)", text)
-    if match:
-        return float(match.group(1))
-    return 0.0
-
-
-def _salary_max_value(value: str) -> float:
-    """Return the upper bound of a salary range for minimum-target comparisons.
-
-    For '$450 - $700 per day' returns 700; for '$130k-$145k p.a.' returns 145000.
-    Falls back to salary_sort_value when only one figure is present.
-    """
-    if not value or value == "N/A":
-        return 0.0
-    text = value.lower().replace(",", "").strip()
-    k_vals = [float(m) * 1000 for m in re.findall(r"(\d+(?:\.\d+)?)\s*k", text)]
-    if k_vals:
-        return max(k_vals)
-    dollar_vals = [float(m) for m in re.findall(r"\$(\d+(?:\.\d+)?)", text)]
-    if dollar_vals:
-        return max(dollar_vals)
-    return 0.0
-
-
-def _salary_includes_super_or_package(value: str) -> bool:
-    text = str(value or "").strip().lower()
-    if not text or text == "n/a":
-        return False
-    return bool(re.search(r"(?:\bincl\.?\s*super\b|\bincluding\s+super\b|\+\s*super\b|\bsuperannuation\b|\bpackage\b|\bsalary packaging\b)", text))
-
-
-def normalize_posted_text(value: Optional[str]) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return "N/A"
-    return re.sub(r"^\s*posted\s+", "", text, flags=re.IGNORECASE).strip()
-
-
-def configure_console_output() -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-
-def load_json_dict(path: Path) -> Dict[str, dict]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        pass
-    return {}
-
-
-def load_json_list(path: Path) -> List[dict]:
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, list):
-            return [item for item in data if isinstance(item, dict)]
-    except Exception:
-        pass
-    return []
-
-
-def save_json(path: Path, payload) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def load_llm_cache() -> Dict[str, Any]:
-    raw = load_json_dict(LLM_CACHE_PATH)
-    return {str(k): v for k, v in raw.items()}
-
-
-def save_llm_cache(cache: Dict[str, Any]) -> None:
-    save_json(LLM_CACHE_PATH, cache)
-
-
-def load_job_history() -> Dict[str, dict]:
-    return load_json_dict(JOB_HISTORY_PATH)
-
-
-def save_job_history(history: Dict[str, dict]) -> None:
-    save_json(JOB_HISTORY_PATH, history)
-
-
-def write_debug_json(records: List[dict]) -> None:
-    save_json(DEBUG_JSON_PATH, records)
-
-
-def write_run_stats(payload: dict) -> None:
-    save_json(RUN_STATS_PATH, payload)
-
-
-def write_run_attempt(run_started_at: datetime) -> None:
-    run_stats = load_json_dict(RUN_STATS_PATH)
-    run_stats["last_run_attempt_at"] = run_started_at.isoformat(timespec="seconds")
-    save_json(RUN_STATS_PATH, run_stats)
-
-
-def write_review_data(payload: dict) -> None:
-    save_json(REVIEW_DATA_PATH, payload)
-
-
-def dedupe_preserve_order(values: List[str]) -> List[str]:
-    seen: Set[str] = set()
-    result: List[str] = []
-    for value in values:
-        normalized = value.strip()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        result.append(normalized)
-    return result
-
-
-def compact_whitespace(value: Optional[str]) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
-
-
-def split_text_snippets(text: str) -> List[str]:
-    snippets: List[str] = []
-    for raw_line in re.split(r"[\r\n]+", text or ""):
-        cleaned = compact_whitespace(raw_line.strip(" -\u2022\t"))
-        if len(cleaned) >= 24:
-            snippets.append(cleaned)
-    if snippets:
-        return dedupe_preserve_order(snippets)
-
-    compact = compact_whitespace(text)
-    if not compact:
-        return []
-    sentence_like = [
-        compact_whitespace(part)
-        for part in re.split(r"(?<=[.!?])\s+", compact)
-        if len(compact_whitespace(part)) >= 24
-    ]
-    return dedupe_preserve_order(sentence_like)
-
-
-def list_to_phrase(items: List[str]) -> str:
-    cleaned = [compact_whitespace(item) for item in items if compact_whitespace(item)]
-    if not cleaned:
-        return ""
-    if len(cleaned) == 1:
-        return cleaned[0]
-    if len(cleaned) == 2:
-        return f"{cleaned[0]} and {cleaned[1]}"
-    return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
-
-
-def _is_generic_summary_text(text: str) -> bool:
-    lowered = compact_whitespace(text).lower()
-    generic_phrases = (
-        "opportunity to join",
-        "fast-paced environment",
-        "leading company",
-        "great opportunity",
-        "asap",
-        "urgent",
-        "must be based in",
-        "full working rights",
-    )
-    return any(phrase in lowered for phrase in generic_phrases)
-
-
-def synthesize_role_snapshot(record: dict) -> str:
-    title = compact_whitespace(record.get("title") or "")
-    location = compact_whitespace(record.get("location") or "")
-    if location.endswith(", Australia"):
-        location = location[:-11].strip()
-    work_type = compact_whitespace(record.get("work_type") or "")
-    teaser = compact_whitespace(record.get("teaser") or "")
-
-    domain_focus = ""
-    if " - " in title:
-        domain_focus = compact_whitespace(title.split(" - ", 1)[1])
-    elif "(" in title and ")" in title:
-        domain_focus = compact_whitespace(re.sub(r"^[^(]*\((.*?)\).*$", r"\1", title))
-
-    summary = ""
-    if title and domain_focus and work_type and location and work_type != "N/A" and location != "N/A":
-        summary = f"{title} role focused on {domain_focus.lower()} work in {location} on a {work_type.lower()} basis."
-    elif title and location and location != "N/A":
-        summary = f"{title} role based in {location}."
-    elif title:
-        summary = f"{title} role."
-
-    if teaser and teaser != "N/A" and not _is_generic_summary_text(teaser):
-        summary = f"{summary} {teaser}".strip()
-
-    return summarize_snippet(summary, max_length=220) if summary else "Role summary not available."
-
-
-def summarize_snippet(snippet: str, max_length: int = 180) -> str:
-    cleaned = compact_whitespace(snippet)
-    if len(cleaned) <= max_length:
-        return cleaned
-    return cleaned[: max_length - 3].rstrip() + "..."
-
-
-def _clean_summary_candidate(text: str) -> str:
-    cleaned = compact_whitespace(text)
-    if not cleaned:
-        return ""
-    if ":" in cleaned[:40]:
-        prefix, _, remainder = cleaned.partition(":")
-        if 0 < len(prefix.split()) <= 4 and remainder.strip():
-            cleaned = compact_whitespace(remainder)
-    cleaned = re.sub(r"^[\u2022\-\u2013\u2014]+\s*", "", cleaned).strip()
-    return cleaned
-
-
-def _is_summary_heading(text: str) -> bool:
-    cleaned = compact_whitespace(text)
-    if not cleaned:
-        return True
-    if len(cleaned) <= 24 and cleaned.endswith(":"):
-        return True
-    tokens = cleaned.split()
-    if len(tokens) <= 5 and cleaned == cleaned.upper():
-        return True
-    return False
-
-
-def _looks_like_generic_job_summary(text: str, title: str, company: str) -> bool:
-    cleaned = compact_whitespace(text)
-    lowered = cleaned.lower()
-    title_lower = compact_whitespace(title).lower()
-    company_lower = compact_whitespace(company).lower()
-    if not cleaned or len(cleaned) < 45:
-        return True
-    if cleaned.endswith(":"):
-        return True
-    if title_lower and lowered == title_lower:
-        return True
-    if company_lower and lowered == company_lower:
-        return True
-    if lowered.startswith("about the role") and len(cleaned.split()) <= 4:
-        return True
-    return False
-
-
-def description_summary_snippet(record: dict, details_text: str) -> str:
-    title = compact_whitespace(record.get("title") or "")
-    company = compact_whitespace(record.get("company") or "")
-    snippets = [
-        _clean_summary_candidate(snippet)
-        for snippet in split_text_snippets(details_text)
-    ]
-    for snippet in snippets:
-        if _is_summary_heading(snippet):
-            continue
-        if _looks_like_generic_job_summary(snippet, title, company):
-            continue
-        return summarize_snippet(snippet, max_length=220)
-    return ""
-
-
-def infer_role_sector(record: dict, details_text: str) -> dict[str, str]:
-    company = compact_whitespace(record.get("company") or "").lower()
-    combined = f"{company}\n{compact_whitespace(details_text).lower()}"
-
-    if has_government_context(combined):
-        return {"kind": "government", "label": "Government", "confidence": "high"}
-    return {"kind": "unknown", "label": "", "confidence": "unknown"}
-
-
-def infer_posting_channel(record: dict, details_text: str) -> dict[str, str]:
-    company = compact_whitespace(record.get("company") or "").lower()
-    title = compact_whitespace(record.get("title") or "").lower()
-    teaser = compact_whitespace(record.get("teaser") or "").lower()
-    description = compact_whitespace(details_text).lower()
-    combined = "\n".join(part for part in [title, company, teaser, description] if part)
-
-    recruiter_company_match = re.search(
-        r"\b(recruitment|recruiter|staffing|resourcing|labour hire|labor hire|executive search|search firm)\b",
-        company,
-    )
-    recruiter_copy_patterns = [
-        r"\bour client\b",
-        r"\bfor our client\b",
-        r"\bon behalf of\b",
-        r"\bclient is seeking\b",
-        r"\bsubmit (?:your )?(?:cv|resume|application)\b",
-        r"\bcontact (?:our )?(?:consultant|recruiter|recruitment team)\b",
-        r"\breference number\b",
-        r"\bshortlisted candidates\b",
-        r"\bimmediate interviews?\b",
-    ]
-    direct_copy_patterns = [
-        r"\babout us\b",
-        r"\babout the company\b",
-        r"\bwho we are\b",
-        r"\bour company\b",
-        r"\bour organisation\b",
-        r"\bour organization\b",
-        r"\bjoin our team\b",
-        r"\bjoin us\b",
-        r"\bwe are looking for\b",
-        r"\bwe are seeking\b",
-    ]
-
-    recruiter_score = 0
-    direct_score = 0
-
-    if recruiter_company_match:
-        recruiter_score += 2
-    recruiter_score += sum(1 for pattern in recruiter_copy_patterns if re.search(pattern, combined))
-    direct_score += sum(1 for pattern in direct_copy_patterns if re.search(pattern, combined))
-
-    if company and description:
-        company_pattern = re.escape(company)
-        if re.search(rf"\b(?:at|join|with)\s+{company_pattern}\b", description):
-            direct_score += 1
-        if re.search(rf"\b{company_pattern}\s+is\b", description):
-            direct_score += 1
-
-    if recruiter_score >= 3 and recruiter_score > direct_score:
-        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "high"}
-    if recruiter_score >= 1 and recruiter_score > direct_score:
-        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "medium"}
-    if direct_score >= 3 and recruiter_score == 0:
-        return {"kind": "direct_employer", "label": "Direct employer", "confidence": "high"}
-    if direct_score >= 1 and recruiter_score == 0:
-        return {"kind": "direct_employer", "label": "Direct employer", "confidence": "medium"}
-    return {"kind": "unknown", "label": "", "confidence": "unknown"}
-
-
-def role_text_bundle(record: dict, details_text: str) -> str:
-    return "\n".join(
-        compact_whitespace(part)
-        for part in [
-            record.get("title"),
-            record.get("company"),
-            record.get("teaser"),
-            details_text,
-        ]
-        if compact_whitespace(part)
-    )
-
-
-def build_role_summary(record: dict, details_text: str, profile: Optional[dict] = None) -> str:
-    teaser = compact_whitespace(record.get("teaser") or "")
-    title = compact_whitespace(record.get("title") or "")
-    location = compact_whitespace(record.get("location") or "")
-    work_type = compact_whitespace(record.get("work_type") or "")
-
-    detail_summary = description_summary_snippet(record, details_text)
-    if detail_summary:
-        return detail_summary
-
-    if teaser and teaser != "N/A" and not _is_generic_summary_text(teaser):
-        return summarize_snippet(teaser, max_length=220)
-
-    domain_focus = ""
-    if " - " in title:
-        domain_focus = compact_whitespace(title.split(" - ", 1)[1])
-    elif "(" in title and ")" in title:
-        domain_focus = compact_whitespace(re.sub(r"^[^(]*\((.*?)\).*$", r"\1", title))
-
-    base_role = title.split(" - ")[0].split("(")[0].strip() if domain_focus else title
-
-    if title and location and location != "N/A" and work_type and work_type != "N/A":
-        intro = f"{base_role} role in {location} ({work_type.lower()})"
-    elif title and location and location != "N/A":
-        intro = f"{base_role} role in {location}"
-    else:
-        intro = f"{base_role} role" if base_role else "Role"
-
-    if domain_focus:
-        summary = f"{intro} focused on {domain_focus}."
-    else:
-        summary = f"{intro}."
-
-    return summarize_snippet(summary, max_length=180)
-
-
-def friendly_capability_label(name: str) -> str:
-    normalized = compact_whitespace(name).lower()
-    return normalized[:1].upper() + normalized[1:] if normalized else ""
-
-def _load_government_context_rules() -> tuple[tuple[str, ...], tuple[str, ...]]:
-    payload = load_json_dict(GOVERNMENT_CONTEXT_RULES_PATH)
-    entries = payload.get("entries")
-    if not isinstance(entries, list):
-        raise ValueError("government_context_rules.json must define an entries list")
-
-    positive_patterns: list[str] = []
-    false_positive_patterns: list[str] = []
-
-    def add_pattern(target: list[str], raw_value: str) -> None:
-        cleaned = compact_whitespace(raw_value).lower()
-        if not cleaned:
-            return
-        if raw_value.startswith("\\b") or raw_value.endswith("\\b") or any(token in raw_value for token in ("\\d", "[", "(", ")", "^", "$")):
-            target.append(raw_value)
-        else:
-            target.append(rf"\b{re.escape(cleaned)}\b")
-
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("enabled", True) is False:
-            continue
-        kind = str(entry.get("kind") or "positive").strip().lower()
-        value = str(entry.get("value") or "").strip()
-        pattern = str(entry.get("pattern") or "").strip()
-        aliases = entry.get("aliases") if isinstance(entry.get("aliases"), list) else []
-        patterns = [pattern, value, *(str(alias or "").strip() for alias in aliases)]
-        for item in patterns:
-            if not item:
-                continue
-            if kind in {"false_positive", "negative", "ignore"}:
-                add_pattern(false_positive_patterns, item)
-            else:
-                add_pattern(positive_patterns, item)
-
-    if not positive_patterns:
-        raise ValueError("government_context_rules.json must define at least one enabled positive entry")
-
-    return tuple(positive_patterns), tuple(false_positive_patterns)
-
-
-def _load_government_context_knowledge_patterns() -> tuple[str, ...]:
-    knowledge_payload = load_json_dict(GOVERNMENT_CONTEXT_KNOWLEDGE_PATH)
-    knowledge_entries = knowledge_payload.get("entries") if isinstance(knowledge_payload, dict) else []
-    if not isinstance(knowledge_entries, list):
-        return tuple()
-
-    patterns: list[str] = []
-    seen: set[str] = set()
-    for entry in knowledge_entries:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("enabled", True) is False:
-            continue
-        value = str(entry.get("value") or "").strip()
-        aliases = entry.get("aliases") if isinstance(entry.get("aliases"), list) else []
-        for item in [value, *(str(alias or "").strip() for alias in aliases)]:
-            cleaned = compact_whitespace(item).lower()
-            if not cleaned or cleaned in seen:
-                continue
-            seen.add(cleaned)
-            patterns.append(rf"(?<!\w){re.escape(cleaned)}(?!\w)")
-    return tuple(patterns)
-
-
-def text_contains_term(text: str, term: str) -> bool:
-    cleaned_text = compact_whitespace(text).lower()
-    cleaned_term = compact_whitespace(term).lower()
-    if not cleaned_text or not cleaned_term:
-        return False
-    pattern = rf"(?<!\w){re.escape(cleaned_term)}(?!\w)"
-    return re.search(pattern, cleaned_text) is not None
-
-
-def has_government_context(text: str) -> bool:
-    lowered = compact_whitespace(text).lower()
-    if not lowered:
-        return False
-    government_patterns, false_positive_patterns = _load_government_context_rules()
-    for pattern in false_positive_patterns:
-        lowered = re.sub(pattern, " ", lowered)
-    if any(re.search(pattern, lowered) for pattern in government_patterns):
-        return True
-    return any(re.search(pattern, lowered) for pattern in _load_government_context_knowledge_patterns())
-
-
-def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
-    lowered = compact_whitespace(details_text).lower()
-    buckets = {
-        "matched": [],
-        "evidence_only": [],
-        "ignored": [],
-        "unresolved": [],
-    }
-    if not lowered:
-        return buckets
-
-    registry = load_registry()
-    for record in registry.values():
-        if not isinstance(record, dict):
-            continue
-        if compact_whitespace(record.get("category") or "").lower() == "hard_blocker_concept":
-            continue
-        label = compact_whitespace(record.get("signal") or "")
-        terms = [label, *(record.get("original_texts") or [])]
-        if not label:
-            continue
-        if not any(text_contains_term(lowered, term) for term in terms if str(term).strip()):
-            continue
-        decision = compact_whitespace(record.get("decision") or record.get("learning_status") or record.get("status")).lower()
-        if decision in {"use", "approved", "keep", "accept"}:
-            buckets["matched"].append(label.lower())
-        elif decision in {"evidence_only", "evidence only"}:
-            buckets["evidence_only"].append(label.lower())
-        elif decision in {"ignore", "ignored"}:
-            buckets["ignored"].append(label.lower())
-        else:
-            buckets["unresolved"].append(label.lower())
-
-    for item in load_approved_signal_catalog():
-        label = compact_whitespace(item.get("label") or "")
-        terms = item.get("terms") if isinstance(item, dict) else []
-        category = compact_whitespace(item.get("category") or "").lower()
-        if not label or not isinstance(terms, list) or category == "role_title_token":
-            continue
-        if not any(text_contains_term(lowered, term) for term in terms):
-            continue
-        buckets["matched"].append(label.lower())
-
-    return {
-        key: dedupe_preserve_order(values)
-        for key, values in buckets.items()
-    }
-
-
-def reviewed_signal_match_summary(record: dict, profile: Optional[dict] = None) -> dict[str, list[str]]:
-    existing = record.get("reviewed_signal_matches")
-    if isinstance(existing, dict):
-        return {
-            "matched": dedupe_preserve_order(existing.get("matched") or []),
-            "evidence_only": dedupe_preserve_order(existing.get("evidence_only") or []),
-            "ignored": dedupe_preserve_order(existing.get("ignored") or []),
-            "unresolved": dedupe_preserve_order(existing.get("unresolved") or []),
-        }
-    source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
-    return reviewed_signal_matches_for_text(source_text)
-
-
-def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
-    lowered = compact_whitespace(details_text).lower()
-    matched_core: List[str] = []
-    matched_supporting: List[str] = []
-    matched_strong: List[str] = []
-    matched_working: List[str] = []
-    matched_basic: List[str] = []
-    matched_limited_depth: List[str] = []
-    matched_must_not: List[str] = []
-
-    for rule in profile.get("capability_profile_rules", []):
-        if not isinstance(rule, dict):
-            continue
-        name = str(rule.get("name") or "").strip()
-        level = str(rule.get("level") or "").strip().lower()
-        fit = str(rule.get("fit") or "").strip().lower()
-        terms = expand_capability_terms(rule)
-        if not terms:
-            continue
-        if not any(text_contains_term(lowered, term) for term in terms):
-            continue
-        label = friendly_capability_label(name)
-        if fit == "core":
-            matched_core.append(label)
-        elif fit == "supporting":
-            matched_supporting.append(label)
-        if level == "strong":
-            matched_strong.append(label)
-        elif level == "working":
-            matched_working.append(label)
-        elif level == "basic":
-            matched_basic.append(label)
-        elif level == "low":
-            matched_limited_depth.append(label)
-
-    for skill in profile.get("must_not_require_skills", []):
-        cleaned_skill = str(skill).strip().lower()
-        if cleaned_skill and matches_missing_requirement(lowered, cleaned_skill):
-            matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
-
-    return {
-        "core": dedupe_preserve_order(matched_core),
-        "supporting": dedupe_preserve_order(matched_supporting),
-        "strong": dedupe_preserve_order(matched_strong),
-        "working": dedupe_preserve_order(matched_working),
-        "basic": dedupe_preserve_order(matched_basic),
-        "limited_depth": dedupe_preserve_order(matched_limited_depth),
-        "must_not": dedupe_preserve_order(matched_must_not),
-    }
-
-
-def _near_desirable_language(text: str, term: str, window: int = 90) -> bool:
-    cleaned_text = compact_whitespace(text).lower()
-    cleaned_term = compact_whitespace(term).lower()
-    if not cleaned_text or not cleaned_term:
-        return False
-    for match in re.finditer(rf"(?<!\w){re.escape(cleaned_term)}(?!\w)", cleaned_text):
-        start = max(match.start() - window, 0)
-        end = min(match.end() + window, len(cleaned_text))
-        context = cleaned_text[start:end]
-        if re.search(
-            r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b",
-            context,
-        ):
-            return True
-    return False
-
-
-def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
-    lowered = compact_whitespace(details_text).lower()
-    if not lowered:
-        return []
-
-    watchouts: List[str] = []
-    profile_blockers = {
-        compact_whitespace(str(skill)).lower()
-        for skill in profile.get("must_not_require_skills", [])
-        if compact_whitespace(str(skill)).lower()
-    }
-    seen_terms: set[str] = set(profile_blockers)
-
-    for skill in profile.get("must_not_require_skills", []):
-        cleaned_skill = compact_whitespace(str(skill)).lower()
-        if not cleaned_skill or not text_contains_term(lowered, cleaned_skill):
-            continue
-        label = cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill
-        if matches_missing_requirement(lowered, cleaned_skill):
-            watchouts.append(f"{label} appears required")
-        elif _near_desirable_language(lowered, cleaned_skill):
-            watchouts.append(f"{label} appears desirable")
-        else:
-            watchouts.append(f"{label} appears in the description")
-
-    for match in find_hard_block_matches(details_text):
-        canonical = compact_whitespace(match.get("value") or "")
-        matched_term = compact_whitespace(match.get("matched_term") or "")
-        term_key = canonical.lower() or matched_term.lower()
-        if not term_key or term_key in seen_terms:
-            continue
-        if not matches_mandatory_requirement(details_text, matched_term):
-            if _near_desirable_language(lowered, matched_term):
-                watchouts.append(f"{canonical.lower() if canonical and not canonical.isupper() else canonical.upper()} appears desirable")
-            else:
-                watchouts.append(f"{canonical.lower() if canonical and not canonical.isupper() else canonical.upper()} appears in the description")
-            seen_terms.add(term_key)
-            continue
-        label = canonical.upper() if canonical.isupper() else canonical.lower()
-        watchouts.append(f"{label} appears required")
-        seen_terms.add(term_key)
-
-    for rule in profile.get("reject_description_phrase_rules", []):
-        phrase = compact_whitespace(str(rule.get("phrase") or "")).lower()
-        if phrase and phrase in lowered:
-            watchouts.append(f"Blocked description phrase appears: {phrase}")
-
-    return dedupe_preserve_order(watchouts)[:4]
-
-
-def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
-    highlights: List[str] = []
-    active_profile = profile or load_profile()
-    role_bundle = role_text_bundle(record, details_text)
-    lowered = role_bundle.lower()
-    capability_matches = find_profile_capability_matches(role_bundle, active_profile)
-    title_lower = compact_whitespace(record.get("title") or "").lower()
-
-    matched_profile_areas = (
-        [("Strong capability match", area) for area in capability_matches["strong"][:3]]
-        + [("Capability match", area) for area in capability_matches["working"][:2]]
-        + [("Capability match", area) for area in capability_matches["basic"][:1]]
-    )
-    for prefix, area in matched_profile_areas:
-        label = friendly_capability_label(area)
-        entry = f"{prefix}: {label}" if label else ""
-        if entry and entry not in highlights:
-            highlights.append(entry)
-
-    reviewed_signal_matches = reviewed_signal_match_summary(
-        {**record, "reviewed_signal_matches": record.get("reviewed_signal_matches") or reviewed_signal_matches_for_text(role_bundle)}
-    )
-    for signal in reviewed_signal_matches["matched"][:3]:
-        label = friendly_capability_label(signal)
-        if label and f"Matched signal: {label}" not in highlights:
-            highlights.append(f"Matched signal: {label}")
-
-    if has_government_context(lowered):
-        highlights.append("Government context")
-
-    contract_months = extract_contract_months(details_text)
-    if contract_months and contract_months >= 12:
-        highlights.append("12+ month contract")
-    elif compact_whitespace(record.get("work_type") or "").lower() in {"full time", "full-time", "permanent"}:
-        highlights.append("Permanent role")
-
-    location_signal = assess_location_preference(record, active_profile)
-    if location_signal and int(location_signal.get("value", 0) or 0) > 0:
-        highlights.append(str(location_signal.get("label") or "Location preference match"))
-
-    highlights.extend(competitive_fit_highlights(record, active_profile))
-    return dedupe_preserve_order(highlights)[:4]
-
-
-def is_capability_fit_highlight(value: str) -> bool:
-    normalized = compact_whitespace(value)
-    return normalized.startswith("Capability match:") or normalized.startswith("Strong capability match:")
-
-
-def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
-    return [
-        compact_whitespace(item)
-        for item in fit_highlights
-        if is_capability_fit_highlight(str(item))
-    ]
-
-
-def build_risk_and_missing_evidence(
-    details_text: str,
-    title_reason: Optional[str],
-    profile: dict,
-    competitive_signals: Optional[List[dict]] = None,
-) -> Tuple[List[str], List[str]]:
-    risks: List[str] = []
-    missing: List[str] = []
-    lowered = compact_whitespace(details_text).lower()
-    capability_matches = find_profile_capability_matches(details_text, profile)
-
-    if title_reason == "TITLE_POTENTIAL_MATCH":
-        risks.append("Secondary role-family match rather than direct target role")
-
-    if capability_matches["must_not"]:
-        missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not evidenced")
-
-    if capability_matches["limited_depth"]:
-        risks.append(
-            f"{list_to_phrase(capability_matches['limited_depth'][:2]).capitalize()} appears in the role, but your profile marks it as beginner-level"
-        )
-
-    risks.extend(description_watchout_reasons(details_text, profile))
-
-    for signal in (competitive_signals or []):
-        if int(signal.get("adjustment", 0)) < 0:
-            alignment = compact_whitespace(signal.get("alignment") or "").lower()
-            label = compact_whitespace(signal.get("risk_label") or signal.get("name") or "")
-            if label:
-                if alignment == "weak":
-                    missing.append(f"{label} required but weakly evidenced")
-                else:
-                    risks.append(f"{label} required but only partially evidenced")
-
-    return dedupe_preserve_order(risks)[:4], dedupe_preserve_order(missing)[:4]
-
-
-def _normalized_aliases(values: List[str]) -> List[str]:
-    return dedupe_preserve_order(
-        [compact_whitespace(str(value)).lower() for value in values if compact_whitespace(str(value))]
-    )
-
-
-def _profile_auxiliary_text(profile: dict) -> str:
-    parts = [
-        profile.get("llm_profile_brief"),
-        profile.get("star_evidence_text"),
-    ]
-    return "\n".join(compact_whitespace(part).lower() for part in parts if compact_whitespace(part))
-
-
-def find_profile_experience_year_in_text(source_text: str, aliases: List[str]) -> Optional[int]:
-    text = str(source_text or "")
-    if not text.strip():
-        return None
-
-    current_year = datetime.now().year
-    most_recent_year: Optional[int] = None
-    section_year: Optional[int] = None
-
-    for raw_line in text.splitlines():
-        line = compact_whitespace(raw_line)
-        if not line:
-            continue
-        updated_year = _line_year_context(line, current_year)
-        if updated_year:
-            section_year = updated_year
-        lowered_line = line.lower()
-        if any(text_contains_term(lowered_line, alias) for alias in aliases if str(alias).strip()):
-            candidate_year = updated_year or section_year
-            if candidate_year and (most_recent_year is None or candidate_year > most_recent_year):
-                most_recent_year = candidate_year
-    return most_recent_year
-
-
-def evidence_tier_alignment_score(profile: dict, aliases: List[str]) -> float:
-    evidence_tiers = get_evidence_tiers(profile)
-    evidence_weights = get_evidence_tier_weights(profile)
-    tier_order = (
-        "primary_current_evidence",
-        "secondary_older_evidence",
-        "background_optional_evidence",
-    )
-    best_score = 0.0
-
-    for tier_name in tier_order:
-        tier_text = compact_whitespace(evidence_tiers.get(tier_name) or "").lower()
-        if not tier_text:
-            continue
-        alias_hits = [alias for alias in aliases if text_contains_term(tier_text, alias)]
-        if not alias_hits:
-            continue
-        hit_count = len(alias_hits)
-        base_strength = min(0.42 + (0.18 * min(hit_count - 1, 3)), 1.0)
-        tier_weight = float(evidence_weights.get(tier_name, 0.0) or 0.0)
-        recent_year = find_profile_experience_year_in_text(tier_text, aliases)
-        if recent_year:
-            years_ago = max(datetime.now().year - int(recent_year), 0)
-            if years_ago <= 5:
-                recency_multiplier = 1.0
-            elif years_ago <= 10:
-                recency_multiplier = 0.6
-            else:
-                recency_multiplier = 0.3
-        elif tier_name == "primary_current_evidence":
-            recency_multiplier = 1.0
-        elif tier_name == "secondary_older_evidence":
-            recency_multiplier = 0.6
-        else:
-            recency_multiplier = 0.35
-
-        best_score = max(best_score, base_strength * tier_weight * recency_multiplier)
-
-    auxiliary_text = _profile_auxiliary_text(profile)
-    auxiliary_hits = sum(1 for alias in aliases if text_contains_term(auxiliary_text, alias))
-    if auxiliary_hits:
-        best_score = max(best_score, min(0.12 + (0.05 * min(auxiliary_hits - 1, 2)), 0.22))
-
-    return min(best_score, 1.0)
-
-
-def _capability_rule_strength(rule: dict) -> float:
-    level = compact_whitespace(rule.get("level") or "").lower()
-    level_map = {
-        "strong": 1.0,
-        "working": 0.72,
-        "basic": 0.55,
-        "low": 0.22,
-    }
-    return max(min(level_map.get(level, 0.45), 1.0), 0.0)
-
-
-def detect_competitive_signals(details_text: str, profile: Optional[dict] = None) -> List[dict]:
-    active_profile = profile or load_profile()
-    source_text = compact_whitespace(details_text).lower()
-    snippets = [snippet.lower() for snippet in split_text_snippets(details_text)]
-    if not source_text:
-        return []
-
-    detected: List[dict] = []
-    for raw_cluster in active_profile.get("dominant_signal_clusters", []):
-        if not isinstance(raw_cluster, dict):
-            continue
-        canonical = compact_whitespace(raw_cluster.get("name") or "").lower()
-        aliases = [canonical] if canonical else []
-        if not aliases:
-            continue
-
-        matched_aliases = [alias for alias in aliases if text_contains_term(source_text, alias)]
-        if len(matched_aliases) < 1:
-            continue
-
-        snippet_hits = 0
-        max_aliases_in_snippet = 0
-        for snippet in snippets:
-            alias_hits_in_snippet = sum(1 for alias in matched_aliases if text_contains_term(snippet, alias))
-            max_aliases_in_snippet = max(max_aliases_in_snippet, alias_hits_in_snippet)
-            if alias_hits_in_snippet > 0:
-                snippet_hits += 1
-        min_snippet_hits = int(raw_cluster.get("min_snippet_hits", 2) or 2)
-        dense_snippet_alias_hits = int(raw_cluster.get("dense_snippet_alias_hits", 4) or 4)
-        if snippet_hits < min_snippet_hits and max_aliases_in_snippet >= dense_snippet_alias_hits:
-            snippet_hits = min_snippet_hits
-        if snippet_hits < min_snippet_hits:
-            continue
-
-        dominance_level = 1
-        if len(matched_aliases) >= 3:
-            dominance_level += 1
-        if snippet_hits >= 3:
-            dominance_level += 1
-
-        detected.append(
-            {
-                "name": compact_whitespace(raw_cluster.get("name") or "domain specialist track"),
-                "fit_label": compact_whitespace(raw_cluster.get("fit_label") or ""),
-                "watchout_label": compact_whitespace(raw_cluster.get("watchout_label") or ""),
-                "risk_label": compact_whitespace(raw_cluster.get("risk_label") or raw_cluster.get("watchout_label") or ""),
-                "aliases": matched_aliases,
-                "alias_hits": len(matched_aliases),
-                "snippet_hits": snippet_hits,
-                "dominance_level": min(dominance_level, 3),
-            }
-        )
-
-    detected.sort(key=lambda item: (-int(item.get("dominance_level", 0)), -int(item.get("alias_hits", 0)), item.get("name", "")))
-    return detected[:3]
-
-
-def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
-    aliases = _normalized_aliases([signal.get("name") or ""])
-    capability_best = 0.0
-
-    for rule in profile.get("capability_profile_rules", []):
-        if not isinstance(rule, dict):
-            continue
-        canonical = canonical_capability_term(rule)
-        rule_aliases = _normalized_aliases([canonical])
-        if not canonical:
-            continue
-        overlap = sum(1 for alias in aliases if alias in rule_aliases or any(alias in rule_alias or rule_alias in alias for rule_alias in rule_aliases))
-        if overlap <= 0:
-            continue
-        rule_strength = _capability_rule_strength(rule)
-        capability_best = max(capability_best, min(rule_strength + (0.05 * min(overlap - 1, 2)), 1.05))
-
-    tiered_evidence_score = evidence_tier_alignment_score(profile, aliases)
-    recency_multiplier = profile_recency_multiplier(profile, aliases)
-    if recency_multiplier == 0.0 and capability_best >= 0.9:
-        recency_multiplier = 0.75
-
-    dominant_alignment_score = max(
-        capability_best * (recency_multiplier or 1.0),
-        tiered_evidence_score,
-    )
-
-    dominance_level = int(signal.get("dominance_level", 1) or 1)
-    positive_bonus = int(signal.get("positive_bonus", min(1 + dominance_level, 2)) or min(1 + dominance_level, 2))
-    partial_penalty = int(signal.get("partial_penalty", 3 + (dominance_level * 2)) or 3 + (dominance_level * 2))
-    weak_penalty = int(signal.get("weak_penalty", 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
-    if dominant_alignment_score >= 0.78:
-        adjustment = positive_bonus
-        alignment = "strong"
-    elif dominant_alignment_score >= 0.42:
-        adjustment = -partial_penalty
-        alignment = "partial"
-    else:
-        adjustment = -weak_penalty
-        alignment = "weak"
-
-    return {
-        "name": signal.get("name") or "domain specialist track",
-        "fit_label": signal.get("fit_label") or signal.get("name") or "specialist context",
-        "watchout_label": signal.get("watchout_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
-        "risk_label": signal.get("risk_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
-        "aliases": aliases,
-        "dominance_level": dominance_level,
-        "alignment": alignment,
-        "adjustment": adjustment,
-    }
-
-
-def competitive_signal_assessments(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    existing = record.get("competitive_signals")
-    if isinstance(existing, list) and existing:
-        sanitized: List[dict] = []
-        for item in existing:
-            if not isinstance(item, dict):
-                continue
-            sanitized.append(
-                {
-                    "name": compact_whitespace(item.get("name") or "domain specialist track"),
-                    "fit_label": compact_whitespace(item.get("fit_label") or item.get("name") or ""),
-                    "watchout_label": compact_whitespace(item.get("watchout_label") or ""),
-                    "risk_label": compact_whitespace(item.get("risk_label") or item.get("watchout_label") or ""),
-                    "aliases": _normalized_aliases(list(item.get("aliases") or [])),
-                    "dominance_level": int(item.get("dominance_level", 1) or 1),
-                    "alignment": compact_whitespace(item.get("alignment") or "partial").lower(),
-                    "adjustment": int(item.get("adjustment", 0) or 0),
-                }
-            )
-        if sanitized:
-            return sanitized
-
-    active_profile = profile or load_profile()
-    details_text = build_scoring_source_text(record)
-    signals = detect_competitive_signals(details_text, active_profile)
-    return [evaluate_competitive_signal_alignment(signal, active_profile) for signal in signals]
-
-
-def competitive_fit_highlights(record: dict, profile: Optional[dict] = None) -> List[str]:
-    highlights: List[str] = []
-    for signal in competitive_signal_assessments(record, profile):
-        if int(signal.get("adjustment", 0)) > 0:
-            fit_label = compact_whitespace(signal.get("fit_label") or signal.get("name") or "")
-            if fit_label:
-                highlights.append(f"{fit_label} \u2713")
-    return dedupe_preserve_order(highlights)[:2]
-
-
-def extract_skill_observations(record: dict, details_text: str, profile: Optional[dict] = None) -> List[dict]:
-    """Return repeated capability-like signals from a kept role for review insights.
-
-    These observations are intentionally conservative: we only emit positively aligned
-    competitive signals from roles we already kept, so Suggested Tuning learns from
-    viable roles rather than from noisy broad matches.
-    """
-    active_profile = profile or load_profile()
-    observations: List[dict] = []
-    seen: Set[str] = set()
-    for signal in competitive_signal_assessments(record, active_profile):
-        if int(signal.get("adjustment", 0) or 0) <= 0:
-            continue
-        skill = compact_whitespace(signal.get("fit_label") or signal.get("name") or "")
-        key = skill.lower()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        observations.append(
-            {
-                "skill": skill,
-                "title": record.get("title"),
-                "company": record.get("company"),
-                "url": record.get("url"),
-                "search_location": record.get("search_location"),
-            }
-        )
-    return observations
-
-
-def build_job_learning_signals(
-    record: dict,
-    skill_observations: List[dict],
-    profile: Optional[dict] = None,
-) -> List[dict[str, Any]]:
-    pending: List[dict[str, Any]] = []
-    seen: Set[str] = set()
-
-    for observation in skill_observations:
-        skill = compact_whitespace(observation.get("skill") or "")
-        normalized_skill = skill.lower()
-        if not skill or not normalized_skill or normalized_skill in seen:
-            continue
-        seen.add(normalized_skill)
-        known_signal, knowledge_match = signal_in_approved_knowledge("capability_concept", skill)
-        if known_signal:
-            continue
-        item: dict[str, Any] = {
-            "signal": skill,
-            "category": "capability_concept",
-            "source": "job parsing",
-            "context": [
-                compact_whitespace(record.get("title") or ""),
-                compact_whitespace(record.get("company") or ""),
-            ],
-            "evidence": [skill],
-            "needs_review": True,
-        }
-        if knowledge_match:
-            item["knowledge_match"] = knowledge_match
-        pending.append(item)
-
-    government_signals = _extract_government_context_learning_signals(record)
-    for item in government_signals:
-        key = compact_whitespace(item.get("signal") or "").lower()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        pending.append(item)
-
-    title_reason = compact_whitespace(record.get("title_reason") or "").upper()
-    if title_reason == "TITLE_POTENTIAL_MATCH":
-        title = compact_whitespace(record.get("title") or "")
-        review_token = _role_title_review_token(title)
-        if review_token:
-            known_signal, knowledge_match = signal_in_approved_knowledge("role_title_token", review_token)
-            if not known_signal:
-                item = {
-                    "signal": review_token,
-                    "category": "role_title_token",
-                    "source": "job parsing",
-                    "context": [title],
-                    "evidence": [title],
-                    "needs_review": True,
-                }
-                if knowledge_match:
-                    item["knowledge_match"] = knowledge_match
-                pending.append(item)
-
-    return pending
-
-
-def _extract_government_context_learning_signals(record: dict) -> List[dict[str, Any]]:
-    sources = [
-        compact_whitespace(record.get("company") or ""),
-        compact_whitespace(record.get("title") or ""),
-        compact_whitespace(record.get("full_description") or record.get("fit_source_text") or ""),
-    ]
-    combined = "\n".join(item for item in sources if item)
-    lowered = combined.lower()
-    if not lowered:
-        return []
-
-    try:
-        _, false_positive_patterns = _load_government_context_rules()
-    except Exception:
-        false_positive_patterns = ()
-    for pattern in false_positive_patterns:
-        lowered = re.sub(pattern, " ", lowered)
-
-    signals: List[dict[str, Any]] = []
-    seen: Set[str] = set()
-
-    def add_signal(value: str, original_text: str | None = None) -> None:
-        cleaned = compact_whitespace(value).lower()
-        if not cleaned or cleaned in seen:
-            return
-        seen.add(cleaned)
-        known_signal, knowledge_match = signal_in_approved_knowledge("government_context", cleaned, [original_text] if original_text else None)
-        if known_signal:
-            return
-        signal: dict[str, Any] = {
-            "signal": cleaned,
-            "original_texts": [original_text or cleaned],
-            "suggested_category": "government_context",
-            "source": "job parsing",
-            "needs_review": True,
-        }
-        if knowledge_match:
-            signal["knowledge_match"] = knowledge_match
-        signals.append(signal)
-
-    if re.search(r"\bgovernment\b", lowered):
-        add_signal("government", "government")
-
-    for match in re.finditer(r"\baps\s*([1-6])\b", lowered):
-        level = match.group(1)
-        add_signal(f"aps{level}", match.group(0))
-
-    for match in re.finditer(r"\bel\s*([12])\b", lowered):
-        level = match.group(1)
-        add_signal(f"el{level}", match.group(0))
-
-    for match in re.finditer(r"\b(?:baseline|nv\s*1|nv1|nv\s*2|nv2|negative vetting\s*1|negative vetting\s*2)\b", lowered):
-        raw = compact_whitespace(match.group(0)).lower()
-        if raw.startswith("negative vetting 1") or raw in {"nv1", "nv 1"}:
-            add_signal("nv1", match.group(0))
-        elif raw.startswith("negative vetting 2") or raw in {"nv2", "nv 2"}:
-            add_signal("nv2", match.group(0))
-        else:
-            add_signal("baseline", match.group(0))
-
-    department_pattern = re.compile(
-        r"\bdepartment(?:\s+of)?\s+[a-z][a-z0-9&/-]*(?:\s+[a-z][a-z0-9&/-]*){1,7}\b",
-        flags=re.IGNORECASE,
-    )
-    for line in lowered.splitlines():
-        line = compact_whitespace(line)
-        if not line or "department" not in line:
-            continue
-        for match in department_pattern.finditer(line):
-            phrase = compact_whitespace(match.group(0))
-            if len(phrase.split()) < 2 or len(phrase) > 80:
-                continue
-            add_signal(phrase, phrase)
-
-    return signals
-
-
-def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    existing = [
-        compact_whitespace(item)
-        for item in (record.get("hard_block_reasons") or [])
-        if compact_whitespace(item)
-    ]
-    if existing:
-        return [{"text": item, "category": ""} for item in dedupe_preserve_order(existing)[:3]]
-
-    active_profile = profile or load_profile()
-    cluster_by_name = {
-        compact_whitespace(str(cluster.get("name") or "")).lower(): cluster
-        for cluster in active_profile.get("dominant_signal_clusters", [])
-        if isinstance(cluster, dict) and compact_whitespace(str(cluster.get("name") or ""))
-    }
-
-    entries: List[dict] = []
-    for assessment in competitive_signal_assessments(record, active_profile):
-        cluster = cluster_by_name.get(compact_whitespace(str(assessment.get("name") or "")).lower())
-        if not isinstance(cluster, dict) or not bool(cluster.get("hard_block_on_mismatch")):
-            continue
-
-        allowed_alignments = {
-            compact_whitespace(str(value)).lower()
-            for value in (cluster.get("hard_block_alignment_levels") or ["partial", "weak"])
-            if compact_whitespace(str(value))
-        } or {"partial", "weak"}
-        alignment = compact_whitespace(str(assessment.get("alignment") or "")).lower()
-        if alignment not in allowed_alignments:
-            continue
-
-        text = compact_whitespace(
-            cluster.get("hard_block_label")
-            or assessment.get("watchout_label")
-            or assessment.get("risk_label")
-            or assessment.get("name")
-            or ""
-        )
-        if not text:
-            continue
-        category = (
-            compact_whitespace(str(cluster.get("name") or ""))
-            .lower()
-            .replace(" and ", "_")
-            .replace(" ", "_")
-        )
-        entries.append({"text": text, "category": category})
-
-    details_text = compact_whitespace(
-        record.get("fit_source_text")
-        or record.get("full_description")
-        or ""
-    )
-    if details_text:
-        profile_blockers = {
-            compact_whitespace(str(skill)).lower()
-            for skill in active_profile.get("must_not_require_skills", [])
-            if compact_whitespace(str(skill)).lower()
-        }
-        seen_terms = {
-            compact_whitespace(str(entry.get("text") or "")).lower()
-            for entry in entries
-            if compact_whitespace(str(entry.get("text") or "")).lower()
-        }
-        for match in find_hard_block_matches(details_text):
-            canonical = compact_whitespace(match.get("value") or "")
-            matched_term = compact_whitespace(match.get("matched_term") or "")
-            term_key = canonical.lower() or matched_term.lower()
-            if not term_key or term_key in seen_terms or term_key in profile_blockers:
-                continue
-            if not matches_mandatory_requirement(details_text, matched_term):
-                continue
-            entries.append({"text": canonical or matched_term, "category": "hard_blocker_concept"})
-            seen_terms.add(term_key)
-
-    deduped: List[dict] = []
-    seen_keys: Set[str] = set()
-    for entry in entries:
-        key = compact_whitespace(str(entry.get("category") or entry.get("text") or "")).lower()
-        if not key or key in seen_keys:
-            continue
-        seen_keys.add(key)
-        deduped.append(entry)
-    return deduped[:3]
-
-
-def hard_block_reasons(record: dict, profile: Optional[dict] = None) -> List[str]:
-    return [entry["text"] for entry in hard_block_entries(record, profile)]
-
-
-def salary_fit_label(record: dict, profile: Optional[dict] = None) -> str:
-    salary_text = str(record.get("salary") or "").strip()
-    if not salary_text or salary_text == "N/A":
-        return "missing"
-
-    salary_adjustment = salary_fit_adjustment(record, profile)
-    if salary_adjustment > 0:
-        return "meets"
-    if salary_adjustment < 0:
-        return "below"
-    return "listed"
-
-
-def score_to_tone_class(score: int, profile: Optional[dict] = None) -> str:
-    match_levels = get_match_levels(profile or load_profile())
-    match_level = score_to_match_level(score, match_levels)
-    if match_levels and match_level == match_levels[0]:
-        return "tone-strong"
-    if len(match_levels) > 1 and match_level == match_levels[1]:
-        return "tone-good"
-    if len(match_levels) > 2 and match_level == match_levels[2]:
-        return "tone-borderline"
-    return "tone-low"
-
-
-def compact_score_label(label: str) -> str:
-    direct_map = {
-        "Primary role-family match": "Title",
-        "Secondary role-family match": "Title",
-        "Primary seniority adjustment": "Title",
-        "Description fit is excellent": "Description",
-        "Description fit is strong": "Description",
-        "Description fit is solid": "Description",
-        "Description fit is mixed": "Description",
-        "Description fit is weak": "Description",
-        "Description fit is a mismatch": "Description",
-        "Passed content filters": "Filters",
-        "Fit evidence bullets": "Evidence",
-        "Salary/rate signal": "Salary",
-        "Salary/rate below target": "Salary",
-        "Already viewed by you": "Viewed",
-        "Description capture incomplete": "Description",
-        "On-site role": "Work mode",
-    }
-    if label in direct_map:
-        return direct_map[label]
-    if label.startswith("Posted within") or label == "Still relatively recent":
-        return "Freshness"
-    if "location" in label.lower() or "onsite" in label.lower() or "travel" in label.lower():
-        return "Location"
-    if label.startswith("Competitive signal"):
-        return "Competitive"
-    if "contract" in label.lower() or "permanent" in label.lower():
-        return "Engagement"
-    if "government" in label.lower():
-        return "Government"
-    if "remote" in label.lower() or "hybrid" in label.lower() or label == "On-site role":
-        return "Work mode"
-    return label
-
-
-def format_score_breakdown_for_console(breakdown: List[dict]) -> str:
-    return " | ".join(
-        f"{compact_score_label(str(item.get('label', '')))} {int(item.get('value', 0)):+d}"
-        for item in breakdown
-    )
-
-
-def render_badge(label: str, class_name: str, explanation: str) -> str:
-    return (
-        f'<span class="badge {safe_html(class_name)}" title="{safe_html(explanation)}" '
-        f'aria-label="{safe_html(explanation)}">{safe_html(label)}</span>'
-    )
-
-
-def viewed_badge_html() -> str:
-    return render_badge("Viewed", "badge-viewed", "You have already opened this role from the dashboard.")
-
-
-def normalize_job_key(raw: str) -> str:
-    value = (raw or "").strip()
-    if not value:
-        return ""
-    match = re.search(r"/job/(\d+)", value)
-    if match:
-        return match.group(1)
-    id_match = re.fullmatch(r"\d+", value)
-    if id_match:
-        return value
-    return value.split("#", 1)[0]
-
-
-def get_manual_skip_sets(profile: dict) -> tuple[Set[str], Set[str]]:
-    review_controls = profile.get("review_controls", {})
-    applied = {
-        normalize_job_key(value)
-        for value in review_controls.get("applied_job_keys", [])
-        if normalize_job_key(value)
-    }
-    hidden = {
-        normalize_job_key(value)
-        for value in review_controls.get("hidden_job_keys", [])
-        if normalize_job_key(value)
-    }
-    return applied, hidden
-
-
-def format_timestamp_label(value: Optional[str]) -> str:
-    if not value:
-        return "N/A"
-    try:
-        return datetime.fromisoformat(value).strftime("%d %b %Y %I:%M %p")
-    except Exception:
-        return value
-
-
-def posted_datetime_from_age(posted_age_days: Optional[float], reference_time: Optional[datetime]) -> Optional[datetime]:
-    if posted_age_days is None or reference_time is None:
-        return None
-    try:
-        return reference_time - timedelta(days=float(posted_age_days))
-    except Exception:
-        return None
-
-
-def format_posted_date_label(posted_text: Optional[str], posted_age_days: Optional[float], reference_time: Optional[datetime]) -> str:
-    normalized_posted = normalize_posted_text(posted_text)
-    if normalized_posted.lower() == "today" and reference_time is None:
-        return "Today"
-    posted_at = posted_datetime_from_age(posted_age_days, reference_time)
-    if posted_at is None:
-        return "Unknown"
-    try:
-        return posted_at.strftime("%d %b %Y")
-    except Exception:
-        return "Unknown"
-
-
-def relative_posted_age_label(posted_at: Optional[datetime], now: Optional[datetime] = None) -> str:
-    if posted_at is None:
-        return ""
-    current = now or datetime.now().astimezone()
-    try:
-        local_posted = posted_at.astimezone(current.tzinfo) if posted_at.tzinfo and current.tzinfo else posted_at
-        days_old = max((current.date() - local_posted.date()).days, 0)
-    except Exception:
-        return ""
-    if days_old == 0:
-        return "today"
-    if days_old == 1:
-        return "yesterday"
-    return f"{days_old} days ago"
-
-
-def posted_reference_time(record: dict) -> Optional[datetime]:
-    for key in ("run_started_at", "last_seen_at", "last_kept_at", "first_seen_at"):
-        timestamp = parse_timestamp(record.get(key))
-        if timestamp:
-            return timestamp
-    return None
-
-
-def is_relative_posted_text(value: Optional[str]) -> bool:
-    text = normalize_posted_text(value).lower()
-    if text in {"today", "yesterday"}:
-        return True
-    return re.fullmatch(r"\d+\s*[mhdy](?:\s*ago)?", text) is not None
-
-
-def posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
-    posted_text = normalize_posted_text(record.get("posted"))
-    posted_age_days = record.get("posted_age_days")
-    reference_time = posted_reference_time(record)
-    posted_at = posted_datetime_from_age(posted_age_days, reference_time)
-    relative_label = relative_posted_age_label(posted_at, now) if posted_at else ""
-    posted_date_label = format_posted_date_label(
-        posted_text,
-        posted_age_days,
-        reference_time,
-    )
-
-    if posted_date_label != "Unknown" and posted_age_days is not None and is_relative_posted_text(posted_text):
-        return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
-    if posted_age_days is not None and posted_age_days >= 1 and posted_text not in ("N/A", ""):
-        if posted_date_label != "Unknown" and posted_date_label != posted_text:
-            if relative_label:
-                return f"{posted_date_label} ({relative_label})"
-            return posted_date_label
-    if posted_text in ("N/A", "") and posted_date_label != "Unknown":
-        return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
-    return posted_text
-
-
-def current_posted_age_days(record: dict, now: Optional[datetime] = None) -> Optional[float]:
-    posted_age_days = record.get("posted_age_days")
-    if posted_age_days is None:
-        return None
-    try:
-        raw_age_days = float(posted_age_days)
-    except Exception:
-        return None
-
-    reference_time = posted_reference_time(record)
-    if reference_time is None:
-        return max(raw_age_days, 0.0)
-
-    posted_at = posted_datetime_from_age(raw_age_days, reference_time)
-    if posted_at is None:
-        return max(raw_age_days, 0.0)
-
-    current = now or datetime.now().astimezone()
-    try:
-        age_seconds = (current - posted_at).total_seconds()
-    except Exception:
-        return max(raw_age_days, 0.0)
-    return max(age_seconds / 86400, 0.0)
-
-
-def get_match_preferences(profile: Optional[dict] = None) -> dict:
-    active_profile = profile or load_profile()
-    defaults = {
-        "home_location": "",
-        "secondary_location": "",
-        "prefer_government": False,
-        "prefer_permanent": False,
-        "preferred_contract_months": 12,
-        "short_contract_months": 6,
-    }
-    preferences = active_profile.get("match_preferences", {})
-    if isinstance(preferences, dict):
-        defaults.update(preferences)
-    return defaults
-
-
-def weighted_points(value: int, weight: float) -> int:
-    scaled = float(value) * float(weight)
-    if scaled >= 0:
-        return int(math.floor(scaled + 0.5))
-    return -int(math.floor(abs(scaled) + 0.5))
-
-
-def build_scoring_source_text(record: dict) -> str:
-    source_parts: List[str] = []
-    for value in [
-        record.get("fit_source_text"),
-        record.get("full_description"),
-        record.get("title"),
-        record.get("company"),
-        record.get("role_snapshot"),
-        record.get("teaser"),
-    ]:
-        cleaned = compact_whitespace(value)
-        if cleaned and cleaned != "N/A":
-            source_parts.append(cleaned)
-    return "\n".join(dedupe_preserve_order(source_parts))
-
-
-def extract_contract_months(details_text: str) -> Optional[int]:
-    lowered = compact_whitespace(details_text).lower()
-    matches = [int(value) for value in re.findall(r"\b(\d{1,2})\s*[-\u2011\u2013 ]?(?:month|months|mth)\b", lowered)]
-    if not matches:
-        return None
-    return max(matches)
-
-
-def find_old_experience_year(profile: dict, aliases: List[str]) -> Optional[int]:
-    cv_text = compact_whitespace(profile.get("cv_text") or "").lower()
-    if not cv_text:
-        return None
-    for alias in aliases:
-        cleaned = str(alias).strip().lower()
-        if not cleaned:
-            continue
-        match = re.search(rf"{re.escape(cleaned)}.{{0,90}}old from (\d{{4}})", cv_text)
-        if match:
-            try:
-                return int(match.group(1))
-            except Exception:
-                return None
-    return None
-
-
-def _line_year_context(line: str, current_year: int) -> Optional[int]:
-    lowered = compact_whitespace(line).lower()
-    if not lowered:
-        return None
-
-    patterns = [
-        r"(20\d{2})\s*[-\u2013]\s*(present|current|ongoing|20\d{2})",
-        r"from\s+(20\d{2})\s+to\s+(20\d{2})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, lowered)
-        if not match:
-            continue
-        end_value = match.group(2)
-        if end_value in {"present", "current", "ongoing"}:
-            return current_year
-        try:
-            return int(end_value)
-        except Exception:
-            continue
-    return None
-
-
-def find_profile_experience_year(profile: dict, aliases: List[str]) -> Optional[int]:
-    explicit_old_year = find_old_experience_year(profile, aliases)
-    if explicit_old_year:
-        return explicit_old_year
-
-    evidence_tiers = get_evidence_tiers(profile)
-    candidate_years = [
-        find_profile_experience_year_in_text(evidence_tiers.get("primary_current_evidence", ""), aliases),
-        find_profile_experience_year_in_text(evidence_tiers.get("secondary_older_evidence", ""), aliases),
-        find_profile_experience_year_in_text(evidence_tiers.get("background_optional_evidence", ""), aliases),
-        find_profile_experience_year_in_text(str(profile.get("cv_text") or ""), aliases),
-    ]
-    candidate_years = [year for year in candidate_years if year]
-    if not candidate_years:
-        return None
-    return max(candidate_years)
-
-
-def profile_recency_multiplier(profile: dict, aliases: List[str]) -> float:
-    most_recent_year = find_profile_experience_year(profile, aliases)
-    if not most_recent_year:
-        return 0.0
-    years_ago = max(datetime.now().year - int(most_recent_year), 0)
-    if years_ago <= 5:
-        return 1.0
-    if years_ago <= 10:
-        return 0.6
-    return 0.3
-
-
-def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> dict:
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    decision = str(record.get("llm_decision") or "").strip().upper()
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    if not grade:
-        fallback_map = {
-            "KEEP": "STRONG",
-            "MAYBE": "SOLID",
-            "REJECT": "MISMATCH",
-        }
-        grade = fallback_map.get(decision, "SOLID")
-
-    grade_map = {
-        "EXCELLENT": ("Description fit is excellent", int(scoring_rules["llm_grade_points"]["EXCELLENT"])),
-        "STRONG": ("Description fit is strong", int(scoring_rules["llm_grade_points"]["STRONG"])),
-        "SOLID": ("Description fit is solid", int(scoring_rules["llm_grade_points"]["SOLID"])),
-        "WEAK": ("Description fit is mixed", int(scoring_rules["llm_grade_points"]["WEAK"])),
-        "POOR": ("Description fit is weak", int(scoring_rules["llm_grade_points"]["POOR"])),
-        "MISMATCH": ("Description fit is a mismatch", int(scoring_rules["llm_grade_points"]["MISMATCH"])),
-    }
-    label, value = grade_map.get(grade, grade_map["SOLID"])
-    return {"label": label, "value": value}
-
-
-def capability_match_summary(record: dict, profile: Optional[dict] = None) -> Dict[str, List[str]]:
-    active_profile = profile or load_profile()
-    source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
-    return find_profile_capability_matches(source_text, active_profile)
-
-
-def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
-    lowered = compact_whitespace(source_text).lower()
-    results = []
-    for rule in profile.get("capability_profile_rules", []):
-        if not isinstance(rule, dict):
-            continue
-        level = str(rule.get("level") or "").strip().lower()
-        if level not in {"strong", "working", "basic"}:
-            continue
-        canonical = canonical_capability_term(rule)
-        if not canonical or not text_contains_term(lowered, canonical):
-            continue
-        rule_strength = _capability_rule_strength(rule)
-        profile_evidence = evidence_tier_alignment_score(profile, [canonical])
-        combined = max(rule_strength, profile_evidence)
-        results.append({
-            "label": friendly_capability_label(str(rule.get("name") or "")),
-            "level": level,
-            "combined_strength": combined,
-        })
-    return results
-
-
-def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> tuple[int, dict]:
-    active_profile = profile or load_profile()
-    source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
-    scored = capability_scored_matches(source_text, active_profile)
-    total = sum(
-        m["combined_strength"] * {"strong": 4, "working": 3, "basic": 2}.get(str(m.get("level") or ""), 0)
-        for m in scored
-    )
-    score = min(round(total), 20)
-    matches = capability_match_summary(record, active_profile)
-    return score, matches
-
-
-def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = None, profile: Optional[dict] = None) -> Optional[dict]:
-    """Award a bonus when multiple strong independent signals simultaneously confirm fit.
-
-    Conditions: title OK, content OK, HIGH description confidence, LLM grade
-    EXCELLENT or STRONG, 2+ positive capability matches, no missing evidence.
-    Soft risks reduce the bonus from 5 to 3 but do not eliminate it.
-    """
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    title_reason = str(record.get("title_reason") or "").strip().upper()
-    content_reason = str(record.get("content_reason") or "").strip().upper()
-    fit_confidence = full_description_confidence(record)
-    missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
-    soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
-    active_profile = profile or load_profile()
-    matches = capability_matches or capability_match_summary(record, active_profile)
-    scoring_rules = get_scoring_rules(active_profile)
-    convergence_rules = scoring_rules["convergence"]
-    positive_count = (
-        len(matches.get("strong", []))
-        + len(matches.get("working", []))
-        + len(matches.get("basic", []))
-    )
-
-    if title_reason != "OK" or content_reason != "OK" or fit_confidence != "HIGH":
-        return None
-    if missing_evidence or grade not in set(convergence_rules.get("eligible_grades", [])):
-        return None
-    if positive_count < int(convergence_rules.get("min_positive_matches", 2) or 2):
-        return None
-    bonus = (
-        int(convergence_rules.get("bonus_no_soft_risks", 5) or 5)
-        if not soft_risks
-        else int(convergence_rules.get("bonus_with_soft_risks", 3) or 3)
-    )
-    return {"label": "Multiple strong signals align", "value": bonus}
 
 
 def deterministic_review_outcome(record: dict, fit_highlights: List[str], missing_evidence: List[str], soft_risk_reasons: List[str]) -> Optional[dict]:
@@ -1859,116 +250,6 @@ def deterministic_review_outcome(record: dict, fit_highlights: List[str], missin
     if title_reason == "OK" and strong_signal_count >= 3 and high_risks == 0 and medium_risks <= 1:
         return {"decision": "KEEP", "grade": "SOLID"}
     return None
-
-
-def assess_location_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
-    active_profile = profile or load_profile()
-    preferences = get_match_preferences(active_profile)
-    scoring_rules = get_scoring_rules(active_profile)
-    location_rules = scoring_rules["location"]
-    source_text = build_scoring_source_text(record).lower()
-    location = compact_whitespace(record.get("location") or "").lower()
-    work_mode = compact_whitespace(record.get("work_mode") or "").lower()
-
-    if not location or location == "n/a":
-        return None
-
-    def _location_variants(value: str) -> list[str]:
-        cleaned = compact_whitespace(value).lower()
-        if not cleaned:
-            return []
-        variants = [cleaned]
-        no_prefix = re.sub(r"^all\s+", "", cleaned).strip()
-        if no_prefix and no_prefix not in variants:
-            variants.append(no_prefix)
-        no_region = re.sub(r"\s+[a-z]{2,3}$", "", no_prefix).strip()
-        if no_region and no_region not in variants:
-            variants.append(no_region)
-        return variants
-
-    def _matches_location(preference: str) -> bool:
-        return any(variant and variant in location for variant in _location_variants(preference))
-
-    home_location = str(preferences.get("home_location") or "")
-    secondary_location = str(preferences.get("secondary_location") or "")
-
-    if home_location and _matches_location(home_location):
-        label_target = compact_whitespace(home_location)
-        return {"label": f"Location matches primary preference: {label_target}", "value": int(location_rules["primary_match"])}
-
-    if secondary_location and _matches_location(secondary_location):
-        label_target = compact_whitespace(secondary_location)
-        if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
-            return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": int(location_rules["secondary_remote"])}
-        if re.search(r"\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\b", source_text):
-            return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": int(location_rules["secondary_limited_onsite"])}
-        if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
-            return {"label": f"Secondary location requires regular onsite attendance: {label_target}", "value": int(location_rules["secondary_regular_onsite"])}
-
-        secondary_terms = [re.escape(value) for value in _location_variants(secondary_location) if value]
-        if secondary_terms and re.search(
-            rf"\b(must be based in|must reside in|onsite in)\s+(?:{'|'.join(secondary_terms)})\b",
-            source_text,
-        ):
-            return {"label": f"Secondary location requires local onsite attendance: {label_target}", "value": int(location_rules["secondary_local_onsite"])}
-        return {"label": f"Location matches secondary preference: {label_target}", "value": int(location_rules["secondary_match"])}
-
-    return None
-
-
-def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
-    active_profile = profile or load_profile()
-    preferences = get_match_preferences(active_profile)
-    scoring_rules = get_scoring_rules(active_profile)
-    contract_rules = scoring_rules["contract"]
-    source_text = build_scoring_source_text(record)
-    work_type = compact_whitespace(record.get("work_type") or "").lower()
-    preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
-    short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
-    eng_pref = preferences.get("engagement_type", "both")
-
-    normalized_work_type = re.sub(r"[\s_-]+", " ", work_type).strip()
-    is_perm = "full time" in normalized_work_type or "permanent" in normalized_work_type
-    is_contract = "contract" in normalized_work_type
-
-    if is_perm:
-        if eng_pref == "contract":
-            return {"label": "Permanent role (preference is Contract)", "value": int(contract_rules["permanent_when_contract_preferred"])}
-        return {"label": "Permanent role", "value": int(contract_rules["permanent_match"])}
-
-    if not is_contract:
-        return None
-
-    if eng_pref == "permanent":
-        return {"label": "Contract role (preference is Permanent)", "value": int(contract_rules["contract_when_permanent_preferred"])}
-
-    contract_months = extract_contract_months(source_text)
-    if contract_months is None:
-        return None
-    if contract_months >= preferred_contract_months:
-        if "extension" in source_text.lower():
-            return {"label": "12+ month contract with extension potential", "value": int(contract_rules["long_with_extension"])}
-        return {"label": "12+ month contract", "value": int(contract_rules["long_contract"])}
-    if contract_months >= short_contract_months:
-        return {"label": "6-12 month contract", "value": int(contract_rules["medium_contract"])}
-    return {"label": "Contract is shorter than preferred", "value": int(contract_rules["short_contract"])}
-
-
-def assess_government_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
-    active_profile = profile or load_profile()
-    preferences = get_match_preferences(active_profile)
-    scoring_rules = get_scoring_rules(active_profile)
-    if not preferences.get("prefer_government", True):
-        return None
-
-    title = compact_whitespace(record.get("title") or "").lower()
-    company = compact_whitespace(record.get("company") or "").lower()
-    source_text = build_scoring_source_text(record).lower()
-    combined = "\n".join([title, company, source_text])
-    if has_government_context(combined) or text_contains_term(combined, "ministerial"):
-        return {"label": "Government context", "value": int(scoring_rules["government"]["match_bonus"])}
-    return None
-
 
 
 def visible_fit_reasons(
@@ -2179,6 +460,8 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Low-fit specialist area: {cleaned_detail}"
     if prefix == "DESC_HARD_BLOCK" and cleaned_detail:
         return f"Hard blocker mismatch: {cleaned_detail}"
+    if prefix == "DESC_HARD_BLOCK_RULE" and cleaned_detail:
+        return f"Hard blocker requirement: {cleaned_detail}"
     if prefix == "CARD_EXCEPTION" and cleaned_detail:
         return f"Collection error: {cleaned_detail}"
     if prefix == "DESC_BAD_PHRASE" and cleaned_detail:
@@ -2201,19 +484,17 @@ def register_hard_blocker_learning_from_rejection(
     reject_reason: str,
     details_text: str = "",
     hard_block_matches: Optional[List[dict]] = None,
+    profile: Optional[dict] = None,
 ) -> None:
     reason = compact_whitespace(reject_reason)
     if not reason:
         return
 
     prefix, _, detail = reason.partition(":")
-    title = compact_whitespace(record.get("title") or "")
-    company = compact_whitespace(record.get("company") or "")
-    context = [value for value in [title, company] if value]
     signals: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add_signal(signal: str, evidence: list[str]) -> None:
+    def add_signal(signal: str, original_text: str) -> None:
         cleaned_signal = compact_whitespace(signal)
         if not cleaned_signal:
             return
@@ -2224,222 +505,27 @@ def register_hard_blocker_learning_from_rejection(
         signals.append(
             {
                 "signal": cleaned_signal,
-                "category": "hard_blocker_concept",
-                "source": "job rejection",
-                "context": context,
-                "evidence": [item for item in evidence if compact_whitespace(item)],
-                "needs_review": True,
+                "suggested_category": "hard_blocker_pattern",
+                "original_texts": [compact_whitespace(original_text)] if compact_whitespace(original_text) else [],
             }
         )
 
-    if prefix == "DESC_MANDATORY_SKILL" and detail:
-        add_signal(detail.replace("_", " "), [reason])
-    elif prefix == "DESC_HARD_BLOCK_KNOWLEDGE":
-        matches = hard_block_matches or find_hard_block_matches(details_text)
+    if prefix in {"DESC_HARD_BLOCK_RULE", "DESC_HARD_BLOCK"}:
+        profile_terms = (profile or {}).get("must_not_require_skills", [])
+        matches = hard_block_matches or find_hard_block_matches(details_text, profile_terms)
         for match in matches:
-            add_signal(
-                str(match.get("value") or match.get("matched_term") or "").replace("_", " "),
-                [reason, str(match.get("context") or "").strip() or reason],
-            )
-        if not signals and detail:
-            add_signal(detail.replace("_", " "), [reason])
-    elif prefix == "DESC_HARD_BLOCK" and hard_block_matches:
-        for match in hard_block_matches:
-            add_signal(
-                str(match.get("text") or match.get("value") or match.get("matched_term") or ""),
-                [reason, str(match.get("text") or "").strip() or reason],
-            )
+            term = str(match.get("matched_term") or "").replace("_", " ")
+            pattern = generalize_hard_block_pattern(details_text, term) or str(match.get("value") or "").strip()
+            add_signal(pattern, str(match.get("context") or details_text or reason))
     elif prefix == "LEARNED_REJECT" and detail:
         token = detail.split(":")[-1].strip()
         if token:
-            add_signal(token.replace("_", " "), [reason])
+            pattern = generalize_hard_block_pattern(details_text, token.replace("_", " "))
+            if pattern:
+                add_signal(pattern, token.replace("_", " "))
 
     if signals:
         register_signals(signals)
-
-
-def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    entries: List[dict] = []
-    for signal in competitive_signal_assessments(record, profile):
-        adjustment = int(signal.get("adjustment", 0) or 0)
-        label_base = compact_whitespace(signal.get("fit_label") or signal.get("name") or "competitive signal")
-        if not label_base or adjustment == 0:
-            continue
-        if adjustment > 0:
-            label = f"Competitive signal aligns: {label_base}"
-        else:
-            label = f"Competitive signal leans elsewhere: {label_base}"
-        entries.append({"label": label, "value": adjustment})
-    entries.sort(key=lambda item: (abs(int(item.get("value", 0))), item.get("label", "")), reverse=True)
-    return entries[:2]
-
-
-def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
-    salary_text = str(record.get("salary") or "").strip()
-    if not salary_text or salary_text == "N/A":
-        return 0
-    if _salary_includes_super_or_package(salary_text):
-        return 0
-
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    salary_rules = scoring_rules["salary"]
-    salary_preferences = active_profile.get("salary_preferences", {})
-    minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
-    minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
-    parsed_value = _salary_max_value(salary_text)
-    lowered = salary_text.lower()
-    is_daily = bool(re.search(r"\b(per\s+day|daily\s+rate|day\s+rate|p/d|pd)\b|/day", lowered))
-    is_non_comparable_period = bool(
-        re.search(
-            r"\b(per\s+hour|hourly|p/h|ph|per\s+week|weekly|per\s+month|monthly)\b"
-            r"|/(?:hr|hour|wk|week|mo|month)",
-            lowered,
-        )
-    )
-
-    if is_daily:
-        if minimum_daily_rate <= 0 or parsed_value <= 0:
-            return 0
-        if parsed_value >= minimum_daily_rate:
-            return int(salary_rules["meeting_target"])
-        ratio = parsed_value / minimum_daily_rate
-        if ratio >= float(salary_rules["below_target_near_min_ratio"]):
-            return int(salary_rules["below_target_near_adjustment"])
-        if ratio >= float(salary_rules["below_target_mid_min_ratio"]):
-            return int(salary_rules["below_target_mid_adjustment"])
-        return int(salary_rules["below_target_far_adjustment"])
-
-    if is_non_comparable_period:
-        return 0
-
-    if minimum_salary_yearly <= 0 or parsed_value <= 0:
-        return 0
-    if parsed_value >= minimum_salary_yearly:
-        return int(salary_rules["meeting_target"])
-    ratio = parsed_value / minimum_salary_yearly
-    if ratio >= float(salary_rules["below_target_near_min_ratio"]):
-        return int(salary_rules["below_target_near_adjustment"])
-    if ratio >= float(salary_rules["below_target_mid_min_ratio"]):
-        return int(salary_rules["below_target_mid_adjustment"])
-    return int(salary_rules["below_target_far_adjustment"])
-
-
-def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    breakdown: List[dict] = []
-    title_reason = str(record.get("title_reason") or "")
-    content_reason = str(record.get("content_reason") or "")
-    title_metadata = record.get("title_match_metadata") if isinstance(record.get("title_match_metadata"), dict) else {}
-    posted_age_days = current_posted_age_days(record)
-    work_mode = str(record.get("work_mode") or "").lower()
-    fit_highlights = [item for item in record.get("fit_highlights", []) if str(item).strip()]
-    active_profile = profile or load_profile()
-    weights = get_preference_weights(active_profile)
-    scoring_rules = get_scoring_rules(active_profile)
-    hard_block_labels = hard_block_reasons(record, active_profile)
-    evidence_score, capability_matches = capability_evidence_score(record, active_profile)
-    reviewed_signal_matches = reviewed_signal_match_summary(record, active_profile)
-    if not title_metadata and str(record.get("title") or "").strip():
-        title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
-    title_family = str(title_metadata.get("match_family") or "").strip().lower()
-    title_seniority_adjustment = int(title_metadata.get("seniority_adjustment") or 0)
-
-    if hard_block_labels:
-        return [{"label": f"Hard blocker requirement mismatch: {hard_block_labels[0]}", "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"])}]
-
-    if title_family == "primary" or (not title_family and title_reason == "OK"):
-        breakdown.append({
-            "label": "Primary role-family match",
-            "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"]),
-        })
-        if title_seniority_adjustment:
-            breakdown.append({
-                "label": "Primary seniority adjustment",
-                "value": weighted_points(int(title_seniority_adjustment), weights["fit"]),
-            })
-    elif title_family == "secondary" or (not title_family and title_reason == "TITLE_POTENTIAL_MATCH"):
-        breakdown.append({
-            "label": "Secondary role-family match",
-            "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"]),
-        })
-
-    llm_entry = llm_description_fit_entry(record, active_profile)
-    breakdown.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"])})
-
-    if content_reason == "OK":
-        breakdown.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"])})
-
-    if full_description_confidence(record) == "LOW":
-        breakdown.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"])})
-
-    if evidence_score:
-        breakdown.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
-
-    convergence_entry = convergence_bonus_entry(record, capability_matches, active_profile)
-    if convergence_entry:
-        breakdown.append({
-            "label": convergence_entry["label"],
-            "value": weighted_points(int(convergence_entry["value"]), weights["fit"]),
-        })
-
-    for item in competitive_signal_breakdown(record, active_profile):
-        breakdown.append({"label": item["label"], "value": weighted_points(int(item["value"]), weights["fit"])})
-
-    if posted_age_days is not None:
-        if posted_age_days <= (1 / 24):
-            breakdown.append({"label": "Posted within the last hour", "value": weighted_points(int(scoring_rules["freshness"]["last_hour"]), weights["freshness"])})
-        elif posted_age_days <= 1:
-            breakdown.append({"label": "Posted within the last day", "value": weighted_points(int(scoring_rules["freshness"]["last_day"]), weights["freshness"])})
-        elif posted_age_days <= 3:
-            breakdown.append({"label": "Posted within the last 3 days", "value": weighted_points(int(scoring_rules["freshness"]["last_3_days"]), weights["freshness"])})
-        elif posted_age_days <= 7:
-            breakdown.append({"label": "Posted within the last week", "value": weighted_points(int(scoring_rules["freshness"]["last_week"]), weights["freshness"])})
-        elif posted_age_days <= 15:
-            breakdown.append({"label": "Still relatively recent", "value": weighted_points(int(scoring_rules["freshness"]["last_15_days"]), weights["freshness"])})
-
-    location_item = assess_location_preference(record, active_profile)
-    if location_item:
-        breakdown.append({
-            "label": location_item["label"],
-            "value": weighted_points(int(location_item["value"]), weights["location"]),
-        })
-
-    contract_item = assess_contract_preference(record, active_profile)
-    if contract_item:
-        breakdown.append({
-            "label": contract_item["label"],
-            "value": weighted_points(int(contract_item["value"]), weights["contract"]),
-        })
-
-    government_item = assess_government_preference(record, active_profile)
-    if government_item:
-        breakdown.append({
-            "label": government_item["label"],
-            "value": weighted_points(int(government_item["value"]), weights["government"]),
-        })
-
-    if work_mode == "hybrid":
-        breakdown.append({"label": "Hybrid work available", "value": weighted_points(int(scoring_rules["work_mode"]["hybrid"]), weights["work_mode"])})
-    elif work_mode == "remote":
-        breakdown.append({"label": "Remote work available", "value": weighted_points(int(scoring_rules["work_mode"]["remote"]), weights["work_mode"])})
-    elif work_mode in {"on-site", "onsite", "on site"}:
-        breakdown.append({"label": "On-site role", "value": weighted_points(int(scoring_rules["work_mode"]["on_site"]), weights["work_mode"])})
-
-    salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
-    if salary_score > 0:
-        breakdown.append({"label": "Salary/rate signal", "value": salary_score})
-    elif salary_score < 0:
-        breakdown.append({"label": "Salary/rate below target", "value": salary_score})
-
-    if viewed_by_user(record) and not record.get("applied"):
-        breakdown.append({"label": "Already viewed by you", "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"])})
-
-    return breakdown
-
-
-def fit_score(record: dict, profile: Optional[dict] = None) -> int:
-    score = sum(item["value"] for item in fit_score_breakdown(record, profile))
-    return max(min(score, 100), 0)
 
 
 def is_dashboard_eligible(
@@ -2456,297 +542,6 @@ def is_dashboard_eligible(
         else get_dashboard_minimum_score()
     )
     return fit_score(record, profile) >= active_dashboard_min_score
-
-
-def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except Exception:
-        return None
-
-
-def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
-    timestamp = parse_timestamp(value)
-    if not timestamp:
-        return None
-    try:
-        return max((reference - timestamp).days, 0)
-    except Exception:
-        return None
-
-
-def build_keep_snapshot(record: dict) -> dict:
-    snapshot = {}
-    for field in KEEP_SNAPSHOT_FIELDS:
-        if field in record:
-            snapshot[field] = record.get(field)
-    return snapshot
-
-
-def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict] = None) -> bool:
-    if not isinstance(history_entry, dict):
-        return False
-    if int(history_entry.get("times_kept", 0) or 0) <= 0:
-        return False
-    snapshot = history_entry.get("last_kept_snapshot")
-    if not isinstance(snapshot, dict):
-        return False
-    if not record.get("job_key"):
-        return False
-    previous_url = str(snapshot.get("url") or history_entry.get("url") or "").strip()
-    current_url = str(record.get("url") or "").strip()
-    if previous_url and current_url and previous_url != current_url:
-        return False
-    if hard_block_reasons(snapshot if isinstance(snapshot, dict) else {}, profile):
-        return False
-    return True
-
-
-def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
-    snapshot = history_entry.get("last_kept_snapshot") if isinstance(history_entry, dict) else {}
-    if not isinstance(snapshot, dict):
-        snapshot = {}
-
-    if record.get("posted") in {None, "", "N/A"}:
-        record["posted"] = snapshot.get("posted") or "N/A"
-    if record.get("posted_age_days") is None and snapshot.get("posted_age_days") is not None:
-        record["posted_age_days"] = snapshot.get("posted_age_days")
-    if record.get("salary") in {None, "", "N/A"}:
-        record["salary"] = snapshot.get("salary") or "N/A"
-    if record.get("teaser") in {None, "", "N/A"}:
-        record["teaser"] = snapshot.get("teaser") or "N/A"
-    if record.get("location") in {None, "", "N/A"}:
-        record["location"] = snapshot.get("location") or "N/A"
-    if record.get("work_mode") in {None, "", "N/A"}:
-        record["work_mode"] = snapshot.get("work_mode") or "N/A"
-    if record.get("work_type") in {None, "", "N/A"}:
-        record["work_type"] = snapshot.get("work_type") or "N/A"
-    if record.get("role_snapshot") in {None, "", "N/A"}:
-        record["role_snapshot"] = snapshot.get("role_snapshot") or "N/A"
-    if not compact_whitespace(record.get("fit_source_text") or ""):
-        record["fit_source_text"] = snapshot.get("fit_source_text") or ""
-    if not compact_whitespace(record.get("full_description") or ""):
-        record["full_description"] = snapshot.get("full_description") or ""
-    if not record.get("fit_confidence"):
-        record["fit_confidence"] = snapshot.get("fit_confidence") or ""
-    if not record.get("fit_highlights"):
-        record["fit_highlights"] = snapshot.get("fit_highlights") or []
-    if not record.get("soft_risk_reasons"):
-        record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []
-    if not record.get("missing_evidence"):
-        record["missing_evidence"] = snapshot.get("missing_evidence") or []
-    if not record.get("competitive_signals"):
-        record["competitive_signals"] = snapshot.get("competitive_signals") or []
-    if not record.get("hard_block_reasons"):
-        record["hard_block_reasons"] = snapshot.get("hard_block_reasons") or []
-    if not compact_whitespace(record.get("details_status") or ""):
-        record["details_status"] = snapshot.get("details_status") or ""
-    if not record.get("description_source"):
-        record["description_source"] = snapshot.get("description_source") or ""
-
-    record["content_reason"] = snapshot.get("content_reason")
-    record["llm_decision"] = snapshot.get("llm_decision")
-    record["llm_fit_grade"] = snapshot.get("llm_fit_grade")
-    record["decision"] = "KEEP"
-    record["details_length"] = 0
-    record["reused_history"] = True
-    return record
-
-
-def viewed_by_user(record: dict) -> bool:
-    if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
-        return False
-    return int(record.get("times_viewed", 0) or 0) > 0
-
-
-def get_trusted_full_description(record: dict) -> str:
-    """Return the trusted full description text, or empty string if not available.
-
-    Prefers the canonical ``full_description`` field. Falls back to
-    ``fit_source_text`` when the source is trusted. Older saved LinkedIn
-    snapshots did not always persist ``description_source``; if the detail
-    status was OK and the fallback text is long enough, treat that as trusted
-    legacy detail text so dashboard rebuilds do not lose evidence.
-    """
-    full = compact_whitespace(record.get("full_description") or "")
-    if full:
-        return full
-    source = str(record.get("description_source") or "").strip().lower()
-    fallback_text = compact_whitespace(record.get("fit_source_text") or "")
-    if len(fallback_text) < MIN_TRUSTED_DESCRIPTION_LENGTH:
-        return ""
-    if source in TRUSTED_DESCRIPTION_SOURCES:
-        return fallback_text
-    details_status = str(record.get("details_status") or "").strip().lower()
-    if details_status == "ok" and not source:
-        return fallback_text
-    return ""
-
-
-def full_description_confidence(record: dict) -> str:
-    """Return 'HIGH' if a trusted full description is available, else 'LOW'.
-
-    Recomputes HIGH from trusted text first so legacy records with recovered
-    detail text are not stuck with an old LOW confidence marker.
-    """
-    if get_trusted_full_description(record):
-        return "HIGH"
-    stored = str(record.get("fit_confidence") or "").strip().upper()
-    if stored in {"HIGH", "LOW"}:
-        return stored
-    return "LOW"
-
-
-def is_description_trusted(record: dict) -> bool:
-    """Return True when a trusted full description is available for this record."""
-    return full_description_confidence(record) == "HIGH"
-
-
-def history_cluster_key_from_parts(source: Optional[str], company: Optional[str], title: Optional[str]) -> str:
-    source_key = compact_whitespace(source or "").lower()
-    company_key = re.sub(r"[^a-z0-9]+", " ", compact_whitespace(company or "").lower()).strip()
-    title_key = re.sub(r"[^a-z0-9]+", " ", compact_whitespace(title or "").lower()).strip()
-    if not source_key or not company_key or not title_key:
-        return ""
-    return f"{source_key}|{company_key}|{title_key}"
-
-
-def history_cluster_key(record: dict) -> str:
-    source = str(record.get("source") or "").strip().lower()
-    if not source:
-        job_key = str(record.get("job_key") or "")
-        source = "linkedin" if job_key.startswith("linkedin:") else "seek"
-    return history_cluster_key_from_parts(source, record.get("company"), record.get("title"))
-
-
-def build_history_sighting(record: dict, run_iso: str) -> dict:
-    details_text = get_trusted_full_description(record) or compact_whitespace(record.get("teaser") or "")
-    posting_channel = infer_posting_channel(record, details_text).get("kind") or "unknown"
-    return {
-        "seen_at": run_iso,
-        "url": str(record.get("url") or "").strip(),
-        "posted": normalize_posted_text(record.get("posted")),
-        "posted_age_days": record.get("posted_age_days"),
-        "company": str(record.get("company") or "").strip(),
-        "title": str(record.get("title") or "").strip(),
-        "source": str(record.get("source") or "").strip().lower(),
-        "posting_channel": posting_channel,
-    }
-
-
-def build_history_cluster_index(history: Dict[str, dict]) -> Dict[str, dict]:
-    clusters: Dict[str, dict] = {}
-    for job_key, entry in history.items():
-        if not isinstance(entry, dict):
-            continue
-        snapshot = entry.get("last_kept_snapshot") if isinstance(entry.get("last_kept_snapshot"), dict) else {}
-        source = snapshot.get("source") or ("linkedin" if str(job_key).startswith("linkedin:") else "seek")
-        company = snapshot.get("company") or entry.get("company")
-        title = snapshot.get("title") or entry.get("title")
-        cluster_key = history_cluster_key_from_parts(source, company, title)
-        if not cluster_key:
-            continue
-        stats = clusters.setdefault(
-            cluster_key,
-            {
-                "job_keys": set(),
-                "times_seen": 0,
-                "first_seen_at": None,
-                "last_seen_at": None,
-            },
-        )
-        stats["job_keys"].add(str(job_key))
-        stats["times_seen"] += int(entry.get("times_seen", 0) or 0)
-        first_seen = parse_timestamp(entry.get("first_seen_at"))
-        last_seen = parse_timestamp(entry.get("last_seen_at"))
-        if first_seen and (stats["first_seen_at"] is None or first_seen < stats["first_seen_at"]):
-            stats["first_seen_at"] = first_seen
-        if last_seen and (stats["last_seen_at"] is None or last_seen > stats["last_seen_at"]):
-            stats["last_seen_at"] = last_seen
-    return clusters
-
-
-def assess_history_warning_signals(record: dict, history_clusters: Optional[Dict[str, dict]] = None) -> List[str]:
-    warnings: List[str] = []
-    times_seen = int(record.get("times_seen", 0) or 0)
-    first_seen = parse_timestamp(record.get("first_seen_at"))
-    last_seen = parse_timestamp(record.get("last_seen_at"))
-    if first_seen and last_seen:
-        span_days = max((last_seen.date() - first_seen.date()).days, 0)
-        if times_seen >= REPEATED_LISTING_MIN_TIMES_SEEN and span_days >= REPEATED_LISTING_MIN_SPAN_DAYS:
-            warnings.append(
-                f"Potential red flag: this same listing has been seen {times_seen} times over {span_days} days"
-            )
-
-    cluster_key = history_cluster_key(record)
-    cluster_stats = history_clusters.get(cluster_key) if history_clusters and cluster_key else None
-    if cluster_stats:
-        listing_count = len(cluster_stats.get("job_keys", set()))
-        cluster_first_seen = cluster_stats.get("first_seen_at")
-        cluster_last_seen = cluster_stats.get("last_seen_at")
-        if cluster_first_seen and cluster_last_seen:
-            cluster_span_days = max((cluster_last_seen.date() - cluster_first_seen.date()).days, 0)
-            if listing_count >= MULTI_LISTING_RED_FLAG_MIN_LISTINGS and cluster_span_days >= MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS:
-                warnings.append(
-                    f"Potential red flag: the same title from the same poster has appeared across {listing_count} separate listings over {cluster_span_days} days"
-                )
-    return dedupe_preserve_order(warnings)
-
-
-def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> None:
-    job_key = record.get("job_key")
-    if not job_key:
-        record["seen_before"] = False
-        record["times_kept"] = 0
-        record["first_kept_at"] = None
-        return
-
-    entry = history.get(job_key, {})
-    prior_kept_count = int(entry.get("times_kept", 0) or 0)
-
-    entry["job_key"] = job_key
-    entry["title"] = record.get("title")
-    entry["company"] = record.get("company")
-    entry["url"] = record.get("url")
-    entry["last_seen_at"] = run_iso
-    entry["times_seen"] = int(entry.get("times_seen", 0) or 0) + 1
-    if not entry.get("first_seen_at"):
-        entry["first_seen_at"] = run_iso
-
-    record["seen_before"] = prior_kept_count > 0
-    record["times_seen"] = entry["times_seen"]
-    record["times_kept"] = prior_kept_count
-    record["times_viewed"] = int(entry.get("times_viewed", 0) or 0)
-    record["first_kept_at"] = entry.get("first_kept_at")
-    record["first_seen_at"] = entry.get("first_seen_at")
-    record["last_seen_at"] = entry.get("last_seen_at")
-    record["first_viewed_at"] = entry.get("first_viewed_at")
-    record["last_viewed_at"] = entry.get("last_viewed_at")
-    sightings = entry.get("sightings") if isinstance(entry.get("sightings"), list) else []
-    current_sighting = build_history_sighting(record, run_iso)
-    if not sightings or sightings[-1] != current_sighting:
-        sightings = [*sightings, current_sighting][-MAX_HISTORY_SIGHTINGS:]
-    entry["sightings"] = sightings
-    record["history_sightings"] = sightings
-
-    if record.get("decision") == "KEEP":
-        if not entry.get("first_kept_at"):
-            entry["first_kept_at"] = run_iso
-        entry["last_kept_at"] = run_iso
-        entry["times_kept"] = prior_kept_count + 1
-        entry["last_kept_snapshot"] = build_keep_snapshot(record)
-        record["times_kept"] = entry["times_kept"]
-        record["first_kept_at"] = entry["first_kept_at"]
-        record["last_kept_at"] = entry["last_kept_at"]
-
-    history[job_key] = entry
-
-
-def finalize_record(history: Dict[str, dict], audit_rows: List[dict], record: dict, run_iso: str) -> None:
-    update_job_history(history, record, run_iso)
-    audit_rows.append(record)
 
 
 def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: datetime) -> Optional[dict]:
@@ -3243,7 +1038,7 @@ def render_job_card(
             '<div class="block-confirm" data-block-confirm hidden>'
             '<div class="feature-guide-note">'
             'Job sites often return broad results even when the search is correct. '
-            'If a title clearly doesn’t match what you want, you can block similar titles directly from the title. '
+            'If a title clearly doesnâ€™t match what you want, you can block similar titles directly from the title. '
             'This helps remove repeated noise from future results.'
             '</div>'
             '<p class="block-confirm-copy">Hide future titles with:</p>'
@@ -3633,21 +1428,20 @@ def _process_seek_job_details(
 
     ok_desc, desc_reason = passes_content_filters(details_text, record["location"], title_reason)
     if not ok_desc:
-        if desc_reason.startswith("DESC_HARD_BLOCK_KNOWLEDGE"):
-            knowledge_matches = find_hard_block_matches(details_text)
+        if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
+            knowledge_matches = find_hard_block_matches(details_text, profile.get("must_not_require_skills", []))
             record["hard_block_reasons"] = dedupe_preserve_order(
                 [
                     compact_whitespace(match.get("value") or match.get("matched_term") or "")
                     for match in knowledge_matches
-                    if matches_mandatory_requirement(details_text, match.get("matched_term") or "")
                 ]
             )[:3]
-        register_hard_blocker_learning_from_rejection(record, desc_reason, details_text)
+        register_hard_blocker_learning_from_rejection(record, desc_reason, details_text, profile=profile)
         return False, desc_reason
 
     ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
     if not ok_learned:
-        register_hard_blocker_learning_from_rejection(record, learned_reason, details_text)
+        register_hard_blocker_learning_from_rejection(record, learned_reason, details_text, profile=profile)
         return False, learned_reason
 
     record["competitive_signals"] = [
@@ -3659,8 +1453,10 @@ def _process_seek_job_details(
     hard_block_matches = hard_block_entries(record, profile)
     record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
     if record["hard_block_reasons"]:
-        register_hard_blocker_learning_from_rejection(record, f"DESC_HARD_BLOCK:{hard_block_matches[0].get('category') or 'hard_block'}", details_text, hard_block_matches)
-        return False, f"DESC_HARD_BLOCK:{hard_block_matches[0].get('category') or 'hard_block'}"
+        term = compact_whitespace(record["hard_block_reasons"][0]).lower()
+        reason_code = f"DESC_HARD_BLOCK_RULE:{re.sub(r'[^a-z0-9]+', '_', term).strip('_') or 'hard_block'}"
+        register_hard_blocker_learning_from_rejection(record, reason_code, details_text, hard_block_matches, profile=profile)
+        return False, reason_code
 
     record["salary"] = extract_salary(details_text) or record.get("card_salary", "N/A")
     detail_work_mode = extract_work_mode(details_text)

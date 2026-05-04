@@ -151,3 +151,4 @@ python -m job_hunter_agent.test_runner
 ```
 
 The runner resolves the local virtualenv automatically when present and forwards normal pytest selectors such as `-k` and `-m`.
+

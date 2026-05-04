@@ -152,19 +152,11 @@
                 <div>
                   <div class="panel-kicker">Search operations</div>
                   <h2>Run &amp; Schedule</h2>
-                  <p class="panel-copy">These controls use your current search settings. Manual runs and daily schedule are part of the same search workflow, so they live together here.</p>
+                  <p class="panel-copy">These controls use your current search settings.</p>
                 </div>
               </div>
 
               <div class="search-operations-grid">
-                <section class="search-operation-card">
-                  <h3>Manual run</h3>
-                  <p>Use this when you want fresh results immediately with the current settings on this page. The search may take several minutes depending on your configuration</p>
-                  <div class="panel-actions search-operation-actions">
-                    <button class="primary" id="run_now" type="button">Run Search Now</button>
-                  </div>
-                </section>
-
                 <section class="search-operation-card">
                   <h3>Daily schedule</h3>
                   <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
@@ -391,14 +383,11 @@
               <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <details class="help-drawer" style="margin-top:8px;">
                 <summary>How "Reject jobs requiring" works</summary>
-                <p>Add skills or tools you do not have. The engine only rejects when those terms look mandatory in context.</p>
+                <p>Add skills or tools that are specific to your profile and that you do not have. The engine only rejects when those terms look mandatory in context.</p>
               </details>
 
-              <details class="help-drawer advanced-rule-drawer" id="advanced_description_blockers">
-                <summary>Advanced hard-blockers</summary>
-                <p>Use these only for exact phrases that should always reject a job when they appear anywhere in the description.</p>
-
-                <label for="reject_description_phrase_rules_add">Blocked description phrases</label>
+              <div style="margin-top: 14px;">
+                <label for="reject_description_phrase_rules_add">Description exclusions</label>
                 <div class="badge-editor" data-chip-editor="reject_description_phrase_rules">
                   <div id="reject_description_phrase_rules_chips" class="badge-editor-list" aria-live="polite"></div>
                   <div class="badge-editor-form">
@@ -407,8 +396,8 @@
                   </div>
                 </div>
                 <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-                <div class="field-help">Use this only for blunt any-mention blocks that should always reject a job.</div>
-              </details>
+                <div class="field-help">Use only for exact description phrases that should always reject a job.</div>
+              </div>
             </section>
           </div>
         </section>
