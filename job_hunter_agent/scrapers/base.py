@@ -4,7 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Any, Optional, Set
-
+from job_type_mapping import JOB_TYPE_MAPPING
 
 def keywords_to_search_string(keywords: str) -> str:
     """Convert comma-separated keywords stored in profile to a boolean OR search string.
@@ -126,7 +126,10 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
         work_mode = "N/A"
 
     # Work type
-    work_type = _map_job_type(_safe_str(_get("job_type"), ""))
+    work_type = _map_job_type(
+        _safe_str(_get("job_type"), ""),
+        JOB_TYPE_MAPPING,
+    )
 
     # Description
     description = _safe_str(_get("description"), "")
@@ -134,7 +137,7 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
     # Stable job key (namespaced)
     raw_id = _safe_str(_get("id"), "")
     job_key = make_namespaced_key("linkedin", raw_id) if raw_id and raw_id != "N/A" else None
-
+#HARCODED linkedin
     return {
         "run_started_at": run_iso,
         "search_location": search_location,
@@ -167,7 +170,7 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
         "competitive_signals": [],
     }
 
-
+#HARCODED
 def _build_salary_string(
     min_amt: Optional[float],
     max_amt: Optional[float],
@@ -207,18 +210,32 @@ def _build_salary_string(
         return "N/A"
 
 
-def _map_job_type(raw: str) -> str:
-    mapping = {
-        "fulltime": "Full time",
-        "full-time": "Full time",
-        "full_time": "Full time",
-        "parttime": "Part time",
-        "part-time": "Part time",
-        "part_time": "Part time",
-        "contract": "Contract",
-        "contractor": "Contract",
-        "temporary": "Temporary",
-        "internship": "Internship",
-        "casual": "Casual",
-    }
-    return mapping.get(raw.lower().replace(" ", ""), "N/A") if raw else "N/A"
+
+"""
+Normalize a raw job type label from a job source into a standard internal value.
+
+`raw`:
+    The original job type string as provided by the external job source
+    (e.g. "Full Time", "FULL-TIME", "Contractor", "Permanent", etc.).
+    This value is untrusted, inconsistent, and outside our control.
+
+`mapping`:
+    A dictionary owned by this project that maps normalized raw values
+    (e.g. "fulltime", "part_time", "contract") to approved, human-readable
+    job type labels used internally (e.g. "Full time", "Part time", "Contract").
+
+Behavior:
+    - If `raw` is empty or missing, return "N/A"
+    - The raw value is normalized (lowercased, spaces removed)
+    - The normalized value is looked up in the provided mapping
+    - If no mapping exists, return "N/A"
+
+This function deliberately contains no hard-coded knowledge.
+All job type knowledge lives in the supplied `mapping`, not in this function.
+"""
+def _map_job_type(raw: str, mapping: dict) -> str:
+    if not raw:
+        return "N/A"
+
+    key = raw.lower().replace(" ", "")
+    return mapping.get(key, "N/A")

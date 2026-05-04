@@ -1,19 +1,40 @@
 import re
 from typing import Iterable, List, Optional
 
+# Business rule: how similar job titles must be to be considered the same
 
+#HARCODED Seek job ads are preferred to linkedin once if both are the same
 _SOURCE_PRIORITY = {
     "seek": 0,
     "linkedin": 1,
-}
+} 
 
+# the percentage of similarity when comparing job ads, word by word should be > 80%
+TITLE_SIMILARITY_THRESHOLD = 0.8
+
+#HARDCODED
+# Domain data: common company suffixes to ignore when matching
+COMPANY_SUFFIXES = [
+    "pty",
+    "ltd",
+    "inc",
+    "corp",
+    "corporation",
+    "limited",
+    "llc",
+    "holdings",
+    "group",
+    "australia",
+]
+
+_COMPANY_SUFFIX_PATTERN = rf"\b({'|'.join(COMPANY_SUFFIXES)})\b"
 
 def _normalize_identity_text(text: str) -> str:
     # Remove punctuation and common company suffixes to improve matching across sources
     t = str(text or "").lower()
     t = re.sub(r"[^\w\s]", "", t)
     # Strip common corporate legal entities and region suffixes
-    t = re.sub(r"\b(pty|ltd|inc|corp|corporation|limited|llc|holdings|group|australia)\b", "", t)
+    t = re.sub(_COMPANY_SUFFIX_PATTERN, "", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
@@ -40,7 +61,8 @@ def are_jobs_semantically_similar(a: dict, b: dict) -> bool:
 
     overlap = words_a & words_b
     combined = words_a | words_b
-    return (len(overlap) / len(combined)) >= 0.8
+    return (len(overlap) / len(combined)) >= TITLE_SIMILARITY_THRESHOLD  
+
 
 
 def find_similar_job(record: dict, pool: Iterable[dict]) -> Optional[dict]:

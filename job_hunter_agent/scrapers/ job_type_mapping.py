@@ -1,0 +1,17 @@
+"""
+
+Main goals: 
+"""
+JOB_TYPE_MAPPING = {
+    "fulltime": "Full time",
+    "full-time": "Full time",
+    "full_time": "Full time",
+    "parttime": "Part time",
+    "part-time": "Part time",
+    "part_time": "Part time",
+    "contract": "Contract",
+    "contractor": "Contract",
+    "temporary": "Temporary",
+    "internship": "Internship",
+    "casual": "Casual",
+} 

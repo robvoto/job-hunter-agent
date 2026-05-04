@@ -3,7 +3,7 @@
 import smtplib
 from email.message import EmailMessage
 
-
+//HARCODED
 def send_email_notification(subject: str, body_text: str, body_html: str, settings: dict) -> dict:
     smtp_host = str(settings.get("smtp_host") or "").strip()
     from_address = str(settings.get("from_address") or "").strip()
