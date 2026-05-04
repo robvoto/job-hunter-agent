@@ -3,8 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
-from typing import Any, Optional, Set
-from job_type_mapping import JOB_TYPE_MAPPING
+from typing import Any, Optional, Set   
 
 def keywords_to_search_string(keywords: str) -> str:
     """Convert comma-separated keywords stored in profile to a boolean OR search string.
@@ -57,7 +56,15 @@ def make_namespaced_key(source: str, raw_id: str) -> str:
     return f"{source}:{raw_id}"
 
 
-def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str, run_iso: str) -> dict:
+def normalize_jobspy_record(
+    row: Any,
+    source: str,
+    search_keywords: str,
+    search_location: str,
+    run_iso: str,
+    salary_rules: dict,
+    job_type_rules: dict,
+) -> dict:
     """Map a python-jobspy DataFrame row to the project's normalized record shape."""
     try:
         import pandas as pd  # noqa: F401 - only used for pd.isna
@@ -116,8 +123,13 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
     max_amt = _safe_float(_get("max_amount"))
     interval_raw = _safe_str(_get("interval"), "")
     currency_raw = _safe_str(_get("currency"), "AUD")
-    salary_str = _build_salary_string(min_amt, max_amt, interval_raw, currency_raw)
-
+    salary_str = _build_salary_string(min_amt,
+        max_amt,
+        interval_raw,
+        currency_raw,
+        salary_rules,
+    )
+    #hardcode
     # Work mode
     is_remote = _get("is_remote")
     if is_remote is True or (isinstance(is_remote, str) and is_remote.lower() == "true"):
@@ -125,26 +137,25 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
     else:
         work_mode = "N/A"
 
-    # Work type
+    # Work type 
     work_type = _map_job_type(
         _safe_str(_get("job_type"), ""),
-        JOB_TYPE_MAPPING,
+        job_type_rules,
     )
 
     # Description
     description = _safe_str(_get("description"), "")
-
+    #hardcode (all keys)
     # Stable job key (namespaced)
-    raw_id = _safe_str(_get("id"), "")
-    job_key = make_namespaced_key("linkedin", raw_id) if raw_id and raw_id != "N/A" else None
-#HARCODED linkedin
+    raw_id = _safe_str(_get("id"), "") 
+    job_key = make_namespaced_key(source, raw_id) if raw_id and raw_id != "N/A" else None 
     return {
         "run_started_at": run_iso,
         "search_location": search_location,
         "search_keywords": search_keywords,
         "search_classifications": "",
         "page": 1,
-        "source": "linkedin",
+        "source": source,
         "job_key": job_key,
         "title": _safe_str(_get("title")),
         "company": _safe_str(_get("company")),
@@ -170,70 +181,82 @@ def normalize_jobspy_record(row: Any, search_keywords: str, search_location: str
         "competitive_signals": [],
     }
 
-#HARCODED
+
 def _build_salary_string(
     min_amt: Optional[float],
     max_amt: Optional[float],
     interval: str,
     currency: str,
+    rules: dict,
 ) -> str:
+    """
+    Format salary information using externally supplied salary rules.
+
+    This function contains no hard-coded salary knowledge.
+    All formatting behaviour is driven by the provided rules dictionary.
+    """
+
     if min_amt is None and max_amt is None:
         return "N/A"
-    prefix = "$" if currency in ("AUD", "USD", "N/A", "") else f"{currency} "
+
+    interval_suffix = rules.get("interval_suffix", {})
+    interval_divisor = rules.get("interval_divisor", {})
+    currencies_with_dollar = set(rules.get("currencies_with_dollar", []))
+
+    prefix = "$" if currency in currencies_with_dollar else f"{currency} "
     normalized_interval = interval.lower()
-    interval_map = {
-        "yearly": "p.a.",
-        "annual": "p.a.",
-        "monthly": "/mo",
-        "hourly": "/hr",
-        "daily": "/day",
-    }
-    divisor = 1000 if normalized_interval in {"yearly", "annual"} else 1
-    suffix = interval_map.get(normalized_interval, "")
+
+    divisor = interval_divisor.get(normalized_interval, 1)
+    suffix = interval_suffix.get(normalized_interval, "")
+
     try:
         if min_amt is not None and max_amt is not None:
             result = (
-                f"{prefix}{int(min_amt / divisor)}k\u2013{int(max_amt / divisor)}k"
+                f"{prefix}{int(min_amt / divisor)}k–{int(max_amt / divisor)}k"
                 if divisor == 1000
-                else f"{prefix}{int(min_amt)}\u2013{int(max_amt)}"
+                else f"{prefix}{int(min_amt)}–{int(max_amt)}"
             )
         elif min_amt is not None:
-            result = f"{prefix}{int(min_amt / divisor)}k+" if divisor == 1000 else f"{prefix}{int(min_amt)}+"
+            result = (
+                f"{prefix}{int(min_amt / divisor)}k+"
+                if divisor == 1000
+                else f"{prefix}{int(min_amt)}+"
+            )
         else:
             result = (
                 f"{prefix}{int(max_amt / divisor)}k"
                 if divisor == 1000
                 else f"{prefix}{int(max_amt)}"
-            )  # type: ignore[arg-type]
+            )
+
         return f"{result} {suffix}".strip() if suffix else result
+
     except Exception:
         return "N/A"
 
-
-
-"""
-Normalize a raw job type label from a job source into a standard internal value.
-
-`raw`:
-    The original job type string as provided by the external job source
-    (e.g. "Full Time", "FULL-TIME", "Contractor", "Permanent", etc.).
-    This value is untrusted, inconsistent, and outside our control.
-
-`mapping`:
-    A dictionary owned by this project that maps normalized raw values
-    (e.g. "fulltime", "part_time", "contract") to approved, human-readable
-    job type labels used internally (e.g. "Full time", "Part time", "Contract").
-
-Behavior:
-    - If `raw` is empty or missing, return "N/A"
-    - The raw value is normalized (lowercased, spaces removed)
-    - The normalized value is looked up in the provided mapping
-    - If no mapping exists, return "N/A"
-
-This function deliberately contains no hard-coded knowledge.
-All job type knowledge lives in the supplied `mapping`, not in this function.
-"""
 def _map_job_type(raw: str, mapping: dict) -> str:
+    """
+    Normalize a raw job type label from a job source into a standard internal value.
+
+    `raw`:
+        The original job type string as provided by the external job source
+        (e.g. "Full Time", "FULL-TIME", "Contractor", "Permanent", etc.).
+        This value is untrusted, inconsistent, and outside our control.
+
+    `mapping`:
+        A dictionary owned by this project that maps normalized raw values
+        (e.g. "fulltime", "part_time", "contract") to approved, human-readable
+        job type labels used internally (e.g. "Full time", "Part time", "Contract").
+
+    Behavior:
+        - If `raw` is empty or missing, return "N/A"
+        - The raw value is normalized (lowercased, spaces removed)
+        - The normalized value is looked up in the provided mapping
+        - If no mapping exists, return "N/A"
+
+    This function deliberately contains no hard-coded knowledge.
+    All job type knowledge lives in the supplied `mapping`, not in this function.
+    """
     if not raw:
         return "N/A"
 

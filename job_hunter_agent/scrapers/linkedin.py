@@ -14,7 +14,15 @@ from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_s
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
 from job_hunter_agent.utils import extract_salary, extract_work_mode
+from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.scrapers.location_adapters import to_jobspy
 
+from job_hunter_agent.salary import load_salary
+from job_hunter_agent.job_type import load_job_type
+
+#Load once
+salary_rules = load_salary()
+job_type_rules = load_job_type()
 
 class LinkedInScraper(BaseJobScraper):
     """Scrape LinkedIn job listings using python-jobspy."""
@@ -83,9 +91,12 @@ class LinkedInScraper(BaseJobScraper):
             for _, row in rows.iterrows():
                 record = normalize_jobspy_record(
                     row,
+                    source=self.source_name,
                     search_keywords=target["search_term"],
                     search_location=target["location"],
                     run_iso=self.run_iso,
+                    salary_rules=salary_rules,
+                    job_type_rules=job_type_rules,
                 )
 
                 title = record.get("title", "")
@@ -323,7 +334,9 @@ class LinkedInScraper(BaseJobScraper):
 
         targets = []
         for raw_loc in locations:
-            jobspy_location = _normalize_location_for_jobspy(raw_loc)
+            location = resolve_location(raw_loc)
+            jobspy_location = to_jobspy(location)
+
             targets.append({
                 "search_term": keywords,
                 "location": jobspy_location,
@@ -351,44 +364,3 @@ class LinkedInScraper(BaseJobScraper):
             kwargs["easy_apply"] = target["easy_apply"]
         return scrape_jobs(**kwargs)
 
-
-_LOCATION_NORMALIZATION_MAP = {
-    "nsw": "New South Wales, Australia",
-    "new south wales": "New South Wales, Australia",
-    "vic": "Victoria, Australia",
-    "victoria": "Victoria, Australia",
-    "qld": "Queensland, Australia",
-    "queensland": "Queensland, Australia",
-    "wa": "Western Australia, Australia",
-    "western australia": "Western Australia, Australia",
-    "sa": "South Australia, Australia",
-    "south australia": "South Australia, Australia",
-    "tas": "Tasmania, Australia",
-    "tasmania": "Tasmania, Australia",
-    "act": "Australian Capital Territory, Australia",
-    "australian capital territory": "Australian Capital Territory, Australia",
-    "nt": "Northern Territory, Australia",
-    "northern territory": "Northern Territory, Australia",
-    "sydney nsw": "Sydney, Australia",
-    "melbourne vic": "Melbourne, Australia",
-    "brisbane qld": "Brisbane, Australia",
-    "perth wa": "Perth, Australia",
-    "adelaide sa": "Adelaide, Australia",
-    "hobart tas": "Hobart, Australia",
-    "darwin nt": "Darwin, Australia",
-    "canberra act": "Canberra, Australia",
-}
-
-
-def _normalize_location_for_jobspy(seek_location: str) -> str:
-    """Convert source-style location strings to jobspy-friendly city strings."""
-    text = re.sub(r"^all\s+", "", seek_location.strip(), flags=re.IGNORECASE)
-    normalized_key = re.sub(r"\s+", " ", text.lower()).strip()
-    if normalized_key in _LOCATION_NORMALIZATION_MAP:
-        return _LOCATION_NORMALIZATION_MAP[normalized_key]
-    # Strip a trailing region abbreviation when present.
-    text = re.sub(r"\s+[A-Z]{2,3}$", "", text.strip())
-    text = text.strip()
-    if text and not text.lower().endswith("australia"):
-        text = f"{text}, Australia"
-    return text or seek_location

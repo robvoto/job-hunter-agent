@@ -172,7 +172,7 @@ All core code lives in `job_hunter_agent/`.
 | `data/hard_blocker_rules.json` | Managed hard blocker rules |
 | `data/role_title_knowledge.json` | Managed role title patterns |
 | `data/signal_registry.json` | Signal inbox awaiting user review |
-| `data/ignored_signal_archive.json` | Archived/dismissed signals |
+| `data/ignored_signal.json` | Archived/dismissed signals |
 | `data/match_level_defaults.json` | Configurable match score band thresholds |
 | `data/rejection_rule_categories.json` | Rejection rule category definitions |
 | `data/government_context_rules.json` | Government context detection rules |
@@ -377,7 +377,7 @@ Keep personal and local-only:
 - `data/hard_blocker_rules.json`
 - `data/role_title_knowledge.json`
 - `data/signal_registry.json`
-- `data/ignored_signal_archive.json`
+- `data/ignored_signal.json`
 - `TODO.txt`
 - `.venv/`
 
