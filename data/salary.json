@@ -1,0 +1,14 @@
+{
+  "interval_suffix": {
+    "yearly": "p.a.",
+    "annual": "p.a.",
+    "monthly": "/mo",
+    "hourly": "/hr",
+    "daily": "/day"
+  },
+  "interval_divisor": {
+    "yearly": 1000,
+    "annual": 1000
+  },
+  "currencies_with_dollar": ["AUD", "USD", "N/A", ""]
+}

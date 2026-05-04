@@ -1,0 +1,91 @@
+{
+  "NSW": {
+    "code": "NSW",
+    "name": "New South Wales",
+    "country": "AU",
+    "kind": "state",
+    "capital": "Sydney",
+    "aliases": [
+      "nsw",
+      "new south wales"
+    ]
+  },
+  "VIC": {
+    "code": "VIC",
+    "name": "Victoria",
+    "country": "AU",
+    "kind": "state",
+    "capital": "Melbourne",
+    "aliases": [
+      "vic",
+      "victoria"
+    ]
+  },
+  "QLD": {
+    "code": "QLD",
+    "name": "Queensland",
+    "country": "AU",
+    "kind": "state",
+    "capital": "Brisbane",
+    "aliases": [
+      "qld",
+      "queensland"
+    ]
+  },
+  "SA": {
+    "code": "SA",
+    "name": "South Australia",
+    "country": "AU",
+    "kind": "state",
+    "capital": "Adelaide",
+    "aliases": [
+      "sa",
+      "south australia"
+    ]
+  },
+  "WA": {
+    "code": "WA",
+    "name": "Western Australia",
+    "country": "AU",
+    "kind": "state",
+    "capital": "Perth",
+    "aliases": [
+      "wa",
+      "western australia"
+    ]
+  },
+  "TAS": {
+    "code": "TAS",
+    "name": "Tasmania",
+    "country": "AU",
+    "kind": "state",
+    "capital": "Hobart",
+    "aliases": [
+      "tas",
+      "tasmania"
+    ]
+  },
+  "ACT": {
+    "code": "ACT",
+    "name": "Australian Capital Territory",
+    "country": "AU",
+    "kind": "territory",
+    "capital": "Canberra",
+    "aliases": [
+      "act",
+      "australian capital territory",
+      "canberra act"
+    ]
+  },
+  "NT": {
+    "code": "NT",
+    "name": "Northern Territory",
+    "country": "AU",
+    "kind": "territory",
+    "capital": "Darwin",
+    "aliases": [
+      "nt",
+      "northern territory"
+    ]
+  }
+}

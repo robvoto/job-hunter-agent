@@ -51,7 +51,7 @@ def test_approve_signal_promotes_capability_with_clean_shape(tmp_path, monkeypat
     monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", tmp_path / "hard_blocker_knowledge.json")
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal_archive.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
     monkeypatch.setattr(capability_knowledge, "CAPABILITY_KNOWLEDGE_PATH", capability_path)
 
     signal_registry.save_registry({
@@ -93,7 +93,7 @@ def test_approve_signal_promotes_hard_blocker_with_clean_shape(tmp_path, monkeyp
     monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", hard_blocker_path)
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal_archive.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
     monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", hard_blocker_path)
 
     signal_registry.save_registry({
@@ -140,7 +140,7 @@ def test_register_signals_preserves_context_and_matches_knowledge(tmp_path, monk
     monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", tmp_path / "hard_blocker_knowledge.json")
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal_archive.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
     monkeypatch.setattr(capability_knowledge, "CAPABILITY_KNOWLEDGE_PATH", capability_path)
 
     capability_knowledge.save_capability_knowledge([
@@ -178,7 +178,7 @@ def test_register_signals_preserves_suggested_category(tmp_path, monkeypatch):
     monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", tmp_path / "hard_blocker_knowledge.json")
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal_archive.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
 
     signal_registry.register_signals([
         {
@@ -209,7 +209,7 @@ def test_approve_signal_promotes_role_title_with_clean_shape(tmp_path, monkeypat
     monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", tmp_path / "hard_blocker_knowledge.json")
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal_archive.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
 
     signal_registry.save_registry({
         "analyst": {
@@ -249,7 +249,7 @@ def test_approve_signal_promotes_government_context_with_clean_shape(tmp_path, m
     monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
     monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", tmp_path / "hard_blocker_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal_archive.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
     monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "government_context", government_path)
 
     signal_registry.save_registry({
