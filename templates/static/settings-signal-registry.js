@@ -1,8 +1,14 @@
 ﻿    let _srData = null;
     let _srLoaded = false;
     let _srSearch = '';
+    let _srSearchDraft = '';
+    let _srSearchTimer = null;
     let _srSort = 'recently_updated';
+    let _srFilter = 'all';
     let _srCategories = [];
+    let _srCurrentPage = 1;
+    const _srItemsPerPage = 50;
+    const _srSearchDebounceMs = 180;
     const _srBusyKeys = new Set();
     const _srInlineStatus = {};
 
@@ -78,6 +84,16 @@
       return Number.isNaN(parsed) ? 0 : parsed;
     }
 
+    function srMatchesFilter(signal) {
+      if (_srFilter === 'needs_review') {
+        return srSignalNeedsReview(signal);
+      }
+      if (_srFilter === 'uncategorized') {
+        return !srSignalCategory(signal);
+      }
+      return true;
+    }
+
     function srMatchesSearch(signal) {
       if (!_srSearch) return true;
       const searchText = [
@@ -94,13 +110,23 @@
 
     function srFilteredSignals() {
       const all = Array.isArray(_srData?.signals) ? _srData.signals : [];
-      return all.filter(signal => srMatchesSearch(signal)).sort((left, right) => {
+      return all.filter(signal => srMatchesFilter(signal) && srMatchesSearch(signal)).sort((left, right) => {
         if (_srSort === 'name_az') {
           return String(left.signal || '').localeCompare(String(right.signal || ''));
         }
         return srTimestampValue(right) - srTimestampValue(left)
           || String(left.signal || '').localeCompare(String(right.signal || ''));
       });
+    }
+
+    function srPageCount(totalItems) {
+      return Math.max(Math.ceil(totalItems / _srItemsPerPage), 1);
+    }
+
+    function srCommitSearch(value) {
+      _srSearch = String(value || '').trim().toLowerCase();
+      _srCurrentPage = 1;
+      renderSignalRegistry();
     }
 
     function srInlineState(key) {
@@ -155,9 +181,14 @@
       _srCategories = Array.isArray(_srData.categories) ? _srData.categories : [];
       const categoryOptions = srCategoryOptions();
       const visible = srFilteredSignals();
-      const cardsHtml = visible.length === 0
+      const totalPages = srPageCount(visible.length);
+      _srCurrentPage = Math.min(Math.max(_srCurrentPage, 1), totalPages);
+      const startIndex = (_srCurrentPage - 1) * _srItemsPerPage;
+      const endIndex = _srCurrentPage * _srItemsPerPage;
+      const visibleRows = visible.slice(startIndex, endIndex);
+      const cardsHtml = visibleRows.length === 0
         ? '<p class="help signal-empty">No signals match the current view.</p>'
-        : visible.map(signal => {
+        : visibleRows.map(signal => {
             const key = srSignalKey(signal);
             const aliases = srSignalAliases(signal);
             const category = srSignalCategory(signal);
@@ -171,6 +202,7 @@
             const addedAt = history.find(entry => String(entry?.action || '').toLowerCase() === 'added') || history[0] || null;
             const timestamp = String(addedAt?.timestamp || '').trim();            
             const statusText = inlineState?.text || '';
+            const statusClass = inlineState ? ` is-status-${escapeHtml(inlineState.kind)}` : '';
             const detailLines = [];
             if (source) detailLines.push(`Source: ${source}`);
             if (knowledge) detailLines.push(`Knowledge match: ${knowledge}`);
@@ -183,66 +215,106 @@
               detailLines.push(`Evidence: ${evidence.join(' | ')}`);
             }
             return `
-<article class="signal-row" data-sr-key="${escapeHtml(key)}">
-  <div class="signal-row-top">
-    <div class="signal-row-headline">
-      <div class="signal-row-title">
-        <h3>${escapeHtml(signal.signal || 'Unnamed signal')}</h3>
-        <details class="signal-context-drawer">
-          <summary title="Signal context" aria-label="Signal context">(i)</summary>
-          <div class="signal-context-panel">
-            ${detailLines.length
-              ? detailLines.map(line => `<p>${escapeHtml(line)}</p>`).join('')
-              : '<p>No extra context recorded yet.</p>'}
-          </div>
-        </details>
+<article class="signal-row${statusClass}" data-sr-key="${escapeHtml(key)}">
+  <div class="signal-row-title">
+    <h3>${escapeHtml(signal.signal || 'Unnamed signal')}</h3>
+    ${statusText ? `<span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(statusText)}</span>` : ''}
+    <details class="signal-context-drawer">
+      <summary title="Signal context" aria-label="Signal context">(i)</summary>
+      <div class="signal-context-panel">
+        ${detailLines.length
+          ? detailLines.map(line => `<p>${escapeHtml(line)}</p>`).join('')
+          : '<p>No extra context recorded yet.</p>'}
       </div>
-      ${aliases.length ? `<p class="signal-row-meta">Seen as: ${escapeHtml(aliases.join(', '))}</p>` : ''}
-    </div>
-    <div class="signal-row-actions">
-      <select class="signal-category-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
-        <option value="">Choose category</option>
-        ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-      </select>
-      <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${isBusy || !category ? ' disabled' : ''} title="Approve" aria-label="Approve">âœ“</button>
-      <button class="signal-action-btn signal-remove" type="button" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''} title="Remove" aria-label="Remove">Ã—</button>
-    </div>
+    </details>
   </div>
-  <div class="signal-row-footer">
-    <span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(statusText)}</span>
+  ${aliases.length ? `<div class="signal-row-meta">Seen as: ${escapeHtml(aliases.join(', '))}</div>` : '<div class="signal-row-meta signal-row-meta-empty"></div>'}
+  <select class="signal-category-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
+    <option value="">Choose category</option>
+    ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+  </select>
+  <div class="signal-row-actions">
+    <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${isBusy || !category ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
+    <button class="signal-action-btn signal-remove" type="button" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''} title="Remove" aria-label="Remove">&#215;</button>
   </div>
 </article>`;
           }).join('');
+      const pagerHtml = visible.length > _srItemsPerPage
+        ? `
+<div class="sr-pagination">
+  <button class="sr-page-button" type="button" data-sr-page-direction="prev"${_srCurrentPage <= 1 ? ' disabled' : ''}>Previous</button>
+  <div class="sr-page-number-group">
+    ${Array.from({ length: totalPages }, (_, index) => {
+      const page = index + 1;
+      return `<button class="sr-page-button sr-page-number${page === _srCurrentPage ? ' is-active' : ''}" type="button" data-sr-page="${page}"${page === _srCurrentPage ? ' aria-current="page"' : ''}>${page}</button>`;
+    }).join('')}
+  </div>
+  <button class="sr-page-button" type="button" data-sr-page-direction="next"${_srCurrentPage >= totalPages ? ' disabled' : ''}>Next</button>
+</div>`
+        : '';
 
       panel.innerHTML = `
 <div class="sr-hero">
   <p class="sr-hero-copy">Review extracted signals, then approve or remove each item.</p>
 </div>
 <div class="sr-toolbar">
-  <input id="sr_search" class="sr-search" type="search" value="${escapeHtml(_srSearch)}" placeholder="Search signals">
+  <input id="sr_search" class="sr-search" type="search" value="${escapeHtml(_srSearchDraft || _srSearch)}" placeholder="Search signals">
   <select id="sr_sort" class="sr-select">
     <option value="recently_updated"${_srSort === 'recently_updated' ? ' selected' : ''}>Recently updated</option>
     <option value="name_az"${_srSort === 'name_az' ? ' selected' : ''}>A-Z</option>
   </select>
+  <select id="sr_filter" class="sr-select" aria-label="Filter signals">
+    <option value="all"${_srFilter === 'all' ? ' selected' : ''}>All Signals</option>
+    <option value="needs_review"${_srFilter === 'needs_review' ? ' selected' : ''}>Needs Review Only</option>
+    <option value="uncategorized"${_srFilter === 'uncategorized' ? ' selected' : ''}>Uncategorized Only</option>
+  </select>
 </div>
-<div class="sr-list">${cardsHtml}</div>`;
+<div class="sr-list">${cardsHtml}${pagerHtml}</div>`;
 
       panel.querySelector('#sr_search')?.addEventListener('input', event => {
         const cursor = typeof event.target.selectionStart === 'number'
           ? event.target.selectionStart
           : String(event.target.value || '').length;
-        _srSearch = String(event.target.value || '').trim().toLowerCase();
-        renderSignalRegistry();
-        const nextInput = panel.querySelector('#sr_search');
-        if (nextInput) {
-          nextInput.focus();
-          nextInput.setSelectionRange(cursor, cursor);
+        _srSearchDraft = String(event.target.value || '');
+        if (_srSearchTimer) {
+          window.clearTimeout(_srSearchTimer);
         }
+        _srSearchTimer = window.setTimeout(() => {
+          _srSearchTimer = null;
+          srCommitSearch(_srSearchDraft);
+        }, _srSearchDebounceMs);
+        window.requestAnimationFrame(() => {
+          const nextInput = panel.querySelector('#sr_search');
+          if (nextInput) {
+            nextInput.focus();
+            nextInput.setSelectionRange(cursor, cursor);
+          }
+        });
       });
 
       panel.querySelector('#sr_sort')?.addEventListener('change', event => {
         _srSort = String(event.target.value || 'recently_updated');
+        _srCurrentPage = 1;
         renderSignalRegistry();
+      });
+
+      panel.querySelector('#sr_filter')?.addEventListener('change', event => {
+        _srFilter = String(event.target.value || 'all');
+        _srCurrentPage = 1;
+        renderSignalRegistry();
+      });
+
+      panel.querySelectorAll('[data-sr-page], [data-sr-page-direction]').forEach(button => {
+        button.addEventListener('click', () => {
+          if (button.dataset.srPage) {
+            _srCurrentPage = Number(button.dataset.srPage || 1);
+          } else if (button.dataset.srPageDirection === 'prev') {
+            _srCurrentPage -= 1;
+          } else if (button.dataset.srPageDirection === 'next') {
+            _srCurrentPage += 1;
+          }
+          renderSignalRegistry();
+        });
       });
 
       panel.querySelectorAll('.signal-category-select').forEach(select => {
@@ -278,6 +350,7 @@
         const resp = await fetch('/api/signal-registry');
         if (!resp.ok) throw new Error('Could not load signal registry');
         _srData = await resp.json();
+        _srSearchDraft = _srSearch;
         renderSignalRegistry();
       } catch (err) {
         _srLoaded = false;

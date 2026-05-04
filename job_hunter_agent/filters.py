@@ -5,7 +5,7 @@ import re
 from typing import Any, Tuple
 
 from job_hunter_agent.capability_matrix import canonical_capability_term
-from job_hunter_agent.hard_blocker_knowledge import find_hard_block_matches
+from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
@@ -123,19 +123,19 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
         result["reason"] = "TITLE_NOT_TARGET"
         return result
 
-    if is_direct_match:
-        if _has_numeric_title_level(normalized_title):
-            result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "primary"})
-            return result
-        result.update({"ok": True, "reason": "OK", "match_family": "primary"})
-        return result
-
     for rule in profile.get("reject_title_rules", []):
         pattern = rule.get("pattern", "")
         reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
         if pattern and re.search(pattern, normalized_title):
             result["reason"] = reason
             return result
+
+    if is_direct_match:
+        if _has_numeric_title_level(normalized_title):
+            result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "primary"})
+            return result
+        result.update({"ok": True, "reason": "OK", "match_family": "primary"})
+        return result
 
     result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "secondary"})
     return result
@@ -484,11 +484,11 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
         if phrase and phrase in description_lower:
             return False, reason
 
-    for match in find_hard_block_matches(details_text):
-        if matches_mandatory_requirement(details_text, match.get("matched_term") or ""):
-            token = _normalize_reason_token(match.get("value") or match.get("matched_term") or "")
-            if token:
-                return False, f"DESC_HARD_BLOCK_KNOWLEDGE:{token}"
+    hard_block_matches = find_hard_block_matches(details_text, profile.get("must_not_require_skills", []))
+    for match in hard_block_matches:
+        token = _normalize_reason_token(match.get("matched_term") or "")
+        if token:
+            return False, f"DESC_HARD_BLOCK_RULE:{token}"
 
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
     if not ok_capability:
@@ -498,12 +498,8 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
     if not ok_confidence:
         return False, confidence_reason
 
-    for skill in profile.get("must_not_require_skills", []):
-        skill_lower = (skill or "").strip().lower()
-        if not skill_lower:
-            continue
-        if matches_missing_requirement(description_lower, skill_lower):
-            return False, f"DESC_MANDATORY_SKILL:{_normalize_reason_token(skill_lower)}"
+    if hard_block_matches:
+        return False, f"DESC_HARD_BLOCK_RULE:{_normalize_reason_token(hard_block_matches[0].get('matched_term') or '')}"
 
     if capability_reason != "OK":
         return True, capability_reason

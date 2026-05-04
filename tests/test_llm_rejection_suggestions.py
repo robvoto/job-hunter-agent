@@ -39,20 +39,20 @@ def test_normalize_rejection_blocker_suggestions_rejects_soft_skill_kind():
     suggestions = llm_gate.normalize_rejection_blocker_suggestions(
         '{"blockers":['
         '{"term":"strong analytical and problem-solving skills","kind":"soft_skill"},'
-        '{"term":"regulated sector experience","kind":"industry"}'
+        '{"term":"regulated sector experience","kind":"industry_platform"}'
         ']}'
     )
 
     assert suggestions == ["regulated sector experience"]
 
 
-def test_hard_blocker_rules_knowledge_file_contains_enabled_entries():
-    payload = json.loads(llm_gate._HARD_BLOCKER_RULES_PATH.read_text(encoding="utf-8"))
+def test_rejection_rule_categories_file_contains_enabled_entries():
+    payload = json.loads(llm_gate._REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
 
     assert payload["kind"] == "managed_knowledge"
     assert any(entry.get("enabled") for entry in payload["entries"])
     assert "platform" in llm_gate._hard_blocker_rules()
-    assert "industry" in llm_gate._hard_blocker_rules()
+    assert "industry_platform" in llm_gate._hard_blocker_rules()
 
 
 def test_managed_llm_prompt_knowledge_files_contain_lines():

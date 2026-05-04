@@ -1,9 +1,13 @@
 # SOUL.md - Job Hunter Agent
 
-> This file is the project source of truth for AI assistants working in this repo.
-> Keep it updated as the project evolves. Last updated: May 2026.
-> Repo target name: `job-hunter-agent`
-> Repo URL: https://github.com/robvoto/job-hunter-agent
+> **ARCHIVED — May 2026.**
+> Content has been split into:
+> - `AGENTS.md` — AI code map, run commands, guardrails (primary AI context, all tools)
+> - `docs/ARCHITECTURE.md` — full architecture, design decisions, scoring model, roadmap
+>
+> This file is kept for reference only. Do not update it. Edit `AGENTS.md` or `docs/ARCHITECTURE.md` instead.
+
+---
 
 ---
 
@@ -75,7 +79,7 @@ This project has now settled into a clearer shape:
 - source documents are the human truth
 - `data/profile.json` is the runtime machine truth
 - settings is the editor and maintenance surface for that runtime truth
-- knowledge JSON files (`capability_knowledge.json`, `hard_blocker_knowledge.json`, `role_title_knowledge.json`) are the managed rule layer
+- knowledge JSON files (`capability_knowledge.json`, `hard_blocker_rules.json`, `role_title_knowledge.json`) are the managed rule layer
 - generated application outputs should be derived from source documents and profile data, not treated as primary sources
 
 For a real user, the intended flow is:
@@ -118,7 +122,7 @@ Do not move the project back to pane-based scraping unless there is a very stron
 Business rules are being systematically migrated from sealed Python constants into JSON-backed knowledge modules. The three main knowledge modules are:
 
 - `capability_knowledge.py` / `capability_knowledge.json` — capability entries with aliases and fit levels
-- `hard_blocker_knowledge.py` / `hard_blocker_knowledge.json` — hard reject rules
+- `hard_blocker_rules.py` / `hard_blocker_rules.json` — approved reusable hard-blocker patterns
 - `role_title_knowledge.py` / `role_title_knowledge.json` — role title token patterns
 
 The signal registry (`signal_registry.py` / `signal_registry.json`) manages an approval inbox for patterns surfaced during scraping that the user can promote into knowledge.
@@ -158,14 +162,14 @@ All core code lives in `job_hunter_agent/`.
 | `job_identity.py` | Cross-source job deduplication and similarity detection |
 | `match_labels.py` | Loads match score bands from `match_level_defaults.json` |
 | `capability_knowledge.py` | Managed JSON-backed capability knowledge module |
-| `hard_blocker_knowledge.py` | Managed JSON-backed hard blocker rules |
+| `hard_blocker_rules.py` | Managed JSON-backed hard blocker rules |
 | `role_title_knowledge.py` | Managed JSON-backed role title patterns |
 | `signal_registry.py` | Signal inbox system with category-based knowledge management |
 | `title_normalization_rules.py` | Title normalization rules module |
 | `capability_matrix.py` | Capability matrix building and scoring |
 | `data/profile.json` | Runtime source of truth for the candidate profile |
 | `data/capability_knowledge.json` | Managed capability entries and aliases |
-| `data/hard_blocker_knowledge.json` | Managed hard blocker rules |
+| `data/hard_blocker_rules.json` | Managed hard blocker rules |
 | `data/role_title_knowledge.json` | Managed role title patterns |
 | `data/signal_registry.json` | Signal inbox awaiting user review |
 | `data/ignored_signal_archive.json` | Archived/dismissed signals |
@@ -218,7 +222,7 @@ All core code lives in `job_hunter_agent/`.
 The exact live fit model is driven by:
 - `data/profile.json`
 - the capability knowledge rules (`capability_knowledge.json`)
-- hard blocker rules (`hard_blocker_knowledge.json`)
+- hard blocker rules (`hard_blocker_rules.json`)
 - role title patterns (`role_title_knowledge.json`)
 - admin-reviewed signals from the signal registry
 
@@ -370,7 +374,7 @@ Keep personal and local-only:
 - `data/llm_cache.json`
 - `data/llm_costs.jsonl`
 - `data/capability_knowledge.json`
-- `data/hard_blocker_knowledge.json`
+- `data/hard_blocker_rules.json`
 - `data/role_title_knowledge.json`
 - `data/signal_registry.json`
 - `data/ignored_signal_archive.json`

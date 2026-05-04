@@ -96,3 +96,37 @@ def test_passes_title_filters_matches_base_role_family(tmp_path, monkeypatch):
 
     assert (ok_primary, reason_primary) == (True, "OK")
     assert (ok_secondary, reason_secondary) == (True, "TITLE_POTENTIAL_MATCH")
+
+
+def test_analyze_title_filters_applies_reject_rules_to_primary_matches(monkeypatch):
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "primary_job_title_pattern": ["business analyst"],
+            "secondary_title_patterns": [],
+            "reject_title_rules": [{"pattern": r"\btechnical\b", "reason": "TITLE_BAD_KEYWORD:technical"}],
+        },
+    )
+
+    result = filters.analyze_title_filters("Technical Business Analyst")
+
+    assert result["ok"] is False
+    assert result["reason"] == "TITLE_BAD_KEYWORD:technical"
+
+
+def test_analyze_title_filters_applies_reject_rules_to_secondary_matches(monkeypatch):
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "primary_job_title_pattern": ["business analyst"],
+            "secondary_title_patterns": ["project coordinator"],
+            "reject_title_rules": [{"pattern": r"\btechnical\b", "reason": "TITLE_BAD_KEYWORD:technical"}],
+        },
+    )
+
+    result = filters.analyze_title_filters("Technical Project Coordinator")
+
+    assert result["ok"] is False
+    assert result["reason"] == "TITLE_BAD_KEYWORD:technical"

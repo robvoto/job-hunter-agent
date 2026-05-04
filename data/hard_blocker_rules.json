@@ -2,68 +2,23 @@
   "kind": "managed_knowledge",
   "name": "hard_blocker_rules",
   "version": 1,
-  "updated_at": "2026-04-29",
-  "description": "Managed blocker kinds the LLM may use when suggesting hard requirement blockers for explicit user approval.",
+  "description": "Approved reusable patterns that detect when a candidate-specific rejected term is a non-negotiable job requirement.",
   "entries": [
     {
-      "value": "credential",
-      "enabled": true      
+      "value": "must have {term}",
+      "aliases": []
     },
     {
-      "value": "clearance",
-      "enabled": true
+      "value": "{term} experience required",
+      "aliases": []
     },
     {
-      "value": "license",
-      "enabled": true
+      "value": "{term} is mandatory",
+      "aliases": []
     },
     {
-      "value": "work_authorization",
-      "enabled": true
-    },
-    {
-      "value": "language",
-      "enabled": true
-    },
-    {
-      "value": "location",
-      "enabled": true
-    },
-    {
-      "value": "domain",
-      "enabled": true
-    },
-    {
-      "value": "industry",
-      "enabled": true
-    },
-    {
-      "value": "regulatory",
-      "enabled": true
-    },
-    {
-      "value": "platform",
-      "enabled": true
-    },
-    {
-      "value": "tool",
-      "enabled": true
-    },
-    {
-      "value": "product",
-      "enabled": true
-    },
-    {
-      "value": "security",
-      "enabled": true
-    },
-    {
-      "value": "specialist_experience",
-      "enabled": true
-    },
-    {
-      "value": "other_hard_requirement",
-      "enabled": true
+      "value": "{term} is essential",
+      "aliases": []
     }
   ]
 }

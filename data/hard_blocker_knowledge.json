@@ -1,8 +1,0 @@
-{
-  "kind": "managed_knowledge",
-  "name": "hard_blocker_knowledge",
-  "version": 1,
-  "updated_at": "2026-05-03",
-  "description": "Approved hard blocker concepts captured from reviewed signals.",
-  "entries": []
-}

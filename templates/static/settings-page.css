@@ -1052,7 +1052,7 @@
     }
     .sr-toolbar {
       display: grid;
-      grid-template-columns: minmax(0, 1.8fr) minmax(220px, 1fr) minmax(220px, 1fr);
+      grid-template-columns: minmax(0, 1.8fr) minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr);
       gap: 14px;
       margin-bottom: 24px;
     }
@@ -1089,34 +1089,98 @@
       flex-direction: column;
       gap: 10px;
     }
+    .sr-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+      padding-top: 8px;
+    }
+    .sr-page-number-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+    }
+    .sr-page-button {
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      font: inherit;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, color 120ms ease, background 120ms ease;
+    }
+    .sr-page-button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+    .sr-page-button.is-active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg-surface);
+      cursor: default;
+    }
+    .sr-page-button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
     .signal-empty {
       padding: 20px 0;
     }
     .signal-row {
-      padding: 14px 16px 12px;
+      display: grid;
+      grid-template-columns: minmax(260px, 1.6fr) minmax(180px, 1fr) minmax(220px, 0.9fr) auto;
+      align-items: center;
+      gap: 12px 16px;
+      padding: 10px 14px;
       border: 1px solid var(--border-subtle);
       border-radius: 16px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 96%, var(--accent-soft) 4%), var(--bg-surface));
       box-shadow: var(--shadow-soft);
     }
-    .signal-row-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
+    .signal-row.is-status-ok {
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--state-success-border) 55%, transparent), 0 0 0 4px color-mix(in srgb, var(--state-success-text) 10%, transparent), var(--shadow-soft);
     }
-    .signal-row-headline h3 {
-      margin: 0;
-      color: var(--text-primary);
-      font-size: 1.08rem;
-      line-height: 1.2;
-      overflow-wrap: anywhere;
+    .signal-row.is-status-error {
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--state-error-border) 55%, transparent), 0 0 0 4px color-mix(in srgb, var(--state-error-text) 10%, transparent), var(--shadow-soft);
+    }
+    .signal-row.is-status-info {
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-soft) 65%, transparent), 0 0 0 4px color-mix(in srgb, var(--accent-soft) 18%, transparent), var(--shadow-soft);
     }
     .signal-row-title {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .signal-row-title h3 {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 0.96rem;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .signal-inline-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 0.72rem;
+      font-weight: 700;
+      white-space: nowrap;
     }
     .signal-context-drawer {
       position: relative;
@@ -1169,25 +1233,31 @@
       margin-bottom: 0;
     }
     .signal-row-meta {
-      margin: 4px 0 0;
+      margin: 0;
       color: var(--text-secondary);
-      font-size: 0.84rem;
-      overflow-wrap: anywhere;
+      font-size: 0.82rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .signal-row-meta-empty {
+      display: none;
     }
     .signal-row-actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: flex-end;
       align-items: center;
       gap: 8px;
     }
     .signal-category-select {
-      width: auto;
-      min-width: 220px;
+      width: 100%;
+      min-width: 0;
       min-height: 34px;
       padding: 0 12px;
       border-radius: 999px;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 700;
     }
     .signal-action-btn {
@@ -1229,19 +1299,20 @@
       color: var(--state-error-text);
       background: color-mix(in srgb, var(--state-error-text) 10%, transparent);
     }
-    .signal-row-footer {
-      min-height: 18px;
-      padding-top: 8px;
-    }
-    .signal-inline-status {
-      font-size: 0.82rem;
-      color: var(--text-secondary);
-    }
     .signal-inline-status.is-ok {
       color: var(--state-success-text);
+      border-color: color-mix(in srgb, var(--state-success-border) 55%, var(--border-subtle));
+      background: color-mix(in srgb, var(--state-success-text) 8%, var(--bg-surface));
     }
     .signal-inline-status.is-error {
       color: var(--state-error-text);
+      border-color: color-mix(in srgb, var(--state-error-border) 55%, var(--border-subtle));
+      background: color-mix(in srgb, var(--state-error-text) 8%, var(--bg-surface));
+    }
+    .signal-inline-status.is-info {
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent-soft) 55%, var(--border-subtle));
+      background: color-mix(in srgb, var(--accent-soft) 12%, var(--bg-surface));
     }
     @media (max-width: 1100px) {
       .sr-toolbar {
@@ -1251,10 +1322,6 @@
     @media (max-width: 720px) {
       .signal-row {
         padding: 12px 12px 10px;
-      }
-      .signal-row-top {
-        flex-direction: column;
-        align-items: flex-start;
       }
       .signal-context-panel {
         width: min(360px, calc(100vw - 48px));

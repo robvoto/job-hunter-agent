@@ -1,7 +1,7 @@
 from datetime import datetime
 import json
 
-from job_hunter_agent import source_connector
+from job_hunter_agent import capability_matching, source_connector
 from job_hunter_agent.utils import extract_work_mode
 
 
@@ -334,17 +334,15 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
 
 
 def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
-    monkeypatch.setattr(
-        source_connector,
-        "load_registry",
-        lambda: {
-            "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
-            "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
-            "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
-            "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
-            "delivery": {"signal": "delivery", "decision": "evidence_only", "original_texts": ["delivery"]},
-        },
-    )
+    _registry = lambda: {
+        "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
+        "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
+        "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
+        "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
+        "delivery": {"signal": "delivery", "decision": "evidence_only", "original_texts": ["delivery"]},
+    }
+    monkeypatch.setattr(source_connector, "load_registry", _registry)
+    monkeypatch.setattr(capability_matching, "load_registry", _registry)
 
     matches = source_connector.reviewed_signal_matches_for_text(
         "Stakeholder management, Jira, banking, project, and delivery are all mentioned in the role."
@@ -539,7 +537,7 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
     assert missing == []
 
 
-def test_job_parsing_rejection_registers_hard_blocker_concept(monkeypatch):
+def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
     registrations = []
 
     monkeypatch.setattr(
@@ -550,7 +548,18 @@ def test_job_parsing_rejection_registers_hard_blocker_concept(monkeypatch):
     monkeypatch.setattr(
         source_connector,
         "passes_content_filters",
-        lambda details_text, card_location="", title_reason="": (False, "DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"),
+        lambda details_text, card_location="", title_reason="": (False, "DESC_HARD_BLOCK_RULE:sap"),
+    )
+    monkeypatch.setattr(
+        source_connector,
+        "find_hard_block_matches",
+        lambda details_text, terms=None: [
+            {
+                "value": "demonstrated experience in {term}",
+                "matched_term": "SAP",
+                "context": "must have SAP experience",
+            }
+        ],
     )
     monkeypatch.setattr(
         source_connector,
@@ -571,17 +580,14 @@ def test_job_parsing_rejection_registers_hard_blocker_concept(monkeypatch):
     )
 
     assert ok is False
-    assert reason == "DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"
+    assert reason == "DESC_HARD_BLOCK_RULE:sap"
     assert registrations == [
         (
             [
                 {
-                    "signal": "mandatory coding",
-                    "category": "hard_blocker_concept",
-                    "source": "job rejection",
-                    "context": ["Business Analyst", "Acme"],
-                    "evidence": ["DESC_HARD_BLOCK_KNOWLEDGE:mandatory_coding"],
-                    "needs_review": True,
+                    "signal": "demonstrated experience in {term}",
+                    "suggested_category": "hard_blocker_pattern",
+                    "original_texts": ["must have SAP experience"],
                 }
             ],
             "",
@@ -761,16 +767,14 @@ def test_job_card_shows_negative_score_factors_without_debug_mode():
 
 
 def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
-    monkeypatch.setattr(
-        source_connector,
-        "load_registry",
-        lambda: {
-            "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
-            "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
-            "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
-            "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
-        },
-    )
+    _registry = lambda: {
+        "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
+        "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
+        "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
+        "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
+    }
+    monkeypatch.setattr(source_connector, "load_registry", _registry)
+    monkeypatch.setattr(capability_matching, "load_registry", _registry)
 
     html = source_connector.render_job_card(
         {

@@ -39,17 +39,17 @@ def test_validate_llm_suggestion_approvals_accepts_matching_token():
     local_server.SettingsHandler._validate_llm_suggestion_approvals("job-1", ["sap"], tokens)
 
 
-def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(monkeypatch):
+def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(tmp_path, monkeypatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
     }
     rebuilds = []
     events = []
-    registrations = []
 
     monkeypatch.setattr(local_server, "load_profile", lambda: profile)
     monkeypatch.setattr(local_server, "save_profile", lambda payload: payload)
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", tmp_path / "signal_registry.json")
     monkeypatch.setattr(
         local_server.SettingsHandler,
         "_load_audit_rows",
@@ -71,12 +71,6 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
         "_rebuild_dashboard_after_rule_change",
         staticmethod(lambda reason="": rebuilds.append(reason)),
     )
-    monkeypatch.setattr(
-        signal_registry,
-        "register_signals",
-        lambda items, category="": registrations.append((items, category)),
-    )
-
     result = local_server.SettingsHandler._save_requirement_blockers_feedback(
         "job-1",
         title="Business Analyst - SAP",
@@ -100,21 +94,7 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
     ]
     assert rebuilds == []
     assert events[0][0][0] == "block_requirement"
-    assert registrations == [
-        (
-            [
-                {
-                    "signal": "sap",
-                    "category": "hard_blocker_concept",
-                    "source": "user feedback",
-                    "context": ["Business Analyst - SAP"],
-                    "evidence": ["sap"],
-                    "needs_review": True,
-                }
-            ],
-            "",
-        )
-    ]
+    assert signal_registry.load_registry() == {}
 
 
 def test_save_requirement_blockers_feedback_skips_title_followup_when_kept_history_matches(monkeypatch):

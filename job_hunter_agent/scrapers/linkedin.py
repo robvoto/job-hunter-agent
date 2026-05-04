@@ -183,19 +183,19 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 record["content_reason"] = desc_reason
                 if not ok_desc:
-                    if desc_reason.startswith("DESC_HARD_BLOCK_KNOWLEDGE"):
+                    if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
                         record["hard_block_reasons"] = [
                             match.get("value") or match.get("matched_term") or ""
-                            for match in find_hard_block_matches(details_text)
+                            for match in find_hard_block_matches(details_text, self.profile.get("must_not_require_skills", []))
                         ]
-                    register_hard_blocker_learning_from_rejection(record, desc_reason, details_text)
+                    register_hard_blocker_learning_from_rejection(record, desc_reason, details_text, profile=self.profile)
                     print(f"[LinkedIn] REJECTED (content) [{desc_reason}] {title} @ {company}")
                     record["reject_reason"] = desc_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
                 ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
                 if not ok_learned:
-                    register_hard_blocker_learning_from_rejection(record, learned_reason, details_text)
+                    register_hard_blocker_learning_from_rejection(record, learned_reason, details_text, profile=self.profile)
                     record["content_reason"] = learned_reason
                     record["reject_reason"] = learned_reason
                     print(f"[LinkedIn] REJECTED (learned rule) [{learned_reason}] {title} @ {company}")
@@ -225,14 +225,16 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
                 if record["hard_block_reasons"]:
-                    hard_block_category = hard_block_matches[0].get("category") or "hard_block"
-                    record["content_reason"] = f"DESC_HARD_BLOCK:{hard_block_category}"
+                    hard_block_term = compact_whitespace(record["hard_block_reasons"][0]).lower()
+                    hard_block_category = re.sub(r"[^a-z0-9]+", "_", hard_block_term).strip("_") or "hard_block"
+                    record["content_reason"] = f"DESC_HARD_BLOCK_RULE:{hard_block_category}"
                     record["reject_reason"] = record["content_reason"]
                     register_hard_blocker_learning_from_rejection(
                         record,
                         record["content_reason"],
                         details_text,
                         hard_block_matches,
+                        profile=self.profile,
                     )
                     print(
                         f"[LinkedIn] REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | "

@@ -34,21 +34,15 @@ appData-dontupload.txt
 .vscode/
 .idea/
 *.code-workspace
-data/ALIAS_LOGIC_RATIONALE.md
-.gitignore
 MAIN LOGOS IMG.png
 job_hunter_img.png
 templates/static/job_hunter_img2.png
-.gitignore
 BACKLOG.md
-.gitignore
 .claude/settings.json
 HARD_CODED_JUDGEMENT_BACKLOG.md
 docs/RUN_COMMANDS.txt
-
-.gitignore
 venv activate.ps1 
 docs/RUN_COMMANDS.txt
 ALIAS_LOGIC_RATIONALE.md
-CAPABILITY_AGING_RATIONALE.md
-.gitignore
+CAPABILITY_AGING_RATIONALE.md 
+pytest.ini

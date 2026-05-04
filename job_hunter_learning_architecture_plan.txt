@@ -186,7 +186,7 @@ Register clean pending signals for:
 - capability_concept
 - government_context
 - role_title_token
-- hard_blocker_concept
+- hard_blocker_pattern
 
 Capability candidates must be conservative:
 - not broken fragments

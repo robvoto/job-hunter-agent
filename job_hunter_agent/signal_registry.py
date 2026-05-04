@@ -9,15 +9,15 @@ from typing import Any
 
 from job_hunter_agent.paths import (
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
-    HARD_BLOCKER_KNOWLEDGE_PATH,
+    HARD_BLOCKER_RULES_PATH,
     IGNORED_SIGNAL_ARCHIVE_PATH,
     ROLE_TITLE_KNOWLEDGE_PATH,
     SIGNAL_REGISTRY_PATH as _REGISTRY_PATH,
 )
-from job_hunter_agent.hard_blocker_knowledge import (
-    load_hard_blocker_knowledge,
-    save_hard_blocker_knowledge,
-    upsert_hard_blocker_entry,
+from job_hunter_agent.hard_blocker_rules import (
+    load_hard_blocker_rules,
+    save_hard_blocker_rules,
+    upsert_hard_blocker_rule,
 )
 from job_hunter_agent.capability_knowledge import (
     CAPABILITY_KNOWLEDGE_PATH,
@@ -35,21 +35,21 @@ from job_hunter_agent.role_title_knowledge import (
 VALID_SIGNAL_CATEGORIES = frozenset({
     "capability_concept",
     "government_context",
-    "hard_blocker_concept",
+    "hard_blocker_pattern",
     "role_title_token",
 })
 
 CATEGORY_LABELS = {
     "capability_concept": "Capability",
     "government_context": "Government context",
-    "hard_blocker_concept": "Hard blocker",
+    "hard_blocker_pattern": "Hard blocker pattern",
     "role_title_token": "Role title",
 }
 
 _CATEGORY_KNOWLEDGE_PATHS = {
     "capability_concept": CAPABILITY_KNOWLEDGE_PATH,
     "government_context": GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
-    "hard_blocker_concept": HARD_BLOCKER_KNOWLEDGE_PATH,
+    "hard_blocker_pattern": HARD_BLOCKER_RULES_PATH,
     "role_title_token": ROLE_TITLE_KNOWLEDGE_PATH,
 }
 
@@ -350,6 +350,8 @@ def signal_in_approved_knowledge(category: str, signal: str, aliases: list[str] 
     for item in load_approved_signal_catalog():
         if item.get("category") != category_key:
             continue
+        if category_key == "hard_blocker_pattern":
+            continue
         terms = [term for term in item.get("terms", []) if isinstance(term, str)]
         if not terms:
             continue
@@ -455,9 +457,8 @@ def approve_signal(key: str, category: str = "") -> dict[str, Any] | None:
         upsert_capability_entry(value, [])
     elif category_key == "role_title_token":
         upsert_role_title_entry(value)
-    elif category_key == "hard_blocker_concept":
-        aliases = _clean_aliases(record.get("original_texts"), canonical=value)
-        upsert_hard_blocker_entry(value, aliases)
+    elif category_key == "hard_blocker_pattern":
+        upsert_hard_blocker_rule(value, [])
     else:
         aliases = _clean_aliases(record.get("original_texts"), canonical=value)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)
@@ -498,9 +499,9 @@ def clear_signal_learning_state() -> None:
     _save_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH, {})
     save_capability_knowledge([])
     save_role_title_knowledge([])
-    save_hard_blocker_knowledge([])
+    save_hard_blocker_rules([])
     for path in _CATEGORY_KNOWLEDGE_PATHS.values():
-        if path in {CAPABILITY_KNOWLEDGE_PATH, ROLE_TITLE_KNOWLEDGE_PATH, HARD_BLOCKER_KNOWLEDGE_PATH}:
+        if path in {CAPABILITY_KNOWLEDGE_PATH, ROLE_TITLE_KNOWLEDGE_PATH, HARD_BLOCKER_RULES_PATH}:
             continue
         _save_approved_knowledge_payload(path, {
             "kind": "managed_knowledge",
@@ -515,8 +516,8 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
             entries = load_capability_knowledge()
         elif category == "role_title_token":
             entries = load_role_title_knowledge()
-        elif category == "hard_blocker_concept":
-            entries = load_hard_blocker_knowledge()
+        elif category == "hard_blocker_pattern":
+            entries = load_hard_blocker_rules()
         else:
             payload = _load_approved_knowledge_payload(path)
             entries = payload.get("entries", [])

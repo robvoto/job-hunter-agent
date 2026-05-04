@@ -1,5 +1,5 @@
 from job_hunter_agent import filters
-from job_hunter_agent import hard_blocker_knowledge
+from job_hunter_agent import hard_blocker_rules
 
 
 def test_missing_requirement_detector_separates_required_from_desirable():
@@ -154,69 +154,69 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
     assert reason_ai == "OK"
 
 
-def test_approved_hard_blocker_knowledge_rejects_mandatory_requirement_text(tmp_path, monkeypatch):
-    knowledge_path = tmp_path / "hard_blocker_knowledge.json"
-    knowledge_path.write_text(
+def test_approved_hard_blocker_rules_rejects_mandatory_requirement_text(tmp_path, monkeypatch):
+    rules_path = tmp_path / "hard_blocker_rules.json"
+    rules_path.write_text(
         """
         {
           "kind": "managed_knowledge",
-          "name": "hard_blocker_knowledge",
+          "name": "hard_blocker_rules",
           "version": 1,
           "entries": [
-            {"value": "hands on coding", "aliases": ["hands-on coding required"]}
+            {"value": "must have {term}", "aliases": []}
           ]
         }
         """.strip(),
         encoding="utf-8",
     )
-    monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
     monkeypatch.setattr(
         filters,
         "load_profile",
         lambda: {
             "capability_profile_rules": [],
             "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
+            "must_not_require_skills": ["SAP"],
         },
     )
 
     ok, reason = filters.passes_content_filters(
-        "Hands-on coding required for this role.",
+        "Must have SAP experience for this role.",
         title_reason="OK",
     )
 
     assert ok is False
-    assert reason == "DESC_HARD_BLOCK_KNOWLEDGE:hands_on_coding"
+    assert reason == "DESC_HARD_BLOCK_RULE:sap"
 
 
-def test_approved_hard_blocker_knowledge_does_not_reject_desirable_only_text(tmp_path, monkeypatch):
-    knowledge_path = tmp_path / "hard_blocker_knowledge.json"
-    knowledge_path.write_text(
+def test_approved_hard_blocker_rules_does_not_reject_desirable_only_text(tmp_path, monkeypatch):
+    rules_path = tmp_path / "hard_blocker_rules.json"
+    rules_path.write_text(
         """
         {
           "kind": "managed_knowledge",
-          "name": "hard_blocker_knowledge",
+          "name": "hard_blocker_rules",
           "version": 1,
           "entries": [
-            {"value": "hands on coding", "aliases": ["hands-on coding required"]}
+            {"value": "must have {term}", "aliases": []}
           ]
         }
         """.strip(),
         encoding="utf-8",
     )
-    monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
     monkeypatch.setattr(
         filters,
         "load_profile",
         lambda: {
             "capability_profile_rules": [],
             "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
+            "must_not_require_skills": ["SAP"],
         },
     )
 
     ok, reason = filters.passes_content_filters(
-        "Hands-on coding experience would be desirable for this role.",
+        "SAP experience would be desirable for this role.",
         title_reason="OK",
     )
 
@@ -224,20 +224,22 @@ def test_approved_hard_blocker_knowledge_does_not_reject_desirable_only_text(tmp
     assert reason == "OK"
 
 
-def test_empty_hard_blocker_knowledge_does_not_break_filtering(tmp_path, monkeypatch):
-    knowledge_path = tmp_path / "hard_blocker_knowledge.json"
-    knowledge_path.write_text(
+def test_term_not_in_profile_does_not_reject_even_if_pattern_appears(tmp_path, monkeypatch):
+    rules_path = tmp_path / "hard_blocker_rules.json"
+    rules_path.write_text(
         """
         {
           "kind": "managed_knowledge",
-          "name": "hard_blocker_knowledge",
+          "name": "hard_blocker_rules",
           "version": 1,
-          "entries": []
+          "entries": [
+            {"value": "must have {term}", "aliases": []}
+          ]
         }
         """.strip(),
         encoding="utf-8",
     )
-    monkeypatch.setattr(hard_blocker_knowledge, "HARD_BLOCKER_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
     monkeypatch.setattr(
         filters,
         "load_profile",
@@ -249,7 +251,7 @@ def test_empty_hard_blocker_knowledge_does_not_break_filtering(tmp_path, monkeyp
     )
 
     ok, reason = filters.passes_content_filters(
-        "Hands-on coding required for this role.",
+        "Must have SAP experience for this role.",
         title_reason="OK",
     )
 
