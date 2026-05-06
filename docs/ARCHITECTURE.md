@@ -1,237 +1,338 @@
-# Architecture — Job Hunter Agent
+# Job Hunter Agent — Architecture
 
-> Deep design context. Not always loaded. Referenced by `CLAUDE.md`.
-> Last updated: May 2026.
+## System Purpose
 
----
+Job Hunter is a local-first agentic job filtering system.
 
-## What this project is
+The system:
 
-A local-first job-hunting system. The candidate gives the app strong source material (CV, STAR notes), the app builds a working profile, reviews jobs against that profile, and keeps a meaningful shortlist instead of forcing the user to search manually every day.
+* scrapes jobs from multiple sources
+* extracts candidate evidence from onboarding and source documents
+* filters jobs using deterministic and explainable rules
+* ranks jobs using configurable scoring
+* preserves uncertain evidence for review
+* learns through explicit user approval
+* avoids hidden rejection logic
 
-**Near-term goal:** reliably scrape and filter target roles from a configurable candidate profile, learn the candidate profile over time, produce a clean shortlist with clear reject reasons.
-
-**Long-term goal:** become a true autonomous job agent that runs daily and sends only meaningful matches.
-
----
-
-## Current stage — Stage 2
-
-Past the prototype. Actively transitioning from hardcoded business logic toward a JSON-backed knowledge management system.
-
-### What works
-- SEEK direct-page scraping + LinkedIn via python-jobspy
-- Deterministic filtering before any LLM call
-- LLM fallback constrained to `KEEP`, `REJECT`, `MAYBE` — cached in `data/llm_cache.json`
-- Runtime profile persisted in `data/profile.json`; source documents importable via the admin UI
-- Persistent dashboard with history, archive, hidden review, score/age/work-mode filters, pagination
-- Viewed/applied/hidden jobs tracked locally
-- Signal registry for surfacing and approving learned patterns
-- Cross-source deduplication (`job_identity.py`)
-- All paths centralised in `paths.py`
-- Knowledge modules: capability, hard blocker, role title — all JSON-backed
-
-### What is still incomplete
-- Not yet a true scheduled agent (scheduling is in Stage 3)
-- No WhatsApp delivery
-- No authenticated SEEK session reuse
-- No durable cloud persistence
-- Filtering still needs ongoing tuning
-- No application-pack workflow (tailored CVs, cover letters, criteria responses)
-- Many hardcoded judgment items remain (tracked in `docs/HARD_CODED_JUDGEMENT_BACKLOG.md`)
+The system is designed as a strict filtering engine, not a generic recommender.
 
 ---
 
-## Product model
+# Runtime Architecture
 
-| Layer | Source |
-|-------|--------|
-| Human truth | Source documents (CV, STAR notes) |
-| Runtime machine truth | `data/profile.json` |
-| Control surface | Settings UI (`local_server.py`) |
-| Rule layer | Knowledge JSON files under `data/` |
-| Generated outputs | `output/` (disposable, can be recreated) |
+## Runtime Layers
 
-**Intended onboarding flow:**
-1. Import one strong detailed CV
-2. Optionally import richer evidence (STAR notes, long-form experience)
-3. Generate distilled runtime profile in `data/profile.json`
-4. Maintain and refine from the settings UI
-5. Use that profile for scraping, filtering, LLM review, and later application generation
-
-`data/profile.json` is not meant to be hand-authored from scratch — it should be generated from source documents, then edited incrementally.
+| Layer             | Responsibility                                   |
+| ----------------- | ------------------------------------------------ |
+| Scraping          | Collect raw jobs from SEEK and LinkedIn          |
+| Parsing           | Normalize job structure and extract signals      |
+| Candidate Profile | Store runtime candidate evidence and preferences |
+| Filtering         | Deterministic rejection and fit gating           |
+| Scoring           | Weighted ranking and evidence evaluation         |
+| Learning          | Capture candidate-approved learned signals       |
+| Review            | Surface uncertain or pending decisions           |
+| Dashboard         | Present explainable ranked jobs                  |
+| Settings          | Runtime control surface                          |
 
 ---
 
-## Architecture decisions
+# Core Runtime Components
 
-### SEEK: direct job pages (not the right-hand pane)
-The detail pane was flaky and inconsistently captured. Direct job pages are the only approved approach. **Do not revert to pane-based scraping.**
+## Scraping
 
-### Knowledge-managed over hardcoded
-Business rules are being systematically migrated from sealed Python constants into JSON-backed knowledge modules:
+Primary modules:
 
-| Module | JSON file |
-|--------|-----------|
-| `capability_knowledge.py` | `data/capability_knowledge.json` |
-| `hard_blocker_rules.py` | `data/hard_blocker_rules.json` |
-| `role_title_knowledge.py` | `data/role_title_knowledge.json` |
-| `signal_registry.py` | `data/signal_registry.json` |
+* `scrapers/seek.py`
+* `scrapers/linkedin.py`
+* `source_connector.py`
 
-**Do not revert knowledge rules to hardcoded constants.**
+Responsibilities:
 
-### Scoring model
-Fit score is a 0–100 integer built as a weighted sum. Weights are per category and configurable via `data/profile.json` (`preference_weights`). Points are computed via `weighted_points(raw, weight)` in `scoring_utils.py`.
+* source collection
+* normalization
+* deduplication preparation
+* scrape metadata
 
-| Component | Range | Weight category |
-|-----------|-------|-----------------|
-| Title signal (direct / secondary) | 0–15 | `fit` |
-| LLM description grade | −8–25 | `fit` |
-| Content filter pass | 0–3 | `fit` |
-| Full description confidence penalty | 0 or −8 | `fit` |
-| Capability evidence score | 0–20 | `fit` |
-| Convergence bonus | 0, 3, or 5 | `fit` |
-| Competitive signal adjustments | variable | `fit` |
-| Freshness | 0–10 | `freshness` |
-| Location preference | −5–8 | `location` |
-| Contract preference | −5–10 | `contract` |
-| Government preference | 0–4 | `government` |
-| Work mode | −2–5 | `work_mode` |
-| Salary signal | −5–7 | `salary` |
-| Already viewed penalty | −3 | unweighted |
-
-Full rationale: `docs/SCORING_RATIONALE.md`.
-
-**Capability evidence score** is the evidence-based component. For each matching capability rule:
-```
-combined     = max(rule_strength, evidence_tier_alignment_score)
-contribution = combined × fit_weight  # 4 for core, 2 for supporting
-```
-`evidence_tier_alignment_score` is computed from the candidate's profile text — recency, role coverage, and alias density.
-
-**Match score bands** are loaded from `data/match_level_defaults.json` via `match_labels.py` (not hardcoded):
-
-| Band | Default score |
-|------|---------------|
-| Strong match | 85–100 |
-| Good match | 70–84 |
-| Possible fit | 55–69 |
-| Stretch | 0–54 |
-
-### LLM model
-The LLM is optional and constrained.
-
-- Title filters run first → content filters second → only surviving jobs reach LLM
-- LLM sees job detail text + profile context from `data/profile.json`
-- Response limited to `KEEP`, `REJECT`, `MAYBE`; cached in `data/llm_cache.json`
-- If `OPENAI_API_KEY` is missing → falls back to `MAYBE`
-- Current provider: OpenAI (`gpt-4o-mini` for cheap pass, `gpt-4o` configurable)
-- Titles are a cheap first pass; the real fit decision is driven by description evidence + profile fit
-
-Profile inputs used by the LLM prompt: candidate fit brief, capability profile rules, match preferences, evidence tiers.
-
-### Dashboard model
-The dashboard is a persistent local workspace, not a throwaway report.
-
-- Served via `workspace.html` at `http://127.0.0.1:8765/dashboard`
-- Multi-view: Potential Jobs, Applied, Hidden Jobs
-- Fresh kept jobs first; previously kept jobs stay visible in saved sections
-- Filters: sort, scope, posted age, work mode, score, pagination
-- `dashboard_data.py` handles data transformation separately from the scraper
-- `history.py` tracks per-job view/keep/apply state
+The scraper layer does not make business-fit decisions.
 
 ---
 
-## Settings UI
+## Candidate Profile Runtime
 
-Served by `local_server.py`. Templates under `templates/`.
+Primary files:
 
-| Tab | Purpose |
-|-----|---------|
-| Search | What SEEK/LinkedIn gets asked for |
-| Candidate Profile | CV text, capability matrix, title/description rules |
-| Review | Applied/hidden controls, unknown skill decisions |
-| Signal Registry | Approve patterns surfaced during scraping |
-| Test | Latest run stats and rejected samples |
+* `data/profile.json`
+* `profile_store.py`
+* `profile_learning.py`
+* `cv_pipeline.py`
 
-Important: signal registry decisions and skill decisions do nothing until explicitly applied.
+Responsibilities:
 
----
+* maintain runtime candidate evidence
+* preserve extracted capabilities
+* maintain preference weights
+* preserve learning state
+* provide scoring context
 
-## Persistence rules
+The runtime profile is authoritative system state.
 
-| Category | Treatment |
-|----------|-----------|
-| `data/profile.json`, `data/job_history.json`, `data/*.json` knowledge files | Valuable local state — never discard |
-| `output/` | Disposable — recreatable from a fresh run |
-| `data/llm_cache.json`, `data/agent_settings.json` | Local-only, never commit |
-
-All paths resolved via `paths.py` relative to the repo root.
+Source onboarding material is evidence input, not runtime truth.
 
 ---
 
-## Tech stack
+## Filtering Pipeline
 
-| Tech | Role |
-|------|------|
-| Python 3.11+ | Core language |
-| Playwright | Browser automation for SEEK |
-| python-jobspy | LinkedIn and multi-board scraping |
-| OpenAI API | Optional LLM review (gpt-4o-mini / gpt-4o) |
-| python-docx | CV and document parsing |
-| pandas | Data manipulation |
-| requests | Notifications and external APIs |
-| python-dotenv | Environment variable management |
-| Local HTML/JS | Settings UI backed by Python `http.server` |
-| JSON files | All runtime state and knowledge |
+Primary modules:
 
----
+* `filters.py`
+* `hard_blocker_rules.py`
+* `role_analysis.py`
+* `capability_matching.py`
+* `signal_detection.py`
 
-## Design principles
+Pipeline order:
 
-1. Deterministic first. Rules before LLM, always.
-2. LLM constrained. Output must stay `KEEP`, `REJECT`, or `MAYBE`.
-3. Cost-aware. Cache responses, minimise prompt size, use LLM only when needed.
-4. Explainable. A reject should have a visible reason whenever possible.
-5. Local-first. Runs on a personal machine without cloud infrastructure.
-6. Learnable. Gets better through explicit user feedback, not hidden magic.
-7. Maintainable. Important runtime state lives in files, not buried in code.
-8. Knowledge-managed. Business rules belong in JSON-backed modules.
+1. Source normalization
+2. Hard blockers
+3. Title analysis
+4. Capability evidence matching
+5. Description evaluation
+6. Competitive-fit analysis
+7. LLM constrained review
+8. Final score generation
 
----
+Rules:
 
-## Parked decisions
-
-### `star_evidence_text` — parked April 2026
-- Field exists in `data/profile.json` and is populated by onboarding/import.
-- Removed from admin UI and excluded from LLM fit-scoring prompt.
-- Reason: adds prompt tokens without improving KEEP/REJECT/MAYBE decisions. Evidence tiers already carry the CV substance.
-- Where it belongs: application generation (cover letters, criteria responses). Build that feature first, then re-expose.
-- See comments in `llm_gate.py` → `build_profile_prompt_context()` and `local_server.py`.
+* deterministic filters run before LLM review
+* hidden rejection logic is forbidden
+* weak evidence should produce review signals instead of silent deletion
+* uncertain signals should be preserved where possible
 
 ---
 
-## Roadmap
+# Scoring Architecture
 
-### Stage 2 — Reliable data pipeline
-- [x] Direct-page SEEK scraping
-- [x] Structured HTML + JSON output, run stats, reject review data
-- [x] Local admin UI
-- [x] Profile persistence and learning loop
-- [x] Persistent dashboard with archive and hidden review
-- [x] Source-document import from CV and STAR material
-- [x] Configurable match bands and rejection rule categories
-- [x] Knowledge-managed capability, hard blocker, and role title modules
-- [x] Signal registry for reviewing and approving learned patterns
-- [x] Cross-source deduplication (`job_identity.py`)
-- [x] Centralised paths (`paths.py`)
-- [x] Workspace multi-view dashboard (`workspace.html`)
-- [ ] Improve title/content filtering quality
-- [ ] Better extraction for hidden/collapsed job requirements
-- [ ] Migrate remaining hardcoded judgment items (see `docs/HARD_CODED_JUDGEMENT_BACKLOG.md`)
+Primary modules:
 
-### Stage 3 — Real job agent
-- [ ] Scheduling and message delivery
-- [ ] Application feedback loop + application-pack workflow
-- [ ] Durable cloud storage
-- [ ] OpenClaw / agent runtime integration (see `BACKLOG.md`)
+* `fit_scoring.py`
+* `scoring_utils.py`
+* `match_labels.py`
+* `score_labels.py`
+
+Scoring characteristics:
+
+* weighted
+* explainable
+* configurable
+* evidence-based
+* bounded
+
+Scoring inputs include:
+
+* title alignment
+* capability evidence
+* profile evidence tiers
+* description quality
+* competitive fit
+* salary alignment
+* work mode
+* location preference
+* government context
+* freshness
+
+The scoring layer must remain inspectable.
+
+Hidden score budgets and invisible penalties are prohibited.
+
+---
+
+# Learning Architecture
+
+Primary modules:
+
+* `signal_registry.py`
+* `review_insights.py`
+* `profile_learning.py`
+
+Learning categories:
+
+* capability concepts
+* government context
+* title normalization
+* role-title signals
+* hard-blocker patterns
+
+Rules:
+
+* learning requires review approval
+* pending learning cannot directly alter runtime filtering
+* learning data must remain inspectable
+* system-generated suggestions are not trusted automatically
+
+---
+
+# Knowledge Management
+
+Primary knowledge files:
+
+* `capability_knowledge.json`
+* `hard_blocker_rules.json`
+* `role_title_knowledge.json`
+* `signal_registry.json`
+* `scoring_rules.json`
+* `match_level_defaults.json`
+
+Rules:
+
+* business judgement belongs in managed knowledge
+* avoid sealed hardcoded dictionaries
+* preserve explainability
+* avoid hidden filtering shortcuts
+* avoid legacy compatibility layers unless explicitly required
+
+---
+
+# LLM Architecture
+
+Primary modules:
+
+* `llm_gate.py`
+* `agent_settings.py`
+
+LLM responsibilities:
+
+* constrained fit review
+* onboarding extraction assistance
+* evidence interpretation
+* capability naming assistance
+
+LLM boundaries:
+
+* deterministic rules run first
+* LLM output is constrained
+* LLM decisions must remain inspectable
+* runtime should survive without LLM access
+* LLM should not silently override deterministic blockers
+
+---
+
+# Dashboard Architecture
+
+Primary modules:
+
+* `dashboard_renderer.py`
+* `dashboard_data.py`
+* `workspace.html`
+
+Dashboard responsibilities:
+
+* ranked shortlist presentation
+* explainable decisions
+* review visibility
+* hidden/applied state management
+* filtering visibility
+* diagnostics visibility
+
+The dashboard is a persistent operational workspace.
+
+---
+
+# Settings Architecture
+
+Primary template:
+
+* `templates/settings.html`
+
+Current sections:
+
+* Search
+* Profile
+* Capability Matrix
+* Rules
+* Alerts & AI
+* Learning
+* Optimise
+
+## Optimise Section
+
+`Optimise` is an internal runtime tuning area.
+
+Purpose:
+
+* diagnostics
+* runtime analysis
+* ranking inspection
+* review tooling
+* experimental controls
+* highlight tuning
+* scrape analysis
+
+It is not intended for normal end-user preferences.
+
+---
+
+# Data Authority Model
+
+| Data Type                     | Authority Level                     |
+| ----------------------------- | ----------------------------------- |
+| `data/profile.json`           | Runtime candidate truth             |
+| Knowledge JSON files          | Approved runtime business knowledge |
+| Signal registry pending items | Review-only                         |
+| `output/` files               | Disposable runtime output           |
+| Dashboard state/history       | Persistent operational state        |
+
+---
+
+# Runtime Constraints
+
+The system must:
+
+* avoid silent false negatives
+* preserve explainability
+* preserve inspectability
+* prefer review over deletion
+* remain locally operable
+* separate runtime truth from onboarding evidence
+
+The system must not:
+
+* hide rejection logic
+* hardcode invisible business judgement
+* silently discard extracted evidence
+* use opaque scoring shortcuts
+* allow unapproved learning to alter runtime behaviour
+
+---
+
+# Current Technical Stack
+
+| Technology         | Responsibility                  |
+| ------------------ | ------------------------------- |
+| Python             | Core runtime                    |
+| FastAPI            | Local server and APIs           |
+| Playwright         | SEEK scraping                   |
+| python-jobspy      | LinkedIn ingestion              |
+| OpenAI API         | Optional constrained LLM review |
+| JSON runtime files | State and knowledge persistence |
+| HTML/CSS/JS        | Dashboard and settings UI       |
+
+---
+
+# Expansion Direction
+
+Future expansion areas:
+
+* autonomous orchestration
+* OpenClaw runtime integration
+* application generation workflows
+* review-driven adaptive tuning
+* managed external knowledge systems
+* multi-agent coordination
+* runtime diagnostics agents
+
+Expansion must preserve:
+
+* explainability
+* deterministic reviewability
+* inspectable learning
+* runtime transparency

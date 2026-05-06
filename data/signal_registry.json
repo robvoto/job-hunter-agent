@@ -58,5 +58,105 @@
       "agile methodologies"
     ],
     "needs_review": true
+  },
+  "performance monitoring": {
+    "signal": "performance monitoring",
+    "normalized_key": "performance monitoring",
+    "original_texts": [
+      "performance monitoring"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-04T23:40:01.130195+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "performance monitoring"
+    ],
+    "needs_review": true
+  },
+  "budget management": {
+    "signal": "budget management",
+    "normalized_key": "budget management",
+    "original_texts": [
+      "budget management"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-05T04:16:48.493991+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "budget management"
+    ],
+    "needs_review": true
+  },
+  "strategic planning": {
+    "signal": "strategic planning",
+    "normalized_key": "strategic planning",
+    "original_texts": [
+      "strategic planning"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-05T04:16:48.493991+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "strategic planning"
+    ],
+    "needs_review": true
+  },
+  "budgeting and financial planning": {
+    "signal": "budgeting and financial planning",
+    "normalized_key": "budgeting and financial planning",
+    "original_texts": [
+      "budgeting and financial planning"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-05T07:53:27.605424+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "budgeting and financial planning"
+    ],
+    "needs_review": true
+  },
+  "process improvement": {
+    "signal": "process improvement",
+    "normalized_key": "process improvement",
+    "original_texts": [
+      "process improvement"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-05T07:53:27.605424+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "process improvement"
+    ],
+    "needs_review": true
   }
 }

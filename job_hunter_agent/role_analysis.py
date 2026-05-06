@@ -1,7 +1,7 @@
 import re
 from typing import Optional
 
-from job_hunter_agent.io_utils import load_json_dict
+from job_hunter_agent.io_utils import load_json_dict, load_parsing_rules
 from job_hunter_agent.paths import (
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
     GOVERNMENT_CONTEXT_RULES_PATH,
@@ -13,7 +13,7 @@ def friendly_capability_label(name: str) -> str:
     normalized = compact_whitespace(name).lower()
     return normalized[:1].upper() + normalized[1:] if normalized else ""
 
-
+#HARCODED
 def role_text_bundle(record: dict, details_text: str) -> str:
     return "\n".join(
         compact_whitespace(part)
@@ -130,33 +130,13 @@ def infer_posting_channel(record: dict, details_text: str) -> dict[str, str]:
     description = compact_whitespace(details_text).lower()
     combined = "\n".join(part for part in [title, company, teaser, description] if part)
 
-    recruiter_company_match = re.search(
-        r"\b(recruitment|recruiter|staffing|resourcing|labour hire|labor hire|executive search|search firm)\b",
-        company,
-    )
-    recruiter_copy_patterns = [
-        r"\bour client\b",
-        r"\bfor our client\b",
-        r"\bon behalf of\b",
-        r"\bclient is seeking\b",
-        r"\bsubmit (?:your )?(?:cv|resume|application)\b",
-        r"\bcontact (?:our )?(?:consultant|recruiter|recruitment team)\b",
-        r"\breference number\b",
-        r"\bshortlisted candidates\b",
-        r"\bimmediate interviews?\b",
-    ]
-    direct_copy_patterns = [
-        r"\babout us\b",
-        r"\babout the company\b",
-        r"\bwho we are\b",
-        r"\bour company\b",
-        r"\bour organisation\b",
-        r"\bour organization\b",
-        r"\bjoin our team\b",
-        r"\bjoin us\b",
-        r"\bwe are looking for\b",
-        r"\bwe are seeking\b",
-    ]
+    rules = load_parsing_rules().get("posting_channel_indicators", {})
+    recruiter_keywords = rules.get("recruiter_keywords", [])
+    recruiter_copy_patterns = [rf"\b{p}\b" for p in rules.get("recruiter_copy_patterns", [])]
+    direct_copy_patterns = [rf"\b{p}\b" for p in rules.get("direct_copy_patterns", [])]
+
+    recruiter_keyword_pattern = rf"\b({'|'.join(recruiter_keywords)})\b"
+    recruiter_company_match = re.search(recruiter_keyword_pattern, company, re.IGNORECASE)
 
     recruiter_score = 0
     direct_score = 0
@@ -172,7 +152,7 @@ def infer_posting_channel(record: dict, details_text: str) -> dict[str, str]:
             direct_score += 1
         if re.search(rf"\b{company_pattern}\s+is\b", description):
             direct_score += 1
-
+    #HARCODED
     if recruiter_score >= 3 and recruiter_score > direct_score:
         return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "high"}
     if recruiter_score >= 1 and recruiter_score > direct_score:

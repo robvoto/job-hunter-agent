@@ -1,4 +1,5 @@
 import re
+from job_hunter_agent.io_utils import load_parsing_rules
 
 
 def salary_sort_value(value: str) -> float:
@@ -37,4 +38,9 @@ def _salary_includes_super_or_package(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text or text == "n/a":
         return False
-    return bool(re.search(r"(?:\bincl\.?\s*super\b|\bincluding\s+super\b|\+\s*super\b|\bsuperannuation\b|\bpackage\b|\bsalary packaging\b)", text))
+    rules = load_parsing_rules()
+    indicators = rules.get("salary_package_indicators", [])
+    if not indicators:
+        return False
+    pattern = rf"(?:\b{'|'.join(indicators)}\b)"
+    return bool(re.search(pattern, text, re.IGNORECASE))

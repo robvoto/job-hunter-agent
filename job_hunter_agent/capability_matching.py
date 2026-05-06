@@ -6,13 +6,30 @@ from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.description_trust import get_trusted_full_description
 from job_hunter_agent.filters import matches_missing_requirement
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
-from job_hunter_agent.profile_store import get_evidence_tier_weights, get_evidence_tiers
+from job_hunter_agent.profile_store import (
+    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+    get_candidate_profile_tier_weights,
+    get_candidate_profile_tiers,
+)
 from job_hunter_agent.role_analysis import friendly_capability_label, text_contains_term
 from job_hunter_agent.scoring_utils import (
     build_scoring_source_text,
     find_profile_experience_year_in_text,
 )
 from job_hunter_agent.signal_registry import load_approved_signal_catalog, load_registry
+from job_hunter_agent.signal_schema import (
+    CATEGORY_HARD_BLOCKER_PATTERN,
+    LEARNING_CATEGORY_KEY,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    SIGNAL_ADJUSTMENT_KEY,
+    SIGNAL_ALIGNMENT_KEY,
+    SIGNAL_LABEL_KEY,
+    TITLE_REASON_POTENTIAL_MATCH,
+)
 from job_hunter_agent.text_processing import (
     compact_whitespace,
     dedupe_preserve_order,
@@ -35,10 +52,10 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
     for record in registry.values():
         if not isinstance(record, dict):
             continue
-        if compact_whitespace(record.get("category") or "").lower() == "hard_blocker_pattern":
+        if compact_whitespace(record.get(LEARNING_CATEGORY_KEY) or "").lower() == CATEGORY_HARD_BLOCKER_PATTERN:
             continue
-        label = compact_whitespace(record.get("signal") or "")
-        terms = [label, *(record.get("original_texts") or [])]
+        label = compact_whitespace(record.get(LEARNING_SIGNAL_KEY) or "")
+        terms = [label, *(record.get(LEARNING_ORIGINAL_TEXTS_KEY) or [])]
         if not label:
             continue
         if not any(text_contains_term(lowered, term) for term in terms if str(term).strip()):
@@ -56,8 +73,8 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
     for item in load_approved_signal_catalog():
         label = compact_whitespace(item.get("label") or "")
         terms = item.get("terms") if isinstance(item, dict) else []
-        category = compact_whitespace(item.get("category") or "").lower()
-        if not label or not isinstance(terms, list) or category in {"role_title_token", "hard_blocker_pattern"}:
+        category = compact_whitespace(item.get(LEARNING_CATEGORY_KEY) or "").lower()
+        if not label or not isinstance(terms, list) or category in {"role_title_token", CATEGORY_HARD_BLOCKER_PATTERN}:
             continue
         if not any(text_contains_term(lowered, term) for term in terms):
             continue
@@ -92,7 +109,7 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
     matched_limited_depth: List[str] = []
     matched_must_not: List[str] = []
 
-    for rule in profile.get("capability_profile_rules", []):
+    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
         if not isinstance(rule, dict):
             continue
         name = str(rule.get("name") or "").strip()
@@ -203,7 +220,7 @@ def build_risk_and_missing_evidence(
     missing: List[str] = []
     capability_matches = find_profile_capability_matches(details_text, profile)
 
-    if title_reason == "TITLE_POTENTIAL_MATCH":
+    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
         risks.append("Secondary role-family match rather than direct target role")
 
     if capability_matches["must_not"]:
@@ -217,9 +234,9 @@ def build_risk_and_missing_evidence(
     risks.extend(description_watchout_reasons(details_text, profile))
 
     for signal in (competitive_signals or []):
-        if int(signal.get("adjustment", 0)) < 0:
-            alignment = compact_whitespace(signal.get("alignment") or "").lower()
-            label = compact_whitespace(signal.get("risk_label") or signal.get("name") or "")
+        if int(signal.get(SIGNAL_ADJUSTMENT_KEY, 0)) < 0:
+            alignment = compact_whitespace(signal.get(SIGNAL_ALIGNMENT_KEY) or "").lower()
+            label = signal[SIGNAL_LABEL_KEY]
             if label:
                 if alignment == "weak":
                     missing.append(f"{label} required but weakly evidenced")
@@ -244,12 +261,12 @@ def _profile_auxiliary_text(profile: dict) -> str:
 
 
 def evidence_tier_alignment_score(profile: dict, aliases: List[str]) -> float:
-    evidence_tiers = get_evidence_tiers(profile)
-    evidence_weights = get_evidence_tier_weights(profile)
+    evidence_tiers = get_candidate_profile_tiers(profile)
+    evidence_weights = get_candidate_profile_tier_weights(profile)
     tier_order = (
-        "primary_current_evidence",
-        "secondary_older_evidence",
-        "background_optional_evidence",
+        KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
     )
     best_score = 0.0
 
@@ -272,9 +289,9 @@ def evidence_tier_alignment_score(profile: dict, aliases: List[str]) -> float:
                 recency_multiplier = 0.6
             else:
                 recency_multiplier = 0.3
-        elif tier_name == "primary_current_evidence":
+        elif tier_name == KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT:
             recency_multiplier = 1.0
-        elif tier_name == "secondary_older_evidence":
+        elif tier_name == KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT:
             recency_multiplier = 0.6
         else:
             recency_multiplier = 0.35

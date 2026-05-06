@@ -242,3 +242,4 @@ What makes them better than the old system is not that they're empirically corre
 How to make it genuinely evidence-based
 The only way to derive the weights from data is outcome calibration: track which jobs you applied for and whether you got an interview, then fit the weights to maximise predictive accuracy. After ~30–50 outcomes you'd have enough signal to calibrate. That's the path to true empirical grounding — but it requires your own historical data, which this system could start collecting now.
  
+

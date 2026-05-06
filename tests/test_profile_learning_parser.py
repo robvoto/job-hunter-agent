@@ -110,6 +110,26 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
     ]
 
 
+def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
+    fixture = {
+        "capabilities": [
+            {"name": "unknown platform", "level": "working", "aliases": [], "needs_review": True},
+        ],
+        "match_preferences": {},
+    }
+    captured = []
+
+    def fake_register_signals(items):
+        captured.extend(items)
+
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture), \
+         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", return_value=(False, "")), \
+         patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
+        build_learning_patch(SAMPLE_CV, source_sections=[{"label": "Skills", "text": "unknown platform"}])
+
+    assert all(item.get("category") != "hard_blocker_pattern" for item in captured)
+
+
 def test_build_role_title_review_signals_routes_uncertain_titles_to_signals():
     def fake_knowledge_match(category, name, aliases=None):
         if name == "analyst":

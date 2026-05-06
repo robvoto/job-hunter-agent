@@ -1,5 +1,6 @@
 from job_hunter_agent import llm_gate
 import json
+import pytest
 
 
 class _FakeResponse:
@@ -81,3 +82,32 @@ def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):
     system_prompt = fake_client.responses.calls[0]["input"][0]["content"]
     assert "platform" in system_prompt
     assert "industry" in system_prompt
+
+
+def test_normalize_llm_review_payload_keeps_learning_candidates():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "SOLID",
+            "learning_candidates": [
+                {"signal": "platform engineer", "suggested_category": "role_title_token", "original_texts": ["Platform Engineer"]},
+                {"signal": "platform engineer", "suggested_category": "role_title_token", "original_texts": ["Platform Engineer"]},
+            ],
+        }
+    )
+
+    assert payload == {
+        "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+        "learning_candidates": [
+            {
+                "signal": "platform engineer",
+                "suggested_category": "role_title_token",
+                "original_texts": ["platform engineer"],
+            }
+        ],
+    }
+
+
+def test_normalize_llm_review_payload_rejects_missing_grade():
+    with pytest.raises(ValueError, match="missing grade"):
+        llm_gate.normalize_llm_review_payload({"decision": "KEEP"})

@@ -6,8 +6,10 @@ from typing import Any, Tuple
 
 from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
+from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.paths import OUTPUT_DIR
-from job_hunter_agent.profile_store import load_profile
+from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, load_profile
+from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
 
 
@@ -94,8 +96,10 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
     matched_secondary_pattern = _find_matching_title_pattern(base_role, adjacent_patterns)
     is_direct_match = bool(matched_primary_pattern)
     is_adjacent_match = bool(matched_secondary_pattern)
+    rules = load_parsing_rules()
+    lower_sen_tokens = set(rules.get("title_seniority_groups", {}).get("lower", []))
     title_seniority = "plain"
-    if any(token in {"junior", "graduate", "associate"} for token in decomposition.get("seniority_modifiers") or []):
+    if any(token in lower_sen_tokens for token in decomposition.get("seniority_modifiers") or []):
         title_seniority = "lower"
     elif decomposition.get("seniority_modifiers"):
         title_seniority = "preferred"
@@ -114,10 +118,11 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
         }
     )
     if result["primary_pattern_has_seniority"]:
+        adjustments = rules.get("seniority_score_adjustments", {})
         if title_seniority == "lower":
-            result["seniority_adjustment"] = -5
+            result["seniority_adjustment"] = adjustments.get("lower", -5)
         elif title_seniority == "preferred":
-            result["seniority_adjustment"] = 3
+            result["seniority_adjustment"] = adjustments.get("preferred", 3)
 
     if not is_direct_match and not is_adjacent_match:
         result["reason"] = "TITLE_NOT_TARGET"
@@ -132,12 +137,12 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
 
     if is_direct_match:
         if _has_numeric_title_level(normalized_title):
-            result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "primary"})
+            result.update({"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "primary"})
             return result
         result.update({"ok": True, "reason": "OK", "match_family": "primary"})
         return result
 
-    result.update({"ok": True, "reason": "TITLE_POTENTIAL_MATCH", "match_family": "secondary"})
+    result.update({"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"})
     return result
 
 
@@ -224,16 +229,9 @@ def _normalize_reason_token(value: str) -> str:
 
 def _normalize_level(value: str) -> str:
     level = (value or "").strip().lower()
-    aliases = {
-        "low": "low",
-        "weak": "low",
-        "basic": "basic",
-        "limited": "basic",
-        "working": "working",
-        "intermediate": "working",
-        "strong": "strong",
-        "expert": "strong",
-    }
+    aliases = load_parsing_rules().get("level_aliases", {})
+    if not aliases:
+        return level or "basic"
     return aliases.get(level, level or "basic")
 
 
@@ -257,11 +255,16 @@ def _matches_hard_requirement(text: str, alias: str) -> bool:
     if not alias_lower:
         return False
 
+    rules = load_parsing_rules()
+    context_pats = rules.get("matching_context_patterns", {})
     escaped_alias = re.escape(alias_lower)
+    prefix = context_pats.get("hard_requirement_prefix", "")
+    suffix = context_pats.get("hard_requirement_suffix", "")
+    
     patterns = [
-        rf"(strong|solid|extensive|proven|demonstrated|hands[- ]on|deep|advanced|expert).{{0,45}}{escaped_alias}",
-        rf"{escaped_alias}.{{0,45}}(required|essential|must have|mandatory|highly desirable)",
-        rf"(required|essential|must have|mandatory|highly desirable).{{0,45}}{escaped_alias}",
+        rf"{prefix}.{{0,45}}{escaped_alias}",
+        rf"{escaped_alias}.{{0,45}}{suffix}",
+        rf"{suffix}.{{0,45}}{escaped_alias}",
     ]
     return any(re.search(pattern, text) for pattern in patterns)
 
@@ -271,10 +274,15 @@ def _matches_soft_requirement(text: str, alias: str) -> bool:
     if not alias_lower:
         return False
 
+    rules = load_parsing_rules()
+    context_pats = rules.get("matching_context_patterns", {})
     escaped_alias = re.escape(alias_lower)
+    prefix = context_pats.get("soft_requirement_prefix", "")
+    suffix = context_pats.get("soft_requirement_suffix", "")
+
     patterns = [
-        rf"(experience in|experience with|knowledge of|understanding of|proficiency in).{{0,45}}{escaped_alias}",
-        rf"{escaped_alias}.{{0,35}}(experience|knowledge|understanding|proficiency)",
+        rf"{prefix}.{{0,45}}{escaped_alias}",
+        rf"{escaped_alias}.{{0,35}}{suffix}",
     ]
     return any(re.search(pattern, text) for pattern in patterns)
 
@@ -285,9 +293,15 @@ def matches_mandatory_requirement(description_text: str, required_term: str) -> 
     if not description_lower or not skill_lower:
         return False
 
+    rules = load_parsing_rules()
+    mandatory_indicators = rules.get("mandatory_language_indicators", [])
+    if not mandatory_indicators:
+        mandatory_indicators = ["required", "essential", "must have", "mandatory"]
+
     escaped_skill = re.escape(skill_lower)
     term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
-    hard_requirement_re = re.compile(r"\b(required|requires|required to|essential|must have|mandatory|need to have|needs to have)\b")
+    mandatory_pattern = rf"\b({'|'.join(mandatory_indicators)})\b"
+    hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
 
     def hard_requirement_matches(context: str) -> bool:
         for hard_match in hard_requirement_re.finditer(context):
@@ -311,11 +325,16 @@ def matches_missing_requirement(description_text: str, required_term: str) -> bo
     skill_lower = (required_term or "").strip().lower()
     if not description_lower or not skill_lower:
         return False
+    rules = load_parsing_rules()
     escaped_skill = re.escape(skill_lower)
     term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
-    hard_requirement_re = re.compile(r"\b(required|requires|required to|essential|must have|mandatory|need to have|needs to have)\b")
-    strength_re = re.compile(r"\b(strong|extensive|proven|solid|deep|hands[- ]on|expert)\b")
-    desirable_re = re.compile(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial|highly desirable)\b")
+    mandatory_pattern = rf"\b({'|'.join(rules.get('mandatory_language_indicators', []))})\b"
+    strength_pattern = rf"\b({'|'.join(rules.get('strength_language_indicators', []))})\b"
+    desirable_pattern = rf"\b({'|'.join(rules.get('desirable_language_indicators', []))})\b"
+
+    hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
+    strength_re = re.compile(strength_pattern, re.IGNORECASE)
+    desirable_re = re.compile(desirable_pattern, re.IGNORECASE)
 
     def hard_requirement_matches(context: str) -> bool:
         for hard_match in hard_requirement_re.finditer(context):
@@ -337,7 +356,7 @@ def matches_missing_requirement(description_text: str, required_term: str) -> bo
 
 
 def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:
-    capability_rules = profile.get("capability_profile_rules", [])
+    capability_rules = profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
     positive_hits = 0
     warning_reason = "OK"
 
@@ -373,7 +392,7 @@ def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple
     proof_hits = 0
     mention_hits = 0
 
-    for rule in profile.get("capability_profile_rules", []):
+    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
         name = str(rule.get("name") or "").strip()
         if not name:
             continue
@@ -397,55 +416,33 @@ def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple
 def _evaluate_description_confidence(details_text: str, description_lower: str, title_reason: str, profile: dict) -> Tuple[bool, str]:
     normalized_text = re.sub(r"\s+", " ", details_text).strip()
     text_length = len(normalized_text)
+    rules = load_parsing_rules()
+    conf_rules = rules.get("description_confidence_rules", {})
+    
     section_score = sum(
         1
-        for pattern in (
-            r"\bresponsibilities\b",
-            r"\brequirements\b",
-            r"\byou will\b",
-            r"\bkey duties\b",
-            r"\babout the role\b",
-            r"\bexperience with\b",
-            r"\bmust have\b",
-            r"\bessential\b",
-        )
+        for pattern in [rf"\b{re.escape(i)}\b" for i in conf_rules.get("section_indicators", [])]
         if re.search(pattern, description_lower)
     )
     bullet_score = len(re.findall(r"(?m)^\s*[-*\u2022]", details_text))
     generic_score = sum(
         1
-        for phrase in (
-            "great opportunity",
-            "fast-paced environment",
-            "dynamic team",
-            "leading organisation",
-            "excellent communication skills",
-            "must be based in",
-            "full working rights",
-        )
-        if phrase in description_lower
+        for phrase in rules.get("generic_summary_phrases", [])
+        if phrase.lower() in description_lower
     )
     coordination_score = sum(
         1
-        for token in (
-            "coordination",
-            "coordinating",
-            "reporting",
-            "liaise",
-            "liaison",
-            "administration",
-            "scheduling",
-        )
-        if token in description_lower
+        for token in conf_rules.get("coordination_tokens", [])
+        if token.lower() in description_lower
     )
     proof_hits, mention_hits = _count_capability_role_proof(description_lower, profile)
     has_capability_rules = any(
         str(rule.get("name") or "").strip()
-        for rule in profile.get("capability_profile_rules", [])
+        for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
     )
     structurally_thin = text_length < 500 and section_score < 2 and bullet_score < 3
 
-    if title_reason == "TITLE_POTENTIAL_MATCH":
+    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
         if has_capability_rules and proof_hits == 0 and mention_hits == 0:
             return False, "DESC_ROLE_PROOF_MISSING"
         if proof_hits == 0 and mention_hits < 2 and (structurally_thin or generic_score >= 2 or coordination_score >= 3):

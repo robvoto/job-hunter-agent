@@ -2,7 +2,7 @@
   "kind": "managed_knowledge",
   "name": "hard_blocker_rules",
   "version": 1,
-  "description": "Approved reusable patterns that detect when a candidate-specific rejected term is a non-negotiable job requirement.",
+  "description": "Sentence patterns that detect when a term is a non-negotiable requirement in a job ad. Each entry must contain a {term} placeholder — the engine substitutes candidate-specific rejected skills from profile.must_not_require_skills. These are detection grammar, not a blocklist.",
   "entries": [
     {
       "value": "must have {term}",
@@ -18,6 +18,10 @@
     },
     {
       "value": "{term} is essential",
+      "aliases": []
+    },
+    {
+      "value": "demonstrated experience in {term}",
       "aliases": []
     }
   ]

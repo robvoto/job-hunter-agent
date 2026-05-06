@@ -14,14 +14,14 @@ def load_salary(force_reload: bool = False) -> dict:
 
     Results are cached in memory to avoid repeated disk reads.
     """
-    global _cached
+    global _cached_rules
 
-    if _cached is not None and not force_reload:
-        return _cached
+    if _cached_rules is not None and not force_reload:
+        return _cached_rules
 
     if _SALARY_PATH.exists():
-        _cached = json.loads(_SALARY_PATH.read_text())
+        _cached_rules = json.loads(_SALARY_PATH.read_text())
     else:
-        _cached = {}
+        _cached_rules = {}
 
-    return _cached
+    return _cached_rules

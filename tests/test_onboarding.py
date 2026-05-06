@@ -1,9 +1,10 @@
-from job_hunter_agent import local_server
+from job_hunter_agent import server_helpers
+from job_hunter_agent import server_review
 from job_hunter_agent import source_documents
 
 
 def test_normalize_onboarding_search_preferences_trims_and_normalizes():
-    normalized = local_server._normalize_onboarding_search_preferences(
+    normalized = server_helpers._normalize_onboarding_search_preferences(
         {
             "keywords": "  business analyst  ",
             "locations": [" Sydney NSW ", "", "Melbourne VIC"],
@@ -20,7 +21,7 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
 
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
     try:
-        local_server._validate_required_onboarding_inputs(
+        server_helpers._validate_required_onboarding_inputs(
             {
                 "keywords": "",
                 "locations": [],
@@ -35,7 +36,7 @@ def test_validate_required_onboarding_inputs_requires_locations_and_engagement()
 
 
 def test_validate_required_onboarding_inputs_allows_blank_keywords():
-    local_server._validate_required_onboarding_inputs(
+    server_helpers._validate_required_onboarding_inputs(
         {
             "keywords": "",
             "locations": ["Sydney NSW"],
@@ -50,7 +51,7 @@ def test_validate_required_onboarding_inputs_allows_blank_keywords():
 
 def test_validate_required_onboarding_inputs_rejects_bad_boundaries():
     try:
-        local_server._validate_required_onboarding_inputs(
+        server_helpers._validate_required_onboarding_inputs(
             {
                 "keywords": "x",
                 "locations": ["Sydney NSW", "!" * 5],
@@ -68,7 +69,7 @@ def test_validate_required_onboarding_inputs_rejects_bad_boundaries():
 
 
 def test_normalize_onboarding_settings_payload_supports_current_key():
-    normalized = local_server._normalize_onboarding_settings_payload(
+    normalized = server_helpers._normalize_onboarding_settings_payload(
         {
             "extraction_lookback_years": 12,
             "title_extraction_min_months": 9,
@@ -86,14 +87,14 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
 
 
 def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
-    monkeypatch.setattr(local_server, "load_profile", lambda: {"onboarding_settings": {}})
+    monkeypatch.setattr(server_helpers, "load_profile", lambda: {"onboarding_settings": {}})
 
-    normalized = local_server._normalize_onboarding_settings_payload(
+    normalized = server_helpers._normalize_onboarding_settings_payload(
         {
             "extraction_lookback_years": 999,
             "title_extraction_min_months": 0,
             "max_target_patterns": -1,
-                "max_secondary_patterns": 999,
+            "max_secondary_patterns": 999,
         }
     )
 
@@ -101,7 +102,7 @@ def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
         "extraction_lookback_years": 20,
         "title_extraction_min_months": 1,
         "max_target_patterns": 1,
-            "max_secondary_patterns": 20,
+        "max_secondary_patterns": 20,
     }
 
 
@@ -154,7 +155,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
 
 
 def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
-    sanitized = local_server.AdminHandler._sanitize_agent_settings_payload(
+    sanitized = server_helpers.SettingsHandler._sanitize_agent_settings_payload(
         {
             "dashboard": {
                 "minimum_score": 150,
@@ -174,7 +175,7 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         "loop_sleep_seconds": 60,
     }
 
-    public_payload = local_server.AdminHandler._public_agent_settings_payload(
+    public_payload = server_helpers.SettingsHandler._public_agent_settings_payload(
         {
             "dashboard": {
                 "minimum_score": 61,
@@ -197,7 +198,7 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
 
 def test_agent_settings_schedule_payload_rejects_bad_time_format():
     try:
-        local_server.AdminHandler._sanitize_agent_settings_payload(
+        server_helpers.SettingsHandler._sanitize_agent_settings_payload(
             {
                 "schedule": {
                     "daily_time_local": "9:45 am",
@@ -219,20 +220,12 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     }
     events = []
 
-    monkeypatch.setattr(local_server, "load_profile", lambda: saved_profile)
-    monkeypatch.setattr(local_server, "save_profile", lambda profile: profile)
-    monkeypatch.setattr(
-        local_server.SettingsHandler,
-        "_persist_review_event",
-        classmethod(lambda cls, *args, **kwargs: events.append((args, kwargs))),
-    )
-    monkeypatch.setattr(
-        local_server.SettingsHandler,
-        "_rebuild_dashboard_after_rule_change",
-        staticmethod(lambda reason="": events.append(((f"rebuild:{reason}",), {}))),
-    )
+    monkeypatch.setattr(server_review, "load_profile", lambda: saved_profile)
+    monkeypatch.setattr(server_review, "save_profile", lambda profile: profile)
+    monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: events.append((args, kwargs)))
+    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": events.append(((f"rebuild:{reason}",), {})))
 
-    result = local_server.SettingsHandler._remove_review_key("unapply", "job-1")
+    result = server_review.remove_review_key("unapply", "job-1")
 
     assert result["ok"] is True
     assert result["reload_dashboard"] is True
@@ -243,7 +236,7 @@ def test_remove_review_key_supports_unapply(monkeypatch):
 
 
 def test_patch_affects_matching_rules_includes_capability_matrix():
-    assert local_server.SettingsHandler._patch_affects_matching_rules({"capability_profile_rules": []}) is True
+    assert server_helpers.SettingsHandler._patch_affects_matching_rules({"capability_profile_rules": []}) is True
 
 
 def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp_path):
@@ -261,65 +254,62 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
             if self.target:
                 self.target()
 
-    monkeypatch.setattr(local_server, "DASHBOARD_PATH", tmp_path / "dashboard.html")
-    monkeypatch.setattr(local_server, "RUN_STATS_PATH", tmp_path / "run_stats.json")
-    monkeypatch.setattr(local_server, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    monkeypatch.setattr(server_review, "DASHBOARD_PATH", tmp_path / "dashboard.html")
+    monkeypatch.setattr(server_review, "RUN_STATS_PATH", tmp_path / "run_stats.json")
+    monkeypatch.setattr(server_review, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
     (tmp_path / "dashboard.html").write_text("ok", encoding="utf-8")
-    monkeypatch.setattr(local_server.threading, "Thread", FakeThread)
-    monkeypatch.setattr(local_server, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_review.threading, "Thread", FakeThread)
+    monkeypatch.setattr(server_review, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
 
-    local_server.SettingsHandler._rebuild_dashboard_after_rule_change("profile matching rules saved")
+    server_review.rebuild_dashboard_after_rule_change("profile matching rules saved")
 
     assert started == [{"daemon": True, "name": "job-hunter-dashboard-rebuild"}]
     assert rebuilds == ["profile matching rules saved; applying saved filters to current dashboard"]
 
 
-def test_rebuild_dashboard_for_debug_mode_runs_once_when_data_exists(monkeypatch, tmp_path):
+def test_rebuild_dashboard_on_startup_runs_when_data_exists(monkeypatch, tmp_path):
     rebuilds = []
 
-    monkeypatch.setattr(local_server, "DEBUG_MODE", True)
-    monkeypatch.setattr(local_server, "DASHBOARD_PATH", tmp_path / "dashboard.html")
-    monkeypatch.setattr(local_server, "RUN_STATS_PATH", tmp_path / "run_stats.json")
-    monkeypatch.setattr(local_server, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
-    local_server.RUN_STATS_PATH.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(local_server, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_helpers, "DASHBOARD_PATH", tmp_path / "dashboard.html")
+    monkeypatch.setattr(server_helpers, "RUN_STATS_PATH", tmp_path / "run_stats.json")
+    monkeypatch.setattr(server_helpers, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    server_helpers.RUN_STATS_PATH.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(server_helpers, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
 
-    local_server._rebuild_dashboard_for_debug_mode()
+    server_helpers._rebuild_dashboard_on_startup()
 
-    assert rebuilds == ["local server debug mode startup"]
+    assert rebuilds == ["server startup rebuild"]
 
 
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):
     saved_profiles = []
     saved_materials = []
 
-    monkeypatch.setattr(local_server, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
-    monkeypatch.setattr(local_server, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
-    monkeypatch.setattr(local_server, "JOB_HISTORY_PATH", tmp_path / "job_history.json")
-    monkeypatch.setattr(local_server, "REVIEW_DATA_PATH", tmp_path / "review_data.json")
-    monkeypatch.setattr(local_server, "RUN_STATS_PATH", tmp_path / "run_stats.json")
-    monkeypatch.setattr(local_server, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
-    monkeypatch.setattr(local_server, "REJECTION_RULES_PATH", tmp_path / "rejection_rules.json")
-    monkeypatch.setattr(local_server, "DASHBOARD_PATH", tmp_path / "dashboard.html")
-    monkeypatch.setattr(local_server, "SOURCE_PACK_DIR", tmp_path / "source_pack")
+    monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
+    monkeypatch.setattr(server_helpers, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
+    monkeypatch.setattr(server_helpers, "JOB_HISTORY_PATH", tmp_path / "job_history.json")
+    monkeypatch.setattr(server_helpers, "REVIEW_DATA_PATH", tmp_path / "review_data.json")
+    monkeypatch.setattr(server_helpers, "RUN_STATS_PATH", tmp_path / "run_stats.json")
+    monkeypatch.setattr(server_helpers, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    monkeypatch.setattr(server_helpers, "DASHBOARD_PATH", tmp_path / "dashboard.html")
+    monkeypatch.setattr(server_helpers, "SOURCE_PACK_DIR", tmp_path / "source_pack")
 
-    local_server.SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
-    (local_server.SOURCE_PACK_DIR / "primary_cv.txt").write_text("cv", encoding="utf-8")
-    local_server.DASHBOARD_PATH.write_text("old dashboard", encoding="utf-8")
+    server_helpers.SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
+    (server_helpers.SOURCE_PACK_DIR / "primary_cv.txt").write_text("cv", encoding="utf-8")
+    server_helpers.DASHBOARD_PATH.write_text("old dashboard", encoding="utf-8")
 
-    result = local_server.SettingsHandler._reset_current_user_state()
+    result = server_helpers.SettingsHandler._reset_current_user_state()
 
     assert result["ok"] is True
     assert result["redirect_to"] == "/start"
-    assert saved_profiles == [local_server.DEFAULT_PROFILE]
-    assert saved_materials == [local_server.DEFAULT_SOURCE_MATERIALS]
-    assert not local_server.SOURCE_PACK_DIR.exists()
-    assert not local_server.DASHBOARD_PATH.exists()
-    assert local_server.JOB_HISTORY_PATH.read_text(encoding="utf-8").strip() == "{}"
-    assert local_server.REVIEW_DATA_PATH.read_text(encoding="utf-8").strip() == "{}"
-    assert local_server.RUN_STATS_PATH.read_text(encoding="utf-8").strip() == "{}"
-    assert local_server.AUDIT_RECORDS_PATH.read_text(encoding="utf-8").strip() == "[]"
-    assert local_server.REJECTION_RULES_PATH.read_text(encoding="utf-8").strip() == "[]"
+    assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
+    assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
+    assert not server_helpers.SOURCE_PACK_DIR.exists()
+    assert not server_helpers.DASHBOARD_PATH.exists()
+    assert server_helpers.JOB_HISTORY_PATH.read_text(encoding="utf-8").strip() == "{}"
+    assert server_helpers.REVIEW_DATA_PATH.read_text(encoding="utf-8").strip() == "{}"
+    assert server_helpers.RUN_STATS_PATH.read_text(encoding="utf-8").strip() == "{}"
+    assert server_helpers.AUDIT_RECORDS_PATH.read_text(encoding="utf-8").strip() == "[]"
 
 
 def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
@@ -330,7 +320,7 @@ def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
 
     monkeypatch.setattr("job_hunter_agent.signal_registry.clear_signal_learning_state", fake_clear_signal_learning_state)
 
-    result = local_server.SettingsHandler._reset_global_learning()
+    result = server_helpers.SettingsHandler._reset_global_learning()
 
     assert result["ok"] is True
     assert calls == [True]

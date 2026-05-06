@@ -1,5 +1,6 @@
 {
   "kind": "rules",
+  
   "name": "title_normalization_rules",
   "version": 1,
   "updated_at": "2026-05-03",
@@ -18,6 +19,24 @@
     "jr": "junior",
     "ba": "business analyst",
     "po": "product owner"
+  },
+  "learning_candidates": {
+    "sr": {
+      "suggested_values": ["senior"],
+      "confidence": "strong"
+    },
+    "jr": {
+      "suggested_values": ["junior"],
+      "confidence": "strong"
+    },
+    "gp": {
+      "suggested_values": ["general practitioner"],
+      "confidence": "ambiguous"
+    },
+    "pm": {
+      "suggested_values": ["project manager", "product manager", "program manager"],
+      "confidence": "ambiguous"
+    }
   },
   "normalization": {
     "collapse_spaces": true,

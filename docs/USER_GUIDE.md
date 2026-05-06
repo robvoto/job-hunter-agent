@@ -16,13 +16,13 @@ That is the current source connector, not the final limit of the product.
 1. Start the local web UI:
 
 ```powershell
-python -m job_hunter_agent.local_server
+python -m job_hunter_agent.fastapi_app
 ```
 
 Test/debug mode:
 
 ```powershell
-python -m job_hunter_agent.local_server --debug-mode
+python -m job_hunter_agent.fastapi_app --debug
 ```
 
 2. Open:
@@ -245,3 +245,4 @@ Simple rule:
 These are also local-only if used:
  
 - `.venv/`
+

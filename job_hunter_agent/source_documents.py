@@ -21,7 +21,9 @@ from job_hunter_agent.profile_learning import (
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
-    build_evidence_tiers_from_sections,
+    build_candidate_profile_tiers_from_sections,
+    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_EVIDENCE_TIERS,
     load_profile,
     patch_profile,
 )
@@ -39,17 +41,14 @@ SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
     "primary_job_title_pattern",
-    "secondary_title_patterns",
-    "reject_title_rules",
-    "capability_profile_rules",
+    "secondary_title_patterns", 
+    KEY_CAPABILITY_PROFILE_RULES,
     "cv_text",
-    "evidence_tiers",
+    KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
     "dominant_signal_clusters",
-    "must_not_require_skills",
-    "cheap_keep_counter_patterns",
-    "cheap_reject_metadata_rules",
+    "must_not_require_skills", 
 )
 
 ONBOARDING_RESET_OUTPUTS = (
@@ -299,7 +298,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     # --- Extract fresh from combined_text ---
     patch["cv_text"] = combined_text
-    patch["evidence_tiers"] = build_evidence_tiers_from_sections(source_sections)
+    # Evidence buckets are derived from source section headings during onboarding.
+    patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
     pipeline_patch = run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings)
     learning_patch = build_learning_patch(
@@ -309,15 +309,15 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     )
     patch.update(pipeline_patch)
     for key, value in learning_patch.items():
-        if key in {"cv_text", "capability_profile_rules"}:
+        if key in {"cv_text", KEY_CAPABILITY_PROFILE_RULES}:
             continue
         patch[key] = value
-    patch["capability_profile_rules"] = merge_capability_rules(
+    patch[KEY_CAPABILITY_PROFILE_RULES] = merge_capability_rules(
         [],
-        learning_patch.get("capability_profile_rules", []),
+        learning_patch.get(KEY_CAPABILITY_PROFILE_RULES, []),
     )
 
-    brief = build_llm_profile_brief(capability_rules=patch.get("capability_profile_rules") or [])
+    brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CAPABILITY_PROFILE_RULES) or [])
     if brief:
         patch["llm_profile_brief"] = brief
 
@@ -384,7 +384,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     extraction_counts = {
         "target_titles": len(patch.get("primary_job_title_pattern") or []),
         "secondary_titles": len(patch.get("secondary_title_patterns") or []),
-        "capabilities": len(patch.get("capability_profile_rules") or []),
+        "capabilities": len(patch.get(KEY_CAPABILITY_PROFILE_RULES) or []),
         "dominant_signal_clusters": len(patch.get("dominant_signal_clusters") or []),
     }
 

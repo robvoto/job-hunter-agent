@@ -3,7 +3,12 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from job_hunter_agent.profile_store import get_evidence_tiers
+from job_hunter_agent.profile_store import (
+    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+    get_candidate_profile_tiers,
+)
 from job_hunter_agent.role_analysis import text_contains_term
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 
@@ -108,11 +113,11 @@ def find_profile_experience_year(profile: dict, aliases: List[str]) -> Optional[
     if explicit_old_year:
         return explicit_old_year
 
-    evidence_tiers = get_evidence_tiers(profile)
+    evidence_tiers = get_candidate_profile_tiers(profile)
     candidate_years = [
-        find_profile_experience_year_in_text(evidence_tiers.get("primary_current_evidence", ""), aliases),
-        find_profile_experience_year_in_text(evidence_tiers.get("secondary_older_evidence", ""), aliases),
-        find_profile_experience_year_in_text(evidence_tiers.get("background_optional_evidence", ""), aliases),
+        find_profile_experience_year_in_text(evidence_tiers.get(KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT, ""), aliases),
+        find_profile_experience_year_in_text(evidence_tiers.get(KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT, ""), aliases),
+        find_profile_experience_year_in_text(evidence_tiers.get(KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT, ""), aliases),
         find_profile_experience_year_in_text(str(profile.get("cv_text") or ""), aliases),
     ]
     candidate_years = [year for year in candidate_years if year]

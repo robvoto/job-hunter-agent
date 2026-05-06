@@ -1,0 +1,112 @@
+{
+  "fit_highlights": {
+    "strong_capability_count": 3,
+    "working_capability_count": 2,
+    "basic_capability_count": 1,
+    "reviewed_signal_count": 3,
+    "max_highlights": 4
+  },
+  "search_settings": {
+    "keywords": "",
+    "locations": [],
+    "classification_ids": [],
+    "date_range_days": 3,
+    "seek_max_pages": 10,
+    "enforce_posted_age_limit": true,
+    "sort_newest_first": true,
+    "linkedin_hours_old": 24,
+    "linkedin_results_per_search": 50,
+    "linkedin_easy_apply_only": null
+  },
+  "search_limits": {
+    "date_range_days": {
+      "min": 1,
+      "max": 30
+    },
+    "seek_max_pages": {
+      "min": 1,
+      "max": 10
+    },
+    "linkedin_hours_old": {
+      "min": 1,
+      "max": 168
+    },
+    "linkedin_results_per_search": {
+      "min": 5,
+      "max": 100
+    }
+  },
+  "preference_weights": {
+    "fit": 1,
+    "salary": 1,
+    "location": 1,
+    "work_mode": 1,
+    "contract": 1,
+    "government": 1,
+    "freshness": 1
+  },
+  "candidate_profile_tier_weights": {
+    "primary_candidate_profile_context": 1,
+    "secondary_candidate_profile_context": 0.55,
+    "supplementary_candidate_profile_context": 0.25
+  },
+  "onboarding_settings": {
+    "extraction_lookback_years": 8,
+    "title_extraction_min_months": 6,
+    "max_target_patterns": 8,
+    "max_secondary_patterns": 6,
+    "capability_strength_preset": "balanced",
+    "capability_recent_years": 4,
+    "capability_strong_max_years_since_use": 4,
+    "capability_strong_min_months": 36,
+    "capability_strong_min_roles": 2,
+    "capability_working_max_years_since_use": 8,
+    "capability_working_min_months": 18,
+    "capability_working_long_history_max_years_since_use": 12,
+    "capability_working_long_history_min_months": 48,
+    "capability_single_role_old_max_years_since_use": 8,
+    "capability_drop_to_basic_after_years": 12,
+    "capability_max_items": 20,
+    "capability_strength_presets": {
+      "recent_focus": {
+        "capability_recent_years": 3,
+        "capability_strong_max_years_since_use": 3,
+        "capability_strong_min_months": 36,
+        "capability_strong_min_roles": 2,
+        "capability_working_max_years_since_use": 6,
+        "capability_working_min_months": 18,
+        "capability_working_long_history_max_years_since_use": 10,
+        "capability_working_long_history_min_months": 60,
+        "capability_single_role_old_max_years_since_use": 6,
+        "capability_drop_to_basic_after_years": 10,
+        "capability_max_items": 20
+      },
+      "balanced": {
+        "capability_recent_years": 4,
+        "capability_strong_max_years_since_use": 4,
+        "capability_strong_min_months": 36,
+        "capability_strong_min_roles": 2,
+        "capability_working_max_years_since_use": 8,
+        "capability_working_min_months": 18,
+        "capability_working_long_history_max_years_since_use": 12,
+        "capability_working_long_history_min_months": 48,
+        "capability_single_role_old_max_years_since_use": 8,
+        "capability_drop_to_basic_after_years": 12,
+        "capability_max_items": 20
+      },
+      "include_older_experience": {
+        "capability_recent_years": 5,
+        "capability_strong_max_years_since_use": 5,
+        "capability_strong_min_months": 30,
+        "capability_strong_min_roles": 2,
+        "capability_working_max_years_since_use": 10,
+        "capability_working_min_months": 12,
+        "capability_working_long_history_max_years_since_use": 15,
+        "capability_working_long_history_min_months": 36,
+        "capability_single_role_old_max_years_since_use": 10,
+        "capability_drop_to_basic_after_years": 15,
+        "capability_max_items": 24
+      }
+    }
+  }
+}

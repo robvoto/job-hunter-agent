@@ -5,6 +5,15 @@ import re
 from typing import Any
 
 from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH
+from job_hunter_agent.signal_schema import (
+    MANAGED_KNOWLEDGE_ALIASES_KEY,
+    MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
+    MANAGED_KNOWLEDGE_ENTRIES_KEY,
+    MANAGED_KNOWLEDGE_KIND_KEY,
+    MANAGED_KNOWLEDGE_NAME_KEY,
+    MANAGED_KNOWLEDGE_VALUE_KEY,
+    MANAGED_KNOWLEDGE_VERSION_KEY,
+)
 
 _TERM_PLACEHOLDER = "{term}"
 
@@ -40,7 +49,7 @@ def _clean_aliases(values: Any, *, canonical: str = "") -> list[str]:
 
 def _load_payload() -> dict[str, Any]:
     if not HARD_BLOCKER_RULES_PATH.exists():
-        return {"entries": []}
+        return {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
     try:
         payload = json.loads(HARD_BLOCKER_RULES_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
@@ -51,12 +60,12 @@ def _load_payload() -> dict[str, Any]:
 def _normalize_entry(entry: Any) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
-    value = _clean_text(entry.get("value"))
+    value = _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
     if not value:
         return None
     return {
-        "value": value,
-        "aliases": _clean_aliases(entry.get("aliases"), canonical=value),
+        MANAGED_KNOWLEDGE_VALUE_KEY: value,
+        MANAGED_KNOWLEDGE_ALIASES_KEY: _clean_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=value),
     }
 
 
@@ -67,12 +76,12 @@ def _merge_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized = _normalize_entry(entry)
         if normalized is None:
             continue
-        value_key = normalized["value"].lower()
+        value_key = normalized[MANAGED_KNOWLEDGE_VALUE_KEY].lower()
         bucket = merged.get(value_key)
         if bucket is None:
             bucket = {
-                "value": normalized["value"],
-                "aliases": [],
+                MANAGED_KNOWLEDGE_VALUE_KEY: normalized[MANAGED_KNOWLEDGE_VALUE_KEY],
+                MANAGED_KNOWLEDGE_ALIASES_KEY: [],
             }
             merged[value_key] = bucket
             order.append(value_key)
@@ -88,7 +97,7 @@ def _merge_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def load_hard_blocker_rules() -> list[dict[str, Any]]:
     payload = _load_payload()
-    entries = payload.get("entries")
+    entries = payload.get(MANAGED_KNOWLEDGE_ENTRIES_KEY)
     if not isinstance(entries, list):
         return []
     return _merge_entries(entries)
@@ -96,11 +105,11 @@ def load_hard_blocker_rules() -> list[dict[str, Any]]:
 
 def save_hard_blocker_rules(entries: list[dict[str, Any]]) -> dict[str, Any]:
     payload = {
-        "kind": "managed_knowledge",
-        "name": "hard_blocker_rules",
-        "version": 1,
-        "description": "Approved reusable patterns that detect when a candidate-specific rejected term is a non-negotiable job requirement.",
-        "entries": _merge_entries(entries),
+        MANAGED_KNOWLEDGE_KIND_KEY: "managed_knowledge",
+        MANAGED_KNOWLEDGE_NAME_KEY: "hard_blocker_rules",
+        MANAGED_KNOWLEDGE_VERSION_KEY: 1,
+        "description": "Sentence patterns that detect when a term is a non-negotiable requirement in a job ad. Each entry must contain a {term} placeholder — the engine substitutes candidate-specific rejected skills from profile.must_not_require_skills. These are detection grammar, not a blocklist.",
+        MANAGED_KNOWLEDGE_ENTRIES_KEY: _merge_entries(entries),
     }
     HARD_BLOCKER_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
     HARD_BLOCKER_RULES_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -116,15 +125,15 @@ def upsert_hard_blocker_rule(value: str, aliases: list[str] | None = None) -> di
 
     entries = list(load_hard_blocker_rules())
     for entry in entries:
-        if _clean_text(entry.get("value")).lower() != cleaned_value.lower():
+        if _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
             continue
-        entry["value"] = cleaned_value
-        entry["aliases"] = []
+        entry[MANAGED_KNOWLEDGE_VALUE_KEY] = cleaned_value
+        entry[MANAGED_KNOWLEDGE_ALIASES_KEY] = []
         return save_hard_blocker_rules(entries)
 
     entries.append({
-        "value": cleaned_value,
-        "aliases": [],
+        MANAGED_KNOWLEDGE_VALUE_KEY: cleaned_value,
+        MANAGED_KNOWLEDGE_ALIASES_KEY: [],
     })
     return save_hard_blocker_rules(entries)
 
@@ -133,7 +142,7 @@ def expand_hard_blocker_terms(entry: dict[str, Any]) -> list[str]:
     normalized = _normalize_entry(entry)
     if normalized is None:
         return []
-    return [normalized["value"], *normalized["aliases"]]
+    return [normalized[MANAGED_KNOWLEDGE_VALUE_KEY], *normalized[MANAGED_KNOWLEDGE_ALIASES_KEY]]
 
 
 def _normalize_match_text(value: Any) -> str:
@@ -175,7 +184,7 @@ def find_hard_block_matches(text: str, terms: list[str] | None = None) -> list[d
     matches: list[tuple[int, dict[str, str]]] = []
     seen: set[tuple[str, str, int]] = set()
     for entry in load_hard_blocker_rules():
-        canonical = _clean_text(entry.get("value"))
+        canonical = _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
         if not canonical:
             continue
         for term in terms:
@@ -196,7 +205,7 @@ def find_hard_block_matches(text: str, terms: list[str] | None = None) -> list[d
                         (
                             match.start(),
                             {
-                                "value": canonical,
+                                MANAGED_KNOWLEDGE_VALUE_KEY: canonical,
                                 "matched_term": _clean_text(term),
                                 "context": context,
                             },

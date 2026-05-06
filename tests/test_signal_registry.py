@@ -5,6 +5,7 @@ import json
 from job_hunter_agent import capability_knowledge, signal_registry
 from job_hunter_agent import hard_blocker_rules
 from job_hunter_agent import role_title_knowledge
+from job_hunter_agent import title_normalization_rules
 
 
 def test_load_capability_knowledge_normalizes_entries(tmp_path, monkeypatch):
@@ -94,6 +95,7 @@ def test_approve_signal_promotes_hard_blocker_pattern_with_clean_shape(tmp_path,
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", hard_blocker_path)
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
     monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", hard_blocker_path)
     
     signal_registry.save_registry({
         "demonstrated experience in {term}": {
@@ -118,18 +120,15 @@ def test_approve_signal_promotes_hard_blocker_pattern_with_clean_shape(tmp_path,
     assert saved_registry == {}
 
     knowledge = json.loads(hard_blocker_path.read_text(encoding="utf-8"))
-    assert knowledge == {
-        "kind": "managed_knowledge",
-        "name": "hard_blocker_rules",
-        "version": 1,
-        "description": "Approved reusable patterns that detect when a candidate-specific rejected term is a non-negotiable job requirement.",
-        "entries": [
-            {
-                "value": "demonstrated experience in {term}",
-                "aliases": [],
-            }
-        ],
-    }
+    assert knowledge["kind"] == "managed_knowledge"
+    assert knowledge["name"] == "hard_blocker_rules"
+    assert knowledge["version"] == 1
+    assert knowledge["entries"] == [
+        {
+            "value": "demonstrated experience in {term}",
+            "aliases": [],
+        }
+    ]
 
 
 def test_register_signals_preserves_context_and_matches_knowledge(tmp_path, monkeypatch):
@@ -149,21 +148,21 @@ def test_register_signals_preserves_context_and_matches_knowledge(tmp_path, monk
 
     signal_registry.register_signals([
         {
-            "signal": "BPMN 2.0",
+            "signal": "workflow mapping",
             "category": "capability_concept",
             "source": "CV parsing",
-            "context": ["Skills section: BPMN 2.0"],
-            "evidence": ["BPMN 2.0", "Business Process Modelling"],
+            "context": ["Skills section: workflow mapping"],
+            "evidence": ["workflow mapping"],
             "needs_review": True,
         }
     ])
 
     saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
-    record = saved_registry["bpmn 2.0"]
+    record = saved_registry["workflow mapping"]
 
     assert record["source"] == "CV parsing"
-    assert record["context"] == ["Skills section: BPMN 2.0"]
-    assert record["evidence"] == ["BPMN 2.0", "Business Process Modelling"]
+    assert record["context"] == ["Skills section: workflow mapping"]
+    assert record["evidence"] == ["workflow mapping"]
     assert record["needs_review"] is True
 
     matched, label = signal_registry.signal_in_approved_knowledge("capability_concept", "BPMN 2.0")
@@ -198,6 +197,93 @@ def test_register_signals_preserves_suggested_category(tmp_path, monkeypatch):
     assert record["original_texts"] == ["government", "Australian Government"]
     assert record["category"] == ""
     assert record["suggested_category"] == "government_context"
+
+
+def test_filter_registerable_signals_skips_approved_pending_and_ignored(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    capability_path = tmp_path / "capability_knowledge.json"
+    ignored_path = tmp_path / "ignored_signal.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", capability_path)
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", ignored_path)
+    monkeypatch.setattr(capability_knowledge, "CAPABILITY_KNOWLEDGE_PATH", capability_path)
+
+    capability_knowledge.save_capability_knowledge([
+        {"value": "BPMN 2.0", "aliases": []},
+    ])
+    signal_registry.register_signals([
+        {"signal": "pending term", "category": "role_title_token"},
+    ])
+    ignored_path.write_text(
+        json.dumps({
+            "ignored term": {
+                "signal": "ignored term",
+                "normalized_key": "ignored term",
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    filtered = signal_registry.filter_registerable_signals([
+        {"signal": "BPMN 2.0", "category": "capability_concept"},
+        {"signal": "pending term", "category": "role_title_token"},
+        {"signal": "ignored term", "category": "government_context"},
+        {"signal": "new term", "category": "government_context"},
+    ])
+
+    assert filtered == [
+        {"signal": "new term", "category": "government_context"},
+    ]
+
+
+def test_register_signals_skips_approved_pending_and_ignored(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    capability_path = tmp_path / "capability_knowledge.json"
+    ignored_path = tmp_path / "ignored_signal.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", capability_path)
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", ignored_path)
+    monkeypatch.setattr(capability_knowledge, "CAPABILITY_KNOWLEDGE_PATH", capability_path)
+
+    capability_knowledge.save_capability_knowledge([
+        {"value": "BPMN 2.0", "aliases": []},
+    ])
+    signal_registry.save_registry({
+        "pending term": {
+            "signal": "pending term",
+            "normalized_key": "pending term",
+            "original_texts": ["pending term"],
+            "category": "role_title_token",
+            "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
+        }
+    })
+    ignored_path.write_text(
+        json.dumps({
+            "ignored term": {
+                "signal": "ignored term",
+                "normalized_key": "ignored term",
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    signal_registry.register_signals([
+        {"signal": "BPMN 2.0", "category": "capability_concept"},
+        {"signal": "pending term", "category": "role_title_token"},
+        {"signal": "ignored term", "category": "government_context"},
+        {"signal": "new term", "category": "government_context"},
+    ])
+
+    saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert set(saved_registry) == {"pending term", "new term"}
+    assert saved_registry["pending term"]["signal"] == "pending term"
+    assert saved_registry["new term"]["signal"] == "new term"
 
 
 def test_approve_signal_promotes_role_title_with_clean_shape(tmp_path, monkeypatch):
@@ -276,7 +362,6 @@ def test_approve_signal_promotes_government_context_with_clean_shape(tmp_path, m
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", government_path)
     monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
     monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
-    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_KNOWLEDGE_PATH", tmp_path / "hard_blocker_knowledge.json")
     monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
     monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "government_context", government_path)
 
@@ -309,3 +394,88 @@ def test_approve_signal_promotes_government_context_with_clean_shape(tmp_path, m
             "aliases": ["state health department"],
         }
     ]
+
+
+def test_approve_signal_promotes_title_normalization_candidate(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    rules_path = tmp_path / "title_normalization_rules.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_normalization_candidate", rules_path)
+
+    signal_registry.save_registry({
+        "sr": {
+            "signal": "sr",
+            "normalized_key": "sr",
+            "original_texts": ["Senior Business Analyst"],
+            "category": "title_normalization_candidate",
+            "suggested_values": ["senior"],
+            "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
+        }
+    })
+
+    updated = signal_registry.approve_signal("sr", "title_normalization_candidate")
+
+    assert updated == {
+        "signal": "sr",
+        "normalized_key": "sr",
+        "original_texts": ["sr", "Senior Business Analyst"],
+        "category": "title_normalization_candidate",
+    }
+
+    saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert saved_registry == {}
+
+    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    assert rules["abbreviation_expansions"] == {"sr": "senior"}
+
+
+def test_approve_signal_title_normalization_candidate_no_suggested_values(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    rules_path = tmp_path / "title_normalization_rules.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_normalization_candidate", rules_path)
+
+    signal_registry.save_registry({
+        "pm": {
+            "signal": "pm",
+            "normalized_key": "pm",
+            "original_texts": ["PM"],
+            "category": "title_normalization_candidate",
+            "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
+        }
+    })
+
+    updated = signal_registry.approve_signal("pm", "title_normalization_candidate")
+
+    assert updated["category"] == "title_normalization_candidate"
+    assert not rules_path.exists()
+
+
+def test_learn_title_normalization_candidates_stores_suggested_values(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_normalization_candidate", tmp_path / "title_normalization_rules.json")
+
+    result = title_normalization_rules.learn_title_normalization_candidates(["Sr BA"])
+
+    assert result["pending"] == 1
+    saved = json.loads(registry_path.read_text(encoding="utf-8"))
+    record = saved.get("sr")
+    assert record is not None
+    assert record["suggested_values"] == ["senior"]
+    assert record["suggested_category"] == "title_normalization_candidate"

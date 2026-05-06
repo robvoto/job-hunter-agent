@@ -5,6 +5,15 @@ import re
 from typing import Any
 
 from job_hunter_agent.paths import ROLE_TITLE_KNOWLEDGE_PATH
+from job_hunter_agent.signal_schema import (
+    MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
+    MANAGED_KNOWLEDGE_ENTRIES_KEY,
+    MANAGED_KNOWLEDGE_KIND_KEY,
+    MANAGED_KNOWLEDGE_NAME_KEY,
+    MANAGED_KNOWLEDGE_UPDATED_AT_KEY,
+    MANAGED_KNOWLEDGE_VALUE_KEY,
+    MANAGED_KNOWLEDGE_VERSION_KEY,
+)
 
 
 def _clean_text(value: Any) -> str:
@@ -13,7 +22,7 @@ def _clean_text(value: Any) -> str:
 
 def _load_payload() -> dict[str, Any]:
     if not ROLE_TITLE_KNOWLEDGE_PATH.exists():
-        return {"entries": []}
+        return {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
     try:
         payload = json.loads(ROLE_TITLE_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
@@ -24,10 +33,10 @@ def _load_payload() -> dict[str, Any]:
 def _normalize_entry(entry: Any) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
-    value = _clean_text(entry.get("value"))
+    value = _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
     if not value:
         return None
-    return {"value": value}
+    return {MANAGED_KNOWLEDGE_VALUE_KEY: value}
 
 
 def _merge_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -37,10 +46,10 @@ def _merge_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized = _normalize_entry(entry)
         if normalized is None:
             continue
-        value_key = normalized["value"].lower()
+        value_key = normalized[MANAGED_KNOWLEDGE_VALUE_KEY].lower()
         bucket = merged.get(value_key)
         if bucket is None:
-            bucket = {"value": normalized["value"]}
+            bucket = {MANAGED_KNOWLEDGE_VALUE_KEY: normalized[MANAGED_KNOWLEDGE_VALUE_KEY]}
             merged[value_key] = bucket
             order.append(value_key)
     return [merged[key] for key in order]
@@ -48,7 +57,7 @@ def _merge_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def load_role_title_knowledge() -> list[dict[str, Any]]:
     payload = _load_payload()
-    entries = payload.get("entries")
+    entries = payload.get(MANAGED_KNOWLEDGE_ENTRIES_KEY)
     if not isinstance(entries, list):
         raise ValueError("role_title_knowledge.json must contain an entries list")
 
@@ -60,13 +69,13 @@ def load_role_title_knowledge() -> list[dict[str, Any]]:
 
 def save_role_title_knowledge(entries: list[dict[str, Any]]) -> dict[str, Any]:
     payload = _load_payload()
-    payload.setdefault("kind", "managed_knowledge")
-    payload.setdefault("name", "role_title_knowledge")
-    payload.setdefault("version", 1)
-    payload.setdefault("updated_at", "")
-    payload.setdefault("description", "")
+    payload.setdefault(MANAGED_KNOWLEDGE_KIND_KEY, "managed_knowledge")
+    payload.setdefault(MANAGED_KNOWLEDGE_NAME_KEY, "role_title_knowledge")
+    payload.setdefault(MANAGED_KNOWLEDGE_VERSION_KEY, 1)
+    payload.setdefault(MANAGED_KNOWLEDGE_UPDATED_AT_KEY, "")
+    payload.setdefault(MANAGED_KNOWLEDGE_DESCRIPTION_KEY, "")
     cleaned_entries = _merge_entries(entries)
-    payload["entries"] = cleaned_entries
+    payload[MANAGED_KNOWLEDGE_ENTRIES_KEY] = cleaned_entries
     ROLE_TITLE_KNOWLEDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     ROLE_TITLE_KNOWLEDGE_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
@@ -79,10 +88,10 @@ def upsert_role_title_entry(value: str) -> dict[str, Any]:
 
     entries = list(load_role_title_knowledge())
     for entry in entries:
-        if _clean_text(entry.get("value")).lower() != cleaned_value.lower():
+        if _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
             continue
-        entry["value"] = cleaned_value
+        entry[MANAGED_KNOWLEDGE_VALUE_KEY] = cleaned_value
         return save_role_title_knowledge(entries)
 
-    entries.append({"value": cleaned_value})
+    entries.append({MANAGED_KNOWLEDGE_VALUE_KEY: cleaned_value})
     return save_role_title_knowledge(entries)

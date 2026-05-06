@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from job_hunter_agent import filters
+from job_hunter_agent import signal_registry
 from job_hunter_agent import role_title_knowledge
 from job_hunter_agent import title_normalization_rules
 
@@ -115,7 +116,7 @@ def test_decompose_title_text_extracts_base_role_and_variant_terms(tmp_path, mon
 
 def test_learn_title_normalization_candidates_promotes_safe_titles_and_reviews_ambiguous(tmp_path, monkeypatch):
     rules_path = tmp_path / "title_normalization_rules.json"
-    review_path = tmp_path / "title_normalization_review.json"
+    registry_path = tmp_path / "signal_registry.json"
     rules_path.write_text(
         json.dumps(
             {
@@ -136,7 +137,13 @@ def test_learn_title_normalization_candidates_promotes_safe_titles_and_reviews_a
         encoding="utf-8",
     )
     monkeypatch.setattr(title_normalization_rules, "TITLE_NORMALIZATION_RULES_PATH", rules_path)
-    monkeypatch.setattr(title_normalization_rules, "TITLE_NORMALIZATION_REVIEW_PATH", review_path)
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_normalization_candidate", rules_path)
 
     summary = title_normalization_rules.learn_title_normalization_candidates(
         ["Sr", "GP", "PM"],
@@ -145,22 +152,17 @@ def test_learn_title_normalization_candidates_promotes_safe_titles_and_reviews_a
     )
 
     saved_rules = json.loads(rules_path.read_text(encoding="utf-8"))
-    review = json.loads(review_path.read_text(encoding="utf-8"))
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
 
-    assert saved_rules["abbreviation_expansions"]["sr"] == "senior"
-    assert saved_rules["abbreviation_expansions"]["gp"] == "general practitioner"
-    assert review["entries"] == [
-        {
-            "value": "pm",
-            "suggested_values": [
-                "project manager",
-                "product manager",
-                "program manager",
-            ],
-            "evidence": ["PM"],
-            "sources": ["job title"],
-            "confidence": "ambiguous",
-            "needs_review": True,
-        }
-    ]
-    assert summary == {"promoted": 2, "reviewed": 1}
+    assert saved_rules["abbreviation_expansions"] == {}
+    assert set(registry) == {"sr", "gp", "pm"}
+    expected_originals = {"sr": "Sr", "gp": "GP", "pm": "PM"}
+    for key in ("sr", "gp", "pm"):
+        record = registry[key]
+        assert record["signal"] == key
+        assert record["normalized_key"] == key
+        assert record["original_texts"] == [expected_originals[key].lower()]
+        assert record["category"] == ""
+        assert record["suggested_category"] == "title_normalization_candidate"
+        assert record["history"][0]["action"] == "added"
+    assert summary == {"pending": 3}

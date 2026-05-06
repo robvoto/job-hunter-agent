@@ -1,40 +1,34 @@
 import re
-from typing import Iterable, List, Optional
+from functools import lru_cache
+from typing import Any, Iterable, List, Optional
 
-# Business rule: how similar job titles must be to be considered the same
+from job_hunter_agent.identity_rules import load_identity_rules
 
-#HARCODED Seek job ads are preferred to linkedin once if both are the same
-_SOURCE_PRIORITY = {
-    "seek": 0,
-    "linkedin": 1,
-} 
 
-# the percentage of similarity when comparing job ads, word by word should be > 80%
-TITLE_SIMILARITY_THRESHOLD = 0.8
+@lru_cache(maxsize=1)
+def _get_identity_config() -> dict[str, Any]:
+    """Load identity matching rules from managed knowledge."""
+    return load_identity_rules()
 
-#HARDCODED
-# Domain data: common company suffixes to ignore when matching
-COMPANY_SUFFIXES = [
-    "pty",
-    "ltd",
-    "inc",
-    "corp",
-    "corporation",
-    "limited",
-    "llc",
-    "holdings",
-    "group",
-    "australia",
-]
 
-_COMPANY_SUFFIX_PATTERN = rf"\b({'|'.join(COMPANY_SUFFIXES)})\b"
+@lru_cache(maxsize=1)
+def _get_company_suffix_pattern() -> re.Pattern:
+    suffixes = [
+        re.escape(str(value).strip())
+        for value in _get_identity_config().get("company_suffixes", [])
+        if str(value).strip()
+    ]
+    if not suffixes:
+        return re.compile(r"(?!x)x")
+    return re.compile(rf"\b({'|'.join(suffixes)})\b", flags=re.IGNORECASE)
+
 
 def _normalize_identity_text(text: str) -> str:
-    # Remove punctuation and common company suffixes to improve matching across sources
+    # Remove punctuation and common company suffixes to improve matching across sources.
     t = str(text or "").lower()
     t = re.sub(r"[^\w\s]", "", t)
-    # Strip common corporate legal entities and region suffixes
-    t = re.sub(_COMPANY_SUFFIX_PATTERN, "", t)
+    # Strip common corporate legal entities and region suffixes.
+    t = _get_company_suffix_pattern().sub("", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
@@ -43,8 +37,10 @@ def _title_words(record: dict) -> set[str]:
 
 
 def _source_priority(record: dict) -> int:
+    source_map = _get_identity_config().get("source_priority", {})
     source = _normalize_identity_text(str(record.get("source") or ""))
-    return _SOURCE_PRIORITY.get(source, 99)
+    fallback_priority = (max(source_map.values()) + 1) if source_map else 1
+    return source_map.get(source, fallback_priority)
 
 
 def are_jobs_semantically_similar(a: dict, b: dict) -> bool:
@@ -61,8 +57,8 @@ def are_jobs_semantically_similar(a: dict, b: dict) -> bool:
 
     overlap = words_a & words_b
     combined = words_a | words_b
-    return (len(overlap) / len(combined)) >= TITLE_SIMILARITY_THRESHOLD  
-
+    threshold = float(_get_identity_config()["title_similarity_threshold"])
+    return (len(overlap) / len(combined)) >= threshold
 
 
 def find_similar_job(record: dict, pool: Iterable[dict]) -> Optional[dict]:

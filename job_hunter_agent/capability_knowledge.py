@@ -5,6 +5,16 @@ import re
 from typing import Any
 
 from job_hunter_agent.paths import CAPABILITY_KNOWLEDGE_PATH
+from job_hunter_agent.signal_schema import (
+    MANAGED_KNOWLEDGE_ALIASES_KEY,
+    MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
+    MANAGED_KNOWLEDGE_ENTRIES_KEY,
+    MANAGED_KNOWLEDGE_KIND_KEY,
+    MANAGED_KNOWLEDGE_NAME_KEY,
+    MANAGED_KNOWLEDGE_UPDATED_AT_KEY,
+    MANAGED_KNOWLEDGE_VALUE_KEY,
+    MANAGED_KNOWLEDGE_VERSION_KEY,
+)
 
 
 def _clean_text(value: Any) -> str:
@@ -34,7 +44,7 @@ def _clean_aliases(value: Any, *, canonical: str) -> list[str]:
 
 def _load_payload() -> dict[str, Any]:
     if not CAPABILITY_KNOWLEDGE_PATH.exists():
-        return {"entries": []}
+        return {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
     try:
         payload = json.loads(CAPABILITY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
@@ -45,13 +55,13 @@ def _load_payload() -> dict[str, Any]:
 def _normalize_entry(entry: Any) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
-    value = _clean_text(entry.get("value"))
+    value = _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
     if not value:
         return None
-    aliases = _clean_aliases(entry.get("aliases"), canonical=value)
+    aliases = _clean_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=value)
     return {
-        "value": value,
-        "aliases": aliases,
+        MANAGED_KNOWLEDGE_VALUE_KEY: value,
+        MANAGED_KNOWLEDGE_ALIASES_KEY: aliases,
     }
 
 
@@ -83,7 +93,7 @@ def _merge_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def load_capability_knowledge() -> list[dict[str, Any]]:
     payload = _load_payload()
-    entries = payload.get("entries")
+    entries = payload.get(MANAGED_KNOWLEDGE_ENTRIES_KEY)
     if not isinstance(entries, list):
         raise ValueError("capability_knowledge.json must contain an entries list")
 
@@ -97,13 +107,13 @@ def load_capability_knowledge() -> list[dict[str, Any]]:
 
 def save_capability_knowledge(entries: list[dict[str, Any]]) -> dict[str, Any]:
     payload = _load_payload()
-    payload.setdefault("kind", "managed_knowledge")
-    payload.setdefault("name", "capability_knowledge")
-    payload.setdefault("version", 1)
-    payload.setdefault("updated_at", "")
-    payload.setdefault("description", "")
+    payload.setdefault(MANAGED_KNOWLEDGE_KIND_KEY, "managed_knowledge")
+    payload.setdefault(MANAGED_KNOWLEDGE_NAME_KEY, "capability_knowledge")
+    payload.setdefault(MANAGED_KNOWLEDGE_VERSION_KEY, 1)
+    payload.setdefault(MANAGED_KNOWLEDGE_UPDATED_AT_KEY, "")
+    payload.setdefault(MANAGED_KNOWLEDGE_DESCRIPTION_KEY, "")
     cleaned_entries = _merge_entries(entries)
-    payload["entries"] = cleaned_entries
+    payload[MANAGED_KNOWLEDGE_ENTRIES_KEY] = cleaned_entries
     CAPABILITY_KNOWLEDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     CAPABILITY_KNOWLEDGE_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
@@ -117,9 +127,9 @@ def upsert_capability_entry(value: str, aliases: list[str] | None = None) -> dic
     cleaned_aliases = _clean_aliases(aliases or [], canonical=cleaned_value)
     entries = list(load_capability_knowledge())
     for entry in entries:
-        if _clean_text(entry.get("value")).lower() != cleaned_value.lower():
+        if _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
             continue
-        existing_aliases = _clean_aliases(entry.get("aliases"), canonical=cleaned_value)
+        existing_aliases = _clean_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=cleaned_value)
         merged: list[str] = []
         seen: set[str] = {cleaned_value.lower()}
         for alias in [*existing_aliases, *cleaned_aliases]:
@@ -128,12 +138,12 @@ def upsert_capability_entry(value: str, aliases: list[str] | None = None) -> dic
                 continue
             seen.add(alias_key)
             merged.append(alias)
-        entry["value"] = cleaned_value
-        entry["aliases"] = merged
+        entry[MANAGED_KNOWLEDGE_VALUE_KEY] = cleaned_value
+        entry[MANAGED_KNOWLEDGE_ALIASES_KEY] = merged
         return save_capability_knowledge(entries)
 
     entries.append({
-        "value": cleaned_value,
-        "aliases": cleaned_aliases,
+        MANAGED_KNOWLEDGE_VALUE_KEY: cleaned_value,
+        MANAGED_KNOWLEDGE_ALIASES_KEY: cleaned_aliases,
     })
     return save_capability_knowledge(entries)

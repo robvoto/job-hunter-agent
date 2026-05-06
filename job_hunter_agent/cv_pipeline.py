@@ -24,15 +24,18 @@ from job_hunter_agent.profile_learning import (
     _normalize_phrase,
     _parse_role_entries,
     _resolve_extraction_lookback_years,
+    get_parsing_rule_set,
     repair_text,
 )
+from job_hunter_agent.profile_store import (
+    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_SIGNAL_CLUSTERS,
+    KEY_REQUIRED_SKILLS,
+)
 
-_STOPWORDS = {
-    "a", "an", "and", "the", "to", "for", "of", "in", "on", "with", "by", "from", "into",
-    "using", "use", "used", "within", "through", "under", "over", "per", "or", "as", "at",
-    "is", "are", "was", "were", "be", "been", "being", "that", "this", "these", "those",
-    "will", "would", "can", "could", "should", "may",
-}
+def _stopwords() -> set[str]:
+    return get_parsing_rule_set("stopwords")
+
 
 def _is_quality_phrase(text: str) -> bool:
     cleaned = _normalize_phrase(text)
@@ -41,7 +44,7 @@ def _is_quality_phrase(text: str) -> bool:
     tokens = cleaned.split()
     if not tokens:
         return False
-    if all(t in _STOPWORDS for t in tokens):
+    if all(t in _stopwords() for t in tokens):
         return False
     return True 
 
@@ -107,7 +110,7 @@ def _tool_terms(text: str) -> list[str]:
         ]
         for piece in pieces or [cleaned_part]:
             tokens = [_normalize_token(token) for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", piece)]
-            tokens = [token for token in tokens if token and token not in _STOPWORDS]
+            tokens = [token for token in tokens if token and token not in _stopwords()]
             if not tokens:
                 continue
             term = " ".join(tokens[:4]).strip()
@@ -118,10 +121,11 @@ def _tool_terms(text: str) -> list[str]:
 
 def _ngrams(text: str, excluded_tokens: set[str] | None = None) -> list[str]:
     blocked = excluded_tokens or set()
+    sw = _stopwords()
     tokens = [
         _normalize_token(token)
         for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
-        if _normalize_token(token) not in _STOPWORDS
+        if _normalize_token(token) not in sw
         and _normalize_token(token) not in blocked
     ]
     phrases: list[str] = []
@@ -406,9 +410,9 @@ def _build_output(
         })
 
     return {
-        "capability_profile_rules": [],
-        "dominant_signal_clusters": dominant_signal_clusters,
-        "must_not_require_skills": [],
+        KEY_CAPABILITY_PROFILE_RULES: [],
+        KEY_SIGNAL_CLUSTERS: dominant_signal_clusters,
+        KEY_REQUIRED_SKILLS: [],
     }
 
 

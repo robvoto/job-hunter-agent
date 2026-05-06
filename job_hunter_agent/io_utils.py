@@ -9,8 +9,10 @@ from job_hunter_agent.paths import (
     AUDIT_RECORDS_PATH as DEBUG_JSON_PATH,
     JOB_HISTORY_PATH,
     LLM_CACHE_PATH,
+    PARSING_RULES_PATH,
     REVIEW_DATA_PATH,
     RUN_STATS_PATH,
+    SIGNAL_DEFAULTS_PATH,
 )
 
 
@@ -65,6 +67,17 @@ def load_llm_cache() -> Dict[str, Any]:
 
 def save_llm_cache(cache: Dict[str, Any]) -> None:
     save_json(LLM_CACHE_PATH, cache)
+
+
+def load_parsing_rules() -> Dict[str, Any]:
+    """Load centralized parsing rules from managed knowledge."""
+    return load_json_dict(PARSING_RULES_PATH)
+
+
+def load_signal_defaults() -> Dict[str, Any]:
+    payload = load_json_dict(SIGNAL_DEFAULTS_PATH)
+    defaults = payload.get("signal_defaults")
+    return defaults if isinstance(defaults, dict) else {}
 
 
 def load_job_history() -> Dict[str, dict]:

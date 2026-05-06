@@ -42,21 +42,31 @@ from job_hunter_agent.job_identity import (
     deduplicate_across_sources,
     find_similar_job,
 )
-from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
+from job_hunter_agent.llm_gate import (
+    build_llm_cache_key,
+    llm_is_enabled,
+    llm_should_consider_learning_candidates,
+    llm_should_consider_with_learning,
+    normalize_llm_review_payload,
+)
 from job_hunter_agent.match_labels import score_to_match_level, score_to_match_label
 from job_hunter_agent.profile_store import (
     get_match_levels,
-    get_evidence_tier_weights,
-    get_evidence_tiers,
+    get_candidate_profile_tier_weights,
+    get_candidate_profile_tiers,
     get_preference_weights,
     get_scoring_rules,
     get_search_settings,
     load_profile,
 )
 from job_hunter_agent.review_insights import build_review_data
-from job_hunter_agent.signal_registry import load_approved_signal_catalog, load_registry, register_signals, signal_in_approved_knowledge
-from job_hunter_agent.profile_learning import _role_title_review_token
-from job_hunter_agent.title_normalization_rules import learn_title_normalization_candidates
+from job_hunter_agent.signal_registry import (
+    filter_registerable_signals,
+    load_approved_signal_catalog,
+    load_registry,
+    register_signals,
+    signal_in_approved_knowledge,
+)
 from job_hunter_agent.scrapers.seek import (
     SELECTOR_CARDS,
     SELECTOR_COMPANY,
@@ -138,7 +148,7 @@ from job_hunter_agent.scoring_utils import (
 )
 from job_hunter_agent.description_trust import (
     MIN_TRUSTED_DESCRIPTION_LENGTH,
-    TRUSTED_DESCRIPTION_SOURCES,
+    get_trusted_sources,
     get_trusted_full_description,
     full_description_confidence,
     is_description_trusted,
@@ -155,14 +165,31 @@ from job_hunter_agent.capability_matching import (
     evidence_tier_alignment_score,
 )
 from job_hunter_agent.signal_detection import (
+    build_job_learning_signals,
     detect_competitive_signals,
     evaluate_competitive_signal_alignment,
     competitive_signal_assessments,
     competitive_fit_highlights,
     extract_skill_observations,
-    build_job_learning_signals,
     hard_block_entries,
     hard_block_reasons,
+)
+from job_hunter_agent.signal_schema import (
+    CATEGORY_HARD_BLOCKER_PATTERN,
+    CATEGORY_ROLE_TITLE_TOKEN,
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+    COMPETITIVE_SIGNALS_KEY,
+    HARD_BLOCK_REASONS_KEY,
+    LEARNING_CATEGORY_KEY,
+    LEARNING_SIGNAL_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+    TITLE_REASON_KEY,
+    TITLE_REASON_POTENTIAL_MATCH,
 )
 from job_hunter_agent.preferences import (
     get_match_preferences,
@@ -229,254 +256,44 @@ CLI_FLAGS = set(sys.argv[1:])
 NO_LLM_MODE = "--no-llm" in CLI_FLAGS
 CHEAP_LLM_MODE = "--cheap-llm" in CLI_FLAGS
 DASHBOARD_DEBUG_MODE = "--debug-mode" in CLI_FLAGS
-DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
-ARCHIVE_LABEL = "Saved From Earlier Searches"
-ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your dashboard."
-ARCHIVE_CONTEXT_PREFIX = "Saved From Earlier Searches"
+
+from job_hunter_agent.dashboard_renderer import (  # noqa: E402 — after CLI_FLAGS
+    ARCHIVE_BADGE_TOOLTIP,
+    ARCHIVE_CONTEXT_PREFIX,
+    ARCHIVE_LABEL,
+    DESCRIPTION_CAPTURE_ISSUE,
+    humanize_reject_reason,
+    negative_score_reasons,
+    posted_filter_option_label,
+    render_job_card,
+    render_posted_filter_options,
+    render_score_filter_options,
+    render_section,
+    score_filter_option_label,
+    score_filter_thresholds,
+    score_gap_reasons,
+    section_dom_id,
+    visible_fit_reasons,
+    _render_match_level_guide_html,
+    _render_results_fragment,
+)
 
 
 def deterministic_review_outcome(record: dict, fit_highlights: List[str], missing_evidence: List[str], soft_risk_reasons: List[str]) -> Optional[dict]:
-    title_reason = str(record.get("title_reason") or "")
+    title_reason = str(record.get(TITLE_REASON_KEY) or "")
     strong_signal_count = len(capability_fit_highlights(fit_highlights))
     high_risks = len(missing_evidence)
     medium_risks = len(soft_risk_reasons)
 
     if high_risks >= 2 and strong_signal_count <= 1:
         return {"decision": "REJECT", "grade": "MISMATCH"}
-    if title_reason == "TITLE_POTENTIAL_MATCH" and high_risks >= 1 and strong_signal_count <= 1:
+    if title_reason == TITLE_REASON_POTENTIAL_MATCH and high_risks >= 1 and strong_signal_count <= 1:
         return {"decision": "REJECT", "grade": "POOR"}
     if title_reason == "OK" and strong_signal_count >= 4 and high_risks == 0:
         return {"decision": "KEEP", "grade": "STRONG"}
     if title_reason == "OK" and strong_signal_count >= 3 and high_risks == 0 and medium_risks <= 1:
         return {"decision": "KEEP", "grade": "SOLID"}
     return None
-
-
-def visible_fit_reasons(
-    fit_highlights: List[str],
-    score_breakdown: List[dict],
-    max_items: int = 4,
-    include_values: bool = False,
-) -> List[str]:
-    reasons = dedupe_preserve_order([
-        compact_whitespace(item)
-        for item in fit_highlights
-        if compact_whitespace(item)
-    ])
-    excluded = {
-        "Fit evidence bullets",
-        "Passed content filters",
-    }
-
-    for item in score_breakdown:
-        label = compact_whitespace(item.get("label") or "")
-        value = int(item.get("value", 0) or 0)
-        if not label or value <= 0 or label in excluded:
-            continue
-        if label not in reasons:
-            reasons.append(label)
-        if len(reasons) >= max_items:
-            break
-
-    reasons = reasons[:max_items]
-
-    if include_values:
-        formatted_reasons = []
-        for reason in reasons:
-            val = next((int(i.get("value", 0) or 0) for i in score_breakdown if compact_whitespace(i.get("label") or "") == reason), None)
-            if val is not None:
-                formatted_reasons.append(f"{reason}: {val:+d}")
-            else:
-                formatted_reasons.append(reason)
-        return formatted_reasons
-
-    return reasons
-
-
-def negative_score_reasons(
-    score_breakdown: List[dict],
-    max_items: int = 4,
-    include_values: bool = True,
-) -> List[str]:
-    friendly_labels = {
-        "Salary/rate below target": "Salary is below target range",
-        "Description capture incomplete": DESCRIPTION_CAPTURE_ISSUE,
-        "Already viewed by you": "Already opened by you",
-        "Contract is shorter than preferred": "Contract length is shorter than preferred",
-    }
-    reasons = [
-        (
-            f"{compact_whitespace(item.get('label') or '')}: {int(item.get('value', 0) or 0):+d}"
-            if include_values
-            else friendly_labels.get(
-                compact_whitespace(item.get("label") or ""),
-                compact_whitespace(item.get("label") or ""),
-            )
-        )
-        for item in score_breakdown
-        if compact_whitespace(item.get("label") or "") and int(item.get("value", 0) or 0) < 0
-    ]
-    return dedupe_preserve_order(reasons)[:max_items]
-
-
-def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int = 4) -> List[str]:
-    labels = [compact_whitespace(item.get("label") or "") for item in score_breakdown]
-    evidence_points = next(
-        (int(item.get("value", 0) or 0) for item in score_breakdown if item.get("label") == "Fit evidence bullets"),
-        0,
-    )
-    gaps: List[str] = []
-
-    if not any(label.startswith("Posted within") or label == "Still relatively recent" for label in labels):
-        gaps.append("No reliable recent-posted signal")
-
-    if not any(label in {"Salary/rate signal", "Salary/rate below target"} for label in labels):
-        salary = compact_whitespace(record.get("salary") or "")
-        if not salary or salary == "N/A":
-            gaps.append("No comparable salary/rate found")
-
-    if evidence_points < 12:
-        capability_matches = capability_match_summary(record)
-        capability_count = (
-            len(capability_matches.get("strong", []))
-            + len(capability_matches.get("working", []))
-            + len(capability_matches.get("basic", []))
-        )
-        gaps.append(f"Only {capability_count} capability evidence match{'es' if capability_count != 1 else ''} counted")
-
-    if full_description_confidence(record) == "LOW":
-        gaps.append("Scoring confidence is limited because the full description was not captured")
-
-    return dedupe_preserve_order(gaps)[:max_items]
-
-
-def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = None) -> str:
-    active_profile = scoring_profile or load_profile()
-    match_levels = get_match_levels(active_profile)
-    label = score_to_match_label(threshold, match_levels)
-    highest_threshold = max(int(level.get("minimum_score", 0) or 0) for level in match_levels)
-    if threshold >= highest_threshold:
-        return f"{label} only"
-    return f"{label} or better"
-
-
-def score_filter_thresholds(
-    records: List[dict],
-    scoring_profile: Optional[dict] = None,
-    include_borderline: Optional[bool] = None,
-) -> List[int]:
-    active_profile = scoring_profile or load_profile()
-    show_borderline = DASHBOARD_DEBUG_MODE if include_borderline is None else bool(include_borderline)
-    scores = [fit_score(record, active_profile) for record in records]
-    match_levels = get_match_levels(active_profile)
-    thresholds = [int(level.get("minimum_score", 0) or 0) for level in match_levels if int(level.get("minimum_score", 0) or 0) > 0]
-    lowest_band_threshold = int(match_levels[-1].get("minimum_score", 0) or 0) if match_levels else 0
-    if (show_borderline or any(score < (thresholds[-1] if thresholds else 0) for score in scores)) and lowest_band_threshold not in thresholds:
-        thresholds.append(lowest_band_threshold)
-    return thresholds
-
-
-def render_score_filter_options(
-    records: List[dict],
-    scoring_profile: Optional[dict] = None,
-    dashboard_min_score: Optional[int] = None,
-    include_borderline: Optional[bool] = None,
-) -> str:
-    active_profile = scoring_profile or load_profile()
-    active_dashboard_min_score = (
-        int(dashboard_min_score)
-        if dashboard_min_score is not None
-        else get_dashboard_minimum_score()
-    )
-    options = ['<option value="all">All match levels</option>']
-    for threshold in score_filter_thresholds(records, active_profile, include_borderline=include_borderline):
-        selected_attr = " selected" if active_dashboard_min_score == threshold else ""
-        options.append(
-            f'<option value="{threshold}"{selected_attr}>'
-            f'{safe_html(score_filter_option_label(threshold, active_profile))}</option>'
-        )
-    return "".join(options)
-
-
-def posted_filter_option_label(threshold: int) -> str:
-    labels = {
-        1: "Posted today",
-        3: "Last 3 days",
-        7: "Last 7 days",
-        14: "Last 14 days",
-        # 30: "Last 30 days",
-    }
-    return labels.get(threshold, f"Last {threshold} days")
-
-
-def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:
-    options = [f'<option value="all">Any posted date ({len(records)})</option>']
-    for threshold in [1, 3, 7, 14, 30]:
-        count = sum(
-            1
-            for record in records
-            if (age_days := current_posted_age_days(record, now)) is not None
-            and age_days <= threshold
-        )
-        options.append(
-            f'<option {"selected" if threshold == 1 else ""} value="{threshold}">'
-            f'{safe_html(posted_filter_option_label(threshold))} ({count})</option>'
-        )
-    return "".join(options)
-
-
-def humanize_reject_reason(reason: Optional[str]) -> str:
-    raw = str(reason or "").strip()
-    if not raw:
-        return "Other filtered-out roles"
-
-    direct_map = {
-        "TITLE_NOT_TARGET": "Title outside target role family",
-        "NO_DETAILS": "Could not read full job details",
-        "DETAILS_CHALLENGE_PAGE": "Blocked by SEEK challenge page",
-        "DETAILS_BLOCKED_PAGE": "Blocked from reading job details",
-        "DETAILS_NAVIGATION_ERROR": "Could not open the job ad page",
-        "DET_REJECT": "Deterministic fit gate rejected",
-        "LLM_REJECT": "AI fit review rejected",
-        "DUPLICATE_URL": "Duplicate listing removed",
-        "ALREADY_APPLIED": "Already marked as applied",
-        "MANUALLY_HIDDEN": "Already hidden by you",
-        "UNKNOWN": "Other filtered-out roles",
-    }
-    if raw in direct_map:
-        return direct_map[raw]
-
-    prefix, _, detail = raw.partition(":")
-    cleaned_detail = detail.replace("_", " ").strip()
-    if prefix == "TITLE_BAD_KEYWORD" and cleaned_detail:
-        return f"Excluded title keyword: {cleaned_detail}"
-    if prefix == "TITLE_BAD_ROLE" and cleaned_detail:
-        return f"Excluded role family: {cleaned_detail}"
-    if prefix == "POSTED_TOO_OLD" and cleaned_detail:
-        return f"Older than the search window ({cleaned_detail} days)"
-    if prefix == "DESC_LOCATION" and cleaned_detail:
-        return f"Location mismatch: {cleaned_detail}"
-    if prefix == "DESC_CAPABILITY_LOW" and cleaned_detail:
-        return f"Low-fit specialist area: {cleaned_detail}"
-    if prefix == "DESC_HARD_BLOCK" and cleaned_detail:
-        return f"Hard blocker mismatch: {cleaned_detail}"
-    if prefix == "DESC_HARD_BLOCK_RULE" and cleaned_detail:
-        return f"Hard blocker requirement: {cleaned_detail}"
-    if prefix == "CARD_EXCEPTION" and cleaned_detail:
-        return f"Collection error: {cleaned_detail}"
-    if prefix == "DESC_BAD_PHRASE" and cleaned_detail:
-        return f"Excluded description phrase: {cleaned_detail}"
-    if prefix == "DESC_BAD_REGEX" and cleaned_detail:
-        return f"Excluded description pattern: {cleaned_detail}"
-    if prefix == "LEARNED_REJECT" and cleaned_detail:
-        return f"Learned blocker: {cleaned_detail.split(':')[-1].strip()}"
-    if prefix == "TITLE_POTENTIAL_MATCH":
-        return "Secondary role-family match"
-    if prefix == "CARD_SPECIALIST" and cleaned_detail:
-        return f"Rejected early from card metadata: {cleaned_detail}"
-
-    fallback = raw.replace("_", " ").lower()
-    return fallback[:1].upper() + fallback[1:]
 
 
 def register_hard_blocker_learning_from_rejection(
@@ -505,7 +322,7 @@ def register_hard_blocker_learning_from_rejection(
         signals.append(
             {
                 "signal": cleaned_signal,
-                "suggested_category": "hard_blocker_pattern",
+                "suggested_category": CATEGORY_HARD_BLOCKER_PATTERN,
                 "original_texts": [compact_whitespace(original_text)] if compact_whitespace(original_text) else [],
             }
         )
@@ -526,6 +343,79 @@ def register_hard_blocker_learning_from_rejection(
 
     if signals:
         register_signals(signals)
+
+
+def _has_high_value_ambiguous_learning_candidate(signals: list[dict[str, Any]]) -> bool:
+    interesting_categories = {CATEGORY_ROLE_TITLE_TOKEN, CATEGORY_TITLE_NORMALIZATION_CANDIDATE}
+    for signal in signals or []:
+        if not isinstance(signal, dict):
+            continue
+        category = compact_whitespace(signal.get("suggested_category") or signal.get(LEARNING_CATEGORY_KEY) or "").lower()
+        if category in interesting_categories:
+            return True
+    return False
+
+
+def _merge_pending_learning_signals(*signal_groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    combined: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for group in signal_groups:
+        for signal in group or []:
+            if not isinstance(signal, dict):
+                continue
+            key = compact_whitespace(signal.get(LEARNING_SIGNAL_KEY) or "").lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            combined.append(signal)
+    return combined
+
+
+def _register_pending_learning_signals(signals: list[dict[str, Any]]) -> None:
+    filtered = filter_registerable_signals(signals)
+    if filtered:
+        register_signals(filtered)
+
+
+def _resolve_llm_review_payload(
+    record: dict,
+    llm_cache: dict,
+    *,
+    learning_only: bool = False,
+) -> dict[str, Any]:
+    llm_input_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    llm_fp = build_llm_cache_key(llm_input_text[:MAX_LLM_CHARS])
+    cached = normalize_llm_review_payload(llm_cache.get(llm_fp)) if llm_fp in llm_cache else None
+
+    if cached:
+        if learning_only and cached.get("learning_candidates"):
+            return {**cached, "payload_source": "cache"}
+        if not learning_only and cached.get("fit_review"):
+            return {**cached, "payload_source": "cache"}
+
+    if not llm_is_enabled():
+        raise RuntimeError("LLM review requested but OPENAI_API_KEY is missing")
+
+    if learning_only:
+        payload = {"fit_review": None, "learning_candidates": llm_should_consider_learning_candidates(llm_input_text[:MAX_LLM_CHARS])}
+    else:
+        payload = llm_should_consider_with_learning(llm_input_text[:MAX_LLM_CHARS])
+
+    if cached:
+        merged = dict(cached)
+        if payload.get("fit_review"):
+            merged["fit_review"] = payload["fit_review"]
+        merged["learning_candidates"] = _merge_pending_learning_signals(
+            cached.get("learning_candidates") or [],
+            payload.get("learning_candidates") or [],
+        )
+        if payload.get("learning_only"):
+            merged["learning_only"] = True
+        llm_cache[llm_fp] = merged
+        return {**merged, "payload_source": "llm"}
+
+    llm_cache[llm_fp] = payload
+    return {**payload, "payload_source": "llm"}
 
 
 def is_dashboard_eligible(
@@ -659,458 +549,6 @@ def build_dashboard_record_sets(
     )
 
 
-def render_job_card(
-    record: dict,
-    scoring_profile: Optional[dict] = None,
-    applied_pool: Optional[List[dict]] = None,
-    history_clusters: Optional[Dict[str, dict]] = None,
-) -> str:
-    active_profile = scoring_profile or load_profile()
-    display_record = dict(record)
-    
-    loc = str(display_record.get("location") or "").strip()
-    if loc.endswith(", Australia"):
-        display_record["location"] = loc[:-11].strip()
-        
-    title = safe_html(record.get("title", "Untitled"))
-    company = safe_html(record.get("company", "N/A"))
-    url = safe_html(record.get("url", "#"))
-    job_key = safe_html(str(record.get("job_key") or ""))
-    title_reason = record.get("title_reason")
-    applied_record = bool(record.get("applied"))
-    archived = bool(record.get("archived"))
-    hidden_record = bool(record.get("hidden"))
-    is_stale = bool(record.get("is_stale"))
-    seen_by_you = viewed_by_user(record)
-    stored_snapshot = compact_whitespace(record.get("role_snapshot") or record.get("teaser") or "N/A")
-    if stored_snapshot in {"", "N/A"}:
-        stored_snapshot = synthesize_role_snapshot(record)
-    fit_confidence_level = full_description_confidence(record)
-    trusted_desc = get_trusted_full_description(record)
-
-    if fit_confidence_level == "HIGH" and trusted_desc:
-        display_record["fit_source_text"] = trusted_desc
-        display_record["fit_confidence"] = "HIGH"
-        detail_work_mode = extract_work_mode(trusted_desc)
-        if detail_work_mode != "N/A":
-            display_record["work_mode"] = detail_work_mode
-        role_summary = build_role_summary(record, trusted_desc, active_profile)
-        display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
-        fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
-        soft_risk_reasons, missing_evidence = build_risk_and_missing_evidence(
-            trusted_desc,
-            title_reason,
-            active_profile,
-            competitive_signals=display_record.get("competitive_signals") if isinstance(display_record.get("competitive_signals"), list) else None,
-        )
-        blocking_reasons = hard_block_reasons(display_record, active_profile)
-        if blocking_reasons:
-            missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
-    else:
-        role_summary = stored_snapshot
-        display_record["fit_confidence"] = "LOW"
-        display_record["competitive_signals"] = []
-        fit_highlights = []
-        soft_risk_reasons = []
-        missing_evidence = [DESCRIPTION_CAPTURE_ISSUE]
-        blocking_reasons = []
-
-    similar_applied_record = None
-    is_possible_repost = False
-    if not applied_record and applied_pool:
-        similar_applied_record = find_similar_job(record, applied_pool)
-        is_possible_repost = similar_applied_record is not None
-
-    display_record["hard_block_reasons"] = blocking_reasons
-    display_record["role_snapshot"] = role_summary
-    display_record["fit_highlights"] = fit_highlights
-    display_record["soft_risk_reasons"] = soft_risk_reasons
-    display_record["missing_evidence"] = missing_evidence
-    fit_points = fit_score(display_record, scoring_profile)
-    match_levels = get_match_levels(scoring_profile or load_profile())
-    fit_label = score_to_match_label(fit_points, match_levels)
-    fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
-    score_breakdown = fit_score_breakdown(display_record, scoring_profile)
-    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=DASHBOARD_DEBUG_MODE)
-    description_issue = fit_confidence_level == "LOW"
-    work_mode = str(display_record.get("work_mode") or "N/A")
-    posted_age_days = current_posted_age_days(record)
-    salary_value = salary_sort_value(str(display_record.get("salary") or ""))
-    salary_fit_state = salary_fit_label(display_record, scoring_profile)
-    record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
-    company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
-    teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
-    sector_signal = infer_role_sector(display_record, trusted_desc if trusted_desc else stored_snapshot)
-    channel_signal = infer_posting_channel(display_record, trusted_desc if trusted_desc else stored_snapshot)
-    _block_phrases_list = suggest_title_block_phrases(str(record.get("title") or ""))
-    block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
-    block_phrases_json = safe_html(json.dumps(_block_phrases_list))
-    similar_applied_title = safe_html(str((similar_applied_record or {}).get("title") or ""))
-    similar_applied_company = safe_html(str((similar_applied_record or {}).get("company") or ""))
-    similar_applied_source = str((similar_applied_record or {}).get("source") or "").lower().strip()
-    similar_applied_source_label = safe_html(
-        {"linkedin": "LinkedIn", "seek": "SEEK"}.get(similar_applied_source, similar_applied_source.upper())
-        if similar_applied_source
-        else ""
-    )
-    similar_applied_job_key = safe_html(str((similar_applied_record or {}).get("job_key") or ""))
-    button_data_attrs = (
-        f'data-job-key="{job_key}" '
-        f'data-job-url="{url}" '
-        f'data-job-title="{title}" '
-        f'data-job-company="{company_attr}" '
-        f'data-job-teaser="{teaser_attr}" '
-        f'data-role-sector="{safe_html(sector_signal.get("kind") or "unknown")}" '
-        f'data-posting-channel="{safe_html(channel_signal.get("kind") or "unknown")}" '
-        f'data-similar-applied-warning="{"1" if is_possible_repost else "0"}" '
-        f'data-similar-applied-job-key="{similar_applied_job_key}" '
-        f'data-similar-applied-title="{similar_applied_title}" '
-        f'data-similar-applied-company="{similar_applied_company}" '
-        f'data-similar-applied-source="{similar_applied_source_label}"'
-    )
-
-    source = str(record.get("source") or "unknown").lower().strip()
-    source_label = {"linkedin": "LinkedIn", "seek": "SEEK"}.get(source, source.upper())
-
-    badges = []
-    if applied_record:
-        badges.append(render_badge("Applied", "badge-viewed", "You already applied for this role."))
-    elif hidden_record:
-        badges.append(render_badge("Hidden", "badge-hidden", "You hid this role for now."))
-    elif is_possible_repost:
-        badges.append(render_badge("Possible Repost", "badge-warning", "This role looks very similar to one you have already applied to."))
-    elif archived:
-        badges.append(render_badge(ARCHIVE_LABEL, "badge-archive", ARCHIVE_BADGE_TOOLTIP))
-    if not applied_record and not seen_by_you:
-        badges.append(render_badge("New To You", "badge-new", "You have not opened this role from the dashboard yet."))
-    if is_stale:
-        badges.append(render_badge("15+ Days Old", "badge-stale", "This role is older, but still saved for reference."))
-    elif seen_by_you:
-        badges.append(viewed_badge_html())
-    if description_issue:
-        badges.append(render_badge("Description Issue", "badge-warning", "The full job description was not captured clearly, so this match needs manual checking."))
-    badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
-    if sector_signal.get("kind") == "government":
-        badges.append(render_badge("Government", "badge-sector-government", "Government/public-sector context detected from the captured job text."))
-    if channel_signal.get("kind") == "recruiter":
-        confidence_text = channel_signal.get("confidence") or "inferred"
-        badges.append(render_badge("Recruiter", "badge-channel-recruiter", f"Recruiter/intermediary posting inferred with {confidence_text} confidence from the captured job text."))
-    elif channel_signal.get("kind") == "direct_employer":
-        confidence_text = channel_signal.get("confidence") or "inferred"
-        badges.append(render_badge("Direct Employer", "badge-new", f"Direct employer posting inferred with {confidence_text} confidence from the captured job text."))
-    history_warning_signals = assess_history_warning_signals(record, history_clusters)
-    if history_warning_signals:
-        badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))
-
-    score_percent = max(min(int(fit_points), 100), 0)
-    score_html = (
-        f'<div class="match-tile {fit_tone_class}" style="--match-score: {score_percent}%;">'
-        + (
-            f'<span class="match-tile-number">{fit_points}</span>'
-            if DASHBOARD_DEBUG_MODE
-            else ""
-        )
-        + f'<span class="match-tile-label">{safe_html(fit_label)}</span>'
-        + '<span class="match-tile-bar" aria-hidden="true"><span class="match-tile-bar-fill"></span></span>'
-        + "</div>"
-    )
-
-    posted_display = posted_display_label(record)
-
-    meta_items = []
-    for label, value in [
-        ("Posted", posted_display),
-        ("Location", display_record.get("location")),
-        ("Work mode", display_record.get("work_mode")),
-        ("Type", display_record.get("work_type")),
-        ("Salary", display_record.get("salary")),
-    ]:
-        if value and value != "N/A" and value != "Unknown":
-            meta_items.append(
-                f'<span class="job-meta-item"><strong>{safe_html(label)}</strong> {safe_html(str(value))}</span>'
-            )
-    context_bits = []
-    if salary_fit_state == "below":
-        soft_risk_reasons = dedupe_preserve_order([
-            *soft_risk_reasons,
-            "Salary is below target range",
-        ])
-    contract_item = assess_contract_preference(display_record, scoring_profile)
-    if contract_item and int(contract_item.get("value", 0)) < 0:
-        soft_risk_reasons = dedupe_preserve_order([
-            *soft_risk_reasons,
-            "Contract length is shorter than preferred",
-        ])
-    if seen_by_you and record.get("last_viewed_at"):
-        context_bits.append(f"Opened by you {format_timestamp_label(record.get('last_viewed_at'))}")
-    if applied_record and record.get("last_applied_at"):
-        context_bits.append(f"Applied {format_timestamp_label(record.get('last_applied_at'))}")
-    if hidden_record and record.get("last_hidden_at"):
-        context_bits.append(f"Hidden {format_timestamp_label(record.get('last_hidden_at'))}")
-    elif archived and record.get("last_kept_at"):
-        context_bits.append(f"{ARCHIVE_CONTEXT_PREFIX} {format_timestamp_label(record.get('last_kept_at'))}")
-    context_html = f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>' if context_bits else ""
-
-    summary_html = (
-        f'<p class="job-summary">{safe_html(role_summary)}</p>'
-        if role_summary and role_summary != "N/A"
-        else ""
-    )
-    note_bits: List[str] = []
-    if history_warning_signals:
-        note_bits.append(f"Potential red flag: {history_warning_signals[0].removeprefix('Potential red flag: ').strip()}.")
-    elif description_issue:
-        note_bits.append("Description issue: full job description was not captured clearly.")
-    elif is_possible_repost:
-        note_bits.append("Alert: This looks like a role you already marked as applied at this company.")
-    elif missing_evidence:
-        note_bits.append(f"Missing evidence: {missing_evidence[0]}.")
-    elif soft_risk_reasons:
-        note_bits.append(f"Risk: {soft_risk_reasons[0]}.")
-    note_html = (
-        f'<div class="job-note">{safe_html(" ".join(note_bits))}</div>'
-        if note_bits
-        else ""
-    )
-    reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
-    insight_sections = []
-    if visible_reasons:
-        insight_sections.append(
-            '<div class="job-insight-group">'
-            '<strong>Why it fits</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in visible_reasons)}</ul>'
-            '</div>'
-        )
-    if reviewed_signal_matches["matched"]:
-        insight_sections.append(
-            '<div class="job-insight-group">'
-            '<strong>Matched signals</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["matched"])}</ul>'
-            '</div>'
-        )
-    if reviewed_signal_matches["unresolved"]:
-        insight_sections.append(
-            '<div class="job-insight-group is-secondary">'
-            '<strong>Unresolved signals</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["unresolved"])}</ul>'
-            '</div>'
-        )
-    if reviewed_signal_matches["evidence_only"]:
-        insight_sections.append(
-            '<div class="job-insight-group is-secondary">'
-            '<strong>Evidence only</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["evidence_only"])}</ul>'
-            '</div>'
-        )
-    if reviewed_signal_matches["ignored"]:
-        insight_sections.append(
-            '<div class="job-insight-group is-secondary">'
-            '<strong>Ignored</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["ignored"])}</ul>'
-            '</div>'
-        )
-    visible_penalties = negative_score_reasons(score_breakdown, include_values=DASHBOARD_DEBUG_MODE)
-    if description_issue:
-        visible_penalties = [
-            item for item in visible_penalties
-            if not item.startswith("Description capture incomplete")
-        ]
-    negative_items = dedupe_preserve_order([
-        *([] if description_issue else missing_evidence),
-        *soft_risk_reasons,
-        *visible_penalties,
-    ])[:6]
-    if description_issue:
-        description_issue_items = [DESCRIPTION_CAPTURE_ISSUE]
-        if DASHBOARD_DEBUG_MODE:
-            capture_facts = []
-            status = compact_whitespace(record.get("details_status") or "")
-            source_name = compact_whitespace(record.get("description_source") or "")
-            details_length = record.get("details_length")
-            if status:
-                capture_facts.append(f"details status: {status}")
-            if source_name:
-                capture_facts.append(f"description source: {source_name}")
-            if details_length not in {None, ""}:
-                capture_facts.append(f"details length: {details_length}")
-            if capture_facts:
-                description_issue_items.append("; ".join(capture_facts))
-        insight_sections.append(
-            '<div class="job-insight-group job-insight-warning">'
-            '<strong>Description issue</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in description_issue_items)}</ul>'
-            '</div>'
-        )
-    if history_warning_signals:
-        insight_sections.append(
-            '<div class="job-insight-group job-insight-warning">'
-            '<strong>Potential red flags</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in history_warning_signals)}</ul>'
-            '</div>'
-        )
-    if negative_items:
-        insight_sections.append(
-            '<div class="job-insight-group job-insight-warning">'
-            '<strong>What lowers it</strong>'
-            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_items)}</ul>'
-            '</div>'
-        )
-    elif DASHBOARD_DEBUG_MODE:
-        insight_sections.append(
-            '<div class="job-insight-group job-insight-muted">'
-            '<strong>Watchouts</strong>'
-            '<p class="insight-unavailable-note">No explicit risks detected from the captured description.</p>'
-            '</div>'
-        )
-    if DASHBOARD_DEBUG_MODE:
-        negative_reasons = negative_score_reasons(score_breakdown)
-        if negative_reasons:
-            insight_sections.append(
-                '<div class="job-insight-group job-insight-warning">'
-                '<strong>Score penalties</strong>'
-                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_reasons)}</ul>'
-                '</div>'
-            )
-        gap_reasons = score_gap_reasons(display_record, score_breakdown)
-        if gap_reasons:
-            insight_sections.append(
-                '<div class="job-insight-group is-secondary">'
-                '<strong>Score gaps</strong>'
-                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in gap_reasons)}</ul>'
-                '</div>'
-            )
-    if DASHBOARD_DEBUG_MODE and score_breakdown:
-        score_breakdown_html = "".join(
-            f"<li>{safe_html(str(item['label']))}: {int(item['value']):+d}</li>"
-            for item in score_breakdown
-        )
-        insight_sections.append(
-            '<div class="job-insight-group is-secondary">'
-            '<strong>Score details</strong>'
-            f'<ul>{score_breakdown_html}</ul>'
-            '</div>'
-        )
-    insight_html = (
-        '<details class="job-insights">'
-        '<summary>Fit breakdown</summary>'
-        f'{"".join(insight_sections)}'
-        '</details>'
-        if insight_sections
-        else ""
-    )
-
-    if applied_record:
-        actions_html = (
-            '<div class="job-actions">'
-            f'<button class="review-button review-undo" type="button" data-review-action="unapply" {button_data_attrs}>Undo Applied</button>'
-            '<span class="review-status" aria-live="polite"></span>'
-            "</div>"
-        )
-    elif hidden_record:
-        actions_html = (
-            '<div class="job-actions">'
-            f'<button class="review-button review-undo" type="button" data-review-action="unhide" {button_data_attrs}>Unhide</button>'
-            '<span class="review-status" aria-live="polite"></span>'
-            "</div>"
-        )
-    elif not applied_record:
-        actions_html = (
-            '<div class="job-actions">'
-            f'<button class="review-button review-applied" type="button" data-review-action="applied" {button_data_attrs}>Applied</button>'
-            f'<button class="review-button review-not-for-me" type="button" data-review-action="not_for_me" {button_data_attrs} title="Marks this role as not a fit and stores it as learning feedback">Not For Me</button>'
-            f'<button class="review-button review-hide" type="button" data-review-action="hidden" {button_data_attrs} title="Hide this one job only. You can unhide it later from Hidden jobs.">Hide</button>'
-            '<span class="review-status" aria-live="polite"></span>'
-            "</div>"
-        )
-    else:
-        actions_html = ""
-
-    card_classes = f'job-card {fit_tone_class}' + (" is-description-issue" if description_issue else "")
-
-    return (
-        f'<article class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}" data-source="{safe_html(source)}">'
-        f'<div class="job-badges">{"".join(badges)}</div>'
-        '<div class="job-header-row">'
-        '<div class="job-header-copy">'
-        f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
-        + (
-            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Hide future roles whose titles contain the selected words, before description review.">Hide title words</button>'
-            '<div class="block-confirm" data-block-confirm hidden>'
-            '<div class="feature-guide-note">'
-            'Job sites often return broad results even when the search is correct. '
-            'If a title clearly doesnâ€™t match what you want, you can block similar titles directly from the title. '
-            'This helps remove repeated noise from future results.'
-            '</div>'
-            '<p class="block-confirm-copy">Hide future titles with:</p>'
-            '<div class="block-phrase-checks" data-block-phrase-checks></div>'
-            '<button class="mini-button block-manual-toggle" type="button" data-block-manual-toggle>Add other title words</button>'
-            '<div class="block-manual-row">'
-            '<span class="block-manual-label">Add title words</span>'
-            '<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. project manager, payroll">'
-            '<span class="block-manual-help">Adds to the checked words above. Use commas to add more than one.</span>'
-            '</div>'
-            '<p class="block-impact" data-block-impact></p>'
-            '<p class="block-confirm-sub">This is a strong filter. Matching titles will be hidden before description review.</p>'
-            '<div class="block-confirm-actions">'
-            '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Block Selected Titles</button>'
-            '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
-            '</div>'
-            '</div>'
-            '<span class="block-status" aria-live="polite"></span>'
-            if (not applied_record and not hidden_record and _block_phrases_list) else "" 
-        )
-        + f'<div class="job-company">{company}</div>'
-        '</div>'
-        f"{score_html}"
-        '</div>'
-        f"{summary_html}"
-        f'<div class="job-meta">{"".join(meta_items)}</div>'
-        f"{note_html}"
-        f"{insight_html}"
-        f"{context_html}"
-        f"{actions_html}"
-        "</article>"
-    )
-
-
-def section_dom_id(title: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-    return slug or "matches"
-
-
-def render_section(
-    title: str,
-    records: List[dict],
-    empty_message: str,
-    scoring_profile: Optional[dict] = None,
-    applied_pool: Optional[List[dict]] = None,
-    history_clusters: Optional[Dict[str, dict]] = None,
-) -> str:
-    if not records:
-        return (
-            f'<section class="section"><h2>{safe_html(title)}</h2>'
-            f'<p class="empty-state">{safe_html(empty_message)}</p></section>'
-        )
-    dom_id = section_dom_id(title)
-    cards = "".join(
-        render_job_card(record, scoring_profile, applied_pool=applied_pool, history_clusters=history_clusters)
-        for record in records
-    )
-    return (
-        f'<section class="section job-section" data-section-id="{safe_html(dom_id)}">'
-        '<div class="section-head">'
-        f'<h2>{safe_html(title)}</h2>'
-        '<div class="section-tools">'
-        '<span class="pagination-label"></span>'
-        '<button class="pagination-button" type="button" data-page-direction="prev">Prev</button>'
-        '<button class="pagination-button" type="button" data-page-direction="next">Next</button>'
-        "</div>"
-        "</div>"
-        f'<div class="job-grid">{cards}</div>'
-        "</section>"
-    )
-
-
 def load_last_kept_records() -> List[dict]:
     return dashboard_data.load_last_kept_records(
         load_json_list(DEBUG_JSON_PATH),
@@ -1136,32 +574,6 @@ def build_run_stats(
         sort_newest_first,
         seek_max_pages,
     )
-
-
-def _render_results_fragment(context: dict[str, str]) -> str:
-    if not RESULTS_TEMPLATE_PATH.exists():
-        raise FileNotFoundError(f"Missing template: {RESULTS_TEMPLATE_PATH}")
-    template = Template(RESULTS_TEMPLATE_PATH.read_text(encoding="utf-8"))
-    return template.safe_substitute(context)
-
-
-def _render_match_level_guide_html(profile: Optional[dict] = None) -> str:
-    active_profile = profile or load_profile()
-    match_levels = get_match_levels(active_profile)
-    guide_bits = [
-        f'<span class="chip"><strong>{safe_html(str(level["label"]))}:</strong> {safe_html(str(level["description"]))}</span>'
-        for level in match_levels
-    ]
-    guide_bits.extend([
-        '<span class="chip"><strong>Title match:</strong> direct titles are favored over secondary titles</span>',
-        '<span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span>',
-        '<span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span>',
-        '<span class="chip"><strong>Freshness:</strong> newer roles are favored</span>',
-        '<span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can be dialed up or down</span>',
-        '<span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>',
-        '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
-    ])
-    return "".join(guide_bits)
 
 
 def render_html(
@@ -1364,16 +776,16 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
 
     return {
         "run_started_at": run_iso,
-        "search_location": search_target["location"],
+        RECORD_SEARCH_LOCATION_KEY: search_target["location"],
         "search_keywords": search_target["keywords"],
         "search_classifications": ",".join(search_target.get("classification_ids", [])),
         "source": "seek",
         "job_key": stable_job_key(full_url) if full_url else None,
-        "title": title,
-        "company": company,
+        RECORD_TITLE_KEY: title,
+        RECORD_COMPANY_KEY: company,
         "posted": posted,
         "posted_age_days": posted_age_days,
-        "url": full_url,
+        RECORD_URL_KEY: full_url,
         "location": card_meta["location"],
         "work_mode": card_meta["work_mode"],
         "work_type": card_meta["work_type"],
@@ -1381,7 +793,7 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
         "card_salary": card_meta["card_salary"],
         "decision": "REJECT",
         "reject_reason": None,
-        "title_reason": None,
+        TITLE_REASON_KEY: None,
         "title_match_metadata": {},
         "content_reason": None,
         "llm_decision": None,
@@ -1390,7 +802,7 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
         "fit_highlights": [],
         "soft_risk_reasons": [],
         "missing_evidence": [],
-        "competitive_signals": [],
+        COMPETITIVE_SIGNALS_KEY: [],
         "reviewed_signal_matches": {"matched": [], "evidence_only": [], "ignored": [], "unresolved": []},
         "details_length": 0,
     }
@@ -1403,7 +815,7 @@ def _process_seek_job_details(
     title_reason: str
 ) -> tuple[bool, str]:
     """Fetches full job details and performs initial content filtering and metadata enrichment."""
-    details_payload = fetch_job_details_payload(detail_page, record["url"])
+    details_payload = fetch_job_details_payload(detail_page, record[RECORD_URL_KEY])
     details_text = str(details_payload.get("text") or "")
     details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
     
@@ -1419,18 +831,18 @@ def _process_seek_job_details(
         }.get(details_status, "NO_DETAILS")
         return False, reject_reason
 
-    record["fit_source_text"] = details_text
-    record["full_description"] = details_text
+    record[RECORD_FIT_SOURCE_TEXT_KEY] = details_text
+    record[RECORD_FULL_DESCRIPTION_KEY] = details_text
     record["description_source"] = details_payload.get("source") or "jobAdDetails"
     source = str(record.get("description_source") or "").strip().lower()
-    is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+    is_trusted = source in get_trusted_sources() and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
     record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
 
     ok_desc, desc_reason = passes_content_filters(details_text, record["location"], title_reason)
     if not ok_desc:
         if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
             knowledge_matches = find_hard_block_matches(details_text, profile.get("must_not_require_skills", []))
-            record["hard_block_reasons"] = dedupe_preserve_order(
+            record[HARD_BLOCK_REASONS_KEY] = dedupe_preserve_order(
                 [
                     compact_whitespace(match.get("value") or match.get("matched_term") or "")
                     for match in knowledge_matches
@@ -1444,19 +856,23 @@ def _process_seek_job_details(
         register_hard_blocker_learning_from_rejection(record, learned_reason, details_text, profile=profile)
         return False, learned_reason
 
-    record["competitive_signals"] = [
+    record[COMPETITIVE_SIGNALS_KEY] = [
         evaluate_competitive_signal_alignment(signal, profile)
         for signal in detect_competitive_signals(details_text, profile)
     ]
     record["reviewed_signal_matches"] = reviewed_signal_matches_for_text(details_text)
     
     hard_block_matches = hard_block_entries(record, profile)
-    record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
-    if record["hard_block_reasons"]:
-        term = compact_whitespace(record["hard_block_reasons"][0]).lower()
+    record[HARD_BLOCK_REASONS_KEY] = [entry["text"] for entry in hard_block_matches]
+    if record[HARD_BLOCK_REASONS_KEY]:
+        term = compact_whitespace(record[HARD_BLOCK_REASONS_KEY][0]).lower()
         reason_code = f"DESC_HARD_BLOCK_RULE:{re.sub(r'[^a-z0-9]+', '_', term).strip('_') or 'hard_block'}"
         register_hard_blocker_learning_from_rejection(record, reason_code, details_text, hard_block_matches, profile=profile)
         return False, reason_code
+
+    record_skill_observations = extract_skill_observations(record, profile)
+    record["skill_observations"] = record_skill_observations
+    record["ad_learning_signals"] = build_job_learning_signals(record, details_text, profile)
 
     record["salary"] = extract_salary(details_text) or record.get("card_salary", "N/A")
     detail_work_mode = extract_work_mode(details_text)
@@ -1477,29 +893,34 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     deterministic_review = deterministic_review_outcome(
         record, record["fit_highlights"], record["missing_evidence"], record["soft_risk_reasons"]
     )
-    
+    record["llm_learning_candidates"] = []
+
     if deterministic_review is not None:
         review = deterministic_review
         source = "rule"
+        if llm_is_enabled() and _has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
+            payload = _resolve_llm_review_payload(
+                record,
+                llm_cache,
+                learning_only=True,
+            )
+            record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+            if record["llm_learning_candidates"]:
+                source = "rule+learning"
     else:
-        llm_input_text = record["full_description"][:MAX_LLM_CHARS]
-        llm_fp = build_llm_cache_key(llm_input_text)
-        if NO_LLM_MODE or not llm_is_enabled():
-            review = normalize_llm_review(None)
-            source = "disabled"
-        elif llm_fp in llm_cache:
-            review = normalize_llm_review(llm_cache[llm_fp])
-            source = "cache"
-        else:
-            review = normalize_llm_review(llm_should_consider(llm_input_text))
-            llm_cache[llm_fp] = review
-            source = "llm"
+        payload = _resolve_llm_review_payload(
+            record,
+            llm_cache,
+        )
+        review = payload["fit_review"]
+        record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+        source = str(payload.get("payload_source") or "llm")
 
     return {
         "llm_decision": review["decision"],
         "llm_fit_grade": review["grade"],
         "review_source": source,
-        "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT"
+        "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
     }
 
 
@@ -1572,21 +993,15 @@ def _seek_scrape_to_records(
                         try:
                             record = _extract_seek_card_data(card, search_target, run_iso)
                             record["page"] = current_page_num
-                            title, company = record["title"], record["company"]
+                            title, company = record[RECORD_TITLE_KEY], record[RECORD_COMPANY_KEY]
                             posted_age_days = record["posted_age_days"]
-                            learn_title_normalization_candidates(
-                                [title],
-                                source="job title",
-                                source_text=record.get("teaser") or "",
-                            )
-
                             if posted_age_days is None or posted_age_days <= configured_date_range:
                                 page_has_fresh_card = True
 
                             title_analysis = analyze_title_filters(title, profile)
                             ok_title = bool(title_analysis.get("ok"))
                             title_reason = str(title_analysis.get("reason") or "")
-                            record["title_reason"] = title_reason
+                            record[TITLE_REASON_KEY] = title_reason
                             record["title_match_metadata"] = title_analysis
                             if not ok_title:
                                 print(f"REJECTED (title) [{title_reason}] {title}")
@@ -1594,7 +1009,7 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if not record["url"]:
+                            if not record[RECORD_URL_KEY]:
                                 print(f"REJECTED (card) [NO_URL] {title} @ {company}")
                                 record["reject_reason"] = "NO_URL"
                                 finalize_record(job_history, audit_rows, record, run_iso)
@@ -1619,12 +1034,12 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if record["url"] in seen_urls:
+                            if record[RECORD_URL_KEY] in seen_urls:
                                 print(f"SKIP (duplicate) {title} @ {company}")
                                 record.update({"decision": "SKIP", "reject_reason": "DUPLICATE_URL"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
-                            seen_urls.add(record["url"])
+                            seen_urls.add(record[RECORD_URL_KEY])
 
                             ok_card, card_reason = passes_quick_card_filters(title=title, teaser=record["teaser"], company=company, location=record["location"], work_mode=record["work_mode"], work_type=record["work_type"], salary=record.get("card_salary", "N/A"))
                             if not ok_card:
@@ -1657,11 +1072,15 @@ def _seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             
-                            record_skill_observations = extract_skill_observations(record, record["full_description"], profile)
-                            skill_observations.extend(record_skill_observations)
-                            pending_signals = build_job_learning_signals(record, record_skill_observations, profile)
-                            if pending_signals:
-                                register_signals(pending_signals)
+                            skill_observations.extend(record.get("skill_observations") or [])
+                            pending_signals = _merge_pending_learning_signals(
+                                record.get("ad_learning_signals") or [],
+                                record.get("llm_learning_candidates") or [],
+                            )
+                            _register_pending_learning_signals(pending_signals)
+                            record.pop("skill_observations", None)
+                            record.pop("ad_learning_signals", None)
+                            record.pop("llm_learning_candidates", None)
                             finalize_record(job_history, audit_rows, record, run_iso)
                             kept_records.append(record)
                             print(f"KEPT: {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")

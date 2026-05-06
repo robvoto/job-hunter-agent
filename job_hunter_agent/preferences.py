@@ -3,11 +3,12 @@ from typing import Optional
 
 from job_hunter_agent.profile_store import get_scoring_rules, load_profile
 from job_hunter_agent.role_analysis import has_government_context, text_contains_term
+from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.salary_utils import _salary_includes_super_or_package, _salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
 
-
+#Harcoded
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
     active_profile = profile or load_profile()
     defaults = {
@@ -47,7 +48,7 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
         if no_region and no_region not in variants:
             variants.append(no_region)
         return variants
-
+    #Harcoded
     def _matches_location(preference: str) -> bool:
         return any(variant and variant in location for variant in _location_variants(preference))
 
@@ -60,10 +61,10 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if secondary_location and _matches_location(secondary_location):
         label_target = compact_whitespace(secondary_location)
+        rules = load_parsing_rules()
         work_mode = compact_whitespace(record.get("work_mode") or "").lower()
         if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
             return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": int(location_rules["secondary_remote"])}
-        if re.search(r"\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\b", source_text):
             return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": int(location_rules["secondary_limited_onsite"])}
         if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
             return {"label": f"Secondary location requires regular onsite attendance: {label_target}", "value": int(location_rules["secondary_regular_onsite"])}
@@ -78,7 +79,7 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
     return None
 
-
+#Harcoded
 def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
@@ -89,10 +90,11 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
     short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
     eng_pref = preferences.get("engagement_type", "both")
+    rules = load_parsing_rules().get("engagement_keywords", {})
 
     normalized_work_type = re.sub(r"[\s_-]+", " ", work_type).strip()
-    is_perm = "full time" in normalized_work_type or "permanent" in normalized_work_type
-    is_contract = "contract" in normalized_work_type
+    is_perm = any(k in normalized_work_type for k in rules.get("permanent", ["full time", "permanent"]))
+    is_contract = any(k in normalized_work_type for k in rules.get("contract", ["contract"]))
 
     if is_perm:
         if eng_pref == "contract":

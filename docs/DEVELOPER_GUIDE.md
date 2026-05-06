@@ -6,7 +6,9 @@ This file is for technical contributors.
 
 Use it alongside:
 
-- `SOUL.md` for project memory and product intent
+- `AGENTS.md` for AI/dev guardrails and the code map
+- `docs/ARCHITECTURE.md` for system design
+- `docs/PRINCIPLES.md` for product and decision philosophy
 - `docs/OPERATIONS.md` for runtime behavior
 - `docs/USER_GUIDE.md` for the end-user flow
 
@@ -16,8 +18,30 @@ Core runtime code now lives under `job_hunter_agent/`.
 
 Primary modules:
 
-- `job_hunter_agent/local_server.py`
-  Local web server for the settings console, dashboard, onboarding UI, and API endpoints.
+- `job_hunter_agent/server_helpers.py`
+  Shared UI logic (`SettingsHandler`), onboarding helpers, run state, scrape thread helpers.
+
+- `job_hunter_agent/fastapi_app.py` / `job_hunter_agent/routes/`
+  FastAPI application, route modules for the settings console, dashboard, onboarding pages, and JSON APIs.
+  Entry point: `python -m job_hunter_agent.fastapi_app`.
+
+  All routers are registered centrally in `routes/__init__.py` → `register_routes()`.
+  Routes rarely change — only when a new feature adds an endpoint or a module is renamed.
+  To see all routes interactively, open `/docs` in the running app (FastAPI's built-in Swagger UI).
+
+  Route map by module:
+
+  | Module               | Routes                                                                                                      |
+  | -------------------- | ----------------------------------------------------------------------------------------------------------- |
+  | `pages.py`           | `/` `/workspace` `/dashboard` `/admin` `/profile` `/settings` `/start` `/onboarding` `/demo`               |
+  | `dashboard_api.py`   | `GET /api/results-html` `/api/health` `/api/run-stats` `/api/run-status` `/api/review-data` `/api/job-history` |
+  | `profile_materials.py` | `GET/PATCH/PUT /api/profile` · `GET/PUT /api/source-materials` · `GET/PATCH /api/advance-settings`        |
+  | `agent_telegram.py`  | `GET /api/llm-costs` · `GET/PATCH /api/agent-settings` · `GET /api/telegram/connect-link` · `POST /api/telegram/sync` `/api/telegram/test-message` |
+  | `signals.py`         | `GET/PATCH /api/signal-registry`                                                                            |
+  | `review.py`          | `GET /api/rejection-suggestions` · `POST /api/tuning-decisions` `/api/skill-decisions` `/api/rule/phrase` `/api/rejection-feedback/mandatory-blockers` `/api/rejection-rules` `/api/title-block-preview` `/api/review` · `DELETE /api/rule/title-block` |
+  | `onboarding_api.py`  | `POST /api/onboarding/import` `/api/onboarding/confirm-profile-signals`                                     |
+  | `scrape_debug.py`    | `POST /api/test/reset-user` `/api/test/reset-learning` `/api/debug/browser-log` `/api/run`                  |
+  | `static_docs.py`     | `GET /static/{path}` `/data/{path}` `/docs` `/api/docs`                                                     |
 
 - `job_hunter_agent/source_documents.py`
   Local source-pack persistence and source-document import into `profile.json`.
@@ -90,7 +114,7 @@ The dashboard now treats scoring as two separate layers:
 
 - visible match band
   The normal dashboard shows four human-facing labels instead of a raw `/100`:
-  `Strong match`, `Good match`, `Worth a look`, and `Stretch`.
+  `Strong match`, `Good match`, `Possible fit`, and `Stretch`.
 
 Design intent:
 
@@ -151,4 +175,5 @@ python -m job_hunter_agent.test_runner
 ```
 
 The runner resolves the local virtualenv automatically when present and forwards normal pytest selectors such as `-k` and `-m`.
+
 

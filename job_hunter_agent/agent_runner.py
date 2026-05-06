@@ -21,6 +21,14 @@ from job_hunter_agent.agent_settings import (
     load_agent_state,
     save_agent_settings,
     save_agent_state,
+    DEFAULT_DASHBOARD_URL,
+    DEFAULT_DAILY_TIME_LOCAL,
+    DEFAULT_SUBJECT_PREFIX,
+    KEY_EMAIL,
+    KEY_LLM,
+    KEY_NOTIFICATION_RULES,
+    KEY_ONLY_IF_NEW_MATCHES,
+    KEY_TELEGRAM,
 )
 from job_hunter_agent.config import OUTPUT_HTML
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
@@ -44,11 +52,32 @@ from job_hunter_agent.job_identity import (
     are_jobs_semantically_similar,
     find_similar_job,
 )
+from job_hunter_agent.paths import OUTPUT_DIR
 
-
-OUTPUT_DIR = ROOT_DIR / "output"
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
 
+# Digest payload keys
+KEY_DIGEST_NEW_RECORDS = "new_records"
+KEY_DIGEST_STRONGEST_RECORDS = "strongest_records"
+KEY_DIGEST_FEATURED_RECORDS = "featured_records"
+KEY_DIGEST_FEATURED_HEADING = "featured_heading"
+KEY_DIGEST_STATUS_MESSAGE = "status_message"
+KEY_DIGEST_NEW_COUNT = "new_count"
+KEY_DIGEST_CURRENT_COUNT = "current_count"
+KEY_DIGEST_SAVED_COUNT = "saved_count"
+KEY_DIGEST_DASHBOARD_COUNT = "dashboard_count"
+KEY_DIGEST_UNOPENED_COUNT = "dashboard_unopened_count"
+KEY_DIGEST_DASHBOARD_REF = "dashboard_reference"
+
+# Dashboard record set keys (from build_dashboard_record_sets)
+KEY_DS_CURRENT = "current_records"
+KEY_DS_APPLIED = "applied_records"
+KEY_DS_RECENT_ARCHIVE = "recent_archive_records"
+KEY_DS_STALE_ARCHIVE = "stale_archive_records"
+
+# Summary labels
+LABEL_NEW_MATCHES = "New matches"
+MSG_NO_NEW_MATCHES = "No new strong matches found this run. Your dashboard was refreshed and kept current."
 
 def configure_console_output() -> None:
     if hasattr(sys.stdout, "reconfigure"):
@@ -63,7 +92,7 @@ def build_dashboard_reference(settings: dict[str, Any]) -> str:
     dashboard_url = str(settings.get("dashboard_url") or "").strip()
     if dashboard_url:
         return dashboard_url
-    return f"http://127.0.0.1:8765/dashboard ({ROOT_DIR / OUTPUT_HTML})"
+    return f"{DEFAULT_DASHBOARD_URL} ({ROOT_DIR / OUTPUT_HTML})"
 
 
 def load_latest_run_stats() -> dict[str, Any]:
@@ -99,9 +128,9 @@ def build_digest_payload(
     # something already known (previous run, archive, applied) or repeated in this batch.
     existing_pool = (
         previous_records +
-        dashboard_records.get("applied_records", []) +
-        dashboard_records.get("recent_archive_records", []) +
-        dashboard_records.get("stale_archive_records", [])
+        dashboard_records.get(KEY_DS_APPLIED, []) +
+        dashboard_records.get(KEY_DS_RECENT_ARCHIVE, []) +
+        dashboard_records.get(KEY_DS_STALE_ARCHIVE, [])
     )
     unique_new = []
     for record in new_records:
@@ -109,11 +138,11 @@ def build_digest_payload(
             unique_new.append(record)
     new_records = unique_new
 
-    saved_records = dashboard_records.get("recent_archive_records", []) + dashboard_records.get("stale_archive_records", [])
-    visible_dashboard_records = dashboard_records.get("current_records", []) + saved_records
+    saved_records = dashboard_records.get(KEY_DS_RECENT_ARCHIVE, []) + dashboard_records.get(KEY_DS_STALE_ARCHIVE, [])
+    visible_dashboard_records = dashboard_records.get(KEY_DS_CURRENT, []) + saved_records
     dashboard_unopened_records = [record for record in visible_dashboard_records if not viewed_by_user(record)]
-    minimum_fit_score = int(settings["notification_rules"]["minimum_fit_score"])
-    max_jobs = int(settings["notification_rules"]["max_jobs_in_digest"])
+    minimum_fit_score = int(settings[KEY_NOTIFICATION_RULES]["minimum_fit_score"])
+    max_jobs = int(settings[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"])
     run_started_at, run_finished_at = _resolve_collection_timestamps(run_stats)
 
     strongest_records = sorted(
@@ -121,27 +150,25 @@ def build_digest_payload(
         key=lambda record: (-fit_score(record), record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999),
     )[:max_jobs]
     featured_records = new_records[:max_jobs]
-    featured_heading = "New matches"
+    featured_heading = LABEL_NEW_MATCHES
 
     return {
         "run_started_at": run_started_at,
         "run_finished_at": run_finished_at,
         "digest_created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "current_count": len(current_records),
-        "saved_count": len(saved_records),
-        "dashboard_count": len(visible_dashboard_records),
-        "new_count": len(new_records),
-        "dashboard_unopened_count": len(dashboard_unopened_records),
-        "new_records": new_records[:max_jobs],
-        "strongest_records": strongest_records,
-        "featured_records": featured_records,
-        "featured_heading": featured_heading,
-        "status_message": (
-            "No new strong matches found this run. Your dashboard was refreshed and kept current."
-            if not new_records
-            else ""
+        KEY_DIGEST_CURRENT_COUNT: len(current_records),
+        KEY_DIGEST_SAVED_COUNT: len(saved_records),
+        KEY_DIGEST_DASHBOARD_COUNT: len(visible_dashboard_records),
+        KEY_DIGEST_NEW_COUNT: len(new_records),
+        KEY_DIGEST_UNOPENED_COUNT: len(dashboard_unopened_records),
+        KEY_DIGEST_NEW_RECORDS: new_records[:max_jobs],
+        KEY_DIGEST_STRONGEST_RECORDS: strongest_records,
+        KEY_DIGEST_FEATURED_RECORDS: featured_records,
+        KEY_DIGEST_FEATURED_HEADING: featured_heading,
+        KEY_DIGEST_STATUS_MESSAGE: (
+            MSG_NO_NEW_MATCHES if not new_records else ""
         ),
-        "dashboard_reference": build_dashboard_reference(settings),
+        KEY_DIGEST_DASHBOARD_REF: build_dashboard_reference(settings),
         "current_keys": sorted(current_keys),
     }
 
@@ -187,21 +214,21 @@ def format_daily_summary(payload: dict[str, Any]) -> str:
         "Daily Job Summary",
         f"Collection started: {_format_summary_timestamp(run_started_at)}",
         f"Collection finished: {_format_summary_timestamp(run_finished_at)}",
-        f"Matches this run: {payload.get('current_count', 0)} | New this run: {payload.get('new_count', 0)}",
-        f"Saved from earlier: {payload.get('saved_count', 0)} | Unopened on dashboard: {payload.get('dashboard_unopened_count', 0)}",
+        f"Matches this run: {payload.get(KEY_DIGEST_CURRENT_COUNT, 0)} | New this run: {payload.get(KEY_DIGEST_NEW_COUNT, 0)}",
+        f"Saved from earlier: {payload.get(KEY_DIGEST_SAVED_COUNT, 0)} | Unopened on dashboard: {payload.get(KEY_DIGEST_UNOPENED_COUNT, 0)}",
         "",
     ]
 
-    featured_records = payload.get("featured_records", [])
+    featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
     if featured_records:
-        lines.append(f"{payload.get('featured_heading', 'Top current matches')}:")
+        lines.append(f"{payload.get(KEY_DIGEST_FEATURED_HEADING, 'Top current matches')}:")
         lines.extend(format_job_line(record, index + 1) for index, record in enumerate(featured_records))
         lines.append("")
-    elif payload.get("status_message"):
-        lines.append(str(payload.get("status_message")))
+    elif payload.get(KEY_DIGEST_STATUS_MESSAGE):
+        lines.append(str(payload.get(KEY_DIGEST_STATUS_MESSAGE)))
         lines.append("")
 
-    lines.append(f"Dashboard: {payload.get('dashboard_reference', '')}")
+    lines.append(f"Dashboard: {payload.get(KEY_DIGEST_DASHBOARD_REF, '')}")
     return "\n".join(lines).strip()
 
 
@@ -211,12 +238,12 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
         _format_summary_timestamp(str(payload.get("run_finished_at", payload.get("run_started_at", "Unknown"))))
     )
     summary_line = (
-        f"Matches this run: <b>{payload.get('current_count', 0)}</b> | "
-        f"New this run: <b>{payload.get('new_count', 0)}</b>"
+        f"Matches this run: <b>{payload.get(KEY_DIGEST_CURRENT_COUNT, 0)}</b> | "
+        f"New this run: <b>{payload.get(KEY_DIGEST_NEW_COUNT, 0)}</b>"
     )
     dashboard_line = (
-        f"Saved from earlier: <b>{payload.get('saved_count', 0)}</b> | "
-        f"Unopened on dashboard: <b>{payload.get('dashboard_unopened_count', 0)}</b>"
+        f"Saved from earlier: <b>{payload.get(KEY_DIGEST_SAVED_COUNT, 0)}</b> | "
+        f"Unopened on dashboard: <b>{payload.get(KEY_DIGEST_UNOPENED_COUNT, 0)}</b>"
     )
     parts = [
         "<b>Daily Job Summary</b>",
@@ -226,16 +253,16 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
         dashboard_line,
     ]
 
-    featured_records = payload.get("featured_records", [])
+    featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
     if featured_records:
         parts.append("")
-        parts.append(f"<b>{html.escape(str(payload.get('featured_heading', 'Top current matches')))}:</b>")
+        parts.append(f"<b>{html.escape(str(payload.get(KEY_DIGEST_FEATURED_HEADING, 'Top current matches')))}:</b>")
         parts.extend(format_job_html(record, index + 1) for index, record in enumerate(featured_records))
-    elif payload.get("status_message"):
+    elif payload.get(KEY_DIGEST_STATUS_MESSAGE):
         parts.append("")
-        parts.append(html.escape(str(payload.get("status_message") or "")))
+        parts.append(html.escape(str(payload.get(KEY_DIGEST_STATUS_MESSAGE) or "")))
 
-    dashboard_reference = str(payload.get("dashboard_reference", "")).strip()
+    dashboard_reference = str(payload.get(KEY_DIGEST_DASHBOARD_REF, "")).strip()
     if dashboard_reference:
         if dashboard_reference.startswith("http://") or dashboard_reference.startswith("https://"):
             parts.append("")
@@ -253,30 +280,30 @@ def write_last_summary(summary_text: str) -> None:
 
 def send_daily_notifications(summary_text: str, summary_html: str, settings: dict[str, Any]) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    subject_prefix = str(settings["email"].get("subject_prefix") or "[Job Hunter]").strip()
+    subject_prefix = str(settings[KEY_EMAIL].get("subject_prefix") or DEFAULT_SUBJECT_PREFIX).strip()
     subject = f"{subject_prefix} Daily Job Summary"
 
-    if settings["email"].get("enabled"):
-        results.append(send_email_notification(subject, summary_text, summary_html, settings["email"]))
-    if settings["telegram"].get("enabled"):
-        results.append(send_telegram_notification(summary_text, summary_html, settings["telegram"]))
+    if settings[KEY_EMAIL].get("enabled"):
+        results.append(send_email_notification(subject, summary_text, summary_html, settings[KEY_EMAIL]))
+    if settings[KEY_TELEGRAM].get("enabled"):
+        results.append(send_telegram_notification(summary_text, summary_html, settings[KEY_TELEGRAM]))
     return results
 
 
 def should_send_digest(payload: dict[str, Any], settings: dict[str, Any]) -> bool:
-    if not settings["notification_rules"].get("only_if_new_matches", False):
+    if not settings[KEY_NOTIFICATION_RULES].get(KEY_ONLY_IF_NEW_MATCHES, False):
         return True
-    return int(payload.get("new_count", 0)) > 0
+    return int(payload.get(KEY_DIGEST_NEW_COUNT, 0)) > 0
 
 
-def run_agent_once(skip_collection: bool = False, notify: bool = True) -> dict[str, Any]:
+def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, Any]:
     settings = load_agent_settings(create_if_missing=True)
     state = load_agent_state()
     previous_records = load_last_kept_records()
 
-    if skip_collection:
+    if no_scrape:
         print("Rebuilding dashboard from current local state...")
-        rebuild_html_dashboard(reason="agent runner --skip-collection")
+        rebuild_html_dashboard(reason="agent runner --send-notification-no-scrape")
     else:
         print("Starting job collection...")
         scrape_jobs_direct()
@@ -304,9 +331,9 @@ def run_agent_once(skip_collection: bool = False, notify: bool = True) -> dict[s
     if not notify:
         print("Notifications skipped because --no-notify was used.")
     elif should_send_digest(payload, settings):
-        if settings["telegram"].get("enabled") and settings["telegram"].get("bot_token"):
+        if settings[KEY_TELEGRAM].get("enabled") and settings[KEY_TELEGRAM].get("bot_token"):
             try:
-                sync_result = sync_telegram_subscribers(settings["telegram"])
+                sync_result = sync_telegram_subscribers(settings[KEY_TELEGRAM])
                 save_agent_settings(settings)
                 print(f"Telegram subscribers synced: {sync_result['total_subscribers']}")
             except Exception as exc:
@@ -322,7 +349,7 @@ def run_agent_once(skip_collection: bool = False, notify: bool = True) -> dict[s
         "last_notified_run_at": payload["run_finished_at"] if notification_results else state.get("last_notified_run_at"),
         "last_current_keys": payload["current_keys"],
         "last_summary_path": str(AGENT_SUMMARY_PATH),
-        "last_dashboard_reference": payload["dashboard_reference"],
+        "last_dashboard_reference": payload[KEY_DIGEST_DASHBOARD_REF],
     })
     save_agent_state(state)
 
@@ -341,8 +368,9 @@ def should_run_now(state: dict[str, Any], daily_time_local: str, now: datetime) 
         scheduled_hour = int(hour_text)
         scheduled_minute = int(minute_text)
     except Exception:
-        scheduled_hour = 8
-        scheduled_minute = 30
+        hour_text, minute_text = DEFAULT_DAILY_TIME_LOCAL.split(":", 1)
+        scheduled_hour = int(hour_text)
+        scheduled_minute = int(minute_text)
 
     last_run_at = str(state.get("last_agent_run_at") or "")
     last_run_day = last_run_at[:10]
@@ -356,7 +384,7 @@ def run_agent_loop() -> None:
     while True:
         settings = load_agent_settings(create_if_missing=True)
         sleep_seconds = int(settings["schedule"]["loop_sleep_seconds"])
-        daily_time_local = str(settings["schedule"]["daily_time_local"] or "08:30").strip()
+        daily_time_local = str(settings["schedule"]["daily_time_local"] or DEFAULT_DAILY_TIME_LOCAL).strip()
 
         now = datetime.now().astimezone()
         state = load_agent_state()
@@ -371,7 +399,7 @@ def main() -> None:
     configure_console_output()
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")
     parser.add_argument("--loop", action="store_true", help="Keep running and trigger once per day at the configured local time.")
-    parser.add_argument("--skip-collection", action="store_true", help="Do not fetch new jobs; just rebuild the dashboard and send a digest from current local state.")
+    parser.add_argument("--send-notification-no-scrape", action="store_true", help="Do not fetch new jobs; just rebuild the dashboard and send a digest from current local state.")
     parser.add_argument("--no-notify", action="store_true", help="Build the digest without sending email or Telegram notifications.")
     args = parser.parse_args()
 
@@ -379,7 +407,7 @@ def main() -> None:
         run_agent_loop()
         return
 
-    result = run_agent_once(skip_collection=args.skip_collection, notify=not args.no_notify)
+    result = run_agent_once(no_scrape=args.send_notification_no_scrape, notify=not args.no_notify)
     print(result["summary_text"])
     print("")
     print(json.dumps({

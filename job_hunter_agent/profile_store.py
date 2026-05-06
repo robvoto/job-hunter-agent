@@ -13,15 +13,26 @@ Notes:
 import copy
 import json
 import re
+import shutil
+from datetime import datetime, timezone
 from typing import Any
 
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
+from job_hunter_agent.advance_settings import (
+    CAPABILITY_STRENGTH_PRESETS,
+    DEFAULT_EVIDENCE_TIER_WEIGHTS,
+    DEFAULT_ONBOARDING_SETTINGS,
+    DEFAULT_PREFERENCE_WEIGHTS,
+    DEFAULT_SEARCH_SETTINGS,
+    KEY_CAPABILITY_STRENGTH_PRESETS,
+    KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_ONBOARDING_SETTINGS as ADVANCE_KEY_ONBOARDING_SETTINGS,
+    ONBOARDING_SETTING_LIMITS,
+    SEARCH_SETTING_LIMITS,
+    load_advance_settings,
+)
 from job_hunter_agent.paths import (
-    DATA_DIR,
-    FIT_REVIEW_DEFAULTS_PATH,
-    HARD_BLOCKER_RULES_PATH,
-    LLM_CAPABILITY_NAMING_DEFAULTS_PATH,
-    LLM_COSTS_PATH,
+    DATA_DIR, 
     PROFILE_PATH,
     REPO_ROOT,
     SCORING_RULES_PATH,
@@ -29,35 +40,72 @@ from job_hunter_agent.paths import (
 
 
 ROOT_DIR = REPO_ROOT 
-MIN_DATE_RANGE_DAYS = 1
-MAX_DATE_RANGE_DAYS = 30
-MIN_SEEK_PAGES = 1
-MAX_SEEK_PAGES = 10
-MIN_LINKEDIN_HOURS_OLD = 1
-MAX_LINKEDIN_HOURS_OLD = 168
-MIN_LINKEDIN_RESULTS_PER_SEARCH = 5
-MAX_LINKEDIN_RESULTS_PER_SEARCH = 100
-DEFAULT_EVIDENCE_TIERS = {
-    "primary_current_evidence": "",
-    "secondary_older_evidence": "",
-    "background_optional_evidence": "",
+# Shared Profile and Settings Keys
+KEY_KEYWORDS = "keywords"
+KEY_LOCATIONS = "locations"
+KEY_ENGAGEMENT_TYPE = "engagement_type"
+KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
+KEY_MIN_DAILY_RATE = "minimum_daily_rate"
+
+KEY_LOOKBACK_YEARS = "extraction_lookback_years"
+KEY_MIN_MONTHS = "title_extraction_min_months"
+KEY_MAX_TARGET = "max_target_patterns"
+KEY_MAX_SECONDARY = "max_secondary_patterns"
+KEY_CAP_STRENGTH_PRESET = "capability_strength_preset"
+
+KEY_BRIEF_MODE = "llm_profile_brief_mode"
+KEY_BRIEF = "llm_profile_brief"
+KEY_FIT_GUIDANCE = "llm_fit_review_guidance"
+KEY_CAP_GUIDANCE = "llm_capability_naming_guidance"
+KEY_STAR_EVIDENCE = "star_candidate_profile_text"
+KEY_CV_TEXT = "cv_text"
+KEY_CANDIDATE_PROFILE_TIERS = "candidate_profile_tiers"
+KEY_EVIDENCE_TIERS = KEY_CANDIDATE_PROFILE_TIERS
+KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
+KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
+KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
+KEY_CAPABILITY_PROFILE_RULES = "capability_profile_rules"
+KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
+KEY_REQUIRED_SKILLS = "must_not_require_skills"
+KEY_ONBOARDING_SETTINGS = "onboarding_settings"
+KEY_MATCH_PREFS = "match_preferences"
+KEY_PRIMARY_PATTERNS = "primary_job_title_pattern"
+KEY_SECONDARY_PATTERNS = "secondary_title_patterns"
+KEY_LLM_GRADE_POINTS = "llm_grade_points"
+KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
+KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
+KEY_MAX_SCORE = "max_score"
+
+KEY_NAME = "name"
+KEY_LEVEL = "level"
+KEY_ALIASES = "aliases"
+KEY_NEEDS_REVIEW = "needs_review"
+KEY_CONVERGENCE = "convergence"
+KEY_CONVERGENCE_ELIGIBLE_GRADES = "eligible_grades"
+KEY_CONVERGENCE_MIN_POSITIVE_MATCHES = "min_positive_matches"
+KEY_CONVERGENCE_BONUS_NO_SOFT_RISKS = "bonus_no_soft_risks"
+KEY_CONVERGENCE_BONUS_WITH_SOFT_RISKS = "bonus_with_soft_risks"
+KEY_CONVERGENCE_LABEL = "label"
+
+LEVEL_STRONG = "strong"
+LEVEL_WORKING = "working"
+LEVEL_BASIC = "basic"
+LEVEL_LOW = "low"
+VALID_CAPABILITY_RULE_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC, LEVEL_LOW})
+VALID_CAPABILITY_MATCH_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC})
+
+DEFAULT_CANDIDATE_PROFILE_TIERS  = {
+    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: "",
+    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: "",
+    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
 }
-DEFAULT_EVIDENCE_TIER_WEIGHTS = {
-    "primary_current_evidence": 1.0,
-    "secondary_older_evidence": 0.55,
-    "background_optional_evidence": 0.25,
-}
-DEFAULT_PREFERENCE_WEIGHTS = {
-    "fit": 1.0,
-    "salary": 1.0,
-    "location": 1.0,
-    "work_mode": 1.0,
-    "contract": 1.0,
-    "government": 1.0,
-    "freshness": 1.0,
-}
+
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
 DEFAULT_LLM_PROFILE_BRIEF_MODE = "auto"
+
+
+class ProfileLoadError(RuntimeError):
+    pass
 
 
 def _load_default_scoring_rules() -> dict[str, Any]:
@@ -66,8 +114,10 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         raise ValueError("scoring_rules.json must be managed knowledge")
     return {
         "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
-        "llm_grade_points": dict(payload.get("llm_grade_points") or {}),
-        "convergence": dict(payload.get("convergence") or {}),
+        KEY_LLM_GRADE_POINTS: dict(payload.get(KEY_LLM_GRADE_POINTS) or {}),
+        KEY_CAPABILITY_LEVEL_WEIGHTS: dict(payload.get(KEY_CAPABILITY_LEVEL_WEIGHTS) or {}),
+        KEY_CAPABILITY_EVIDENCE: dict(payload.get(KEY_CAPABILITY_EVIDENCE) or {}),
+        KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
         "salary": dict(payload.get("salary") or {}),
@@ -78,80 +128,6 @@ def _load_default_scoring_rules() -> dict[str, Any]:
 
 
 DEFAULT_SCORING_RULES = _load_default_scoring_rules()
-
-DEFAULT_ONBOARDING_SETTINGS = {
-    "extraction_lookback_years": 8,
-    "title_extraction_min_months": 6,
-    "max_target_patterns": 8,
-    "max_secondary_patterns": 6,
-    "capability_strength_preset": "balanced",
-    "capability_recent_years": 4,
-    "capability_strong_max_years_since_use": 4,
-    "capability_strong_min_months": 36,
-    "capability_strong_min_roles": 2,
-    "capability_working_max_years_since_use": 8,
-    "capability_working_min_months": 18,
-    "capability_working_long_history_max_years_since_use": 12,
-    "capability_working_long_history_min_months": 48,
-    "capability_single_role_old_max_years_since_use": 8,
-    "capability_drop_to_basic_after_years": 12,
-    "capability_max_items": 20,
-}
-
-CAPABILITY_STRENGTH_PRESETS = {
-    "recent_focus": {
-        "capability_recent_years": 3,
-        "capability_strong_max_years_since_use": 3,
-        "capability_strong_min_months": 36,
-        "capability_strong_min_roles": 2,
-        "capability_working_max_years_since_use": 6,
-        "capability_working_min_months": 18,
-        "capability_working_long_history_max_years_since_use": 10,
-        "capability_working_long_history_min_months": 60,
-        "capability_single_role_old_max_years_since_use": 6,
-        "capability_drop_to_basic_after_years": 10,
-        "capability_max_items": 20,
-    },
-    "balanced": {
-        "capability_recent_years": 4,
-        "capability_strong_max_years_since_use": 4,
-        "capability_strong_min_months": 36,
-        "capability_strong_min_roles": 2,
-        "capability_working_max_years_since_use": 8,
-        "capability_working_min_months": 18,
-        "capability_working_long_history_max_years_since_use": 12,
-        "capability_working_long_history_min_months": 48,
-        "capability_single_role_old_max_years_since_use": 8,
-        "capability_drop_to_basic_after_years": 12,
-        "capability_max_items": 20,
-    },
-    "include_older_experience": {
-        "capability_recent_years": 5,
-        "capability_strong_max_years_since_use": 5,
-        "capability_strong_min_months": 30,
-        "capability_strong_min_roles": 2,
-        "capability_working_max_years_since_use": 10,
-        "capability_working_min_months": 12,
-        "capability_working_long_history_max_years_since_use": 15,
-        "capability_working_long_history_min_months": 36,
-        "capability_single_role_old_max_years_since_use": 10,
-        "capability_drop_to_basic_after_years": 15,
-        "capability_max_items": 24,
-    },
-}
-
-DEFAULT_SEARCH_SETTINGS = {
-    "keywords": "",
-    "locations": [],
-    "classification_ids": [],
-    "date_range_days": 3,
-    "seek_max_pages": 10,
-    "enforce_posted_age_limit": True,
-    "sort_newest_first": True,
-    "linkedin_hours_old": 24,
-    "linkedin_results_per_search": 50,
-    "linkedin_easy_apply_only": None,
-}
 
 DEFAULT_PROFILE = {
     "enabled_sources": ["seek", "linkedin"],
@@ -184,23 +160,19 @@ DEFAULT_PROFILE = {
     "llm_profile_brief": "",
     "llm_fit_review_guidance": "",
     "llm_capability_naming_guidance": "",
-    "star_evidence_text": "",
+    "star_candidate_profile_text": "",
     "cv_text": "",
-    "evidence_tiers": {
-        **DEFAULT_EVIDENCE_TIERS,
+    KEY_CANDIDATE_PROFILE_TIERS : {
+        **DEFAULT_CANDIDATE_PROFILE_TIERS ,
     },
-    "evidence_tier_weights": {
+    "candidate_profile_tier_weights": {
         **DEFAULT_EVIDENCE_TIER_WEIGHTS,
     },
-    "capability_profile_rules": [],
-    "cheap_keep_counter_patterns": [],
-    "cheap_reject_metadata_rules": [],
+    KEY_CAPABILITY_PROFILE_RULES: [],
     "dominant_signal_clusters": [],
     "primary_job_title_pattern": [],
     "secondary_title_patterns": [],
-    "must_not_require_skills": [],
-    "reject_title_rules": [],
-    "reject_description_phrase_rules": [],
+    "must_not_require_skills": [],  
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
     },
@@ -245,6 +217,14 @@ def ensure_profile_exists() -> None:
     save_profile(DEFAULT_PROFILE)
 
 
+def _backup_invalid_profile() -> None:
+    if not PROFILE_PATH.exists():
+        return
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    backup_path = PROFILE_PATH.with_name(f"profile.invalid.{timestamp}.json")
+    shutil.copy2(PROFILE_PATH, backup_path)
+
+
 def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     try:
         resolved = int(value)
@@ -255,118 +235,42 @@ def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
 
 def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     source = settings if isinstance(settings, dict) else {}
-    raw_preset = str(source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]).strip().lower()
-    capability_strength_preset = raw_preset if raw_preset in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
-    merged = _deep_merge(copy.deepcopy(DEFAULT_ONBOARDING_SETTINGS), CAPABILITY_STRENGTH_PRESETS[capability_strength_preset])
-    merged = _deep_merge(
-        merged,
-        {
-            "extraction_lookback_years": source.get("extraction_lookback_years"),
-            "title_extraction_min_months": source.get("title_extraction_min_months"),
-            "max_target_patterns": source.get("max_target_patterns"),
-            "max_secondary_patterns": source.get("max_secondary_patterns"),
-            "capability_strength_preset": capability_strength_preset,
-        },
-    )
-    return {
-        "capability_strength_preset": capability_strength_preset,
-        "extraction_lookback_years": _coerce_int(
-            merged.get("extraction_lookback_years"),
-            DEFAULT_ONBOARDING_SETTINGS["extraction_lookback_years"],
-            1,
-            20,
-        ),
-        "title_extraction_min_months": _coerce_int(
-            merged.get("title_extraction_min_months"),
-            DEFAULT_ONBOARDING_SETTINGS["title_extraction_min_months"],
-            1,
-            24,
-        ),
-        "max_target_patterns": _coerce_int(
-            merged.get("max_target_patterns"),
-            DEFAULT_ONBOARDING_SETTINGS["max_target_patterns"],
-            1,
-            20,
-        ),
-        "max_secondary_patterns": _coerce_int(
-            merged.get("max_secondary_patterns"),
-            DEFAULT_ONBOARDING_SETTINGS["max_secondary_patterns"],
-            1,
-            20,
-        ),
-        "capability_recent_years": _coerce_int(
-            merged.get("capability_recent_years"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_recent_years"],
-            1,
-            15,
-        ),
-        "capability_strong_max_years_since_use": _coerce_int(
-            merged.get("capability_strong_max_years_since_use"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_strong_max_years_since_use"],
-            1,
-            20,
-        ),
-        "capability_strong_min_months": _coerce_int(
-            merged.get("capability_strong_min_months"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_strong_min_months"],
-            1,
-            240,
-        ),
-        "capability_strong_min_roles": _coerce_int(
-            merged.get("capability_strong_min_roles"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_strong_min_roles"],
-            1,
-            10,
-        ),
-        "capability_working_max_years_since_use": _coerce_int(
-            merged.get("capability_working_max_years_since_use"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_working_max_years_since_use"],
-            1,
-            25,
-        ),
-        "capability_working_min_months": _coerce_int(
-            merged.get("capability_working_min_months"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_working_min_months"],
-            1,
-            240,
-        ),
-        "capability_working_long_history_max_years_since_use": _coerce_int(
-            merged.get("capability_working_long_history_max_years_since_use"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_working_long_history_max_years_since_use"],
-            1,
-            30,
-        ),
-        "capability_working_long_history_min_months": _coerce_int(
-            merged.get("capability_working_long_history_min_months"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_working_long_history_min_months"],
-            1,
-            360,
-        ),
-        "capability_single_role_old_max_years_since_use": _coerce_int(
-            merged.get("capability_single_role_old_max_years_since_use"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_single_role_old_max_years_since_use"],
-            1,
-            25,
-        ),
-        "capability_drop_to_basic_after_years": _coerce_int(
-            merged.get("capability_drop_to_basic_after_years"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_drop_to_basic_after_years"],
-            1,
-            40,
-        ),
-        "capability_max_items": _coerce_int(
-            merged.get("capability_max_items"),
-            DEFAULT_ONBOARDING_SETTINGS["capability_max_items"],
-            1,
-            50,
-        ),
-    }
+
+    # Global policy baseline: user-configured values from advance_settings.json.
+    # Falls back to code defaults if advance_settings is not yet initialised.
+    try:
+        global_onboarding = load_advance_settings()[ADVANCE_KEY_ONBOARDING_SETTINGS]
+    except Exception:
+        global_onboarding = {}
+    global_presets = global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
+
+    # Preset resolution: source > global > code default.
+    raw_preset = str(
+        source.get("capability_strength_preset")
+        or global_onboarding.get("capability_strength_preset")
+        or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    ).strip().lower()
+    preset_name = raw_preset if raw_preset in global_presets else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    preset_values = global_presets[preset_name]
+
+    # Merge layer: code defaults → global settings → chosen preset → all explicit source overrides.
+    merged: dict[str, Any] = {**DEFAULT_ONBOARDING_SETTINGS}
+    merged.update({k: v for k, v in global_onboarding.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS})
+    merged.update(preset_values)
+    merged.update({
+        k: v for k, v in source.items()
+        if k not in (KEY_CAPABILITY_STRENGTH_PRESETS, "capability_strength_preset") and v is not None
+    })
+
+    result: dict[str, Any] = {"capability_strength_preset": preset_name}
+    for key, (minimum, maximum) in ONBOARDING_SETTING_LIMITS.items():
+        result[key] = _coerce_int(merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], minimum, maximum)
+    return result
 
 
 def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     cleaned: list[dict[str, Any]] = []
     seen_names: set[str] = set()
-    valid_levels = {"strong", "working", "basic", "low"}
     derive_job_description_aliases = None
 
     try:
@@ -387,7 +291,7 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
         level = str(rule.get("level") or "").strip().lower()
         if level == "none":
             continue
-        if level not in valid_levels:
+        if level not in VALID_CAPABILITY_RULE_LEVELS:
             level = "basic"
 
         raw_aliases = rule.get("aliases")
@@ -436,132 +340,64 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
     return cleaned
 
 
+def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(profile, dict):
+        raise TypeError("profile must be a dict")
+    merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
+    merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
+    merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
+    merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
+    merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
+    merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
+    merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
+        merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+    )
+    merged["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
+        merged.get("llm_fit_review_guidance", "")
+    )
+    merged["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
+        merged.get("llm_capability_naming_guidance", "")
+    )
+    merged[KEY_CANDIDATE_PROFILE_TIERS ] = normalize_candidate_profile_tiers(
+        merged.get(KEY_CANDIDATE_PROFILE_TIERS , {}),
+        merged.get("cv_text", ""),
+    )
+    merged["candidate_profile_tier_weights"] = normalize_candidate_profile_tier_weights(
+        merged.get("candidate_profile_tier_weights", {})
+    )
+    merged["onboarding_settings"] = normalize_onboarding_settings(
+        merged.get("onboarding_settings", {})
+    )
+    merged[KEY_CAPABILITY_PROFILE_RULES] = normalize_capability_rules(
+        merged.get(KEY_CAPABILITY_PROFILE_RULES, [])
+    )
+    merged["primary_job_title_pattern"] = normalize_multiline_string_list(
+        merged.get("primary_job_title_pattern", [])
+    )
+    merged["secondary_title_patterns"] = normalize_multiline_string_list(
+        merged.get("secondary_title_patterns", [])
+    )
+    merged["must_not_require_skills"] = normalize_multiline_string_list(
+        merged.get("must_not_require_skills", [])
+    )
+    return merged
+
+
 def load_profile() -> dict[str, Any]:
     ensure_profile_exists()
     try:
         data = json.loads(PROFILE_PATH.read_text(encoding="utf-8-sig"))
-        if isinstance(data, dict):
-            merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), data)
-            merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
-            merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
-            merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
-            merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
-            merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
-            merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
-                merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
-            )
-            merged["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
-                merged.get("llm_fit_review_guidance", "")
-            )
-            merged["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
-                merged.get("llm_capability_naming_guidance", "")
-            )
-            merged["evidence_tiers"] = normalize_evidence_tiers(
-                merged.get("evidence_tiers", {}),
-                merged.get("cv_text", ""),
-            )
-            merged["evidence_tier_weights"] = normalize_evidence_tier_weights(
-                merged.get("evidence_tier_weights", {})
-            )
-            merged["onboarding_settings"] = normalize_onboarding_settings(
-                merged.get("onboarding_settings", {})
-            )
-            merged.pop("strengths", None)
-            merged["capability_profile_rules"] = normalize_capability_rules(
-                merged.get("capability_profile_rules", [])
-            )
-            merged["primary_job_title_pattern"] = normalize_multiline_string_list(
-                merged.get("primary_job_title_pattern", [])
-            )
-            merged["secondary_title_patterns"] = normalize_multiline_string_list(
-                merged.get("secondary_title_patterns", [])
-            )
-            merged["must_not_require_skills"] = normalize_multiline_string_list(
-                merged.get("must_not_require_skills", [])
-            )
-            return merged
-    except Exception:
-        pass
-    fallback = copy.deepcopy(DEFAULT_PROFILE)
-    fallback["search_settings"] = normalize_search_settings(fallback.get("search_settings", {}))
-    fallback["salary_preferences"] = normalize_salary_preferences(fallback.get("salary_preferences", {}))
-    fallback["preference_weights"] = normalize_preference_weights(fallback.get("preference_weights", {}))
-    fallback["scoring_rules"] = normalize_scoring_rules(fallback.get("scoring_rules", {}))
-    fallback["match_levels"] = normalize_match_levels(fallback.get("match_levels", []))
-    fallback["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
-        fallback.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
-    )
-    fallback["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
-        fallback.get("llm_fit_review_guidance", "")
-    )
-    fallback["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
-        fallback.get("llm_capability_naming_guidance", "")
-    )
-    fallback["evidence_tiers"] = normalize_evidence_tiers(
-        fallback.get("evidence_tiers", {}),
-        fallback.get("cv_text", ""),
-    )
-    fallback["evidence_tier_weights"] = normalize_evidence_tier_weights(
-        fallback.get("evidence_tier_weights", {})
-    )
-    fallback["onboarding_settings"] = normalize_onboarding_settings(
-        fallback.get("onboarding_settings", {})
-    )
-    fallback.pop("strengths", None)
-    fallback["capability_profile_rules"] = normalize_capability_rules(
-        fallback.get("capability_profile_rules", [])
-    )
-    fallback["primary_job_title_pattern"] = normalize_multiline_string_list(
-        fallback.get("primary_job_title_pattern", [])
-    )
-    fallback["secondary_title_patterns"] = normalize_multiline_string_list(
-        fallback.get("secondary_title_patterns", [])
-    )
-    fallback["must_not_require_skills"] = normalize_multiline_string_list(
-        fallback.get("must_not_require_skills", [])
-    )
-    return fallback
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        _backup_invalid_profile()
+        raise ProfileLoadError(f"Failed to parse profile.json: {exc}") from exc
+    if not isinstance(data, dict):
+        _backup_invalid_profile()
+        raise ProfileLoadError("profile.json must contain a JSON object")
+    return normalize_full_profile(data)
 
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
-    normalized = copy.deepcopy(profile)
-    normalized["search_settings"] = normalize_search_settings(normalized.get("search_settings", {}))
-    normalized["salary_preferences"] = normalize_salary_preferences(normalized.get("salary_preferences", {}))
-    normalized["preference_weights"] = normalize_preference_weights(normalized.get("preference_weights", {}))
-    normalized["scoring_rules"] = normalize_scoring_rules(normalized.get("scoring_rules", {}))
-    normalized["match_levels"] = normalize_match_levels(normalized.get("match_levels", []))
-    normalized["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
-        normalized.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
-    )
-    normalized["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
-        normalized.get("llm_fit_review_guidance", "")
-    )
-    normalized["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
-        normalized.get("llm_capability_naming_guidance", "")
-    )
-    normalized["evidence_tiers"] = normalize_evidence_tiers(
-        normalized.get("evidence_tiers", {}),
-        normalized.get("cv_text", ""),
-    )
-    normalized["evidence_tier_weights"] = normalize_evidence_tier_weights(
-        normalized.get("evidence_tier_weights", {})
-    )
-    normalized["onboarding_settings"] = normalize_onboarding_settings(
-        normalized.get("onboarding_settings", {})
-    )
-    normalized.pop("strengths", None)
-    normalized["capability_profile_rules"] = normalize_capability_rules(
-        normalized.get("capability_profile_rules", [])
-    )
-    normalized["primary_job_title_pattern"] = normalize_multiline_string_list(
-        normalized.get("primary_job_title_pattern", [])
-    )
-    normalized["secondary_title_patterns"] = normalize_multiline_string_list(
-        normalized.get("secondary_title_patterns", [])
-    )
-    normalized["must_not_require_skills"] = normalize_multiline_string_list(
-        normalized.get("must_not_require_skills", [])
-    )
+    normalized = normalize_full_profile(profile)
     PROFILE_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -589,26 +425,32 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
 
     try:
         merged["date_range_days"] = max(
-            MIN_DATE_RANGE_DAYS,
-            min(int(merged.get("date_range_days", DEFAULT_SEARCH_SETTINGS["date_range_days"])), MAX_DATE_RANGE_DAYS),
+            SEARCH_SETTING_LIMITS["date_range_days"]["min"],
+            min(
+                int(merged.get("date_range_days", DEFAULT_SEARCH_SETTINGS["date_range_days"])),
+                SEARCH_SETTING_LIMITS["date_range_days"]["max"],
+            ),
         )
     except Exception:
         merged["date_range_days"] = DEFAULT_SEARCH_SETTINGS["date_range_days"]
 
     try:
         merged["seek_max_pages"] = max(
-            MIN_SEEK_PAGES,
-            min(int(merged.get("seek_max_pages", DEFAULT_SEARCH_SETTINGS["seek_max_pages"])), MAX_SEEK_PAGES),
+            SEARCH_SETTING_LIMITS["seek_max_pages"]["min"],
+            min(
+                int(merged.get("seek_max_pages", DEFAULT_SEARCH_SETTINGS["seek_max_pages"])),
+                SEARCH_SETTING_LIMITS["seek_max_pages"]["max"],
+            ),
         )
     except Exception:
         merged["seek_max_pages"] = DEFAULT_SEARCH_SETTINGS["seek_max_pages"]
 
     try:
         merged["linkedin_hours_old"] = max(
-            MIN_LINKEDIN_HOURS_OLD,
+            SEARCH_SETTING_LIMITS["linkedin_hours_old"]["min"],
             min(
                 int(merged.get("linkedin_hours_old", DEFAULT_SEARCH_SETTINGS["linkedin_hours_old"])),
-                MAX_LINKEDIN_HOURS_OLD,
+                SEARCH_SETTING_LIMITS["linkedin_hours_old"]["max"],
             ),
         )
     except Exception:
@@ -616,7 +458,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
 
     try:
         merged["linkedin_results_per_search"] = max(
-            MIN_LINKEDIN_RESULTS_PER_SEARCH,
+            SEARCH_SETTING_LIMITS["linkedin_results_per_search"]["min"],
             min(
                 int(
                     merged.get(
@@ -624,7 +466,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
                         DEFAULT_SEARCH_SETTINGS["linkedin_results_per_search"],
                     )
                 ),
-                MAX_LINKEDIN_RESULTS_PER_SEARCH,
+                SEARCH_SETTING_LIMITS["linkedin_results_per_search"]["max"],
             ),
         )
     except Exception:
@@ -637,19 +479,19 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
     merged["classification_ids"] = [
         str(value).strip() for value in merged.get("classification_ids", []) if str(value).strip()
     ]
-    easy_apply_only = merged.get("linkedin_easy_apply_only")
+    easy_apply_only = merged.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
     if easy_apply_only is None or easy_apply_only == "":
-        merged["linkedin_easy_apply_only"] = None
+        merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = None
     elif isinstance(easy_apply_only, str):
         normalized_easy_apply_only = easy_apply_only.strip().lower()
         if normalized_easy_apply_only == "true":
-            merged["linkedin_easy_apply_only"] = True
+            merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = True
         elif normalized_easy_apply_only == "false":
-            merged["linkedin_easy_apply_only"] = False
+            merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = False
         else:
-            merged["linkedin_easy_apply_only"] = None
+            merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = None
     else:
-        merged["linkedin_easy_apply_only"] = bool(easy_apply_only)
+        merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = bool(easy_apply_only)
     return merged
 
 
@@ -733,17 +575,18 @@ def normalize_llm_capability_naming_guidance(value: Any) -> str:
     return str(value or "").strip()
 
 
-def classify_evidence_section_label(label: str) -> str:
+def classify_candidate_profile_section_label(label: str) -> str:
     lowered = str(label or "").strip().lower()
+    # Route section headings into the three profile-context buckets.
     if not lowered:
-        return "primary_current_evidence"
+        return KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT
     if any(token in lowered for token in ("primary", "detailed", "current", "recent", "main", "core")):
-        return "primary_current_evidence"
+        return KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT
     if any(token in lowered for token in ("supporting", "older", "secondary", "legacy", "earlier", "previous")):
-        return "secondary_older_evidence"
+        return KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT
     if any(token in lowered for token in ("background", "optional", "extra", "additional", "note", "notes", "cert", "education")):
-        return "background_optional_evidence"
-    return "primary_current_evidence"
+        return KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT
+    return KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT
 
 
 def _combine_unique_sections(parts: list[str]) -> str:
@@ -761,8 +604,8 @@ def _combine_unique_sections(parts: list[str]) -> str:
     return "\n\n".join(cleaned_parts).strip()
 
 
-def build_evidence_tiers_from_sections(sections: list[dict[str, str]] | None) -> dict[str, str]:
-    buckets = {key: [] for key in DEFAULT_EVIDENCE_TIERS}
+def build_candidate_profile_tiers_from_sections(sections: list[dict[str, str]] | None) -> dict[str, str]:
+    buckets = {key: [] for key in DEFAULT_CANDIDATE_PROFILE_TIERS }
     for section in sections or []:
         if not isinstance(section, dict):
             continue
@@ -770,7 +613,8 @@ def build_evidence_tiers_from_sections(sections: list[dict[str, str]] | None) ->
         text = str(section.get("text") or "").strip()
         if not text:
             continue
-        bucket = classify_evidence_section_label(label)
+        bucket = classify_candidate_profile_section_label(label)
+        # Headings only decide the bucket; the text itself is preserved unchanged.
         buckets[bucket].append(text)
     return {
         bucket: _combine_unique_sections(parts)
@@ -778,13 +622,14 @@ def build_evidence_tiers_from_sections(sections: list[dict[str, str]] | None) ->
     }
 
 
-def infer_evidence_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
+def infer_candidate_profile_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
     text = str(cv_text or "").strip()
     if not text:
-        return dict(DEFAULT_EVIDENCE_TIERS)
+        return dict(DEFAULT_CANDIDATE_PROFILE_TIERS )
 
     heading_matches = list(re.finditer(r"(?m)^##\s+(.+?)\s*$", text))
     if heading_matches:
+        # Headings are the only routing signal here; no score or judgment is applied.
         sections: list[dict[str, str]] = []
         for index, match in enumerate(heading_matches):
             label = match.group(1).strip()
@@ -793,7 +638,7 @@ def infer_evidence_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
             body = text[start:end].strip()
             if body:
                 sections.append({"label": label, "text": body})
-        tiers = build_evidence_tiers_from_sections(sections)
+        tiers = build_candidate_profile_tiers_from_sections(sections)
         if any(tiers.values()):
             return tiers
 
@@ -802,29 +647,29 @@ def infer_evidence_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
         primary = parts[0].strip()
         secondary = parts[1].strip() if len(parts) > 1 else ""
         return {
-            "primary_current_evidence": primary,
-            "secondary_older_evidence": secondary,
-            "background_optional_evidence": "",
+            KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: primary,
+            KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: secondary,
+            KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
         }
 
     return {
-        "primary_current_evidence": text,
-        "secondary_older_evidence": "",
-        "background_optional_evidence": "",
+        KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: text,
+        KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: "",
+        KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
     }
 
 
-def normalize_evidence_tiers(payload: dict[str, Any] | None, cv_text: str = "") -> dict[str, str]:
-    normalized = dict(DEFAULT_EVIDENCE_TIERS)
+def normalize_candidate_profile_tiers(payload: dict[str, Any] | None, cv_text: str = "") -> dict[str, str]:
+    normalized = dict(DEFAULT_CANDIDATE_PROFILE_TIERS )
     source = payload if isinstance(payload, dict) else {}
-    inferred = infer_evidence_tiers_from_cv_text(cv_text)
+    inferred = infer_candidate_profile_tiers_from_cv_text(cv_text)
     for key in normalized:
         value = str(source.get(key) or "").strip()
         normalized[key] = value or inferred.get(key, "")
     return normalized
 
 
-def normalize_evidence_tier_weights(payload: dict[str, Any] | None) -> dict[str, float]:
+def normalize_candidate_profile_tier_weights(payload: dict[str, Any] | None) -> dict[str, float]:
     source = payload if isinstance(payload, dict) else {}
     normalized = dict(DEFAULT_EVIDENCE_TIER_WEIGHTS)
     for key, default in DEFAULT_EVIDENCE_TIER_WEIGHTS.items():
@@ -836,15 +681,15 @@ def normalize_evidence_tier_weights(payload: dict[str, Any] | None) -> dict[str,
     return normalized
 
 
-def get_evidence_tiers(profile: dict[str, Any]) -> dict[str, str]:
-    return normalize_evidence_tiers(
-        profile.get("evidence_tiers", {}),
+def get_candidate_profile_tiers(profile: dict[str, Any]) -> dict[str, str]:
+    return normalize_candidate_profile_tiers(
+        profile.get(KEY_CANDIDATE_PROFILE_TIERS , {}),
         str(profile.get("cv_text") or ""),
     )
 
 
-def get_evidence_tier_weights(profile: dict[str, Any]) -> dict[str, float]:
-    return normalize_evidence_tier_weights(profile.get("evidence_tier_weights", {}))
+def get_candidate_profile_tier_weights(profile: dict[str, Any]) -> dict[str, float]:
+    return normalize_candidate_profile_tier_weights(profile.get("candidate_profile_tier_weights", {}))
 
 
 def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:

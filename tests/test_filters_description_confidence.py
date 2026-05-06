@@ -224,6 +224,55 @@ def test_approved_hard_blocker_rules_does_not_reject_desirable_only_text(tmp_pat
     assert reason == "OK"
 
 
+def test_pending_hard_blocker_pattern_does_not_affect_filtering(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    rules_path = tmp_path / "hard_blocker_rules.json"
+    registry_path.write_text(
+        """
+        {
+          "must have sap": {
+            "signal": "must have sap",
+            "normalized_key": "must have sap",
+            "original_texts": ["must have sap experience"],
+            "category": "hard_blocker_pattern",
+            "suggested_category": "hard_blocker_pattern",
+            "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}]
+          }
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    rules_path.write_text(
+        """
+        {
+          "kind": "managed_knowledge",
+          "name": "hard_blocker_rules",
+          "version": 1,
+          "entries": []
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
+    monkeypatch.setattr(
+        filters,
+        "load_profile",
+        lambda: {
+            "capability_profile_rules": [],
+            "reject_description_phrase_rules": [],
+            "must_not_require_skills": ["SAP"],
+        },
+    )
+
+    ok, reason = filters.passes_content_filters(
+        "Must have SAP experience for this role.",
+        title_reason="OK",
+    )
+
+    assert ok is True
+    assert reason == "OK"
+
+
 def test_term_not_in_profile_does_not_reject_even_if_pattern_appears(tmp_path, monkeypatch):
     rules_path = tmp_path / "hard_blocker_rules.json"
     rules_path.write_text(

@@ -2,22 +2,31 @@ import re
 from typing import Any
 
 
+from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.profile_store import (
+    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_REQUIRED_SKILLS,
+    KEY_ALIASES,
+    KEY_NAME,
+    KEY_LEVEL,
+)
+
 def _normalize_term(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
 
 
 def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
     known_terms = set()
-    for skill in profile.get("must_not_require_skills", []):
+    for skill in profile.get(KEY_REQUIRED_SKILLS, []):
         normalized = _normalize_term(str(skill))
         if normalized:
             known_terms.add(normalized)
 
-    for rule in profile.get("capability_profile_rules", []):
-        normalized_name = _normalize_term(str(rule.get("name") or ""))
+    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
+        normalized_name = _normalize_term(str(rule.get(KEY_NAME) or ""))
         if normalized_name:
             known_terms.add(normalized_name)
-        for alias in rule.get("aliases", []):
+        for alias in rule.get(KEY_ALIASES, []):
             normalized_alias = _normalize_term(str(alias))
             if normalized_alias:
                 known_terms.add(normalized_alias)
@@ -41,6 +50,7 @@ def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str
                 "examples": [],
             },
         )
+        #HARCODED
         entry["count"] += 1
         if len(entry["examples"]) < 3:
             entry["examples"].append(
@@ -70,6 +80,7 @@ def build_rejection_review(audit_rows: list[dict]) -> list[dict]:
                 "samples": [],
             },
         )
+        #HARCODED
         entry["count"] += 1
         if len(entry["samples"]) < 4:
             entry["samples"].append(
@@ -92,10 +103,10 @@ def _friendly_reason_suffix(value: str) -> str:
 
 def _capability_rule_lookup(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
     lookup: dict[str, dict[str, Any]] = {}
-    for rule in profile.get("capability_profile_rules", []):
+    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
         if not isinstance(rule, dict):
             continue
-        aliases = [rule.get("name"), *(rule.get("aliases") or [])]
+        aliases = [rule.get(KEY_NAME), *(rule.get(KEY_ALIASES) or [])]
         for alias in aliases:
             normalized = _normalize_term(str(alias))
             if normalized:
@@ -108,7 +119,7 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
     for idx, rule in enumerate(capability_rules):
         if not isinstance(rule, dict):
             continue
-        aliases = [rule.get("name"), *(rule.get("aliases") or [])]
+        aliases = [rule.get(KEY_NAME), *(rule.get(KEY_ALIASES) or [])]
         for alias in aliases:
             normalized = _normalize_term(str(alias))
             if normalized:
@@ -117,19 +128,15 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 
 def _choice_label(choice: str) -> str:
-    labels = {
-        "strong": "Expert",
-        "working": "Advanced",
-        "basic": "Intermediate",
-        "low": "Beginner",
-    }
+    rules = load_parsing_rules()
+    labels = rules.get("level_labels", {})
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
-
+#HARCODED
 def _current_rule_label(rule: dict[str, Any] | None) -> str:
     if not isinstance(rule, dict):
         return "Unclassified"
-    level = str(rule.get("level") or "").strip().lower()
+    level = str(rule.get(KEY_LEVEL) or "").strip().lower()
     if not level:
         return "Unclassified"
     return _choice_label(level)
@@ -158,7 +165,7 @@ def build_capability_tuning_suggestions(
         normalized = _normalize_term(skill)
         if not normalized:
             continue
-
+        #HARCODED      
         entry = grouped.setdefault(
             normalized,
             {
@@ -170,7 +177,7 @@ def build_capability_tuning_suggestions(
         entry["count"] += 1
         if len(entry["examples"]) < 3:
             entry["examples"].append(
-                {
+                {#HARCODED
                     "title": observation.get("title"),
                     "company": observation.get("company"),
                     "url": observation.get("url"),
@@ -186,7 +193,7 @@ def build_capability_tuning_suggestions(
 
         current_rule = rule_lookup.get(normalized)
         skill = str(entry["skill"] or normalized).strip()
-
+#HARCODED
         if current_rule:
             # Already classified - skip regardless of stored strength.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
@@ -196,7 +203,7 @@ def build_capability_tuning_suggestions(
         detail = f"Seen in {count} kept role(s) and still unclassified."
 
         suggestions.append(
-            {
+            {#HARCODED
                 "kind": "capability",
                 "skill": skill,
                 "count": count,
@@ -226,7 +233,7 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
             if count < 20:
                 continue
             suggestions.append(
-                {
+                {#HARCODED
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -243,7 +250,7 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
         if prefix == "CARD_SPECIALIST" and count >= 2:
             domain = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {
+                {#HARCODED
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -257,7 +264,7 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
         elif prefix == "DESC_CAPABILITY_LOW" and count >= 2:
             area = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {
+                {#HARCODED
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -271,7 +278,7 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
         elif prefix == "TITLE_BAD_KEYWORD" and count >= 2:
             keyword = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {
+                {#HARCODED
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -285,7 +292,7 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
         elif prefix == "DESC_MANDATORY_SKILL" and count >= 2:
             skill = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {
+                {#HARCODED
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -311,7 +318,7 @@ def build_suggested_tuning(
 ) -> dict[str, Any]:
     capability_suggestions = build_capability_tuning_suggestions(skill_observations, audit_rows, profile)
     rule_suggestions = build_rule_tuning_suggestions(audit_rows)
-    return {
+    return {#HARCODED
         "summary": {
             "capability_count": len(capability_suggestions),
             "rule_count": len(rule_suggestions),
@@ -326,7 +333,7 @@ def build_suggested_tuning_from_saved_review(payload: dict[str, Any], profile: d
         str(value).strip()
         for value in payload.get("kept_job_urls", [])
         if str(value).strip()
-    }
+    }#HARCODED
     audit_rows = [{"url": url, "decision": "KEEP"} for url in sorted(kept_job_urls)]
     skill_observations = [
         item for item in payload.get("skill_observations", [])
@@ -338,7 +345,7 @@ def build_suggested_tuning_from_saved_review(payload: dict[str, Any], profile: d
         if isinstance(item, dict)
     ]
     rule_suggestions = _build_rule_tuning_suggestions_from_reviews(rule_reviews)
-    return {
+    return {#HARCODED
         "summary": {
             "capability_count": len(capability_suggestions),
             "rule_count": len(rule_suggestions),
@@ -356,7 +363,7 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
             if row.get("decision") == "KEEP" and str(row.get("url") or "").strip()
         }
     )
-    return {
+    return {#HARCODED
         "suggested_tuning": build_suggested_tuning(audit_rows, skill_observations, profile),
         "kept_job_urls": kept_job_urls,
         "skill_observations": skill_observations,
@@ -366,7 +373,7 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
 
 
 def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
-    capability_rules = list(profile.get("capability_profile_rules", []))
+    capability_rules = list(profile.get(KEY_CAPABILITY_PROFILE_RULES, []))
     existing_index = _capability_rule_index_lookup(capability_rules)
 
     for item in decisions:
@@ -381,19 +388,19 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
         level = choice
 
         rule = {
-            "name": skill,
-            "level": level,
-            "aliases": [],
+            KEY_NAME: skill,
+            KEY_LEVEL: level,
+            KEY_ALIASES: [],
         }
 
         if normalized in existing_index:
             existing_rule = capability_rules[existing_index[normalized]]
             merged_aliases: list[str] = []
-            canonical_name = str(existing_rule.get("name") or skill).strip() or skill
+            canonical_name = str(existing_rule.get(KEY_NAME) or skill).strip() or skill
             canonical_name_norm = _normalize_term(canonical_name)
 
             alias_candidates = [
-                *(existing_rule.get("aliases") or []),
+                *(existing_rule.get(KEY_ALIASES) or []),
             ]
 
             for alias in alias_candidates:
@@ -406,13 +413,13 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
                     merged_aliases.append(cleaned_alias)
 
             capability_rules[existing_index[normalized]] = {
-                "name": canonical_name,
-                "level": level,
-                "aliases": merged_aliases,
+                KEY_NAME: canonical_name,
+                KEY_LEVEL: level,
+                KEY_ALIASES: merged_aliases,
             }
         else:
             capability_rules.append(rule)
             existing_index[normalized] = len(capability_rules) - 1
 
-    profile["capability_profile_rules"] = capability_rules
+    profile[KEY_CAPABILITY_PROFILE_RULES] = capability_rules
     return profile

@@ -1,0 +1,16 @@
+"""Shared job/record field names."""
+
+RECORD_TITLE_KEY = "title"
+RECORD_COMPANY_KEY = "company"
+RECORD_URL_KEY = "url"
+RECORD_FULL_DESCRIPTION_KEY = "full_description"
+RECORD_DESCRIPTION_SOURCE_KEY = "description_source"
+RECORD_FIT_SOURCE_TEXT_KEY = "fit_source_text"
+RECORD_DETAILS_STATUS_KEY = "details_status"
+RECORD_FIT_CONFIDENCE_KEY = "fit_confidence"
+RECORD_SEARCH_LOCATION_KEY = "search_location"
+
+DETAILS_STATUS_OK = "ok"
+CONFIDENCE_HIGH = "HIGH"
+CONFIDENCE_LOW = "LOW"
+REASON_OK = "OK"

@@ -6,43 +6,170 @@ from job_hunter_agent.capability_matching import (
     _normalized_aliases,
     evidence_tier_alignment_score,
 )
-from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
+
 from job_hunter_agent.profile_learning import _role_title_review_token
-from job_hunter_agent.profile_store import load_profile
+from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, KEY_LEVEL, KEY_SIGNAL_CLUSTERS, load_profile
 from job_hunter_agent.role_analysis import text_contains_term
 from job_hunter_agent.role_analysis import _load_government_context_rules
 from job_hunter_agent.scoring_utils import build_scoring_source_text, profile_recency_multiplier
-from job_hunter_agent.signal_registry import load_approved_signal_catalog, signal_in_approved_knowledge
+from job_hunter_agent.signal_schema import (
+    ALIGNMENT_PARTIAL,
+    ALIGNMENT_STRONG,
+    ALIGNMENT_WEAK,
+    CATEGORY_CAPABILITY_CONCEPT,
+    CATEGORY_GOVERNMENT_CONTEXT,
+    CATEGORY_HARD_BLOCKER_PATTERN,
+    CATEGORY_ROLE_TITLE_TOKEN,
+    LEARNING_CATEGORY_KEY,
+    LEARNING_CONTEXT_KEY,
+    LEARNING_EVIDENCE_KEY,
+    LEARNING_KNOWLEDGE_MATCH_KEY,
+    LEARNING_NEEDS_REVIEW_KEY,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SOURCE_KEY,
+    COMPETITIVE_SIGNALS_KEY,
+    HARD_BLOCK_REASONS_KEY,
+    HARD_BLOCK_TEXT_KEY,
+    SIGNAL_ADJUSTMENT_KEY,
+    SIGNAL_ALIAS_HITS_KEY,
+    SIGNAL_ALIGNMENT_KEY,
+    SIGNAL_ALIASES_KEY,
+    SIGNAL_DOMINANCE_LEVEL_KEY,
+    SIGNAL_FIT_LABEL_KEY,
+    SIGNAL_LABEL_KEY,
+    SIGNAL_NAME_KEY,
+    SIGNAL_RISK_LABEL_KEY,
+    SIGNAL_SNIPPET_HITS_KEY,
+    SIGNAL_WATCHOUT_LABEL_KEY,
+    SOURCE_JOB_PARSING,
+    TITLE_REASON_KEY,
+    TITLE_REASON_POTENTIAL_MATCH,
+    OBSERVATION_SKILL_KEY,
+    PARSING_APS_PATTERN_KEY,
+    PARSING_CLEARANCE_PATTERN_KEY,
+    PARSING_DEPARTMENT_PATTERN_KEY,
+    PARSING_DEFAULT_KEY,
+    PARSING_EL_PATTERN_KEY,
+    PARSING_JUNK_KEYWORDS_KEY,
+    PARSING_MAX_DISCOVERY_TERMS_KEY,
+    PARSING_MIN_TERM_LENGTH_KEY,
+    PARSING_SKILL_DISCOVERY_CONFIG_KEY,
+    PARSING_STRENGTH_COEFFICIENTS_KEY,
+    PARSING_STOPWORDS_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+)
+from job_hunter_agent.parsing_schema import (
+    PARSING_CLEARANCE_NORMALIZATION_KEY,
+    PARSING_GOVERNMENT_DISCOVERY_CONFIG_KEY,
+    PARSING_GOVERNMENT_DISCOVERY_PATTERNS_KEY,
+    PARSING_GOVERNMENT_TERMS_KEY,
+)
+from job_hunter_agent.signal_registry import signal_in_approved_knowledge
+from job_hunter_agent.io_utils import load_parsing_rules, load_signal_defaults
 from job_hunter_agent.text_processing import (
     compact_whitespace,
     dedupe_preserve_order,
     split_text_snippets,
 )
 
+CLUSTER_MIN_SNIPPET_HITS_KEY = "min_snippet_hits"
+CLUSTER_DENSE_SNIPPET_ALIAS_HITS_KEY = "dense_snippet_alias_hits"
+CLUSTER_HARD_BLOCK_ON_MISMATCH_KEY = "hard_block_on_mismatch"
+CLUSTER_HARD_BLOCK_ALIGNMENT_LEVELS_KEY = "hard_block_alignment_levels"
+CLUSTER_HARD_BLOCK_LABEL_KEY = "hard_block_label"
+CLUSTER_POSITIVE_BONUS_KEY = "positive_bonus"
+CLUSTER_PARTIAL_PENALTY_KEY = "partial_penalty"
+CLUSTER_WEAK_PENALTY_KEY = "weak_penalty"
+
+
+def _dedupe_key(value: Any) -> str:
+    return compact_whitespace(str(value or "")).lower()
+
+
+def _iter_pattern_matches(patterns: dict[str, Any], key: str, text: str):
+    pattern = patterns.get(key)
+    if not isinstance(pattern, str) or not pattern.strip():
+        return ()
+    return re.finditer(pattern, text)
+
+
+def _signal_defaults() -> dict[str, str]:
+    defaults = load_signal_defaults()
+    return {
+        key: compact_whitespace(value)
+        for key, value in defaults.items()
+        if isinstance(value, str) and compact_whitespace(value)
+    }
+
+
+def _government_discovery_config() -> dict[str, Any]:
+    rules = load_parsing_rules()
+    config = rules.get(PARSING_GOVERNMENT_DISCOVERY_CONFIG_KEY, {})
+    return config if isinstance(config, dict) else {}
+
+
+def _resolved_signal_text(source: dict[str, Any], key: str, defaults: dict[str, str]) -> str:
+    value = compact_whitespace(source.get(key) or "")
+    if value:
+        return value
+    return compact_whitespace(defaults.get(key) or "")
+
+
+def _configured_terms(values: Any) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return []
+    return [
+        compact_whitespace(value).lower()
+        for value in values
+        if compact_whitespace(value)
+    ]
+
+
+def _normalized_clearance_value(raw_text: str, config: dict[str, Any]) -> str:
+    lowered = compact_whitespace(raw_text).lower()
+    if not lowered:
+        return ""
+    mappings = config.get(PARSING_CLEARANCE_NORMALIZATION_KEY, {})
+    if isinstance(mappings, dict):
+        for canonical, aliases in mappings.items():
+            canonical_value = compact_whitespace(canonical).lower()
+            if not canonical_value:
+                continue
+            alias_values = _configured_terms(aliases)
+            if alias_values and any(text_contains_term(lowered, alias) for alias in alias_values):
+                return canonical_value
+    return ""
+
 
 def _capability_rule_strength(rule: dict) -> float:
-    level = compact_whitespace(rule.get("level") or "").lower()
-    level_map = {
-        "strong": 1.0,
-        "working": 0.72,
-        "basic": 0.55,
-        "low": 0.22,
-    }
-    return max(min(level_map.get(level, 0.45), 1.0), 0.0)
+    level = compact_whitespace(rule.get(KEY_LEVEL) or "").lower()
+    rules = load_parsing_rules()
+    level_map = rules.get(PARSING_STRENGTH_COEFFICIENTS_KEY, {})
+    default = level_map.get(PARSING_DEFAULT_KEY, 0.45)
+    return max(min(level_map.get(level, default), 1.0), 0.0)
 
 
 def detect_competitive_signals(details_text: str, profile: Optional[dict] = None) -> List[dict]:
     active_profile = profile or load_profile()
-    source_text = compact_whitespace(details_text).lower()
-    snippets = [snippet.lower() for snippet in split_text_snippets(details_text)]
+    defaults = _signal_defaults()
+    source_text = _dedupe_key(details_text)
+    snippets = [_dedupe_key(snippet) for snippet in split_text_snippets(details_text)]
     if not source_text:
         return []
 
     detected: List[dict] = []
-    for raw_cluster in active_profile.get("dominant_signal_clusters", []):
+    for raw_cluster in active_profile.get(KEY_SIGNAL_CLUSTERS, []):
         if not isinstance(raw_cluster, dict):
             continue
-        canonical = compact_whitespace(raw_cluster.get("name") or "").lower()
+        canonical = _dedupe_key(raw_cluster.get(SIGNAL_NAME_KEY) or "")
         aliases = [canonical] if canonical else []
         if not aliases:
             continue
@@ -58,8 +185,8 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
             max_aliases_in_snippet = max(max_aliases_in_snippet, alias_hits_in_snippet)
             if alias_hits_in_snippet > 0:
                 snippet_hits += 1
-        min_snippet_hits = int(raw_cluster.get("min_snippet_hits", 2) or 2)
-        dense_snippet_alias_hits = int(raw_cluster.get("dense_snippet_alias_hits", 4) or 4)
+        min_snippet_hits = int(raw_cluster.get(CLUSTER_MIN_SNIPPET_HITS_KEY, 2) or 2)
+        dense_snippet_alias_hits = int(raw_cluster.get(CLUSTER_DENSE_SNIPPET_ALIAS_HITS_KEY, 4) or 4)
         if snippet_hits < min_snippet_hits and max_aliases_in_snippet >= dense_snippet_alias_hits:
             snippet_hits = min_snippet_hits
         if snippet_hits < min_snippet_hits:
@@ -73,26 +200,28 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
 
         detected.append(
             {
-                "name": compact_whitespace(raw_cluster.get("name") or "domain specialist track"),
-                "fit_label": compact_whitespace(raw_cluster.get("fit_label") or ""),
-                "watchout_label": compact_whitespace(raw_cluster.get("watchout_label") or ""),
-                "risk_label": compact_whitespace(raw_cluster.get("risk_label") or raw_cluster.get("watchout_label") or ""),
-                "aliases": matched_aliases,
-                "alias_hits": len(matched_aliases),
-                "snippet_hits": snippet_hits,
-                "dominance_level": min(dominance_level, 3),
+                SIGNAL_NAME_KEY: _resolved_signal_text(raw_cluster, SIGNAL_NAME_KEY, defaults),
+                SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(raw_cluster, SIGNAL_FIT_LABEL_KEY, defaults),
+                SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(raw_cluster, SIGNAL_WATCHOUT_LABEL_KEY, defaults),
+                SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(raw_cluster, SIGNAL_RISK_LABEL_KEY, defaults),
+                SIGNAL_ALIASES_KEY: matched_aliases,
+                SIGNAL_ALIAS_HITS_KEY: len(matched_aliases),
+                SIGNAL_SNIPPET_HITS_KEY: snippet_hits,
+                SIGNAL_DOMINANCE_LEVEL_KEY: min(dominance_level, 3),
             }
         )
 
-    detected.sort(key=lambda item: (-int(item.get("dominance_level", 0)), -int(item.get("alias_hits", 0)), item.get("name", "")))
+    detected.sort(key=lambda item: (-int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 0)), -int(item.get(SIGNAL_ALIAS_HITS_KEY, 0)), item.get(SIGNAL_NAME_KEY, "")))
     return detected[:3]
 
 
 def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
-    aliases = _normalized_aliases([signal.get("name") or ""])
+    defaults = _signal_defaults()
+    signal_name = _resolved_signal_text(signal, SIGNAL_NAME_KEY, defaults)
+    aliases = _normalized_aliases([signal_name])
     capability_best = 0.0
 
-    for rule in profile.get("capability_profile_rules", []):
+    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
         if not isinstance(rule, dict):
             continue
         canonical = canonical_capability_term(rule)
@@ -115,49 +244,58 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
         tiered_evidence_score,
     )
 
-    dominance_level = int(signal.get("dominance_level", 1) or 1)
-    positive_bonus = int(signal.get("positive_bonus", min(1 + dominance_level, 2)) or min(1 + dominance_level, 2))
-    partial_penalty = int(signal.get("partial_penalty", 3 + (dominance_level * 2)) or 3 + (dominance_level * 2))
-    weak_penalty = int(signal.get("weak_penalty", 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
+    dominance_level = int(signal.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1)
+    positive_bonus = int(signal.get(CLUSTER_POSITIVE_BONUS_KEY, min(1 + dominance_level, 2)) or min(1 + dominance_level, 2))
+    partial_penalty = int(signal.get(CLUSTER_PARTIAL_PENALTY_KEY, 3 + (dominance_level * 2)) or 3 + (dominance_level * 2))
+    weak_penalty = int(signal.get(CLUSTER_WEAK_PENALTY_KEY, 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
     if dominant_alignment_score >= 0.78:
         adjustment = positive_bonus
-        alignment = "strong"
+        alignment = ALIGNMENT_STRONG
     elif dominant_alignment_score >= 0.42:
         adjustment = -partial_penalty
-        alignment = "partial"
+        alignment = ALIGNMENT_PARTIAL
     else:
         adjustment = -weak_penalty
-        alignment = "weak"
+        alignment = ALIGNMENT_WEAK
 
+    label = _resolved_signal_text(signal, SIGNAL_FIT_LABEL_KEY, defaults)
+    if not label:
+        raise ValueError(f"competitive signal missing fit_label and no default available: {signal!r}")
     return {
-        "name": signal.get("name") or "domain specialist track",
-        "fit_label": signal.get("fit_label") or signal.get("name") or "specialist context",
-        "watchout_label": signal.get("watchout_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
-        "risk_label": signal.get("risk_label") or f"Role leans toward {signal.get('name') or 'specialist depth'}",
-        "aliases": aliases,
-        "dominance_level": dominance_level,
-        "alignment": alignment,
-        "adjustment": adjustment,
+        SIGNAL_LABEL_KEY: label,
+        SIGNAL_NAME_KEY: signal_name,
+        SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(signal, SIGNAL_FIT_LABEL_KEY, defaults),
+        SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(signal, SIGNAL_WATCHOUT_LABEL_KEY, defaults),
+        SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(signal, SIGNAL_RISK_LABEL_KEY, defaults),
+        SIGNAL_ALIASES_KEY: aliases,
+        SIGNAL_DOMINANCE_LEVEL_KEY: dominance_level,
+        SIGNAL_ALIGNMENT_KEY: alignment,
+        SIGNAL_ADJUSTMENT_KEY: adjustment,
     }
 
 
 def competitive_signal_assessments(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    existing = record.get("competitive_signals")
+    existing = record.get(COMPETITIVE_SIGNALS_KEY)
     if isinstance(existing, list) and existing:
+        defaults = _signal_defaults()
         sanitized: List[dict] = []
         for item in existing:
             if not isinstance(item, dict):
                 continue
+            label = _resolved_signal_text(item, SIGNAL_FIT_LABEL_KEY, defaults)
+            if not label:
+                continue
             sanitized.append(
                 {
-                    "name": compact_whitespace(item.get("name") or "domain specialist track"),
-                    "fit_label": compact_whitespace(item.get("fit_label") or item.get("name") or ""),
-                    "watchout_label": compact_whitespace(item.get("watchout_label") or ""),
-                    "risk_label": compact_whitespace(item.get("risk_label") or item.get("watchout_label") or ""),
-                    "aliases": _normalized_aliases(list(item.get("aliases") or [])),
-                    "dominance_level": int(item.get("dominance_level", 1) or 1),
-                    "alignment": compact_whitespace(item.get("alignment") or "partial").lower(),
-                    "adjustment": int(item.get("adjustment", 0) or 0),
+                    SIGNAL_LABEL_KEY: label,
+                    SIGNAL_NAME_KEY: _resolved_signal_text(item, SIGNAL_NAME_KEY, defaults),
+                    SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(item, SIGNAL_FIT_LABEL_KEY, defaults),
+                    SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(item, SIGNAL_WATCHOUT_LABEL_KEY, defaults),
+                    SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(item, SIGNAL_RISK_LABEL_KEY, defaults),
+                    SIGNAL_ALIASES_KEY: _normalized_aliases(list(item.get(SIGNAL_ALIASES_KEY) or [])),
+                    SIGNAL_DOMINANCE_LEVEL_KEY: int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1),
+                    SIGNAL_ALIGNMENT_KEY: _dedupe_key(item.get(SIGNAL_ALIGNMENT_KEY) or ALIGNMENT_PARTIAL),
+                    SIGNAL_ADJUSTMENT_KEY: int(item.get(SIGNAL_ADJUSTMENT_KEY, 0) or 0),
                 }
             )
         if sanitized:
@@ -172,14 +310,12 @@ def competitive_signal_assessments(record: dict, profile: Optional[dict] = None)
 def competitive_fit_highlights(record: dict, profile: Optional[dict] = None) -> List[str]:
     highlights: List[str] = []
     for signal in competitive_signal_assessments(record, profile):
-        if int(signal.get("adjustment", 0)) > 0:
-            fit_label = compact_whitespace(signal.get("fit_label") or signal.get("name") or "")
-            if fit_label:
-                highlights.append(f"{fit_label} ✓")
+        if int(signal.get(SIGNAL_ADJUSTMENT_KEY, 0)) > 0:
+            highlights.append(f"{signal[SIGNAL_LABEL_KEY]} ✓")
     return dedupe_preserve_order(highlights)[:2]
 
 
-def extract_skill_observations(record: dict, details_text: str, profile: Optional[dict] = None) -> List[dict]:
+def extract_skill_observations(record: dict, profile: Optional[dict] = None) -> List[dict]:
     """Return repeated capability-like signals from a kept role for review insights.
 
     These observations are intentionally conservative: we only emit positively aligned
@@ -190,20 +326,20 @@ def extract_skill_observations(record: dict, details_text: str, profile: Optiona
     observations: List[dict] = []
     seen: Set[str] = set()
     for signal in competitive_signal_assessments(record, active_profile):
-        if int(signal.get("adjustment", 0) or 0) <= 0:
+        if int(signal.get(SIGNAL_ADJUSTMENT_KEY, 0) or 0) <= 0:
             continue
-        skill = compact_whitespace(signal.get("fit_label") or signal.get("name") or "")
-        key = skill.lower()
+        skill = signal[SIGNAL_LABEL_KEY]
+        key = _dedupe_key(skill)
         if not key or key in seen:
             continue
         seen.add(key)
         observations.append(
             {
-                "skill": skill,
-                "title": record.get("title"),
-                "company": record.get("company"),
-                "url": record.get("url"),
-                "search_location": record.get("search_location"),
+                OBSERVATION_SKILL_KEY: skill,
+                RECORD_TITLE_KEY: record.get(RECORD_TITLE_KEY),
+                RECORD_COMPANY_KEY: record.get(RECORD_COMPANY_KEY),
+                RECORD_URL_KEY: record.get(RECORD_URL_KEY),
+                RECORD_SEARCH_LOCATION_KEY: record.get(RECORD_SEARCH_LOCATION_KEY),
             }
         )
     return observations
@@ -217,70 +353,87 @@ def build_job_learning_signals(
     pending: List[dict[str, Any]] = []
     seen: Set[str] = set()
 
+    # 1. Process explicit observations (from existing clusters)
     for observation in skill_observations:
-        skill = compact_whitespace(observation.get("skill") or "")
-        normalized_skill = skill.lower()
-        if not skill or not normalized_skill or normalized_skill in seen:
-            continue
-        seen.add(normalized_skill)
-        known_signal, knowledge_match = signal_in_approved_knowledge("capability_concept", skill)
-        if known_signal:
-            continue
-        item: dict[str, Any] = {
-            "signal": skill,
-            "category": "capability_concept",
-            "source": "job parsing",
-            "context": [
-                compact_whitespace(record.get("title") or ""),
-                compact_whitespace(record.get("company") or ""),
-            ],
-            "evidence": [skill],
-            "needs_review": True,
-        }
-        if knowledge_match:
-            item["knowledge_match"] = knowledge_match
-        pending.append(item)
+        _add_to_pending(observation.get(OBSERVATION_SKILL_KEY), CATEGORY_CAPABILITY_CONCEPT, record, pending, seen)
 
+    # 2. Discovery: scan for UNKNOWN skills in the description
+    details_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    if details_text:
+        new_skills = _extract_capability_learning_signals(details_text, profile or load_profile())
+        for skill in new_skills:
+            _add_to_pending(skill, CATEGORY_CAPABILITY_CONCEPT, record, pending, seen)
+
+    # 3. Detect Government contexts
     government_signals = _extract_government_context_learning_signals(record)
     for item in government_signals:
-        key = compact_whitespace(item.get("signal") or "").lower()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        pending.append(item)
+        sig_key = _dedupe_key(item.get(LEARNING_SIGNAL_KEY) or "")
+        if sig_key and sig_key not in seen:
+            seen.add(sig_key)
+            pending.append(item)
 
-    title_reason = compact_whitespace(record.get("title_reason") or "").upper()
-    if title_reason == "TITLE_POTENTIAL_MATCH":
-        title = compact_whitespace(record.get("title") or "")
+    # 4. Role title patterns
+    title_reason = compact_whitespace(record.get(TITLE_REASON_KEY) or "").upper()
+    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
+        title = compact_whitespace(record.get(RECORD_TITLE_KEY) or "")
         review_token = _role_title_review_token(title)
         if review_token:
-            known_signal, knowledge_match = signal_in_approved_knowledge("role_title_token", review_token)
-            if not known_signal:
-                item = {
-                    "signal": review_token,
-                    "category": "role_title_token",
-                    "source": "job parsing",
-                    "context": [title],
-                    "evidence": [title],
-                    "needs_review": True,
-                }
-                if knowledge_match:
-                    item["knowledge_match"] = knowledge_match
-                pending.append(item)
+            _add_to_pending(review_token, CATEGORY_ROLE_TITLE_TOKEN, record, pending, seen, context=[title])
 
     return pending
 
 
+def _add_to_pending(value: str, category: str, record: dict, pending: list, seen: set, context: list = None) -> None:
+    val = compact_whitespace(value or "")
+    key = _dedupe_key(val)
+    if not val or key in seen:
+        return
+    seen.add(key)
+
+    known_signal, knowledge_match = signal_in_approved_knowledge(category, val)
+    if not known_signal:
+        item = {
+            LEARNING_SIGNAL_KEY: val,
+            LEARNING_CATEGORY_KEY: category,
+            LEARNING_SOURCE_KEY: SOURCE_JOB_PARSING,
+            LEARNING_CONTEXT_KEY: context or [
+                compact_whitespace(record.get(RECORD_TITLE_KEY) or ""),
+                compact_whitespace(record.get(RECORD_COMPANY_KEY) or ""),
+            ],
+            LEARNING_EVIDENCE_KEY: [val],
+            LEARNING_NEEDS_REVIEW_KEY: True,
+        }
+        if knowledge_match:
+            item[LEARNING_KNOWLEDGE_MATCH_KEY] = knowledge_match
+        pending.append(item)
+
+
+def _extract_capability_learning_signals(text: str, profile: dict) -> List[str]:
+    rules = load_parsing_rules()
+    config = rules.get(PARSING_SKILL_DISCOVERY_CONFIG_KEY, {})
+    junk = {_dedupe_key(item) for item in config.get(PARSING_JUNK_KEYWORDS_KEY, []) if _dedupe_key(item)}
+    sw = set(rules.get(PARSING_STOPWORDS_KEY, []))
+
+    tokens = [t for t in re.findall(r"[a-z]{3,}", text.lower()) if t not in sw and t not in junk]
+    # Basic n-gram extraction (discovery only)
+    max_discovery_terms = int(config.get(PARSING_MAX_DISCOVERY_TERMS_KEY, 10) or 10)
+    return list(set(t for t in tokens if len(t) >= config.get(PARSING_MIN_TERM_LENGTH_KEY, 3)))[:max_discovery_terms]
+
+
 def _extract_government_context_learning_signals(record: dict) -> List[dict[str, Any]]:
     sources = [
-        compact_whitespace(record.get("company") or ""),
-        compact_whitespace(record.get("title") or ""),
-        compact_whitespace(record.get("full_description") or record.get("fit_source_text") or ""),
+        compact_whitespace(record.get(RECORD_COMPANY_KEY) or ""),
+        compact_whitespace(record.get(RECORD_TITLE_KEY) or ""),
+        compact_whitespace(record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""),
     ]
     combined = "\n".join(item for item in sources if item)
     lowered = combined.lower()
     if not lowered:
         return []
+
+    rules = load_parsing_rules()
+    patterns = rules.get(PARSING_GOVERNMENT_DISCOVERY_PATTERNS_KEY, {})
+    config = _government_discovery_config()
 
     try:
         _, false_positive_patterns = _load_government_context_rules()
@@ -293,53 +446,50 @@ def _extract_government_context_learning_signals(record: dict) -> List[dict[str,
     seen: Set[str] = set()
 
     def add_signal(value: str, original_text: str | None = None) -> None:
-        cleaned = compact_whitespace(value).lower()
+        cleaned = _dedupe_key(value)
         if not cleaned or cleaned in seen:
             return
         seen.add(cleaned)
-        known_signal, knowledge_match = signal_in_approved_knowledge("government_context", cleaned, [original_text] if original_text else None)
+        known_signal, knowledge_match = signal_in_approved_knowledge(CATEGORY_GOVERNMENT_CONTEXT, cleaned, [original_text] if original_text else None)
         if known_signal:
             return
         signal: dict[str, Any] = {
-            "signal": cleaned,
-            "original_texts": [original_text or cleaned],
-            "suggested_category": "government_context",
-            "source": "job parsing",
-            "needs_review": True,
+            LEARNING_SIGNAL_KEY: cleaned,
+            LEARNING_ORIGINAL_TEXTS_KEY: [original_text or cleaned],
+            LEARNING_CATEGORY_KEY: CATEGORY_GOVERNMENT_CONTEXT,
+            LEARNING_SOURCE_KEY: SOURCE_JOB_PARSING,
+            LEARNING_NEEDS_REVIEW_KEY: True,
         }
         if knowledge_match:
-            signal["knowledge_match"] = knowledge_match
+            signal[LEARNING_KNOWLEDGE_MATCH_KEY] = knowledge_match
         signals.append(signal)
 
-    if re.search(r"\bgovernment\b", lowered):
-        add_signal("government", "government")
+    for government_term in _configured_terms(config.get(PARSING_GOVERNMENT_TERMS_KEY)):
+        if text_contains_term(lowered, government_term):
+            add_signal(government_term, government_term)
 
-    for match in re.finditer(r"\baps\s*([1-6])\b", lowered):
+    for match in _iter_pattern_matches(patterns, PARSING_APS_PATTERN_KEY, lowered):
         level = match.group(1)
         add_signal(f"aps{level}", match.group(0))
 
-    for match in re.finditer(r"\bel\s*([12])\b", lowered):
+    for match in _iter_pattern_matches(patterns, PARSING_EL_PATTERN_KEY, lowered):
         level = match.group(1)
         add_signal(f"el{level}", match.group(0))
 
-    for match in re.finditer(r"\b(?:baseline|nv\s*1|nv1|nv\s*2|nv2|negative vetting\s*1|negative vetting\s*2)\b", lowered):
-        raw = compact_whitespace(match.group(0)).lower()
-        if raw.startswith("negative vetting 1") or raw in {"nv1", "nv 1"}:
-            add_signal("nv1", match.group(0))
-        elif raw.startswith("negative vetting 2") or raw in {"nv2", "nv 2"}:
-            add_signal("nv2", match.group(0))
-        else:
-            add_signal("baseline", match.group(0))
+    for match in _iter_pattern_matches(patterns, PARSING_CLEARANCE_PATTERN_KEY, lowered):
+        normalized = _normalized_clearance_value(match.group(0), config)
+        if normalized:
+            add_signal(normalized, match.group(0))
 
-    department_pattern = re.compile(
-        r"\bdepartment(?:\s+of)?\s+[a-z][a-z0-9&/-]*(?:\s+[a-z][a-z0-9&/-]*){1,7}\b",
-        flags=re.IGNORECASE,
-    )
+    dept_pattern = patterns.get(PARSING_DEPARTMENT_PATTERN_KEY)
+    if not isinstance(dept_pattern, str) or not dept_pattern.strip():
+        return signals
+    dept_pattern = re.compile(dept_pattern, flags=re.IGNORECASE)
     for line in lowered.splitlines():
         line = compact_whitespace(line)
         if not line or "department" not in line:
             continue
-        for match in department_pattern.finditer(line):
+        for match in dept_pattern.finditer(line):
             phrase = compact_whitespace(match.group(0))
             if len(phrase.split()) < 2 or len(phrase) > 80:
                 continue
@@ -351,80 +501,48 @@ def _extract_government_context_learning_signals(record: dict) -> List[dict[str,
 def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
     existing = [
         compact_whitespace(item)
-        for item in (record.get("hard_block_reasons") or [])
+        for item in (record.get(HARD_BLOCK_REASONS_KEY) or [])
         if compact_whitespace(item)
     ]
     if existing:
-        return [{"text": item, "category": ""} for item in dedupe_preserve_order(existing)[:3]]
+        return [{HARD_BLOCK_TEXT_KEY: item, LEARNING_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN} for item in dedupe_preserve_order(existing)[:3]]
 
     active_profile = profile or load_profile()
     cluster_by_name = {
-        compact_whitespace(str(cluster.get("name") or "")).lower(): cluster
-        for cluster in active_profile.get("dominant_signal_clusters", [])
-        if isinstance(cluster, dict) and compact_whitespace(str(cluster.get("name") or ""))
+        _dedupe_key(cluster.get(SIGNAL_NAME_KEY) or ""): cluster
+        for cluster in active_profile.get(KEY_SIGNAL_CLUSTERS, [])
+        if isinstance(cluster, dict) and _dedupe_key(cluster.get(SIGNAL_NAME_KEY) or "")
     }
 
     entries: List[dict] = []
     for assessment in competitive_signal_assessments(record, active_profile):
-        cluster = cluster_by_name.get(compact_whitespace(str(assessment.get("name") or "")).lower())
-        if not isinstance(cluster, dict) or not bool(cluster.get("hard_block_on_mismatch")):
+        cluster = cluster_by_name.get(_dedupe_key(assessment.get(SIGNAL_NAME_KEY) or ""))
+        if not isinstance(cluster, dict) or not bool(cluster.get(CLUSTER_HARD_BLOCK_ON_MISMATCH_KEY)):
             continue
 
         allowed_alignments = {
             compact_whitespace(str(value)).lower()
-            for value in (cluster.get("hard_block_alignment_levels") or ["partial", "weak"])
+            for value in (cluster.get(CLUSTER_HARD_BLOCK_ALIGNMENT_LEVELS_KEY) or ["partial", "weak"])
             if compact_whitespace(str(value))
         } or {"partial", "weak"}
-        alignment = compact_whitespace(str(assessment.get("alignment") or "")).lower()
+        alignment = compact_whitespace(str(assessment.get(SIGNAL_ALIGNMENT_KEY) or "")).lower()
         if alignment not in allowed_alignments:
             continue
 
         text = compact_whitespace(
-            cluster.get("hard_block_label")
-            or assessment.get("watchout_label")
-            or assessment.get("risk_label")
-            or assessment.get("name")
+            cluster.get(CLUSTER_HARD_BLOCK_LABEL_KEY)
+            or assessment.get(SIGNAL_WATCHOUT_LABEL_KEY)
+            or assessment.get(SIGNAL_RISK_LABEL_KEY)
             or ""
         )
         if not text:
             continue
-        category = (
-            compact_whitespace(str(cluster.get("name") or ""))
-            .lower()
-            .replace(" and ", "_")
-            .replace(" ", "_")
-        )
-        entries.append({"text": text, "category": category})
-
-    details_text = compact_whitespace(
-        record.get("fit_source_text")
-        or record.get("full_description")
-        or ""
-    )
-    if details_text:
-        profile_blockers = {
-            compact_whitespace(str(skill)).lower()
-            for skill in active_profile.get("must_not_require_skills", [])
-            if compact_whitespace(str(skill)).lower()
-        }
-        seen_terms = {
-            compact_whitespace(str(entry.get("text") or "")).lower()
-            for entry in entries
-            if compact_whitespace(str(entry.get("text") or "")).lower()
-        }
-        for match in find_hard_block_matches(details_text, active_profile.get("must_not_require_skills", [])):
-            canonical = compact_whitespace(match.get("value") or "")
-            matched_term = compact_whitespace(match.get("matched_term") or "")
-            term_key = canonical.lower() or matched_term.lower()
-            if not term_key or term_key in seen_terms or term_key in profile_blockers:
-                continue
-            entries.append({"text": canonical or matched_term, "category": "hard_blocker_pattern"})
-            seen_terms.add(term_key)
+        entries.append({HARD_BLOCK_TEXT_KEY: text, LEARNING_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN})
 
     deduped: List[dict] = []
     seen_keys: Set[str] = set()
     for entry in entries:
-        key = compact_whitespace(str(entry.get("category") or entry.get("text") or "")).lower()
+        key = _dedupe_key(entry.get(LEARNING_CATEGORY_KEY) or entry.get(HARD_BLOCK_TEXT_KEY) or "")
         if not key or key in seen_keys:
             continue
         seen_keys.add(key)
@@ -433,4 +551,4 @@ def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dic
 
 
 def hard_block_reasons(record: dict, profile: Optional[dict] = None) -> List[str]:
-    return [entry["text"] for entry in hard_block_entries(record, profile)]
+    return [entry[HARD_BLOCK_TEXT_KEY] for entry in hard_block_entries(record, profile)]

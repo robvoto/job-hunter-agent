@@ -1,6 +1,7 @@
 from pathlib import Path
 import importlib
 
+from job_hunter_agent.advance_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS, normalize_search_settings
 
 
@@ -24,14 +25,14 @@ def test_search_settings_clamp_source_fetch_limits():
             "seek_max_pages": 100,
             "linkedin_hours_old": 999,
             "linkedin_results_per_search": 1,
-            "linkedin_easy_apply_only": "false",
+            KEY_LINKEDIN_EASY_APPLY_ONLY: "false",
         }
     )
 
     assert normalized["seek_max_pages"] == 10
     assert normalized["linkedin_hours_old"] == 168
     assert normalized["linkedin_results_per_search"] == 5
-    assert normalized["linkedin_easy_apply_only"] is False
+    assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
 
 
 def test_default_match_preferences_are_neutral():
@@ -50,7 +51,8 @@ def test_active_modules_import():
         "job_hunter_agent.cv_pipeline",
         "job_hunter_agent.filters",
         "job_hunter_agent.llm_gate",
-        "job_hunter_agent.local_server",
+        "job_hunter_agent.fastapi_app",
+        "job_hunter_agent.server_helpers",
         "job_hunter_agent.profile_learning",
         "job_hunter_agent.profile_store",
         "job_hunter_agent.review_insights",

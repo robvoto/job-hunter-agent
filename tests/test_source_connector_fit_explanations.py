@@ -1,7 +1,23 @@
 from datetime import datetime
 import json
+import pytest
 
-from job_hunter_agent import capability_matching, source_connector
+from job_hunter_agent import fit_scoring
+from job_hunter_agent import capability_matching, dashboard_renderer, signal_detection, source_connector
+from job_hunter_agent.record_schema import (
+    CONFIDENCE_HIGH,
+    CONFIDENCE_LOW,
+    DETAILS_STATUS_OK,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+)
+from job_hunter_agent.profile_store import (
+    KEY_EVIDENCE_TIERS,
+    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+)
 from job_hunter_agent.utils import extract_work_mode
 
 
@@ -81,7 +97,6 @@ def test_infer_role_sector_only_claims_government_when_explicit():
 def test_score_to_match_label_uses_central_match_band_mapping():
     assert source_connector.score_to_match_label(92) == "Strong match"
     assert source_connector.score_to_match_label(74) == "Good match"
-    assert source_connector.score_to_match_label(61) == "Worth a look"
     assert source_connector.score_to_match_label(61) == "Possible fit"
     assert source_connector.score_to_match_label(40) == "Stretch"
 
@@ -101,7 +116,6 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
     assert source_connector.score_filter_option_label(65, profile) == "Review next or better"
     assert source_connector.score_to_match_label(67, profile["match_levels"]) == "Review next"
     assert source_connector.score_to_tone_class(67, profile) == "tone-good"
-    assert source_connector.score_to_tone_class(67, profile) == "tone-borderline"
 
 
 def test_has_government_context_detects_real_public_sector_language():
@@ -163,59 +177,82 @@ def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch
     assert source_connector.has_government_context("Role in NSW Health digital delivery program")
 
 
-def test_build_job_learning_signals_registers_pending_capability_and_title_tokens(monkeypatch):
+def test_build_ad_learning_signals_registers_pending_capability_and_title_tokens(monkeypatch):
     monkeypatch.setattr(
-        source_connector,
+        signal_detection,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_job_learning_signals(
+    signals = source_connector.build_ad_learning_signals(
         {
             "title": "Senior Delivery Ninja",
             "company": "Acme",
             "title_reason": "TITLE_POTENTIAL_MATCH",
+            "skill_observations": [
+                {"skill": "process mapping"},
+            ],
         },
-        [
-            {"skill": "process mapping"},
-        ],
+        "Process mapping across delivery teams.",
         profile={},
     )
 
     assert signals == [
         {
             "signal": "process mapping",
-            "category": "capability_concept",
-            "source": "job parsing",
-            "context": ["Senior Delivery Ninja", "Acme"],
-            "evidence": ["process mapping"],
-            "needs_review": True,
+            "suggested_category": "capability_concept",
+            "original_texts": ["process mapping"],
         },
         {
             "signal": "ninja",
-            "category": "role_title_token",
-            "source": "job parsing",
-            "context": ["Senior Delivery Ninja"],
-            "evidence": ["Senior Delivery Ninja"],
-            "needs_review": True,
+            "suggested_category": "role_title_token",
+            "original_texts": ["Senior Delivery Ninja"],
         },
     ]
 
 
-def test_build_job_learning_signals_registers_government_context_from_job_description(monkeypatch):
+def test_build_ad_learning_signals_registers_capability_from_structured_observation(monkeypatch):
     monkeypatch.setattr(
-        source_connector,
+        signal_detection,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_job_learning_signals(
+    signals = source_connector.build_ad_learning_signals(
+        {
+            "title": "Business Analyst",
+            "company": "Acme",
+            "skill_observations": [
+                {"skill": "process mapping"},
+            ],
+        },
+        "Process mapping across delivery teams.",
+        profile={},
+    )
+
+    assert signals == [
+        {
+            "signal": "process mapping",
+            "suggested_category": "capability_concept",
+            "original_texts": ["process mapping"],
+        }
+    ]
+
+
+def test_build_ad_learning_signals_registers_government_context_from_job_description(monkeypatch):
+    monkeypatch.setattr(
+        signal_detection,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+
+    signals = source_connector.build_ad_learning_signals(
         {
             "title": "APS6 Policy Officer",
             "company": "Australian Government Department of Health",
             "full_description": "Baseline clearance required for this APS6 role.",
         },
-        [],
+        "Baseline clearance required for this APS6 role.",
         profile={},
     )
 
@@ -226,17 +263,74 @@ def test_build_job_learning_signals_registers_government_context_from_job_descri
         "department of health",
     ]
     assert all(item["suggested_category"] == "government_context" for item in signals)
-    assert all(item["needs_review"] is True for item in signals)
 
 
-def test_legacy_linkedin_fit_source_text_can_restore_description_confidence():
+def test_build_ad_learning_signals_registers_title_normalization_candidates(monkeypatch):
+    monkeypatch.setattr(
+        signal_detection,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+
+    signals = source_connector.build_ad_learning_signals(
+        {
+            "title": "PM",
+            "company": "Acme",
+        },
+        "Contract role for PM with delivery oversight.",
+        profile={},
+    )
+
+    assert signals == [
+        {
+            "signal": "pm",
+            "suggested_category": "title_normalization_candidate",
+            "original_texts": ["PM"],
+        }
+    ]
+
+
+def test_build_ad_learning_signals_does_not_infer_hard_blockers_from_raw_text(monkeypatch):
+    monkeypatch.setattr(
+        signal_detection,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+
+    signals = source_connector.build_ad_learning_signals(
+        {
+            "title": "Business Analyst",
+            "company": "Acme",
+            "hard_block_reasons": [],
+        },
+        "Must have SAP experience for this role.",
+        profile={},
+    )
+
+    assert all(item["suggested_category"] != "hard_blocker_pattern" for item in signals)
+
+
+def test_fit_confidence_does_not_override_trusted_description_calculation():
     record = {
-        "details_status": "ok",
-        "fit_source_text": "Business analyst duties. " * 40,
+        RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+        RECORD_FIT_SOURCE_TEXT_KEY: "Business analyst duties. " * 40,
+        RECORD_FIT_CONFIDENCE_KEY: CONFIDENCE_LOW,
     }
 
-    assert source_connector.full_description_confidence(record) == "HIGH"
+    assert source_connector.full_description_confidence(record) == CONFIDENCE_HIGH
     assert source_connector.get_trusted_full_description(record).startswith("Business analyst duties.")
+    assert source_connector.is_description_trusted(record)
+
+
+def test_fit_confidence_low_when_no_trusted_description_exists():
+    record = {
+        RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+        RECORD_FIT_SOURCE_TEXT_KEY: "Too short to trust.",
+        RECORD_FIT_CONFIDENCE_KEY: CONFIDENCE_HIGH,
+    }
+
+    assert source_connector.full_description_confidence(record) == CONFIDENCE_LOW
+    assert not source_connector.is_description_trusted(record)
 
 
 def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_method():
@@ -276,7 +370,7 @@ def test_render_job_card_does_not_claim_private_sector_by_default():
             "full_description": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. " * 20,
             "fit_source_text": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. " * 20,
             "description_source": "jobAdDetails",
-            "details_status": "ok",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
             "fit_highlights": [],
             "source": "seek",
         },
@@ -315,6 +409,16 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
             "capability_profile_rules": [],
             "match_preferences": {},
             "dominant_signal_clusters": [],
+        },
+    )
+    monkeypatch.setattr(
+        fit_scoring,
+        "reviewed_signal_matches_for_text",
+        lambda text: {
+            "matched": [],
+            "evidence_only": [],
+            "ignored": [],
+            "unresolved": [],
         },
     )
 
@@ -382,7 +486,7 @@ def test_fit_score_breakdown_does_not_score_reviewed_signal_matches(monkeypatch)
             "full_description": "Jira and banking domain experience are helpful in this project role.",
             "fit_source_text": "Jira and banking domain experience are helpful in this project role.",
             "description_source": "jobAdDetails",
-            "details_status": "ok",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
         },
         _test_profile(),
     )
@@ -792,7 +896,7 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
             "full_description": "Strong stakeholder management, Jira, banking exposure, and project coordination needed.",
             "fit_source_text": "Strong stakeholder management, Jira, banking exposure, and project coordination needed.",
             "description_source": "jobAdDetails",
-            "details_status": "ok",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
             "fit_highlights": [],
             "source": "seek",
         },
@@ -1015,6 +1119,11 @@ def test_deterministic_review_counts_only_capability_highlights():
     ) == {"decision": "KEEP", "grade": "SOLID"}
 
 
+def test_llm_description_fit_entry_requires_grade():
+    with pytest.raises(ValueError, match="llm_fit_grade is required"):
+        fit_scoring.llm_description_fit_entry({"llm_decision": "KEEP"}, _test_profile())
+
+
 def test_salary_fit_label_marks_scores_above_target_as_meets():
     profile = {
         **_test_profile(),
@@ -1143,15 +1252,15 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
     current_year = source_connector.datetime.now().year
     profile = {
         **_test_profile(),
-        "evidence_tiers": {
-            "primary_current_evidence": f"{current_year - 1} - present: delivery leadership",
-            "secondary_older_evidence": "",
-            "background_optional_evidence": "",
+        KEY_EVIDENCE_TIERS: {
+            KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: f"{current_year - 1} - present: delivery leadership",
+            KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: "",
+            KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
         },
     }
 
     assert source_connector.find_profile_experience_year_in_text(
-        profile["evidence_tiers"]["primary_current_evidence"],
+        profile[KEY_EVIDENCE_TIERS][KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT],
         ["delivery leadership"],
     ) == current_year
     assert source_connector.profile_recency_multiplier(profile, ["delivery leadership"]) == 1.0
@@ -1194,6 +1303,7 @@ def test_is_dashboard_eligible_uses_saved_dashboard_minimum_score(monkeypatch):
 
 def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
         [{"score": 85}, {"score": 70}, {"score": 55}],
@@ -1206,6 +1316,7 @@ def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monke
 
 def test_score_filter_thresholds_show_lowest_band_when_borderline_roles_are_present(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
     thresholds = source_connector.score_filter_thresholds(
         [{"score": 58}, {"score": 43}],
@@ -1218,6 +1329,7 @@ def test_score_filter_thresholds_show_lowest_band_when_borderline_roles_are_pres
 
 def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
     options_html = source_connector.render_score_filter_options(
         [{"score": 85}, {"score": 70}, {"score": 55}],
@@ -1228,13 +1340,13 @@ def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
     assert "All match levels" in options_html
     assert "Strong match only" in options_html
     assert "Good match or better" in options_html
-    assert "Worth a look or better" in options_html
     assert "Possible fit or better" in options_html
     assert "50+ only" not in options_html
 
 
 def test_score_filter_options_include_lowest_match_band_when_lower_scores_exist(monkeypatch):
     monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
     options_html = source_connector.render_score_filter_options(
         [{"score": 58}, {"score": 43}],

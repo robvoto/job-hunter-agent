@@ -1,8 +1,8 @@
 {
   "kind": "managed_knowledge",
   "name": "scoring_rules",
-  "version": 1,
-  "updated_at": "2026-04-29",
+  "version": 2,
+  "updated_at": "2026-05-06",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "fit_breakdown": {
     "hard_block_penalty": -100,
@@ -20,11 +20,20 @@
     "POOR": 0,
     "MISMATCH": -8
   },
+  "capability_level_weights": {
+    "strong": 4,
+    "working": 3,
+    "basic": 2
+  },
+  "capability_evidence": {
+    "max_score": 20
+  },
   "convergence": {
     "eligible_grades": ["EXCELLENT", "STRONG"],
     "min_positive_matches": 2,
     "bonus_no_soft_risks": 5,
-    "bonus_with_soft_risks": 3
+    "bonus_with_soft_risks": 3,
+    "label": "Multiple strong signals align"
   },
   "freshness": {
     "last_hour": 10,
@@ -65,5 +74,19 @@
   },
   "government": {
     "match_bonus": 4
+  },
+  "evidence_tier_weights": {
+    "primary_current_evidence": 1.0,
+    "secondary_older_evidence": 0.55,
+    "background_optional_evidence": 0.25
+  },
+  "preference_weight_defaults": {
+    "fit": 1.0,
+    "salary": 1.0,
+    "location": 1.0,
+    "work_mode": 1.0,
+    "contract": 1.0,
+    "government": 1.0,
+    "freshness": 1.0
   }
 }
