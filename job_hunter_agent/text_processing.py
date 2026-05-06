@@ -1,5 +1,11 @@
 import re
 from typing import Dict, List, Optional, Set
+from job_hunter_agent.profile_learning import get_parsing_rule_set
+
+
+def _generic_summary_phrases() -> set[str]:
+    return get_parsing_rule_set("generic_summary_phrases")
+
 
 
 def dedupe_preserve_order(values: List[str]) -> List[str]:
@@ -102,17 +108,8 @@ def description_summary_snippet(record: dict, details_text: str) -> str:
 
 def _is_generic_summary_text(text: str) -> bool:
     lowered = compact_whitespace(text).lower()
-    generic_phrases = (
-        "opportunity to join",
-        "fast-paced environment",
-        "leading company",
-        "great opportunity",
-        "asap",
-        "urgent",
-        "must be based in",
-        "full working rights",
-    )
-    return any(phrase in lowered for phrase in generic_phrases)
+    phrases = _generic_summary_phrases()
+    return any(phrase in lowered for phrase in phrases)
 
 
 def _clean_summary_candidate(text: str) -> str:

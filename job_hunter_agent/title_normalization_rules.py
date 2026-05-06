@@ -5,11 +5,69 @@ import re
 from typing import Any
 
 from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
-from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR
+from job_hunter_agent.paths import OUTPUT_DIR, TITLE_NORMALIZATION_RULES_PATH
+from job_hunter_agent.signal_registry import register_signals
+from job_hunter_agent.signal_schema import (
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+    LEARNING_CATEGORY_KEY,
+    LEARNING_EVIDENCE_KEY,
+    LEARNING_NEEDS_REVIEW_KEY,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SOURCE_KEY,
+    SOURCE_CV_PARSING,
+)
+from job_hunter_agent.io_utils import load_parsing_rules
 
 
 TITLE_NORMALIZATION_REVIEW_PATH = OUTPUT_DIR / "title_normalization_review.json"
-TITLE_NORMALIZATION_RULES_PATH = DATA_DIR / "title_normalization_rules.json"
+
+NORMALIZATION_STRIP_OUTER_PUNCTUATION_KEY = "strip_outer_punctuation"
+NORMALIZATION_COLLAPSE_SPACES_KEY = "collapse_spaces"
+NORMALIZATION_LOWERCASE_FOR_MATCHING_KEY = "lowercase_for_matching"
+
+NORMALIZED_TITLE_KEY = "normalized_title"
+SENIORITY_TITLE_KEY = "seniority_modifiers"
+BASE_ROLE_KEY = "base_role"
+VARIANT_TERMS_KEY = "variant_terms"
+
+SUMMARY_PENDING_KEY = "pending"
+
+RULES_KIND = "rules"
+RULES_NAME = "title_normalization_rules"
+RULES_KIND_KEY = "kind"
+RULES_NAME_KEY = "name"
+RULES_VERSION_KEY = "version"
+RULES_UPDATED_AT_KEY = "updated_at"
+RULES_SENIORITY_MODIFIERS_KEY = "seniority_modifiers"
+RULES_ABBREVIATION_EXPANSIONS_KEY = "abbreviation_expansions"
+RULES_NORMALIZATION_KEY = "normalization"
+
+REVIEW_KIND = "title_normalization_review"
+REVIEW_NAME = "title_normalization_review"
+REVIEW_ENTRIES_KEY = "entries"
+
+VALUE_KEY = "value"
+SUGGESTED_VALUES_KEY = "suggested_values"
+EVIDENCE_KEY = "evidence"
+SOURCES_KEY = "sources"
+CONFIDENCE_KEY = "confidence"
+NEEDS_REVIEW_KEY = LEARNING_NEEDS_REVIEW_KEY
+NOTE_KEY = "note"
+AMBIGUOUS = "ambiguous"
+
+LEARNING_CANDIDATES_KEY = "learning_candidates"
+TITLE_DISCOVERY_CONFIG_KEY = "title_discovery_config"
+STOPWORDS_KEY = "stopwords"
+MIN_TOKEN_LEN_KEY = "min_token_len"
+MAX_TOKEN_LEN_KEY = "max_token_len"
+DISCOVERY_CONFIDENCE_KEY = "discovery_confidence"
+
+TITLE_NORMALIZATION_CANDIDATE = CATEGORY_TITLE_NORMALIZATION_CANDIDATE
+SOURCE_LABEL = SOURCE_CV_PARSING
+SIGNAL_KEY = LEARNING_SIGNAL_KEY
+CATEGORY_KEY = LEARNING_CATEGORY_KEY
+SOURCE_FIELD_KEY = LEARNING_SOURCE_KEY
 
 
 def _clean_text(value: Any) -> str:
@@ -32,16 +90,15 @@ def load_title_normalization_rules() -> dict[str, Any]:
         raise ValueError("title_normalization_rules.json must contain a rules object")
     return payload
 
-
 def _save_rules_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload or {})
-    normalized.setdefault("kind", "rules")
-    normalized.setdefault("name", "title_normalization_rules")
-    normalized.setdefault("version", 1)
-    normalized.setdefault("updated_at", "")
-    normalized.setdefault("seniority_modifiers", [])
-    normalized.setdefault("abbreviation_expansions", {})
-    normalized.setdefault("normalization", {})
+    normalized.setdefault(RULES_KIND_KEY, RULES_KIND)
+    normalized.setdefault(RULES_NAME_KEY, RULES_NAME)
+    normalized.setdefault(RULES_VERSION_KEY, 1)
+    normalized.setdefault(RULES_UPDATED_AT_KEY, "")
+    normalized.setdefault(RULES_SENIORITY_MODIFIERS_KEY, [])
+    normalized.setdefault(RULES_ABBREVIATION_EXPANSIONS_KEY, {})
+    normalized.setdefault(RULES_NORMALIZATION_KEY, {})
     TITLE_NORMALIZATION_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
     TITLE_NORMALIZATION_RULES_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
@@ -63,7 +120,7 @@ def _load_seniority_modifiers() -> frozenset[str]:
         payload = load_title_normalization_rules()
     except Exception:
         return frozenset()
-    modifiers = payload.get("seniority_modifiers")
+    modifiers = payload.get(RULES_SENIORITY_MODIFIERS_KEY)
     if not isinstance(modifiers, list):
         return frozenset()
     return frozenset(
@@ -111,24 +168,23 @@ def _load_role_title_tokens() -> frozenset[str]:
             tokens.append(token)
     return frozenset(tokens)
 
-
 def decompose_title_text(value: Any) -> dict[str, Any]:
     normalized = normalize_title_text(value)
     if not normalized:
         return {
-            "normalized_title": "",
-            "seniority_modifiers": [],
-            "base_role": "",
-            "variant_terms": "",
+            NORMALIZED_TITLE_KEY: "",
+            SENIORITY_TITLE_KEY: [],
+            BASE_ROLE_KEY: "",
+            VARIANT_TERMS_KEY: "",
         }
 
     tokens = [token for token in normalized.split() if token]
     if not tokens:
         return {
-            "normalized_title": normalized,
-            "seniority_modifiers": [],
-            "base_role": "",
-            "variant_terms": "",
+            NORMALIZED_TITLE_KEY: normalized,
+            SENIORITY_TITLE_KEY: [],
+            BASE_ROLE_KEY: "",
+            VARIANT_TERMS_KEY: "",
         }
 
     seniority_modifiers = extract_seniority_modifiers(normalized)
@@ -136,10 +192,10 @@ def decompose_title_text(value: Any) -> dict[str, Any]:
     family_tokens = [token for token in tokens if token not in seniority_set]
     if not family_tokens:
         return {
-            "normalized_title": normalized,
-            "seniority_modifiers": seniority_modifiers,
-            "base_role": "",
-            "variant_terms": "",
+            NORMALIZED_TITLE_KEY: normalized,
+            SENIORITY_TITLE_KEY: seniority_modifiers,
+            BASE_ROLE_KEY: "",
+            VARIANT_TERMS_KEY: "",
         }
 
     role_tokens = _load_role_title_tokens()
@@ -155,34 +211,33 @@ def decompose_title_text(value: Any) -> dict[str, Any]:
     base_role = " ".join(base_role_tokens).strip()
     variant_terms = " ".join(variant_terms_tokens).strip()
     return {
-        "normalized_title": normalized,
-        "seniority_modifiers": seniority_modifiers,
-        "base_role": base_role,
-        "variant_terms": variant_terms,
+        NORMALIZED_TITLE_KEY: normalized,
+        SENIORITY_TITLE_KEY: seniority_modifiers,
+        BASE_ROLE_KEY: base_role,
+        VARIANT_TERMS_KEY: variant_terms,
     }
 
 
 def derive_base_title_from_seniority(value: Any) -> str:
-    return str(decompose_title_text(value).get("base_role") or "").strip()
+    return str(decompose_title_text(value).get(BASE_ROLE_KEY) or "").strip()
 
 
 def _load_review_payload() -> dict[str, Any]:
     if not TITLE_NORMALIZATION_REVIEW_PATH.exists():
-        return {"kind": "title_normalization_review", "name": "title_normalization_review", "version": 1, "entries": []}
+        return {RULES_KIND_KEY: REVIEW_KIND, RULES_NAME_KEY: REVIEW_NAME, RULES_VERSION_KEY: 1, REVIEW_ENTRIES_KEY: []}
     try:
         payload = json.loads(TITLE_NORMALIZATION_REVIEW_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
     return payload if isinstance(payload, dict) else {}
 
-
 def _save_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload or {})
-    normalized.setdefault("kind", "title_normalization_review")
-    normalized.setdefault("name", "title_normalization_review")
-    normalized.setdefault("version", 1)
-    normalized.setdefault("updated_at", "")
-    normalized.setdefault("entries", [])
+    normalized.setdefault(RULES_KIND_KEY, REVIEW_KIND)
+    normalized.setdefault(RULES_NAME_KEY, REVIEW_NAME)
+    normalized.setdefault(RULES_VERSION_KEY, 1)
+    normalized.setdefault(RULES_UPDATED_AT_KEY, "")
+    normalized.setdefault(REVIEW_ENTRIES_KEY, [])
     TITLE_NORMALIZATION_REVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
     TITLE_NORMALIZATION_REVIEW_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
@@ -194,12 +249,12 @@ def _save_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _normalize_review_entry(entry: Any) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
-    value = _clean_rule_token(entry.get("value"))
+    value = _clean_rule_token(entry.get(VALUE_KEY))
     if not value:
         return None
     suggested_values = []
     seen: set[str] = {value}
-    for item in entry.get("suggested_values") or []:
+    for item in entry.get(SUGGESTED_VALUES_KEY) or []:
         suggested = _clean_rule_token(item)
         if not suggested or suggested in seen:
             continue
@@ -207,7 +262,7 @@ def _normalize_review_entry(entry: Any) -> dict[str, Any] | None:
         suggested_values.append(suggested)
     evidence = []
     seen_evidence: set[str] = set()
-    for item in entry.get("evidence") or []:
+    for item in entry.get(EVIDENCE_KEY) or []:
         text = re.sub(r"\s+", " ", str(item or "")).strip()
         lowered = text.lower()
         if not text or lowered in seen_evidence:
@@ -216,7 +271,7 @@ def _normalize_review_entry(entry: Any) -> dict[str, Any] | None:
         evidence.append(text)
     sources = []
     seen_sources: set[str] = set()
-    for item in entry.get("sources") or []:
+    for item in entry.get(SOURCES_KEY) or []:
         text = re.sub(r"\s+", " ", str(item or "")).strip()
         lowered = text.lower()
         if not text or lowered in seen_sources:
@@ -224,22 +279,21 @@ def _normalize_review_entry(entry: Any) -> dict[str, Any] | None:
         seen_sources.add(lowered)
         sources.append(text)
     normalized: dict[str, Any] = {
-        "value": value,
-        "suggested_values": suggested_values,
-        "evidence": evidence,
-        "sources": sources,
-        "confidence": _clean_rule_token(entry.get("confidence")) or "ambiguous",
-        "needs_review": bool(entry.get("needs_review", True)),
+        VALUE_KEY: value,
+        SUGGESTED_VALUES_KEY: suggested_values,
+        EVIDENCE_KEY: evidence,
+        SOURCES_KEY: sources,
+        CONFIDENCE_KEY: _clean_rule_token(entry.get(CONFIDENCE_KEY)) or AMBIGUOUS,
+        NEEDS_REVIEW_KEY: bool(entry.get(NEEDS_REVIEW_KEY, True)),
     }
-    note = re.sub(r"\s+", " ", str(entry.get("note") or "")).strip()
+    note = re.sub(r"\s+", " ", str(entry.get(NOTE_KEY) or "")).strip()
     if note:
-        normalized["note"] = note
+        normalized[NOTE_KEY] = note
     return normalized
-
 
 def load_title_normalization_review() -> list[dict[str, Any]]:
     payload = _load_review_payload()
-    entries = payload.get("entries")
+    entries = payload.get(REVIEW_ENTRIES_KEY)
     if not isinstance(entries, list):
         raise ValueError("title_normalization_review.json must contain an entries list")
     cleaned: list[dict[str, Any]] = []
@@ -248,7 +302,7 @@ def load_title_normalization_review() -> list[dict[str, Any]]:
         normalized = _normalize_review_entry(entry)
         if normalized is None:
             continue
-        key = normalized["value"]
+        key = normalized[VALUE_KEY]
         if key in seen:
             continue
         seen.add(key)
@@ -257,14 +311,13 @@ def load_title_normalization_review() -> list[dict[str, Any]]:
         save_title_normalization_review(cleaned)
     return cleaned
 
-
 def save_title_normalization_review(entries: list[dict[str, Any]]) -> dict[str, Any]:
     payload = _load_review_payload()
-    payload.setdefault("kind", "title_normalization_review")
-    payload.setdefault("name", "title_normalization_review")
-    payload.setdefault("version", 1)
-    payload.setdefault("updated_at", "")
-    payload["entries"] = [
+    payload.setdefault(RULES_KIND_KEY, REVIEW_KIND)
+    payload.setdefault(RULES_NAME_KEY, REVIEW_NAME)
+    payload.setdefault(RULES_VERSION_KEY, 1)
+    payload.setdefault(RULES_UPDATED_AT_KEY, "")
+    payload[REVIEW_ENTRIES_KEY] = [
         entry
         for entry in (
             _normalize_review_entry(item)
@@ -273,125 +326,6 @@ def save_title_normalization_review(entries: list[dict[str, Any]]) -> dict[str, 
         if entry is not None
     ]
     return _save_review_payload(payload)
-
-
-def record_title_normalization_review(
-    value: str,
-    *,
-    suggested_values: list[str] | None = None,
-    evidence: list[str] | None = None,
-    sources: list[str] | None = None,
-    confidence: str = "ambiguous",
-    note: str = "",
-) -> dict[str, Any]:
-    cleaned_value = _clean_rule_token(value)
-    if not cleaned_value:
-        raise ValueError("value is required")
-
-    entries = list(load_title_normalization_review())
-    cleaned_suggestions = []
-    seen: set[str] = {cleaned_value}
-    for item in suggested_values or []:
-        suggested = _clean_rule_token(item)
-        if not suggested or suggested in seen:
-            continue
-        seen.add(suggested)
-        cleaned_suggestions.append(suggested)
-
-    cleaned_evidence: list[str] = []
-    seen_evidence: set[str] = set()
-    for item in evidence or []:
-        text = re.sub(r"\s+", " ", str(item or "")).strip()
-        lowered = text.lower()
-        if not text or lowered in seen_evidence:
-            continue
-        seen_evidence.add(lowered)
-        cleaned_evidence.append(text)
-
-    cleaned_sources: list[str] = []
-    seen_sources: set[str] = set()
-    for item in sources or []:
-        text = re.sub(r"\s+", " ", str(item or "")).strip()
-        lowered = text.lower()
-        if not text or lowered in seen_sources:
-            continue
-        seen_sources.add(lowered)
-        cleaned_sources.append(text)
-
-    for entry in entries:
-        if entry["value"] != cleaned_value:
-            continue
-        merged_suggestions = list(dict.fromkeys([*entry.get("suggested_values", []), *cleaned_suggestions]))
-        entry["suggested_values"] = merged_suggestions
-        entry["evidence"] = list(dict.fromkeys([*entry.get("evidence", []), *cleaned_evidence]))
-        entry["sources"] = list(dict.fromkeys([*entry.get("sources", []), *cleaned_sources]))
-        entry["confidence"] = confidence or entry.get("confidence") or "ambiguous"
-        if note:
-            entry["note"] = note
-        entry["needs_review"] = True
-        return save_title_normalization_review(entries)
-
-    entries.append({
-        "value": cleaned_value,
-        "suggested_values": cleaned_suggestions,
-        "evidence": cleaned_evidence,
-        "sources": cleaned_sources,
-        "confidence": confidence or "ambiguous",
-        "needs_review": True,
-        **({"note": note} if note else {}),
-    })
-    return save_title_normalization_review(entries)
-
-
-def upsert_title_normalization_expansion(abbreviation: str, expansion: str) -> dict[str, Any]:
-    cleaned_abbreviation = _clean_rule_token(abbreviation)
-    cleaned_expansion = _clean_rule_token(expansion)
-    if not cleaned_abbreviation or not cleaned_expansion:
-        raise ValueError("abbreviation and expansion are required")
-
-    payload = load_title_normalization_rules()
-    expansions = payload.get("abbreviation_expansions")
-    if not isinstance(expansions, dict):
-        expansions = {}
-    existing = _clean_rule_token(expansions.get(cleaned_abbreviation))
-    if existing and existing != cleaned_expansion:
-        record_title_normalization_review(
-            cleaned_abbreviation,
-            suggested_values=[existing, cleaned_expansion],
-            evidence=[f"{cleaned_abbreviation} -> {existing}", f"{cleaned_abbreviation} -> {cleaned_expansion}"],
-            sources=["auto-promotion conflict"],
-            confidence="ambiguous",
-            note="conflicting approved expansion",
-        )
-        return payload
-
-    if existing == cleaned_expansion:
-        return payload
-
-    expansions = dict(expansions)
-    expansions[cleaned_abbreviation] = cleaned_expansion
-    payload["abbreviation_expansions"] = expansions
-    return _save_rules_payload(payload)
-
-
-_MEDICAL_CONTEXT_TOKENS = {
-    "medical",
-    "doctor",
-    "clinic",
-    "patient",
-    "health",
-    "practice",
-    "hospital",
-    "general practitioner",
-}
-
-
-def _has_medical_context(*values: Any) -> bool:
-    combined = " ".join(_clean_rule_token(value) for value in values if _clean_rule_token(value))
-    if not combined:
-        return False
-    return any(token in combined for token in _MEDICAL_CONTEXT_TOKENS)
-
 
 def _classify_title_normalization_candidate(title: Any, source_text: Any = "") -> dict[str, Any] | None:
     raw_title = _clean_text(title)
@@ -403,99 +337,87 @@ def _classify_title_normalization_candidate(title: Any, source_text: Any = "") -
     if not tokens:
         return None
 
-    source_context = _clean_text(source_text)
+    title_rules = load_title_normalization_rules()
+    parsing_rules = load_parsing_rules()
+
+    candidates = title_rules.get(LEARNING_CANDIDATES_KEY, {})
+    config = parsing_rules.get(TITLE_DISCOVERY_CONFIG_KEY, {})
+    sw = set(parsing_rules.get(STOPWORDS_KEY, []))
+
     for token in tokens:
-        if token == "sr":
+        # 1. Existing candidate in knowledge base
+        if token in candidates:
+            cand_config = candidates[token]
             return {
-                "value": "sr",
-                "expansion": "senior",
-                "auto_promote": True,
-                "confidence": "strong",
-                "evidence": [raw_title],
+                VALUE_KEY: token,
+                SUGGESTED_VALUES_KEY: cand_config.get(SUGGESTED_VALUES_KEY, []),
+                CONFIDENCE_KEY: cand_config.get(CONFIDENCE_KEY, AMBIGUOUS),
+                EVIDENCE_KEY: [raw_title],
             }
-        if token == "jr":
-            return {
-                "value": "jr",
-                "expansion": "junior",
-                "auto_promote": True,
-                "confidence": "strong",
-                "evidence": [raw_title],
-            }
-        if token == "gp":
-            if _has_medical_context(raw_title, source_context):
+
+        # 2. Discovery: find new abbreviations (e.g., 'ba', 'pm')
+        if len(token) >= config.get(MIN_TOKEN_LEN_KEY, 2) and len(token) <= config.get(MAX_TOKEN_LEN_KEY, 3):
+            if token not in sw:
                 return {
-                    "value": "gp",
-                    "expansion": "general practitioner",
-                    "auto_promote": True,
-                    "confidence": "likely",
-                    "evidence": [raw_title, source_context],
+                    VALUE_KEY: token,
+                    SUGGESTED_VALUES_KEY: [],
+                    CONFIDENCE_KEY: config.get(DISCOVERY_CONFIDENCE_KEY, AMBIGUOUS),
+                    EVIDENCE_KEY: [raw_title],
                 }
-            return {
-                "value": "gp",
-                "suggested_values": ["general practitioner"],
-                "auto_promote": False,
-                "confidence": "ambiguous",
-                "evidence": [raw_title],
-            }
-        if token == "pm":
-            return {
-                "value": "pm",
-                "suggested_values": [
-                    "project manager",
-                    "product manager",
-                    "program manager",
-                ],
-                "auto_promote": False,
-                "confidence": "ambiguous",
-                "evidence": [raw_title],
-            }
     return None
 
 
-def learn_title_normalization_candidates(
-    titles: list[str] | tuple[str, ...] | set[str],
-    *,
-    source: str = "",
-    source_text: str = "",
-) -> dict[str, int]:
-    summary = {"promoted": 0, "reviewed": 0}
-    source_label = _clean_text(source)
-    for title in titles or []:
-        candidate = _classify_title_normalization_candidate(title, source_text)
-        if candidate is None:
+def learn_title_normalization_candidates(titles: list[str], source: str = "", source_text: str = "") -> dict[str, int]:
+    summary = {SUMMARY_PENDING_KEY: 0}
+    if not titles:
+        return summary
+
+    signals = []
+    seen_tokens = set()
+    for raw_title in titles:
+        candidate = _classify_title_normalization_candidate(raw_title, source_text)
+        if not candidate:
             continue
-        if candidate.get("auto_promote") and candidate.get("expansion"):
-            upsert_title_normalization_expansion(candidate["value"], candidate["expansion"])
-            summary["promoted"] += 1
+
+        token = candidate["value"]
+        if token in seen_tokens:
             continue
-        record_title_normalization_review(
-            candidate["value"],
-            suggested_values=list(candidate.get("suggested_values") or []),
-            evidence=list(candidate.get("evidence") or []),
-            sources=[source_label] if source_label else [],
-            confidence=str(candidate.get("confidence") or "ambiguous"),
-        )
-        summary["reviewed"] += 1
+        seen_tokens.add(token)
+
+        signal = {
+            SIGNAL_KEY: token,
+            LEARNING_SUGGESTED_CATEGORY_KEY: TITLE_NORMALIZATION_CANDIDATE,
+            SOURCE_FIELD_KEY: source or SOURCE_LABEL,
+            EVIDENCE_KEY: candidate.get(EVIDENCE_KEY, []),
+            CONFIDENCE_KEY: candidate.get(CONFIDENCE_KEY, AMBIGUOUS),
+            SUGGESTED_VALUES_KEY: candidate.get(SUGGESTED_VALUES_KEY, []),
+            NEEDS_REVIEW_KEY: True,
+        }
+        signals.append(signal)
+
+    if signals:
+        register_signals(signals)
+        summary[SUMMARY_PENDING_KEY] = len(signals)
     return summary
 
 
 def normalize_title_text(value: Any) -> str:
     payload = load_title_normalization_rules()
-    normalization = payload.get("normalization") if isinstance(payload.get("normalization"), dict) else {}
+    normalization = payload.get(RULES_NORMALIZATION_KEY) if isinstance(payload.get(RULES_NORMALIZATION_KEY), dict) else {}
     text = _clean_text(value)
     if not text:
         return ""
 
-    if normalization.get("strip_outer_punctuation", True):
+    if normalization.get(NORMALIZATION_STRIP_OUTER_PUNCTUATION_KEY, True):
         text = _strip_outer_punctuation(text)
 
-    if normalization.get("collapse_spaces", True):
+    if normalization.get(NORMALIZATION_COLLAPSE_SPACES_KEY, True):
         text = re.sub(r"\s+", " ", text).strip()
 
-    if normalization.get("lowercase_for_matching", True):
+    if normalization.get(NORMALIZATION_LOWERCASE_FOR_MATCHING_KEY, True):
         text = text.lower()
 
-    expansions = payload.get("abbreviation_expansions")
+    expansions = payload.get(RULES_ABBREVIATION_EXPANSIONS_KEY)
     if not isinstance(expansions, dict) or not expansions:
         return text
 
@@ -511,8 +433,8 @@ def normalize_title_text(value: Any) -> str:
         expanded_tokens.append(cleaned_token)
 
     normalized = " ".join(expanded_tokens)
-    if normalization.get("collapse_spaces", True):
+    if normalization.get(NORMALIZATION_COLLAPSE_SPACES_KEY, True):
         normalized = re.sub(r"\s+", " ", normalized).strip()
-    if normalization.get("lowercase_for_matching", True):
+    if normalization.get(NORMALIZATION_LOWERCASE_FOR_MATCHING_KEY, True):
         normalized = normalized.lower()
     return normalized

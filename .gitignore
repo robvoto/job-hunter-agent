@@ -46,3 +46,11 @@ docs/RUN_COMMANDS.txt
 ALIAS_LOGIC_RATIONALE.md
 CAPABILITY_AGING_RATIONALE.md 
 pytest.ini
+docs/RUN_COMMANDS.txt
+.gitignore
+CLAUDE.md
+.gitignore
+data/signal_registry.json
+NEXT_RUN.md
+CLAUDE.md
+AGENTS - OLD.md

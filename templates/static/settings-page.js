@@ -1,4 +1,6 @@
 ﻿
+    const LINKEDIN_EASY_APPLY_ONLY = 'linkedin_easy_apply_only';
+
     const statusEl = document.getElementById('status');
     const isTestMode = document.body?.dataset.testMode === 'true';
     const runNowButton = document.getElementById('run_now');
@@ -7,11 +9,15 @@
     let telegramConnectLink = '';
     let loadedAgentSettings = null;
     let loadedProfile = null;
+    let loadedAdvanceSettings = null;
     let capabilityRuleState = [];
     let expandedCapabilityRows = new Set();
     let suppressDirtyTracking = true;
     let statusHideTimer = null;
     document.querySelectorAll('[data-test-only]').forEach((element) => {
+      element.hidden = !isTestMode;
+    });
+    document.querySelectorAll('[data-debug-only]').forEach((element) => {
       element.hidden = !isTestMode;
     });
     const listTextAreas = [
@@ -444,8 +450,8 @@
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
       document.getElementById('linkedin_hours_old').value = String(profile.search_settings?.linkedin_hours_old ?? 24);
       document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search ?? 25);
-      const _liEasyApply = profile.search_settings?.linkedin_easy_apply_only;
-      document.getElementById('linkedin_easy_apply_only').value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
+      const _liEasyApply = profile.search_settings?.[LINKEDIN_EASY_APPLY_ONLY];
+      document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
       document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly || '');
       document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate || '');
@@ -465,6 +471,182 @@
         settingsField(id).value = rulesToText(profile[id], key);
       }
       renderAdvancedChipEditors();
+    }
+
+    // Populate the global advance-settings form from the server payload.
+    function fillAdvanceForm(settings) {
+      loadedAdvanceSettings = settings || {};
+      const fitHl = loadedAdvanceSettings.fit_highlights || {};
+      const searchDefaults = loadedAdvanceSettings.search_settings || {};
+      const searchLimits = loadedAdvanceSettings.search_limits || {};
+      const evidenceWeights = loadedAdvanceSettings.candidate_profile_tier_weights || {};
+      const preferenceWeights = loadedAdvanceSettings.preference_weights || {};
+      const onboarding = loadedAdvanceSettings.onboarding_settings || {};
+      const setBounds = (id, bounds) => {
+        const input = document.getElementById(id);
+        if (!input || !bounds) return;
+        if (bounds.min !== undefined) input.min = String(bounds.min);
+        if (bounds.max !== undefined) input.max = String(bounds.max);
+      };
+
+      document.getElementById('highlight_strong_capability_count').value = String(fitHl.strong_capability_count ?? '');
+      document.getElementById('highlight_working_capability_count').value = String(fitHl.working_capability_count ?? '');
+      document.getElementById('highlight_basic_capability_count').value = String(fitHl.basic_capability_count ?? '');
+      document.getElementById('highlight_reviewed_signal_count').value = String(fitHl.reviewed_signal_count ?? '');
+      document.getElementById('highlight_max_highlights').value = String(fitHl.max_highlights ?? '');
+
+      document.getElementById('search_default_date_range_days').value = String(searchDefaults.date_range_days ?? '');
+      document.getElementById('search_default_seek_max_pages').value = String(searchDefaults.seek_max_pages ?? '');
+      document.getElementById('search_default_linkedin_hours_old').value = String(searchDefaults.linkedin_hours_old ?? '');
+      document.getElementById('search_default_linkedin_results_per_search').value = String(searchDefaults.linkedin_results_per_search ?? '');
+      document.getElementById('search_default_enforce_posted_age_limit').value = searchDefaults.enforce_posted_age_limit === false ? 'false' : 'true';
+      document.getElementById('search_default_sort_newest_first').value = searchDefaults.sort_newest_first === false ? 'false' : 'true';
+      const liEasyApply = searchDefaults[LINKEDIN_EASY_APPLY_ONLY];
+      document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value = (liEasyApply === null || liEasyApply === undefined) ? '' : String(liEasyApply);
+      setBounds('search_default_date_range_days', searchLimits.date_range_days);
+      setBounds('search_default_seek_max_pages', searchLimits.seek_max_pages);
+      setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
+      setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
+
+      const rangeText = (value) => value?.min !== undefined && value?.max !== undefined ? `${value.min} to ${value.max}` : 'managed by the server';
+      document.getElementById('search_default_date_range_days_bounds').textContent = rangeText(searchLimits.date_range_days);
+      document.getElementById('search_default_seek_max_pages_bounds').textContent = rangeText(searchLimits.seek_max_pages);
+      document.getElementById('search_default_linkedin_hours_old_bounds').textContent = rangeText(searchLimits.linkedin_hours_old);
+      document.getElementById('search_default_linkedin_results_per_search_bounds').textContent = rangeText(searchLimits.linkedin_results_per_search);
+
+      document.getElementById('evidence_primary_weight').value = String(evidenceWeights.primary_candidate_profile_context ?? '');
+      document.getElementById('evidence_secondary_weight').value = String(evidenceWeights.secondary_candidate_profile_context ?? '');
+      document.getElementById('evidence_supplementary_weight').value = String(evidenceWeights.supplementary_candidate_profile_context ?? '');
+
+      document.getElementById('preference_fit_weight').value = String(preferenceWeights.fit ?? '');
+      document.getElementById('preference_salary_weight').value = String(preferenceWeights.salary ?? '');
+      document.getElementById('preference_location_weight').value = String(preferenceWeights.location ?? '');
+      document.getElementById('preference_work_mode_weight').value = String(preferenceWeights.work_mode ?? '');
+      document.getElementById('preference_contract_weight').value = String(preferenceWeights.contract ?? '');
+      document.getElementById('preference_government_weight').value = String(preferenceWeights.government ?? '');
+      document.getElementById('preference_freshness_weight').value = String(preferenceWeights.freshness ?? '');
+
+      document.getElementById('onboarding_extraction_lookback_years').value = String(onboarding.extraction_lookback_years ?? '');
+      document.getElementById('onboarding_title_extraction_min_months').value = String(onboarding.title_extraction_min_months ?? '');
+      document.getElementById('onboarding_max_target_patterns').value = String(onboarding.max_target_patterns ?? '');
+      document.getElementById('onboarding_max_secondary_patterns').value = String(onboarding.max_secondary_patterns ?? '');
+      document.getElementById('onboarding_capability_strength_preset').value = onboarding.capability_strength_preset || '';
+
+      // Keep the shared search guardrails editable from the same global settings source.
+      document.getElementById('search_limit_date_range_days_min').value = String(searchLimits.date_range_days?.min ?? '');
+      document.getElementById('search_limit_date_range_days_max').value = String(searchLimits.date_range_days?.max ?? '');
+      document.getElementById('search_limit_seek_max_pages_min').value = String(searchLimits.seek_max_pages?.min ?? '');
+      document.getElementById('search_limit_seek_max_pages_max').value = String(searchLimits.seek_max_pages?.max ?? '');
+      document.getElementById('search_limit_linkedin_hours_old_min').value = String(searchLimits.linkedin_hours_old?.min ?? '');
+      document.getElementById('search_limit_linkedin_hours_old_max').value = String(searchLimits.linkedin_hours_old?.max ?? '');
+      document.getElementById('search_limit_linkedin_results_per_search_min').value = String(searchLimits.linkedin_results_per_search?.min ?? '');
+      document.getElementById('search_limit_linkedin_results_per_search_max').value = String(searchLimits.linkedin_results_per_search?.max ?? '');
+
+      // Render the preset table read-only so the global tuning remains visible without duplicating edit logic.
+      const presetPanel = document.getElementById('capability_strength_presets_panel');
+      const presetTable = onboarding.capability_strength_presets || {};
+      if (presetPanel) {
+        const presetRows = Object.entries(presetTable).map(([presetName, presetValues]) => `
+          <tr>
+            <th scope="row">${escapeHtml(presetName)}</th>
+            <td>${escapeHtml(Object.entries(presetValues || {}).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No values')}</td>
+          </tr>
+        `).join('');
+        presetPanel.innerHTML = `
+          <table class="settings-table">
+            <thead>
+              <tr>
+                <th>Preset</th>
+                <th>Values</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${presetRows || '<tr><td colspan="2">No capability presets loaded.</td></tr>'}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    // Build the payload that saves only the global optimiser settings.
+    function collectAdvanceSettings() {
+      const current = loadedAdvanceSettings || {};
+      const currentSearch = current.search_settings || {};
+      const currentLimits = current.search_limits || {};
+      const currentOnboarding = current.onboarding_settings || {};
+      const readNumber = (id, fallback) => {
+        const raw = Number(document.getElementById(id).value);
+        return Number.isNaN(raw) ? fallback : raw;
+      };
+      const readBoolean = (id, fallback) => {
+        const raw = document.getElementById(id).value;
+        if (raw === 'true') return true;
+        if (raw === 'false') return false;
+        return fallback;
+      };
+      return {
+        fit_highlights: {
+          strong_capability_count: readNumber('highlight_strong_capability_count', current.fit_highlights?.strong_capability_count),
+          working_capability_count: readNumber('highlight_working_capability_count', current.fit_highlights?.working_capability_count),
+          basic_capability_count: readNumber('highlight_basic_capability_count', current.fit_highlights?.basic_capability_count),
+          reviewed_signal_count: readNumber('highlight_reviewed_signal_count', current.fit_highlights?.reviewed_signal_count),
+          max_highlights: readNumber('highlight_max_highlights', current.fit_highlights?.max_highlights),
+        },
+        search_settings: {
+          ...currentSearch,
+          date_range_days: readNumber('search_default_date_range_days', currentSearch.date_range_days),
+          seek_max_pages: readNumber('search_default_seek_max_pages', currentSearch.seek_max_pages),
+          linkedin_hours_old: readNumber('search_default_linkedin_hours_old', currentSearch.linkedin_hours_old),
+          linkedin_results_per_search: readNumber('search_default_linkedin_results_per_search', currentSearch.linkedin_results_per_search),
+          enforce_posted_age_limit: readBoolean('search_default_enforce_posted_age_limit', currentSearch.enforce_posted_age_limit),
+          sort_newest_first: readBoolean('search_default_sort_newest_first', currentSearch.sort_newest_first),
+          [LINKEDIN_EASY_APPLY_ONLY]: (() => {
+            const raw = document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value;
+            if (raw === '') return null;
+            return raw === 'true';
+          })(),
+        },
+        search_limits: {
+          date_range_days: {
+            min: readNumber('search_limit_date_range_days_min', currentLimits.date_range_days?.min),
+            max: readNumber('search_limit_date_range_days_max', currentLimits.date_range_days?.max),
+          },
+          seek_max_pages: {
+            min: readNumber('search_limit_seek_max_pages_min', currentLimits.seek_max_pages?.min),
+            max: readNumber('search_limit_seek_max_pages_max', currentLimits.seek_max_pages?.max),
+          },
+          linkedin_hours_old: {
+            min: readNumber('search_limit_linkedin_hours_old_min', currentLimits.linkedin_hours_old?.min),
+            max: readNumber('search_limit_linkedin_hours_old_max', currentLimits.linkedin_hours_old?.max),
+          },
+          linkedin_results_per_search: {
+            min: readNumber('search_limit_linkedin_results_per_search_min', currentLimits.linkedin_results_per_search?.min),
+            max: readNumber('search_limit_linkedin_results_per_search_max', currentLimits.linkedin_results_per_search?.max),
+          },
+        },
+        preference_weights: {
+          fit: readNumber('preference_fit_weight', current.preference_weights?.fit),
+          salary: readNumber('preference_salary_weight', current.preference_weights?.salary),
+          location: readNumber('preference_location_weight', current.preference_weights?.location),
+          work_mode: readNumber('preference_work_mode_weight', current.preference_weights?.work_mode),
+          contract: readNumber('preference_contract_weight', current.preference_weights?.contract),
+          government: readNumber('preference_government_weight', current.preference_weights?.government),
+          freshness: readNumber('preference_freshness_weight', current.preference_weights?.freshness),
+        },
+        candidate_profile_tier_weights: {
+          primary_candidate_profile_context: readNumber('evidence_primary_weight', current.candidate_profile_tier_weights?.primary_candidate_profile_context),
+          secondary_candidate_profile_context: readNumber('evidence_secondary_weight', current.candidate_profile_tier_weights?.secondary_candidate_profile_context),
+          supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', current.candidate_profile_tier_weights?.supplementary_candidate_profile_context),
+        },
+        onboarding_settings: {
+          ...currentOnboarding,
+          extraction_lookback_years: readNumber('onboarding_extraction_lookback_years', currentOnboarding.extraction_lookback_years),
+          title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
+          max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
+          max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
+          capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
+        },
+      };
     }
 
     const chipHtmlIdAliases = { adjacent_title_patterns: 'secondary_title_patterns' };
@@ -564,6 +746,14 @@
       showStatus('Profile loaded.', 'ok', { autoHideMs: 2600 });
     }
 
+    async function loadAdvanceSettings() {
+      const response = await fetch('/api/advance-settings');
+      if (!response.ok) throw new Error('Could not load advanced settings');
+      const settings = await response.json();
+      loadedAdvanceSettings = settings;
+      fillAdvanceForm(settings);
+    }
+
     function collectAgentSettings() {
       const currentSchedule = loadedAgentSettings?.schedule || {};
       return {
@@ -652,6 +842,13 @@
     }
 
     async function loadRunStats() {
+      if (!isTestMode) {
+        const panel = document.getElementById('run_stats_panel');
+        if (panel) {
+          panel.innerHTML = '';
+        }
+        return;
+      }
       const response = await fetch('/api/run-stats');
       if (!response.ok) { renderRunStats(null); return; }
       const stats = await response.json();
@@ -861,6 +1058,7 @@
       showInlineStatus(globalStatus, 'Saving changes...', 'loading');
       try {
         const profile = collectProfile();
+        const advanceSettings = collectAdvanceSettings();
         const agentSettings = collectAgentSettings();
 
         const agentResponse = await fetch('/api/agent-settings', {
@@ -883,8 +1081,19 @@
           throw new Error(profilePayload.error || 'Profile save failed after alert settings were saved.');
         }
 
+        const advanceResponse = await fetch('/api/advance-settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(advanceSettings),
+        });
+        const advancePayload = await advanceResponse.json().catch(() => ({}));
+        if (!advanceResponse.ok) {
+          throw new Error(advancePayload.error || 'Could not save advanced settings.');
+        }
+
         fillAgentSettings(agentPayload);
         fillForm(profilePayload);
+        fillAdvanceForm(advancePayload);
         initSliders();
         clearDirty();
         showInlineStatus(globalStatus, 'All changes saved.', 'ok');
@@ -902,6 +1111,7 @@
     saveAllBtn?.addEventListener('click', saveAll);
     Promise.all([
       loadProfile(),
+      loadAdvanceSettings(),
       loadAgentSettings(),
       loadRunStats(),
     ]).then(() => {

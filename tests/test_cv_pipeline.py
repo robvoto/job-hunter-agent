@@ -9,7 +9,7 @@ def test_parse_roles_uses_configured_lookback_years_for_recency():
 Acme Corp - Platform Lead ({_CURRENT_YEAR - 7} - {_CURRENT_YEAR - 7})
 - Led platform delivery.
 """
-
+    #hardcoded
     short_roles = parse_roles(cv_text, {"extraction_lookback_years": 5})
     long_roles = parse_roles(cv_text, {"extraction_lookback_years": 8})
 

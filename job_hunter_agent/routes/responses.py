@@ -1,0 +1,45 @@
+"""Shared HTTP helpers for FastAPI dashboard routes."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from fastapi.responses import HTMLResponse, JSONResponse
+
+from job_hunter_agent import server_helpers as srv
+
+
+def json_response(payload: dict[str, Any], status_code: int = 200) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=payload,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, PUT, PATCH, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        },
+    )
+
+
+def html_response(html: str, status_code: int = 200) -> HTMLResponse:
+    return HTMLResponse(
+        status_code=status_code,
+        content=html,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+def guess_media_type(path: Path) -> str:
+    overrides = getattr(srv, "_STATIC_MIME_OVERRIDES", {})
+    mime_type = overrides.get(path.suffix.lower())
+    if mime_type:
+        return mime_type
+    import mimetypes
+
+    guessed, _ = mimetypes.guess_type(str(path))
+    content_type = guessed or "application/octet-stream"
+    if content_type.startswith("text/") or content_type == "application/javascript":
+        return f"{content_type}; charset=utf-8"
+    return content_type

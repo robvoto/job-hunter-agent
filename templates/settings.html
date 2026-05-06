@@ -6,6 +6,8 @@
   <title>Settings - Job Hunter</title>
   <link rel="stylesheet" href="/static/themes.css">
   <link rel="stylesheet" href="/static/settings-page.css">
+  <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
+  <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
   <style>
     /* Hide aliases when not in test mode */
@@ -44,8 +46,9 @@
         <button class="nav-item" type="button" data-section="section-matrix">Capability Matrix</button>
         <button class="nav-item" type="button" data-section="section-rules">Rules</button>
         <button class="nav-item" type="button" data-section="section-alerts">Alerts &amp; AI</button>
-        <button class="nav-item" type="button" data-section="section-signals">Learning</button>
         <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise">Optimise</button>
+        <button class="nav-item" type="button" data-section="section-advance">Advanced Settings</button>
+        <button class="nav-item" type="button" data-section="section-learning">Learning</button>
       </div>
       <a href="/" class="nav-item-back">View Dashboard</a>
     </nav>
@@ -55,7 +58,7 @@
         <section class="hero">
           <div class="hero-text">
             <h1>Settings</h1>
-            <p>Configure search behavior, salary, alerts, matching, and review what the agent is learning.</p>
+            <p>Configure candidate search and matching settings here. Global admin tools live in Advanced Settings.</p>
           </div>
           <div class="theme-switcher-widget" style="margin-left:auto;flex-shrink:0;">
             <span>Theme test:</span>
@@ -372,18 +375,18 @@
 
             <section class="subpanel">
               <h3>Requirement Exclusions</h3>
-              <label for="must_not_require_skills_add">Reject jobs requiring</label>
+              <label for="must_not_require_skills_add">Reject jobs that mandate these skills</label>
               <div class="badge-editor" data-chip-editor="must_not_require_skills">
                 <div id="must_not_require_skills_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
-                  <input id="must_not_require_skills_add" type="text" data-chip-input="must_not_require_skills" placeholder="Add a requirement">
+                  <input id="must_not_require_skills_add" type="text" data-chip-input="must_not_require_skills" placeholder="Add a skill or tool">
                   <button class="secondary" type="button" data-add-chip="must_not_require_skills">Add</button>
                 </div>
               </div>
               <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <details class="help-drawer" style="margin-top:8px;">
-                <summary>How "Reject jobs requiring" works</summary>
-                <p>Add skills or tools that are specific to your profile and that you do not have. The engine only rejects when those terms look mandatory in context.</p>
+                <summary>How this works</summary>
+                <p>Add skills or tools you cannot claim. A job is only rejected when the ad explicitly mandates the skill — e.g. "must have SAP" or "SAP experience required". Jobs where the skill is listed as desirable or preferred are <strong>not</strong> rejected.</p>
               </details>
 
               <div style="margin-top: 14px;">
@@ -460,17 +463,10 @@
           </div>
         </section>
 
-        <section id="section-signals" class="settings-group">
-          <h2 class="section-title">Learning</h2>
-          <div id="signal_registry_panel">
-            <p class="help">Select "Learning" in the sidebar to load.</p>
-          </div>
-        </section>
-
         <section id="section-optimise" class="settings-group">
           <h2 class="section-title">Optimise</h2>
           <div class="grid">
-            <section class="panel">
+            <section class="panel" data-debug-only hidden>
               <h2>Latest Run Stats</h2>
               <div id="run_stats_panel" class="help">No run stats loaded yet.</div>
               <div class="panel-actions">
@@ -488,6 +484,187 @@
               </div>
             </section>
           </div>
+        </section>
+
+        <section id="section-advance" class="settings-group">
+          <h2 class="section-title">Advanced Settings</h2>
+          <section class="panel">
+            <h2>Card Highlight Display</h2>
+            <p class="panel-copy">These are global dashboard rendering controls. They change what appears on every card, not the candidate profile or scoring rules.</p>
+
+            <label for="highlight_strong_capability_count">Strong capability matches shown</label>
+            <input id="highlight_strong_capability_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on dashboard job cards only. Controls how many strong capability matches appear before the card runs out of space.</div>
+
+            <label for="highlight_working_capability_count">Working capability matches shown</label>
+            <input id="highlight_working_capability_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on dashboard job cards only. Controls how many working-level capability matches appear per card.</div>
+
+            <label for="highlight_basic_capability_count">Basic capability matches shown</label>
+            <input id="highlight_basic_capability_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on dashboard job cards only. Controls how many basic capability matches appear per card.</div>
+
+            <label for="highlight_reviewed_signal_count">Reviewed signal matches shown</label>
+            <input id="highlight_reviewed_signal_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on dashboard job cards only. Controls how many approved learning signals are displayed per card.</div>
+
+            <label for="highlight_max_highlights">Maximum highlights per card</label>
+            <input id="highlight_max_highlights" type="number" min="1" max="20" step="1">
+            <div class="field-help">Shown on dashboard job cards only. This is the total cap across all highlight categories on one card.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Search Defaults</h2>
+            <p class="panel-copy">These defaults seed search behaviour for the whole app. They do not replace the live search fields in Profile.</p>
+
+            <label for="search_default_date_range_days">Default date range days</label>
+            <input id="search_default_date_range_days" type="number" min="1" max="30" step="1">
+            <div class="field-help">Default window for new search runs. Valid range: <span id="search_default_date_range_days_bounds"></span>.</div>
+
+            <label for="search_default_seek_max_pages">Default SEEK pages</label>
+            <input id="search_default_seek_max_pages" type="number" min="1" max="10" step="1">
+            <div class="field-help">Default SEEK crawl cap. Valid range: <span id="search_default_seek_max_pages_bounds"></span>.</div>
+
+            <label for="search_default_linkedin_hours_old">Default LinkedIn age window</label>
+            <input id="search_default_linkedin_hours_old" type="number" min="1" max="168" step="1">
+            <div class="field-help">Default LinkedIn freshness window in hours. Valid range: <span id="search_default_linkedin_hours_old_bounds"></span>.</div>
+
+            <label for="search_default_linkedin_results_per_search">Default LinkedIn results per search</label>
+            <input id="search_default_linkedin_results_per_search" type="number" min="5" max="100" step="1">
+            <div class="field-help">Default result budget for each LinkedIn search. Valid range: <span id="search_default_linkedin_results_per_search_bounds"></span>.</div>
+
+            <label for="search_default_enforce_posted_age_limit">Enforce posted-age limit</label>
+            <select id="search_default_enforce_posted_age_limit">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <div class="field-help">When enabled, the scraper skips jobs that are older than the configured search window.</div>
+
+            <label for="search_default_sort_newest_first">Sort newest first</label>
+            <select id="search_default_sort_newest_first">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <div class="field-help">When enabled, the dashboard prefers fresher jobs in search results.</div>
+
+            <label for="search_default_linkedin_easy_apply_only">LinkedIn Easy Apply only</label>
+            <select id="search_default_linkedin_easy_apply_only">
+              <option value="">Unset</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <div class="field-help">Leave unset unless you want the LinkedIn default to force Easy Apply filtering.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Search Guardrails</h2>
+            <p class="panel-copy">These bounds control what the search defaults can be set to. They are global, shared limits.</p>
+
+            <label for="search_limit_date_range_days_min">Date range minimum</label>
+            <input id="search_limit_date_range_days_min" type="number" min="1" max="365" step="1">
+            <label for="search_limit_date_range_days_max">Date range maximum</label>
+            <input id="search_limit_date_range_days_max" type="number" min="1" max="365" step="1">
+
+            <label for="search_limit_seek_max_pages_min">SEEK pages minimum</label>
+            <input id="search_limit_seek_max_pages_min" type="number" min="1" max="100" step="1">
+            <label for="search_limit_seek_max_pages_max">SEEK pages maximum</label>
+            <input id="search_limit_seek_max_pages_max" type="number" min="1" max="100" step="1">
+
+            <label for="search_limit_linkedin_hours_old_min">LinkedIn hours minimum</label>
+            <input id="search_limit_linkedin_hours_old_min" type="number" min="1" max="720" step="1">
+            <label for="search_limit_linkedin_hours_old_max">LinkedIn hours maximum</label>
+            <input id="search_limit_linkedin_hours_old_max" type="number" min="1" max="720" step="1">
+
+            <label for="search_limit_linkedin_results_per_search_min">LinkedIn results minimum</label>
+            <input id="search_limit_linkedin_results_per_search_min" type="number" min="1" max="1000" step="1">
+            <label for="search_limit_linkedin_results_per_search_max">LinkedIn results maximum</label>
+            <input id="search_limit_linkedin_results_per_search_max" type="number" min="1" max="1000" step="1">
+          </section>
+
+          <section class="panel">
+            <h2>Evidence Tier Weights</h2>
+            <p class="panel-copy">These global weights control how much each profile tier contributes when evidence is scored.</p>
+
+            <label for="evidence_primary_weight">Primary profile context weight</label>
+            <input id="evidence_primary_weight" type="number" min="0" max="1" step="0.05">
+
+            <label for="evidence_secondary_weight">Secondary profile context weight</label>
+            <input id="evidence_secondary_weight" type="number" min="0" max="1" step="0.05">
+
+            <label for="evidence_supplementary_weight">Supplementary profile context weight</label>
+            <input id="evidence_supplementary_weight" type="number" min="0" max="1" step="0.05">
+          </section>
+
+          <section class="panel">
+            <h2>Preference Weights</h2>
+            <p class="panel-copy">These weights shape the global fit score. They stay shared across profiles so scoring stays consistent.</p>
+
+            <label for="preference_fit_weight">Fit</label>
+            <input id="preference_fit_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_salary_weight">Salary</label>
+            <input id="preference_salary_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_location_weight">Location</label>
+            <input id="preference_location_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_work_mode_weight">Work mode</label>
+            <input id="preference_work_mode_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_contract_weight">Contract</label>
+            <input id="preference_contract_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_government_weight">Government</label>
+            <input id="preference_government_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_freshness_weight">Freshness</label>
+            <input id="preference_freshness_weight" type="number" min="0" max="2" step="0.1">
+          </section>
+
+          <section class="panel">
+            <h2>Onboarding Defaults</h2>
+            <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
+
+            <label for="onboarding_extraction_lookback_years">Extraction lookback years</label>
+            <input id="onboarding_extraction_lookback_years" type="number" min="1" max="20" step="1">
+
+            <label for="onboarding_title_extraction_min_months">Title extraction minimum months</label>
+            <input id="onboarding_title_extraction_min_months" type="number" min="1" max="24" step="1">
+
+            <label for="onboarding_max_target_patterns">Max target patterns</label>
+            <input id="onboarding_max_target_patterns" type="number" min="1" max="20" step="1">
+
+            <label for="onboarding_max_secondary_patterns">Max secondary patterns</label>
+            <input id="onboarding_max_secondary_patterns" type="number" min="1" max="20" step="1">
+
+            <label for="onboarding_capability_strength_preset">Capability strength preset</label>
+            <select id="onboarding_capability_strength_preset">
+              <option value="recent_focus">Recent focus</option>
+              <option value="balanced">Balanced</option>
+              <option value="include_older_experience">Include older experience</option>
+            </select>
+          </section>
+
+          <section class="panel">
+            <h2>Capability Presets</h2>
+            <p class="panel-copy">These preset tables are global. The selector above chooses which one onboarding uses.</p>
+            <div id="capability_strength_presets_panel">
+              <p class="help">Load Advanced Settings to view the preset tables.</p>
+            </div>
+          </section>
+
+        </section>
+
+        <section id="section-learning" class="settings-group">
+          <h2 class="section-title">Learning</h2>
+          <section class="panel">
+            <div class="panel-kicker">Global learning</div>
+            <h2>Learning</h2>
+            <p class="panel-copy">This inbox is shared across the whole system. It helps the parser, capability learning, and signal registry for every candidate profile, so it stays out of candidate-specific settings.</p>
+            <div id="signal_registry_panel">
+              <p class="help">Open Learning to load the shared learning inbox.</p>
+            </div>
+          </section>
         </section>
       </div>
     </main>

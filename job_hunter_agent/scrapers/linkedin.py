@@ -10,7 +10,7 @@ import sys
 from typing import List, Set
 
 from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules
-from job_hunter_agent.llm_gate import build_llm_cache_key, llm_is_enabled, llm_should_consider, normalize_llm_review
+from job_hunter_agent.advance_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
 from job_hunter_agent.utils import extract_salary, extract_work_mode
@@ -18,11 +18,18 @@ from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
 
 from job_hunter_agent.salary import load_salary
-from job_hunter_agent.job_type import load_job_type
+from job_hunter_agent.job_types import load_job_type
 
 #Load once
 salary_rules = load_salary()
 job_type_rules = load_job_type()
+
+
+def _normalize_location_for_jobspy(raw: str) -> str:
+    """Map raw profile/search location text to python-jobspy's location string."""
+    location = resolve_location(str(raw).strip())
+    return to_jobspy(location)
+
 
 class LinkedInScraper(BaseJobScraper):
     """Scrape LinkedIn job listings using python-jobspy."""
@@ -45,9 +52,9 @@ class LinkedInScraper(BaseJobScraper):
         from job_hunter_agent.source_connector import (  # noqa: PLC0415
             MAX_LLM_CHARS,
             MIN_TRUSTED_DESCRIPTION_LENGTH,
-            TRUSTED_DESCRIPTION_SOURCES,
+            get_trusted_sources,
             build_fit_highlights,
-            build_job_learning_signals,
+            build_ad_learning_signals,
             build_risk_and_missing_evidence,
             build_role_summary,
             can_reuse_kept_job,
@@ -61,7 +68,10 @@ class LinkedInScraper(BaseJobScraper):
             hard_block_entries,
             hard_block_reasons,
             find_hard_block_matches,
-            register_signals,
+            _has_high_value_ambiguous_learning_candidate,
+            _resolve_llm_review_payload,
+            _merge_pending_learning_signals,
+            _register_pending_learning_signals,
             register_hard_blocker_learning_from_rejection,
         )
 
@@ -182,7 +192,7 @@ class LinkedInScraper(BaseJobScraper):
                 record["full_description"] = details_text
                 record["description_source"] = "linkedin_full_description"
                 source = str(record.get("description_source") or "").strip().lower()
-                is_trusted = source in TRUSTED_DESCRIPTION_SOURCES and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+                is_trusted = source in get_trusted_sources() and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
                 record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
                 record["details_status"] = "ok"
 
@@ -253,6 +263,10 @@ class LinkedInScraper(BaseJobScraper):
                     )
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
+                record_skill_observations = extract_skill_observations(record, self.profile)
+                skill_observations.extend(record_skill_observations)
+                record["skill_observations"] = record_skill_observations
+                record["ad_learning_signals"] = build_ad_learning_signals(record, details_text, self.profile)
                 record["role_snapshot"] = build_role_summary(record, details_text, self.profile)
                 record["fit_highlights"] = build_fit_highlights(record, details_text, self.profile)
                 soft_risk_reasons, missing_evidence = build_risk_and_missing_evidence(
@@ -273,20 +287,20 @@ class LinkedInScraper(BaseJobScraper):
                 if deterministic_review is not None:
                     llm_review = deterministic_review
                     print(f"[LinkedIn][LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                    if _has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
+                        payload = _resolve_llm_review_payload(
+                            record,
+                            self.llm_cache,
+                            learning_only=True,
+                        )
+                        record["llm_learning_candidates"] = payload.get("learning_candidates") or []
                 else:
-                    llm_input = compact_whitespace(details_text)[:MAX_LLM_CHARS]
-                    llm_fp = build_llm_cache_key(llm_input)
-
-                    if not llm_is_enabled():
-                        llm_review = normalize_llm_review(None)
-                        print(f"[LinkedIn][LLM][DISABLED] {llm_review['decision']}|{llm_review['grade']} {title}")
-                    elif llm_fp in self.llm_cache:
-                        llm_review = normalize_llm_review(self.llm_cache[llm_fp])
-                        print(f"[LinkedIn][LLM][CACHE] {llm_review['decision']}|{llm_review['grade']} {title}")
-                    else:
-                        llm_review = normalize_llm_review(llm_should_consider(llm_input))
-                        self.llm_cache[llm_fp] = llm_review
-                        print(f"[LinkedIn][LLM] {llm_review['decision']}|{llm_review['grade']} {title}")
+                    payload = _resolve_llm_review_payload(
+                        record,
+                        self.llm_cache,
+                    )
+                    llm_review = payload["fit_review"]
+                    print(f"[LinkedIn][LLM][{payload.get('payload_source', 'llm').upper()}] {llm_review['decision']}|{llm_review['grade']} {title}")
 
                 record["llm_decision"] = llm_review["decision"]
                 record["llm_fit_grade"] = llm_review["grade"]
@@ -298,11 +312,14 @@ class LinkedInScraper(BaseJobScraper):
                     continue
 
                 record["decision"] = "KEEP"
-                record_skill_observations = extract_skill_observations(record, details_text, self.profile)
-                skill_observations.extend(record_skill_observations)
-                pending_signals = build_job_learning_signals(record, record_skill_observations, self.profile)
-                if pending_signals:
-                    register_signals(pending_signals)
+                pending_signals = _merge_pending_learning_signals(
+                    record.get("ad_learning_signals") or [],
+                    record.get("llm_learning_candidates") or [],
+                )
+                _register_pending_learning_signals(pending_signals)
+                record.pop("skill_observations", None)
+                record.pop("ad_learning_signals", None)
+                record.pop("llm_learning_candidates", None)
                 finalize_record(self.job_history, audit_rows, record, self.run_iso)
                 kept_records.append(record)
                 print(
@@ -330,7 +347,7 @@ class LinkedInScraper(BaseJobScraper):
         date_range_days = int(search_settings.get("date_range_days", 3) or 3)
         hours_old = int(search_settings.get("linkedin_hours_old", 24) or 24)
         results_wanted = int(search_settings.get("linkedin_results_per_search", 25) or 25)
-        easy_apply = search_settings.get("linkedin_easy_apply_only")  # None / True / False
+        easy_apply = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)  # None / True / False
 
         targets = []
         for raw_loc in locations:

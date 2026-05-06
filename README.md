@@ -69,7 +69,7 @@ Useful flags:
 
 - `--no-llm` to stay deterministic and avoid live LLM review
 - `--cheap-llm` to force the cheaper review model
-- `--debug-mode` to show extra dashboard scoring detail
+- `--debug` to show extra dashboard scoring detail
 
 Search design note:
 
@@ -87,13 +87,13 @@ Useful flags:
 Run the local web UI:
 
 ```powershell
-python -m job_hunter_agent.local_server
+python -m job_hunter_agent.fastapi_app
 ```
 
 Optional local web UI test mode:
 
 ```powershell
-python -m job_hunter_agent.local_server --debug-mode
+python -m job_hunter_agent.fastapi_app --debug
 ```
 
 Run the daily local agent once:
@@ -111,7 +111,7 @@ Most users should think of it like this:
 
 Useful daily-agent flags:
 
-- `--skip-collection` to rebuild/send from current local state only
+-- `--send-notification-no-scrape` to rebuild/send from current local state only
 - `--no-notify` to build the digest without email or Telegram delivery
 
 Run the daily local agent in loop mode:
@@ -146,7 +146,7 @@ Then open:
 - **Multi-Source**: `python-jobspy` (LinkedIn)
 - **Intelligence**: OpenAI API (GPT-4o / GPT-4o-mini)
 - **Parsing**: `python-docx` and `pandas`
-- **UI**: Python `http.server` with custom HTML/JS templates
+- **UI**: FastAPI + uvicorn; HTML/JS templates under `templates/` and `static/` (routes in `job_hunter_agent/routes/`)
 - **Environment**: `python-dotenv`
 
 Logic and core modules reside in the `job_hunter_agent/` package.
@@ -218,4 +218,6 @@ Recommended beta setup:
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - [docs/OPERATIONS.md](docs/OPERATIONS.md)
 - [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
-- [SOUL.md](SOUL.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/PRINCIPLES.md](docs/PRINCIPLES.md)
+

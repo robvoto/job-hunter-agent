@@ -4,6 +4,7 @@ import re
 from html import escape
 from typing import Optional
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from job_hunter_agent.io_utils import load_parsing_rules
 
 
 def safe_html(text: str) -> str:
@@ -35,10 +36,8 @@ def extract_salary(details_text: str) -> str:
     if not details_text:
         return "N/A"
 
-    regex_patterns = [
-        r"\$\s?\d[\d,]*(?:\s*-\s*\$?\s?\d[\d,]*)?(?:\s*(?:\+?\s*super|incl\.?\s*super|package|p\.a\.|per annum|per day|daily rate))?",
-        r"\b\d{2,3}k(?:\s*-\s*\d{2,3}k)?(?:\s*(?:\+?\s*super|incl\.?\s*super|package|p\.a\.|per annum))?",
-    ]
+    rules = load_parsing_rules()
+    regex_patterns = rules.get("salary_extraction_patterns", [])
     for pattern in regex_patterns:
         match = re.search(pattern, details_text, flags=re.IGNORECASE)
         if match:
@@ -68,42 +67,15 @@ def extract_work_mode(text: str) -> str:
         return "N/A"
 
     lowered = text.lower()
-    strict_onsite_tokens = [
-        "5 days in office",
-        "five days in office",
-        "must be in office",
-        "must work from the office",
-        "100% office based",
-        "100% office-based",
-        "fully office based",
-        "fully office-based",
-    ]
+    rules = load_parsing_rules().get("work_mode_indicators", {})
+    strict_onsite_tokens = rules.get("strict_onsite", [])
     if any(token in lowered for token in strict_onsite_tokens):
         return "On-site"
-    if any(token in lowered for token in ["hybrid", "split between home and office", "mix of home and office"]):
+    if any(token in lowered for token in rules.get("hybrid", [])):
         return "Hybrid"
-    if any(
-        token in lowered
-        for token in [
-            "work from home",
-            "wfh",
-            "remote",
-            "fully remote",
-            "100% remote",
-        ]
-    ):
+    if any(token in lowered for token in rules.get("remote", [])):
         return "Remote"
-    if any(
-        token in lowered
-        for token in [
-            "on site",
-            "onsite",
-            "office based",
-            "office-based",
-            "must be in office",
-            "5 days in office",
-        ]
-    ):
+    if any(token in lowered for token in rules.get("onsite", [])):
         return "On-site"
     return "N/A"
 

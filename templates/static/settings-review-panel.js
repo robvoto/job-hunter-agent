@@ -1,4 +1,6 @@
-﻿    function getReviewChoiceMeta(choice) {
+﻿    const LINKEDIN_EASY_APPLY_ONLY = 'linkedin_easy_apply_only';
+
+    function getReviewChoiceMeta(choice) {
       if (!choice) return { label: 'Choose a strength' };
       return capabilityStrengthMeta(choice) || { label: 'Choose a strength' };
     }
@@ -142,7 +144,7 @@
           sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
           linkedin_hours_old: Number(document.getElementById('linkedin_hours_old').value) || 24,
           linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
-          linkedin_easy_apply_only: (() => { const v = document.getElementById('linkedin_easy_apply_only').value; return v === '' ? null : v === 'true'; })(),
+          [LINKEDIN_EASY_APPLY_ONLY]: (() => { const v = document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value; return v === '' ? null : v === 'true'; })(),
         },
         salary_preferences: {
           minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value || 0),
@@ -165,6 +167,18 @@
         must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
         reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
         reject_description_phrase_rules: textToRules(settingsField('reject_description_phrase_rules').value, 'phrase'),
+      };
+    }
+
+    function collectAdvanceSettings() {
+      return {
+        fit_highlights: {
+          strong_capability_count: Number(document.getElementById('highlight_strong_capability_count').value),
+          working_capability_count: Number(document.getElementById('highlight_working_capability_count').value),
+          basic_capability_count: Number(document.getElementById('highlight_basic_capability_count').value),
+          reviewed_signal_count: Number(document.getElementById('highlight_reviewed_signal_count').value),
+          max_highlights: Number(document.getElementById('highlight_max_highlights').value),
+        },
       };
     }
 

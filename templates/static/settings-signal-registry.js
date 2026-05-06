@@ -354,13 +354,16 @@
         renderSignalRegistry();
       } catch (err) {
         _srLoaded = false;
-        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} - click Learning again to retry.</p>`;
+        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} - click Advanced Settings again to retry.</p>`;
       }
     }
-    document.querySelector('.nav-item[data-section="section-signals"]')?.addEventListener('click', () => {
-      if (!_srLoaded) {
-        _srLoaded = true;
-        loadSignalRegistry();
-      }
-    });
+    function maybeLoadSignalRegistry() {
+      if (_srLoaded) return;
+      _srLoaded = true;
+      loadSignalRegistry();
+    }
+    document.querySelector('.nav-item[data-section="section-learning"]')?.addEventListener('click', maybeLoadSignalRegistry);
+    if (document.querySelector('.nav-item[data-section="section-learning"]')?.classList.contains('is-active')) {
+      maybeLoadSignalRegistry();
+    }
 
