@@ -78,6 +78,13 @@ Debug mode:
 python -m job_hunter_agent.fastapi_app --debug
 ```
 
+Server logs:
+
+- runtime output is written to `output/server.log`
+- each line gets a timestamp
+- the terminal still shows the same server output
+- browser `console.log` is separate from server logs and only matters for JS running in the page
+
 Primary routes:
 
 | Route         | Purpose               |
@@ -363,6 +370,15 @@ The runtime must:
 * avoid hidden filtering behaviour
 * survive LLM disablement
 * preserve runtime state integrity
+* enforce secure network communication (HTTPS) for any non-local deployment
+
+## Network Deployment & Security
+
+When the server is bound to a network-accessible IP (e.g., `0.0.0.0`), it enforces `Secure` and `__Host-` prefixed cookies. 
+
+**Requirement:** Operations must provide an SSL/TLS termination layer (using a reverse proxy like Caddy or Nginx) to handle HTTPS, otherwise session management will fail.
+
+The session cookie name can be customized via the `JOB_HUNTER_SESSION_COOKIE_NAME` environment variable.
 
 The runtime must not:
 

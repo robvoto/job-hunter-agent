@@ -182,6 +182,10 @@ These are intended to stay local and ignored:
 - `output/rejection_rules.json`
 - `output/`
 
+## Security
+
+By default, the application is configured for local use on `localhost`. If you access the dashboard over a network (e.g., binding to `0.0.0.0`), the system enforces `Secure` and `__Host-` prefixed session cookies. **This requires an HTTPS connection** (usually handled via a reverse proxy like Caddy or Nginx) for the session management to function.
+
 ## LLM Notes
 
 The app uses `python-dotenv` to load environment variables. To use the LLM:
@@ -220,4 +224,3 @@ Recommended beta setup:
 - [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/PRINCIPLES.md](docs/PRINCIPLES.md)
-

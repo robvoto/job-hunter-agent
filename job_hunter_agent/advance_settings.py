@@ -13,13 +13,38 @@ from typing import Any
 from job_hunter_agent.paths import ADVANCE_SETTINGS_PATH, DATA_DIR
 
 
+def _load_managed_advance_settings_seed() -> dict[str, Any]:
+    payload = json.loads(ADVANCE_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise ValueError("advance_settings.json must contain a JSON object")
+    return payload
+
+
+_MANAGED_ADVANCE_SETTINGS_SEED = _load_managed_advance_settings_seed()
+
+
 KEY_FIT_HIGHLIGHTS = "fit_highlights"
 KEY_SEARCH_SETTINGS = "search_settings"
 KEY_SEARCH_LIMITS = "search_limits"
 KEY_PREFERENCE_WEIGHTS = "preference_weights"
 KEY_EVIDENCE_TIER_WEIGHTS = "candidate_profile_tier_weights"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
+KEY_LLM_SETTINGS = "llm_settings"
+KEY_LLM_PROMPT_SETTINGS = "llm_prompt_settings"
 KEY_CAPABILITY_STRENGTH_PRESETS = "capability_strength_presets"
+# These onboarding controls shape how much learned capability structure we keep
+# and when a signal cluster is promoted into persisted profile data.
+KEY_CAPABILITY_ALIAS_LIMIT = "capability_alias_limit"
+KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS = "signal_cluster_min_alias_hits"
+KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS = "signal_cluster_min_snippet_hits"
+KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS = "signal_cluster_dense_snippet_alias_hits"
+KEY_MODEL_OPTIONS = "model_options"
+KEY_LLM_PRICING_PER_1M = "pricing_per_1m"
+KEY_LLM_PROMPT_TEMPLATES = "match_preference_templates"
+KEY_LLM_PROMPT_EVIDENCE_TIERS = "evidence_tiers"
+KEY_LLM_PROMPT_LEARNING_MAX_ITEMS = "learning_candidates_max_items"
+KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS = "rejection_blocker_suggestions_max_items"
+KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS = "rejection_blocker_suggestions_max_words"
 
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
@@ -27,71 +52,33 @@ KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_c
 
 KEY_LINKEDIN_EASY_APPLY_ONLY = "linkedin_easy_apply_only"
 
+KEY_DATE_RANGE_DAYS = "date_range_days"
+KEY_SEEK_MAX_PAGES = "seek_max_pages"
+KEY_LINKEDIN_HOURS_OLD = "linkedin_hours_old"
+KEY_LINKEDIN_RESULTS_PER_SEARCH = "linkedin_results_per_search"
+
 # Global card highlight controls are shared dashboard presentation settings.
-DEFAULT_FIT_HIGHLIGHTS = {
-    "strong_capability_count": 3,
-    "working_capability_count": 2,
-    "basic_capability_count": 1,
-    "reviewed_signal_count": 3,
-    "max_highlights": 4,
-}
+DEFAULT_FIT_HIGHLIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_FIT_HIGHLIGHTS])
 
 # Global search defaults are shared across every profile and keep runtime code data-driven.
-DEFAULT_SEARCH_SETTINGS = {
-    "keywords": "",
-    "locations": [],
-    "classification_ids": [],
-    "date_range_days": 3,
-    "seek_max_pages": 10,
-    "enforce_posted_age_limit": True,
-    "sort_newest_first": True,
-    "linkedin_hours_old": 24,
-    "linkedin_results_per_search": 50,
-    KEY_LINKEDIN_EASY_APPLY_ONLY: None,
-}
+DEFAULT_SEARCH_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SEARCH_SETTINGS])
 
 # Validation bounds live beside the defaults so profile code does not own hidden limits.
-SEARCH_SETTING_LIMITS = {
-    "date_range_days": {"min": 1, "max": 30},
-    "seek_max_pages": {"min": 1, "max": 10},
-    "linkedin_hours_old": {"min": 1, "max": 168},
-    "linkedin_results_per_search": {"min": 5, "max": 100},
-}
+SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SEARCH_LIMITS])
 
-DEFAULT_PREFERENCE_WEIGHTS = {
-    "fit": 1.0,
-    "salary": 1.0,
-    "location": 1.0,
-    "work_mode": 1.0,
-    "contract": 1.0,
-    "government": 1.0,
-    "freshness": 1.0,
-}
+DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_PREFERENCE_WEIGHTS])
 
-DEFAULT_EVIDENCE_TIER_WEIGHTS = {
-    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: 1.0,
-    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: 0.55,
-    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: 0.25,
-}
+DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
 
 DEFAULT_ONBOARDING_SETTINGS = {
-    "extraction_lookback_years": 8,
-    "title_extraction_min_months": 6,
-    "max_target_patterns": 8,
-    "max_secondary_patterns": 6,
-    "capability_strength_preset": "balanced",
-    "capability_recent_years": 4,
-    "capability_strong_max_years_since_use": 4,
-    "capability_strong_min_months": 36,
-    "capability_strong_min_roles": 2,
-    "capability_working_max_years_since_use": 8,
-    "capability_working_min_months": 18,
-    "capability_working_long_history_max_years_since_use": 12,
-    "capability_working_long_history_min_months": 48,
-    "capability_single_role_old_max_years_since_use": 8,
-    "capability_drop_to_basic_after_years": 12,
-    "capability_max_items": 20,
+    k: copy.deepcopy(v)
+    for k, v in _MANAGED_ADVANCE_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS].items()
+    if k != KEY_CAPABILITY_STRENGTH_PRESETS
 }
+
+DEFAULT_LLM_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_LLM_SETTINGS])
+
+DEFAULT_LLM_PROMPT_SETTINGS = dict(DEFAULT_LLM_SETTINGS[KEY_LLM_PROMPT_SETTINGS])
 
 # Validation bounds for every onboarding setting. Centralised here so profile_store
 # and normalize_advance_settings both use the same limits without duplication.
@@ -111,61 +98,26 @@ ONBOARDING_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     "capability_single_role_old_max_years_since_use":      (1, 25),
     "capability_drop_to_basic_after_years":                (1, 40),
     "capability_max_items":                                (1, 50),
+    "capability_alias_limit":                              (1, 20),
+    "signal_cluster_min_alias_hits":                       (1, 10),
+    "signal_cluster_min_snippet_hits":                     (1, 10),
+    "signal_cluster_dense_snippet_alias_hits":             (1, 20),
 }
 
-CAPABILITY_STRENGTH_PRESETS = {
-    "recent_focus": {
-        "capability_recent_years": 3,
-        "capability_strong_max_years_since_use": 3,
-        "capability_strong_min_months": 36,
-        "capability_strong_min_roles": 2,
-        "capability_working_max_years_since_use": 6,
-        "capability_working_min_months": 18,
-        "capability_working_long_history_max_years_since_use": 10,
-        "capability_working_long_history_min_months": 60,
-        "capability_single_role_old_max_years_since_use": 6,
-        "capability_drop_to_basic_after_years": 10,
-        "capability_max_items": 20,
-    },
-    "balanced": {
-        "capability_recent_years": 4,
-        "capability_strong_max_years_since_use": 4,
-        "capability_strong_min_months": 36,
-        "capability_strong_min_roles": 2,
-        "capability_working_max_years_since_use": 8,
-        "capability_working_min_months": 18,
-        "capability_working_long_history_max_years_since_use": 12,
-        "capability_working_long_history_min_months": 48,
-        "capability_single_role_old_max_years_since_use": 8,
-        "capability_drop_to_basic_after_years": 12,
-        "capability_max_items": 20,
-    },
-    "include_older_experience": {
-        "capability_recent_years": 5,
-        "capability_strong_max_years_since_use": 5,
-        "capability_strong_min_months": 30,
-        "capability_strong_min_roles": 2,
-        "capability_working_max_years_since_use": 10,
-        "capability_working_min_months": 12,
-        "capability_working_long_history_max_years_since_use": 15,
-        "capability_working_long_history_min_months": 36,
-        "capability_single_role_old_max_years_since_use": 10,
-        "capability_drop_to_basic_after_years": 15,
-        "capability_max_items": 24,
-    },
-}
+CAPABILITY_STRENGTH_PRESETS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS][KEY_CAPABILITY_STRENGTH_PRESETS])
 
 # Default advance settings are persisted globally and shared across profiles.
 DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
-    KEY_FIT_HIGHLIGHTS: dict(DEFAULT_FIT_HIGHLIGHTS),
-    KEY_SEARCH_SETTINGS: dict(DEFAULT_SEARCH_SETTINGS),
+    KEY_FIT_HIGHLIGHTS: copy.deepcopy(DEFAULT_FIT_HIGHLIGHTS),
+    KEY_SEARCH_SETTINGS: copy.deepcopy(DEFAULT_SEARCH_SETTINGS),
     KEY_SEARCH_LIMITS: copy.deepcopy(SEARCH_SETTING_LIMITS),
-    KEY_PREFERENCE_WEIGHTS: dict(DEFAULT_PREFERENCE_WEIGHTS),
-    KEY_EVIDENCE_TIER_WEIGHTS: dict(DEFAULT_EVIDENCE_TIER_WEIGHTS),
+    KEY_PREFERENCE_WEIGHTS: copy.deepcopy(DEFAULT_PREFERENCE_WEIGHTS),
+    KEY_EVIDENCE_TIER_WEIGHTS: copy.deepcopy(DEFAULT_EVIDENCE_TIER_WEIGHTS),
     KEY_ONBOARDING_SETTINGS: {
-        **DEFAULT_ONBOARDING_SETTINGS,
+        **copy.deepcopy(DEFAULT_ONBOARDING_SETTINGS),
         KEY_CAPABILITY_STRENGTH_PRESETS: copy.deepcopy(CAPABILITY_STRENGTH_PRESETS),
     },
+    KEY_LLM_SETTINGS: copy.deepcopy(DEFAULT_LLM_SETTINGS),
 }
 
 
@@ -230,6 +182,92 @@ def _normalize_float_map(
     return normalized
 
 
+def _normalize_llm_pricing_map(source: dict[str, Any], defaults: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
+    normalized: dict[str, dict[str, float]] = {}
+    for model, raw_prices in source.items():
+        if not isinstance(raw_prices, dict):
+            raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M}.{model} must be a dict")
+        default_prices = defaults.get(model, {"input": 0.0, "output": 0.0})
+        normalized[model] = {
+            "input": _require_float(raw_prices, "input", float(default_prices["input"]), 0.0, 10_000.0),
+            "output": _require_float(raw_prices, "output", float(default_prices["output"]), 0.0, 10_000.0),
+        }
+    if not normalized:
+        normalized = copy.deepcopy(defaults)
+    return normalized
+
+
+def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
+    templates_source = source.get(KEY_LLM_PROMPT_TEMPLATES, {})
+    if not isinstance(templates_source, dict):
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_TEMPLATES} must be a dict")
+    evidence_tiers_source = source.get(KEY_LLM_PROMPT_EVIDENCE_TIERS, [])
+    if not isinstance(evidence_tiers_source, list):
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS} must be a list")
+
+    templates = {
+        name: str(templates_source.get(name) or default).strip()
+        for name, default in DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_TEMPLATES].items()
+    }
+    evidence_tiers: list[dict[str, Any]] = []
+    default_tiers = DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_EVIDENCE_TIERS]
+    for index, default_tier in enumerate(default_tiers):
+        tier_source = evidence_tiers_source[index] if index < len(evidence_tiers_source) else {}
+        if not isinstance(tier_source, dict):
+            tier_source = {}
+        profile_key = str(tier_source.get("profile_key") or default_tier["profile_key"]).strip()
+        if not profile_key:
+            raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS}[{index}].profile_key is required")
+        evidence_tiers.append(
+            {
+                "profile_key": profile_key,
+                "label": str(tier_source.get("label") or default_tier["label"]).strip(),
+                "weight_label": str(tier_source.get("weight_label") or default_tier["weight_label"]).strip(),
+                "default_weight": _require_float(
+                    tier_source,
+                    "default_weight",
+                    float(default_tier["default_weight"]),
+                    0.0,
+                    10.0,
+                ),
+                "limit": _require_int(
+                    tier_source,
+                    "limit",
+                    int(default_tier["limit"]),
+                    1,
+                    10_000,
+                ),
+            }
+        )
+
+    try:
+        learning_max_items = int(source.get(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS]) or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be an integer") from exc
+    if learning_max_items < 1 or learning_max_items > 20:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be between 1 and 20")
+    try:
+        rejection_blocker_max_items = int(source.get(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS]) or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be an integer") from exc
+    if rejection_blocker_max_items < 1 or rejection_blocker_max_items > 20:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be between 1 and 20")
+    try:
+        rejection_blocker_max_words = int(source.get(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS]) or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be an integer") from exc
+    if rejection_blocker_max_words < 1 or rejection_blocker_max_words > 20:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be between 1 and 20")
+
+    return {
+        KEY_LLM_PROMPT_TEMPLATES: templates,
+        KEY_LLM_PROMPT_EVIDENCE_TIERS: evidence_tiers,
+        KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS: rejection_blocker_max_words,
+    }
+
+
 def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
     raw = source.get(key, default)
     if isinstance(raw, str):
@@ -250,6 +288,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
     preference_source = source.get(KEY_PREFERENCE_WEIGHTS, {})
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
+    llm_source = source.get(KEY_LLM_SETTINGS, {})
 
     if not isinstance(fit_source, dict):
         raise ValueError(f"advance_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
@@ -263,11 +302,32 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         raise ValueError(f"advance_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}")
     if not isinstance(onboarding_source, dict):
         raise ValueError(f"advance_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
+    if not isinstance(llm_source, dict):
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}")
 
     preset_name = str(onboarding_source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]).strip().lower()
     preset_name = preset_name if preset_name in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
     preset_defaults = CAPABILITY_STRENGTH_PRESETS[preset_name]
     merged_onboarding = {**DEFAULT_ONBOARDING_SETTINGS, **preset_defaults, **{k: v for k, v in onboarding_source.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS}}
+
+    model_options_source = llm_source.get(KEY_MODEL_OPTIONS, DEFAULT_LLM_SETTINGS[KEY_MODEL_OPTIONS])
+    if not isinstance(model_options_source, list):
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must be a list")
+    normalized_model_options: list[str] = []
+    for value in model_options_source:
+        model = str(value or "").strip()
+        if model and model not in normalized_model_options:
+            normalized_model_options.append(model)
+    if not normalized_model_options:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must contain at least one model")
+    pricing_source = llm_source.get(KEY_LLM_PRICING_PER_1M, {})
+    if not isinstance(pricing_source, dict):
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict")
+    normalized_llm_pricing = _normalize_llm_pricing_map(pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M])
+    prompt_source = llm_source.get(KEY_LLM_PROMPT_SETTINGS, {})
+    if not isinstance(prompt_source, dict):
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
+    normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source)
 
     # Keep the configured preset table in the persisted settings file, not in feature code.
     preset_table_source = onboarding_source.get(KEY_CAPABILITY_STRENGTH_PRESETS, {})
@@ -307,35 +367,35 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             "keywords": str(search_source.get("keywords") or "").strip(),
             "locations": [str(value).strip() for value in search_source.get("locations", []) if str(value).strip()],
             "classification_ids": [str(value).strip() for value in search_source.get("classification_ids", []) if str(value).strip()],
-            "date_range_days": _require_int(
+            KEY_DATE_RANGE_DAYS: _require_int(
                 search_source,
-                "date_range_days",
-                DEFAULT_SEARCH_SETTINGS["date_range_days"],
-                SEARCH_SETTING_LIMITS["date_range_days"]["min"],
-                SEARCH_SETTING_LIMITS["date_range_days"]["max"],
+                KEY_DATE_RANGE_DAYS,
+                DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS],
+                normalized_search_limits[KEY_DATE_RANGE_DAYS]["min"],
+                normalized_search_limits[KEY_DATE_RANGE_DAYS]["max"],
             ),
-            "seek_max_pages": _require_int(
+            KEY_SEEK_MAX_PAGES: _require_int(
                 search_source,
-                "seek_max_pages",
-                DEFAULT_SEARCH_SETTINGS["seek_max_pages"],
-                SEARCH_SETTING_LIMITS["seek_max_pages"]["min"],
-                SEARCH_SETTING_LIMITS["seek_max_pages"]["max"],
+                KEY_SEEK_MAX_PAGES,
+                normalized_search_limits[KEY_SEEK_MAX_PAGES]["max"],
+                normalized_search_limits[KEY_SEEK_MAX_PAGES]["min"],
+                normalized_search_limits[KEY_SEEK_MAX_PAGES]["max"],
             ),
             "enforce_posted_age_limit": _normalize_bool(search_source, "enforce_posted_age_limit", DEFAULT_SEARCH_SETTINGS["enforce_posted_age_limit"]),
             "sort_newest_first": _normalize_bool(search_source, "sort_newest_first", DEFAULT_SEARCH_SETTINGS["sort_newest_first"]),
-            "linkedin_hours_old": _require_int(
+            KEY_LINKEDIN_HOURS_OLD: _require_int(
                 search_source,
-                "linkedin_hours_old",
-                DEFAULT_SEARCH_SETTINGS["linkedin_hours_old"],
-                SEARCH_SETTING_LIMITS["linkedin_hours_old"]["min"],
-                SEARCH_SETTING_LIMITS["linkedin_hours_old"]["max"],
+                KEY_LINKEDIN_HOURS_OLD,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD],
+                normalized_search_limits[KEY_LINKEDIN_HOURS_OLD]["min"],
+                normalized_search_limits[KEY_LINKEDIN_HOURS_OLD]["max"],
             ),
-            "linkedin_results_per_search": _require_int(
+            KEY_LINKEDIN_RESULTS_PER_SEARCH: _require_int(
                 search_source,
-                "linkedin_results_per_search",
-                DEFAULT_SEARCH_SETTINGS["linkedin_results_per_search"],
-                SEARCH_SETTING_LIMITS["linkedin_results_per_search"]["min"],
-                SEARCH_SETTING_LIMITS["linkedin_results_per_search"]["max"],
+                KEY_LINKEDIN_RESULTS_PER_SEARCH,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
+                normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["min"],
+                normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["max"],
             ),
             KEY_LINKEDIN_EASY_APPLY_ONLY: (
                 None
@@ -361,6 +421,11 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             },
             "capability_strength_preset": preset_name,
             KEY_CAPABILITY_STRENGTH_PRESETS: normalized_preset_table,
+        },
+        KEY_LLM_SETTINGS: {
+            KEY_MODEL_OPTIONS: normalized_model_options,
+            KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
+            KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
         },
     }
 

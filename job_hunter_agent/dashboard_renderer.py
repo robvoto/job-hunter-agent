@@ -44,8 +44,8 @@ from job_hunter_agent.posting_utils import (
 )
 from job_hunter_agent.preferences import assess_contract_preference
 from job_hunter_agent.profile_store import get_match_levels, load_profile
-from job_hunter_agent.role_analysis import infer_posting_channel, infer_role_sector
-from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.role_analysis import infer_role_sector
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.salary_utils import salary_sort_value
 from job_hunter_agent.score_labels import (
     render_badge,
@@ -64,7 +64,8 @@ from job_hunter_agent.text_processing import (
     dedupe_preserve_order,
     synthesize_role_snapshot,
 )
-from job_hunter_agent.utils import extract_work_mode, safe_html
+from job_hunter_agent.utils import safe_html
+from job_hunter_agent.work_mode_extraction import extract_from_text, WORK_MODE_UNKNOWN
 
 DASHBOARD_DEBUG_MODE = "--debug-mode" in sys.argv
 
@@ -120,7 +121,7 @@ def negative_score_reasons(
     max_items: int = 4,
     include_values: bool = True,
 ) -> List[str]:
-    rules = load_parsing_rules()
+    rules = load_ui_labels()
     friendly_labels = rules.get("negative_score_labels", {})
     reasons = [
         (
@@ -217,9 +218,9 @@ def render_score_filter_options(
 
 
 def posted_filter_option_label(threshold: int) -> str:
-    rules = load_parsing_rules()
+    rules = load_ui_labels()
     labels = rules.get("posted_threshold_labels", {})
-    return labels.get(threshold, f"Last {threshold} days")
+    return labels.get(str(threshold), f"Last {threshold} days")
 
 
 def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:
@@ -243,7 +244,7 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
     if not raw:
         return "Other filtered-out roles"
 
-    rules = load_parsing_rules()
+    rules = load_ui_labels()
     direct_map = rules.get("reject_reason_human_map", {})
     if raw in direct_map:
         return direct_map[raw]
@@ -311,9 +312,14 @@ def render_job_card(
     if fit_confidence_level == "HIGH" and trusted_desc:
         display_record["fit_source_text"] = trusted_desc
         display_record["fit_confidence"] = "HIGH"
-        detail_work_mode = extract_work_mode(trusted_desc)
-        if detail_work_mode != "N/A":
-            display_record["work_mode"] = detail_work_mode
+        # Refresh work mode from description only if stored extraction found nothing useful.
+        # Metadata-sourced values (seek_detail_payload, linkedin_structured, etc.) are
+        # more reliable than text inference — don't override them at display time.
+        stored_source = record.get("work_mode_source", "")
+        if not stored_source or stored_source == "fallback_text":
+            text_result = extract_from_text(trusted_desc)
+            if text_result["work_mode"] != WORK_MODE_UNKNOWN:
+                display_record["work_mode"] = text_result["work_mode"]
         role_summary = build_role_summary(record, trusted_desc, active_profile)
         display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
         fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
@@ -360,7 +366,9 @@ def render_job_card(
     company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
     sector_signal = infer_role_sector(display_record, trusted_desc if trusted_desc else stored_snapshot)
-    channel_signal = infer_posting_channel(display_record, trusted_desc if trusted_desc else stored_snapshot)
+    channel_signal = display_record.get("posting_channel_evidence")
+    if not isinstance(channel_signal, dict):
+        channel_signal = {}
     _block_phrases_list = suggest_title_block_phrases(str(record.get("title") or ""))
     block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
     block_phrases_json = safe_html(json.dumps(_block_phrases_list))
@@ -380,7 +388,6 @@ def render_job_card(
         f'data-job-company="{company_attr}" '
         f'data-job-teaser="{teaser_attr}" '
         f'data-role-sector="{safe_html(sector_signal.get("kind") or "unknown")}" '
-        f'data-posting-channel="{safe_html(channel_signal.get("kind") or "unknown")}" '
         f'data-similar-applied-warning="{"1" if is_possible_repost else "0"}" '
         f'data-similar-applied-job-key="{similar_applied_job_key}" '
         f'data-similar-applied-title="{similar_applied_title}" '
@@ -410,12 +417,26 @@ def render_job_card(
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
     if sector_signal.get("kind") == "government":
         badges.append(render_badge("Government", "badge-sector-government", "Government/public-sector context detected from the captured job text."))
-    if channel_signal.get("kind") == "recruiter":
-        confidence_text = channel_signal.get("confidence") or "inferred"
-        badges.append(render_badge("Recruiter", "badge-channel-recruiter", f"Recruiter/intermediary posting inferred with {confidence_text} confidence from the captured job text."))
-    elif channel_signal.get("kind") == "direct_employer":
-        confidence_text = channel_signal.get("confidence") or "inferred"
-        badges.append(render_badge("Direct Employer", "badge-new", f"Direct employer posting inferred with {confidence_text} confidence from the captured job text."))
+    trusted_metadata = [str(item) for item in channel_signal.get("trusted_metadata", []) if str(item).strip()]
+    weak_text_matches = [str(item) for item in channel_signal.get("weak_text_matches", []) if str(item).strip()]
+    if trusted_metadata:
+        evidence_text = ", ".join(trusted_metadata)
+        badges.append(
+            render_badge(
+                "Posting evidence",
+                "badge-source-neutral",
+                f"Trusted metadata: {evidence_text}.",
+            )
+        )
+    elif channel_signal.get("needs_review") and weak_text_matches:
+        evidence_text = ", ".join(weak_text_matches)
+        badges.append(
+            render_badge(
+                "Posting evidence",
+                "badge-warning",
+                f"Fallback text evidence matched: {evidence_text}. Review the poster manually.",
+            )
+        )
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if history_warning_signals:
         badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))

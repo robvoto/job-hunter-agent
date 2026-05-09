@@ -55,6 +55,10 @@
     "title_extraction_min_months": 6,
     "max_target_patterns": 8,
     "max_secondary_patterns": 6,
+    "capability_alias_limit": 8,
+    "signal_cluster_min_alias_hits": 2,
+    "signal_cluster_min_snippet_hits": 2,
+    "signal_cluster_dense_snippet_alias_hits": 4,
     "capability_strength_preset": "balanced",
     "capability_recent_years": 4,
     "capability_strong_max_years_since_use": 4,
@@ -107,6 +111,64 @@
         "capability_drop_to_basic_after_years": 15,
         "capability_max_items": 24
       }
+    }
+  },
+  "llm_settings": {
+    "model_options": [
+      "gpt-4o-mini",
+      "gpt-4o"
+    ],
+    "pricing_per_1m": {
+      "gpt-4o-mini": {
+        "input": 0.15,
+        "output": 0.6
+      },
+      "gpt-4o-mini-2024-07-18": {
+        "input": 0.15,
+        "output": 0.6
+      },
+      "gpt-4o": {
+        "input": 2.5,
+        "output": 10
+      },
+      "gpt-4o-2024-08-06": {
+        "input": 2.5,
+        "output": 10
+      }
+    },
+    "llm_prompt_settings": {
+      "match_preference_templates": {
+        "compensation_target_yearly": "Compensation target: permanent roles around {value} yearly.",
+        "compensation_target_daily": "Compensation target: contract roles around {value} per day.",
+        "home_location": "Home base: {home_location}.",
+        "prefer_permanent": "Prefer permanent roles first, then 12+ month contracts with extensions, then shorter contracts."
+      },
+      "evidence_tiers": [
+        {
+          "profile_key": "primary_candidate_profile_context",
+          "label": "Primary candidate profile context",
+          "weight_label": "strongest",
+          "default_weight": 1,
+          "limit": 1600
+        },
+        {
+          "profile_key": "secondary_candidate_profile_context",
+          "label": "Secondary candidate profile context",
+          "weight_label": "lower",
+          "default_weight": 0.55,
+          "limit": 900
+        },
+        {
+          "profile_key": "supplementary_candidate_profile_context",
+          "label": "Supplementary candidate profile context",
+          "weight_label": "weakest",
+          "default_weight": 0.25,
+          "limit": 600
+        }
+      ],
+      "learning_candidates_max_items": 6,
+      "rejection_blocker_suggestions_max_items": 6,
+      "rejection_blocker_suggestions_max_words": 6
     }
   }
 }

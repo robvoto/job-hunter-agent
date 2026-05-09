@@ -7,6 +7,7 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - Pending registry records must not affect runtime filtering/scoring.
 - Approved knowledge is the only runtime source for learned behaviour.
 - Preserve original text/evidence for review.
+- Heuristic fallback findings may be logged and stored, but they are not learned unless they go through the approval flow.
 - Do not auto-promote suggestions.
 - Signal schema must be canonical at the registry boundary; consumers must not guess fields.
 

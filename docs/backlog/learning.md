@@ -1,5 +1,32 @@
 # Learning Backlog
 
+### Critical Security and Stability Hardening
+
+- [ ] **Fix JSON Concurrency (Race Conditions)**
+  - Context: Background dashboard rebuilds and API requests can write to `profile.json` and `job_history.json` simultaneously.
+  - Risk: Data corruption or truncated files.
+  - Plan: Implement a file-locking mechanism or migrate local state to a SQLite database.
+
+- [ ] **Implement CSRF Protection**
+  - Context: FastAPI endpoints for state changes (reset user, delete rules) lack CSRF middleware.
+  - Risk: Malicious sites could trigger actions on a user's local server via their browser session.
+  - Plan: Add CSRF middleware and require tokens for all non-GET requests.
+
+- [ ] **Improve Semantic Deduplication**
+  - Context: Logic currently relies on exact Job IDs or URLs. Reposts with new IDs create noise.
+  - Risk: Shortlist fatigue from seeing the same job multiple times.
+  - Plan: Use normalized title + company + location signatures to automatically suppress "Possible Duplicates" rather than just flagging them.
+
+- [ ] **Optimise Rendering Performance**
+  - Context: Fit scores and capability matches are recalculated for every job during HTML rendering.
+  - Risk: Dashboard will become unusable as history grows to thousands of records.
+  - Plan: Calculate and persist scores during the "Scrape" phase; treat dashboard rendering as a pure display of saved state.
+
+- [ ] **Refine Date Parsing Heuristics**
+  - Context: `_extract_year_range` defaults missing months to Jan (start) and Dec (end).
+  - Risk: Overestimates tenure (e.g., "2023-2023" becomes 12 months), leading to inflated fit scores for seniority requirements.
+  - Plan: Use more conservative defaults or flag "Year-only" ranges for human review.
+
 ### Agent memory
 
 - [ ] Add memory for seen, liked, applied, and rejected jobs
@@ -313,5 +340,3 @@
     - showcasing
 
 ---
-
-

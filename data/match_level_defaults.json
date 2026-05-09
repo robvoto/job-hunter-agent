@@ -1,5 +1,5 @@
 {
-  "kind": "managed_knowledge",
+  "kind": "system_config",
   "name": "match_level_defaults",
   "entries": [
     {

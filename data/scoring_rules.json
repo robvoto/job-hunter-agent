@@ -1,10 +1,11 @@
 {
-  "kind": "managed_knowledge",
+  "kind": "system_config",
   "name": "scoring_rules",
-  "version": 2,
+  "version": 4,
   "updated_at": "2026-05-06",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "fit_breakdown": {
+    "description": "Core score components for title fit, content fit, review status, and hard-block penalties. Internal scoring logic.",
     "hard_block_penalty": -100,
     "title_direct": 15,
     "title_secondary": 4,
@@ -13,6 +14,7 @@
     "viewed_by_user": -3
   },
   "llm_grade_points": {
+    "description": "Point values assigned to AI fit grades before the final score is assembled. Internal scoring logic.",
     "EXCELLENT": 25,
     "STRONG": 20,
     "SOLID": 14,
@@ -21,33 +23,96 @@
     "MISMATCH": -8
   },
   "capability_level_weights": {
+    "description": "Weights for capability evidence strength bands. Managed scoring defaults, not free-form user input.",
     "strong": 4,
     "working": 3,
     "basic": 2
   },
   "capability_evidence": {
+    "description": "Caps how much capability evidence can contribute to the final score.",
     "max_score": 20
   },
   "convergence": {
+    "description": "Bonuses for strong multi-signal agreement between title, content, and evidence.",
     "eligible_grades": ["EXCELLENT", "STRONG"],
     "min_positive_matches": 2,
+    "required_title_reason": "OK",
+    "required_content_reason": "OK",
+    "required_fit_confidence": "HIGH",
     "bonus_no_soft_risks": 5,
     "bonus_with_soft_risks": 3,
     "label": "Multiple strong signals align"
   },
+  "competitive_signal_alignment": {
+    "description": "Score adjustments for competitive signals that point toward a specialist domain.",
+    "strong_threshold": 0.78,
+    "partial_threshold": 0.42,
+    "recency_fallback_min_capability_best": 0.9,
+    "recency_fallback_multiplier": 0.75,
+    "overlap_bonus_per_extra_alias": 0.05,
+    "overlap_bonus_max_extra_aliases": 2,
+    "max_capability_best": 1.05,
+    "positive_bonus_by_dominance": {
+      "1": 2,
+      "2": 2,
+      "3": 2
+    },
+    "partial_penalty_by_dominance": {
+      "1": 5,
+      "2": 7,
+      "3": 9
+    },
+    "weak_penalty_by_dominance": {
+      "1": 6,
+      "2": 8,
+      "3": 10
+    }
+  },
   "freshness": {
+    "description": "Bonuses for newer jobs. Used by the score engine, not the search filters.",
     "last_hour": 10,
     "last_day": 8,
     "last_3_days": 5,
     "last_week": 2,
-    "last_15_days": 1
+    "last_15_days": 1,
+    "bucket_order": [
+      "last_hour",
+      "last_day",
+      "last_3_days",
+      "last_week",
+      "last_15_days"
+    ],
+    "buckets": {
+      "last_hour": {
+        "max_days": 0.041666666666666664,
+        "label": "Posted within the last hour"
+      },
+      "last_day": {
+        "max_days": 1,
+        "label": "Posted within the last day"
+      },
+      "last_3_days": {
+        "max_days": 3,
+        "label": "Posted within the last 3 days"
+      },
+      "last_week": {
+        "max_days": 7,
+        "label": "Posted within the last week"
+      },
+      "last_15_days": {
+        "max_days": 15,
+        "label": "Still relatively recent"
+      }
+    }
   },
   "work_mode": {
+    "description": "Score adjustments for hybrid, remote, and on-site roles.",
     "hybrid": 3,
     "remote": 5,
     "on_site": -2
   },
   "salary": {
+    "description": "Score adjustments for salary or rate fit.",
     "meeting_target": 7,
     "below_target_near_min_ratio": 0.8,
     "below_target_near_adjustment": -1,
@@ -56,6 +121,7 @@
     "below_target_far_adjustment": -5
   },
   "location": {
+    "description": "Score adjustments for location fit and travel distance.",
     "primary_match": 8,
     "secondary_remote": 4,
     "secondary_limited_onsite": 0,
@@ -64,6 +130,7 @@
     "secondary_match": -1
   },
   "contract": {
+    "description": "Score adjustments for permanent, contract, and contract-length preferences.",
     "permanent_match": 10,
     "permanent_when_contract_preferred": -5,
     "contract_when_permanent_preferred": -5,
@@ -73,14 +140,17 @@
     "short_contract": -4
   },
   "government": {
+    "description": "Score adjustments for government-context matches.",
     "match_bonus": 4
   },
   "evidence_tier_weights": {
+    "description": "Managed defaults for evidence tier weighting. These correspond to the profile-side evidence weighting controls in Advanced Settings.",
     "primary_current_evidence": 1.0,
     "secondary_older_evidence": 0.55,
     "background_optional_evidence": 0.25
   },
   "preference_weight_defaults": {
+    "description": "Managed defaults for the profile-side weight sliders shown in Advanced Settings.",
     "fit": 1.0,
     "salary": 1.0,
     "location": 1.0,

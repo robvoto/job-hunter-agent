@@ -31,6 +31,7 @@ The system is designed as a strict filtering engine, not a generic recommender.
 | Scoring           | Weighted ranking and evidence evaluation         |
 | Learning          | Capture candidate-approved learned signals       |
 | Review            | Surface uncertain or pending decisions           |
+| Security          | Dynamic session hardening and transport safety   |
 | Dashboard         | Present explainable ranked jobs                  |
 | Settings          | Runtime control surface                          |
 
@@ -73,6 +74,7 @@ Responsibilities:
 * maintain preference weights
 * preserve learning state
 * provide scoring context
+* ensure data integrity during concurrent background updates (atomic writes/locking)
 
 The runtime profile is authoritative system state.
 
@@ -292,7 +294,9 @@ The system must:
 * preserve inspectability
 * prefer review over deletion
 * remain locally operable
+* protect local state (JSON) from write corruption during concurrent operations
 * separate runtime truth from onboarding evidence
+* enforce secure session management (HTTPS) when exposed to a network
 
 The system must not:
 

@@ -1,4 +1,9 @@
 {
+  "help": {
+    "interval_suffix": "Display suffixes for salary intervals such as yearly, monthly, daily, and hourly.",
+    "interval_divisor": "Divisors used when normalising source salary ranges into a shared scale.",
+    "currencies_with_dollar": "Currencies that should render with a dollar sign instead of a currency code prefix."
+  },
   "interval_suffix": {
     "yearly": "p.a.",
     "annual": "p.a.",

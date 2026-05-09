@@ -9,6 +9,21 @@ from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, load_profile
+from job_hunter_agent.parsing_schema import (
+    PARSING_DESCRIPTION_CONFIDENCE_MIN_BULLET_POINTS_KEY,
+    PARSING_DESCRIPTION_CONFIDENCE_MIN_COORDINATION_TOKENS_KEY,
+    PARSING_DESCRIPTION_CONFIDENCE_MIN_GENERIC_PHRASES_KEY,
+    PARSING_DESCRIPTION_CONFIDENCE_MIN_SECTION_HITS_KEY,
+    PARSING_DESCRIPTION_CONFIDENCE_MIN_TEXT_LENGTH_KEY,
+    PARSING_HARD_REQUIREMENT_PREFIX_KEY,
+    PARSING_HARD_REQUIREMENT_SUFFIX_KEY,
+    PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY,
+    PARSING_MATCHING_CONTEXT_PATTERNS_KEY,
+    PARSING_NEGATION_PREFIX_WINDOW_CHARS_KEY,
+    PARSING_SOFT_REQUIREMENT_PREFIX_KEY,
+    PARSING_SOFT_REQUIREMENT_SUFFIX_KEY,
+    PARSING_SOFT_REQUIREMENT_WINDOW_CHARS_KEY,
+)
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
 
@@ -250,21 +265,49 @@ def _count_alias_hits(text: str, aliases: list[str]) -> tuple[int, int]:
     return total_hits, distinct_hits
 
 
+def _load_required_parsing_rule_terms(rule_key: str) -> list[str]:
+    rules = load_parsing_rules()
+    values = rules.get(rule_key)
+    if not isinstance(values, list):
+        raise ValueError(f"parsing_rules.json must define {rule_key}")
+
+    terms = [str(value).strip().lower() for value in values if str(value).strip()]
+    if not terms:
+        raise ValueError(f"parsing_rules.json must define at least one {rule_key}")
+    return terms
+
+
+def _load_matching_context_patterns() -> dict[str, Any]:
+    rules = load_parsing_rules()
+    patterns = rules.get(PARSING_MATCHING_CONTEXT_PATTERNS_KEY)
+    if not isinstance(patterns, dict):
+        raise ValueError("parsing_rules.json must define matching_context_patterns")
+    return patterns
+
+
 def _matches_hard_requirement(text: str, alias: str) -> bool:
     alias_lower = (alias or "").strip().lower()
     if not alias_lower:
         return False
 
-    rules = load_parsing_rules()
-    context_pats = rules.get("matching_context_patterns", {})
+    context_pats = _load_matching_context_patterns()
     escaped_alias = re.escape(alias_lower)
-    prefix = context_pats.get("hard_requirement_prefix", "")
-    suffix = context_pats.get("hard_requirement_suffix", "")
-    
+    prefix = str(context_pats.get(PARSING_HARD_REQUIREMENT_PREFIX_KEY) or "").strip()
+    suffix = str(context_pats.get(PARSING_HARD_REQUIREMENT_SUFFIX_KEY) or "").strip()
+    if not prefix or not suffix:
+        raise ValueError("parsing_rules.json must define hard_requirement_prefix and hard_requirement_suffix")
+    try:
+        window_chars = int(context_pats.get(PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY))
+        negation_window = int(context_pats.get(PARSING_NEGATION_PREFIX_WINDOW_CHARS_KEY))
+    except Exception as exc:
+        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars") from exc
+    if window_chars <= 0 or negation_window <= 0:
+        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars")
+
     patterns = [
-        rf"{prefix}.{{0,45}}{escaped_alias}",
-        rf"{escaped_alias}.{{0,45}}{suffix}",
-        rf"{suffix}.{{0,45}}{escaped_alias}",
+        rf"{prefix}.{{0,{window_chars}}}{escaped_alias}",
+        rf"{escaped_alias}.{{0,{window_chars}}}{suffix}",
+        rf"{suffix}.{{0,{window_chars}}}{escaped_alias}",
     ]
     return any(re.search(pattern, text) for pattern in patterns)
 
@@ -274,15 +317,22 @@ def _matches_soft_requirement(text: str, alias: str) -> bool:
     if not alias_lower:
         return False
 
-    rules = load_parsing_rules()
-    context_pats = rules.get("matching_context_patterns", {})
+    context_pats = _load_matching_context_patterns()
     escaped_alias = re.escape(alias_lower)
-    prefix = context_pats.get("soft_requirement_prefix", "")
-    suffix = context_pats.get("soft_requirement_suffix", "")
+    prefix = str(context_pats.get(PARSING_SOFT_REQUIREMENT_PREFIX_KEY) or "").strip()
+    suffix = str(context_pats.get(PARSING_SOFT_REQUIREMENT_SUFFIX_KEY) or "").strip()
+    if not prefix or not suffix:
+        raise ValueError("parsing_rules.json must define soft_requirement_prefix and soft_requirement_suffix")
+    try:
+        window_chars = int(context_pats.get(PARSING_SOFT_REQUIREMENT_WINDOW_CHARS_KEY))
+    except Exception as exc:
+        raise ValueError("parsing_rules.json must define soft_requirement_window_chars") from exc
+    if window_chars <= 0:
+        raise ValueError("parsing_rules.json must define soft_requirement_window_chars")
 
     patterns = [
-        rf"{prefix}.{{0,45}}{escaped_alias}",
-        rf"{escaped_alias}.{{0,35}}{suffix}",
+        rf"{prefix}.{{0,{window_chars}}}{escaped_alias}",
+        rf"{escaped_alias}.{{0,{window_chars}}}{suffix}",
     ]
     return any(re.search(pattern, text) for pattern in patterns)
 
@@ -293,27 +343,30 @@ def matches_mandatory_requirement(description_text: str, required_term: str) -> 
     if not description_lower or not skill_lower:
         return False
 
-    rules = load_parsing_rules()
-    mandatory_indicators = rules.get("mandatory_language_indicators", [])
-    if not mandatory_indicators:
-        mandatory_indicators = ["required", "essential", "must have", "mandatory"]
-
     escaped_skill = re.escape(skill_lower)
     term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
-    mandatory_pattern = rf"\b({'|'.join(mandatory_indicators)})\b"
+    matching_context = _load_matching_context_patterns()
+    mandatory_indicators = _load_required_parsing_rule_terms("mandatory_language_indicators")
+    mandatory_pattern = rf"\b({'|'.join(re.escape(term) for term in mandatory_indicators)})\b"
     hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
+    try:
+        window_chars = int(matching_context.get(PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY))
+    except Exception as exc:
+        raise ValueError("parsing_rules.json must define hard_requirement_window_chars") from exc
+    if window_chars <= 0:
+        raise ValueError("parsing_rules.json must define hard_requirement_window_chars")
 
     def hard_requirement_matches(context: str) -> bool:
         for hard_match in hard_requirement_re.finditer(context):
-            prefix = context[max(0, hard_match.start() - 5):hard_match.start()]
+            prefix = context[max(0, hard_match.start() - negation_window):hard_match.start()]
             if re.search(r"\bnot\s+$", prefix):
                 continue
             return True
         return False
 
     for match in re.finditer(term_pattern, description_lower):
-        start = max(match.start() - 45, 0)
-        end = min(match.end() + 45, len(description_lower))
+        start = max(match.start() - window_chars, 0)
+        end = min(match.end() + window_chars, len(description_lower))
         context = description_lower[start:end]
         if hard_requirement_matches(context):
             return True
@@ -325,28 +378,38 @@ def matches_missing_requirement(description_text: str, required_term: str) -> bo
     skill_lower = (required_term or "").strip().lower()
     if not description_lower or not skill_lower:
         return False
-    rules = load_parsing_rules()
     escaped_skill = re.escape(skill_lower)
     term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
-    mandatory_pattern = rf"\b({'|'.join(rules.get('mandatory_language_indicators', []))})\b"
-    strength_pattern = rf"\b({'|'.join(rules.get('strength_language_indicators', []))})\b"
-    desirable_pattern = rf"\b({'|'.join(rules.get('desirable_language_indicators', []))})\b"
+    mandatory_indicators = _load_required_parsing_rule_terms("mandatory_language_indicators")
+    strength_indicators = _load_required_parsing_rule_terms("strength_language_indicators")
+    desirable_indicators = _load_required_parsing_rule_terms("desirable_language_indicators")
+    matching_context = _load_matching_context_patterns()
+    mandatory_pattern = rf"\b({'|'.join(re.escape(term) for term in mandatory_indicators)})\b"
+    strength_pattern = rf"\b({'|'.join(re.escape(term) for term in strength_indicators)})\b"
+    desirable_pattern = rf"\b({'|'.join(re.escape(term) for term in desirable_indicators)})\b"
 
     hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
     strength_re = re.compile(strength_pattern, re.IGNORECASE)
     desirable_re = re.compile(desirable_pattern, re.IGNORECASE)
+    try:
+        window_chars = int(matching_context.get(PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY))
+        negation_window = int(matching_context.get(PARSING_NEGATION_PREFIX_WINDOW_CHARS_KEY))
+    except Exception as exc:
+        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars") from exc
+    if window_chars <= 0 or negation_window <= 0:
+        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars")
 
     def hard_requirement_matches(context: str) -> bool:
         for hard_match in hard_requirement_re.finditer(context):
-            prefix = context[max(0, hard_match.start() - 5):hard_match.start()]
+            prefix = context[max(0, hard_match.start() - negation_window):hard_match.start()]
             if re.search(r"\bnot\s+$", prefix):
                 continue
             return True
         return False
 
     for match in re.finditer(term_pattern, description_lower):
-        start = max(match.start() - 45, 0)
-        end = min(match.end() + 45, len(description_lower))
+        start = max(match.start() - window_chars, 0)
+        end = min(match.end() + window_chars, len(description_lower))
         context = description_lower[start:end]
         if hard_requirement_matches(context):
             return True
@@ -418,7 +481,21 @@ def _evaluate_description_confidence(details_text: str, description_lower: str, 
     text_length = len(normalized_text)
     rules = load_parsing_rules()
     conf_rules = rules.get("description_confidence_rules", {})
-    
+    if not isinstance(conf_rules, dict):
+        raise ValueError("parsing_rules.json must define description_confidence_rules")
+
+    try:
+        min_text_length = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_TEXT_LENGTH_KEY))
+        min_section_hits = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_SECTION_HITS_KEY))
+        min_bullet_points = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_BULLET_POINTS_KEY))
+        min_generic_phrases = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_GENERIC_PHRASES_KEY))
+        min_coordination_tokens = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_COORDINATION_TOKENS_KEY))
+    except Exception as exc:
+        raise ValueError("parsing_rules.json must define description confidence thresholds") from exc
+
+    if min_text_length <= 0 or min_section_hits < 0 or min_bullet_points < 0 or min_generic_phrases < 0 or min_coordination_tokens < 0:
+        raise ValueError("parsing_rules.json must define description confidence thresholds")
+
     section_score = sum(
         1
         for pattern in [rf"\b{re.escape(i)}\b" for i in conf_rules.get("section_indicators", [])]
@@ -440,17 +517,17 @@ def _evaluate_description_confidence(details_text: str, description_lower: str, 
         str(rule.get("name") or "").strip()
         for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
     )
-    structurally_thin = text_length < 500 and section_score < 2 and bullet_score < 3
+    structurally_thin = text_length < min_text_length and section_score < min_section_hits and bullet_score < min_bullet_points
 
     if title_reason == TITLE_REASON_POTENTIAL_MATCH:
         if has_capability_rules and proof_hits == 0 and mention_hits == 0:
             return False, "DESC_ROLE_PROOF_MISSING"
-        if proof_hits == 0 and mention_hits < 2 and (structurally_thin or generic_score >= 2 or coordination_score >= 3):
+        if proof_hits == 0 and mention_hits < 2 and (structurally_thin or generic_score >= min_generic_phrases or coordination_score >= min_coordination_tokens):
             return False, "DESC_ROLE_PROOF_MISSING"
         if proof_hits <= 1 and structurally_thin and mention_hits == 0:
             return False, "DESC_ROLE_PROOF_WEAK"
 
-    if title_reason == "OK" and proof_hits == 0 and structurally_thin and generic_score >= 2:
+    if title_reason == "OK" and proof_hits == 0 and structurally_thin and generic_score >= min_generic_phrases:
         return False, "DESC_VAGUE_TARGET_ROLE"
 
     return True, "OK"
@@ -555,43 +632,3 @@ def passes_quick_card_filters(
 
     return True, "OK"
 
-
-# ---------------------------------------------------------------------------
-# Rejection-learning: extraction helpers
-# ---------------------------------------------------------------------------
-
-_REJECTION_RULES_PATH = OUTPUT_DIR / "rejection_rules.json"
-
-
-def _load_saved_rejection_rules() -> list:
-    if not _REJECTION_RULES_PATH.exists():
-        return []
-    try:
-        data = json.loads(_REJECTION_RULES_PATH.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
-
-
-def passes_saved_rejection_rules(text: str) -> Tuple[bool, str]:
-    """Apply user-saved rejection rules (output/rejection_rules.json) to description text.
-
-    Returns (True, 'OK') if no active rule matches, else (False, reason).
-    Called during scraping, NOT at render time.
-    """
-    rules = _load_saved_rejection_rules()
-    if not rules:
-        return True, "OK"
-    lowered = (text or "").lower()
-    for rule in rules:
-        if not rule.get("active", True):
-            continue
-        value = str(rule.get("value") or "").strip().lower()
-        if len(value) < 3:
-            continue
-        pattern = rf"(?<!\w){re.escape(value)}(?!\w)"
-        if re.search(pattern, lowered):
-            category = re.sub(r"[^a-z0-9_]", "_", str(rule.get("category") or "other"))
-            token = re.sub(r"[^a-z0-9]+", "_", value).strip("_")[:30]
-            return False, f"LEARNED_REJECT:{category}:{token}"
-    return True, "OK"

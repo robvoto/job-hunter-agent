@@ -158,5 +158,88 @@
       "process improvement"
     ],
     "needs_review": true
+  },
+  "project management": {
+    "signal": "project management",
+    "normalized_key": "project management",
+    "original_texts": [
+      "project management"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-06T13:06:57.035789+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "context": [
+      "Primary CV: Certified Associate in Project Management (CAPM) - PMI"
+    ],
+    "evidence": [
+      "project management"
+    ],
+    "needs_review": true
+  },
+  "stakeholder engagement": {
+    "signal": "stakeholder engagement",
+    "normalized_key": "stakeholder engagement",
+    "original_texts": [
+      "stakeholder engagement"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-07T12:59:48.512816+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "stakeholder engagement"
+    ],
+    "needs_review": true
+  },
+  "system integration": {
+    "signal": "system integration",
+    "normalized_key": "system integration",
+    "original_texts": [
+      "system integration"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-07T12:59:48.512816+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "system integration"
+    ],
+    "needs_review": true
+  },
+  "performance optimization": {
+    "signal": "performance optimization",
+    "normalized_key": "performance optimization",
+    "original_texts": [
+      "performance optimization"
+    ],
+    "category": "capability_concept",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-07T12:59:48.512816+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "evidence": [
+      "performance optimization"
+    ],
+    "needs_review": true
   }
 }

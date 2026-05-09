@@ -1,17 +1,68 @@
 {
-  "kind": "managed_knowledge",
+  "kind": "system_config",
   "name": "parsing_rules",
-  "version": 5,
+  "version": 13,
+  "stopwords_description": "Common filler words stripped during title parsing and token matching.",
   "stopwords": [
     "a", "an", "and", "the", "to", "for", "of", "in", "on", "with", "by", "from", "into",
     "using", "use", "used", "within", "through", "under", "over", "per", "or", "as", "at",
     "is", "are", "was", "were", "be", "been", "being", "that", "this", "these", "those",
     "will", "would", "can", "could", "should", "may"
   ],
-  "title_parse_blockers": [
-    "working", "helping", "involved", "role", "responsible", "supporting",
-    "managing", "leading", "coordinating", "performing", "delivering"
+  "title_candidate_leading_verb_blockers_description": "Words that make a title too generic or role-like to treat as a clean title candidate during title extraction.",
+  "title_candidate_leading_verb_blockers": [
+    "working",
+    "helping",
+    "involved",
+    "role",
+    "responsible",
+    "supporting",
+    "managing",
+    "leading",
+    "coordinating",
+    "performing",
+    "delivering"
   ],
+  "title_candidate_line_rules_description": "Structural limits used to avoid treating sentence fragments as role titles.",
+  "title_candidate_line_rules": {
+    "max_length_chars": 80,
+    "max_tokens": 7,
+    "punctuation_blockers": [
+      ".",
+      ","
+    ]
+  },
+  "candidate_profile_section_routing_description": "Section labels used to route profile text into primary, secondary, or supplementary evidence buckets.",
+  "candidate_profile_section_routing": {
+    "default_bucket": "primary_candidate_profile_context",
+    "primary_labels": [
+      "primary",
+      "detailed",
+      "current",
+      "recent",
+      "main",
+      "core"
+    ],
+    "secondary_labels": [
+      "supporting",
+      "older",
+      "secondary",
+      "legacy",
+      "earlier",
+      "previous"
+    ],
+    "supplementary_labels": [
+      "background",
+      "optional",
+      "extra",
+      "additional",
+      "note",
+      "notes",
+      "cert",
+      "education"
+    ]
+  },
+  "generic_summary_phrases_description": "Short phrases that usually belong to marketing copy, not job evidence.",
   "generic_summary_phrases": [
     "opportunity to join",
     "fast-paced environment",
@@ -22,18 +73,13 @@
     "must be based in",
     "full working rights"
   ],
+  "salary_indicators_description": "Copy cues that help identify salary text and distinguish annual, daily, and super-inclusive pay wording.",
   "salary_indicators": {
     "superannuation": ["inc super", "pkg", "package", "plus super", "superannuation", "super", "+ super"],
     "daily_rate": ["per day", "daily", "p.d.", "day rate", "/day"],
     "annual_rate": ["p.a.", "per annum", "annually", "/year", "/yr", "base +"]
   },
-  "remote_work_indicators": [
-    "remote",
-    "wfh",
-    "work from home",
-    "work-from-home",
-    "anywhere"
-  ],
+  "contract_type_indicators_description": "Words that suggest permanent, contract, casual, temp, or part-time engagement.",
   "contract_type_indicators": [
     "contract",
     "perm",
@@ -44,6 +90,7 @@
     "full-time",
     "part-time"
   ],
+  "desirable_language_indicators_description": "Soft wording that usually marks optional rather than required capabilities.",
   "desirable_language_indicators": [
     "desirable",
     "advantage",
@@ -57,6 +104,7 @@
     "beneficial",
     "highly desirable"
   ],
+  "mandatory_language_indicators_description": "Words that usually mean a capability or condition is required.",
   "mandatory_language_indicators": [
     "required",
     "requires",
@@ -67,6 +115,7 @@
     "need to have",
     "needs to have"
   ],
+  "strength_language_indicators_description": "Words that help judge whether capability language is strong or weak.",
   "strength_language_indicators": [
     "strong",
     "extensive",
@@ -78,6 +127,7 @@
     "demonstrated",
     "advanced"
   ],
+  "level_aliases_description": "Normalised aliases used when the app maps evidence strength labels to a shared level system.",
   "level_aliases": {
     "low": "low",
     "weak": "low",
@@ -88,6 +138,7 @@
     "strong": "strong",
     "expert": "strong"
   },
+  "description_confidence_rules_description": "Signals that help decide whether a description reads like real role content or thin copy.",
   "description_confidence_rules": {
     "section_indicators": [
       "responsibilities",
@@ -107,79 +158,29 @@
       "liaison",
       "administration",
       "scheduling"
-    ]
+    ],
+    "min_text_length_chars": 500,
+    "min_section_hits": 2,
+    "min_bullet_points": 3,
+    "min_generic_phrases": 2,
+    "min_coordination_tokens": 3
   },
-  "posting_channel_indicators": {
-    "recruiter_keywords": [
-      "recruitment",
-      "recruiter",
-      "staffing",
-      "resourcing",
-      "labour hire",
-      "labor hire",
-      "executive search",
-      "search firm"
-    ],
-    "recruiter_copy_patterns": [
-      "our client",
-      "for our client",
-      "on behalf of",
-      "client is seeking",
-      "submit (?:your )?(?:cv|resume|application)",
-      "contact (?:our )?(?:consultant|recruiter|recruitment team)",
-      "reference number",
-      "shortlisted candidates",
-      "immediate interviews?"
-    ],
-    "direct_copy_patterns": [
-      "about us",
-      "about the company",
-      "who we are",
-      "our company",
-      "our organisation",
-      "our organization",
-      "join our team",
-      "join us",
-      "we are looking for",
-      "we are seeking"
-    ]
+  "matching_context_patterns_description": "Regex fragments and context windows used to judge whether capability mentions read as required or desirable.",
+  "matching_context_patterns": {
+    "hard_requirement_prefix": "(?:required|essential|must have|mandatory|need to have|needs to have|strongly required)",
+    "hard_requirement_suffix": "(?:required|essential|must have|mandatory|need to have|needs to have)",
+    "hard_requirement_window_chars": 45,
+    "soft_requirement_prefix": "(?:desirable|preferred|advantage|plus|ideally|nice to have|not essential|highly regarded|advantageous|beneficial|highly desirable)",
+    "soft_requirement_suffix": "(?:desirable|preferred|advantage|plus|ideally|nice to have|not essential|highly regarded|advantageous|beneficial|highly desirable)",
+    "soft_requirement_window_chars": 35,
+    "negation_prefix_window_chars": 5
   },
-  "work_mode_indicators": {
-    "strict_onsite": [
-      "5 days in office",
-      "five days in office",
-      "must be in office",
-      "must work from the office",
-      "100% office based",
-      "100% office-based",
-      "fully office based",
-      "fully office-based"
-    ],
-    "hybrid": [
-      "hybrid",
-      "split between home and office",
-      "mix of home and office"
-    ],
-    "remote": [
-      "work from home",
-      "wfh",
-      "remote",
-      "fully remote",
-      "100% remote"
-    ],
-    "onsite": [
-      "on site",
-      "onsite",
-      "office based",
-      "office-based",
-      "must be in office",
-      "5 days in office"
-    ]
-  },
+  "salary_extraction_patterns_description": "Regex patterns used to extract salary and rate text from descriptions.",
   "salary_extraction_patterns": [
     "\\$\\s?\\d[\\d,]*(?:\\s*-\\s*\\$?\\s?\\d[\\d,]*)?(?:\\s*(?:\\+?\\s*super|incl\\.?\\s*super|package|p\\.a\\.|per annum|per day|daily rate))?",
     "\\b\\d{2,3}k(?:\\s*-\\s*\\d{2,3}k)?(?:\\s*(?:\\+?\\s*super|incl\\.?\\s*super|package|p\\.a\\.|per annum))?"
   ],
+  "salary_package_indicators_description": "Signals that indicate salary wording includes package or superannuation cues.",
   "salary_package_indicators": [
     "incl\\.?\\s*super",
     "including\\s+super",
@@ -188,154 +189,50 @@
     "package",
     "salary packaging"
   ],
-  "score_label_compact_map": {
-    "Primary role-family match": "Title",
-    "Secondary role-family match": "Title",
-    "Primary seniority adjustment": "Title",
-    "Description fit is excellent": "Description",
-    "Description fit is strong": "Description",
-    "Description fit is solid": "Description",
-    "Description fit is mixed": "Description",
-    "Description fit is weak": "Description",
-    "Description fit is a mismatch": "Description",
-    "Passed content filters": "Filters",
-    "Fit evidence bullets": "Evidence",
-    "Salary/rate signal": "Salary",
-    "Salary/rate below target": "Salary",
-    "Already viewed by you": "Viewed",
-    "Description capture incomplete": "Description",
-    "On-site role": "Work mode"
-  },
-  "reject_reason_human_map": {
-    "TITLE_NOT_TARGET": "Title outside target role family",
-    "NO_DETAILS": "Could not read full job details",
-    "DETAILS_CHALLENGE_PAGE": "Blocked by SEEK challenge page",
-    "DETAILS_BLOCKED_PAGE": "Blocked from reading job details",
-    "DETAILS_NAVIGATION_ERROR": "Could not open the job ad page",
-    "DET_REJECT": "Deterministic fit gate rejected",
-    "LLM_REJECT": "AI fit review rejected",
-    "DUPLICATE_URL": "Duplicate listing removed",
-    "ALREADY_APPLIED": "Already marked as applied",
-    "MANUALLY_HIDDEN": "Already hidden by you",
-    "UNKNOWN": "Other filtered-out roles"
-  },
-  "level_labels": {
-    "strong": "Expert",
-    "working": "Advanced",
-    "basic": "Intermediate",
-    "low": "Beginner"
-  },
-  "grade_labels": {
-    "EXCELLENT": "Description fit is excellent",
-    "STRONG": "Description fit is strong",
-    "SOLID": "Description fit is solid",
-    "WEAK": "Description fit is mixed",
-    "POOR": "Description fit is weak",
-    "MISMATCH": "Description fit is a mismatch"
-  },
-  "fit_highlight_labels": {
-    "strong_capability_match": "Strong capability match",
-    "capability_match": "Capability match",
-    "matched_signal": "Matched signal",
-    "long_contract": "12+ month contract",
-    "permanent_role": "Permanent role"
+  "seek_posted_age_rules_description": "SEEK-specific posted age text extraction and normalization rules.",
+  "seek_posted_age_rules": {
+    "card_match_pattern": "\\b(?:today|yesterday|\\d+\\s*[mhdy](?:\\s*ago)?)\\b",
+    "explicit_labels": {
+      "today": 0,
+      "yesterday": 1
+    },
+    "relative_text_pattern": "^(?P<amount>\\d+)\\s*(?P<unit>[mhdy])(?:\\s*ago)?$",
+    "unit_days": {
+      "m": 0.0006944444444444445,
+      "h": 0.041666666666666664,
+      "d": 1,
+      "y": 365
+    }
   },
   "strength_coefficients": {
+    "description": "Strength multipliers for capability rule levels. Used by capability_rule_strength to weight evidence.",
+    "default": 0.45,
     "strong": 1.0,
-    "working": 0.72,
-    "basic": 0.55,
-    "low": 0.22,
-    "default": 0.45
-  },
-  "trusted_description_sources": [
-    "jobaddetails",
-    "body",
-    "linkedin_full_description"
-  ],
-  "attendance_patterns": {
-    "limited_onsite": "\\b(1 day a week|one day a week|1 day per week|fortnight|2 days a month|two days a month)\\b",
-    "regular_onsite": "\\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\\b"
-  },
-  "matching_context_patterns": {
-    "hard_requirement_prefix": "(strong|solid|extensive|proven|demonstrated|hands[- ]on|deep|advanced|expert)",
-    "hard_requirement_suffix": "(required|essential|must have|mandatory|highly desirable)",
-    "soft_requirement_prefix": "(experience in|experience with|knowledge of|understanding of|proficiency in)",
-    "soft_requirement_suffix": "(experience|knowledge|understanding|proficiency)"
-  },
-  "negative_score_labels": {
-    "Salary/rate below target": "Salary is below target range",
-    "Description capture incomplete": "Full job description not captured clearly",
-    "Already viewed by you": "Already opened by you",
-    "Contract is shorter than preferred": "Contract length is shorter than preferred"
-  },
-  "posted_threshold_labels": {
-    "1": "Posted today",
-    "3": "Last 3 days",
-    "7": "Last 7 days",
-    "14": "Last 14 days"
-  },
-  "seniority_score_adjustments": {
-    "lower": -5,
-    "preferred": 3
-  },
-  "title_seniority_groups": {
-    "lower": [
-      "junior",
-      "graduate",
-      "associate"
-    ]
-  },
-  "title_lead_tokens": [
-    "the",
-    "role",
-    "opportunity",
-    "position",
-    "join"
-  ],
-  "skill_discovery_config": {
-    "min_term_length": 3,
-    "max_phrase_words": 3,
-    "junk_keywords": ["required", "essential", "experience", "skills", "ability", "knowledge", "candidate", "role", "duties", "responsibilities", "requirements"]
-  },
-  "government_discovery_patterns": {
-    "aps": "\\baps\\s*([1-6])\\b",
-    "el": "\\bel\\s*([12])\\b",
-    "clearance": "\\b(?:baseline|nv\\s*1|nv1|nv\\s*2|nv2|negative vetting\\s*1|negative vetting\\s*2)\\b",
-    "department": "\\bdepartment(?:\\s+of)?\\s+[a-z][a-z0-9&/-]*(?:\\s+[a-z][a-z0-9&/-]*){1,7}\\b"
+    "working": 0.75,
+    "basic": 0.5,
+    "low": 0.25
   },
   "government_discovery_config": {
     "government_terms": [
-      "government"
+      "government",
+      "public sector",
+      "public service",
+      "dept",
+      "council",
+      "minister"
     ],
     "clearance_normalization": {
-      "nv1": [
-        "negative vetting 1",
-        "nv1",
-        "nv 1"
-      ],
-      "nv2": [
-        "negative vetting 2",
-        "nv2",
-        "nv 2"
-      ]
+      "baseline": ["baseline", "baseline clearance"],
+      "nv1": ["nv1", "nv 1", "negative vetting 1", "negative vetting level 1"],
+      "nv2": ["nv2", "nv 2", "negative vetting 2", "negative vetting level 2"],
+      "top secret": ["top secret", "ts"],
+      "protected": ["protected clearance"]
     }
   },
-  "title_discovery_config": {
-    "min_token_len": 2,
-    "max_token_len": 3,
-    "discovery_confidence": "ambiguous"
-  },
-  "engagement_keywords": {
-    "permanent": ["full time", "full-time", "permanent"],
-    "contract": ["contract", "temp", "casual"]
-  },
-  "fit_highlight_labels": {
-    "strong_capability_match": "Strong capability match",
-    "capability_match": "Capability match",
-    "matched_signal": "Matched signal",
-    "long_contract": "12+ month contract",
-    "permanent_role": "Permanent role",
-    "competitive_signal_aligns": "Competitive signal aligns",
-    "competitive_signal_elsewhere": "Competitive signal leans elsewhere"
+  "government_discovery_patterns": {
+    "aps": "\\baps\\s*(\\d+)\\b",
+    "el": "\\bel\\s*(\\d+)\\b",
+    "clearance": "\\b(?:baseline|nv\\s*\\d|negative\\s+vetting\\s+\\d|top\\s+secret|protected)\\s*(?:clearance)?\\b|\\bclearance\\s+required\\b",
+    "department": "department(?:\\s+of)?\\s+(?:[a-z]+(?:\\s+[a-z]+)*)"
   }
 }

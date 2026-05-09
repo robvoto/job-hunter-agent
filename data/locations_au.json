@@ -10,6 +10,17 @@
       "new south wales"
     ]
   },
+  "Sydney": {
+    "code": "Sydney",
+    "name": "Sydney",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Sydney",
+    "aliases": [
+      "sydney",
+      "sydney nsw"
+    ]
+  },
   "VIC": {
     "code": "VIC",
     "name": "Victoria",
@@ -19,6 +30,17 @@
     "aliases": [
       "vic",
       "victoria"
+    ]
+  },
+  "Melbourne": {
+    "code": "Melbourne",
+    "name": "Melbourne",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Melbourne",
+    "aliases": [
+      "melbourne",
+      "melbourne vic"
     ]
   },
   "QLD": {

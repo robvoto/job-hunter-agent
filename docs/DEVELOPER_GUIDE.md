@@ -43,6 +43,18 @@ Primary modules:
   | `scrape_debug.py`    | `POST /api/test/reset-user` `/api/test/reset-learning` `/api/debug/browser-log` `/api/run`                  |
   | `static_docs.py`     | `GET /static/{path}` `/data/{path}` `/docs` `/api/docs`                                                     |
 
+Server logging:
+
+- `python -m job_hunter_agent.fastapi_app --debug` writes server output to `output/server.log`
+- logs are timestamped and still mirrored to the terminal
+- `/api/debug/browser-log` is for browser-side JS logs only
+
+- `job_hunter_agent/auth.py`
+  Session management and security. 
+  - **Dynamic Security:** Uses `Secure=True` and `__Host-` prefixes when bound to non-local IPs.
+  - **SameSite Policy:** Enforced as `Strict` to mitigate CSRF.
+  - **Configuration:** Cookie names are configurable via `JOB_HUNTER_SESSION_COOKIE_NAME` env var.
+
 - `job_hunter_agent/source_documents.py`
   Local source-pack persistence and source-document import into `profile.json`.
 
@@ -175,5 +187,3 @@ python -m job_hunter_agent.test_runner
 ```
 
 The runner resolves the local virtualenv automatically when present and forwards normal pytest selectors such as `-k` and `-m`.
-
-

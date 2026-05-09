@@ -179,3 +179,4 @@
 
 ---
 
+- and also we need to be sure about cost, but this is another agent

@@ -1,0 +1,41 @@
+{
+  "kind": "rules",
+  "name": "work_mode_rules",
+  "version": 1,
+  "updated_at": "2026-05-07",
+  "work_mode_indicators_description": "Words that help tell if a role is remote, hybrid, or onsite.",
+  "work_mode_indicators": {
+    "strict_onsite": [
+      "5 days in office",
+      "five days in office",
+      "must be in office",
+      "must work from the office",
+      "100% office based",
+      "100% office-based",
+      "fully office based",
+      "fully office-based"
+    ],
+    "hybrid": [
+      "hybrid",
+      "split between home and office",
+      "mix of home and office"
+    ],
+    "remote": [
+      "remote",
+      "wfh",
+      "work from home",
+      "work-from-home",
+      "anywhere",
+      "fully remote",
+      "100% remote"
+    ],
+    "onsite": [
+      "on site",
+      "onsite",
+      "office based",
+      "office-based",
+      "must be in office",
+      "5 days in office"
+    ]
+  }
+}

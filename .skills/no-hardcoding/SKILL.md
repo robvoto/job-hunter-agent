@@ -19,6 +19,7 @@ Business judgement must not hide in feature code.
 - Validate required config at the producer/normalizer boundary.
 - Consumers use canonical fields directly, e.g. `signal["label"]`.
 - If required data is missing, fix the producer; do not patch around it in consumers.
+- Do not add local fallback defaults for business values, decision labels, or display labels in feature code. If the owner does not provide the value, surface an explicit error or fix the owner.
 
 ## Checklist
 - Search for `.get(..., fallback)`.
@@ -26,3 +27,14 @@ Business judgement must not hide in feature code.
 - Search for inline dicts mapping labels to points/weights.
 - Search for numeric caps/slices that affect behaviour.
 - Search for consumer-side alternate fields like `x or y`.
+
+## Advanced settings ownership
+
+Configurable/admin-tunable behaviour belongs in advanced settings — not feature code.
+
+Rules:
+- Global system behaviour belongs in global advanced settings.
+- Advanced settings must be manageable from the Advanced Settings UI.
+- Do not hardcode admin-tunable behaviour in Python/JS.
+- If unsure whether a setting is global or candidate-specific, ask before implementing.
+- Do not silently create candidate-specific settings.

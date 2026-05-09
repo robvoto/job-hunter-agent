@@ -1,0 +1,24 @@
+{
+  "kind": "system_config",
+  "name": "posting_channel_indicators",
+  "version": 2,
+  "posting_channel_indicators_description": "Fallback-only text evidence for posting channel review. These patterns do not decide recruiter or direct employer status.",
+  "posting_channel_indicators": {
+    "recruiter_keywords": [
+      "recruitment",
+      "recruiter",
+      "staffing",
+      "resourcing",
+      "labour hire",
+      "labor hire",
+      "executive search",
+      "search firm"
+    ],
+    "recruiter_copy_patterns": [
+      "our client",
+      "on behalf of",
+      "client is seeking",
+      "contact (?:our )?(?:consultant|recruiter|recruitment team)"
+    ]
+  }
+}

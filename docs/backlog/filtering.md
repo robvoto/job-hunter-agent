@@ -238,43 +238,6 @@
 
 ---
 
-### Seniority filtering
-
-- [ ] Decide if seniority filters are needed
-
-  Context:
-  - junior / mid / senior
-  - unclear if users need it
-
----
-Add a seniority preference mode.
-
-seniority_preference_mode:
-- flexible   default
-- senior_only
-- junior_only
-- no_preference
-
-Behavior:
-
-flexible
-- Primary role-family passes.
-- Seniority affects score only.
-- This is the default.
-
-senior_only
-- Senior/lead/principal titles pass.
-- Plain role titles can pass as secondary/potential or be demoted.
-- Junior/graduate titles hard reject.
-
-junior_only
-- Junior/entry/graduate titles pass.
-- Senior/lead/principal titles hard reject or heavily demote.
-- Plain role titles can pass as potential.
-
-no_preference
-- Ignore seniority in scoring.
-- Match role family only.
 
 ### Location & Scoring
 

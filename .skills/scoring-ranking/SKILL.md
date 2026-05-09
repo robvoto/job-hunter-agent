@@ -11,7 +11,7 @@ Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection
 - Do not bypass hard blockers to increase score.
 
 ## Key owners
-- `fit_scoring.py`: assembles score entries and highlights.
+- `fit_scoring.py`: assembles score entries and highlights. Breakdown is split into four builder functions: `build_core_fit_breakdown`, `build_preference_breakdown`, `build_convenience_breakdown`, `build_risk_breakdown`. Hard blockers appear in the risk section — they no longer short-circuit the full breakdown. Use `has_hard_blockers()` for downstream exclusion.
 - `profile_store.py`: loads/normalises scoring/profile settings.
 - `data/scoring_rules.json`: managed scoring policy.
 - `data/match_level_defaults.json`: match band thresholds.

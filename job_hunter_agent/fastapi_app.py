@@ -15,12 +15,99 @@ Flags:
 
 from __future__ import annotations
 
+import logging
+import logging.config
+import sys
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from job_hunter_agent.routes import register_routes
 from job_hunter_agent.routes.responses import json_response
+from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
+
+
+class _LineLoggingStream:
+    def __init__(self, logger: logging.Logger, level: int) -> None:
+        self._logger = logger
+        self._level = level
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        if not text:
+            return 0
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if line.strip():
+                self._logger.log(self._level, line.rstrip("\r"))
+        return len(text)
+
+    def flush(self) -> None:
+        line = self._buffer.strip("\r")
+        self._buffer = ""
+        if line.strip():
+            self._logger.log(self._level, line)
+
+    def isatty(self) -> bool:
+        return False
+
+
+def _configure_server_logging() -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    logging_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": "INFO",
+                "formatter": "standard",
+                "stream": "ext://sys.__stdout__",
+            },
+            "file": {
+                "class": "logging.FileHandler",
+                "level": "INFO",
+                "formatter": "standard",
+                "filename": str(SERVER_LOG_PATH),
+                "encoding": "utf-8",
+            },
+        },
+        "root": {
+            "level": "INFO",
+            "handlers": ["console", "file"],
+        },
+        "loggers": {
+            "uvicorn": {
+                "level": "INFO",
+                "handlers": ["console", "file"],
+                "propagate": False,
+            },
+            "uvicorn.error": {
+                "level": "INFO",
+                "handlers": ["console", "file"],
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "level": "INFO",
+                "handlers": ["console", "file"],
+                "propagate": False,
+            },
+        },
+    }
+    logging.config.dictConfig(logging_config)
+
+    app_logger = logging.getLogger("job_hunter_agent.app")
+    sys.stdout = _LineLoggingStream(app_logger, logging.INFO)
+    sys.stderr = _LineLoggingStream(app_logger, logging.ERROR)
 
 
 def create_app() -> FastAPI:
@@ -88,6 +175,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    _configure_server_logging()
+
     if args.rebuild or args.debug:
         srv._rebuild_dashboard_on_startup()
 
@@ -105,4 +194,5 @@ if __name__ == "__main__":
         port=PORT,
         log_level="debug" if srv.DEBUG_MODE else "info",
         access_log=srv.DEBUG_MODE,
+        log_config=None,
     )

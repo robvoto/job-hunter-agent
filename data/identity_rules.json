@@ -1,5 +1,5 @@
 {
-  "kind": "managed_knowledge",
+  "kind": "system_config",
   "name": "identity_rules",
   "version": 1,
   "source_priority": {

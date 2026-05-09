@@ -4,6 +4,11 @@
 
 ## Product intent
 
+## Security and reliability
+
+- **Data Integrity:** Local state (JSON files) is critical. Operations must be defensive against race conditions and corruption during concurrent background tasks.
+- **Network Safety:** The app is local-first but must be network-safe. Security defaults (like cookie attributes) must escalate automatically when the app is exposed to a network.
+
 This is a strict, explainable job-fit system, not a vague recommender.
 
 The system should find roles worth human attention, hide obvious mismatches, and make every decision inspectable. It should improve through explicit user review, not hidden magic.
@@ -46,4 +51,3 @@ The system should find roles worth human attention, hide obvious mismatches, and
 - Do not reintroduce hidden scoring shortcuts or fixed dictionaries to force outcomes.
 - Prefer warnings, review signals, neutral metrics, and configurable scoring over hard rejection.
 - When uncertain, preserve evidence and surface it for review instead of dropping it.
-

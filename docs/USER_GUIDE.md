@@ -161,12 +161,23 @@ Current behavior:
 - only surviving job descriptions reach the LLM
 - the LLM reads from `data/profile.json`
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
+- you can tune AI fit review guidance and AI capability naming guidance in **Settings**
 
 To enable:
 1. Create a `.env` file in the project root.
 2. Add `OPENAI_API_KEY=sk-your-actual-key`
 
 If the variable is not found in the environment or the `.env` file, the app runs without live LLM review.
+
+## Security and Network Access
+
+By default, the application is configured for local use on `localhost`. 
+
+If you intend to access the dashboard over a network (e.g., from a different computer or hosting it), it is strongly recommended to use a **reverse proxy** (such as Nginx, Caddy, or Traefik) to handle SSL/TLS termination (HTTPS). 
+
+When the server is bound to a non-local IP (like `0.0.0.0`), it enforces `Secure` and `__Host-` prefixed session cookies, which require an encrypted HTTPS connection to function correctly.
+
+You can customize the session cookie name by setting the `JOB_HUNTER_SESSION_COOKIE_NAME` environment variable in your `.env` file.
 
 ## Testing
 
@@ -245,4 +256,3 @@ Simple rule:
 These are also local-only if used:
  
 - `.venv/`
-

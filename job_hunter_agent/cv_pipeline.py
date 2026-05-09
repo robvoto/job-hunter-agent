@@ -31,6 +31,13 @@ from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_SIGNAL_CLUSTERS,
     KEY_REQUIRED_SKILLS,
+    normalize_onboarding_settings,
+)
+from job_hunter_agent.advance_settings import (
+    KEY_CAPABILITY_ALIAS_LIMIT,
+    KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
+    KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
+    KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
 )
 
 def _stopwords() -> set[str]:
@@ -291,6 +298,39 @@ def _score(cluster: dict[str, Any]) -> float:
     return recurrence * 0.30 + breadth * 0.25 + recency * 0.25 + current_depth * 0.20
 
 
+def _classify_cluster_level(cluster: dict[str, Any], onboarding_settings: dict[str, Any] | None = None) -> str:
+    settings = normalize_onboarding_settings(onboarding_settings)
+    total_duration_months = max(int(cluster.get("total_duration_months") or 0), 0)
+    role_count = max(int(cluster.get("role_count") or 0), 0)
+    most_recent_year = int(cluster.get("most_recent_year") or 0)
+    years_since_last_use = max(_CURRENT_YEAR - most_recent_year, 0) if most_recent_year else 99
+    is_recent = years_since_last_use <= int(settings["capability_recent_years"])
+
+    if (
+        is_recent
+        and years_since_last_use <= int(settings["capability_strong_max_years_since_use"])
+        and total_duration_months >= int(settings["capability_strong_min_months"])
+        and role_count >= int(settings["capability_strong_min_roles"])
+    ):
+        return "strong"
+    if (
+        years_since_last_use <= int(settings["capability_working_max_years_since_use"])
+        and total_duration_months >= int(settings["capability_working_min_months"])
+    ):
+        return "working"
+    if (
+        total_duration_months >= int(settings["capability_working_long_history_min_months"])
+        and years_since_last_use <= int(settings["capability_working_long_history_max_years_since_use"])
+    ):
+        return "working"
+    if (
+        role_count == 1
+        and years_since_last_use <= int(settings["capability_single_role_old_max_years_since_use"])
+    ):
+        return "working"
+    return "basic"
+
+
 def score_and_promote(
     clusters: list[dict[str, Any]],
     onboarding_settings: dict[str, Any] | None = None,
@@ -302,15 +342,13 @@ def score_and_promote(
         breadth = min(int(cluster["role_count"]) / 5.0, 1.0)
         recency_ratio = int(cluster["recent_role_count"]) / max(occurrences, 1)
         total_duration_months = max(int(cluster.get("total_duration_months") or 0), 0)
-        role_count = max(int(cluster.get("role_count") or 0), 0)
-        current_role_count = max(int(cluster.get("current_role_count") or 0), 0)
         most_recent_year = int(cluster.get("most_recent_year") or 0)
         years_since_last_use = max(_CURRENT_YEAR - most_recent_year, 0) if most_recent_year else 99
 
         scored.append({
             **cluster,
             "score": round(score, 3),
-            "level": "basic",
+            "level": _classify_cluster_level(cluster, onboarding_settings),
             "name": cluster["seed"],
             "fit_label": "",
             "watchout_label": "",
@@ -361,6 +399,8 @@ def _build_output(
     total_roles: int = 0,
     onboarding_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Turn extracted capability candidates into persisted profile learning output."""
+    settings = normalize_onboarding_settings(onboarding_settings)
     dominant_signal_clusters: list[dict[str, Any]] = []
     seen_names: set[str] = set()
 
@@ -374,7 +414,7 @@ def _build_output(
         matching_aliases = derive_job_description_aliases(
             display_name,
             [candidate["seed"], *candidate["aliases"]],
-            max_aliases=8,
+            max_aliases=int(settings[KEY_CAPABILITY_ALIAS_LIMIT]),
         )
         if not isinstance(matching_aliases, list):
             matching_aliases = []
@@ -400,17 +440,33 @@ def _build_output(
             signal_aliases = list(dict.fromkeys([display_name, *signal_aliases]))
         dominant_signal_clusters.append({
             "name": display_name,
-            "aliases": signal_aliases[:8],
+            "aliases": signal_aliases[: int(settings[KEY_CAPABILITY_ALIAS_LIMIT])],
+            "level": candidate["level"],
             "fit_label": candidate["fit_label"],
             "watchout_label": candidate["watchout_label"],
-            "min_alias_hits": 2 if len(signal_aliases) >= 2 else 1,
-            "min_snippet_hits": 2,
-            "dense_snippet_alias_hits": max(len(signal_aliases) // 2 + 2, 4),
+            "min_alias_hits": int(settings[KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS]),
+            "min_snippet_hits": int(settings[KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS]),
+            "dense_snippet_alias_hits": int(settings[KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS]),
+            "needs_review": True,
+        })
+
+    capability_profile_rules: list[dict[str, Any]] = []
+    seen_cap_names: set[str] = set()
+    for cluster in dominant_signal_clusters:
+        rule_name = str(cluster.get("name") or "").strip()
+        rule_name_norm = rule_name.lower()
+        if not rule_name_norm or rule_name_norm in seen_cap_names:
+            continue
+        seen_cap_names.add(rule_name_norm)
+        capability_profile_rules.append({
+            "name": rule_name_norm,
+            "level": str(cluster.get("level") or "basic"),
+            "aliases": list(cluster.get("aliases") or []),
             "needs_review": True,
         })
 
     return {
-        KEY_CAPABILITY_PROFILE_RULES: [],
+        KEY_CAPABILITY_PROFILE_RULES: capability_profile_rules,
         KEY_SIGNAL_CLUSTERS: dominant_signal_clusters,
         KEY_REQUIRED_SKILLS: [],
     }
@@ -448,7 +504,7 @@ def run_cv_pipeline(
     _cap_log(
         f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "
         f"{len(clusters)} clusters -> {len(candidates)} candidates -> "
-        f"0 cap rules (deterministic path suppressed), "
+        f"{len(output.get(KEY_CAPABILITY_PROFILE_RULES, []))} cap rules, "
         f"{len(dominant)} dominant signal clusters (evidence/review only)"
     )
     if dominant:
