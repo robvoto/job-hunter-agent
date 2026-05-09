@@ -1,10 +1,11 @@
 import re
 from typing import Optional
 
-from job_hunter_agent.io_utils import load_json_dict, load_parsing_rules
+from job_hunter_agent.io_utils import load_json_dict
 from job_hunter_agent.paths import (
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
     GOVERNMENT_CONTEXT_RULES_PATH,
+    POSTING_CHANNEL_INDICATORS_PATH,
 )
 from job_hunter_agent.text_processing import compact_whitespace
 
@@ -123,42 +124,127 @@ def infer_role_sector(record: dict, details_text: str) -> dict[str, str]:
     return {"kind": "unknown", "label": "", "confidence": "unknown"}
 
 
-def infer_posting_channel(record: dict, details_text: str) -> dict[str, str]:
-    company = compact_whitespace(record.get("company") or "").lower()
-    title = compact_whitespace(record.get("title") or "").lower()
-    teaser = compact_whitespace(record.get("teaser") or "").lower()
+def _source_metadata(record: dict) -> dict:
+    metadata = record.get("source_metadata")
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _raw_source_fields(metadata: dict) -> dict:
+    raw_fields = metadata.get("raw_source_fields")
+    return raw_fields if isinstance(raw_fields, dict) else {}
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        cleaned = compact_whitespace(value)
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        result.append(cleaned)
+    return result
+
+
+def _build_weak_text_matches(details_text: str) -> list[str]:
+    rules = load_json_dict(POSTING_CHANNEL_INDICATORS_PATH).get("posting_channel_indicators", {})
+    recruiter_keywords = [str(value or "").strip() for value in rules.get("recruiter_keywords", []) if str(value or "").strip()]
+    recruiter_copy_patterns = [str(value or "").strip() for value in rules.get("recruiter_copy_patterns", []) if str(value or "").strip()]
     description = compact_whitespace(details_text).lower()
-    combined = "\n".join(part for part in [title, company, teaser, description] if part)
+    matches: list[str] = []
 
-    rules = load_parsing_rules().get("posting_channel_indicators", {})
-    recruiter_keywords = rules.get("recruiter_keywords", [])
-    recruiter_copy_patterns = [rf"\b{p}\b" for p in rules.get("recruiter_copy_patterns", [])]
-    direct_copy_patterns = [rf"\b{p}\b" for p in rules.get("direct_copy_patterns", [])]
+    for keyword in recruiter_keywords:
+        pattern = rf"(?<!\w){re.escape(keyword.lower())}(?!\w)"
+        if re.search(pattern, description, re.IGNORECASE):
+            matches.append(keyword)
 
-    recruiter_keyword_pattern = rf"\b({'|'.join(recruiter_keywords)})\b"
-    recruiter_company_match = re.search(recruiter_keyword_pattern, company, re.IGNORECASE)
+    for pattern_text in recruiter_copy_patterns:
+        if re.search(pattern_text, description, re.IGNORECASE):
+            matches.append(pattern_text)
 
-    recruiter_score = 0
-    direct_score = 0
+    return _dedupe_strings(matches)
 
-    if recruiter_company_match:
-        recruiter_score += 2
-    recruiter_score += sum(1 for pattern in recruiter_copy_patterns if re.search(pattern, combined))
-    direct_score += sum(1 for pattern in direct_copy_patterns if re.search(pattern, combined))
 
-    if company and description:
-        company_pattern = re.escape(company)
-        if re.search(rf"\b(?:at|join|with)\s+{company_pattern}\b", description):
-            direct_score += 1
-        if re.search(rf"\b{company_pattern}\s+is\b", description):
-            direct_score += 1
-    #HARCODED
-    if recruiter_score >= 3 and recruiter_score > direct_score:
-        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "high"}
-    if recruiter_score >= 1 and recruiter_score > direct_score:
-        return {"kind": "recruiter", "label": "Recruiter posting", "confidence": "medium"}
-    if direct_score >= 3 and recruiter_score == 0:
-        return {"kind": "direct_employer", "label": "Direct employer", "confidence": "high"}
-    if direct_score >= 1 and recruiter_score == 0:
-        return {"kind": "direct_employer", "label": "Direct employer", "confidence": "medium"}
-    return {"kind": "unknown", "label": "", "confidence": "unknown"}
+def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], bool, bool]:
+    metadata = _source_metadata(record)
+    raw_fields = _raw_source_fields(metadata)
+    trusted_metadata: list[str] = []
+    recruiter_keys = (
+        "seekPostingSourceCode",
+        "seekPartnerMetadata",
+        "recruiter_badge",
+        "recruiterBadge",
+        "agency_specific_reference",
+        "agencySpecificReferences",
+    )
+    employer_keys = (
+        "seekHirerJobReference",
+        "hirer",
+        "hirer_relationship",
+        "hirerRelationship",
+        "company_url",
+        "company_url_direct",
+        "job_url_direct",
+    )
+
+    for key in recruiter_keys:
+        value = raw_fields.get(key)
+        if value is not None and compact_whitespace(value):
+            trusted_metadata.append(key)
+
+    for key in employer_keys:
+        value = raw_fields.get(key)
+        if value is not None and compact_whitespace(value):
+            trusted_metadata.append(key)
+
+    apply_domain = compact_whitespace(metadata.get("apply_domain") or "")
+    company_profile_url = compact_whitespace(metadata.get("company_profile_url") or "")
+    if apply_domain:
+        trusted_metadata.append(f"apply domain = {apply_domain}")
+    if company_profile_url:
+        trusted_metadata.append(f"company profile link = {company_profile_url}")
+
+    trusted_metadata = _dedupe_strings(trusted_metadata)
+    trusted_recruiter = any(key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in recruiter_keys)
+    trusted_employer = any(key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in employer_keys)
+    return trusted_metadata, trusted_recruiter, trusted_employer
+
+
+def infer_posting_channel(record: dict, details_text: str) -> dict[str, object]:
+    trusted_metadata, trusted_recruiter, trusted_employer = _collect_trusted_posting_channel_metadata(record)
+    weak_text_matches = _build_weak_text_matches(details_text)
+
+    if trusted_recruiter:
+        return {
+            "kind": "agency_or_recruiter",
+            "source": "metadata_first",
+            "trusted_metadata": trusted_metadata,
+            "weak_text_matches": weak_text_matches,
+            "needs_review": False,
+        }
+
+    if trusted_employer:
+        return {
+            "kind": "direct_employer",
+            "source": "metadata_first",
+            "trusted_metadata": trusted_metadata,
+            "weak_text_matches": weak_text_matches,
+            "needs_review": False,
+        }
+
+    if weak_text_matches:
+        return {
+            "kind": "unknown",
+            "source": "fallback_text_evidence",
+            "trusted_metadata": trusted_metadata,
+            "weak_text_matches": weak_text_matches,
+            "needs_review": True,
+        }
+
+    return {
+        "kind": "unknown",
+        "source": "metadata_first",
+        "trusted_metadata": trusted_metadata,
+        "weak_text_matches": [],
+        "needs_review": False,
+    }

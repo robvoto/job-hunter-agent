@@ -11,6 +11,7 @@ from job_hunter_agent.profile_store import (
     KEY_MATCH_PREFS,
     KEY_MIN_DAILY_RATE,
     KEY_MIN_SALARY_YEARLY,
+    KEY_ONBOARDING_SETTINGS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
 )
@@ -67,7 +68,9 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         engagement_type = str(body.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
-        capability_rules = srv.normalize_capability_rules(body.get(KEY_CAPABILITY_PROFILE_RULES) or [])
+        current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
+        # Keep the current onboarding limits in the learning path so profile saves do not drop them.
+        capability_rules = srv.normalize_capability_rules(body.get(KEY_CAPABILITY_PROFILE_RULES) or [], current_onboarding)
         if not target:
             raise ValueError("Primary job title must not be empty")
         if keyword and (len(keyword) < 2 or len(keyword) > 120):

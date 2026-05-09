@@ -38,7 +38,6 @@ from job_hunter_agent.profile_store import (
 )
 from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
 from job_hunter_agent.title_normalization_rules import (
-    derive_base_title_from_seniority,
     learn_title_normalization_candidates,
     load_title_normalization_rules,
     normalize_title_text,
@@ -57,6 +56,12 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SOURCE_KEY,
     SOURCE_CV_PARSING,
 )
+from job_hunter_agent.parsing_schema import (
+    PARSING_TITLE_CANDIDATE_LINE_RULES_KEY,
+    PARSING_TITLE_CANDIDATE_MAX_LENGTH_KEY,
+    PARSING_TITLE_CANDIDATE_MAX_TOKENS_KEY,
+    PARSING_TITLE_CANDIDATE_PUNCTUATION_BLOCKERS_KEY,
+)
 
 ROOT_DIR = REPO_ROOT
 CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
@@ -69,7 +74,7 @@ KEY_SUGGESTED_KEYWORDS = "suggested_search_keywords"
 CAT_CAPABILITY = CATEGORY_CAPABILITY_CONCEPT
 CAT_ROLE_TITLE = CATEGORY_ROLE_TITLE_TOKEN
 CAT_TITLE_NORM = CATEGORY_TITLE_NORMALIZATION_CANDIDATE
-KEY_TITLE_PARSE_BLOCKERS = "title_parse_blockers"
+KEY_TITLE_PARSE_BLOCKERS = "title_candidate_leading_verb_blockers"
 
 _VALID_LEVELS = {LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC, LEVEL_LOW}
 _CURRENT_YEAR = datetime.now().year
@@ -321,18 +326,42 @@ def get_parsing_rule_set(key: str) -> set[str]:
     return set()
 
 
+@lru_cache(maxsize=1)
+def _load_title_candidate_line_rules() -> dict[str, Any]:
+    rules = _load_parsing_rules()
+    line_rules = rules.get(PARSING_TITLE_CANDIDATE_LINE_RULES_KEY)
+    if not isinstance(line_rules, dict):
+        raise ValueError("parsing_rules.json must define title_candidate_line_rules")
+    return line_rules
+
+
+def _get_title_candidate_line_int(key: str) -> int:
+    value = _load_title_candidate_line_rules().get(key)
+    try:
+        return int(value)
+    except Exception as exc:
+        raise ValueError(f"title_candidate_line_rules.{key} must be an integer") from exc
+
+
+def _get_title_candidate_punctuation_blockers() -> set[str]:
+    blockers = _load_title_candidate_line_rules().get(PARSING_TITLE_CANDIDATE_PUNCTUATION_BLOCKERS_KEY)
+    if not isinstance(blockers, list):
+        raise ValueError("title_candidate_line_rules.punctuation_blockers must be a list")
+    return {str(item) for item in blockers if str(item)}
+
+
 
 def _looks_like_role_title_line(text: str) -> bool:
     cleaned = _clean_line(text)
     if not cleaned:
         return False
-    if len(cleaned) > 80:
+    if len(cleaned) > _get_title_candidate_line_int(PARSING_TITLE_CANDIDATE_MAX_LENGTH_KEY):
         return False
-    if cleaned.endswith(".") or "," in cleaned:
+    if any(blocker in cleaned for blocker in _get_title_candidate_punctuation_blockers()):
         return False
     normalized = _normalize_role_title_value(cleaned)
     tokens = _pattern_tokens(normalized)
-    if not tokens or len(tokens) > 7:
+    if not tokens or len(tokens) > _get_title_candidate_line_int(PARSING_TITLE_CANDIDATE_MAX_TOKENS_KEY):
         return False
     if tokens[0] in get_parsing_rule_set(KEY_TITLE_PARSE_BLOCKERS):
         return False
@@ -492,6 +521,15 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                         and not _extract_year_range(previous_line)
                     ):
                         employer = previous_line
+                if not employer and i + 1 < len(lines):
+                    next_line = _clean_line(lines[i + 1].strip())
+                    if (
+                        next_line
+                        and not _is_heading_line(lines[i + 1].strip())
+                        and not _extract_year_range(next_line)
+                        and not _looks_like_role_title_line(next_line)
+                    ):
+                        employer = next_line
                 roles.append(
                     {
                         "title": title,
@@ -913,12 +951,12 @@ def _split_compound_role_title(title: str) -> list[str]:
         return []
     raw_parts = [
         _normalize_role_title_value(part)
-        for part in re.split(r"\s*/\s*|\s*\|\s*|\s+\band\b\s+", cleaned)
+        for part in re.split(r"\s*/\s*|\s*\|\s*|\s+\band\b\s+|\s*&\s+", cleaned)
         if _normalize_role_title_value(part)
     ]
     if len(raw_parts) <= 1:
         return [cleaned]
-    if not all(any(token in _generic_role_tokens() for token in _pattern_tokens(part)) for part in raw_parts):
+    if not all(len(_pattern_tokens(part)) >= 2 for part in raw_parts):
         return [cleaned]
     return list(dict.fromkeys(raw_parts))
 
@@ -936,14 +974,16 @@ def _sorted_roles_for_title_selection(roles: list[dict[str, Any]]) -> list[dict[
     )
 
 
-def _collect_title_evidence(roles: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+def _collect_title_evidence(roles: list[dict[str, Any]], *, recent_years: int) -> dict[str, dict[str, int]]:
     evidence: dict[str, dict[str, int]] = {}
-    for index, role in enumerate(_sorted_roles_for_title_selection(roles)):
+    for role in _sorted_roles_for_title_selection(roles):
         raw_title = str(role.get("title") or "").strip()
         if not raw_title:
             continue
         titles = _split_compound_role_title(raw_title)
         is_compound = len(titles) > 1
+        end_year = int(role.get("end_year") or 0)
+        years_since_last_use = max(_CURRENT_YEAR - end_year, 0) if end_year else 99
         for title in titles:
             bucket = evidence.setdefault(
                 title,
@@ -959,7 +999,7 @@ def _collect_title_evidence(roles: list[dict[str, Any]]) -> dict[str, dict[str, 
             bucket["total_occurrences"] += 1
             if bool(role.get("is_current")):
                 bucket["current_occurrences"] += 1
-            elif index <= 2:
+            elif years_since_last_use <= recent_years:
                 bucket["recent_occurrences"] += 1
             else:
                 bucket["older_occurrences"] += 1
@@ -1131,7 +1171,10 @@ def extract_title_pattern_suggestions(
     max_target = _resolve_onboarding_int(settings, KEY_MAX_TARGET)
     max_secondary = _resolve_onboarding_int(settings, KEY_MAX_SECONDARY)
     roles = _parse_role_entries(source_text)
-    title_evidence = _collect_title_evidence(roles)
+    title_evidence = _collect_title_evidence(
+        roles,
+        recent_years=_resolve_extraction_lookback_years(settings),
+    )
     classified = _classify_titles_from_evidence(
         title_evidence,
         max_target=max_target,
@@ -1148,15 +1191,12 @@ def extract_title_pattern_suggestions(
         for value in (classified.get(KEY_SECONDARY_PATTERNS) or [])
         if _normalize_role_title_value(value)
     ][:max_secondary]
-    derived_secondary_patterns: list[str] = []
-    seen_secondary = {pattern for pattern in secondary_patterns if pattern}
-    for primary in target_patterns:
-        derived = derive_base_title_from_seniority(primary)
-        if not derived or derived in seen_secondary or derived in target_patterns:
-            continue
-        seen_secondary.add(derived)
-        derived_secondary_patterns.append(derived)
-    secondary_patterns = list(dict.fromkeys([*secondary_patterns, *derived_secondary_patterns]))[:max_secondary]
+    primary_set = {pattern for pattern in target_patterns if pattern}
+    secondary_patterns = [
+        pattern
+        for pattern in secondary_patterns
+        if pattern not in primary_set
+    ][:max_secondary]
     suggested_search_keywords = target_patterns[:4]
 
     return {

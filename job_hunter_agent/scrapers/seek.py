@@ -8,9 +8,11 @@ import re
 from typing import List, Optional
 from urllib.parse import urljoin
 
+from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import keywords_to_search_string
-from job_hunter_agent.utils import extract_work_mode, set_query_param
+from job_hunter_agent.utils import set_query_param
+from job_hunter_agent.work_mode_extraction import extract_from_seek_card
 
 # ---------------------------------------------------------------------------
 # Playwright CSS selectors (SEEK-specific DOM)
@@ -59,8 +61,13 @@ def _dedupe_preserve_order(values: List[str]) -> List[str]:
 def _normalize_posted_text(value: Optional[str]) -> str:
     text = str(value or "").strip()
     if not text:
-        return "N/A"
+        return ""
     return re.sub(r"^\s*posted\s+", "", text, flags=re.IGNORECASE).strip()
+
+
+def _seek_posted_age_rules() -> dict:
+    rules = load_parsing_rules().get("seek_posted_age_rules", {})
+    return rules if isinstance(rules, dict) else {}
 
 
 # ---------------------------------------------------------------------------
@@ -70,24 +77,23 @@ def _normalize_posted_text(value: Optional[str]) -> str:
 
 def extract_posted_text_from_card(card_text: str) -> str:
     text = _normalize_posted_text(card_text)
-    match = re.search(
-        r"\b(today|yesterday|\d+\s*[mhdy](?:\s*ago)?)\b",
-        text,
-        flags=re.IGNORECASE,
-    )
+    pattern = str(_seek_posted_age_rules().get("card_match_pattern") or "").strip()
+    if not pattern:
+        return ""
+    match = re.search(pattern, text, flags=re.IGNORECASE)
     if match:
-        return _normalize_posted_text(match.group(1))
-    return "N/A"
+        return _normalize_posted_text(match.group(0))
+    return ""
 
 
 def extract_work_type(card_text: str) -> str:
     match = re.search(r"This is a ([^\n]+?) job", card_text, flags=re.IGNORECASE)
     if match:
         return match.group(1).strip()
-    return "N/A"
+    return ""
 
 
-def extract_card_metadata(card) -> dict:
+def extract_card_metadata(card, filter_state=None) -> dict:
     location_values = [
         (element.inner_text() or "").strip()
         for element in card.query_selector_all(SELECTOR_LOCATION)
@@ -98,12 +104,16 @@ def extract_card_metadata(card) -> dict:
     teaser_text = teaser_el.inner_text().strip() if teaser_el else ""
     card_text = (card.inner_text() or "").strip()
 
+    wm = extract_from_seek_card(card_text, filter_state)
     return {
-        "location": ", ".join(_dedupe_preserve_order(location_values)) or "N/A",
+        "location": ", ".join(_dedupe_preserve_order(location_values)) or "",
         "work_type": extract_work_type(card_text),
-        "work_mode": extract_work_mode("\n".join([card_text, teaser_text, salary_text])),
-        "card_salary": salary_text or "N/A",
-        "teaser": teaser_text or "N/A",
+        "work_mode": wm["work_mode"],
+        "work_mode_source": wm["work_mode_source"],
+        "work_mode_evidence": wm["work_mode_evidence"],
+        "work_mode_needs_review": wm["work_mode_needs_review"],
+        "card_salary": salary_text or "",
+        "teaser": teaser_text or "",
     }
 
 

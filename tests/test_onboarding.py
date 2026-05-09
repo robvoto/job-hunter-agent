@@ -1,6 +1,9 @@
+import pytest
+
 from job_hunter_agent import server_helpers
 from job_hunter_agent import server_review
 from job_hunter_agent import source_documents
+from job_hunter_agent import profile_store
 
 
 def test_normalize_onboarding_search_preferences_trims_and_normalizes():
@@ -75,15 +78,21 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
             "title_extraction_min_months": 9,
             "max_target_patterns": 10,
             "max_secondary_patterns": 7,
+            "capability_alias_limit": 6,
+            "signal_cluster_min_alias_hits": 3,
+            "signal_cluster_min_snippet_hits": 4,
+            "signal_cluster_dense_snippet_alias_hits": 5,
         }
     )
 
-    assert normalized == {
-        "extraction_lookback_years": 12,
-        "title_extraction_min_months": 9,
-        "max_target_patterns": 10,
-        "max_secondary_patterns": 7,
-    }
+    assert normalized["extraction_lookback_years"] == 12
+    assert normalized["title_extraction_min_months"] == 9
+    assert normalized["max_target_patterns"] == 10
+    assert normalized["max_secondary_patterns"] == 7
+    assert normalized["capability_alias_limit"] == 6
+    assert normalized["signal_cluster_min_alias_hits"] == 3
+    assert normalized["signal_cluster_min_snippet_hits"] == 4
+    assert normalized["signal_cluster_dense_snippet_alias_hits"] == 5
 
 
 def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
@@ -95,15 +104,21 @@ def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
             "title_extraction_min_months": 0,
             "max_target_patterns": -1,
             "max_secondary_patterns": 999,
+            "capability_alias_limit": 999,
+            "signal_cluster_min_alias_hits": 0,
+            "signal_cluster_min_snippet_hits": 0,
+            "signal_cluster_dense_snippet_alias_hits": 999,
         }
     )
 
-    assert normalized == {
-        "extraction_lookback_years": 20,
-        "title_extraction_min_months": 1,
-        "max_target_patterns": 1,
-        "max_secondary_patterns": 20,
-    }
+    assert normalized["extraction_lookback_years"] == 20
+    assert normalized["title_extraction_min_months"] == 1
+    assert normalized["max_target_patterns"] == 1
+    assert normalized["max_secondary_patterns"] == 20
+    assert normalized["capability_alias_limit"] == 20
+    assert normalized["signal_cluster_min_alias_hits"] == 1
+    assert normalized["signal_cluster_min_snippet_hits"] == 1
+    assert normalized["signal_cluster_dense_snippet_alias_hits"] == 20
 
 
 def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(monkeypatch, tmp_path):
@@ -123,6 +138,10 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
                 "title_extraction_min_months": 5,
                 "max_target_patterns": 9,
                 "max_secondary_patterns": 4,
+                "capability_alias_limit": 7,
+                "signal_cluster_min_alias_hits": 3,
+                "signal_cluster_min_snippet_hits": 4,
+                "signal_cluster_dense_snippet_alias_hits": 5,
             },
         },
     )
@@ -146,12 +165,38 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
     )
 
     assert result["ok"] is True
-    assert captured["onboarding_settings"] == {
-        "extraction_lookback_years": 11,
-        "title_extraction_min_months": 5,
-        "max_target_patterns": 9,
-        "max_secondary_patterns": 4,
-    }
+    assert captured["onboarding_settings"]["extraction_lookback_years"] == 11
+    assert captured["onboarding_settings"]["title_extraction_min_months"] == 5
+    assert captured["onboarding_settings"]["max_target_patterns"] == 9
+    assert captured["onboarding_settings"]["max_secondary_patterns"] == 4
+    assert captured["onboarding_settings"]["capability_alias_limit"] == 7
+    assert captured["onboarding_settings"]["signal_cluster_min_alias_hits"] == 3
+    assert captured["onboarding_settings"]["signal_cluster_min_snippet_hits"] == 4
+    assert captured["onboarding_settings"]["signal_cluster_dense_snippet_alias_hits"] == 5
+
+
+def test_normalize_full_profile_preserves_selected_title_categories():
+    normalized = profile_store.normalize_full_profile(
+        {
+            "primary_job_title_pattern": ["senior business analyst"],
+            "secondary_title_patterns": ["scrum master"],
+        }
+    )
+
+    assert normalized["primary_job_title_pattern"] == ["senior business analyst"]
+    assert normalized["secondary_title_patterns"] == ["scrum master"]
+
+
+def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
+    normalized = profile_store.normalize_full_profile(
+        {
+            "primary_job_title_pattern": ["senior business analyst"],
+            "secondary_title_patterns": ["Senior Business Analyst", "scrum master"],
+        }
+    )
+
+    assert normalized["primary_job_title_pattern"] == ["senior business analyst"]
+    assert normalized["secondary_title_patterns"] == ["scrum master"]
 
 
 def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
@@ -194,6 +239,37 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         "daily_time_local": "09:45",
         "loop_sleep_seconds": 120,
     }
+
+
+def test_agent_settings_model_uses_advanced_setting_options(monkeypatch):
+    monkeypatch.setattr(
+        server_helpers,
+        "load_advance_settings",
+        lambda: {
+            "llm_settings": {
+                "model_options": ["gpt-4o-mini", "gpt-4o"],
+            },
+        },
+    )
+
+    sanitized = server_helpers.SettingsHandler._sanitize_agent_settings_payload(
+        {
+            "llm": {
+                "model": "gpt-4o",
+            }
+        }
+    )
+
+    assert sanitized["llm"] == {"model": "gpt-4o"}
+
+    with pytest.raises(ValueError, match="Advanced Settings"):
+        server_helpers.SettingsHandler._sanitize_agent_settings_payload(
+            {
+                "llm": {
+                    "model": "gpt-4.1",
+                }
+            }
+        )
 
 
 def test_agent_settings_schedule_payload_rejects_bad_time_format():

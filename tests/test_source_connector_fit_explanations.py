@@ -4,6 +4,7 @@ import pytest
 
 from job_hunter_agent import fit_scoring
 from job_hunter_agent import capability_matching, dashboard_renderer, signal_detection, source_connector
+from job_hunter_agent import role_analysis
 from job_hunter_agent.record_schema import (
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
@@ -11,6 +12,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_STATUS_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
 )
 from job_hunter_agent.profile_store import (
     KEY_EVIDENCE_TIERS,
@@ -18,7 +20,8 @@ from job_hunter_agent.profile_store import (
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
 )
-from job_hunter_agent.utils import extract_work_mode
+from job_hunter_agent.paths import SCORING_RULES_PATH
+from job_hunter_agent.work_mode_extraction import extract_from_text
 
 
 def _test_profile():
@@ -70,17 +73,44 @@ def _breakdown_value(breakdown, label):
     return None
 
 
-def test_infer_posting_channel_ignores_current_state_phrase():
-    channel = source_connector.infer_posting_channel(
-        {"company": "Preacta Recruitment"},
-        "Join a global consultancy. Analyse current-state data capability and maturity.",
+def test_infer_posting_channel_uses_trusted_metadata_before_text():
+    channel = role_analysis.infer_posting_channel(
+        {
+            "source_metadata": {
+                "platform": "linkedin",
+                "apply_url": "https://jobs.lever.co/acme/123",
+                "apply_domain": "jobs.lever.co",
+                "company_profile_url": "https://acme.com.au",
+                "company_profile_name": "Acme",
+                "poster_company": "Acme",
+                "hiring_company": "Acme",
+                "ats_source": "jobs.lever.co",
+                "raw_source_fields": {
+                    "job_url_direct": "https://jobs.lever.co/acme/123",
+                    "company_url_direct": "https://acme.com.au",
+                },
+            }
+        },
+        "",
     )
 
-    assert channel == {
-        "kind": "recruiter",
-        "label": "Recruiter posting",
-        "confidence": "medium",
-    }
+    assert channel["kind"] == "direct_employer"
+    assert channel["source"] == "metadata_first"
+    assert channel["needs_review"] is False
+    assert "job_url_direct" in channel["trusted_metadata"]
+
+
+def test_infer_posting_channel_returns_fallback_text_evidence():
+    channel = role_analysis.infer_posting_channel(
+        {"source_metadata": {"platform": "seek", "raw_source_fields": {}}},
+        "Our client is seeking a consultant. Contact our recruitment team for details.",
+    )
+
+    assert channel["kind"] == "unknown"
+    assert channel["source"] == "fallback_text_evidence"
+    assert channel["needs_review"] is True
+    assert "our client" in channel["weak_text_matches"]
+    assert "client is seeking" in channel["weak_text_matches"]
 
 
 def test_infer_role_sector_only_claims_government_when_explicit():
@@ -313,7 +343,7 @@ def test_build_ad_learning_signals_does_not_infer_hard_blockers_from_raw_text(mo
 def test_fit_confidence_does_not_override_trusted_description_calculation():
     record = {
         RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
-        RECORD_FIT_SOURCE_TEXT_KEY: "Business analyst duties. " * 40,
+        RECORD_FULL_DESCRIPTION_KEY: "Business analyst duties. " * 40,
         RECORD_FIT_CONFIDENCE_KEY: CONFIDENCE_LOW,
     }
 
@@ -334,7 +364,12 @@ def test_fit_confidence_low_when_no_trusted_description_exists():
 
 
 def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_method():
-    assert extract_work_mode("Familiarity with Agile, Waterfall, or hybrid delivery environments. This role is 5 days in office.") == "On-site"
+    result = extract_from_text(
+        "Familiarity with Agile, Waterfall, or hybrid delivery environments. This role is 5 days in office."
+    )
+    assert result["work_mode"] == "onsite"
+    assert result["work_mode_source"] == "fallback_text"
+    assert result["work_mode_needs_review"] is True
 
 
 def test_build_role_summary_prefers_description_snippet_over_generic_sector_stub():
@@ -447,6 +482,7 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
     }
     monkeypatch.setattr(source_connector, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
+    monkeypatch.setattr(capability_matching, "load_approved_signal_catalog", lambda: [])
 
     matches = source_connector.reviewed_signal_matches_for_text(
         "Stakeholder management, Jira, banking, project, and delivery are all mentioned in the role."
@@ -614,6 +650,41 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
 
     assert _breakdown_value(breakdown, "Multiple strong signals align") == 5
     assert source_connector.fit_score(record, profile) >= 70
+
+
+def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypatch):
+    monkeypatch.setattr(fit_scoring, "full_description_confidence", lambda record: "HIGH")
+
+    profile = {
+        **_test_profile(),
+        "scoring_rules": {
+            "convergence": {
+                "eligible_grades": ["SOLID"],
+                "min_positive_matches": 1,
+                "required_title_reason": "TITLE_POTENTIAL_MATCH",
+                "required_content_reason": "DESC_OK",
+                "required_fit_confidence": "HIGH",
+                "bonus_no_soft_risks": 11,
+                "bonus_with_soft_risks": 7,
+                "label": "Aligned",
+            }
+        },
+    }
+    record = {
+        "title_reason": "TITLE_POTENTIAL_MATCH",
+        "content_reason": "DESC_OK",
+        "llm_fit_grade": "SOLID",
+        "missing_evidence": [],
+        "soft_risk_reasons": [],
+    }
+
+    entry = fit_scoring.convergence_bonus_entry(
+        record,
+        {"strong": ["platform engineering"], "working": [], "basic": []},
+        profile,
+    )
+
+    assert entry == {"label": "Aligned", "value": 11}
 
 
 def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
@@ -938,10 +1009,13 @@ def test_job_card_uses_score_tone_as_card_accent_class():
     assert ">New To You<" in html
 
 
-def test_recruiter_badge_uses_distinct_class():
+def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
+    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: 0)
+    monkeypatch.setattr(dashboard_renderer, "fit_score_breakdown", lambda record, profile=None: [])
+
     html = source_connector.render_job_card(
         {
-            "job_key": "test-recruiter-badge",
+            "job_key": "test-posting-channel-badge",
             "title": "Business Analyst",
             "company": "Preacta Recruitment",
             "url": "https://example.com/job",
@@ -952,14 +1026,20 @@ def test_recruiter_badge_uses_distinct_class():
             "work_type": "Full Time",
             "work_mode": "Hybrid",
             "salary": "N/A",
-            "full_description": "Leading consultancy seeks a business analyst to run agile workshops and stakeholder discovery. " * 20,
+            "full_description": "Our client is seeking a business analyst. Contact our recruitment team for details. " * 20,
             "fit_highlights": [],
             "source": "seek",
+            "posting_channel_evidence": {
+                "trusted_metadata": [],
+                "weak_text_matches": ["our client", "contact (?:our )?(?:consultant|recruiter|recruitment team)"],
+                "needs_review": True,
+            },
         },
         _test_profile(),
     )
 
-    assert "badge-channel-recruiter" in html
+    assert "badge-warning" in html
+    assert "Posting evidence" in html
     assert "badge-sector-government" not in html
 
 
@@ -997,9 +1077,11 @@ def test_applied_and_hidden_cards_render_undo_actions():
 
 
 def test_possible_repost_card_carries_duplicate_apply_warning_details():
+    # find_similar_job only matches confirmed duplicates (same job_key or URL).
+    # Use the same job_key in the applied pool to trigger the "Possible Repost" badge.
     html = source_connector.render_job_card(
         {
-            "job_key": "seek:new",
+            "job_key": "seek:repost",
             "title": "Senior Business Analyst",
             "company": "Acme",
             "url": "https://example.com/new-role",
@@ -1017,7 +1099,7 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
         _test_profile(),
         applied_pool=[
             {
-                "job_key": "seek:old",
+                "job_key": "seek:repost",
                 "title": "Business Analyst Senior",
                 "company": "Acme",
                 "source": "seek",
@@ -1027,7 +1109,7 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
 
     assert "Possible Repost" in html
     assert 'data-similar-applied-warning="1"' in html
-    assert 'data-similar-applied-job-key="seek:old"' in html
+    assert 'data-similar-applied-job-key="seek:repost"' in html
     assert 'data-similar-applied-title="Business Analyst Senior"' in html
     assert "Alert: This looks like a role you already marked as applied at this company." in html
 
@@ -1375,6 +1457,16 @@ def test_posted_filter_options_show_explicit_day_windows():
     #assert "Last 30 days (3)" in options_html
 
 
+def test_freshness_breakdown_uses_managed_bucket_cutoffs():
+    scoring_rules = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
+    weights = {"freshness": 1.0}
+
+    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02), "Posted within the last hour") == 10
+    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 2), "Posted within the last 3 days") == 5
+    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 10), "Still relatively recent") == 1
+    assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 20) == []
+
+
 def test_repeated_listing_history_adds_candidate_warning():
     html = source_connector.render_job_card(
         {
@@ -1440,3 +1532,50 @@ def test_posted_display_shows_today_against_current_render_date():
     )
 
     assert label == "22 Apr 2026 (today)"
+
+
+def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
+    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, {}))
+
+    record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "competitive_signals": [],
+        "hard_block_reasons": ["requires SAP experience"],
+    }
+
+    breakdown = source_connector.fit_score_breakdown(record, _test_profile())
+    labels = [item["label"] for item in breakdown]
+
+    assert any("Hard blocker" in label for label in labels)
+    assert "Primary role-family match" in labels
+    assert any("fit" in label.lower() for label in labels)
+
+
+def test_score_equivalent_where_no_hard_blockers(monkeypatch):
+    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, {}))
+
+    record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "competitive_signals": [],
+    }
+    profile = _test_profile()
+
+    breakdown = source_connector.fit_score_breakdown(record, profile)
+    score = source_connector.fit_score(record, profile)
+
+    assert score == max(min(sum(item["value"] for item in breakdown), 100), 0)
+    assert not any("Hard blocker" in item["label"] for item in breakdown)

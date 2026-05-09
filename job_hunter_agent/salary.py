@@ -1,9 +1,13 @@
 import json
-from pathlib import Path
-from typing import Dict, Optional, Set
-#Harcoded: We need LLM to learn / maintain and grow salary_rules
-_BASE_DIR = Path(__file__).resolve().parent
-_SALARY_PATH = _BASE_DIR / "data" / "salary.json"
+from typing import Dict, Optional
+
+from job_hunter_agent.paths import DATA_DIR
+
+_SALARY_PATH = DATA_DIR / "salary.json"
+
+KEY_INTERVAL_SUFFIX = "interval_suffix"
+KEY_INTERVAL_DIVISOR = "interval_divisor"
+KEY_CURRENCIES_WITH_DOLLAR = "currencies_with_dollar"
 
 _cached_rules: Optional[Dict] = None
 

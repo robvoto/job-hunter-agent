@@ -16,6 +16,8 @@ from job_hunter_agent.signal_schema import (
 )
 
 _TERM_PLACEHOLDER = "{term}"
+REJECTION_BLOCKER_MIN_LENGTH = 2
+REJECTION_BLOCKER_MAX_LENGTH = 80
 
 
 def _clean_text(value: Any) -> str:
@@ -165,6 +167,45 @@ def _near_desirable_language(text: str, term: str, window: int = 90) -> bool:
         if re.search(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b", context):
             return True
     return False
+
+
+def normalize_rejection_blocker_suggestions(
+    value: Any,
+    *,
+    max_items: int,
+    max_words: int,
+) -> list[str]:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return []
+    if isinstance(value, dict):
+        value = value.get("blockers") or value.get("suggestions") or []
+    if not isinstance(value, list):
+        return []
+
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        phrase = re.sub(r"\s+", " ", str(item.get("term") or "").strip().lower())
+        if not phrase:
+            continue
+        if len(phrase) < REJECTION_BLOCKER_MIN_LENGTH or len(phrase) > REJECTION_BLOCKER_MAX_LENGTH:
+            continue
+        if re.search(r"[\r\n.;!?]", phrase):
+            continue
+        if len(phrase.split()) > max_words:
+            continue
+        if phrase in seen:
+            continue
+        seen.add(phrase)
+        suggestions.append(phrase)
+        if len(suggestions) >= max_items:
+            break
+    return suggestions
 
 
 def _render_rule(value: str, term: str) -> str:

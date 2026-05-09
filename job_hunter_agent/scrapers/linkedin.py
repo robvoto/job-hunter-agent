@@ -8,17 +8,32 @@ filtering, enrichment, LLM gate, and dashboard rendering pipeline works unchange
 import re
 import sys
 from typing import List, Set
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
-from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters, passes_saved_rejection_rules
-from job_hunter_agent.advance_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
+from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters
+from job_hunter_agent.advance_settings import (
+    DEFAULT_SEARCH_SETTINGS,
+    KEY_DATE_RANGE_DAYS,
+    KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
+)
+from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
-from job_hunter_agent.utils import extract_salary, extract_work_mode
+from job_hunter_agent.utils import extract_salary
+from job_hunter_agent.work_mode_extraction import (
+    extract_from_text,
+    log_work_mode_result,
+    WORK_MODE_UNKNOWN,
+)
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
 
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.job_types import load_job_type
+from job_hunter_agent.role_analysis import infer_posting_channel
 
 #Load once
 salary_rules = load_salary()
@@ -29,6 +44,26 @@ def _normalize_location_for_jobspy(raw: str) -> str:
     """Map raw profile/search location text to python-jobspy's location string."""
     location = resolve_location(str(raw).strip())
     return to_jobspy(location)
+
+
+def _fetch_job_html(record: dict) -> str:
+    raw_fields = record.get("source_metadata", {}).get("raw_source_fields", {})
+    if not isinstance(raw_fields, dict):
+        raw_fields = {}
+    url = str(
+        raw_fields.get("job_url_direct")
+        or raw_fields.get("job_url")
+        or record.get("url")
+        or ""
+    ).strip()
+    if not url:
+        return ""
+    request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urlopen(request, timeout=20) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except (URLError, TimeoutError, ValueError):
+        return ""
 
 
 class LinkedInScraper(BaseJobScraper):
@@ -150,9 +185,9 @@ class LinkedInScraper(BaseJobScraper):
 
                 # Date window check
                 search_settings = get_search_settings(self.profile)
-                date_range_days = int(search_settings.get("date_range_days", 3) or 3)
+                date_range_days = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
                 posted_age = record.get("posted_age_days")
-                enforce_limit = bool(search_settings.get("enforce_posted_age_limit", True))
+                enforce_limit = bool(search_settings.get("enforce_posted_age_limit", DEFAULT_SEARCH_SETTINGS["enforce_posted_age_limit"]))
                 if enforce_limit and posted_age is not None and posted_age > date_range_days:
                     record["reject_reason"] = f"POSTED_TOO_OLD:{date_range_days}"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
@@ -214,24 +249,21 @@ class LinkedInScraper(BaseJobScraper):
                     record["reject_reason"] = desc_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
-                ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
-                if not ok_learned:
-                    register_hard_blocker_learning_from_rejection(record, learned_reason, details_text, profile=self.profile)
-                    record["content_reason"] = learned_reason
-                    record["reject_reason"] = learned_reason
-                    print(f"[LinkedIn] REJECTED (learned rule) [{learned_reason}] {title} @ {company}")
-                    finalize_record(self.job_history, audit_rows, record, self.run_iso)
-                    continue
-
                 # Enrich from full description text
                 salary = extract_salary(details_text)
                 if salary == "N/A":
                     salary = record.get("salary", "N/A")
                 record["salary"] = salary
 
-                detail_work_mode = extract_work_mode(details_text)
-                if detail_work_mode != "N/A":
-                    record["work_mode"] = detail_work_mode
+                # Upgrade work mode via text inference only if structured metadata found nothing.
+                if record.get("work_mode") in (WORK_MODE_UNKNOWN, "", None):
+                    text_result = extract_from_text(details_text)
+                    if text_result["work_mode"] != WORK_MODE_UNKNOWN:
+                        record["work_mode"] = text_result["work_mode"]
+                        record["work_mode_source"] = text_result["work_mode_source"]
+                        record["work_mode_evidence"] = text_result["work_mode_evidence"]
+                        record["work_mode_needs_review"] = text_result["work_mode_needs_review"]
+                log_work_mode_result(str(record.get("job_key") or ""), "linkedin", record)
 
                 raw_signals = detect_competitive_signals(details_text, self.profile)
                 record["competitive_signals"] = [
@@ -279,6 +311,23 @@ class LinkedInScraper(BaseJobScraper):
                 record["missing_evidence"] = missing_evidence
                 record["fit_watchout_meta"] = []
                 record["fit_watchouts"] = []
+                channel_signal = infer_posting_channel(record, details_text)
+                record["posting_channel_evidence"] = {
+                    "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),
+                    "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
+                    "needs_review": bool(channel_signal.get("needs_review")),
+                }
+                if DEBUG_CAPTURE_SOURCE_PAYLOADS:
+                    try:
+                        write_source_payload_debug(
+                            "linkedin",
+                            str(record.get("job_key") or record.get("url") or "unknown"),
+                            raw_html=_fetch_job_html(record),
+                            raw_json=record.get("source_metadata", {}).get("raw_source_fields", {}),
+                            normalized_record=record,
+                        )
+                    except Exception:
+                        pass
 
                 # LLM gate
                 deterministic_review = deterministic_review_outcome(
@@ -344,9 +393,9 @@ class LinkedInScraper(BaseJobScraper):
             for loc in search_settings.get("locations", [])
             if str(loc).strip()
         ]
-        date_range_days = int(search_settings.get("date_range_days", 3) or 3)
-        hours_old = int(search_settings.get("linkedin_hours_old", 24) or 24)
-        results_wanted = int(search_settings.get("linkedin_results_per_search", 25) or 25)
+        date_range_days = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
+        hours_old = int(search_settings.get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]) or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD])
+        results_wanted = int(search_settings.get(KEY_LINKEDIN_RESULTS_PER_SEARCH, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]) or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH])
         easy_apply = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)  # None / True / False
 
         targets = []

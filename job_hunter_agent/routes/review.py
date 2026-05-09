@@ -1,7 +1,6 @@
 import hashlib
 import json
 import re
-from datetime import datetime
 
 from fastapi import APIRouter, Body, Query
 
@@ -127,55 +126,6 @@ def api_rejection_feedback_mandatory_blockers(body: dict = Body(...)):  # type: 
         return json_response({"error": str(exc)}, 400)
     return json_response(result)
 
-
-@router.post("/api/rejection-rules")
-def api_rejection_rules(body: dict = Body(...)):  # type: ignore[no-untyped-def]
-    try:
-        job_id = str(body.get("job_id") or "").strip()
-        job_title = str(body.get("job_title") or "").strip()
-        raw_rules = body.get("rules")
-        if not isinstance(raw_rules, list):
-            raise ValueError("rules must be a list")
-        validated = []
-        now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
-        approved_suggestion_tokens = body.get("approved_suggestion_tokens") or {}
-        if not isinstance(approved_suggestion_tokens, dict):
-            raise ValueError("approved_suggestion_tokens must be an object")
-        raw_values = [str(r.get("value") or "").strip() for r in raw_rules if isinstance(r, dict)]
-        srv.SettingsHandler._validate_llm_suggestion_approvals(
-            job_id,
-            raw_values,
-            approved_suggestion_tokens=approved_suggestion_tokens,
-        )
-        for i, r in enumerate(raw_rules):
-            value = str(r.get("value") or "").strip()
-            category = str(r.get("category") or "other").strip()
-            if not value or len(value) < 3:
-                continue
-            if value.lower() in srv._REJECTION_RULE_JUNK_VALUES:
-                continue
-            if category not in srv._VALID_REJECTION_RULE_CATEGORIES:
-                category = "other"
-            validated.append(
-                {
-                    "id": f"{job_id}_{now_iso}_{i}",
-                    "job_id": job_id,
-                    "job_title": job_title,
-                    "value": value,
-                    "category": category,
-                    "source": str(r.get("source") or "user_selected"),
-                    "active": True,
-                    "created_at": now_iso,
-                },
-            )
-        if not validated:
-            raise ValueError("No valid rules provided (check minimum length >= 3)")
-        existing = srv.SettingsHandler._load_rejection_rules()
-        existing.extend(validated)
-        srv.SettingsHandler._save_rejection_rules_list(existing)
-    except Exception as exc:
-        return json_response({"error": str(exc)}, 400)
-    return json_response({"ok": True, "saved": len(validated)})
 
 
 @router.post("/api/title-block-preview")

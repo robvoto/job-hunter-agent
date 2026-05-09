@@ -49,7 +49,8 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
     )
 
     assert result["ok"] is True
-    assert captured["onboarding_settings"] == {"extraction_lookback_years": 12, "title_extraction_min_months": 6}
+    assert captured["onboarding_settings"]["extraction_lookback_years"] == 12
+    assert captured["onboarding_settings"]["title_extraction_min_months"] == 6
 
 
 def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_returns_none(monkeypatch, tmp_path):
@@ -178,8 +179,8 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
             "match_preferences": {},
         },
     )
-    monkeypatch.setattr(llm_gate, "get_evidence_tiers", lambda profile: {})
-    monkeypatch.setattr(llm_gate, "get_evidence_tier_weights", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_candidate_profile_tiers", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_candidate_profile_tier_weights", lambda profile: {})
 
     context = llm_gate.build_profile_prompt_context()
 
@@ -201,8 +202,8 @@ def test_build_system_prompt_includes_user_fit_review_guidance(monkeypatch):
             "match_preferences": {},
         },
     )
-    monkeypatch.setattr(llm_gate, "get_evidence_tiers", lambda profile: {})
-    monkeypatch.setattr(llm_gate, "get_evidence_tier_weights", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_candidate_profile_tiers", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_candidate_profile_tier_weights", lambda profile: {})
 
     prompt = llm_gate.build_system_prompt()
 
@@ -224,8 +225,8 @@ def test_build_system_prompt_includes_managed_default_fit_review_guidance(monkey
             "match_preferences": {},
         },
     )
-    monkeypatch.setattr(llm_gate, "get_evidence_tiers", lambda profile: {})
-    monkeypatch.setattr(llm_gate, "get_evidence_tier_weights", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_candidate_profile_tiers", lambda profile: {})
+    monkeypatch.setattr(llm_gate, "get_candidate_profile_tier_weights", lambda profile: {})
 
     prompt = llm_gate.build_system_prompt()
 

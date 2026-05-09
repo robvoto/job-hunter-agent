@@ -3,6 +3,7 @@ import importlib
 
 from job_hunter_agent.advance_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS, normalize_search_settings
+from job_hunter_agent import profile_store
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -16,7 +17,7 @@ def test_default_search_settings_are_candidate_agnostic():
     assert DEFAULT_SEARCH_SETTINGS["keywords"] == ""
     assert DEFAULT_SEARCH_SETTINGS["locations"] == []
     assert DEFAULT_SEARCH_SETTINGS["classification_ids"] == []
-    assert DEFAULT_SEARCH_SETTINGS["seek_max_pages"] == 10
+    assert DEFAULT_SEARCH_SETTINGS["seek_max_pages"] > 0
 
 
 def test_search_settings_clamp_source_fetch_limits():
@@ -29,10 +30,39 @@ def test_search_settings_clamp_source_fetch_limits():
         }
     )
 
-    assert normalized["seek_max_pages"] == 10
+    assert normalized["seek_max_pages"] == DEFAULT_SEARCH_SETTINGS["seek_max_pages"]
     assert normalized["linkedin_hours_old"] == 168
     assert normalized["linkedin_results_per_search"] == 5
     assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
+
+
+def test_search_settings_follow_managed_search_limits(monkeypatch):
+    monkeypatch.setattr(
+        profile_store,
+        "load_advance_settings",
+        lambda: {
+            "search_limits": {
+                "date_range_days": {"min": 1, "max": 9},
+                "seek_max_pages": {"min": 1, "max": 12},
+                "linkedin_hours_old": {"min": 1, "max": 72},
+                "linkedin_results_per_search": {"min": 5, "max": 40},
+            }
+        },
+    )
+
+    normalized = profile_store.normalize_search_settings(
+        {
+            "seek_max_pages": 100,
+            "date_range_days": 99,
+            "linkedin_hours_old": 999,
+            "linkedin_results_per_search": 1,
+        }
+    )
+
+    assert normalized["seek_max_pages"] == 12
+    assert normalized["date_range_days"] == 9
+    assert normalized["linkedin_hours_old"] == 72
+    assert normalized["linkedin_results_per_search"] == 5
 
 
 def test_default_match_preferences_are_neutral():
@@ -65,4 +95,3 @@ def test_active_modules_import():
     ]
     for module in modules:
         importlib.import_module(module)
-

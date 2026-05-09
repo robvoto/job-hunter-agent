@@ -20,12 +20,18 @@ def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
         },
         "search_settings": {
             "date_range_days": "5",
-            "seek_max_pages": "7",
+            "seek_max_pages": "12",
             "linkedin_hours_old": "48",
-            "linkedin_results_per_search": "75",
+            "linkedin_results_per_search": "40",
             "enforce_posted_age_limit": "false",
             "sort_newest_first": "true",
             KEY_LINKEDIN_EASY_APPLY_ONLY: "true",
+        },
+        "search_limits": {
+            "date_range_days": {"min": 1, "max": 9},
+            "seek_max_pages": {"min": 1, "max": 12},
+            "linkedin_hours_old": {"min": 1, "max": 72},
+            "linkedin_results_per_search": {"min": 5, "max": 40},
         },
         "preference_weights": {
             "fit": "1.5",
@@ -46,17 +52,39 @@ def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
             "title_extraction_min_months": "7",
             "max_target_patterns": "9",
             "max_secondary_patterns": "5",
+            "capability_alias_limit": "6",
+            "signal_cluster_min_alias_hits": "3",
+            "signal_cluster_min_snippet_hits": "4",
+            "signal_cluster_dense_snippet_alias_hits": "5",
             "capability_strength_preset": "recent_focus",
+        },
+        "llm_settings": {
+            "model_options": [
+                "gpt-4o-mini",
+                "gpt-4o",
+                "gpt-4o-mini",
+            ],
         },
     })
 
     assert saved["fit_highlights"]["strong_capability_count"] == 4
     assert saved["search_settings"]["date_range_days"] == 5
+    assert saved["search_settings"]["seek_max_pages"] == 12
     assert saved["search_settings"][KEY_LINKEDIN_EASY_APPLY_ONLY] is True
+    assert saved["search_limits"]["seek_max_pages"]["max"] == 12
     assert saved["preference_weights"]["salary"] == 1.25
     assert saved["candidate_profile_tier_weights"]["secondary_candidate_profile_context"] == 0.5
     assert saved["onboarding_settings"]["capability_strength_preset"] == "recent_focus"
+    assert saved["onboarding_settings"]["capability_alias_limit"] == 6
+    assert saved["onboarding_settings"]["signal_cluster_min_alias_hits"] == 3
+    assert saved["onboarding_settings"]["signal_cluster_min_snippet_hits"] == 4
+    assert saved["onboarding_settings"]["signal_cluster_dense_snippet_alias_hits"] == 5
     assert "capability_strength_presets" in saved["onboarding_settings"]
+    assert saved["llm_settings"]["model_options"] == ["gpt-4o-mini", "gpt-4o"]
+    assert saved["llm_settings"]["pricing_per_1m"]["gpt-4o"]["output"] == 10.0
+    assert saved["llm_settings"]["llm_prompt_settings"]["learning_candidates_max_items"] == 6
+    assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_items"] == 6
+    assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_words"] == 6
     assert settings_path.exists()
 
 

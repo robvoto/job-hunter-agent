@@ -1,5 +1,60 @@
 from job_hunter_agent import filters
 from job_hunter_agent import hard_blocker_rules
+from job_hunter_agent import signal_registry
+from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH, SIGNAL_REGISTRY_PATH
+
+
+REQUIREMENTS_ELICITATION_RULE = {
+    "name": "requirements elicitation",
+    "level": "strong",
+    "fit": "core",
+    "aliases": ["requirements elicitation", "requirements gathering"],
+}
+
+PROCESS_MAPPING_RULE = {
+    "name": "process mapping",
+    "level": "working",
+    "fit": "core",
+    "aliases": ["process mapping", "as-is", "to-be"],
+}
+
+AGILE_METHODS_RULE = {
+    "name": "agile methodologies",
+    "level": "strong",
+    "fit": "core",
+    "aliases": ["scrum", "kanban"],
+}
+
+
+def _load_profile(*, capability_profile_rules=None, reject_description_phrase_rules=None, must_not_require_skills=None, extra=None):
+    profile = {
+        "capability_profile_rules": capability_profile_rules or [],
+        "reject_description_phrase_rules": reject_description_phrase_rules or [],
+        "must_not_require_skills": must_not_require_skills or [],
+    }
+    if extra:
+        profile.update(extra)
+    return profile
+
+
+def _hard_blocker_rules_path(tmp_path):
+    return tmp_path / HARD_BLOCKER_RULES_PATH.name
+
+
+def _signal_registry_path(tmp_path):
+    return tmp_path / SIGNAL_REGISTRY_PATH.name
+
+
+def _write_hard_blocker_rules(path, entries):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    hard_blocker_rules.HARD_BLOCKER_RULES_PATH = path
+    return hard_blocker_rules.save_hard_blocker_rules(entries)
+
+
+def _write_signal_registry(path, registry):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    signal_registry._REGISTRY_PATH = path
+    signal_registry.save_registry(registry)
 
 
 def test_missing_requirement_detector_separates_required_from_desirable():
@@ -13,24 +68,7 @@ def test_secondary_title_requires_stronger_role_proof(monkeypatch):
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [
-                {
-                    "name": "requirements elicitation",
-                    "level": "strong",
-                    "fit": "core",
-                    "aliases": ["requirements elicitation", "requirements gathering"],
-                },
-                {
-                    "name": "process mapping",
-                    "level": "working",
-                    "fit": "core",
-                    "aliases": ["process mapping", "as-is", "to-be"],
-                },
-            ],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
-        },
+        lambda: _load_profile(capability_profile_rules=[REQUIREMENTS_ELICITATION_RULE, PROCESS_MAPPING_RULE]),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -46,24 +84,7 @@ def test_secondary_title_with_clear_role_evidence_can_pass(monkeypatch):
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [
-                {
-                    "name": "requirements elicitation",
-                    "level": "strong",
-                    "fit": "core",
-                    "aliases": ["requirements elicitation", "requirements gathering"],
-                },
-                {
-                    "name": "process mapping",
-                    "level": "working",
-                    "fit": "core",
-                    "aliases": ["process mapping", "as-is", "to-be"],
-                },
-            ],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
-        },
+        lambda: _load_profile(capability_profile_rules=[REQUIREMENTS_ELICITATION_RULE, PROCESS_MAPPING_RULE]),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -84,18 +105,7 @@ def test_secondary_title_alias_only_mentions_do_not_count_as_role_proof(monkeypa
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [
-                {
-                    "name": "agile methodologies",
-                    "level": "strong",
-                    "fit": "core",
-                    "aliases": ["scrum", "kanban"],
-                },
-            ],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
-        },
+        lambda: _load_profile(capability_profile_rules=[AGILE_METHODS_RULE]),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -115,11 +125,7 @@ def test_direct_title_can_still_reject_overly_vague_description(monkeypatch):
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
-        },
+        lambda: _load_profile(),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -135,11 +141,11 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
+        lambda: _load_profile(extra={
             "primary_job_title_pattern": [r"\bbusiness\ analyst\b"],
             "secondary_title_patterns": [],
             "reject_title_rules": [],
-        },
+        }),
     )
 
     ok_plain, reason_plain = filters.passes_title_filters("Business Analyst")
@@ -155,29 +161,12 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
 
 
 def test_approved_hard_blocker_rules_rejects_mandatory_requirement_text(tmp_path, monkeypatch):
-    rules_path = tmp_path / "hard_blocker_rules.json"
-    rules_path.write_text(
-        """
-        {
-          "kind": "managed_knowledge",
-          "name": "hard_blocker_rules",
-          "version": 1,
-          "entries": [
-            {"value": "must have {term}", "aliases": []}
-          ]
-        }
-        """.strip(),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
+    rules_path = _hard_blocker_rules_path(tmp_path)
+    _write_hard_blocker_rules(rules_path, [{"value": "must have {term}", "aliases": []}])
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": ["SAP"],
-        },
+        lambda: _load_profile(must_not_require_skills=["SAP"]),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -190,29 +179,12 @@ def test_approved_hard_blocker_rules_rejects_mandatory_requirement_text(tmp_path
 
 
 def test_approved_hard_blocker_rules_does_not_reject_desirable_only_text(tmp_path, monkeypatch):
-    rules_path = tmp_path / "hard_blocker_rules.json"
-    rules_path.write_text(
-        """
-        {
-          "kind": "managed_knowledge",
-          "name": "hard_blocker_rules",
-          "version": 1,
-          "entries": [
-            {"value": "must have {term}", "aliases": []}
-          ]
-        }
-        """.strip(),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
+    rules_path = _hard_blocker_rules_path(tmp_path)
+    _write_hard_blocker_rules(rules_path, [{"value": "must have {term}", "aliases": []}])
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": ["SAP"],
-        },
+        lambda: _load_profile(must_not_require_skills=["SAP"]),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -225,43 +197,26 @@ def test_approved_hard_blocker_rules_does_not_reject_desirable_only_text(tmp_pat
 
 
 def test_pending_hard_blocker_pattern_does_not_affect_filtering(tmp_path, monkeypatch):
-    registry_path = tmp_path / "signal_registry.json"
-    rules_path = tmp_path / "hard_blocker_rules.json"
-    registry_path.write_text(
-        """
+    registry_path = _signal_registry_path(tmp_path)
+    rules_path = _hard_blocker_rules_path(tmp_path)
+    _write_signal_registry(
+        registry_path,
         {
-          "must have sap": {
-            "signal": "must have sap",
-            "normalized_key": "must have sap",
-            "original_texts": ["must have sap experience"],
-            "category": "hard_blocker_pattern",
-            "suggested_category": "hard_blocker_pattern",
-            "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}]
-          }
-        }
-        """.strip(),
-        encoding="utf-8",
+            "must have sap": {
+                "signal": "must have sap",
+                "normalized_key": "must have sap",
+                "original_texts": ["must have sap experience"],
+                "category": "hard_blocker_pattern",
+                "suggested_category": "hard_blocker_pattern",
+                "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
+            }
+        },
     )
-    rules_path.write_text(
-        """
-        {
-          "kind": "managed_knowledge",
-          "name": "hard_blocker_rules",
-          "version": 1,
-          "entries": []
-        }
-        """.strip(),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
+    _write_hard_blocker_rules(rules_path, [])
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": ["SAP"],
-        },
+        lambda: _load_profile(must_not_require_skills=["SAP"]),
     )
 
     ok, reason = filters.passes_content_filters(
@@ -274,29 +229,12 @@ def test_pending_hard_blocker_pattern_does_not_affect_filtering(tmp_path, monkey
 
 
 def test_term_not_in_profile_does_not_reject_even_if_pattern_appears(tmp_path, monkeypatch):
-    rules_path = tmp_path / "hard_blocker_rules.json"
-    rules_path.write_text(
-        """
-        {
-          "kind": "managed_knowledge",
-          "name": "hard_blocker_rules",
-          "version": 1,
-          "entries": [
-            {"value": "must have {term}", "aliases": []}
-          ]
-        }
-        """.strip(),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(hard_blocker_rules, "HARD_BLOCKER_RULES_PATH", rules_path)
+    rules_path = _hard_blocker_rules_path(tmp_path)
+    _write_hard_blocker_rules(rules_path, [{"value": "must have {term}", "aliases": []}])
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: {
-            "capability_profile_rules": [],
-            "reject_description_phrase_rules": [],
-            "must_not_require_skills": [],
-        },
+        lambda: _load_profile(),
     )
 
     ok, reason = filters.passes_content_filters(

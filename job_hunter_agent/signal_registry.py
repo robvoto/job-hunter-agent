@@ -11,10 +11,12 @@ from job_hunter_agent.paths import (
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
     HARD_BLOCKER_RULES_PATH,
     IGNORED_SIGNAL_ARCHIVE_PATH,
+    PARSING_RULES_PATH,
     ROLE_TITLE_KNOWLEDGE_PATH,
     SIGNAL_REGISTRY_PATH as _REGISTRY_PATH,
     TITLE_NORMALIZATION_RULES_PATH,
 )
+from job_hunter_agent.parsing_schema import PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY
 from job_hunter_agent.hard_blocker_rules import (
     load_hard_blocker_rules,
     save_hard_blocker_rules,
@@ -37,6 +39,7 @@ from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+    CATEGORY_TITLE_PARSE_BLOCKER,
     LEARNING_CATEGORY_KEY,
     LEARNING_CONFIDENCE_KEY,
     LEARNING_CONTEXT_KEY,
@@ -64,6 +67,7 @@ CATEGORY_LABELS = {
     CATEGORY_HARD_BLOCKER_PATTERN: "Hard blocker pattern",
     CATEGORY_ROLE_TITLE_TOKEN: "Role title",
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "Title abbreviation",
+    CATEGORY_TITLE_PARSE_BLOCKER: "Title parse blocker",
 }
 
 _CATEGORY_KNOWLEDGE_PATHS = {
@@ -72,6 +76,7 @@ _CATEGORY_KNOWLEDGE_PATHS = {
     CATEGORY_HARD_BLOCKER_PATTERN: HARD_BLOCKER_RULES_PATH,
     CATEGORY_ROLE_TITLE_TOKEN: ROLE_TITLE_KNOWLEDGE_PATH,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: TITLE_NORMALIZATION_RULES_PATH,
+    CATEGORY_TITLE_PARSE_BLOCKER: PARSING_RULES_PATH,
 }
 
 
@@ -364,6 +369,28 @@ def _append_title_normalization_expansion(path, abbreviation: str, expansion: st
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _append_title_candidate_leading_verb_blocker(path, blocker: str) -> None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.setdefault("kind", "rules")
+    payload.setdefault("name", "title_normalization_rules")
+    payload.setdefault("version", 1)
+    blockers = payload.get(PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY)
+    if not isinstance(blockers, list):
+        blockers = []
+    blocker_value = _clean_text(blocker)
+    blocker_key = blocker_value.lower()
+    if blocker_key and blocker_key not in {_clean_text(item).lower() for item in blockers}:
+        blockers.append(blocker_value)
+    payload[PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY] = blockers
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def load_registry() -> dict[str, dict[str, Any]]:
     if not _REGISTRY_PATH.exists():
         return {}
@@ -547,6 +574,8 @@ def approve_signal(key: str, category: str = "") -> dict[str, Any] | None:
             _append_title_normalization_expansion(
                 _CATEGORY_KNOWLEDGE_PATHS[category_key], value, suggested[0]
             )
+    elif category_key == CATEGORY_TITLE_PARSE_BLOCKER:
+        _append_title_candidate_leading_verb_blocker(_CATEGORY_KNOWLEDGE_PATHS[category_key], value)
     else:
         aliases = _clean_aliases(record.get("original_texts"), canonical=value)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)
@@ -601,6 +630,16 @@ def clear_signal_learning_state() -> None:
                     payload["abbreviation_expansions"] = {}
                     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
             continue
+        if category == CATEGORY_TITLE_PARSE_BLOCKER:
+            if path.exists():
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    payload = {}
+                if isinstance(payload, dict):
+                    payload[PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY] = []
+                    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            continue
         _save_approved_knowledge_payload(path, {
             "kind": "managed_knowledge",
             "entries": [],
@@ -626,6 +665,22 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                     if expanded:
                         terms.append(expanded)
                     catalog.append({"category": category, "label": abbrev, "terms": terms})
+            continue
+        if category == CATEGORY_TITLE_PARSE_BLOCKER:
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            except (json.JSONDecodeError, OSError):
+                payload = {}
+            blockers = payload.get(PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY) if isinstance(payload, dict) else []
+            if isinstance(blockers, list):
+                for blocker in blockers:
+                    cleaned = _clean_text(blocker)
+                    if cleaned:
+                        catalog.append({
+                            "category": category,
+                            "label": cleaned,
+                            "terms": [cleaned],
+                        })
             continue
         if category == CATEGORY_CAPABILITY_CONCEPT:
             entries = load_capability_knowledge()

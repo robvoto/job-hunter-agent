@@ -1,24 +1,16 @@
 import re
 from typing import Optional
 
-from job_hunter_agent.profile_store import get_scoring_rules, load_profile
+from job_hunter_agent.profile_store import DEFAULT_PROFILE, get_scoring_rules, load_profile
 from job_hunter_agent.role_analysis import has_government_context, text_contains_term
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.salary_utils import _salary_includes_super_or_package, _salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
 
-#Harcoded
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
     active_profile = profile or load_profile()
-    defaults = {
-        "home_location": "",
-        "secondary_location": "",
-        "prefer_government": False,
-        "prefer_permanent": False,
-        "preferred_contract_months": 12,
-        "short_contract_months": 6,
-    }
+    defaults = dict(DEFAULT_PROFILE["match_preferences"])
     preferences = active_profile.get("match_preferences", {})
     if isinstance(preferences, dict):
         defaults.update(preferences)
@@ -48,7 +40,6 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
         if no_region and no_region not in variants:
             variants.append(no_region)
         return variants
-    #Harcoded
     def _matches_location(preference: str) -> bool:
         return any(variant and variant in location for variant in _location_variants(preference))
 
@@ -61,11 +52,9 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if secondary_location and _matches_location(secondary_location):
         label_target = compact_whitespace(secondary_location)
-        rules = load_parsing_rules()
         work_mode = compact_whitespace(record.get("work_mode") or "").lower()
         if work_mode == "remote" or "remote position" in source_text or "fully remote" in source_text:
             return {"label": f"Location matches secondary preference with remote setup: {label_target}", "value": int(location_rules["secondary_remote"])}
-            return {"label": f"Secondary location has limited onsite attendance: {label_target}", "value": int(location_rules["secondary_limited_onsite"])}
         if re.search(r"\b(2 days a week|two days a week|3 days a week|three days a week|2-3 days|two to three days)\b", source_text):
             return {"label": f"Secondary location requires regular onsite attendance: {label_target}", "value": int(location_rules["secondary_regular_onsite"])}
 
@@ -79,7 +68,6 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
     return None
 
-#Harcoded
 def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
@@ -87,9 +75,9 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     contract_rules = scoring_rules["contract"]
     source_text = build_scoring_source_text(record)
     work_type = compact_whitespace(record.get("work_type") or "").lower()
-    preferred_contract_months = int(preferences.get("preferred_contract_months", 12) or 12)
-    short_contract_months = int(preferences.get("short_contract_months", 6) or 6)
-    eng_pref = preferences.get("engagement_type", "both")
+    preferred_contract_months = int(preferences["preferred_contract_months"])
+    short_contract_months = int(preferences["short_contract_months"])
+    eng_pref = str(preferences["engagement_type"]).strip().lower()
     rules = load_parsing_rules().get("engagement_keywords", {})
 
     normalized_work_type = re.sub(r"[\s_-]+", " ", work_type).strip()
@@ -123,7 +111,7 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
-    if not preferences.get("prefer_government", True):
+    if not bool(preferences["prefer_government"]):
         return None
 
     title = compact_whitespace(record.get("title") or "").lower()

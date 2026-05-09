@@ -113,6 +113,7 @@
                 <option value="14">Last 14 days</option>
                 <option value="30">Last 30 days</option>
               </select>
+              <div class="help">How many days back to look for new job ads. Shorter windows are faster; longer windows catch late-appearing listings.</div>
 
               <label for="seek_max_pages">Max pages to check</label>
               <input id="seek_max_pages" type="number" min="1" max="10">
@@ -123,12 +124,14 @@
                 <option value="true">Yes</option>
                 <option value="false">No</option>
               </select>
+              <div class="help">When Yes, ads posted outside the search window are discarded before scoring. When No, older ads are still evaluated.</div>
 
               <label for="sort_newest_first">Prefer newest jobs first</label>
               <select id="sort_newest_first">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
               </select>
+              <div class="help">When Yes, the dashboard orders results with the freshest listings at the top.</div>
             </section>
 
             <section class="panel">
@@ -453,12 +456,9 @@
               <h2>AI / LLM</h2>
               <label for="llm_model">Model</label>
               <select id="llm_model">
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4.1">gpt-4.1</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="gpt-4o">gpt-4o</option>
+                <option value="">Select a model</option>
               </select>
-              <div class="help">Used for fit decisions and CV extraction.</div>
+              <div class="help">Used for fit decisions and CV extraction. The available models are managed in Advanced Settings.</div>
             </section>
           </div>
         </section>
@@ -488,6 +488,7 @@
 
         <section id="section-advance" class="settings-group">
           <h2 class="section-title">Advanced Settings</h2>
+          <p class="panel-copy">These controls stay global and centrally managed. They cover card highlight display, search defaults, search guardrails, evidence tier weights, preference weights, onboarding defaults, and capability presets. Candidate profile fields stay elsewhere.</p>
           <section class="panel">
             <h2>Card Highlight Display</h2>
             <p class="panel-copy">These are global dashboard rendering controls. They change what appears on every card, not the candidate profile or scoring rules.</p>
@@ -517,9 +518,9 @@
             <h2>Search Defaults</h2>
             <p class="panel-copy">These defaults seed search behaviour for the whole app. They do not replace the live search fields in Profile.</p>
 
-            <label for="search_default_date_range_days">Default date range days</label>
+            <label for="search_default_date_range_days">Default search window (days)</label>
             <input id="search_default_date_range_days" type="number" min="1" max="30" step="1">
-            <div class="field-help">Default window for new search runs. Valid range: <span id="search_default_date_range_days_bounds"></span>.</div>
+            <div class="field-help">How many days back each run looks for new listings by default. Profile search settings override this per run. Valid range: <span id="search_default_date_range_days_bounds"></span>.</div>
 
             <label for="search_default_seek_max_pages">Default SEEK pages</label>
             <input id="search_default_seek_max_pages" type="number" min="1" max="10" step="1">
@@ -560,25 +561,29 @@
             <h2>Search Guardrails</h2>
             <p class="panel-copy">These bounds control what the search defaults can be set to. They are global, shared limits.</p>
 
-            <label for="search_limit_date_range_days_min">Date range minimum</label>
+            <label for="search_limit_date_range_days_min">Search window minimum (days)</label>
             <input id="search_limit_date_range_days_min" type="number" min="1" max="365" step="1">
-            <label for="search_limit_date_range_days_max">Date range maximum</label>
+            <label for="search_limit_date_range_days_max">Search window maximum (days)</label>
             <input id="search_limit_date_range_days_max" type="number" min="1" max="365" step="1">
+            <div class="field-help">Lowest and highest number of days the search window default can be set to. Prevents defaults being set outside a sensible range.</div>
 
             <label for="search_limit_seek_max_pages_min">SEEK pages minimum</label>
             <input id="search_limit_seek_max_pages_min" type="number" min="1" max="100" step="1">
             <label for="search_limit_seek_max_pages_max">SEEK pages maximum</label>
             <input id="search_limit_seek_max_pages_max" type="number" min="1" max="100" step="1">
+            <div class="field-help">Allowed range for the SEEK page crawl cap default.</div>
 
-            <label for="search_limit_linkedin_hours_old_min">LinkedIn hours minimum</label>
+            <label for="search_limit_linkedin_hours_old_min">LinkedIn age window minimum (hours)</label>
             <input id="search_limit_linkedin_hours_old_min" type="number" min="1" max="720" step="1">
-            <label for="search_limit_linkedin_hours_old_max">LinkedIn hours maximum</label>
+            <label for="search_limit_linkedin_hours_old_max">LinkedIn age window maximum (hours)</label>
             <input id="search_limit_linkedin_hours_old_max" type="number" min="1" max="720" step="1">
+            <div class="field-help">Allowed range for how fresh LinkedIn listings must be (in hours).</div>
 
             <label for="search_limit_linkedin_results_per_search_min">LinkedIn results minimum</label>
             <input id="search_limit_linkedin_results_per_search_min" type="number" min="1" max="1000" step="1">
             <label for="search_limit_linkedin_results_per_search_max">LinkedIn results maximum</label>
             <input id="search_limit_linkedin_results_per_search_max" type="number" min="1" max="1000" step="1">
+            <div class="field-help">Allowed range for the LinkedIn result budget per search term.</div>
           </section>
 
           <section class="panel">
@@ -624,18 +629,39 @@
           <section class="panel">
             <h2>Onboarding Defaults</h2>
             <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
+            <div class="field-help">These controls also shape how the learning pass keeps aliases and signal clusters when the system extracts your CV.</div>
 
             <label for="onboarding_extraction_lookback_years">Extraction lookback years</label>
             <input id="onboarding_extraction_lookback_years" type="number" min="1" max="20" step="1">
+            <div class="field-help">How far back the CV parser looks for role history when it decides what is recent enough to matter.</div>
 
             <label for="onboarding_title_extraction_min_months">Title extraction minimum months</label>
             <input id="onboarding_title_extraction_min_months" type="number" min="1" max="24" step="1">
+            <div class="field-help">Roles shorter than this are treated as too brief to count as a main title signal.</div>
 
             <label for="onboarding_max_target_patterns">Max target patterns</label>
             <input id="onboarding_max_target_patterns" type="number" min="1" max="20" step="1">
+            <div class="field-help">How many primary job-title patterns the onboarding extractor keeps.</div>
 
             <label for="onboarding_max_secondary_patterns">Max secondary patterns</label>
             <input id="onboarding_max_secondary_patterns" type="number" min="1" max="20" step="1">
+            <div class="field-help">How many fallback job-title patterns the onboarding extractor keeps.</div>
+
+            <label for="onboarding_capability_alias_limit">Capability alias limit</label>
+            <input id="onboarding_capability_alias_limit" type="number" min="1" max="20" step="1">
+            <div class="field-help">How many aliases a learned capability row can keep before the extras are dropped.</div>
+
+            <label for="onboarding_signal_cluster_min_alias_hits">Signal cluster minimum alias hits</label>
+            <input id="onboarding_signal_cluster_min_alias_hits" type="number" min="1" max="10" step="1">
+            <div class="field-help">The minimum number of alias matches a learned signal cluster must collect before it is kept.</div>
+
+            <label for="onboarding_signal_cluster_min_snippet_hits">Signal cluster minimum snippet hits</label>
+            <input id="onboarding_signal_cluster_min_snippet_hits" type="number" min="1" max="10" step="1">
+            <div class="field-help">The minimum number of separate snippets that need to mention the signal before it is kept.</div>
+
+            <label for="onboarding_signal_cluster_dense_snippet_alias_hits">Signal cluster dense alias hits</label>
+            <input id="onboarding_signal_cluster_dense_snippet_alias_hits" type="number" min="1" max="20" step="1">
+            <div class="field-help">A dense mention threshold that can keep a signal even when the snippet count is lower.</div>
 
             <label for="onboarding_capability_strength_preset">Capability strength preset</label>
             <select id="onboarding_capability_strength_preset">
@@ -643,6 +669,23 @@
               <option value="balanced">Balanced</option>
               <option value="include_older_experience">Include older experience</option>
             </select>
+          </section>
+
+          <section class="panel">
+            <h2>LLM Models</h2>
+            <p class="panel-copy">These models are the only ones shown in the AI / LLM selector above.</p>
+
+            <label for="llm_model_options">Allowed models</label>
+            <textarea id="llm_model_options" rows="4" placeholder="One model id per line"></textarea>
+            <div class="field-help">Keep one model id per line. The runtime selector uses this list directly.</div>
+
+            <label for="llm_pricing_per_1m">Model pricing per 1M tokens</label>
+            <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"gpt-4o-mini": {"input": 0.15, "output": 0.6}}'></textarea>
+            <div class="field-help">Managed pricing used for cost logging. Keep it as JSON with `input` and `output` rates per model.</div>
+
+            <label for="llm_prompt_settings">Prompt settings</label>
+            <textarea id="llm_prompt_settings" rows="14" placeholder='{"match_preference_templates": {...}}'></textarea>
+            <div class="field-help">Managed prompt policy for LLM fit review context and normalization caps. Keep it as JSON.</div>
           </section>
 
           <section class="panel">

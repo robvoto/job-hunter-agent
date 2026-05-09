@@ -115,6 +115,40 @@ async function postTestAction(path) {
   return payload;
 }
 
+function normalizeReviewText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeReviewTitle(value) {
+  return normalizeReviewText(value);
+}
+
+function normalizeReviewTitleKey(value) {
+  return normalizeReviewTitle(value).toLowerCase();
+}
+
+function normalizeReviewTitleLists(primaryValues, secondaryValues) {
+  const primary = [];
+  const primarySeen = new Set();
+  for (const value of Array.isArray(primaryValues) ? primaryValues : []) {
+    const cleaned = normalizeReviewTitle(value);
+    const key = normalizeReviewTitleKey(cleaned);
+    if (!cleaned || primarySeen.has(key)) continue;
+    primarySeen.add(key);
+    primary.push(cleaned);
+  }
+  const secondary = [];
+  const secondarySeen = new Set();
+  for (const value of Array.isArray(secondaryValues) ? secondaryValues : []) {
+    const cleaned = normalizeReviewTitle(value);
+    const key = normalizeReviewTitleKey(cleaned);
+    if (!cleaned || primarySeen.has(key) || secondarySeen.has(key)) continue;
+    secondarySeen.add(key);
+    secondary.push(cleaned);
+  }
+  return { primary, secondary };
+}
+
 function resetOnboardingWizardState() {
   lastImportPayload = null;
   reviewTargetTitles = [];
@@ -162,8 +196,9 @@ function restoreWizardState() {
     const savedCapabilities = Array.isArray(state?.reviewCapabilityRules) ? state.reviewCapabilityRules : [];
     const hasSavedDraft = Boolean(savedTargets.length || savedSecondary.length || savedCapabilities.length);
     if (!state || (!hasSavedDraft && state.step < 2)) return false;
-    reviewTargetTitles = state.reviewTargetTitles || [];
-    reviewSecondaryTitles = state.reviewSecondaryTitles || [];
+    const normalizedTitles = normalizeReviewTitleLists(state.reviewTargetTitles || [], state.reviewSecondaryTitles || []);
+    reviewTargetTitles = normalizedTitles.primary;
+    reviewSecondaryTitles = normalizedTitles.secondary;
     reviewCapabilityRules = state.reviewCapabilityRules || [];
     maxUnlockedStep = Math.max(1, Math.min(STEP_COUNT, Number(state.maxUnlockedStep) || 1));
     reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0

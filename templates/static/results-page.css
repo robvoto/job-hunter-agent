@@ -429,7 +429,6 @@
     .badge-source-linkedin { background: var(--state-info-bg); color: var(--state-info-text); }
     .badge-source-neutral { background: var(--state-success-bg); color: var(--state-success-text); }
     .badge-sector-government { background: var(--state-info-bg); color: var(--state-info-text); }
-    .badge-channel-recruiter { background: var(--state-warning-bg); color: var(--state-warning-text); }
     .badge-fit-high { background: var(--state-success-bg); color: var(--state-success-text); }
     .badge-fit-medium { background: var(--state-warning-bg); color: var(--state-warning-text); }
     .badge-fit-borderline { background: var(--state-neutral-bg); color: var(--state-neutral-text); }

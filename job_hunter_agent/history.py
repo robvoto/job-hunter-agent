@@ -4,11 +4,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 from job_hunter_agent import dashboard_data
-from job_hunter_agent.description_trust import get_trusted_full_description
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.posting_utils import days_since, normalize_job_key, parse_timestamp
-from job_hunter_agent.profile_store import load_profile
-from job_hunter_agent.role_analysis import infer_posting_channel
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 
@@ -29,6 +26,9 @@ KEEP_SNAPSHOT_FIELDS = (
     "posted_age_days",
     "salary",
     "work_mode",
+    "work_mode_source",
+    "work_mode_evidence",
+    "work_mode_needs_review",
     "location",
     "work_type",
     "teaser",
@@ -155,8 +155,6 @@ def history_cluster_key(record: dict) -> str:
 
 
 def build_history_sighting(record: dict, run_iso: str) -> dict:
-    details_text = get_trusted_full_description(record) or compact_whitespace(record.get("teaser") or "")
-    posting_channel = infer_posting_channel(record, details_text).get("kind") or "unknown"
     return {
         "seen_at": run_iso,
         "url": str(record.get("url") or "").strip(),
@@ -165,7 +163,6 @@ def build_history_sighting(record: dict, run_iso: str) -> dict:
         "company": str(record.get("company") or "").strip(),
         "title": str(record.get("title") or "").strip(),
         "source": str(record.get("source") or "").strip().lower(),
-        "posting_channel": posting_channel,
     }
 
 

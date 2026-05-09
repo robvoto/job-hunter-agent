@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
 from typing import Any
 
 from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
@@ -18,6 +19,10 @@ from job_hunter_agent.signal_schema import (
     SOURCE_CV_PARSING,
 )
 from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.parsing_schema import (
+    PARSING_STOPWORDS_KEY,
+    PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY,
+)
 
 
 TITLE_NORMALIZATION_REVIEW_PATH = OUTPUT_DIR / "title_normalization_review.json"
@@ -89,6 +94,22 @@ def load_title_normalization_rules() -> dict[str, Any]:
     if not payload:
         raise ValueError("title_normalization_rules.json must contain a rules object")
     return payload
+
+
+@lru_cache(maxsize=1)
+def load_title_candidate_leading_verb_blockers() -> frozenset[str]:
+    try:
+        payload = load_parsing_rules()
+    except Exception:
+        return frozenset()
+    blockers = payload.get(PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY)
+    if not isinstance(blockers, list):
+        return frozenset()
+    return frozenset(
+        _clean_rule_token(value)
+        for value in blockers
+        if _clean_rule_token(value)
+    )
 
 def _save_rules_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload or {})
@@ -341,8 +362,9 @@ def _classify_title_normalization_candidate(title: Any, source_text: Any = "") -
     parsing_rules = load_parsing_rules()
 
     candidates = title_rules.get(LEARNING_CANDIDATES_KEY, {})
+    expansions = title_rules.get(RULES_ABBREVIATION_EXPANSIONS_KEY, {})
     config = parsing_rules.get(TITLE_DISCOVERY_CONFIG_KEY, {})
-    sw = set(parsing_rules.get(STOPWORDS_KEY, []))
+    sw = set(parsing_rules.get(PARSING_STOPWORDS_KEY, []))
 
     for token in tokens:
         # 1. Existing candidate in knowledge base
@@ -354,6 +376,15 @@ def _classify_title_normalization_candidate(title: Any, source_text: Any = "") -
                 CONFIDENCE_KEY: cand_config.get(CONFIDENCE_KEY, AMBIGUOUS),
                 EVIDENCE_KEY: [raw_title],
             }
+        if token in expansions:
+            expansion = _clean_text(expansions.get(token))
+            if expansion:
+                return {
+                    VALUE_KEY: token,
+                    SUGGESTED_VALUES_KEY: [expansion],
+                    CONFIDENCE_KEY: config.get(DISCOVERY_CONFIDENCE_KEY, AMBIGUOUS),
+                    EVIDENCE_KEY: [raw_title],
+                }
 
         # 2. Discovery: find new abbreviations (e.g., 'ba', 'pm')
         if len(token) >= config.get(MIN_TOKEN_LEN_KEY, 2) and len(token) <= config.get(MAX_TOKEN_LEN_KEY, 3):

@@ -31,9 +31,9 @@ def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("identity_rules.json must define at least one source priority")
     normalized["source_priority"] = cleaned_priority
 
-    if "title_similarity_threshold" not in normalized:
-        raise ValueError("identity_rules.json must define title_similarity_threshold")
-    normalized["title_similarity_threshold"] = float(normalized["title_similarity_threshold"])
+    # Similar-title thresholds are intentionally not part of identity rules.
+    # Deduplication must be based on deterministic identifiers only.
+    normalized.pop("title_similarity_threshold", None)
 
     company_suffixes = normalized.get("company_suffixes")
     if not isinstance(company_suffixes, list):
@@ -62,7 +62,7 @@ def load_identity_rules() -> dict[str, Any]:
 
 def save_identity_rules(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = _normalize_config(payload)
-    normalized.setdefault("kind", "managed_knowledge")
+    normalized.setdefault("kind", "sysetm_config")
     normalized.setdefault("name", "identity_rules")
     normalized.setdefault("version", 1)
     IDENTITY_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)

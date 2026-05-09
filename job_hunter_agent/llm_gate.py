@@ -15,7 +15,6 @@ import json as _json_mod
 import os
 import re
 import sys
-from datetime import datetime, timezone
 from typing import Any, Dict
 
 from dotenv import load_dotenv
@@ -26,7 +25,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
     LLM_CHEAP_MODEL,
-    LLM_EVIDENCE_TIERS,
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
     LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER,
@@ -43,16 +41,24 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_REVIEW_OUTPUT_FORMAT,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_USE_AT_MOST_FOUR,
-    LLM_PROMPT_USE_AT_MOST_SIX,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
     LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER,
     LLM_PROMPT_USER_FIT_REVIEW_GUIDANCE_HEADER,
+    LLM_MAX_JOB_DESCRIPTION_CHARS,
+    LLM_MAX_PROFILE_BRIEF_CHARS,
+    LLM_MAX_CAPABILITY_RULES,
+    LLM_MAX_CAPABILITY_RULE_ALIASES,
+    LLM_MAX_FIT_GUIDANCE_CHARS,
+    LLM_MAX_CAPABILITY_NAMING_GUIDANCE_CHARS,
+    LLM_MAX_CAPABILITY_NAMING_ALIASES,
+    LLM_MAX_RAW_OUTPUT_LOG_CHARS,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_MAX_TOKENS_CV_EXTRACTION,
     LLM_MAX_TOKENS_FIT_DECISION,
     LLM_MAX_TOKENS_REJECTION_SUGGESTIONS,
     LLM_REVIEW_GRADE_GUIDANCE,
     LLM_REVIEW_PROMPT_SHAPE,
+    LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
 )
 from job_hunter_agent.profile_store import (
     get_candidate_profile_tier_weights,
@@ -64,11 +70,29 @@ from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     load_profile,
 )
+from job_hunter_agent.hard_blocker_rules import normalize_rejection_blocker_suggestions as _normalize_rejection_blocker_suggestions
+from job_hunter_agent.advance_settings import (
+    KEY_LLM_PRICING_PER_1M,
+    KEY_LLM_SETTINGS,
+    KEY_LLM_PROMPT_EVIDENCE_TIERS,
+    KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
+    KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
+    KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
+    KEY_LLM_PROMPT_SETTINGS,
+    KEY_LLM_PROMPT_TEMPLATES,
+    load_advance_settings,
+)
 from job_hunter_agent.paths import (
     FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
     LLM_CAPABILITY_NAMING_DEFAULTS_PATH as _CAPABILITY_NAMING_DEFAULTS_PATH,
     LLM_COSTS_PATH as _LLM_COSTS_PATH,
     PROFILE_PATH as _PROFILE_PATH,
+)
+from job_hunter_agent.runtime_helpers import (
+    CLI_FLAG_CHEAP_LLM,
+    append_llm_cost_log,
+    build_llm_cost_entry,
+    has_cli_flag,
 )
 from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
@@ -77,26 +101,41 @@ from job_hunter_agent.signal_schema import (
     LEARNING_ORIGINAL_TEXTS_KEY,
     VALID_SIGNAL_CATEGORIES,
 )
-from job_hunter_agent.paths import REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH as _REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH
 
 load_dotenv()
 
 # Cheap-llm flag: mirrors the same argv check in source_connector
-_CHEAP_LLM_MODE = "--cheap-llm" in sys.argv
+_CHEAP_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_CHEAP_LLM)
 
 MODEL_FALLBACK = DEFAULT_AGENT_SETTINGS["llm"]["model"]
 
 
 _profile_fingerprint_cache: str | None = None
-#HARCODED
+
 # Cost logging --------------------------------------------------------
-_PRICING_PER_1M: dict[str, dict[str, float]] = {
-    "gpt-4o-mini":              {"input": 0.15,  "output": 0.60},
-    "gpt-4o-mini-2024-07-18":  {"input": 0.15,  "output": 0.60},
-    "gpt-4o":                   {"input": 2.50,  "output": 10.00},
-    "gpt-4o-2024-08-06":       {"input": 2.50,  "output": 10.00},
-}
 _session_cost_usd: float = 0.0
+
+
+def _get_llm_pricing_per_1m() -> dict[str, dict[str, float]]:
+    pricing = load_advance_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PRICING_PER_1M, {})
+    if not isinstance(pricing, dict) or not pricing:
+        raise ValueError("No LLM pricing is configured in Advanced Settings.")
+    return pricing  # type: ignore[return-value]
+
+
+def _get_llm_prompt_settings() -> dict[str, Any]:
+    prompt_settings = load_advance_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
+    if not isinstance(prompt_settings, dict) or not prompt_settings:
+        raise ValueError("No LLM prompt settings are configured in Advanced Settings.")
+    return prompt_settings
+
+
+def _get_llm_prompt_int(key: str) -> int:
+    value = _get_llm_prompt_settings()[key]
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"advance_settings.llm_settings.llm_prompt_settings.{key} must be an integer") from exc
 
 
 def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
@@ -107,29 +146,19 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
     # Responses API uses input_tokens/output_tokens; Chat uses prompt_tokens/completion_tokens
     tok_in  = getattr(usage, "input_tokens",  None) or getattr(usage, "prompt_tokens",     0) or 0
     tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens",  0) or 0
-    prices  = _PRICING_PER_1M.get(model, {"input": 2.50, "output": 10.00})
+    prices  = _get_llm_pricing_per_1m()[model]
     cost    = (tok_in * prices["input"] + tok_out * prices["output"]) / 1_000_000
     _session_cost_usd += cost
 
-    entry = {
-        "ts":          datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "purpose":     purpose,
-        "model":       model,
-        "tok_in":      tok_in,
-        "tok_out":     tok_out,
-        "cost_usd":    round(cost, 6),
-        "session_usd": round(_session_cost_usd, 6),
-    }
-    try:
-        with open(_LLM_COSTS_PATH, "a", encoding="utf-8") as fh:
-            fh.write(_json_mod.dumps(entry) + "\n")
-    except Exception:
-        pass
-    print(
-        f"[LLM] {purpose} | {model} | "
-        f"in={tok_in} out={tok_out} | "
-        f"${cost:.6f} | session=${_session_cost_usd:.6f}"
+    entry = build_llm_cost_entry(
+        purpose=purpose,
+        model=model,
+        tok_in=tok_in,
+        tok_out=tok_out,
+        cost_usd=cost,
+        session_usd=_session_cost_usd,
     )
+    append_llm_cost_log(_LLM_COSTS_PATH, entry)
 
 
 def _profile_fingerprint() -> str:
@@ -188,28 +217,6 @@ def _load_managed_prompt_lines(path, filename: str) -> tuple[str, ...]:
     return cleaned
 
 
-def _load_hard_blocker_rules() -> frozenset[str]:
-    payload = _json_mod.loads(_REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
-    entries = payload.get("entries")
-    if not isinstance(entries, list):
-        raise ValueError("rejection_rule_categories.json must contain an entries list")
-
-    kinds: list[str] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("enabled", True) is False:
-            continue
-        value = str(entry.get("value") or "").strip()
-        if value:
-            kinds.append(value)
-    if not kinds:
-        raise ValueError("rejection_rule_categories.json must define at least one enabled kind")
-    return frozenset(kinds)
-
-
-def _hard_blocker_rules() -> frozenset[str]:
-    return _load_hard_blocker_rules()
 FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines(_FIT_REVIEW_DEFAULTS_PATH, "llm_fit_review_defaults.json")
 CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines(_CAPABILITY_NAMING_DEFAULTS_PATH, "llm_capability_naming_defaults.json")
 
@@ -224,6 +231,9 @@ def build_profile_prompt_context() -> str:
     star_evidence_text = str(profile.get("star_evidence_text") or "").strip()
     evidence_tiers = get_candidate_profile_tiers(profile)
     evidence_weights = get_candidate_profile_tier_weights(profile)
+    prompt_settings = _get_llm_prompt_settings()
+    prompt_templates = prompt_settings[KEY_LLM_PROMPT_TEMPLATES]
+    prompt_evidence_tiers = prompt_settings[KEY_LLM_PROMPT_EVIDENCE_TIERS]
     capability_rules = profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = profile.get("match_preferences", {}) if isinstance(profile.get("match_preferences", {}), dict) else {}
@@ -231,11 +241,11 @@ def build_profile_prompt_context() -> str:
     parts = []
     if llm_profile_brief:
         parts.append(LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER)
-        parts.append(llm_profile_brief[:2500])
+        parts.append(llm_profile_brief[:LLM_MAX_PROFILE_BRIEF_CHARS])
 
     if isinstance(capability_rules, list) and capability_rules:
         parts.append(LLM_PROMPT_CAPABILITY_LEVELS_HEADER)
-        for rule in capability_rules[:20]:
+        for rule in capability_rules[:LLM_MAX_CAPABILITY_RULES]:
             if not isinstance(rule, dict):
                 continue
             name = str(rule.get("name") or "").strip()
@@ -243,7 +253,7 @@ def build_profile_prompt_context() -> str:
             fit = str(rule.get("fit") or "").strip()
             raw_aliases = rule.get("aliases", [])
             aliases_list = raw_aliases if isinstance(raw_aliases, list) else []
-            aliases = ", ".join(str(alias).strip() for alias in aliases_list[:8] if str(alias).strip())
+            aliases = ", ".join(str(alias).strip() for alias in aliases_list[:LLM_MAX_CAPABILITY_RULE_ALIASES] if str(alias).strip())
             if name and level:
                 label = f"- {name}: {level}"
                 if fit:
@@ -252,17 +262,19 @@ def build_profile_prompt_context() -> str:
                     label += f" ({aliases})"
                 parts.append(label)
 
-    preference_lines = []
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
+    preference_lines = []
     if minimum_salary_yearly > 0 or minimum_daily_rate > 0:
-        preference_lines.append(
-            f"Compensation target: permanent roles around {minimum_salary_yearly or 'not set'} yearly, contract roles around {minimum_daily_rate or 'not set'} per day."
-        )
-    if match_preferences.get("home_location"):
-        preference_lines.append(f"Home base: {match_preferences.get('home_location')}.")
+        if minimum_salary_yearly > 0:
+            preference_lines.append(prompt_templates["compensation_target_yearly"].format(value=minimum_salary_yearly))
+        if minimum_daily_rate > 0:
+            preference_lines.append(prompt_templates["compensation_target_daily"].format(value=minimum_daily_rate))
+    home_location = str(match_preferences.get("home_location") or "").strip()
+    if home_location:
+        preference_lines.append(prompt_templates["home_location"].format(home_location=home_location))
     if match_preferences.get("prefer_permanent"):
-        preference_lines.append("Prefer permanent roles first, then 12+ month contracts with extensions, then shorter contracts.")
+        preference_lines.append(prompt_templates["prefer_permanent"])
     if preference_lines:
         parts.append(LLM_PROMPT_MATCH_PREFERENCES_HEADER)
         parts.extend(f"- {line}" for line in preference_lines)
@@ -275,18 +287,22 @@ def build_profile_prompt_context() -> str:
     secondary_evidence = str(evidence_tiers.get(KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT) or "").strip()
     background_evidence = str(evidence_tiers.get(KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT) or "").strip()
 
-    if primary_evidence:
-        tier_key, tier_label, tier_weight, tier_limit = LLM_EVIDENCE_TIERS[0]
-        parts.append(f"{tier_label} (strongest weight {evidence_weights.get(tier_key, tier_weight):.2f}):")
-        parts.append(primary_evidence[:tier_limit])
-    if secondary_evidence:
-        tier_key, tier_label, tier_weight, tier_limit = LLM_EVIDENCE_TIERS[1]
-        parts.append(f"{tier_label} (lower weight {evidence_weights.get(tier_key, tier_weight):.2f}):")
-        parts.append(secondary_evidence[:tier_limit])
-    if background_evidence:
-        tier_key, tier_label, tier_weight, tier_limit = LLM_EVIDENCE_TIERS[2]
-        parts.append(f"{tier_label} (weakest weight {evidence_weights.get(tier_key, tier_weight):.2f}):")
-        parts.append(background_evidence[:tier_limit])
+    tier_text_by_key = {
+        KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: primary_evidence,
+        KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: secondary_evidence,
+        KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: background_evidence,
+    }
+    for tier in prompt_evidence_tiers:
+        tier_key = str(tier.get("profile_key") or "").strip()
+        tier_label = str(tier.get("label") or "").strip()
+        weight_label = str(tier.get("weight_label") or "").strip()
+        tier_weight = float(tier.get("default_weight") or 0.0)
+        tier_limit = int(tier.get("limit") or 0)
+        tier_text = str(tier_text_by_key.get(tier_key) or "").strip()
+        if not tier_key or not tier_label or not tier_limit or not tier_text:
+            continue
+        parts.append(f"{tier_label} ({weight_label} weight {evidence_weights.get(tier_key, tier_weight):.2f}):")
+        parts.append(tier_text[:tier_limit])
 
     return "\n".join(part for part in parts if part)
 
@@ -298,7 +314,7 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
     guidance = str(active_profile.get("llm_fit_review_guidance") or "").strip()
     if guidance:
         parts.append(LLM_PROMPT_USER_FIT_REVIEW_GUIDANCE_HEADER)
-        parts.append(guidance[:1200])
+        parts.append(guidance[:LLM_MAX_FIT_GUIDANCE_CHARS])
     return "\n".join(parts)
 
 
@@ -312,7 +328,7 @@ def build_capability_naming_guidance(profile: dict[str, Any] | None = None) -> s
     parts.extend(f"- {line}" for line in CAPABILITY_NAMING_DEFAULT_LINES)
     guidance = str(active_profile.get("llm_capability_naming_guidance") or "").strip()
     if guidance:
-        parts.extend(["", LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER, guidance[:1200]])
+        parts.extend(["", LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER, guidance[:LLM_MAX_CAPABILITY_NAMING_GUIDANCE_CHARS]])
     parts.extend(["", LLM_PROMPT_CLUSTERS_HEADER])
     return "\n".join(parts)
 
@@ -370,7 +386,9 @@ def _clean_learning_candidate_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
-def normalize_llm_learning_candidates(value: Any, max_items: int = 6) -> list[dict[str, Any]]:
+def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) -> list[dict[str, Any]]:
+    if max_items is None:
+        max_items = _get_llm_prompt_int(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS)
     if isinstance(value, dict):
         value = value.get("learning_candidates") or value.get("candidates") or []
     if isinstance(value, str):
@@ -469,41 +487,17 @@ def _strip_json_fence(value: str) -> str:
     return raw
 
 
-def normalize_rejection_blocker_suggestions(value: Any, max_items: int = 6) -> list[str]:
+def normalize_rejection_blocker_suggestions(value: Any, max_items: int | None = None) -> list[str]:
+    if max_items is None:
+        max_items = _get_llm_prompt_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS)
+    max_words = _get_llm_prompt_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS)
     if isinstance(value, str):
-        try:
-            value = _json_mod.loads(_strip_json_fence(value))
-        except Exception:
-            return []
-    if isinstance(value, dict):
-        value = value.get("blockers") or value.get("suggestions") or []
-    if not isinstance(value, list):
-        return []
-
-    suggestions: list[str] = []
-    seen: set[str] = set()
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        kind = re.sub(r"[^a-z_]+", "_", str(item.get("kind") or "").strip().lower()).strip("_")
-        if kind not in _hard_blocker_rules():
-            continue
-        phrase = re.sub(r"\s+", " ", str(item.get("term") or "").strip().lower())
-        if not phrase:
-            continue
-        if len(phrase) < 2 or len(phrase) > 80:
-            continue
-        if re.search(r"[\r\n.;!?]", phrase):
-            continue
-        if len(phrase.split()) > 6:
-            continue
-        if phrase in seen:
-            continue
-        seen.add(phrase)
-        suggestions.append(phrase)
-        if len(suggestions) >= max_items:
-            break
-    return suggestions
+        value = _strip_json_fence(value)
+    return _normalize_rejection_blocker_suggestions(
+        value,
+        max_items=max_items,
+        max_words=max_words,
+    )
 
 
 def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = None) -> list[str]:
@@ -520,8 +514,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
             "Suggest only concise blocker terms that appear to be hard requirements for this specific job and are not clearly evidenced by the candidate profile.",
             "Hard blockers can be from any field: credentials, clearances, licences, work authorization, language, location, regulated/domain experience, industry background, products, platforms, tools, or specialist experience.",
             "Do not suggest desirable, preferred, nice-to-have, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs.",
-            "Classify each suggestion with one kind from: " + ", ".join(sorted(_hard_blocker_rules())) + ".",
-            f"{LLM_PROMPT_JSON_ONLY}, in this exact shape: {{\"blockers\":[{{\"term\":\"term\",\"kind\":\"kind\"}}]}}. Return an empty array if unsure.",
+            f"{LLM_PROMPT_JSON_ONLY}, in this exact shape: {LLM_REJECTION_SUGGESTIONS_JSON_SHAPE}. Return an empty array if unsure.",
             build_profile_prompt_context(),
         ]
         if part
@@ -533,7 +526,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
             model=model,
             input=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + description[:5000]},
+                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + description[:LLM_MAX_JOB_DESCRIPTION_CHARS]},
             ],
             max_output_tokens=LLM_MAX_TOKENS_REJECTION_SUGGESTIONS,
         )
@@ -545,7 +538,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     suggestions = normalize_rejection_blocker_suggestions(getattr(resp, "output_text", ""))
     raw_output = str(getattr(resp, "output_text", "") or "").strip()
     if raw_output:
-        print(f"[LLM][REJECTION_SUGGESTIONS][RAW] {raw_output[:1200]}")
+        print(f"[LLM][REJECTION_SUGGESTIONS][RAW] {raw_output[:LLM_MAX_RAW_OUTPUT_LOG_CHARS]}")
     print(f"[LLM][REJECTION_SUGGESTIONS][NORMALIZED] {suggestions}")
     if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
         print(f"[LLM][REJECTION_SUGGESTIONS][UNEXPECTED] {str(resp.output_text).strip()}")
@@ -570,7 +563,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
             continue
         payload.append({
             "seed": seed,
-            "aliases": aliases[:6],
+            "aliases": aliases[:LLM_MAX_CAPABILITY_NAMING_ALIASES],
         })
     if not payload:
         return []
@@ -611,7 +604,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
     if fit_review:
         parts.extend([
             f"Return exactly this shape: {LLM_REVIEW_PROMPT_SHAPE}",
-            LLM_PROMPT_USE_AT_MOST_SIX,
+            f"Use at most {_get_llm_prompt_int(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS)} learning candidates.",
         ])
     else:
         parts.extend([

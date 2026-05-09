@@ -18,6 +18,11 @@ Managed knowledge:
 Main entry point:
 - `python -m job_hunter_agent.source_connector`
 
+## Environment defaults
+
+- This repo may be used manually from VS Code or programmatically by OpenClaw.
+- When running inside WSL, use WSL/Linux shell commands and `/mnt/...` paths.
+
 ## Commands
 
 | Task | Command |

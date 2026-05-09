@@ -9,6 +9,12 @@ class _FakeResponse:
         self.usage = None
 
 
+class _FakeUsage:
+    def __init__(self, input_tokens: int, output_tokens: int):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
 class _FakeResponses:
     def __init__(self, output_text: str):
         self.output_text = output_text
@@ -24,46 +30,198 @@ class _FakeClient:
         self.responses = _FakeResponses(output_text)
 
 
+def test_llm_cost_logging_uses_managed_pricing(tmp_path, monkeypatch):
+    costs_path = tmp_path / "llm_costs.jsonl"
+    monkeypatch.setattr(llm_gate, "_LLM_COSTS_PATH", costs_path)
+    monkeypatch.setattr(llm_gate, "_session_cost_usd", 0.0)
+    monkeypatch.setattr(
+        llm_gate,
+        "load_advance_settings",
+        lambda: {
+            "llm_settings": {
+                "pricing_per_1m": {
+                    "gpt-4o-mini": {"input": 1.0, "output": 2.0},
+                },
+            },
+        },
+    )
+
+    resp = _FakeResponse("ok")
+    resp.usage = _FakeUsage(10, 20)
+
+    llm_gate._log_llm_call(resp, "job_review", "gpt-4o-mini")
+
+    payload = json.loads(costs_path.read_text(encoding="utf-8").strip())
+    assert payload["cost_usd"] == 0.00005
+    assert payload["session_usd"] == 0.00005
+
+
 def test_normalize_rejection_blocker_suggestions_accepts_json_shape():
     suggestions = llm_gate.normalize_rejection_blocker_suggestions(
         '{"blockers":['
-        '{"term":"restricted platform","kind":"platform"},'
-        '{"term":"specialist certification","kind":"credential"},'
-        '{"term":"restricted platform","kind":"platform"}'
+        '{"term":"restricted platform"},'
+        '{"term":"specialist certification"},'
+        '{"term":"restricted platform"}'
         ']}'
     )
 
     assert suggestions == ["restricted platform", "specialist certification"]
 
 
-def test_normalize_rejection_blocker_suggestions_rejects_soft_skill_kind():
+def test_normalize_rejection_blocker_suggestions_deduplicates_and_limits_words():
     suggestions = llm_gate.normalize_rejection_blocker_suggestions(
         '{"blockers":['
-        '{"term":"strong analytical and problem-solving skills","kind":"soft_skill"},'
-        '{"term":"regulated sector experience","kind":"industry_platform"}'
-        ']}'
+        '{"term":"regulated sector experience"},'
+        '{"term":"regulated sector experience"},'
+        '{"term":"ahpra registration"}'
+        ']}',
+        max_items=5,
     )
 
-    assert suggestions == ["regulated sector experience"]
-
-
-def test_rejection_rule_categories_file_contains_enabled_entries():
-    payload = json.loads(llm_gate._REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
-
-    assert payload["kind"] == "managed_knowledge"
-    assert any(entry.get("enabled") for entry in payload["entries"])
-    assert "platform" in llm_gate._hard_blocker_rules()
-    assert "industry_platform" in llm_gate._hard_blocker_rules()
+    assert suggestions == ["regulated sector experience", "ahpra registration"]
 
 
 def test_managed_llm_prompt_knowledge_files_contain_lines():
     fit_payload = json.loads(llm_gate._FIT_REVIEW_DEFAULTS_PATH.read_text(encoding="utf-8"))
     capability_payload = json.loads(llm_gate._CAPABILITY_NAMING_DEFAULTS_PATH.read_text(encoding="utf-8"))
 
-    assert fit_payload["kind"] == "managed_knowledge"
-    assert capability_payload["kind"] == "managed_knowledge"
+    assert fit_payload["kind"] == "system_config"
+    assert capability_payload["kind"] == "system_config"
     assert any(str(line).strip() for line in fit_payload["lines"])
     assert any(str(line).strip() for line in capability_payload["lines"])
+
+
+def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "llm_profile_brief": "",
+            "star_evidence_text": "",
+            "capability_profile_rules": [],
+            "salary_preferences": {
+                "minimum_salary_yearly": 150000,
+                "minimum_daily_rate": 900,
+            },
+            "match_preferences": {
+                "home_location": "Sydney",
+                "prefer_permanent": True,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "get_candidate_profile_tiers",
+        lambda profile: {
+            "primary_candidate_profile_context": "Primary evidence",
+            "secondary_candidate_profile_context": "Secondary evidence",
+            "supplementary_candidate_profile_context": "Supplementary evidence",
+        },
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "get_candidate_profile_tier_weights",
+        lambda profile: {
+            "primary_candidate_profile_context": 0.9,
+            "secondary_candidate_profile_context": 0.5,
+            "supplementary_candidate_profile_context": 0.2,
+        },
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "load_advance_settings",
+        lambda: {
+            "llm_settings": {
+                "llm_prompt_settings": {
+                    "match_preference_templates": {
+                        "compensation_target_yearly": "Yearly target {value}.",
+                        "compensation_target_daily": "Daily target {value}.",
+                        "home_location": "Base {home_location}.",
+                        "prefer_permanent": "Prefer permanent.",
+                    },
+                    "evidence_tiers": [
+                        {
+                            "profile_key": "primary_candidate_profile_context",
+                            "label": "Primary context",
+                            "weight_label": "strongest",
+                            "default_weight": 1.0,
+                            "limit": 50,
+                        },
+                        {
+                            "profile_key": "secondary_candidate_profile_context",
+                            "label": "Secondary context",
+                            "weight_label": "lower",
+                            "default_weight": 0.5,
+                            "limit": 40,
+                        },
+                    ],
+                    "learning_candidates_max_items": 6,
+                    "rejection_blocker_suggestions_max_items": 6,
+                    "rejection_blocker_suggestions_max_words": 6,
+                },
+            },
+        },
+    )
+
+    context = llm_gate.build_profile_prompt_context()
+
+    assert "Yearly target 150000." in context
+    assert "Daily target 900." in context
+    assert "Base Sydney." in context
+    assert "Prefer permanent." in context
+    assert "Primary context (strongest weight 0.90):" in context
+    assert "Primary evidence" in context
+
+
+def test_normalize_llm_learning_candidates_uses_managed_max_items(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_advance_settings",
+        lambda: {
+            "llm_settings": {
+                "llm_prompt_settings": {
+                    "match_preference_templates": {},
+                    "evidence_tiers": [],
+                    "learning_candidates_max_items": 1,
+                    "rejection_blocker_suggestions_max_items": 6,
+                    "rejection_blocker_suggestions_max_words": 6,
+                },
+            },
+        },
+    )
+
+    candidates = llm_gate.normalize_llm_learning_candidates(
+        [
+            {"signal": "platform engineer", "suggested_category": "role_title_token"},
+            {"signal": "delivery manager", "suggested_category": "role_title_token"},
+        ]
+    )
+
+    assert len(candidates) == 1
+
+
+def test_normalize_rejection_blocker_suggestions_uses_managed_max_items(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_advance_settings",
+        lambda: {
+            "llm_settings": {
+                "llm_prompt_settings": {
+                    "match_preference_templates": {},
+                    "evidence_tiers": [],
+                    "learning_candidates_max_items": 6,
+                    "rejection_blocker_suggestions_max_items": 1,
+                    "rejection_blocker_suggestions_max_words": 6,
+                },
+            },
+        },
+    )
+
+    suggestions = llm_gate.normalize_rejection_blocker_suggestions(
+        '{"blockers":[{"term":"specialist platform","kind":"platform"},{"term":"regulated sector","kind":"industry_platform"}]}'
+    )
+
+    assert suggestions == ["specialist platform"]
 
 
 def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):

@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from string import Template
 from typing import Any, Dict, List, Optional, Set, Tuple
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from playwright.sync_api import sync_playwright
 
@@ -32,15 +32,11 @@ from job_hunter_agent.filters import (
     analyze_title_filters,
     passes_content_filters,
     passes_quick_card_filters,
-    passes_saved_rejection_rules,
-    passes_title_filters,
-    suggest_title_block_phrase,
-    suggest_title_block_phrases,
+    passes_title_filters, 
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches, generalize_hard_block_pattern
 from job_hunter_agent.job_identity import (
-    deduplicate_across_sources,
-    find_similar_job,
+    deduplicate_across_sources, 
 )
 from job_hunter_agent.llm_gate import (
     build_llm_cache_key,
@@ -50,6 +46,20 @@ from job_hunter_agent.llm_gate import (
     normalize_llm_review_payload,
 )
 from job_hunter_agent.match_labels import score_to_match_level, score_to_match_label
+from job_hunter_agent.runtime_helpers import (
+    CLI_FLAG_CHEAP_LLM,
+    CLI_FLAG_DEBUG_MODE,
+    CLI_FLAG_NO_LLM,
+    CLI_FLAG_REBUILD_DASHBOARD,
+    has_cli_flag,
+)
+from job_hunter_agent.advance_settings import (
+    DEFAULT_SEARCH_SETTINGS,
+    KEY_DATE_RANGE_DAYS,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_SEEK_MAX_PAGES,
+)
 from job_hunter_agent.profile_store import (
     get_match_levels,
     get_candidate_profile_tier_weights,
@@ -60,6 +70,48 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.review_insights import build_review_data
+from job_hunter_agent.record_schema import (
+    RECORD_CARD_SALARY_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_COMPETITIVE_SIGNALS_KEY,
+    RECORD_CONTENT_REASON_KEY,
+    RECORD_DECISION_KEY,
+    RECORD_DETAILS_LENGTH_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DETAILS_TEXT_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_FIT_HIGHLIGHTS_KEY,
+    RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_JOB_KEY,
+    RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_MISSING_EVIDENCE_KEY,
+    RECORD_PAGE_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_POSTED_KEY,
+    RECORD_REJECT_REASON_KEY,
+    RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    RECORD_SALARY_KEY,
+    RECORD_SEARCH_CLASSIFICATIONS_KEY,
+    RECORD_SEARCH_KEYWORDS_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SOURCE_METADATA_KEY,
+    RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_TITLE_MATCH_METADATA_KEY,
+    RECORD_TITLE_REASON_KEY,
+    RECORD_URL_KEY,
+    RECORD_WORK_MODE_KEY,
+    RECORD_WORK_MODE_SOURCE_KEY,
+    RECORD_WORK_MODE_EVIDENCE_KEY,
+    RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
+    RECORD_WORK_TYPE_KEY,
+)
 from job_hunter_agent.signal_registry import (
     filter_registerable_signals,
     load_approved_signal_catalog,
@@ -95,10 +147,15 @@ from job_hunter_agent.paths import (
 )
 from job_hunter_agent.utils import (
     extract_salary,
-    extract_work_mode,
     parse_seek_posted_age_days,
     safe_html,
     set_page_param,
+)
+from job_hunter_agent.work_mode_extraction import (
+    extract_from_seek_detail,
+    extract_seek_filter_panel_state,
+    log_work_mode_result,
+    WORK_MODE_UNKNOWN,
 )
 from job_hunter_agent.salary_utils import (
     salary_sort_value,
@@ -106,6 +163,7 @@ from job_hunter_agent.salary_utils import (
     _salary_includes_super_or_package,
 )
 from job_hunter_agent.io_utils import (
+    DEBUG_CAPTURE_SOURCE_PAYLOADS,
     normalize_posted_text,
     configure_console_output,
     load_json_dict,
@@ -119,6 +177,7 @@ from job_hunter_agent.io_utils import (
     write_run_stats,
     write_run_attempt,
     write_review_data,
+    write_source_payload_debug,
 )
 from job_hunter_agent.text_processing import (
     dedupe_preserve_order,
@@ -132,12 +191,13 @@ from job_hunter_agent.text_processing import (
 )
 from job_hunter_agent.role_analysis import (
     friendly_capability_label,
+    has_government_context,
+    infer_posting_channel,
+    infer_role_sector,
     role_text_bundle,
     text_contains_term,
-    has_government_context,
-    infer_role_sector,
-    infer_posting_channel,
 )
+from job_hunter_agent.scrapers.base import blank_posting_channel_evidence, blank_source_metadata
 from job_hunter_agent.scoring_utils import (
     weighted_points,
     build_scoring_source_text,
@@ -166,6 +226,7 @@ from job_hunter_agent.capability_matching import (
 )
 from job_hunter_agent.signal_detection import (
     build_job_learning_signals,
+    _extract_government_context_learning_signals,
     detect_competitive_signals,
     evaluate_competitive_signal_alignment,
     competitive_signal_assessments,
@@ -174,14 +235,22 @@ from job_hunter_agent.signal_detection import (
     hard_block_entries,
     hard_block_reasons,
 )
+from job_hunter_agent.profile_learning import _role_title_review_token
+from job_hunter_agent.title_normalization_rules import _classify_title_normalization_candidate
 from job_hunter_agent.signal_schema import (
+    CATEGORY_CAPABILITY_CONCEPT,
+    CATEGORY_GOVERNMENT_CONTEXT,
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+    CATEGORY_TITLE_PARSE_BLOCKER,
     COMPETITIVE_SIGNALS_KEY,
     HARD_BLOCK_REASONS_KEY,
     LEARNING_CATEGORY_KEY,
+    LEARNING_EVIDENCE_KEY,
+    LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
     RECORD_COMPANY_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
@@ -253,9 +322,9 @@ from job_hunter_agent.history import (
 
 MAX_LLM_CHARS = 3000
 CLI_FLAGS = set(sys.argv[1:])
-NO_LLM_MODE = "--no-llm" in CLI_FLAGS
-CHEAP_LLM_MODE = "--cheap-llm" in CLI_FLAGS
-DASHBOARD_DEBUG_MODE = "--debug-mode" in CLI_FLAGS
+NO_LLM_MODE = has_cli_flag(list(CLI_FLAGS), CLI_FLAG_NO_LLM)
+CHEAP_LLM_MODE = has_cli_flag(list(CLI_FLAGS), CLI_FLAG_CHEAP_LLM)
+DASHBOARD_DEBUG_MODE = has_cli_flag(list(CLI_FLAGS), CLI_FLAG_DEBUG_MODE)
 
 from job_hunter_agent.dashboard_renderer import (  # noqa: E402 — after CLI_FLAGS
     ARCHIVE_BADGE_TOOLTIP,
@@ -345,8 +414,85 @@ def register_hard_blocker_learning_from_rejection(
         register_signals(signals)
 
 
+def build_ad_learning_signals(
+    record: dict,
+    details_text: str,
+    profile: Optional[dict] = None,
+) -> list[dict[str, Any]]:
+    """Build learning signals for a job ad.
+
+    Accepts (record, details_text, profile) and returns a list of signal dicts
+    in the {signal, suggested_category, original_texts} shape.
+
+    Signals are produced from three sources (in order):
+    1. Explicit skill_observations in the record (capability_concept)
+    2. Government context signals extracted from the record + details_text
+    3. Title tokens or title normalization candidates from the record title
+    """
+    pending: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _add(signal_val: str, suggested_cat: str, original_texts: list[str]) -> None:
+        key = compact_whitespace(signal_val or "").lower()
+        if not key or key in seen:
+            return
+        known, _ = signal_in_approved_knowledge(suggested_cat, key)
+        if known:
+            return
+        seen.add(key)
+        pending.append({
+            LEARNING_SIGNAL_KEY: compact_whitespace(signal_val),
+            LEARNING_SUGGESTED_CATEGORY_KEY: suggested_cat,
+            LEARNING_ORIGINAL_TEXTS_KEY: [compact_whitespace(t) for t in original_texts if compact_whitespace(t)],
+        })
+
+    # 1. Capability concepts from explicit skill observations
+    for obs in (record.get("skill_observations") or []):
+        skill = compact_whitespace((obs.get("skill") or "") if isinstance(obs, dict) else "")
+        if skill:
+            _add(skill, CATEGORY_CAPABILITY_CONCEPT, [skill])
+
+    # 2. Government context from record fields + details_text
+    gov_record = dict(record)
+    if details_text and not gov_record.get(RECORD_FULL_DESCRIPTION_KEY):
+        gov_record[RECORD_FULL_DESCRIPTION_KEY] = details_text
+    for item in _extract_government_context_learning_signals(gov_record):
+        sig = compact_whitespace(item.get(LEARNING_SIGNAL_KEY) or "")
+        texts = item.get(LEARNING_ORIGINAL_TEXTS_KEY) or [sig]
+        if sig:
+            key = sig.lower()
+            if key not in seen:
+                seen.add(key)
+                pending.append({
+                    LEARNING_SIGNAL_KEY: sig,
+                    LEARNING_SUGGESTED_CATEGORY_KEY: item.get(LEARNING_CATEGORY_KEY) or CATEGORY_GOVERNMENT_CONTEXT,
+                    LEARNING_ORIGINAL_TEXTS_KEY: [compact_whitespace(t) for t in texts if compact_whitespace(t)],
+                })
+
+    # 3. Title token detection
+    title = compact_whitespace(record.get("title") or "")
+    title_reason = compact_whitespace(record.get("title_reason") or "").upper()
+    if title:
+        if title_reason == TITLE_REASON_POTENTIAL_MATCH:
+            token = _role_title_review_token(title)
+            if token:
+                _add(token, CATEGORY_ROLE_TITLE_TOKEN, [title])
+        else:
+            candidate = _classify_title_normalization_candidate(title)
+            if candidate:
+                cand_val = compact_whitespace(candidate.get("value") or "")
+                if cand_val:
+                    _add(cand_val, CATEGORY_TITLE_NORMALIZATION_CANDIDATE, candidate.get("evidence") or [title])
+
+    return pending
+
+
 def _has_high_value_ambiguous_learning_candidate(signals: list[dict[str, Any]]) -> bool:
-    interesting_categories = {CATEGORY_ROLE_TITLE_TOKEN, CATEGORY_TITLE_NORMALIZATION_CANDIDATE}
+    interesting_categories = {
+        CATEGORY_ROLE_TITLE_TOKEN,
+        CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+        CATEGORY_TITLE_PARSE_BLOCKER,
+    }
     for signal in signals or []:
         if not isinstance(signal, dict):
             continue
@@ -383,7 +529,9 @@ def _resolve_llm_review_payload(
     *,
     learning_only: bool = False,
 ) -> dict[str, Any]:
-    llm_input_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    title_text = str(record.get(RECORD_TITLE_KEY) or "").strip()
+    body_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    llm_input_text = "\n".join(part for part in [title_text, str(body_text).strip()] if part)
     llm_fp = build_llm_cache_key(llm_input_text[:MAX_LLM_CHARS])
     cached = normalize_llm_review_payload(llm_cache.get(llm_fp)) if llm_fp in llm_cache else None
 
@@ -642,21 +790,21 @@ def render_html(
     search_settings_payload = {
         "keywords": str(current_search_settings.get("keywords") or "").strip(),
         "locations": [str(value).strip() for value in current_search_settings.get("locations", []) if str(value).strip()],
-        "date_range_days": int(current_search_settings.get("date_range_days", date_range_days) or date_range_days),
-        "seek_max_pages": int(
-            current_search_settings.get("seek_max_pages", run_stats.get("seek_max_pages", 10))
-            or run_stats.get("seek_max_pages", 10)
+        KEY_DATE_RANGE_DAYS: int(current_search_settings.get(KEY_DATE_RANGE_DAYS, date_range_days) or date_range_days),
+        KEY_SEEK_MAX_PAGES: int(
+            current_search_settings.get(KEY_SEEK_MAX_PAGES, run_stats.get(KEY_SEEK_MAX_PAGES, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]))
+            or run_stats.get(KEY_SEEK_MAX_PAGES, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES])
         ),
-        "linkedin_hours_old": int(current_search_settings.get("linkedin_hours_old", 24) or 24),
-        "linkedin_results_per_search": int(current_search_settings.get("linkedin_results_per_search", 25) or 25),
+        KEY_LINKEDIN_HOURS_OLD: int(current_search_settings.get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]) or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]),
+        KEY_LINKEDIN_RESULTS_PER_SEARCH: int(current_search_settings.get(KEY_LINKEDIN_RESULTS_PER_SEARCH, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]) or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]),
     }
     search_keywords_label = search_settings_payload["keywords"] or "Not set"
     search_locations_label = " | ".join(search_settings_payload["locations"]) or "Not set"
     search_locations_text = "\n".join(search_settings_payload["locations"])
     search_settings_json = json.dumps(search_settings_payload, ensure_ascii=False).replace("</", "<\\/")
-    
-    li_hours = scoring_profile.get("search_settings", {}).get("linkedin_hours_old", 24)
-    li_results = scoring_profile.get("search_settings", {}).get("linkedin_results_per_search", 25)
+
+    li_hours = scoring_profile.get("search_settings", {}).get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD])
+    li_results = scoring_profile.get("search_settings", {}).get(KEY_LINKEDIN_RESULTS_PER_SEARCH, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH])
     
     view_history_text = "treats all roles as New To You" if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else "preserves your viewed history"
     snapshot_helper = (
@@ -727,9 +875,9 @@ def render_html(
             ),
             "SEARCH_KEYWORDS_LABEL": safe_html(search_keywords_label),
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),
-            "SEARCH_DATE_RANGE_DAYS": safe_html(str(search_settings_payload["date_range_days"])),
-            "SEARCH_DATE_RANGE_SUFFIX": "s" if int(search_settings_payload["date_range_days"]) != 1 else "",
-            "SEARCH_SEEK_MAX_PAGES": safe_html(str(search_settings_payload["seek_max_pages"])),
+            "SEARCH_DATE_RANGE_DAYS": safe_html(str(search_settings_payload[KEY_DATE_RANGE_DAYS])),
+            "SEARCH_DATE_RANGE_SUFFIX": "s" if int(search_settings_payload[KEY_DATE_RANGE_DAYS]) != 1 else "",
+            "SEARCH_SEEK_MAX_PAGES": safe_html(str(search_settings_payload[KEY_SEEK_MAX_PAGES])),
             "LINKEDIN_HOURS": safe_html(str(li_hours)),
             "LINKEDIN_RESULTS": safe_html(str(li_results)),
             "SEARCH_KEYWORDS_INPUT": safe_html(search_settings_payload["keywords"]),
@@ -755,16 +903,98 @@ def render_html(
     output_file.write_text(html, encoding="utf-8")
 
 
-def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
+def _seek_nested_value(payload: object, key_names: tuple[str, ...]) -> object:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            key_text = str(key or "")
+            if any(name in key_text for name in key_names) and value not in (None, "", [], {}):
+                return value
+            nested = _seek_nested_value(value, key_names)
+            if nested not in (None, "", [], {}):
+                return nested
+    elif isinstance(payload, list):
+        for item in payload:
+            nested = _seek_nested_value(item, key_names)
+            if nested not in (None, "", [], {}):
+                return nested
+    return None
+
+
+def _seek_string_value(payload: object, key_names: tuple[str, ...]) -> str:
+    value = _seek_nested_value(payload, key_names)
+    return str(value).strip() if value not in (None, "", [], {}) else ""
+
+
+def _seek_json_safe_value(value: object):
+    if isinstance(value, dict):
+        return {str(key): _seek_json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_seek_json_safe_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_seek_json_safe_value(item) for item in value]
+    if isinstance(value, (datetime,)):
+        return value.isoformat()
+    return value
+
+
+def _seek_source_metadata(detail_page, details_payload: dict) -> tuple[dict, object]:
+    redux_payload = None
+    try:
+        redux_payload = detail_page.evaluate("window.SEEK_REDUX_DATA || null")
+    except Exception:
+        redux_payload = None
+
+    combined_payload = redux_payload if redux_payload not in (None, "", [], {}) else details_payload
+    apply_url = _seek_string_value(combined_payload, ("shareLink",))
+    company_profile_url = _seek_string_value(combined_payload, ("companySearchUrl",))
+    company_profile_name = _seek_string_value(combined_payload, ("normalisedOrganisationName", "companyProfileName"))
+    advertiser_block = _seek_nested_value(combined_payload, ("advertiser",))
+    if isinstance(advertiser_block, dict):
+        poster_company = _seek_string_value(advertiser_block, ("name", "label", "value"))
+    else:
+        poster_company = _seek_string_value(combined_payload, ("advertiser", "name"))
+    hiring_company = _seek_string_value(combined_payload, ("normalisedOrganisationName", "companyProfileName", "name"))
+    raw_source_fields = {}
+    for key in [
+        "seekPostingSourceCode",
+        "seekHirerJobReference",
+        "seekPartnerMetadata",
+        "hirer",
+        "advertiser",
+        "companySearchUrl",
+        "companyProfile",
+        "shareLink",
+    ]:
+        value = _seek_nested_value(combined_payload, (key,))
+        if value not in (None, "", [], {}):
+            raw_source_fields[key] = _seek_json_safe_value(value)
+
+    metadata = blank_source_metadata("seek")
+    metadata.update(
+        {
+            "apply_url": apply_url,
+            "apply_domain": urlparse(apply_url).netloc.lower().strip() if apply_url else "",
+            "company_profile_url": company_profile_url,
+            "company_profile_name": company_profile_name,
+            "poster_company": poster_company,
+            "hiring_company": hiring_company,
+            "ats_source": "",
+            "raw_source_fields": raw_source_fields,
+        }
+    )
+    return metadata, combined_payload
+
+
+def _extract_seek_card_data(card, search_target: dict, run_iso: str, filter_state=None) -> dict:
     """Extracts basic information from a SEEK job card and returns a normalized record."""
     title_el = card.query_selector(SELECTOR_TITLE)
     company_el = card.query_selector(SELECTOR_COMPANY)
     posted_el = card.query_selector(SELECTOR_POSTED)
-    card_meta = extract_card_metadata(card)
+    card_meta = extract_card_metadata(card, filter_state=filter_state)
     card_text = (card.inner_text() or "").strip()
 
     title = title_el.inner_text().strip() if title_el else ""
-    company = company_el.inner_text().strip() if company_el else "N/A"
+    company = company_el.inner_text().strip() if company_el else ""
     posted = posted_el.inner_text().strip() if posted_el else ""
     if not posted:
         posted = extract_posted_text_from_card(card_text)
@@ -773,38 +1003,44 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str) -> dict:
     
     relative_url = title_el.get_attribute("href") if title_el else None
     full_url = build_full_seek_url(relative_url)
-
     return {
-        "run_started_at": run_iso,
+        RECORD_RUN_STARTED_AT_KEY: run_iso,
         RECORD_SEARCH_LOCATION_KEY: search_target["location"],
-        "search_keywords": search_target["keywords"],
-        "search_classifications": ",".join(search_target.get("classification_ids", [])),
-        "source": "seek",
-        "job_key": stable_job_key(full_url) if full_url else None,
+        RECORD_SEARCH_KEYWORDS_KEY: search_target["keywords"],
+        RECORD_SEARCH_CLASSIFICATIONS_KEY: ",".join(search_target.get("classification_ids", [])),
+        RECORD_PAGE_KEY: 1,
+        RECORD_SOURCE_KEY: "seek",
+        RECORD_JOB_KEY: stable_job_key(full_url) if full_url else None,
         RECORD_TITLE_KEY: title,
         RECORD_COMPANY_KEY: company,
-        "posted": posted,
-        "posted_age_days": posted_age_days,
+        RECORD_POSTED_KEY: posted,
+        RECORD_POSTED_AGE_DAYS_KEY: posted_age_days,
         RECORD_URL_KEY: full_url,
-        "location": card_meta["location"],
-        "work_mode": card_meta["work_mode"],
-        "work_type": card_meta["work_type"],
-        "teaser": card_meta["teaser"],
-        "card_salary": card_meta["card_salary"],
-        "decision": "REJECT",
-        "reject_reason": None,
-        TITLE_REASON_KEY: None,
-        "title_match_metadata": {},
-        "content_reason": None,
-        "llm_decision": None,
-        "llm_fit_grade": None,
-        "role_snapshot": "N/A",
-        "fit_highlights": [],
-        "soft_risk_reasons": [],
-        "missing_evidence": [],
-        COMPETITIVE_SIGNALS_KEY: [],
-        "reviewed_signal_matches": {"matched": [], "evidence_only": [], "ignored": [], "unresolved": []},
-        "details_length": 0,
+        RECORD_LOCATION_KEY: card_meta["location"],
+        RECORD_WORK_MODE_KEY: card_meta["work_mode"],
+        RECORD_WORK_MODE_SOURCE_KEY: card_meta["work_mode_source"],
+        RECORD_WORK_MODE_EVIDENCE_KEY: card_meta["work_mode_evidence"],
+        RECORD_WORK_MODE_NEEDS_REVIEW_KEY: card_meta["work_mode_needs_review"],
+        RECORD_WORK_TYPE_KEY: card_meta["work_type"],
+        RECORD_TEASER_KEY: card_meta["teaser"],
+        RECORD_CARD_SALARY_KEY: card_meta["card_salary"],
+        RECORD_DECISION_KEY: None,
+        RECORD_REJECT_REASON_KEY: None,
+        RECORD_TITLE_REASON_KEY: None,
+        RECORD_TITLE_MATCH_METADATA_KEY: {},
+        RECORD_CONTENT_REASON_KEY: None,
+        RECORD_LLM_DECISION_KEY: None,
+        RECORD_LLM_FIT_GRADE_KEY: None,
+        RECORD_DETAILS_LENGTH_KEY: 0,
+        RECORD_DETAILS_TEXT_KEY: "",
+        RECORD_SALARY_KEY: "",
+        RECORD_FIT_HIGHLIGHTS_KEY: [],
+        RECORD_SOFT_RISK_REASONS_KEY: [],
+        RECORD_MISSING_EVIDENCE_KEY: [],
+        RECORD_COMPETITIVE_SIGNALS_KEY: [],
+        RECORD_REVIEWED_SIGNAL_MATCHES_KEY: {"matched": [], "evidence_only": [], "ignored": [], "unresolved": []},
+        RECORD_SOURCE_METADATA_KEY: blank_source_metadata("seek"),
+        RECORD_POSTING_CHANNEL_EVIDENCE_KEY: blank_posting_channel_evidence(),
     }
 
 
@@ -819,8 +1055,8 @@ def _process_seek_job_details(
     details_text = str(details_payload.get("text") or "")
     details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
     
-    record["details_status"] = details_status
-    record["details_length"] = len(details_text)
+    record[RECORD_DETAILS_STATUS_KEY] = details_status
+    record[RECORD_DETAILS_LENGTH_KEY] = len(details_text)
     
     if details_status != "ok" or not details_text:
         reject_reason = {
@@ -833,10 +1069,29 @@ def _process_seek_job_details(
 
     record[RECORD_FIT_SOURCE_TEXT_KEY] = details_text
     record[RECORD_FULL_DESCRIPTION_KEY] = details_text
-    record["description_source"] = details_payload.get("source") or "jobAdDetails"
-    source = str(record.get("description_source") or "").strip().lower()
+    record[RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
+    source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
     is_trusted = source in get_trusted_sources() and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
-    record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
+    record[RECORD_FIT_CONFIDENCE_KEY] = "HIGH" if is_trusted else "LOW"
+    source_metadata, raw_source_payload = _seek_source_metadata(detail_page, details_payload)
+    record[RECORD_SOURCE_METADATA_KEY] = source_metadata
+    channel_signal = infer_posting_channel(record, details_text)
+    record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
+        "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),
+        "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
+        "needs_review": bool(channel_signal.get("needs_review")),
+    }
+    if DEBUG_CAPTURE_SOURCE_PAYLOADS:
+        try:
+            write_source_payload_debug(
+                "seek",
+                str(record.get(RECORD_JOB_KEY) or record.get(RECORD_URL_KEY) or "unknown"),
+                raw_html=detail_page.content(),
+                raw_json=raw_source_payload,
+                normalized_record=record,
+            )
+        except Exception:
+            pass
 
     ok_desc, desc_reason = passes_content_filters(details_text, record["location"], title_reason)
     if not ok_desc:
@@ -851,16 +1106,11 @@ def _process_seek_job_details(
         register_hard_blocker_learning_from_rejection(record, desc_reason, details_text, profile=profile)
         return False, desc_reason
 
-    ok_learned, learned_reason = passes_saved_rejection_rules(details_text)
-    if not ok_learned:
-        register_hard_blocker_learning_from_rejection(record, learned_reason, details_text, profile=profile)
-        return False, learned_reason
-
     record[COMPETITIVE_SIGNALS_KEY] = [
         evaluate_competitive_signal_alignment(signal, profile)
         for signal in detect_competitive_signals(details_text, profile)
     ]
-    record["reviewed_signal_matches"] = reviewed_signal_matches_for_text(details_text)
+    record[RECORD_REVIEWED_SIGNAL_MATCHES_KEY] = reviewed_signal_matches_for_text(details_text)
     
     hard_block_matches = hard_block_entries(record, profile)
     record[HARD_BLOCK_REASONS_KEY] = [entry["text"] for entry in hard_block_matches]
@@ -872,17 +1122,25 @@ def _process_seek_job_details(
 
     record_skill_observations = extract_skill_observations(record, profile)
     record["skill_observations"] = record_skill_observations
-    record["ad_learning_signals"] = build_job_learning_signals(record, details_text, profile)
+    record["ad_learning_signals"] = build_ad_learning_signals(record, details_text, profile)
 
-    record["salary"] = extract_salary(details_text) or record.get("card_salary", "N/A")
-    detail_work_mode = extract_work_mode(details_text)
-    if detail_work_mode != "N/A":
-        record["work_mode"] = detail_work_mode
+    record[RECORD_SALARY_KEY] = extract_salary(details_text) or record.get(RECORD_CARD_SALARY_KEY) or ""
+    # Upgrade work mode from detail page. raw_source_payload is the SEEK_REDUX_DATA extracted
+    # above — structured server state takes priority over card-level text inference.
+    detail_extraction = extract_from_seek_detail(raw_source_payload, details_text)
+    detail_mode = detail_extraction["work_mode"]
+    current_mode = record.get(RECORD_WORK_MODE_KEY) or ""
+    if detail_mode != WORK_MODE_UNKNOWN or not current_mode or current_mode == WORK_MODE_UNKNOWN:
+        record[RECORD_WORK_MODE_KEY] = detail_extraction["work_mode"]
+        record[RECORD_WORK_MODE_SOURCE_KEY] = detail_extraction["work_mode_source"]
+        record[RECORD_WORK_MODE_EVIDENCE_KEY] = detail_extraction["work_mode_evidence"]
+        record[RECORD_WORK_MODE_NEEDS_REVIEW_KEY] = detail_extraction["work_mode_needs_review"]
+    log_work_mode_result(str(record.get(RECORD_JOB_KEY) or ""), "seek", record)
 
-    record["role_snapshot"] = build_role_summary(record, details_text, profile)
-    record["fit_highlights"] = build_fit_highlights(record, details_text, profile)
-    record["soft_risk_reasons"], record["missing_evidence"] = build_risk_and_missing_evidence(
-        details_text, title_reason, profile, competitive_signals=record["competitive_signals"]
+    record[RECORD_ROLE_SNAPSHOT_KEY] = build_role_summary(record, details_text, profile)
+    record[RECORD_FIT_HIGHLIGHTS_KEY] = build_fit_highlights(record, details_text, profile)
+    record[RECORD_SOFT_RISK_REASONS_KEY], record[RECORD_MISSING_EVIDENCE_KEY] = build_risk_and_missing_evidence(
+        details_text, title_reason, profile, competitive_signals=record[RECORD_COMPETITIVE_SIGNALS_KEY]
     )
     
     return True, "OK"
@@ -987,14 +1245,18 @@ def _seek_scrape_to_records(
                         print("No cards found. Stopping this target.")
                         break
 
+                    # Extract work arrangement filter state once per page load.
+                    # This is search-level context passed to each card extractor.
+                    filter_state = extract_seek_filter_panel_state(list_page)
+
                     page_has_fresh_card = False
-                    
+
                     for card in job_cards:
                         try:
-                            record = _extract_seek_card_data(card, search_target, run_iso)
-                            record["page"] = current_page_num
+                            record = _extract_seek_card_data(card, search_target, run_iso, filter_state)
+                            record[RECORD_PAGE_KEY] = current_page_num
                             title, company = record[RECORD_TITLE_KEY], record[RECORD_COMPANY_KEY]
-                            posted_age_days = record["posted_age_days"]
+                            posted_age_days = record[RECORD_POSTED_AGE_DAYS_KEY]
                             if posted_age_days is None or posted_age_days <= configured_date_range:
                                 page_has_fresh_card = True
 
@@ -1002,49 +1264,49 @@ def _seek_scrape_to_records(
                             ok_title = bool(title_analysis.get("ok"))
                             title_reason = str(title_analysis.get("reason") or "")
                             record[TITLE_REASON_KEY] = title_reason
-                            record["title_match_metadata"] = title_analysis
+                            record[RECORD_TITLE_MATCH_METADATA_KEY] = title_analysis
                             if not ok_title:
                                 print(f"REJECTED (title) [{title_reason}] {title}")
-                                record["reject_reason"] = title_reason
+                                record[RECORD_REJECT_REASON_KEY] = title_reason
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if not record[RECORD_URL_KEY]:
                                 print(f"REJECTED (card) [NO_URL] {title} @ {company}")
-                                record["reject_reason"] = "NO_URL"
+                                record[RECORD_REJECT_REASON_KEY] = "NO_URL"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            job_key = record["job_key"]
+                            job_key = record[RECORD_JOB_KEY]
                             if job_key in applied_job_keys:
                                 print(f"SKIP (applied) {title} @ {company}")
-                                record.update({"decision": "SKIP", "reject_reason": "ALREADY_APPLIED"})
+                                record.update({RECORD_DECISION_KEY: "SKIP", RECORD_REJECT_REASON_KEY: "ALREADY_APPLIED"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if job_key in hidden_job_keys:
                                 print(f"SKIP (hidden) {title} @ {company}")
-                                record.update({"decision": "SKIP", "reject_reason": "MANUALLY_HIDDEN"})
+                                record.update({RECORD_DECISION_KEY: "SKIP", RECORD_REJECT_REASON_KEY: "MANUALLY_HIDDEN"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if enforce_posted_age_limit and posted_age_days is not None and posted_age_days > configured_date_range:
                                 print(f"REJECTED (posted) [POSTED_TOO_OLD:{configured_date_range}] {title} @ {company}")
-                                record["reject_reason"] = f"POSTED_TOO_OLD:{configured_date_range}"
+                                record[RECORD_REJECT_REASON_KEY] = f"POSTED_TOO_OLD:{configured_date_range}"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if record[RECORD_URL_KEY] in seen_urls:
                                 print(f"SKIP (duplicate) {title} @ {company}")
-                                record.update({"decision": "SKIP", "reject_reason": "DUPLICATE_URL"})
+                                record.update({RECORD_DECISION_KEY: "SKIP", RECORD_REJECT_REASON_KEY: "DUPLICATE_URL"})
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             seen_urls.add(record[RECORD_URL_KEY])
 
-                            ok_card, card_reason = passes_quick_card_filters(title=title, teaser=record["teaser"], company=company, location=record["location"], work_mode=record["work_mode"], work_type=record["work_type"], salary=record.get("card_salary", "N/A"))
+                            ok_card, card_reason = passes_quick_card_filters(title=title, teaser=record[RECORD_TEASER_KEY], company=company, location=record[RECORD_LOCATION_KEY], work_mode=record[RECORD_WORK_MODE_KEY], work_type=record[RECORD_WORK_TYPE_KEY], salary=record.get(RECORD_CARD_SALARY_KEY) or "")
                             if not ok_card:
                                 print(f"REJECTED (card gate) [{card_reason}] {title} @ {company}")
-                                record["reject_reason"] = card_reason
+                                record[RECORD_REJECT_REASON_KEY] = card_reason
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
@@ -1059,16 +1321,16 @@ def _seek_scrape_to_records(
                             ok_details, reject_reason = _process_seek_job_details(record, detail_page, profile, title_reason)
                             if not ok_details:
                                 print(f"REJECTED (details/content) [{reject_reason}] {title} @ {company}")
-                                record["reject_reason"] = reject_reason
+                                record[RECORD_REJECT_REASON_KEY] = reject_reason
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             fit_eval = _evaluate_job_fit(record, profile, llm_cache)
                             record.update(fit_eval)
                             
-                            if record["decision"] == "REJECT":
+                            if record[RECORD_DECISION_KEY] == "REJECT":
                                 print(f"REJECTED ({record['review_source']}) {title} @ {company}")
-                                record["reject_reason"] = "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT"
+                                record[RECORD_REJECT_REASON_KEY] = "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT"
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
                             
@@ -1127,10 +1389,10 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
     previous_run_stats = load_json_dict(RUN_STATS_PATH)
     search_settings = get_search_settings(profile)
-    configured_seek_max_pages = int(search_settings.get("seek_max_pages", 10) or 10)
-    configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
-    enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", True))
-    sort_newest_first = bool(search_settings.get("sort_newest_first", True))
+    configured_seek_max_pages = int(search_settings.get(KEY_SEEK_MAX_PAGES, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]) or DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES])
+    configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
+    enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", DEFAULT_SEARCH_SETTINGS["enforce_posted_age_limit"]))
+    sort_newest_first = bool(search_settings.get("sort_newest_first", DEFAULT_SEARCH_SETTINGS["sort_newest_first"]))
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
 
     run_started_at = datetime.now().astimezone()
@@ -1258,8 +1520,8 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
     print("=" * 60)
     profile = load_profile()
     search_settings = get_search_settings(profile)
-    configured_date_range = int(search_settings.get("date_range_days", 3) or 3)
-    sort_newest_first = bool(search_settings.get("sort_newest_first", True))
+    configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
+    sort_newest_first = bool(search_settings.get("sort_newest_first", DEFAULT_SEARCH_SETTINGS["sort_newest_first"]))
     run_stats = load_json_dict(RUN_STATS_PATH)
     run_started_at = parse_timestamp(run_stats.get("run_started_at")) or datetime.now().astimezone()
     reference_time = datetime.now().astimezone()
@@ -1289,7 +1551,7 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
 
 
 if __name__ == "__main__":
-    if "--rebuild-dashboard" in sys.argv:
+    if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_DASHBOARD):
         rebuild_html_dashboard()
     else:
         scrape_jobs_direct()

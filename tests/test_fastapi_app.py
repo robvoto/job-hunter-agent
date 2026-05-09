@@ -1,5 +1,3 @@
-import json
-
 from fastapi.testclient import TestClient
 
 from job_hunter_agent.fastapi_app import create_app

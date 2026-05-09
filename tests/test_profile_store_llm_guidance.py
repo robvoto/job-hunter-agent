@@ -40,6 +40,17 @@ def test_save_profile_normalizes_llm_capability_naming_guidance(tmp_path, monkey
     assert saved["llm_capability_naming_guidance"] == "Prefer stable business-analysis style labels."
 
 
+def test_save_profile_does_not_persist_scoring_rules(tmp_path, monkeypatch):
+    profile_path = tmp_path / "profile.json"
+    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
+    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+
+    profile_store.save_profile({**profile_store.DEFAULT_PROFILE})
+
+    persisted = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert "scoring_rules" not in persisted
+
+
 def test_load_profile_defaults_llm_capability_naming_guidance(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
     monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
@@ -82,7 +93,7 @@ def test_load_profile_raises_for_non_object_json_and_backs_up_file(tmp_path, mon
 def test_scoring_rules_knowledge_file_contains_sections():
     payload = json.loads(profile_store.SCORING_RULES_PATH.read_text(encoding="utf-8"))
 
-    assert payload["kind"] == "managed_knowledge"
+    assert payload["kind"] == "system_config"
     assert "fit_breakdown" in payload
     assert "salary" in payload
     assert "convergence" in payload
@@ -102,3 +113,22 @@ def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():
 
     assert rules[0]["aliases"] == ["scrum"]
     assert rules[0]["needs_review"] is True
+
+
+def test_classify_candidate_profile_section_label_uses_parsing_rules(monkeypatch):
+    monkeypatch.setattr(
+        profile_store,
+        "load_parsing_rules",
+        lambda: {
+            "candidate_profile_section_routing": {
+                "default_bucket": "primary_candidate_profile_context",
+                "primary_labels": ["primary", "current"],
+                "secondary_labels": ["supporting"],
+                "supplementary_labels": ["background", "education"],
+            }
+        },
+    )
+
+    assert profile_store.classify_candidate_profile_section_label("Supporting Background") == "secondary_candidate_profile_context"
+    assert profile_store.classify_candidate_profile_section_label("Education") == "supplementary_candidate_profile_context"
+    assert profile_store.classify_candidate_profile_section_label("Main CV") == "primary_candidate_profile_context"

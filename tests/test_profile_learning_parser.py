@@ -376,6 +376,28 @@ def test_role_title_detection_requires_an_approved_role_token(line, expected):
     assert profile_learning._looks_like_role_title_line(line) is expected
 
 
+def test_role_title_detection_uses_parsing_config_for_line_rules(monkeypatch):
+    monkeypatch.setattr(
+        profile_learning,
+        "_load_parsing_rules",
+        lambda: {
+            "title_candidate_line_rules": {
+                "max_length_chars": 12,
+                "max_tokens": 2,
+                "punctuation_blockers": [";"],
+            },
+            "title_candidate_leading_verb_blockers": ["working"],
+        },
+    )
+    profile_learning._load_title_candidate_line_rules.cache_clear()
+
+    assert profile_learning._looks_like_role_title_line("Software Engineer") is False
+    assert profile_learning._looks_like_role_title_line("Lead;Engineer") is False
+    assert profile_learning._looks_like_role_title_line("Working Lead") is False
+
+    profile_learning._load_title_candidate_line_rules.cache_clear()
+
+
 def test_role_title_normalization_expands_abbreviations():
     assert profile_learning._normalize_role_title_value("Sr BA") == "senior business analyst"
     assert profile_learning._normalize_role_title_value("PO") == "product owner"

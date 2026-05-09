@@ -24,12 +24,25 @@ from job_hunter_agent.advance_settings import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PREFERENCE_WEIGHTS,
     DEFAULT_SEARCH_SETTINGS,
+    KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_CAPABILITY_STRENGTH_PRESETS,
+    KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_ONBOARDING_SETTINGS as ADVANCE_KEY_ONBOARDING_SETTINGS,
+    KEY_SEARCH_LIMITS,
+    KEY_SEEK_MAX_PAGES,
     ONBOARDING_SETTING_LIMITS,
-    SEARCH_SETTING_LIMITS,
     load_advance_settings,
+)
+from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.parsing_schema import (
+    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_DEFAULT_KEY,
+    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_KEY,
+    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_PRIMARY_KEY,
+    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SECONDARY_KEY,
+    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SUPPLEMENTARY_KEY,
 )
 from job_hunter_agent.paths import (
     DATA_DIR, 
@@ -75,6 +88,14 @@ KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 KEY_MAX_SCORE = "max_score"
+MATCHING_RULE_PROFILE_KEYS = frozenset({
+    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_PRIMARY_PATTERNS,
+    KEY_SECONDARY_PATTERNS,
+    KEY_REQUIRED_SKILLS,
+    "reject_title_rules",
+    "reject_description_phrase_rules",
+})
 
 KEY_NAME = "name"
 KEY_LEVEL = "level"
@@ -83,9 +104,13 @@ KEY_NEEDS_REVIEW = "needs_review"
 KEY_CONVERGENCE = "convergence"
 KEY_CONVERGENCE_ELIGIBLE_GRADES = "eligible_grades"
 KEY_CONVERGENCE_MIN_POSITIVE_MATCHES = "min_positive_matches"
+KEY_CONVERGENCE_REQUIRED_TITLE_REASON = "required_title_reason"
+KEY_CONVERGENCE_REQUIRED_CONTENT_REASON = "required_content_reason"
+KEY_CONVERGENCE_REQUIRED_FIT_CONFIDENCE = "required_fit_confidence"
 KEY_CONVERGENCE_BONUS_NO_SOFT_RISKS = "bonus_no_soft_risks"
 KEY_CONVERGENCE_BONUS_WITH_SOFT_RISKS = "bonus_with_soft_risks"
 KEY_CONVERGENCE_LABEL = "label"
+KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
 
 LEVEL_STRONG = "strong"
 LEVEL_WORKING = "working"
@@ -110,14 +135,15 @@ class ProfileLoadError(RuntimeError):
 
 def _load_default_scoring_rules() -> dict[str, Any]:
     payload = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
-    if str(payload.get("kind") or "").strip() != "managed_knowledge":
+    if str(payload.get("kind") or "").strip() != "system_config" or str(payload.get("name") or "").strip() != "scoring_rules":
         raise ValueError("scoring_rules.json must be managed knowledge")
     return {
         "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
         KEY_LLM_GRADE_POINTS: dict(payload.get(KEY_LLM_GRADE_POINTS) or {}),
         KEY_CAPABILITY_LEVEL_WEIGHTS: dict(payload.get(KEY_CAPABILITY_LEVEL_WEIGHTS) or {}),
-        KEY_CAPABILITY_EVIDENCE: dict(payload.get(KEY_CAPABILITY_EVIDENCE) or {}),
+        KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
+        KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),
         "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
         "salary": dict(payload.get("salary") or {}),
@@ -210,6 +236,26 @@ def normalize_multiline_string_list(values: Any) -> list[str]:
     return cleaned
 
 
+def normalize_title_pattern_lists(
+    primary_values: Any,
+    secondary_values: Any,
+) -> tuple[list[str], list[str]]:
+    primary = normalize_multiline_string_list(primary_values)
+    secondary = normalize_multiline_string_list(secondary_values)
+    primary_seen = {re.sub(r"\s+", " ", value).strip().lower() for value in primary if value}
+
+    cleaned_secondary: list[str] = []
+    seen_secondary: set[str] = set()
+    for value in secondary:
+        normalized = re.sub(r"\s+", " ", value).strip().lower()
+        if not normalized or normalized in primary_seen or normalized in seen_secondary:
+            continue
+        seen_secondary.add(normalized)
+        cleaned_secondary.append(value)
+
+    return primary, cleaned_secondary
+
+
 def ensure_profile_exists() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if PROFILE_PATH.exists():
@@ -268,17 +314,30 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     return result
 
 
-def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def normalize_capability_rules(
+    rules: list[dict[str, Any]] | None,
+    onboarding_settings: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Normalise learned capability rules and keep alias growth under onboarding limits."""
     cleaned: list[dict[str, Any]] = []
     seen_names: set[str] = set()
     derive_job_description_aliases = None
 
+    choose_capability_name = None
     try:
         from job_hunter_agent.capability_matrix import derive_job_description_aliases as _derive_job_description_aliases
+        from job_hunter_agent.capability_matrix import choose_capability_name as _choose_capability_name
 
         derive_job_description_aliases = _derive_job_description_aliases
+        choose_capability_name = _choose_capability_name
     except Exception:
         pass
+
+    source_onboarding = onboarding_settings if isinstance(onboarding_settings, dict) else {}
+    try:
+        alias_limit = int(source_onboarding.get(KEY_CAPABILITY_ALIAS_LIMIT) or DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
+    except Exception:
+        alias_limit = int(DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
 
     for rule in rules or []:
         if not isinstance(rule, dict):
@@ -305,7 +364,7 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
             alias_items = list(raw_aliases or [])
 
         if derive_job_description_aliases:
-            alias_items = derive_job_description_aliases(name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=8)
+            alias_items = derive_job_description_aliases(name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=alias_limit)
 
         name_norm = re.sub(r"\s+", " ", name).strip().lower()
         if not name_norm or name_norm in seen_names:
@@ -330,8 +389,12 @@ def normalize_capability_rules(rules: list[dict[str, Any]] | None) -> list[dict[
         if aliases:
             needs_review = True
 
+        canonical_name = choose_capability_name(name, alias_items) if choose_capability_name else name_norm
+        if not canonical_name:
+            continue
+
         cleaned.append({
-            "name": name,
+            "name": canonical_name,
             "level": level,
             "aliases": aliases,
             "needs_review": needs_review,
@@ -369,14 +432,15 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         merged.get("onboarding_settings", {})
     )
     merged[KEY_CAPABILITY_PROFILE_RULES] = normalize_capability_rules(
-        merged.get(KEY_CAPABILITY_PROFILE_RULES, [])
+        merged.get(KEY_CAPABILITY_PROFILE_RULES, []),
+        merged.get("onboarding_settings", {}),
     )
-    merged["primary_job_title_pattern"] = normalize_multiline_string_list(
-        merged.get("primary_job_title_pattern", [])
+    primary_titles, secondary_titles = normalize_title_pattern_lists(
+        merged.get("primary_job_title_pattern", []),
+        merged.get("secondary_title_patterns", []),
     )
-    merged["secondary_title_patterns"] = normalize_multiline_string_list(
-        merged.get("secondary_title_patterns", [])
-    )
+    merged["primary_job_title_pattern"] = primary_titles
+    merged["secondary_title_patterns"] = secondary_titles
     merged["must_not_require_skills"] = normalize_multiline_string_list(
         merged.get("must_not_require_skills", [])
     )
@@ -398,8 +462,10 @@ def load_profile() -> dict[str, Any]:
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_full_profile(profile)
+    persisted = dict(normalized)
+    persisted.pop("scoring_rules", None)
     PROFILE_PATH.write_text(
-        json.dumps(normalized, ensure_ascii=False, indent=2),
+        json.dumps(persisted, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return normalized
@@ -422,55 +488,56 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     merged = _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
+    search_limits = load_advance_settings()[KEY_SEARCH_LIMITS]
 
     try:
-        merged["date_range_days"] = max(
-            SEARCH_SETTING_LIMITS["date_range_days"]["min"],
+        merged[KEY_DATE_RANGE_DAYS] = max(
+            search_limits[KEY_DATE_RANGE_DAYS]["min"],
             min(
-                int(merged.get("date_range_days", DEFAULT_SEARCH_SETTINGS["date_range_days"])),
-                SEARCH_SETTING_LIMITS["date_range_days"]["max"],
+                int(merged.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])),
+                search_limits[KEY_DATE_RANGE_DAYS]["max"],
             ),
         )
     except Exception:
-        merged["date_range_days"] = DEFAULT_SEARCH_SETTINGS["date_range_days"]
+        merged[KEY_DATE_RANGE_DAYS] = DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]
 
     try:
-        merged["seek_max_pages"] = max(
-            SEARCH_SETTING_LIMITS["seek_max_pages"]["min"],
+        merged[KEY_SEEK_MAX_PAGES] = max(
+            search_limits[KEY_SEEK_MAX_PAGES]["min"],
             min(
-                int(merged.get("seek_max_pages", DEFAULT_SEARCH_SETTINGS["seek_max_pages"])),
-                SEARCH_SETTING_LIMITS["seek_max_pages"]["max"],
+                int(merged.get(KEY_SEEK_MAX_PAGES, search_limits[KEY_SEEK_MAX_PAGES]["max"])),
+                search_limits[KEY_SEEK_MAX_PAGES]["max"],
             ),
         )
     except Exception:
-        merged["seek_max_pages"] = DEFAULT_SEARCH_SETTINGS["seek_max_pages"]
+        merged[KEY_SEEK_MAX_PAGES] = DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]
 
     try:
-        merged["linkedin_hours_old"] = max(
-            SEARCH_SETTING_LIMITS["linkedin_hours_old"]["min"],
+        merged[KEY_LINKEDIN_HOURS_OLD] = max(
+            search_limits[KEY_LINKEDIN_HOURS_OLD]["min"],
             min(
-                int(merged.get("linkedin_hours_old", DEFAULT_SEARCH_SETTINGS["linkedin_hours_old"])),
-                SEARCH_SETTING_LIMITS["linkedin_hours_old"]["max"],
+                int(merged.get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD])),
+                search_limits[KEY_LINKEDIN_HOURS_OLD]["max"],
             ),
         )
     except Exception:
-        merged["linkedin_hours_old"] = DEFAULT_SEARCH_SETTINGS["linkedin_hours_old"]
+        merged[KEY_LINKEDIN_HOURS_OLD] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
 
     try:
-        merged["linkedin_results_per_search"] = max(
-            SEARCH_SETTING_LIMITS["linkedin_results_per_search"]["min"],
+        merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = max(
+            search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["min"],
             min(
                 int(
                     merged.get(
-                        "linkedin_results_per_search",
-                        DEFAULT_SEARCH_SETTINGS["linkedin_results_per_search"],
+                        KEY_LINKEDIN_RESULTS_PER_SEARCH,
+                        DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
                     )
                 ),
-                SEARCH_SETTING_LIMITS["linkedin_results_per_search"]["max"],
+                search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["max"],
             ),
         )
     except Exception:
-        merged["linkedin_results_per_search"] = DEFAULT_SEARCH_SETTINGS["linkedin_results_per_search"]
+        merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
 
     merged["enforce_posted_age_limit"] = bool(merged.get("enforce_posted_age_limit", True))
     merged["sort_newest_first"] = bool(merged.get("sort_newest_first", True))
@@ -577,16 +644,29 @@ def normalize_llm_capability_naming_guidance(value: Any) -> str:
 
 def classify_candidate_profile_section_label(label: str) -> str:
     lowered = str(label or "").strip().lower()
-    # Route section headings into the three profile-context buckets.
+    routing = load_parsing_rules().get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_KEY)
+    if not isinstance(routing, dict):
+        raise ValueError("parsing_rules.json must define candidate_profile_section_routing")
+    default_bucket = str(routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_DEFAULT_KEY) or "").strip()
+    primary_labels = routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_PRIMARY_KEY)
+    secondary_labels = routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SECONDARY_KEY)
+    supplementary_labels = routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SUPPLEMENTARY_KEY)
+    if not all(isinstance(items, list) for items in (primary_labels, secondary_labels, supplementary_labels)):
+        raise ValueError("candidate_profile_section_routing labels must be lists")
+    if default_bucket not in DEFAULT_CANDIDATE_PROFILE_TIERS:
+        raise ValueError("candidate_profile_section_routing.default_bucket must be a known profile bucket")
+    primary_tokens = [str(token).strip().lower() for token in primary_labels if str(token).strip()]
+    secondary_tokens = [str(token).strip().lower() for token in secondary_labels if str(token).strip()]
+    supplementary_tokens = [str(token).strip().lower() for token in supplementary_labels if str(token).strip()]
     if not lowered:
+        return default_bucket
+    if any(token in lowered for token in primary_tokens):
         return KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT
-    if any(token in lowered for token in ("primary", "detailed", "current", "recent", "main", "core")):
-        return KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT
-    if any(token in lowered for token in ("supporting", "older", "secondary", "legacy", "earlier", "previous")):
+    if any(token in lowered for token in secondary_tokens):
         return KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT
-    if any(token in lowered for token in ("background", "optional", "extra", "additional", "note", "notes", "cert", "education")):
+    if any(token in lowered for token in supplementary_tokens):
         return KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT
-    return KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT
+    return default_bucket
 
 
 def _combine_unique_sections(parts: list[str]) -> str:
@@ -641,16 +721,6 @@ def infer_candidate_profile_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
         tiers = build_candidate_profile_tiers_from_sections(sections)
         if any(tiers.values()):
             return tiers
-
-    if "supporting background" in text.lower():
-        parts = re.split(r"(?im)^##\s+supporting background\s*$", text, maxsplit=1)
-        primary = parts[0].strip()
-        secondary = parts[1].strip() if len(parts) > 1 else ""
-        return {
-            KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: primary,
-            KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: secondary,
-            KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
-        }
 
     return {
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: text,

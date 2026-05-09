@@ -2,8 +2,9 @@ import json
 from pathlib import Path
 from typing import Dict, Optional
 
-_BASE_DIR = Path(__file__).resolve().parent
-_LOCATIONS_AU_PATH = _BASE_DIR / "data" / "locations_au.json"
+from job_hunter_agent.paths import DATA_DIR
+
+_LOCATIONS_AU_PATH = DATA_DIR / "locations_au.json"
 
 _cached_locations: Optional[Dict[str, dict]] = None
 

@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from job_hunter_agent.match_labels import score_to_match_label, score_to_match_level
 from job_hunter_agent.preferences import salary_fit_adjustment
-from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import get_match_levels, load_profile
 from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.utils import safe_html
@@ -33,8 +33,8 @@ def score_to_tone_class(score: int, profile: Optional[dict] = None) -> str:
 
 
 def compact_score_label(label: str) -> str:
-    rules = load_parsing_rules()
-    direct_map = rules.get("score_label_compact_map", {})
+    rules = load_ui_labels()
+    direct_map = rules.get("core_label_compact_map", {})
     if label in direct_map:
         return direct_map[label]
     if label.startswith("Posted within") or label == "Still relatively recent":

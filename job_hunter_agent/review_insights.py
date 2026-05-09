@@ -2,7 +2,7 @@ import re
 from typing import Any
 
 
-from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_REQUIRED_SKILLS,
@@ -128,7 +128,7 @@ def _capability_rule_index_lookup(capability_rules: list[dict[str, Any]]) -> dic
 
 
 def _choice_label(choice: str) -> str:
-    rules = load_parsing_rules()
+    rules = load_ui_labels()
     labels = rules.get("level_labels", {})
     return labels.get(choice, choice.replace("_", " ").strip().title())
 

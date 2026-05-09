@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE
 from job_hunter_agent.agent_settings import (
     DEFAULT_AGENT_SETTINGS, 
     load_agent_state, 
@@ -18,7 +19,6 @@ from job_hunter_agent.agent_settings import (
     KEY_SCHEDULE,
     KEY_LLM,
 )
-from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import (
@@ -26,8 +26,6 @@ from job_hunter_agent.paths import (
     DASHBOARD_PATH,
     DATA_DIR,
     JOB_HISTORY_PATH,
-    REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH,
-    REJECTION_RULES_PATH,
     REPO_ROOT as ROOT_DIR,
     REVIEW_DATA_PATH,
     RUN_STATS_PATH,
@@ -63,6 +61,8 @@ from job_hunter_agent.profile_store import (
     KEY_EVIDENCE_TIERS,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ONBOARDING_SETTINGS,
+    MATCHING_RULE_PROFILE_KEYS,
+    patch_profile,
 )
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.server_review import (
@@ -92,7 +92,16 @@ from job_hunter_agent.source_documents import (
     run_onboarding,
     save_source_materials,
 )
-from job_hunter_agent.advance_settings import load_advance_settings, save_advance_settings
+from job_hunter_agent.advance_settings import (
+    KEY_DATE_RANGE_DAYS,
+    KEY_LLM_SETTINGS,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_MODEL_OPTIONS,
+    KEY_SEEK_MAX_PAGES,
+    load_advance_settings,
+    save_advance_settings,
+)
 # Common configuration values
 VAL_MODE_AUTO = "auto"
 VAL_MODE_MANUAL = "manual"
@@ -105,64 +114,11 @@ _STATIC_MIME_OVERRIDES = {
     ".js": "text/javascript",
     ".png": "image/png",
 }
-
-# Parse --debug / --debug-mode at import time so routes can read DEBUG_MODE.
-# parse_known_args is used so this doesn't fail in pytest or other non-server contexts.
-def _resolve_debug_mode() -> bool:
-    import argparse
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--debug", action="store_true", dest="debug")
-    args, _ = parser.parse_known_args()
-    return args.debug
-
-
-DEBUG_MODE: bool = _resolve_debug_mode()
-
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
 
 
-def _load_rejection_rule_categories() -> frozenset[str]:
-    payload = json.loads(REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
-    entries = payload.get("entries")
-    if not isinstance(entries, list):
-        raise ValueError("rejection_rule_categories.json must contain an entries list")
-
-    categories: list[str] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("enabled", True) is False:
-            continue
-        value = str(entry.get("value") or "").strip()
-        if value:
-            categories.append(value)
-    if not categories:
-        raise ValueError("rejection_rule_categories.json must define at least one enabled category")
-    return frozenset(categories)
-
-
-_VALID_REJECTION_RULE_CATEGORIES = _load_rejection_rule_categories()
-
-
-def _load_rejection_rule_junk_values() -> frozenset[str]:
-    payload = json.loads(REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
-    entries = payload.get("junk_values")
-    if not isinstance(entries, list):
-        raise ValueError("rejection_rule_categories.json must contain a junk_values list")
-
-    junk_values = [
-        str(value).strip().lower()
-        for value in entries
-        if str(value).strip()
-    ]
-    if not junk_values:
-        raise ValueError("rejection_rule_categories.json must define at least one junk value")
-    return frozenset(junk_values)
-
-
-_REJECTION_RULE_JUNK_VALUES = _load_rejection_rule_junk_values()
 #hardcoded
 _ALLOWED_DOC_REL_PATHS = (
     "README.md",
@@ -342,14 +298,14 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
         overrides[KEY_KEYWORDS] = str(source.get(KEY_KEYWORDS) or "").strip()
     if KEY_LOCATIONS in source:
         overrides[KEY_LOCATIONS] = _parse_locations_override(source.get(KEY_LOCATIONS))
-    if "date_range_days" in source:
-        overrides["date_range_days"] = source.get("date_range_days")
-    if "seek_max_pages" in source:
-        overrides["seek_max_pages"] = source.get("seek_max_pages")
-    if "linkedin_hours_old" in source:
-        overrides["linkedin_hours_old"] = source.get("linkedin_hours_old")
-    if "linkedin_results_per_search" in source:
-        overrides["linkedin_results_per_search"] = source.get("linkedin_results_per_search")
+    if KEY_DATE_RANGE_DAYS in source:
+        overrides[KEY_DATE_RANGE_DAYS] = source.get(KEY_DATE_RANGE_DAYS)
+    if KEY_SEEK_MAX_PAGES in source:
+        overrides[KEY_SEEK_MAX_PAGES] = source.get(KEY_SEEK_MAX_PAGES)
+    if KEY_LINKEDIN_HOURS_OLD in source:
+        overrides[KEY_LINKEDIN_HOURS_OLD] = source.get(KEY_LINKEDIN_HOURS_OLD)
+    if KEY_LINKEDIN_RESULTS_PER_SEARCH in source:
+        overrides[KEY_LINKEDIN_RESULTS_PER_SEARCH] = source.get(KEY_LINKEDIN_RESULTS_PER_SEARCH)
 
     if not overrides:
         return {}
@@ -409,18 +365,9 @@ def _rebuild_dashboard_on_startup() -> None:
 
 
 class SettingsHandler:
-    MATCHING_RULE_PROFILE_KEYS = {
-            KEY_CAPABILITY_PROFILE_RULES,
-        "primary_job_title_pattern",
-        "secondary_title_patterns",
-        "must_not_require_skills",
-        "reject_title_rules",
-        "reject_description_phrase_rules",
-    }
-
     @staticmethod
     def _patch_affects_matching_rules(patch: dict) -> bool:
-        return any(key in (patch or {}) for key in SettingsHandler.MATCHING_RULE_PROFILE_KEYS)
+        return any(key in (patch or {}) for key in MATCHING_RULE_PROFILE_KEYS)
 
     @staticmethod
     def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:
@@ -511,9 +458,6 @@ class SettingsHandler:
         telegram = payload.get(KEY_TELEGRAM, {}) if isinstance(payload, dict) else {}
         llm = payload.get(KEY_LLM, {}) if isinstance(payload, dict) else {}
         schedule_payload = payload.get(KEY_SCHEDULE) if isinstance(payload, dict) else None
-        #hardcoded
-        _allowed_models = {"gpt-4o-mini", "gpt-4o"}
-        model = str(llm.get("model") or "").strip()
         sanitized = {
             KEY_DASHBOARD: {
                 "minimum_score": max(0, min(int(dashboard.get("minimum_score", 55) or 55), 100)),
@@ -524,10 +468,27 @@ class SettingsHandler:
                 "bot_username": str(telegram.get("bot_username") or "").strip().lstrip("@"),
                 "disable_link_preview": bool(telegram.get("disable_link_preview", False)),
             },
-            KEY_LLM: {
-                "model": model if model in _allowed_models else "gpt-4o-mini",
-            },
         }
+        model = str(llm.get("model") or "").strip()
+        if "model" in llm or model:
+            allowed_models = [
+                str(value).strip()
+                for value in (
+                    load_advance_settings()
+                    .get(KEY_LLM_SETTINGS, {})
+                    .get(KEY_MODEL_OPTIONS, [])
+                )
+                if str(value).strip()
+            ]
+            if not allowed_models:
+                raise ValueError("No LLM models are configured in Advanced Settings.")
+            if not model:
+                raise ValueError("Please choose an LLM model.")
+            if model not in allowed_models:
+                raise ValueError("Please choose a model configured in Advanced Settings.")
+            sanitized[KEY_LLM] = {
+                "model": model,
+            }
         if isinstance(schedule_payload, dict):
             daily_time_local = str(
                 schedule_payload.get("daily_time_local")
@@ -600,31 +561,9 @@ class SettingsHandler:
                 "subscribers": subscribers,
             },
             KEY_LLM: {
-                "model": str(llm.get("model") or "gpt-4o-mini").strip(),
+                "model": str(llm.get("model") or "").strip(),
             },
         }
-
-    # ------------------------------------------------------------------
-    # Rejection-learning helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _load_rejection_rules() -> list:
-        if not REJECTION_RULES_PATH.exists():
-            return []
-        try:
-            data = json.loads(REJECTION_RULES_PATH.read_text(encoding="utf-8"))
-            return data if isinstance(data, list) else []
-        except Exception:
-            return []
-
-    @staticmethod
-    def _save_rejection_rules_list(rules: list) -> None:
-        REJECTION_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        REJECTION_RULES_PATH.write_text(
-            json.dumps(rules, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
 
     @staticmethod
     def _issue_rejection_suggestion_approval_tokens(job_id: str, suggestions: list[str]) -> dict[str, str]:

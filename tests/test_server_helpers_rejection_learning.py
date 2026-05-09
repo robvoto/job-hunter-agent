@@ -5,14 +5,6 @@ from job_hunter_agent import server_review
 from job_hunter_agent import signal_registry
 
 
-def test_rejection_rule_category_knowledge_file_contains_enabled_entries():
-    payload = json.loads(server_helpers.REJECTION_RULE_CATEGORY_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
-
-    assert payload["kind"] == "managed_knowledge"
-    assert any(entry.get("enabled") for entry in payload["entries"])
-    assert "other" in server_helpers._VALID_REJECTION_RULE_CATEGORIES
-    assert "not me" in server_helpers._REJECTION_RULE_JUNK_VALUES
-
 
 def test_validate_llm_suggestion_approvals_requires_token_for_cached_suggestion():
     server_helpers._rejection_suggestions_cache.clear()
@@ -250,3 +242,88 @@ def test_save_requirement_blockers_feedback_can_apply_description_block_in_same_
     assert result["description_block_suggestions"] == []
     assert len(rebuilds) == 1
     assert "description phrase rule added for sap" in rebuilds[0]
+
+
+def test_save_requirement_blockers_feedback_applies_both_title_and_description_blocks_in_same_flow(tmp_path, monkeypatch):
+    profile = {
+        "must_not_require_skills": [],
+        "reject_title_rules": [],
+        "reject_description_phrase_rules": [],
+    }
+    rebuilds = []
+    events = []
+
+    monkeypatch.setattr(server_review, "load_profile", lambda: profile)
+    monkeypatch.setattr(server_review, "save_profile", lambda payload: payload)
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", tmp_path / "signal_registry.json")
+    monkeypatch.setattr(
+        server_review,
+        "_load_audit_rows",
+        lambda: [
+            {
+                "job_key": "rej-1",
+                "title": "Senior Business Analyst - SAP",
+                "company": "Acme",
+                "decision": "REJECT",
+                "full_description": "Strong SAP experience is mandatory for this role. Also requires Salesforce.",
+            },
+            {
+                "job_key": "rej-2",
+                "title": "Delivery Lead | SAP Finance",
+                "company": "Beta",
+                "decision": "REJECT",
+                "full_description": "The role needs SAP rollout experience across finance. Salesforce is a plus.",
+            },
+            {
+                "job_key": "rej-3",
+                "title": "Project Manager - Salesforce",
+                "company": "Gamma",
+                "decision": "REJECT",
+                "full_description": "Mandatory Salesforce certification.",
+            },
+        ],
+    )
+    monkeypatch.setattr(server_review, "load_job_history", lambda: {})
+    monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: events.append((args, kwargs)))
+    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": rebuilds.append(reason))
+
+    result = server_review.save_requirement_blockers_feedback(
+        "job-1",
+        title="Business Analyst - SAP",
+        blockers=["sap", "salesforce"],
+        title_block_phrases=["sap"],
+        description_block_phrases=["salesforce"],
+    )
+
+    # Assert profile updates
+    assert profile["must_not_require_skills"] == ["sap", "salesforce"]
+    assert profile["reject_title_rules"] == [
+        {
+            "pattern": r"\bsap\b",
+            "reason": "TITLE_BAD_KEYWORD:sap",
+        }
+    ]
+    assert profile["reject_description_phrase_rules"] == [
+        {
+            "phrase": "salesforce",
+            "reason": "DESC_REJECT:salesforce",
+        }
+    ]
+
+    # Assert result payload
+    assert result["added_blockers"] == ["sap", "salesforce"]
+    assert result["applied_title_block_phrases"] == ["sap"]
+    assert result["applied_description_block_phrases"] == ["salesforce"]
+    assert result["title_block_suggestions"] == []  # Applied, so no suggestions
+    assert result["description_block_suggestions"] == []  # Applied, so no suggestions
+    assert "Added 2 mandatory requirement blockers" in result["message"]
+    assert "Added 1 title block" in result["message"]
+    assert "Added 1 hard description block" in result["message"]
+
+    # Assert side effects
+    assert len(rebuilds) == 2  # One for title, one for description
+    assert "title block added for sap" in rebuilds[0]
+    assert "description phrase rule added for salesforce" in rebuilds[1]
+    # Events order: block_title, block_description, block_requirement
+    assert any(e[0][0] == "block_requirement" for e in events)
+    assert signal_registry.load_registry() == {}

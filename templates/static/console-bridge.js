@@ -20,6 +20,10 @@
       : console.log.bind(console);
   }
 
+  nativeConsole.error = typeof console.error === 'function'
+    ? console.error.bind(console)
+    : console.log.bind(console);
+
   function truncate(value, limit = 2000) {
     const text = String(value ?? '');
     return text.length <= limit ? text : `${text.slice(0, limit)}...`;

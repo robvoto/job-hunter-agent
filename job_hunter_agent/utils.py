@@ -34,7 +34,7 @@ def extract_salary(details_text: str) -> str:
     (Best-effort: SEEK formats vary)
     """
     if not details_text:
-        return "N/A"
+        return ""
 
     rules = load_parsing_rules()
     regex_patterns = rules.get("salary_extraction_patterns", [])
@@ -59,47 +59,41 @@ def extract_salary(details_text: str) -> str:
             )
         ):
             return line
-    return "N/A"
-
-
-def extract_work_mode(text: str) -> str:
-    if not text:
-        return "N/A"
-
-    lowered = text.lower()
-    rules = load_parsing_rules().get("work_mode_indicators", {})
-    strict_onsite_tokens = rules.get("strict_onsite", [])
-    if any(token in lowered for token in strict_onsite_tokens):
-        return "On-site"
-    if any(token in lowered for token in rules.get("hybrid", [])):
-        return "Hybrid"
-    if any(token in lowered for token in rules.get("remote", [])):
-        return "Remote"
-    if any(token in lowered for token in rules.get("onsite", [])):
-        return "On-site"
-    return "N/A"
+    return ""
 
 
 def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
     if not posted_text:
         return None
 
-    value = posted_text.strip().lower()
-    if value == "today":
-        return 0.0
+    rules = load_parsing_rules().get("seek_posted_age_rules", {})
+    if not isinstance(rules, dict):
+        return None
 
-    match = re.search(r"(\d+)\s*([mhdy])", value)
+    value = posted_text.strip().lower()
+    explicit_labels = rules.get("explicit_labels", {})
+    if isinstance(explicit_labels, dict):
+        for label, days in explicit_labels.items():
+            if value == str(label).strip().lower():
+                try:
+                    return float(days)
+                except Exception:
+                    return None
+
+    pattern = str(rules.get("relative_text_pattern") or "").strip()
+    unit_days = rules.get("unit_days", {})
+    if not pattern or not isinstance(unit_days, dict):
+        return None
+
+    match = re.fullmatch(pattern, value)
     if not match:
         return None
 
-    amount = int(match.group(1))
-    unit = match.group(2)
-    if unit == "m":
-        return amount / (24 * 60)
-    if unit == "h":
-        return amount / 24
-    if unit == "d":
-        return float(amount)
-    if unit == "y":
-        return float(amount * 365)
-    return None
+    amount = int(match.group("amount"))
+    unit = match.group("unit").lower()
+    if unit not in unit_days:
+        return None
+    try:
+        return float(amount) * float(unit_days[unit])
+    except Exception:
+        return None

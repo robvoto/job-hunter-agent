@@ -1,6 +1,7 @@
 import re
 from functools import lru_cache
 from typing import Any, Iterable, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from job_hunter_agent.identity_rules import load_identity_rules
 
@@ -32,8 +33,56 @@ def _normalize_identity_text(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
-def _title_words(record: dict) -> set[str]:
-    return set(_normalize_identity_text(str(record.get("title") or "")).split())
+def _normalized_url(record: dict) -> str:
+    raw_url = str(record.get("url") or "").strip()
+    if not raw_url:
+        return ""
+    try:
+        parsed = urlsplit(raw_url)
+    except ValueError:
+        return raw_url.split("#", 1)[0].split("?", 1)[0].strip().lower()
+    normalized_path = parsed.path.rstrip("/")
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), normalized_path, "", ""))
+
+
+def _normalized_job_key(record: dict) -> str:
+    return str(record.get("job_key") or "").strip().lower()
+
+
+def _confirmed_duplicate_key(record: dict) -> Optional[tuple[str, str]]:
+    job_key = _normalized_job_key(record)
+    if job_key:
+        return ("job_key", job_key)
+    url = _normalized_url(record)
+    if url:
+        return ("url", url)
+    return None
+
+
+def _possible_duplicate_signature(record: dict) -> Optional[tuple[str, str]]:
+    company = _normalize_identity_text(str(record.get("company") or ""))
+    title = _normalize_identity_text(str(record.get("title") or ""))
+    if not company or not title:
+        return None
+    return (company, title)
+
+
+def _mark_possible_duplicate(record: dict, candidate: dict) -> None:
+    review_items = record.setdefault("identity_review", [])
+    review_items.append(
+        {
+            "kind": "possible_duplicate",
+            "needs_review": True,
+            "source": "normalized_company_and_title",
+            "matched_record": {
+                "job_key": candidate.get("job_key"),
+                "source": candidate.get("source"),
+                "title": candidate.get("title"),
+                "company": candidate.get("company"),
+                "url": candidate.get("url"),
+            },
+        }
+    )
 
 
 def _source_priority(record: dict) -> int:
@@ -43,42 +92,48 @@ def _source_priority(record: dict) -> int:
     return source_map.get(source, fallback_priority)
 
 
+def are_jobs_confirmed_duplicates(a: dict, b: dict) -> bool:
+    """Return True only when two records share a deterministic identity."""
+    key_a = _confirmed_duplicate_key(a)
+    key_b = _confirmed_duplicate_key(b)
+    return bool(key_a and key_a == key_b)
+
+
 def are_jobs_semantically_similar(a: dict, b: dict) -> bool:
-    """Return True when two records look like the same role at the same company."""
-    company_a = _normalize_identity_text(str(a.get("company") or ""))
-    company_b = _normalize_identity_text(str(b.get("company") or ""))
-    if not company_a or company_a != company_b:
-        return False
-
-    words_a = _title_words(a)
-    words_b = _title_words(b)
-    if not words_a or not words_b:
-        return False
-
-    overlap = words_a & words_b
-    combined = words_a | words_b
-    threshold = float(_get_identity_config()["title_similarity_threshold"])
-    return (len(overlap) / len(combined)) >= threshold
+    """Deprecated compatibility wrapper: only confirmed duplicates are actionable."""
+    return are_jobs_confirmed_duplicates(a, b)
 
 
 def find_similar_job(record: dict, pool: Iterable[dict]) -> Optional[dict]:
+    """Return only a confirmed duplicate from the supplied pool."""
     for candidate in pool:
-        if are_jobs_semantically_similar(record, candidate):
+        if are_jobs_confirmed_duplicates(record, candidate):
             return candidate
     return None
 
 
 def deduplicate_across_sources(records: List[dict]) -> List[dict]:
-    """Collapse cross-source duplicates, preferring SEEK over LinkedIn."""
+    """Collapse only confirmed duplicates; annotate possible duplicates for review."""
     deduped: List[dict] = []
+    possible_duplicate_index: dict[tuple[str, str], dict] = {}
+
     for record in records:
         duplicate_index = next(
-            (index for index, kept in enumerate(deduped) if are_jobs_semantically_similar(record, kept)),
+            (index for index, kept in enumerate(deduped) if are_jobs_confirmed_duplicates(record, kept)),
             None,
         )
-        if duplicate_index is None:
-            deduped.append(record)
+        if duplicate_index is not None:
+            if _source_priority(record) < _source_priority(deduped[duplicate_index]):
+                deduped[duplicate_index] = record
             continue
-        if _source_priority(record) < _source_priority(deduped[duplicate_index]):
-            deduped[duplicate_index] = record
+
+        possible_signature = _possible_duplicate_signature(record)
+        if possible_signature and possible_signature in possible_duplicate_index:
+            _mark_possible_duplicate(record, possible_duplicate_index[possible_signature])
+            _mark_possible_duplicate(possible_duplicate_index[possible_signature], record)
+        elif possible_signature:
+            possible_duplicate_index[possible_signature] = record
+
+        deduped.append(record)
+
     return deduped

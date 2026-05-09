@@ -36,6 +36,17 @@ def test_load_title_normalization_rules_returns_expected_structure(tmp_path, mon
     assert payload["kind"] == "rules"
     assert payload["name"] == "title_normalization_rules"
     assert payload["abbreviation_expansions"]["ba"] == "business analyst"
+    assert "title_candidate_leading_verb_blockers" not in payload
+
+
+def test_load_title_candidate_leading_verb_blockers_reads_parsing_rules(monkeypatch):
+    monkeypatch.setattr(
+        title_normalization_rules,
+        "load_parsing_rules",
+        lambda: {"title_candidate_leading_verb_blockers": ["working", "helping"]},
+    )
+
+    assert title_normalization_rules.load_title_candidate_leading_verb_blockers() == frozenset({"working", "helping"})
 
 
 def test_normalize_title_text_expands_abbreviations(tmp_path, monkeypatch):

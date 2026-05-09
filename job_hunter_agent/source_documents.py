@@ -82,8 +82,6 @@ def _normalize_profile_sources(items: Any) -> list[dict[str, str]]:
             continue
         label = str(item.get("label") or "").strip()
         path = str(item.get("path") or "").strip()
-        if label.lower() == "supporting background":
-            continue
         if label and path:
             normalized.append({"label": label, "path": path})
     return normalized

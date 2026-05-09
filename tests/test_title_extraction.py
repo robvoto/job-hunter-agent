@@ -49,21 +49,28 @@ def test_extract_title_pattern_suggestions_returns_deterministic_patterns():
 
     assert "senior devops engineer" in result["primary_job_title_pattern"]
     assert "technical consultant" in result["primary_job_title_pattern"]
-    assert result["secondary_title_patterns"] == ["devops engineer"]
+    assert "devops engineer" not in result["secondary_title_patterns"]
 
 
-def test_extract_title_pattern_suggestions_adds_seniority_base_to_secondary():
+def test_extract_title_pattern_suggestions_splits_compound_role_titles_cleanly():
     cv_text = """
     # Professional Experience
-    Senior Business Analyst
+    Senior Business Analyst and Scrum Master
     Acme
     2024 - Present
-    - Led requirements workshops.
+    - Led requirements workshops and delivery ceremonies.
     """
     result = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 8})
 
-    assert "senior business analyst" in result["primary_job_title_pattern"]
-    assert "business analyst" in result["secondary_title_patterns"]
+    combined = {
+        *result["primary_job_title_pattern"],
+        *result["secondary_title_patterns"],
+    }
+    assert "senior business analyst" in combined
+    assert "scrum master" in combined
+    assert "senior business analyst and scrum master" not in combined
+    assert "scrum master business analyst" not in combined
+    assert "business analyst" not in result["secondary_title_patterns"]
 
 
 def test_extract_title_pattern_suggestions_empty_when_no_role_headers():

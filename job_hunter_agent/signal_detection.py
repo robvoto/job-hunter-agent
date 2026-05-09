@@ -8,7 +8,14 @@ from job_hunter_agent.capability_matching import (
 )
 
 from job_hunter_agent.profile_learning import _role_title_review_token
-from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, KEY_LEVEL, KEY_SIGNAL_CLUSTERS, load_profile
+from job_hunter_agent.profile_store import (
+    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_COMPETITIVE_SIGNAL_ALIGNMENT,
+    KEY_LEVEL,
+    KEY_SIGNAL_CLUSTERS,
+    get_scoring_rules,
+    load_profile,
+)
 from job_hunter_agent.role_analysis import text_contains_term
 from job_hunter_agent.role_analysis import _load_government_context_rules
 from job_hunter_agent.scoring_utils import build_scoring_source_text, profile_recency_multiplier
@@ -87,6 +94,17 @@ CLUSTER_POSITIVE_BONUS_KEY = "positive_bonus"
 CLUSTER_PARTIAL_PENALTY_KEY = "partial_penalty"
 CLUSTER_WEAK_PENALTY_KEY = "weak_penalty"
 
+ALIGNMENT_STRONG_THRESHOLD_KEY = "strong_threshold"
+ALIGNMENT_PARTIAL_THRESHOLD_KEY = "partial_threshold"
+ALIGNMENT_RECENCY_FALLBACK_MIN_CAPABILITY_BEST_KEY = "recency_fallback_min_capability_best"
+ALIGNMENT_RECENCY_FALLBACK_MULTIPLIER_KEY = "recency_fallback_multiplier"
+ALIGNMENT_OVERLAP_BONUS_PER_EXTRA_ALIAS_KEY = "overlap_bonus_per_extra_alias"
+ALIGNMENT_OVERLAP_BONUS_MAX_EXTRA_ALIASES_KEY = "overlap_bonus_max_extra_aliases"
+ALIGNMENT_MAX_CAPABILITY_BEST_KEY = "max_capability_best"
+ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY = "positive_bonus_by_dominance"
+ALIGNMENT_PARTIAL_PENALTY_BY_DOMINANCE_KEY = "partial_penalty_by_dominance"
+ALIGNMENT_WEAK_PENALTY_BY_DOMINANCE_KEY = "weak_penalty_by_dominance"
+
 
 def _dedupe_key(value: Any) -> str:
     return compact_whitespace(str(value or "")).lower()
@@ -157,6 +175,14 @@ def _capability_rule_strength(rule: dict) -> float:
     return max(min(level_map.get(level, default), 1.0), 0.0)
 
 
+def _competitive_signal_alignment_rules(profile: dict) -> dict[str, Any]:
+    scoring_rules = get_scoring_rules(profile)
+    rules = scoring_rules.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT, {})
+    if not isinstance(rules, dict) or not rules:
+        raise ValueError("competitive_signal_alignment rules are required in scoring_rules")
+    return rules
+
+
 def detect_competitive_signals(details_text: str, profile: Optional[dict] = None) -> List[dict]:
     active_profile = profile or load_profile()
     defaults = _signal_defaults()
@@ -217,6 +243,7 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
 
 def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     defaults = _signal_defaults()
+    alignment_rules = _competitive_signal_alignment_rules(profile)
     signal_name = _resolved_signal_text(signal, SIGNAL_NAME_KEY, defaults)
     aliases = _normalized_aliases([signal_name])
     capability_best = 0.0
@@ -232,12 +259,21 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
         if overlap <= 0:
             continue
         rule_strength = _capability_rule_strength(rule)
-        capability_best = max(capability_best, min(rule_strength + (0.05 * min(overlap - 1, 2)), 1.05))
+        overlap_bonus = float(alignment_rules[ALIGNMENT_OVERLAP_BONUS_PER_EXTRA_ALIAS_KEY])
+        max_overlap_bonus_steps = int(alignment_rules[ALIGNMENT_OVERLAP_BONUS_MAX_EXTRA_ALIASES_KEY])
+        max_capability_best = float(alignment_rules[ALIGNMENT_MAX_CAPABILITY_BEST_KEY])
+        capability_best = max(
+            capability_best,
+            min(
+                rule_strength + (overlap_bonus * min(overlap - 1, max_overlap_bonus_steps)),
+                max_capability_best,
+            ),
+        )
 
     tiered_evidence_score = evidence_tier_alignment_score(profile, aliases)
     recency_multiplier = profile_recency_multiplier(profile, aliases)
-    if recency_multiplier == 0.0 and capability_best >= 0.9:
-        recency_multiplier = 0.75
+    if recency_multiplier == 0.0 and capability_best >= float(alignment_rules[ALIGNMENT_RECENCY_FALLBACK_MIN_CAPABILITY_BEST_KEY]):
+        recency_multiplier = float(alignment_rules[ALIGNMENT_RECENCY_FALLBACK_MULTIPLIER_KEY])
 
     dominant_alignment_score = max(
         capability_best * (recency_multiplier or 1.0),
@@ -245,13 +281,13 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     )
 
     dominance_level = int(signal.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1)
-    positive_bonus = int(signal.get(CLUSTER_POSITIVE_BONUS_KEY, min(1 + dominance_level, 2)) or min(1 + dominance_level, 2))
-    partial_penalty = int(signal.get(CLUSTER_PARTIAL_PENALTY_KEY, 3 + (dominance_level * 2)) or 3 + (dominance_level * 2))
-    weak_penalty = int(signal.get(CLUSTER_WEAK_PENALTY_KEY, 4 + (dominance_level * 2)) or 4 + (dominance_level * 2))
-    if dominant_alignment_score >= 0.78:
+    positive_bonus = int(signal.get(CLUSTER_POSITIVE_BONUS_KEY) or alignment_rules[ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY][str(dominance_level)])
+    partial_penalty = int(signal.get(CLUSTER_PARTIAL_PENALTY_KEY) or alignment_rules[ALIGNMENT_PARTIAL_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)])
+    weak_penalty = int(signal.get(CLUSTER_WEAK_PENALTY_KEY) or alignment_rules[ALIGNMENT_WEAK_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)])
+    if dominant_alignment_score >= float(alignment_rules[ALIGNMENT_STRONG_THRESHOLD_KEY]):
         adjustment = positive_bonus
         alignment = ALIGNMENT_STRONG
-    elif dominant_alignment_score >= 0.42:
+    elif dominant_alignment_score >= float(alignment_rules[ALIGNMENT_PARTIAL_THRESHOLD_KEY]):
         adjustment = -partial_penalty
         alignment = ALIGNMENT_PARTIAL
     else:

@@ -25,6 +25,10 @@ function normalizeReviewTitle(value) {
   return patternToLabel(value) || normalizeReviewText(value);
 }
 
+function normalizeReviewTitleKey(value) {
+  return normalizeReviewTitle(value).toLowerCase();
+}
+
 function normalizeReviewAlias(value) {
   return normalizeReviewText(value).toLowerCase();
 }
@@ -48,7 +52,7 @@ function dedupeReviewList(values) {
   const output = [];
   for (const value of values || []) {
     const cleaned = normalizeReviewTitle(value);
-    const key = cleaned.toLowerCase();
+    const key = normalizeReviewTitleKey(cleaned);
     if (!cleaned || seen.has(key)) continue;
     seen.add(key);
     output.push(cleaned);
@@ -56,7 +60,57 @@ function dedupeReviewList(values) {
   return output;
 }
 
-function renderReviewChipList(elementId, values, emptyLabel, removeAttribute) {
+function normalizeReviewTitleLists(primaryValues, secondaryValues) {
+  const primary = dedupeReviewList(primaryValues);
+  const primarySeen = new Set(primary.map(normalizeReviewTitleKey));
+  const secondary = [];
+  const seenSecondary = new Set();
+  for (const value of dedupeReviewList(secondaryValues)) {
+    const key = normalizeReviewTitleKey(value);
+    if (!key || primarySeen.has(key) || seenSecondary.has(key)) continue;
+    seenSecondary.add(key);
+    secondary.push(value);
+  }
+  return { primary, secondary };
+}
+
+function moveReviewTitle(sourceList, sourceIndex, targetList) {
+  const source = sourceList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
+  const target = targetList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
+  const item = source[sourceIndex];
+  if (!item) return;
+  const key = normalizeReviewTitleKey(item);
+  const targetHas = target.some((value) => normalizeReviewTitleKey(value) === key);
+  if (!targetHas) {
+    target.push(item);
+  }
+  source.splice(sourceIndex, 1);
+  const normalized = normalizeReviewTitleLists(reviewTargetTitles, reviewSecondaryTitles);
+  reviewTargetTitles = normalized.primary;
+  reviewSecondaryTitles = normalized.secondary;
+  renderReviewStep();
+}
+
+function addReviewTitle(targetList, value) {
+  const cleaned = normalizeReviewTitle(value);
+  if (!cleaned) return;
+  const key = normalizeReviewTitleKey(cleaned);
+  const target = targetList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
+  const other = targetList === 'primary' ? reviewSecondaryTitles : reviewTargetTitles;
+  const otherIndex = other.findIndex((item) => normalizeReviewTitleKey(item) === key);
+  if (otherIndex >= 0) {
+    other.splice(otherIndex, 1);
+  }
+  if (!target.some((item) => normalizeReviewTitleKey(item) === key)) {
+    target.push(cleaned);
+  }
+  const normalized = normalizeReviewTitleLists(reviewTargetTitles, reviewSecondaryTitles);
+  reviewTargetTitles = normalized.primary;
+  reviewSecondaryTitles = normalized.secondary;
+  renderReviewStep();
+}
+
+function renderReviewChipList(elementId, values, emptyLabel, removeAttribute, moveAttribute, moveLabel) {
   const container = document.getElementById(elementId);
   if (!container) return;
   if (!values.length) {
@@ -66,6 +120,7 @@ function renderReviewChipList(elementId, values, emptyLabel, removeAttribute) {
   container.innerHTML = values.map((value, index) => `
     <span class="chip-item">
       <span>${escapeHtml(value)}</span>
+      <button type="button" ${moveAttribute}="${index}" aria-label="${escapeHtml(moveLabel)} ${escapeHtml(value)}">${escapeHtml(moveLabel)}</button>
       <button type="button" ${removeAttribute}="${index}" aria-label="Remove ${escapeHtml(value)}">&#215;</button>
     </span>
   `).join('');
@@ -256,15 +311,33 @@ function renderReviewStep() {
   selectedReviewCapabilityIndexes = new Set(
     [...selectedReviewCapabilityIndexes].filter((index) => index >= 0 && index < reviewCapabilityRules.length)
   );
-  renderReviewChipList('review_target_titles_list', reviewTargetTitles, 'No primary job titles extracted yet.', 'data-remove-review-target');
-  renderReviewChipList('review_secondary_titles_list', reviewSecondaryTitles, 'No secondary titles extracted yet.', 'data-remove-review-secondary');
+  renderReviewChipList(
+    'review_target_titles_list',
+    reviewTargetTitles,
+    'No primary job titles extracted yet.',
+    'data-remove-review-target',
+    'data-move-review-target',
+    'Move to secondary',
+  );
+  renderReviewChipList(
+    'review_secondary_titles_list',
+    reviewSecondaryTitles,
+    'No secondary titles extracted yet.',
+    'data-remove-review-secondary',
+    'data-move-review-secondary',
+    'Move to primary',
+  );
   renderReviewCapabilities();
   saveWizardState();
 }
 
 function hydrateDraftStep(profile) {
-  reviewTargetTitles = dedupeReviewList(profile?.primary_job_title_pattern || []);
-  reviewSecondaryTitles = dedupeReviewList(profile?.secondary_title_patterns || []);
+  const normalizedTitles = normalizeReviewTitleLists(
+    profile?.primary_job_title_pattern || [],
+    profile?.secondary_title_patterns || [],
+  );
+  reviewTargetTitles = normalizedTitles.primary;
+  reviewSecondaryTitles = normalizedTitles.secondary;
   reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
   selectedReviewCapabilityIndexes.clear();
   reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
@@ -551,20 +624,14 @@ document.querySelector('.wizard-progress-steps')?.addEventListener('click', (eve
 
 document.getElementById('review_add_target_title').addEventListener('click', () => {
   const input = document.getElementById('review_target_titles_input');
-  const cleaned = normalizeReviewTitle(input.value);
-  if (!cleaned) return;
-  reviewTargetTitles = dedupeReviewList([...reviewTargetTitles, cleaned]);
+  addReviewTitle('primary', input.value);
   input.value = '';
-  renderReviewStep();
 });
 
 document.getElementById('review_add_secondary_title').addEventListener('click', () => {
   const input = document.getElementById('review_secondary_titles_input');
-  const cleaned = normalizeReviewTitle(input.value);
-  if (!cleaned) return;
-  reviewSecondaryTitles = dedupeReviewList([...reviewSecondaryTitles, cleaned]);
+  addReviewTitle('secondary', input.value);
   input.value = '';
-  renderReviewStep();
 });
 
 document.getElementById('review_capability_filter').addEventListener('input', () => {
@@ -579,10 +646,20 @@ document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
     renderReviewStep();
     return;
   }
+  const moveTarget = event.target.closest('[data-move-review-target]');
+  if (moveTarget) {
+    moveReviewTitle('primary', Number(moveTarget.dataset.moveReviewTarget), 'secondary');
+    return;
+  }
   const removeSecondary = event.target.closest('[data-remove-review-secondary]');
   if (removeSecondary) {
     reviewSecondaryTitles.splice(Number(removeSecondary.dataset.removeReviewSecondary), 1);
     renderReviewStep();
+    return;
+  }
+  const moveSecondary = event.target.closest('[data-move-review-secondary]');
+  if (moveSecondary) {
+    moveReviewTitle('secondary', Number(moveSecondary.dataset.moveReviewSecondary), 'primary');
     return;
   }
   const capabilityAction = event.target.closest('[data-review-capability-action]');

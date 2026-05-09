@@ -1,19 +1,24 @@
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.paths import (
     AUDIT_RECORDS_PATH as DEBUG_JSON_PATH,
+    DEBUG_SOURCE_PAYLOADS_DIR,
     JOB_HISTORY_PATH,
     LLM_CACHE_PATH,
     PARSING_RULES_PATH,
     REVIEW_DATA_PATH,
     RUN_STATS_PATH,
     SIGNAL_DEFAULTS_PATH,
+    UI_LABELS_PATH,
+    WORK_MODE_RULES_PATH,
 )
+
+DEBUG_CAPTURE_SOURCE_PAYLOADS = True
 
 
 def normalize_posted_text(value: Optional[str]) -> str:
@@ -60,6 +65,29 @@ def save_json(path: Path, payload) -> None:
     )
 
 
+def _slugify_debug_component(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+    return slug or "unknown"
+
+
+def _json_safe_payload(payload):
+    if isinstance(payload, dict):
+        return {str(key): _json_safe_payload(value) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [_json_safe_payload(item) for item in payload]
+    if isinstance(payload, tuple):
+        return [_json_safe_payload(item) for item in payload]
+    if isinstance(payload, (datetime, date)):
+        return payload.isoformat()
+    if isinstance(payload, Path):
+        return str(payload)
+    try:
+        json.dumps(payload)
+        return payload
+    except Exception:
+        return str(payload)
+
+
 def load_llm_cache() -> Dict[str, Any]:
     raw = load_json_dict(LLM_CACHE_PATH)
     return {str(k): v for k, v in raw.items()}
@@ -72,6 +100,16 @@ def save_llm_cache(cache: Dict[str, Any]) -> None:
 def load_parsing_rules() -> Dict[str, Any]:
     """Load centralized parsing rules from managed knowledge."""
     return load_json_dict(PARSING_RULES_PATH)
+
+
+def load_ui_labels() -> Dict[str, Any]:
+    """Load UI wording labels from managed knowledge."""
+    return load_json_dict(UI_LABELS_PATH)
+
+
+def load_work_mode_rules() -> Dict[str, Any]:
+    """Load work mode parsing rules from managed knowledge."""
+    return load_json_dict(WORK_MODE_RULES_PATH)
 
 
 def load_signal_defaults() -> Dict[str, Any]:
@@ -90,6 +128,20 @@ def save_job_history(history: Dict[str, dict]) -> None:
 
 def write_debug_json(records: List[dict]) -> None:
     save_json(DEBUG_JSON_PATH, records)
+
+
+def write_source_payload_debug(
+    source: str,
+    job_id: str,
+    raw_html: str = "",
+    raw_json=None,
+    normalized_record=None,
+) -> None:
+    target_dir = DEBUG_SOURCE_PAYLOADS_DIR / _slugify_debug_component(source) / _slugify_debug_component(job_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "raw.html").write_text(str(raw_html or ""), encoding="utf-8")
+    save_json(target_dir / "raw.json", _json_safe_payload(raw_json if raw_json is not None else {}))
+    save_json(target_dir / "normalized.json", _json_safe_payload(normalized_record if normalized_record is not None else {}))
 
 
 def write_run_stats(payload: dict) -> None:

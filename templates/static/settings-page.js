@@ -482,6 +482,7 @@
       const evidenceWeights = loadedAdvanceSettings.candidate_profile_tier_weights || {};
       const preferenceWeights = loadedAdvanceSettings.preference_weights || {};
       const onboarding = loadedAdvanceSettings.onboarding_settings || {};
+      const llmSettings = loadedAdvanceSettings.llm_settings || {};
       const setBounds = (id, bounds) => {
         const input = document.getElementById(id);
         if (!input || !bounds) return;
@@ -530,7 +531,14 @@
       document.getElementById('onboarding_title_extraction_min_months').value = String(onboarding.title_extraction_min_months ?? '');
       document.getElementById('onboarding_max_target_patterns').value = String(onboarding.max_target_patterns ?? '');
       document.getElementById('onboarding_max_secondary_patterns').value = String(onboarding.max_secondary_patterns ?? '');
+      document.getElementById('onboarding_capability_alias_limit').value = String(onboarding.capability_alias_limit ?? '');
+      document.getElementById('onboarding_signal_cluster_min_alias_hits').value = String(onboarding.signal_cluster_min_alias_hits ?? '');
+      document.getElementById('onboarding_signal_cluster_min_snippet_hits').value = String(onboarding.signal_cluster_min_snippet_hits ?? '');
+      document.getElementById('onboarding_signal_cluster_dense_snippet_alias_hits').value = String(onboarding.signal_cluster_dense_snippet_alias_hits ?? '');
       document.getElementById('onboarding_capability_strength_preset').value = onboarding.capability_strength_preset || '';
+      document.getElementById('llm_model_options').value = (llmSettings.model_options || []).join('\n');
+      document.getElementById('llm_pricing_per_1m').value = JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2);
+      document.getElementById('llm_prompt_settings').value = JSON.stringify(llmSettings.llm_prompt_settings || {}, null, 2);
 
       // Keep the shared search guardrails editable from the same global settings source.
       document.getElementById('search_limit_date_range_days_min').value = String(searchLimits.date_range_days?.min ?? '');
@@ -566,6 +574,7 @@
           </table>
         `;
       }
+      renderLlmModelOptions();
     }
 
     // Build the payload that saves only the global optimiser settings.
@@ -644,7 +653,16 @@
           title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
           max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
           max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
+          capability_alias_limit: readNumber('onboarding_capability_alias_limit', currentOnboarding.capability_alias_limit),
+          signal_cluster_min_alias_hits: readNumber('onboarding_signal_cluster_min_alias_hits', currentOnboarding.signal_cluster_min_alias_hits),
+          signal_cluster_min_snippet_hits: readNumber('onboarding_signal_cluster_min_snippet_hits', currentOnboarding.signal_cluster_min_snippet_hits),
+          signal_cluster_dense_snippet_alias_hits: readNumber('onboarding_signal_cluster_dense_snippet_alias_hits', currentOnboarding.signal_cluster_dense_snippet_alias_hits),
           capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
+        },
+        llm_settings: {
+          model_options: toLines(document.getElementById('llm_model_options').value),
+          pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
+          llm_prompt_settings: JSON.parse(document.getElementById('llm_prompt_settings').value.trim() || '{}'),
         },
       };
     }
@@ -719,6 +737,22 @@
       `;
     }
 
+    function renderLlmModelOptions() {
+      const select = document.getElementById('llm_model');
+      if (!select) return;
+      const modelOptions = loadedAdvanceSettings?.llm_settings?.model_options;
+      const options = Array.isArray(modelOptions)
+        ? modelOptions.map(model => String(model || '').trim()).filter(Boolean)
+        : [];
+      const currentModel = String(loadedAgentSettings?.llm?.model || '').trim();
+      select.innerHTML = ['<option value="">Select a model</option>']
+        .concat(options.map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`))
+        .join('');
+      if (currentModel && options.includes(currentModel)) {
+        select.value = currentModel;
+      }
+    }
+
     function fillAgentSettings(settings) {
       loadedAgentSettings = settings || {};
       const dashboard = settings?.dashboard || {};
@@ -733,8 +767,7 @@
       telegramConnectLink = telegram.bot_username ? `https://t.me/${telegram.bot_username}?start=connect` : telegramConnectLink;
       renderTelegramSubscribers(telegram.subscribers || []);
       renderTelegramConnectPanel(settings);
-      const llm = settings?.llm || {};
-      if (llm.model) document.getElementById('llm_model').value = llm.model;
+      renderLlmModelOptions();
     }
 
     async function loadProfile() {
@@ -1061,26 +1094,6 @@
         const advanceSettings = collectAdvanceSettings();
         const agentSettings = collectAgentSettings();
 
-        const agentResponse = await fetch('/api/agent-settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(agentSettings),
-        });
-        const agentPayload = await agentResponse.json().catch(() => ({}));
-        if (!agentResponse.ok) {
-          throw new Error(agentPayload.error || 'Could not save alert settings.');
-        }
-
-        const profileResponse = await fetch('/api/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(profile),
-        });
-        const profilePayload = await profileResponse.json().catch(() => ({}));
-        if (!profileResponse.ok) {
-          throw new Error(profilePayload.error || 'Profile save failed after alert settings were saved.');
-        }
-
         const advanceResponse = await fetch('/api/advance-settings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -1091,9 +1104,29 @@
           throw new Error(advancePayload.error || 'Could not save advanced settings.');
         }
 
-        fillAgentSettings(agentPayload);
-        fillForm(profilePayload);
         fillAdvanceForm(advancePayload);
+        const profileResponse = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile),
+        });
+        const profilePayload = await profileResponse.json().catch(() => ({}));
+        if (!profileResponse.ok) {
+          throw new Error(profilePayload.error || 'Profile save failed after advanced settings were saved.');
+        }
+
+        const agentResponse = await fetch('/api/agent-settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(agentSettings),
+        });
+        const agentPayload = await agentResponse.json().catch(() => ({}));
+        if (!agentResponse.ok) {
+          throw new Error(agentPayload.error || 'Could not save alert settings.');
+        }
+
+        fillForm(profilePayload);
+        fillAgentSettings(agentPayload);
         initSliders();
         clearDirty();
         showInlineStatus(globalStatus, 'All changes saved.', 'ok');
