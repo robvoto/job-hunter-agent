@@ -771,7 +771,7 @@
     }
 
     async function loadProfile() {
-      const response = await fetch('/api/profile');
+      const response = await jobHunterFetch('/api/profile');
       if (!response.ok) throw new Error('Could not load profile');
       const profile = await response.json();
       loadedProfile = profile;
@@ -780,7 +780,7 @@
     }
 
     async function loadAdvanceSettings() {
-      const response = await fetch('/api/advance-settings');
+      const response = await jobHunterFetch('/api/advance-settings');
       if (!response.ok) throw new Error('Could not load advanced settings');
       const settings = await response.json();
       loadedAdvanceSettings = settings;
@@ -810,14 +810,14 @@
     }
 
     async function loadAgentSettings() {
-      const response = await fetch('/api/agent-settings');
+      const response = await jobHunterFetch('/api/agent-settings');
       if (!response.ok) throw new Error('Could not load alert settings');
       const settings = await response.json();
       fillAgentSettings(settings);
     }
 
     async function loadTelegramConnectLink() {
-      const response = await fetch('/api/telegram/connect-link');
+      const response = await jobHunterFetch('/api/telegram/connect-link');
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not build Telegram connect link');
       telegramConnectLink = payload.connect_link || '';
@@ -826,7 +826,7 @@
     }
 
     async function syncTelegramSubscribers() {
-      const response = await fetch('/api/telegram/sync', { method: 'POST' });
+      const response = await jobHunterFetch('/api/telegram/sync', { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not refresh the connected Telegram account');
       fillAgentSettings(payload.settings || {});
@@ -839,7 +839,7 @@
     }
 
     async function sendTelegramTestMessage() {
-      const response = await fetch('/api/telegram/test-message', {
+      const response = await jobHunterFetch('/api/telegram/test-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -882,7 +882,7 @@
         }
         return;
       }
-      const response = await fetch('/api/run-stats');
+      const response = await jobHunterFetch('/api/run-stats');
       if (!response.ok) { renderRunStats(null); return; }
       const stats = await response.json();
       renderRunStats(stats);
@@ -1094,7 +1094,7 @@
         const advanceSettings = collectAdvanceSettings();
         const agentSettings = collectAgentSettings();
 
-        const advanceResponse = await fetch('/api/advance-settings', {
+        const advanceResponse = await jobHunterFetch('/api/advance-settings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(advanceSettings),
@@ -1105,7 +1105,7 @@
         }
 
         fillAdvanceForm(advancePayload);
-        const profileResponse = await fetch('/api/profile', {
+        const profileResponse = await jobHunterFetch('/api/profile', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(profile),
@@ -1115,7 +1115,7 @@
           throw new Error(profilePayload.error || 'Profile save failed after advanced settings were saved.');
         }
 
-        const agentResponse = await fetch('/api/agent-settings', {
+        const agentResponse = await jobHunterFetch('/api/agent-settings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(agentSettings),

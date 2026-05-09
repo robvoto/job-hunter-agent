@@ -103,7 +103,7 @@ function clearOnboardingBrowserState() {
 }
 
 async function postTestAction(path) {
-  const response = await fetch(path, {
+      const response = await jobHunterFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',

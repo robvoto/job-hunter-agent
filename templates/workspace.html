@@ -11,6 +11,8 @@
 </span-->
   <link rel="stylesheet" href="/static/themes.css">
   <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
+  <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN__";</script>
+  <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
   <style>
@@ -353,7 +355,7 @@
     }
 
     async function postTestAction(path) {
-      const response = await fetch(path, {
+      const response = await jobHunterFetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
@@ -558,7 +560,7 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
 
     async function loadResults() {
       try {
-        const resp = await fetch('/api/results-html');
+        const resp = await jobHunterFetch('/api/results-html');
         if (!resp.ok) {
           resultsMount.innerHTML = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;">Run a search first to see results.</div>';
           return;

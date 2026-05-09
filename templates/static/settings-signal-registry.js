@@ -152,7 +152,7 @@
       _srBusyKeys.add(key);
       srSetInlineState(key, 'Saving...', 'info');
       try {
-        const resp = await fetch('/api/signal-registry', {
+        const resp = await jobHunterFetch('/api/signal-registry', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -347,7 +347,7 @@
       if (!panel) return;
       panel.innerHTML = '<p class="help">Loading learning inbox...</p>';
       try {
-        const resp = await fetch('/api/signal-registry');
+        const resp = await jobHunterFetch('/api/signal-registry');
         if (!resp.ok) throw new Error('Could not load signal registry');
         _srData = await resp.json();
         _srSearchDraft = _srSearch;

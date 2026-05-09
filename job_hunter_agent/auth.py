@@ -43,6 +43,7 @@ OPEN_PATHS = {
     LOGOUT_PATH,
     HEALTH_CHECK_PATH,
 }
+CSRF_TOKEN_CONTEXT = "job_hunter_csrf"
 
 
 @dataclass(frozen=True)
@@ -173,12 +174,31 @@ def clear_session_cookie(response: RedirectResponse | JSONResponse | HTMLRespons
     response.delete_cookie(name, path="/")
 
 
+def issue_csrf_token(request: Request) -> str | None:
+    config = getattr(request.app.state, "auth_config", None)
+    if not isinstance(config, AuthConfig) or not config.configured or not config.session_secret:
+        return None
+    session_cookie_value = _read_session_cookie_value(request)
+    if not session_cookie_value:
+        return None
+    return _build_csrf_token_value(session_cookie_value, config.session_secret)
+
+
+def verify_csrf_token(request: Request, presented_token: str | None) -> bool:
+    expected = issue_csrf_token(request)
+    if expected is None:
+        return False
+    candidate = str(presented_token or "").strip()
+    if not candidate:
+        return False
+    return hmac.compare_digest(expected, candidate)
+
+
 def read_session_username(request: Request) -> str | None:
     config = getattr(request.app.state, "auth_config", None)
     if not isinstance(config, AuthConfig) or not config.configured or not config.session_secret:
         return None
-    name, _ = _get_session_cookie_params()
-    token = request.cookies.get(name)
+    token = _read_session_cookie_value(request)
     if not token:
         return None
     try:
@@ -218,3 +238,16 @@ def _build_session_cookie_value(username: str, secret: str) -> str:
     payload_b64 = base64.urlsafe_b64encode(payload).decode(ENCODING_UTF8).rstrip("=")
     signature = hmac.new(secret.encode(ENCODING_UTF8), payload_b64.encode(ENCODING_UTF8), ALGORITHM_SHA256).hexdigest()
     return f"{payload_b64}.{signature}"
+
+
+def _read_session_cookie_value(request: Request) -> str | None:
+    name, _ = _get_session_cookie_params()
+    token = request.cookies.get(name)
+    if not token:
+        return None
+    return str(token)
+
+
+def _build_csrf_token_value(session_cookie_value: str, secret: str) -> str:
+    message = f"{CSRF_TOKEN_CONTEXT}:{session_cookie_value}"
+    return hmac.new(secret.encode(ENCODING_UTF8), message.encode(ENCODING_UTF8), ALGORITHM_SHA256).hexdigest()

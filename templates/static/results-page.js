@@ -92,7 +92,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
 
     async function loadLastRunLabel() {
       try {
-        const response = await fetch(RUN_STATUS_API_URL, { method: 'GET' });
+        const response = await jobHunterFetch(RUN_STATUS_API_URL, { method: 'GET' });
         if (!response.ok) {
           return;
         }
@@ -193,7 +193,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       setSearchSettingsMessage('Saving search settings...');
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/profile`, {
+        const response = await jobHunterFetch(`${API_BASE_URL}/api/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ search_settings: searchSettings }),
@@ -241,7 +241,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
 
     async function syncRunStatus() {
       try {
-        const response = await fetch(RUN_STATUS_API_URL, { method: 'GET' });
+        const response = await jobHunterFetch(RUN_STATUS_API_URL, { method: 'GET' });
         if (!response.ok) {
           throw new Error('Could not check run status.');
         }
@@ -284,7 +284,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       setSearchSettingsMessage('Saving search settings and starting scrape...');
 
       try {
-        const response = await fetch(RUN_API_URL, {
+        const response = await jobHunterFetch(RUN_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(searchSettings),
@@ -598,7 +598,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
 
     async function hydrateViewedState() {
       try {
-        const response = await fetch(JOB_HISTORY_API_URL, { method: 'GET' });
+        const response = await jobHunterFetch(JOB_HISTORY_API_URL, { method: 'GET' });
         if (!response.ok) {
           return;
         }
@@ -733,7 +733,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
         if (!selected.length) { impactEl.textContent = ''; return; }
         impactEl.textContent = 'Checking impact\u2026';
         try {
-          const resp = await fetch(`${API_BASE_URL}/api/title-block-preview`, {
+          const resp = await jobHunterFetch(`${API_BASE_URL}/api/title-block-preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phrases: selected }),
@@ -825,7 +825,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       status.textContent = reviewSavingMessage(action);
 
       try {
-        const response = await fetch(REVIEW_API_URL, {
+        const response = await jobHunterFetch(REVIEW_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload)
@@ -1077,7 +1077,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       document.getElementById('rejection-panel').removeAttribute('hidden');
       document.getElementById('rejection-overlay').removeAttribute('hidden');
       const jobKey = button.dataset.jobKey || '';
-      fetch(`${API_BASE_URL}/api/rejection-suggestions?job_id=${encodeURIComponent(jobKey)}`)
+      jobHunterFetch(`${API_BASE_URL}/api/rejection-suggestions?job_id=${encodeURIComponent(jobKey)}`)
         .then(r => r.json())
         .catch(() => ({}))
         .then(data => {
@@ -1292,7 +1292,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
           approvedSuggestionTokens[key] = _rejectionApprovalTokens[key];
         }
       });
-      const response = await fetch(`${API_BASE_URL}/api/rejection-feedback/mandatory-blockers`, {
+      const response = await jobHunterFetch(`${API_BASE_URL}/api/rejection-feedback/mandatory-blockers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

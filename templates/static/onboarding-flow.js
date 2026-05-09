@@ -390,7 +390,7 @@ async function createProfile() {
   }
 
   const files = [await fileToPayload(primary, 'Primary CV')];
-  const response = await fetch('/api/onboarding/import', {
+      const response = await jobHunterFetch('/api/onboarding/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -443,7 +443,7 @@ async function finishSetup() {
     throw new Error('Please keep at least one target title before finishing setup.');
   }
 
-  const response = await fetch('/api/onboarding/confirm-profile-signals', {
+      const response = await jobHunterFetch('/api/onboarding/confirm-profile-signals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -476,7 +476,7 @@ async function finishSetup() {
 }
 
 async function loadProfileDefaults() {
-  const response = await fetch('/api/profile');
+  const response = await jobHunterFetch('/api/profile');
   if (!response.ok) return;
   const profile = await response.json().catch(() => ({}));
   applyProfileDefaults(profile || {});

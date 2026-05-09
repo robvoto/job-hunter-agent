@@ -125,7 +125,7 @@
     }
 
     async function loadReviewData() {
-      const response = await fetch('/api/review-data');
+      const response = await jobHunterFetch('/api/review-data');
       if (!response.ok) { renderSuggestedTuning({ capability_suggestions: [], rule_suggestions: [], summary: {} }); return; }
       const payload = await response.json();
       renderSuggestedTuning(payload.suggested_tuning || { capability_suggestions: [], rule_suggestions: [], summary: {} });
@@ -183,7 +183,7 @@
     }
 
     async function patchProfile(payload, successMessage) {
-      const response = await fetch('/api/profile', {
+      const response = await jobHunterFetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -201,7 +201,7 @@
     async function runSearchNow() {
       const profile = collectProfile();
       const agentSettings = collectAgentSettings();
-      const agentResponse = await fetch('/api/agent-settings', {
+      const agentResponse = await jobHunterFetch('/api/agent-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agentSettings),
@@ -215,7 +215,7 @@
         { search_settings: profile.search_settings, salary_preferences: profile.salary_preferences },
         'Search settings saved to profile.json.'
       );
-      const response = await fetch('/api/run', {
+      const response = await jobHunterFetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ search_settings: profile.search_settings }),
@@ -227,7 +227,7 @@
     }
 
     async function applyOneSkipDecision(skill, choice) {
-      const response = await fetch('/api/tuning-decisions', {
+      const response = await jobHunterFetch('/api/tuning-decisions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decisions: [{ skill, choice }] }),
@@ -315,7 +315,7 @@
         addBtn.disabled = true;
         addBtn.textContent = 'Saving\u2026';
         try {
-          const response = await fetch('/api/rule/phrase', {
+          const response = await jobHunterFetch('/api/rule/phrase', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phrase: suffix, reason: 'low-fit specialist area' }),

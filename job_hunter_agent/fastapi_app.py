@@ -23,6 +23,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from job_hunter_agent.auth import configure_auth, read_session_username, verify_csrf_token
 from job_hunter_agent.routes import register_routes
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
@@ -113,6 +114,7 @@ def _configure_server_logging() -> None:
 def create_app() -> FastAPI:
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
     app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc")
+    configure_auth(app)
 
     @app.exception_handler(StarletteHTTPException)
     async def _starlette_http_exc(request: Request, exc: StarletteHTTPException):  # type: ignore[no-untyped-def]
@@ -148,6 +150,18 @@ def create_app() -> FastAPI:
         )
         response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
         return response
+
+    @app.middleware("http")
+    async def csrf_protection(request: Request, call_next):  # type: ignore[no-untyped-def]
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+        if request.url.path == "/api/debug/browser-log":
+            return await call_next(request)
+        if read_session_username(request) is None:
+            return await call_next(request)
+        if not verify_csrf_token(request, request.headers.get("x-csrf-token")):
+            return json_response({"error": "CSRF token missing or invalid"}, 403)
+        return await call_next(request)
 
     register_routes(app)
     return app
