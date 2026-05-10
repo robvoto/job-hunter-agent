@@ -21,6 +21,7 @@ from job_hunter_agent.profile_learning import (
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
+    ENGAGEMENT_TYPE_BOTH,
     build_candidate_profile_tiers_from_sections,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_EVIDENCE_TIERS,
@@ -343,7 +344,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
             match_preferences["home_location"] = hint
 
     # 3. Engagement
-    eng_type = str(prefs.get("engagement_type") or "both").lower()
+    eng_type = str(prefs.get("engagement_type") or ENGAGEMENT_TYPE_BOTH).lower()
     match_preferences["engagement_type"] = eng_type
 
     # 4. Merge text-extracted preferences ("Warnings")

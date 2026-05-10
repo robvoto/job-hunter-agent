@@ -14,36 +14,43 @@ from urllib.parse import quote, urlsplit
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from job_hunter_agent.config import SERVER_HOST, DEBUG_MODE, LOGIN_PATH, LOGOUT_PATH, HEALTH_CHECK_PATH
+from job_hunter_agent.config import (
+    LOGIN_PATH, 
+    LOGOUT_PATH, 
+    HEALTH_CHECK_PATH,
+    AUTH_ALGO_PBKDF2,
+    AUTH_ALGO_SHA256,
+    AUTH_ENCODING,
+    CSRF_TOKEN_CONTEXT,
+    SESSION_COOKIE_PATH,
+    SESSION_COOKIE_DEFAULT_NAME
+)
 
-# Security and encoding constants
-ALGORITHM_PBKDF2 = "pbkdf2_sha256"
-ALGORITHM_SHA256 = "sha256"
-ENCODING_UTF8 = "utf-8"
-
-def _get_session_cookie_params() -> tuple[str, bool]:
-    """Determine session cookie parameters based on the server environment."""
+def _get_session_cookie_params(request: Request) -> tuple[str, bool]:
+    """Determine session cookie parameters based on the request transport."""
     # Allow the base cookie name to be changed via environment variable
-    base_name = os.getenv("JOB_HUNTER_SESSION_COOKIE_NAME", "job_hunter_session")
+    base_name = os.getenv("JOB_HUNTER_SESSION_COOKIE_NAME", SESSION_COOKIE_DEFAULT_NAME)
     # Strip existing __Host- prefix to handle it dynamically based on environment
     if base_name.startswith("__Host-"):
         base_name = base_name[7:]
 
-    is_local = SERVER_HOST in ("127.0.0.1", "localhost")
-    
-    if DEBUG_MODE or is_local:
-        return base_name, False
+    secure_mode = os.getenv("JOB_HUNTER_SESSION_COOKIE_SECURE", "auto").strip().lower()
+    if secure_mode == "true":
+        secure_flag = True
+    elif secure_mode == "false":
+        secure_flag = False
+    else:
+        secure_flag = request.url.scheme == "https"
 
-    # FIX #3 Plan Step 4: Cookie prefixing (__Host- prefix requires secure=True)
-    # We ensure the __Host- prefix is applied for secure contexts as it's a browser requirement
-    return f"__Host-{base_name}", True
+    if secure_flag:
+        return f"__Host-{base_name}", True
+    return base_name, False
 
 OPEN_PATHS = {
     LOGIN_PATH,
     LOGOUT_PATH,
     HEALTH_CHECK_PATH,
 }
-CSRF_TOKEN_CONTEXT = "job_hunter_csrf"
 
 
 @dataclass(frozen=True)
@@ -81,8 +88,8 @@ def load_auth_config() -> AuthConfig:
 
 def hash_password(password: str, *, salt_hex: str | None = None, iterations: int = 210_000) -> str:
     salt = bytes.fromhex(salt_hex) if salt_hex else secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac(ALGORITHM_SHA256, password.encode(ENCODING_UTF8), salt, iterations)
-    return f"{ALGORITHM_PBKDF2}${iterations}${salt.hex()}${digest.hex()}"
+    digest = hashlib.pbkdf2_hmac(AUTH_ALGO_SHA256, password.encode(AUTH_ENCODING), salt, iterations)
+    return f"{AUTH_ALGO_PBKDF2}${iterations}${salt.hex()}${digest.hex()}"
 
 
 def verify_password(password: str, encoded_hash: str) -> bool:
@@ -90,7 +97,7 @@ def verify_password(password: str, encoded_hash: str) -> bool:
     if len(parts) != 4:
         return False
     algorithm, iterations_text, salt_hex, hash_hex = parts
-    if algorithm != ALGORITHM_PBKDF2:
+    if algorithm != AUTH_ALGO_PBKDF2:
         return False
     try:
         iterations = int(iterations_text)
@@ -98,7 +105,7 @@ def verify_password(password: str, encoded_hash: str) -> bool:
         expected = bytes.fromhex(hash_hex)
     except ValueError:
         return False
-    candidate = hashlib.pbkdf2_hmac(ALGORITHM_SHA256, password.encode(ENCODING_UTF8), salt, iterations)
+    candidate = hashlib.pbkdf2_hmac(AUTH_ALGO_SHA256, password.encode(AUTH_ENCODING), salt, iterations)
     return hmac.compare_digest(candidate, expected)
 
 
@@ -125,7 +132,7 @@ def configure_auth(app) -> None:
 def login_success_response(request: Request, next_path: str, username: str) -> RedirectResponse:
     target = _safe_next_path(next_path)
     response = RedirectResponse(target, status_code=302)
-    set_session_cookie(response, request.app.state.auth_config, username)
+    set_session_cookie(response, request, request.app.state.auth_config, username)
     return response
 
 
@@ -154,24 +161,25 @@ def auth_required_response(next_path: str, accepts_html: bool) -> RedirectRespon
     return login_error_response("Authentication required", 401)
 
 
-def set_session_cookie(response: RedirectResponse | JSONResponse | HTMLResponse, config: AuthConfig, username: str) -> None:
+def set_session_cookie(response: RedirectResponse | JSONResponse | HTMLResponse, request: Request, config: AuthConfig, username: str) -> None:
     if not config.configured or not config.session_secret:
         return
     value = _build_session_cookie_value(username, config.session_secret)
-    name, secure_flag = _get_session_cookie_params()
+    name, secure_flag = _get_session_cookie_params(request)
     response.set_cookie(
         name,
         value,
         httponly=True,
         samesite="strict",  # FIX #3 Plan Step 2: Enforce Strict SameSite policy
         secure=secure_flag,
-        path="/",
+        path=SESSION_COOKIE_PATH,
     )
 
 
-def clear_session_cookie(response: RedirectResponse | JSONResponse | HTMLResponse) -> None:
-    name, _ = _get_session_cookie_params()
-    response.delete_cookie(name, path="/")
+def clear_session_cookie(response: RedirectResponse | JSONResponse | HTMLResponse, request: Request) -> None:
+    name, _ = _get_session_cookie_params(request)
+    response.delete_cookie(name, path=SESSION_COOKIE_PATH)
+
 
 
 def issue_csrf_token(request: Request) -> str | None:
@@ -205,12 +213,12 @@ def read_session_username(request: Request) -> str | None:
         payload_b64, signature = token.split(".", 1)
     except ValueError:
         return None
-    expected = hmac.new(config.session_secret.encode(ENCODING_UTF8), payload_b64.encode(ENCODING_UTF8), ALGORITHM_SHA256).hexdigest()
+    expected = hmac.new(config.session_secret.encode(AUTH_ENCODING), payload_b64.encode(AUTH_ENCODING), AUTH_ALGO_SHA256).hexdigest()
     if not hmac.compare_digest(signature, expected):
         return None
     try:
         padding = "=" * (-len(payload_b64) % 4)
-        payload = json.loads(base64.urlsafe_b64decode((payload_b64 + padding).encode(ENCODING_UTF8)).decode(ENCODING_UTF8))
+        payload = json.loads(base64.urlsafe_b64decode((payload_b64 + padding).encode(AUTH_ENCODING)).decode(AUTH_ENCODING))
     except Exception:
         return None
     username = str(payload.get("username") or "").strip()
@@ -234,14 +242,14 @@ def _safe_next_path(next_path: str) -> str:
 
 
 def _build_session_cookie_value(username: str, secret: str) -> str:
-    payload = json.dumps({"username": username}, separators=(",", ":")).encode(ENCODING_UTF8)
-    payload_b64 = base64.urlsafe_b64encode(payload).decode(ENCODING_UTF8).rstrip("=")
-    signature = hmac.new(secret.encode(ENCODING_UTF8), payload_b64.encode(ENCODING_UTF8), ALGORITHM_SHA256).hexdigest()
+    payload = json.dumps({"username": username}, separators=(",", ":")).encode(AUTH_ENCODING)
+    payload_b64 = base64.urlsafe_b64encode(payload).decode(AUTH_ENCODING).rstrip("=")
+    signature = hmac.new(secret.encode(AUTH_ENCODING), payload_b64.encode(AUTH_ENCODING), AUTH_ALGO_SHA256).hexdigest()
     return f"{payload_b64}.{signature}"
 
 
 def _read_session_cookie_value(request: Request) -> str | None:
-    name, _ = _get_session_cookie_params()
+    name, _ = _get_session_cookie_params(request)
     token = request.cookies.get(name)
     if not token:
         return None
@@ -250,4 +258,4 @@ def _read_session_cookie_value(request: Request) -> str | None:
 
 def _build_csrf_token_value(session_cookie_value: str, secret: str) -> str:
     message = f"{CSRF_TOKEN_CONTEXT}:{session_cookie_value}"
-    return hmac.new(secret.encode(ENCODING_UTF8), message.encode(ENCODING_UTF8), ALGORITHM_SHA256).hexdigest()
+    return hmac.new(secret.encode(AUTH_ENCODING), message.encode(AUTH_ENCODING), AUTH_ALGO_SHA256).hexdigest()

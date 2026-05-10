@@ -12,6 +12,20 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters
+from job_hunter_agent.record_schema import (
+    RECORD_JOB_KEY, RECORD_URL_KEY, RECORD_TITLE_KEY, RECORD_COMPANY_KEY,
+    RECORD_DECISION_KEY, RECORD_REJECT_REASON_KEY, RECORD_TITLE_REASON_KEY,
+    RECORD_TITLE_MATCH_METADATA_KEY, RECORD_LOCATION_KEY, RECORD_WORK_MODE_KEY,
+    RECORD_WORK_TYPE_KEY, RECORD_SALARY_KEY, RECORD_TEASER_KEY, RECORD_DETAILS_TEXT_KEY,
+    RECORD_DETAILS_STATUS_KEY, RECORD_DESCRIPTION_SOURCE_KEY, RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY, RECORD_FULL_DESCRIPTION_KEY, RECORD_HARD_BLOCK_REASONS_KEY,
+    RECORD_LLM_DECISION_KEY, RECORD_LLM_FIT_GRADE_KEY, RECORD_ROLE_SNAPSHOT_KEY,
+    RECORD_FIT_HIGHLIGHTS_KEY, RECORD_COMPETITIVE_SIGNALS_KEY, RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_MISSING_EVIDENCE_KEY, RECORD_REVIEWED_SIGNAL_MATCHES_KEY, RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    RECORD_SOURCE_METADATA_KEY, RECORD_SEARCH_LOCATION_KEY, RECORD_SEARCH_KEYWORDS_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY, RECORD_POSTED_KEY, DETAILS_STATUS_OK, CONFIDENCE_HIGH,
+    CONFIDENCE_LOW, RECORD_RUN_STARTED_AT_KEY, RECORD_SOURCE_KEY
+)
 from job_hunter_agent.advance_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
@@ -144,16 +158,16 @@ class LinkedInScraper(BaseJobScraper):
                     job_type_rules=job_type_rules,
                 )
 
-                title = record.get("title", "")
-                company = record.get("company", "N/A")
+                title = record.get(RECORD_TITLE_KEY) or ""
+                company = record.get(RECORD_COMPANY_KEY) or "N/A"
 
-                if not record.get("job_key"):
-                    record["reject_reason"] = "NO_JOB_KEY"
+                if not record.get(RECORD_JOB_KEY):
+                    record[RECORD_REJECT_REASON_KEY] = "NO_JOB_KEY"
                     audit_rows.append(record)
                     continue
 
-                if not record.get("url"):
-                    record["reject_reason"] = "NO_URL"
+                if not record.get(RECORD_URL_KEY):
+                    record[RECORD_REJECT_REASON_KEY] = "NO_URL"
                     audit_rows.append(record)
                     continue
 
@@ -161,51 +175,50 @@ class LinkedInScraper(BaseJobScraper):
                 title_analysis = analyze_title_filters(title, self.profile)
                 ok_title = bool(title_analysis.get("ok"))
                 title_reason = str(title_analysis.get("reason") or "")
-                record["title_reason"] = title_reason
-                record["title_match_metadata"] = title_analysis
+                record[RECORD_TITLE_REASON_KEY] = title_reason
+                record[RECORD_TITLE_MATCH_METADATA_KEY] = title_analysis
                 if not ok_title:
                     print(f"[LinkedIn] REJECTED (title) [{title_reason}] {title}")
-                    record["reject_reason"] = title_reason
+                    record[RECORD_REJECT_REASON_KEY] = title_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 
                 # Applied / hidden skip
-                job_key = record["job_key"]
-                bare_key = job_key.split(":", 1)[-1] if ":" in job_key else job_key
-                if bare_key in self.applied_job_keys or job_key in self.applied_job_keys:
-                    record["decision"] = "SKIP"
-                    record["reject_reason"] = "ALREADY_APPLIED"
+                job_key = record[RECORD_JOB_KEY]
+                if job_key in self.applied_job_keys:
+                    record[RECORD_DECISION_KEY] = "SKIP"
+                    record[RECORD_REJECT_REASON_KEY] = "ALREADY_APPLIED"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
-                if bare_key in self.hidden_job_keys or job_key in self.hidden_job_keys:
-                    record["decision"] = "SKIP"
-                    record["reject_reason"] = "MANUALLY_HIDDEN"
+                if job_key in self.hidden_job_keys:
+                    record[RECORD_DECISION_KEY] = "SKIP"
+                    record[RECORD_REJECT_REASON_KEY] = "MANUALLY_HIDDEN"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 
                 # Date window check
                 search_settings = get_search_settings(self.profile)
                 date_range_days = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
-                posted_age = record.get("posted_age_days")
+                posted_age = record.get(RECORD_POSTED_AGE_DAYS_KEY)
                 enforce_limit = bool(search_settings.get("enforce_posted_age_limit", DEFAULT_SEARCH_SETTINGS["enforce_posted_age_limit"]))
                 if enforce_limit and posted_age is not None and posted_age > date_range_days:
-                    record["reject_reason"] = f"POSTED_TOO_OLD:{date_range_days}"
+                    record[RECORD_REJECT_REASON_KEY] = f"POSTED_TOO_OLD:{date_range_days}"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 
                 # Quick card gate
                 ok_card, card_reason = passes_quick_card_filters(
                     title=title,
-                    teaser=record.get("teaser", ""),
+                    teaser=record.get(RECORD_TEASER_KEY) or "",
                     company=company,
-                    location=record.get("location", ""),
-                    work_mode=record.get("work_mode", ""),
-                    work_type=record.get("work_type", ""),
-                    salary=record.get("salary", ""),
+                    location=record.get(RECORD_LOCATION_KEY) or "",
+                    work_mode=record.get(RECORD_WORK_MODE_KEY) or "",
+                    work_type=record.get(RECORD_WORK_TYPE_KEY) or "",
+                    salary=record.get(RECORD_SALARY_KEY) or "",
                 )
                 if not ok_card:
                     print(f"[LinkedIn] REJECTED (card gate) [{card_reason}] {title} @ {company}")
-                    record["reject_reason"] = card_reason
+                    record[RECORD_REJECT_REASON_KEY] = card_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 
@@ -218,65 +231,65 @@ class LinkedInScraper(BaseJobScraper):
                     print(f"[LinkedIn] KEPT (history reuse): {title} @ {company}")
                     continue
 
-                details_text = record.get("details_text", "")
+                details_text = record.get(RECORD_DETAILS_TEXT_KEY) or ""
                 if not details_text:
-                    record["reject_reason"] = "NO_DETAILS"
+                    record[RECORD_REJECT_REASON_KEY] = "NO_DETAILS"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
-                record["fit_source_text"] = details_text
-                record["full_description"] = details_text
-                record["description_source"] = "linkedin_full_description"
-                source = str(record.get("description_source") or "").strip().lower()
+                record[RECORD_FIT_SOURCE_TEXT_KEY] = details_text
+                record[RECORD_FULL_DESCRIPTION_KEY] = details_text
+                record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
+                source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
                 is_trusted = source in get_trusted_sources() and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
-                record["fit_confidence"] = "HIGH" if is_trusted else "LOW"
-                record["details_status"] = "ok"
+                record[RECORD_FIT_CONFIDENCE_KEY] = CONFIDENCE_HIGH if is_trusted else CONFIDENCE_LOW
+                record[RECORD_DETAILS_STATUS_KEY] = DETAILS_STATUS_OK
 
                 # Content filter
                 ok_desc, desc_reason = passes_content_filters(
                     details_text,
-                    record.get("location", ""),
-                    record.get("title_reason", ""),
+                    record.get(RECORD_LOCATION_KEY) or "",
+                    record.get(RECORD_TITLE_REASON_KEY) or "",
                 )
-                record["content_reason"] = desc_reason
+                record[RECORD_CONTENT_REASON_KEY] = desc_reason
                 if not ok_desc:
                     if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
-                        record["hard_block_reasons"] = [
+                        record[RECORD_HARD_BLOCK_REASONS_KEY] = [
                             match.get("value") or match.get("matched_term") or ""
                             for match in find_hard_block_matches(details_text, self.profile.get("must_not_require_skills", []))
                         ]
                     register_hard_blocker_learning_from_rejection(record, desc_reason, details_text, profile=self.profile)
                     print(f"[LinkedIn] REJECTED (content) [{desc_reason}] {title} @ {company}")
-                    record["reject_reason"] = desc_reason
+                    record[RECORD_REJECT_REASON_KEY] = desc_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
                 # Enrich from full description text
                 salary = extract_salary(details_text)
                 if salary == "N/A":
-                    salary = record.get("salary", "N/A")
-                record["salary"] = salary
+                    salary = record.get(RECORD_SALARY_KEY) or "N/A"
+                record[RECORD_SALARY_KEY] = salary
 
                 # Upgrade work mode via text inference only if structured metadata found nothing.
-                if record.get("work_mode") in (WORK_MODE_UNKNOWN, "", None):
+                if record.get(RECORD_WORK_MODE_KEY) in (WORK_MODE_UNKNOWN, "", None):
                     text_result = extract_from_text(details_text)
                     if text_result["work_mode"] != WORK_MODE_UNKNOWN:
-                        record["work_mode"] = text_result["work_mode"]
-                        record["work_mode_source"] = text_result["work_mode_source"]
-                        record["work_mode_evidence"] = text_result["work_mode_evidence"]
-                        record["work_mode_needs_review"] = text_result["work_mode_needs_review"]
-                log_work_mode_result(str(record.get("job_key") or ""), "linkedin", record)
+                        record[RECORD_WORK_MODE_KEY] = text_result["work_mode"]
+                        record[RECORD_WORK_MODE_SOURCE_KEY] = text_result["work_mode_source"]
+                        record[RECORD_WORK_MODE_EVIDENCE_KEY] = text_result["work_mode_evidence"]
+                        record[RECORD_WORK_MODE_NEEDS_REVIEW_KEY] = text_result["work_mode_needs_review"]
+                log_work_mode_result(str(record.get(RECORD_JOB_KEY) or ""), "linkedin", record)
 
                 raw_signals = detect_competitive_signals(details_text, self.profile)
-                record["competitive_signals"] = [
+                record[RECORD_COMPETITIVE_SIGNALS_KEY] = [
                     evaluate_competitive_signal_alignment(s, self.profile) for s in raw_signals
                 ]
                 hard_block_matches = hard_block_entries(
                     {
-                        "fit_source_text": details_text,
-                        "competitive_signals": record.get("competitive_signals"),
+                        RECORD_FIT_SOURCE_TEXT_KEY: details_text,
+                        RECORD_COMPETITIVE_SIGNALS_KEY: record.get(RECORD_COMPETITIVE_SIGNALS_KEY),
                     },
                     self.profile,
                 )
-                record["hard_block_reasons"] = [entry["text"] for entry in hard_block_matches]
+                record[RECORD_HARD_BLOCK_REASONS_KEY] = [entry["text"] for entry in hard_block_matches]
                 if record["hard_block_reasons"]:
                     hard_block_term = compact_whitespace(record["hard_block_reasons"][0]).lower()
                     hard_block_category = re.sub(r"[^a-z0-9]+", "_", hard_block_term).strip("_") or "hard_block"
@@ -429,4 +442,3 @@ class LinkedInScraper(BaseJobScraper):
         if target.get("easy_apply") is not None:
             kwargs["easy_apply"] = target["easy_apply"]
         return scrape_jobs(**kwargs)
-

@@ -9,13 +9,13 @@ from job_hunter_agent.fastapi_app import create_app
 from job_hunter_agent.routes import profile_materials
 
 
-def _csrf_request(app, cookie_header: str) -> Request:
+def _csrf_request(app, cookie_header: str, scheme: str = "http") -> Request:
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
         "method": "GET",
-        "scheme": "http",
+        "scheme": scheme,
         "path": "/",
         "raw_path": b"/",
         "query_string": b"",
@@ -31,17 +31,18 @@ def _csrf_request(app, cookie_header: str) -> Request:
     return Request(scope, receive=receive)
 
 
-def _session_cookie_and_token(app) -> tuple[str, str]:
+def _session_cookie_and_token(app, scheme: str = "http") -> tuple[str, str, str]:
+    request = _csrf_request(app, "", scheme=scheme)
     response = Response()
-    set_session_cookie(response, app.state.auth_config, "alice")
+    set_session_cookie(response, request, app.state.auth_config, "alice")
     cookie = SimpleCookie()
     cookie.load(response.headers["set-cookie"])
-    session_cookie_name, _ = _get_session_cookie_params()
+    session_cookie_name, _ = _get_session_cookie_params(request)
     session_cookie_value = cookie[session_cookie_name].value
-    request = _csrf_request(app, f"{session_cookie_name}={session_cookie_value}")
+    request = _csrf_request(app, f"{session_cookie_name}={session_cookie_value}", scheme=scheme)
     token = issue_csrf_token(request)
     assert token is not None
-    return session_cookie_value, token
+    return session_cookie_name, session_cookie_value, token
 
 
 def test_csrf_middleware_blocks_unsafe_session_request(monkeypatch):
@@ -50,8 +51,7 @@ def test_csrf_middleware_blocks_unsafe_session_request(monkeypatch):
     monkeypatch.setenv("JOB_HUNTER_AUTH_SESSION_SECRET", "secret")
 
     app = create_app()
-    session_cookie_value, _ = _session_cookie_and_token(app)
-    session_cookie_name, _ = _get_session_cookie_params()
+    session_cookie_name, session_cookie_value, _ = _session_cookie_and_token(app)
 
     client = TestClient(app)
     client.cookies.set(session_cookie_name, session_cookie_value)
@@ -68,8 +68,7 @@ def test_csrf_middleware_allows_valid_token(monkeypatch):
     monkeypatch.setenv("JOB_HUNTER_AUTH_SESSION_SECRET", "secret")
 
     app = create_app()
-    session_cookie_value, token = _session_cookie_and_token(app)
-    session_cookie_name, _ = _get_session_cookie_params()
+    session_cookie_name, session_cookie_value, token = _session_cookie_and_token(app)
 
     monkeypatch.setattr(profile_materials.srv, "load_profile", lambda: {})
     monkeypatch.setattr(profile_materials.srv, "patch_profile", lambda patch: {"ok": True, "patched": patch})

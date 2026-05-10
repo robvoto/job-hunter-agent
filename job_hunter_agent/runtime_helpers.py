@@ -9,6 +9,7 @@ CLI_FLAG_CHEAP_LLM = "--cheap-llm"
 CLI_FLAG_NO_LLM = "--no-llm"
 CLI_FLAG_DEBUG_MODE = "--debug-mode"
 CLI_FLAG_REBUILD_DASHBOARD = "--rebuild-dashboard"
+CLI_FLAG_RESET_NEW_TO_YOU = "--reset-new-to-you"
 
 
 def has_cli_flag(argv: list[str], flag: str) -> bool:

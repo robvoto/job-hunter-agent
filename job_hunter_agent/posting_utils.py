@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Set
 
 from job_hunter_agent.io_utils import normalize_posted_text
+from job_hunter_agent.job_identity import normalize_job_key
 
 
 def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
@@ -22,20 +23,6 @@ def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
         return max((reference - timestamp).days, 0)
     except Exception:
         return None
-
-
-def normalize_job_key(raw: str) -> str:
-    value = (raw or "").strip()
-    if not value:
-        return ""
-    match = re.search(r"/job/(\d+)", value)
-    if match:
-        return match.group(1)
-    id_match = re.fullmatch(r"\d+", value)
-    if id_match:
-        return value
-    return value.split("#", 1)[0]
-
 
 def get_manual_skip_sets(profile: dict) -> tuple[Set[str], Set[str]]:
     review_controls = profile.get("review_controls", {})

@@ -12,8 +12,35 @@ from job_hunter_agent.paths import (
     OUTPUT_DIR,
     RUN_STATS_PATH,
 )
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.profile_store import load_profile, save_profile
 from job_hunter_agent.source_connector import rebuild_html_dashboard
+from job_hunter_agent.record_schema import (
+    RECORD_JOB_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_URL_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_TIMES_VIEWED_KEY,
+    RECORD_FIRST_VIEWED_AT_KEY,
+    RECORD_LAST_VIEWED_AT_KEY,
+    RECORD_TEASER_KEY,
+    RECORD_REVIEW_EVENTS_KEY,
+    RECORD_IS_HIDDEN_KEY,
+    RECORD_FIRST_HIDDEN_AT_KEY,
+    RECORD_LAST_HIDDEN_AT_KEY,
+    RECORD_LAST_UNHIDDEN_AT_KEY,
+    RECORD_FIRST_APPLIED_AT_KEY,
+    RECORD_LAST_APPLIED_AT_KEY,
+    RECORD_LAST_UNAPPLIED_AT_KEY,
+    RECORD_LAST_NOT_FOR_ME_AT_KEY,
+    RECORD_TIMES_NOT_FOR_ME_KEY,
+    RECORD_LAST_BLOCK_TITLE_AT_KEY,
+    RECORD_TIMES_BLOCK_TITLE_KEY,
+    RECORD_REJECT_TITLE_RULES_KEY,
+)
 
 
 def rebuild_dashboard_after_rule_change(reason: str = "matching rule change") -> None:
@@ -31,20 +58,6 @@ def rebuild_dashboard_after_rule_change(reason: str = "matching rule change") ->
         daemon=True,
         name="job-hunter-dashboard-rebuild",
     ).start()
-
-
-def normalize_job_key(value: str) -> str:
-    raw = (value or "").strip()
-    if not raw:
-        return ""
-    if re.match(r"^(seek|linkedin|indeed|glassdoor):[^\s]+$", raw):
-        return raw
-    match = re.search(r"/job/(\d+)", raw)
-    if match:
-        return match.group(1)
-    if re.fullmatch(r"\d+", raw):
-        return raw
-    return raw.split("#", 1)[0]
 
 
 def load_job_history() -> dict:
@@ -89,23 +102,24 @@ def _normalize_description_block_phrase(value: str) -> str:
 
 def get_job_description(job_id: str) -> str:
     history = load_job_history()
-    for key in [job_id, f"linkedin:{job_id}"]:
-        entry = history.get(key) if isinstance(history, dict) else None
-        if not isinstance(entry, dict):
-            continue
-        snap = entry.get("last_kept_snapshot") or {}
-        if isinstance(snap, dict):
-            desc = snap.get("full_description") or snap.get("fit_source_text") or ""
-            if desc:
-                return desc
+    # Standardize the ID before lookup to ensure it matches the namespaced keys in history
+    normalized_key = normalize_job_key(job_id)
+    entry = history.get(normalized_key) if isinstance(history, dict) else None
+    if isinstance(entry, dict):
+        snap = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY) or {}
+        desc = snap.get(RECORD_FULL_DESCRIPTION_KEY) or snap.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+        if desc:
+            return desc
+
     seek_path = OUTPUT_DIR / "seek_results.json"
     if seek_path.exists():
         try:
             rows = json.loads(seek_path.read_text(encoding="utf-8"))
             if isinstance(rows, list):
                 for row in rows:
-                    if str(row.get("job_key") or "") == str(job_id):
-                        return row.get("full_description") or row.get("fit_source_text") or ""
+                    # Check against the normalized ID
+                    if normalize_job_key(str(row.get(RECORD_JOB_KEY) or "")) == normalized_key:
+                        return row.get(RECORD_FULL_DESCRIPTION_KEY) or row.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
         except Exception:
             pass
     return ""
@@ -122,28 +136,28 @@ def _append_review_event(
     teaser: str = "",
     extra: dict | None = None,
 ) -> None:
-    snapshot = entry.get("last_kept_snapshot")
+    snapshot = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY)
     if not isinstance(snapshot, dict):
         snapshot = {}
 
     event: dict[str, Any] = {
         "action": action,
-        "job_key": job_key,
+        RECORD_JOB_KEY: job_key,
         "timestamp": occurred_at,
     }
-    resolved_title = title or entry.get("title") or snapshot.get("title") or ""
-    resolved_company = company or entry.get("company") or snapshot.get("company") or ""
-    resolved_url = url or entry.get("url") or snapshot.get("url") or ""
-    resolved_teaser = teaser or snapshot.get("teaser") or entry.get("teaser") or ""
+    resolved_title = title or entry.get(RECORD_TITLE_KEY) or snapshot.get(RECORD_TITLE_KEY) or ""
+    resolved_company = company or entry.get(RECORD_COMPANY_KEY) or snapshot.get(RECORD_COMPANY_KEY) or ""
+    resolved_url = url or entry.get(RECORD_URL_KEY) or snapshot.get(RECORD_URL_KEY) or ""
+    resolved_teaser = teaser or snapshot.get(RECORD_TEASER_KEY) or entry.get(RECORD_TEASER_KEY) or ""
 
     if resolved_title:
-        event["title"] = resolved_title
+        event[RECORD_TITLE_KEY] = resolved_title
     if resolved_company:
-        event["company"] = resolved_company
+        event[RECORD_COMPANY_KEY] = resolved_company
     if resolved_url:
-        event["url"] = resolved_url
+        event[RECORD_URL_KEY] = resolved_url
     if resolved_teaser:
-        event["teaser"] = resolved_teaser
+        event[RECORD_TEASER_KEY] = resolved_teaser
 
     if isinstance(extra, dict):
         for k, v in extra.items():
@@ -151,11 +165,11 @@ def _append_review_event(
                 continue
             event[k] = v
 
-    events = entry.get("review_events")
+    events = entry.get(RECORD_REVIEW_EVENTS_KEY)
     if not isinstance(events, list):
         events = []
     events.append(event)
-    entry["review_events"] = events[-50:]
+    entry[RECORD_REVIEW_EVENTS_KEY] = events[-50:]
 
 
 def persist_review_event(
@@ -175,34 +189,34 @@ def persist_review_event(
     entry = history.get(normalized, {})
     now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 
-    entry["job_key"] = normalized
+    entry[RECORD_JOB_KEY] = normalized
     if title:
-        entry["title"] = title
+        entry[RECORD_TITLE_KEY] = title
     if company:
-        entry["company"] = company
+        entry[RECORD_COMPANY_KEY] = company
     if url:
-        entry["url"] = url
+        entry[RECORD_URL_KEY] = url
 
     if action == "hidden":
-        entry["is_hidden"] = True
-        if not entry.get("first_hidden_at"):
-            entry["first_hidden_at"] = now_iso
-        entry["last_hidden_at"] = now_iso
+        entry[RECORD_IS_HIDDEN_KEY] = True
+        if not entry.get(RECORD_FIRST_HIDDEN_AT_KEY):
+            entry[RECORD_FIRST_HIDDEN_AT_KEY] = now_iso
+        entry[RECORD_LAST_HIDDEN_AT_KEY] = now_iso
     elif action == "unhide":
-        entry["is_hidden"] = False
-        entry["last_unhidden_at"] = now_iso
+        entry[RECORD_IS_HIDDEN_KEY] = False
+        entry[RECORD_LAST_UNHIDDEN_AT_KEY] = now_iso
     elif action == "applied":
-        if not entry.get("first_applied_at"):
-            entry["first_applied_at"] = now_iso
-        entry["last_applied_at"] = now_iso
+        if not entry.get(RECORD_FIRST_APPLIED_AT_KEY):
+            entry[RECORD_FIRST_APPLIED_AT_KEY] = now_iso
+        entry[RECORD_LAST_APPLIED_AT_KEY] = now_iso
     elif action == "unapply":
-        entry["last_unapplied_at"] = now_iso
+        entry[RECORD_LAST_UNAPPLIED_AT_KEY] = now_iso
     elif action == "not_for_me":
-        entry["last_not_for_me_at"] = now_iso
-        entry["times_not_for_me"] = int(entry.get("times_not_for_me", 0) or 0) + 1
+        entry[RECORD_LAST_NOT_FOR_ME_AT_KEY] = now_iso
+        entry[RECORD_TIMES_NOT_FOR_ME_KEY] = int(entry.get(RECORD_TIMES_NOT_FOR_ME_KEY, 0) or 0) + 1
     elif action in ("block_similar", "block_title"):
-        entry["last_block_title_at"] = now_iso
-        entry["times_block_title"] = int(entry.get("times_block_title", 0) or 0) + 1
+        entry[RECORD_LAST_BLOCK_TITLE_AT_KEY] = now_iso
+        entry[RECORD_TIMES_BLOCK_TITLE_KEY] = int(entry.get(RECORD_TIMES_BLOCK_TITLE_KEY, 0) or 0) + 1
 
     _append_review_event(
         entry,
@@ -312,15 +326,15 @@ def record_job_view(job_key: str, url: str = "", title: str = "") -> dict:
     entry = history.get(normalized, {})
     now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 
-    entry["job_key"] = normalized
-    if title and not entry.get("title"):
-        entry["title"] = title
+    entry[RECORD_JOB_KEY] = normalized
+    if title and not entry.get(RECORD_TITLE_KEY):
+        entry[RECORD_TITLE_KEY] = title
     if url:
-        entry["url"] = url
-    entry["times_viewed"] = int(entry.get("times_viewed", 0) or 0) + 1
-    if not entry.get("first_viewed_at"):
-        entry["first_viewed_at"] = now_iso
-    entry["last_viewed_at"] = now_iso
+        entry[RECORD_URL_KEY] = url
+    entry[RECORD_TIMES_VIEWED_KEY] = int(entry.get(RECORD_TIMES_VIEWED_KEY, 0) or 0) + 1
+    if not entry.get(RECORD_FIRST_VIEWED_AT_KEY):
+        entry[RECORD_FIRST_VIEWED_AT_KEY] = now_iso
+    entry[RECORD_LAST_VIEWED_AT_KEY] = now_iso
 
     history[normalized] = entry
     save_job_history(history)
@@ -328,8 +342,8 @@ def record_job_view(job_key: str, url: str = "", title: str = "") -> dict:
         "ok": True,
         "action": "viewed",
         "job_key": normalized,
-        "times_viewed": entry["times_viewed"],
-        "last_viewed_at": entry["last_viewed_at"],
+        RECORD_TIMES_VIEWED_KEY: entry[RECORD_TIMES_VIEWED_KEY],
+        RECORD_LAST_VIEWED_AT_KEY: entry[RECORD_LAST_VIEWED_AT_KEY],
     }
 
 
@@ -337,7 +351,7 @@ def build_title_block_followups(blockers: list[str]) -> list[dict[str, Any]]:
     profile = load_profile()
     existing_patterns = {
         str(rule.get("pattern") or "").strip()
-        for rule in profile.get("reject_title_rules", [])
+        for rule in profile.get(RECORD_REJECT_TITLE_RULES_KEY, [])
         if isinstance(rule, dict)
     }
     audit_rows = _load_audit_rows()
@@ -363,13 +377,13 @@ def build_title_block_followups(blockers: list[str]) -> list[dict[str, Any]]:
         for row in audit_rows:
             if not isinstance(row, dict):
                 continue
-            title = str(row.get("title") or "").strip()
+            title = str(row.get(RECORD_TITLE_KEY) or "").strip()
             if not title or not matcher.search(title.lower()):
                 continue
-            job_key = normalize_job_key(str(row.get("job_key") or row.get("url") or title))
+            job_key = normalize_job_key(str(row.get(RECORD_JOB_KEY) or row.get(RECORD_URL_KEY) or title))
             item = {
-                "title": title,
-                "company": str(row.get("company") or "").strip(),
+                RECORD_TITLE_KEY: title,
+                RECORD_COMPANY_KEY: str(row.get(RECORD_COMPANY_KEY) or "").strip(),
             }
             if str(row.get("decision") or "").strip().upper() == "KEEP":
                 if job_key and job_key in kept_keys:
@@ -395,15 +409,15 @@ def build_title_block_followups(blockers: list[str]) -> list[dict[str, Any]]:
             if job_key and job_key in kept_keys:
                 continue
             snapshot = entry.get("last_kept_snapshot") if isinstance(entry.get("last_kept_snapshot"), dict) else {}
-            title = str(snapshot.get("title") or entry.get("title") or "").strip()
+            title = str(snapshot.get(RECORD_TITLE_KEY) or entry.get(RECORD_TITLE_KEY) or "").strip()
             if not title or not matcher.search(title.lower()):
                 continue
             if job_key:
                 kept_keys.add(job_key)
             if len(kept_examples) < 3:
                 kept_examples.append({
-                    "title": title,
-                    "company": str(snapshot.get("company") or entry.get("company") or "").strip(),
+                    RECORD_TITLE_KEY: title,
+                    RECORD_COMPANY_KEY: str(snapshot.get(RECORD_COMPANY_KEY) or entry.get(RECORD_COMPANY_KEY) or "").strip(),
                 })
 
         rejected_count = len(rejected_keys) or len(rejected_examples)

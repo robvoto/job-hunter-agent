@@ -11,6 +11,12 @@
 
 This is a strict, explainable job-fit system, not a vague recommender.
 
+## Identity Principle
+
+- **Single Source of Truth for Identity**: A job is uniquely identified by its platform source and numeric ID, not its URL.
+- **Canonical Normalization**: All modules must use the centralized identification standard. 
+- **Zero Tolerance for Collisions**: Numeric IDs must always be namespaced by their source to prevent cross-platform duplication.
+
 The system should find roles worth human attention, hide obvious mismatches, and make every decision inspectable. It should improve through explicit user review, not hidden magic.
 
 ## Filtering philosophy

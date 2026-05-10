@@ -47,10 +47,19 @@ from job_hunter_agent.source_connector import (
     scrape_jobs_direct,
     score_to_match_label,
     viewed_by_user,
+    configure_console_output,
 )
-from job_hunter_agent.job_identity import (
-    are_jobs_semantically_similar,
-    find_similar_job,
+from job_hunter_agent.job_identity import normalize_job_key, find_similar_job
+from job_hunter_agent.record_schema import (
+    RECORD_JOB_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_SOURCE_NAME_KEY,
+    RECORD_URL_KEY,
+    RECORD_POSTED_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
 )
 from job_hunter_agent.paths import OUTPUT_DIR
 
@@ -77,15 +86,17 @@ KEY_DS_STALE_ARCHIVE = "stale_archive_records"
 
 # Summary labels
 LABEL_NEW_MATCHES = "New matches"
+LABEL_TOP_MATCHES = "Top current matches"
 MSG_NO_NEW_MATCHES = "No new strong matches found this run. Your dashboard was refreshed and kept current."
 
-def configure_console_output() -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-
 def _job_key(record: dict) -> str:
-    return str(record.get("job_key") or record.get("url") or "").strip()
+    val = record.get(RECORD_JOB_KEY) or record.get(RECORD_URL_KEY)
+    source = record.get(RECORD_SOURCE_KEY) or record.get(RECORD_SOURCE_NAME_KEY)
+    return normalize_job_key(str(val or ""), source=source)
+
+def _safe_job_key(record: dict) -> str | None:
+    key = _job_key(record)
+    return key if key else None
 
 
 def build_dashboard_reference(settings: dict[str, Any]) -> str:
@@ -110,7 +121,11 @@ def _resolve_collection_timestamps(run_stats: dict[str, Any]) -> tuple[str, str]
 
 
 def _format_summary_timestamp(value: str) -> str:
-    return value.replace("T", " ").replace("+10:00", " AEST").replace("+11:00", " AEDT")
+    dt = parse_timestamp(value)
+    if not dt:
+        return value
+    # Consistent human-readable output without hardcoded timezone strings
+    return dt.strftime("%Y-%m-%d %H:%M %Z").strip()
 
 
 def build_digest_payload(
@@ -120,9 +135,11 @@ def build_digest_payload(
     settings: dict[str, Any],
     run_stats: dict[str, Any],
 ) -> dict[str, Any]:
-    previous_keys = {_job_key(record) for record in previous_records if _job_key(record)}
-    current_keys = {_job_key(record) for record in current_records if _job_key(record)}
-    new_records = [record for record in current_records if _job_key(record) and _job_key(record) not in previous_keys]
+    previous_keys = {k for r in previous_records if (k := _safe_job_key(r))}
+    current_keys_list = [k for r in current_records if (k := _safe_job_key(r))]
+    current_keys = set(current_keys_list)
+    
+    new_records = [r for r in current_records if (k := _safe_job_key(r)) and k not in previous_keys]
 
     # Deduplication safety net: skip notifying for roles that are semantically identical to
     # something already known (previous run, archive, applied) or repeated in this batch.
@@ -147,7 +164,7 @@ def build_digest_payload(
 
     strongest_records = sorted(
         [record for record in current_records if fit_score(record) >= minimum_fit_score],
-        key=lambda record: (-fit_score(record), record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999),
+        key=lambda record: (-fit_score(record), record.get(RECORD_POSTED_AGE_DAYS_KEY) if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None else 9999),
     )[:max_jobs]
     featured_records = new_records[:max_jobs]
     featured_heading = LABEL_NEW_MATCHES
@@ -174,14 +191,14 @@ def build_digest_payload(
 
 
 def format_job_line(record: dict, index: int | None = None) -> str:
-    posted = str(record.get("posted") or "N/A")
-    company = str(record.get("company") or "N/A")
-    title = str(record.get("title") or "Untitled")
-    location = str(record.get("location") or "N/A")
+    posted = str(record.get(RECORD_POSTED_KEY) or "N/A")
+    company = str(record.get(RECORD_COMPANY_KEY) or "N/A")
+    title = str(record.get(RECORD_TITLE_KEY) or "Untitled")
+    location = str(record.get(RECORD_LOCATION_KEY) or "N/A")
     score = fit_score(record)
     score_label = score_to_match_label(score, load_profile().get("match_levels", []))
-    source = str(record.get("source") or "N/A").upper()
-    url = str(record.get("url") or "").strip()
+    source = str(record.get(RECORD_SOURCE_KEY) or "N/A").upper()
+    url = str(record.get(RECORD_URL_KEY) or "").strip()
     prefix = f"{index}. " if index is not None else "- "
     lines = [
         f"{prefix}{title} - {company}",
@@ -193,14 +210,14 @@ def format_job_line(record: dict, index: int | None = None) -> str:
 
 
 def format_job_html(record: dict, index: int | None = None) -> str:
-    posted = html.escape(str(record.get("posted") or "N/A"))
-    company = html.escape(str(record.get("company") or "N/A"))
-    title = html.escape(str(record.get("title") or "Untitled"))
-    location = html.escape(str(record.get("location") or "N/A"))
+    posted = html.escape(str(record.get(RECORD_POSTED_KEY) or "N/A"))
+    company = html.escape(str(record.get(RECORD_COMPANY_KEY) or "N/A"))
+    title = html.escape(str(record.get(RECORD_TITLE_KEY) or "Untitled"))
+    location = html.escape(str(record.get(RECORD_LOCATION_KEY) or "N/A"))
     score = fit_score(record)
     score_label = html.escape(score_to_match_label(score, load_profile().get("match_levels", [])))
-    source = html.escape(str(record.get("source") or "N/A").upper())
-    url = str(record.get("url") or "").strip()
+    source = html.escape(str(record.get(RECORD_SOURCE_KEY) or "N/A").upper())
+    url = str(record.get(RECORD_URL_KEY) or "").strip()
     prefix = f"{index}. " if index is not None else ""
     detail_line = f"{score}/100 (<b>{score_label}</b>) | {source} | {posted} | {location}"
     link_line = f'\n<a href="{html.escape(url)}">View role</a>' if url else ""
@@ -221,7 +238,7 @@ def format_daily_summary(payload: dict[str, Any]) -> str:
 
     featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
     if featured_records:
-        lines.append(f"{payload.get(KEY_DIGEST_FEATURED_HEADING, 'Top current matches')}:")
+        lines.append(f"{payload.get(KEY_DIGEST_FEATURED_HEADING, LABEL_TOP_MATCHES)}:")
         lines.extend(format_job_line(record, index + 1) for index, record in enumerate(featured_records))
         lines.append("")
     elif payload.get(KEY_DIGEST_STATUS_MESSAGE):
@@ -256,7 +273,7 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
     featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
     if featured_records:
         parts.append("")
-        parts.append(f"<b>{html.escape(str(payload.get(KEY_DIGEST_FEATURED_HEADING, 'Top current matches')))}:</b>")
+        parts.append(f"<b>{html.escape(str(payload.get(KEY_DIGEST_FEATURED_HEADING, LABEL_TOP_MATCHES)))}:</b>")
         parts.extend(format_job_html(record, index + 1) for index, record in enumerate(featured_records))
     elif payload.get(KEY_DIGEST_STATUS_MESSAGE):
         parts.append("")
@@ -389,7 +406,7 @@ def run_agent_loop() -> None:
         now = datetime.now().astimezone()
         state = load_agent_state()
         if should_run_now(state, daily_time_local, now):
-            result = run_agent_once(skip_collection=False, notify=True)
+            result = run_agent_once(no_scrape=False, notify=True)
             print(result["summary_text"])
             print(f"Summary saved to {result['summary_path']}")
         time.sleep(sleep_seconds)

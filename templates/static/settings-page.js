@@ -171,50 +171,36 @@
           return item.rule.name.toLowerCase().includes(filterTerm)
             || item.rule.aliases.some(alias => alias.includes(filterTerm));
         });
-      const rowsHtml = rows.length
+      const cardsHtml = rows.length
         ? rows.map(({ rule, index }) => {
             const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            const aliasCount = (rule.aliases || []).length;
+            const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
+            const aliasCount = aliases.length;
+            const aliasPreview = aliases.slice(0, 3).join(', ');
             return `
-              <div class="cap-row" data-capability-index="${index}" 
-                   style="display: flex; align-items: center; height: 40px; border-bottom: 1px solid var(--border-subtle); padding: 0 8px; background: transparent; transition: background 0.2s;">
-                
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1rem; flex-shrink: 0; opacity: 0.4;">ðŸ·ï¸</span>
-                    <input class="cap-name-input" type="text" data-capability-field="name" aria-label="Capability name" 
-                           value="${escapeHtml(titleCaseName)}" 
-                           style="font-size: 0.95rem; font-weight: 500; border: none; background: transparent; padding: 0; width: 100%; outline: none; color: var(--text-primary);" 
-                           placeholder="e.g. Agile Delivery">
-                  </div>
-                  <details style="flex-shrink: 0;">
-                    <summary style="font-size: 0.75rem; color: var(--accent); cursor: pointer; list-style: none; opacity: 0.8;">
-                      ${aliasCount} background keywords
-                    </summary>
-                    <div style="position: absolute; background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 8px; z-index: 100; border-radius: var(--radius-sm); font-size: 0.8rem; margin-top: 4px;">
-                       ${(rule.aliases || []).join(', ') || 'No background keywords'}
-                    </div>
-                  </details>
-                </div>
-                <div class="cap-controls" style="display: flex; align-items: center; gap: 12px; margin-left: 12px; flex-shrink: 0;">
-                  <div class="cap-strength">
-                    <select class="cap-level-select level-${escapeHtml(rule.level || 'basic')}" 
-                            data-capability-field="level" aria-label="Capability strength" 
-                            style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); font-size: 0.85rem;">
-                      <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
-                      <option value="working"${rule.level === 'working' ? ' selected' : ''}>Intermediate</option>
-                      <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Basic</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="cap-action" style="width: 32px; text-align: right;">
-                  <button class="cap-remove-btn" type="button" data-remove-capability="${index}"
+              <article class="capability-card" data-capability-index="${index}">
+                <div class="capability-card-head">
+                  <input class="cap-name-input capability-card-name" type="text" data-capability-field="name" aria-label="Capability name"
+                         value="${escapeHtml(titleCaseName)}"
+                         placeholder="e.g. Agile Delivery">
+                  <button class="cap-remove-btn capability-remove-btn" type="button" data-remove-capability="${index}"
                           aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
-                          style="background: transparent; border: none; font-size: 1rem; cursor: pointer; opacity: 0.3; transition: all 0.2s;"
-                          onmouseover="this.style.opacity=1; this.style.color='var(--state-error-text)'" 
-                          onmouseout="this.style.opacity=0.3; this.style.color='var(--text-muted)'"
-                          title="Remove capability">ðŸ—‘ï¸</button>
+                          title="Remove capability">Remove</button>
                 </div>
-              </div>
+                <div class="capability-card-meta">
+                  <span class="cap-alias-summary">${escapeHtml(aliasCount ? `${aliasCount} aliases` : 'No aliases')}</span>
+                  ${aliasCount ? `<span class="cap-alias-preview">${escapeHtml(aliasPreview)}${aliasCount > 3 ? '...' : ''}</span>` : ''}
+                </div>
+                <label class="cap-strength-label">
+                  <span>Strength</span>
+                  <select class="cap-level-select capability-strength-select level-${escapeHtml(rule.level || 'basic')}"
+                          data-capability-field="level" aria-label="Capability strength">
+                    <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
+                    <option value="working"${rule.level === 'working' ? ' selected' : ''}>Intermediate</option>
+                    <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Basic</option>
+                  </select>
+                </label>
+              </article>
             `;
           }).join('')
         : '<div class="capability-editor-empty-group">No matching capabilities.</div>';
@@ -222,16 +208,14 @@
       container.innerHTML = `
         <section class="capability-group">
           <div class="capability-group-head">
-            <h4 style="color: var(--accent);">Capabilities</h4>
+            <div>
+              <h4 style="color: var(--accent);">Capabilities</h4>
+              <p class="capability-group-copy">Keep the set tight. These rows feed fit scoring, CV learning, and review signals.</p>
+            </div>
             <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
           </div>
-          <div class="cap-table" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface-dim);">
-            <div class="cap-table-head" style="display: flex; height: 32px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); color: var(--muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
-              <span style="flex: 1;"></span>
-              <span style="width: 110px; text-align: center; margin-right: 32px;">Strength</span>
-              <span style="width: 32px;"></span>
-            </div>
-            ${rowsHtml}
+          <div class="capability-grid">
+            ${cardsHtml}
           </div>
         </section>
       `;
@@ -1069,6 +1053,7 @@
     // -- Save Management ---------------------------------------
     const stickySaveBar = document.getElementById('sticky_save_bar');
     const saveAllBtn = document.getElementById('save_all_btn');
+    const saveAdvanceBtn = document.getElementById('save_advance_btn');
     const globalStatus = document.getElementById('global_save_status');
 
     document.querySelectorAll('input, select, textarea').forEach(el => {
@@ -1142,6 +1127,7 @@
     }
 
     saveAllBtn?.addEventListener('click', saveAll);
+    saveAdvanceBtn?.addEventListener('click', saveAll);
     Promise.all([
       loadProfile(),
       loadAdvanceSettings(),

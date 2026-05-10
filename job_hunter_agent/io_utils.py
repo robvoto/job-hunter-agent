@@ -17,6 +17,7 @@ from job_hunter_agent.paths import (
     UI_LABELS_PATH,
     WORK_MODE_RULES_PATH,
 )
+from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS
 
 DEBUG_CAPTURE_SOURCE_PAYLOADS = True
 
@@ -30,14 +31,14 @@ def normalize_posted_text(value: Optional[str]) -> str:
 
 def configure_console_output() -> None:
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding=AUTH_ENCODING, errors=DEFAULT_ERRORS)
 
 
 def load_json_dict(path: Path) -> Dict[str, dict]:
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding=AUTH_ENCODING))
         if isinstance(data, dict):
             return data
     except Exception:
@@ -49,7 +50,7 @@ def load_json_list(path: Path) -> List[dict]:
     if not path.exists():
         return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding=AUTH_ENCODING))
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
     except Exception:
@@ -61,7 +62,7 @@ def save_json(path: Path, payload) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+        encoding=AUTH_ENCODING,
     )
 
 
@@ -139,7 +140,7 @@ def write_source_payload_debug(
 ) -> None:
     target_dir = DEBUG_SOURCE_PAYLOADS_DIR / _slugify_debug_component(source) / _slugify_debug_component(job_id)
     target_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / "raw.html").write_text(str(raw_html or ""), encoding="utf-8")
+    (target_dir / "raw.html").write_text(str(raw_html or ""), encoding=AUTH_ENCODING)
     save_json(target_dir / "raw.json", _json_safe_payload(raw_json if raw_json is not None else {}))
     save_json(target_dir / "normalized.json", _json_safe_payload(normalized_record if normalized_record is not None else {}))
 

@@ -51,7 +51,7 @@ Server logging:
 
 - `job_hunter_agent/auth.py`
   Session management and security. 
-  - **Dynamic Security:** Uses `Secure=True` and `__Host-` prefixes when bound to non-local IPs.
+  - **Transport-aware security:** `Secure` follows the request transport by default, with `JOB_HUNTER_SESSION_COOKIE_SECURE` available to force `true` or `false`.
   - **SameSite Policy:** Enforced as `Strict` to mitigate CSRF.
   - **Configuration:** Cookie names are configurable via `JOB_HUNTER_SESSION_COOKIE_NAME` env var.
 
@@ -119,6 +119,14 @@ Do not rename major files casually unless there is time to clean the whole proje
 
 ## Score Presentation
 
+## Job Identification (Job Keys)
+
+All job records MUST include a `job_key` in the `source:id` format.
+
+- Never use raw URLs as keys in `job_history.json` or `profile.json`.
+- Always use `job_hunter_agent.job_identity.normalize_job_key(raw_value, source=...)` when creating records.
+- Use `RECORD_JOB_KEY` from `record_schema.py` instead of the string literal `"job_key"`.
+
 The dashboard now treats scoring as two separate layers:
 
 - internal numeric score
@@ -133,13 +141,6 @@ Design intent:
 - the numeric score is useful to the engine and to technical debugging
 - the raw `/100` can mislead users into reading the score as a literal probability or percentage
 - you can use the `--show-scores` flag to see the raw score on cards and the detailed breakdown for tuning work
-
-Current band mapping:
-
-- `85-100` -> `Strong match`
-- `70-84` -> `Good match`
-- `55-69` -> `Possible fit`
-- `0-54` -> `Stretch`
 
 Hard blockers:
 

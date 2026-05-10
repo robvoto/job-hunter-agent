@@ -5,9 +5,61 @@ from typing import Any, Dict, List, Optional, Set
 
 from job_hunter_agent import dashboard_data
 from job_hunter_agent.io_utils import normalize_posted_text
-from job_hunter_agent.posting_utils import days_since, normalize_job_key, parse_timestamp
+from job_hunter_agent.posting_utils import days_since, parse_timestamp
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
+from job_hunter_agent.record_schema import (
+    RECORD_COMPANY_KEY,
+    RECORD_COMPETITIVE_SIGNALS_KEY,
+    RECORD_CONTENT_REASON_KEY,
+    RECORD_DECISION_KEY,
+    RECORD_DETAILS_LENGTH_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_FIT_HIGHLIGHTS_KEY,
+    RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_JOB_KEY,
+    RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_MISSING_EVIDENCE_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_POSTED_KEY,
+    RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+    RECORD_WORK_MODE_KEY,
+    RECORD_WORK_MODE_SOURCE_KEY,
+    RECORD_WORK_MODE_EVIDENCE_KEY,
+    RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
+    RECORD_WORK_TYPE_KEY,
+    RECORD_TEASER_KEY,
+    RECORD_TITLE_REASON_KEY,
+    RECORD_ROLE_SNAPSHOT_KEY,
+    RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
+    RECORD_HARD_BLOCK_REASONS_KEY,
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_TIMES_KEPT_KEY,
+    RECORD_FIRST_KEPT_AT_KEY,
+    RECORD_LAST_KEPT_AT_KEY,
+    RECORD_TIMES_SEEN_KEY,
+    RECORD_FIRST_SEEN_AT_KEY,
+    RECORD_LAST_SEEN_AT_KEY,
+    RECORD_TIMES_VIEWED_KEY,
+    RECORD_FIRST_VIEWED_AT_KEY,
+    RECORD_LAST_VIEWED_AT_KEY,
+    RECORD_SIGHTINGS_KEY,
+    RECORD_SEEN_BEFORE_KEY,
+    RECORD_REUSED_HISTORY_KEY,
+    RECORD_SALARY_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SEARCH_KEYWORDS_KEY
+)
 
 ARCHIVE_STALE_AFTER_DAYS = 15
 HIDDEN_REVIEW_DAYS = 30
@@ -16,40 +68,40 @@ REPEATED_LISTING_MIN_TIMES_SEEN = 4
 REPEATED_LISTING_MIN_SPAN_DAYS = 21
 MULTI_LISTING_RED_FLAG_MIN_LISTINGS = 3
 MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = 30
-TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = "--reset-new-to-you" in set(sys.argv[1:])
+TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = CLI_FLAG_RESET_NEW_TO_YOU in set(sys.argv[1:])
 
 KEEP_SNAPSHOT_FIELDS = (
-    "title",
-    "company",
-    "url",
-    "posted",
-    "posted_age_days",
-    "salary",
-    "work_mode",
-    "work_mode_source",
-    "work_mode_evidence",
-    "work_mode_needs_review",
-    "location",
-    "work_type",
-    "teaser",
-    "title_reason",
-    "content_reason",
-    "llm_decision",
-    "llm_fit_grade",
-    "search_location",
-    "search_keywords",
-    "fit_source_text",
-    "full_description",
-    "fit_confidence",
-    "details_status",
-    "description_source",
-    "role_snapshot",
-    "fit_highlights",
-    "soft_risk_reasons",
-    "missing_evidence",
-    "competitive_signals",
-    "hard_block_reasons",
-    "reviewed_signal_matches",
+    RECORD_TITLE_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_URL_KEY,
+    RECORD_POSTED_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_SALARY_KEY,
+    RECORD_WORK_MODE_KEY,
+    RECORD_WORK_MODE_SOURCE_KEY,
+    RECORD_WORK_MODE_EVIDENCE_KEY,
+    RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_WORK_TYPE_KEY,
+    RECORD_TEASER_KEY,
+    RECORD_TITLE_REASON_KEY,
+    RECORD_CONTENT_REASON_KEY,
+    RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SEARCH_KEYWORDS_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_ROLE_SNAPSHOT_KEY,
+    RECORD_FIT_HIGHLIGHTS_KEY,
+    RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_MISSING_EVIDENCE_KEY,
+    RECORD_COMPETITIVE_SIGNALS_KEY,
+    RECORD_HARD_BLOCK_REASONS_KEY,
+    RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
 )
 
 
@@ -64,16 +116,12 @@ def build_keep_snapshot(record: dict) -> dict:
 def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict] = None) -> bool:
     if not isinstance(history_entry, dict):
         return False
-    if int(history_entry.get("times_kept", 0) or 0) <= 0:
+    if int(history_entry.get(RECORD_TIMES_KEPT_KEY, 0) or 0) <= 0:
         return False
-    snapshot = history_entry.get("last_kept_snapshot")
+    snapshot = history_entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY)
     if not isinstance(snapshot, dict):
         return False
-    if not record.get("job_key"):
-        return False
-    previous_url = str(snapshot.get("url") or history_entry.get("url") or "").strip()
-    current_url = str(record.get("url") or "").strip()
-    if previous_url and current_url and previous_url != current_url:
+    if not record.get(RECORD_JOB_KEY):
         return False
     if hard_block_reasons(snapshot if isinstance(snapshot, dict) else {}, profile):
         return False
@@ -81,60 +129,60 @@ def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict
 
 
 def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
-    snapshot = history_entry.get("last_kept_snapshot") if isinstance(history_entry, dict) else {}
+    snapshot = history_entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY) if isinstance(history_entry, dict) else {}
     if not isinstance(snapshot, dict):
         snapshot = {}
 
-    if record.get("posted") in {None, "", "N/A"}:
-        record["posted"] = snapshot.get("posted") or "N/A"
-    if record.get("posted_age_days") is None and snapshot.get("posted_age_days") is not None:
-        record["posted_age_days"] = snapshot.get("posted_age_days")
-    if record.get("salary") in {None, "", "N/A"}:
-        record["salary"] = snapshot.get("salary") or "N/A"
-    if record.get("teaser") in {None, "", "N/A"}:
-        record["teaser"] = snapshot.get("teaser") or "N/A"
-    if record.get("location") in {None, "", "N/A"}:
-        record["location"] = snapshot.get("location") or "N/A"
-    if record.get("work_mode") in {None, "", "N/A"}:
-        record["work_mode"] = snapshot.get("work_mode") or "N/A"
-    if record.get("work_type") in {None, "", "N/A"}:
-        record["work_type"] = snapshot.get("work_type") or "N/A"
-    if record.get("role_snapshot") in {None, "", "N/A"}:
-        record["role_snapshot"] = snapshot.get("role_snapshot") or "N/A"
-    if not compact_whitespace(record.get("fit_source_text") or ""):
-        record["fit_source_text"] = snapshot.get("fit_source_text") or ""
-    if not compact_whitespace(record.get("full_description") or ""):
-        record["full_description"] = snapshot.get("full_description") or ""
-    if not record.get("fit_confidence"):
-        record["fit_confidence"] = snapshot.get("fit_confidence") or ""
-    if not record.get("fit_highlights"):
-        record["fit_highlights"] = snapshot.get("fit_highlights") or []
-    if not record.get("soft_risk_reasons"):
-        record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []
-    if not record.get("missing_evidence"):
-        record["missing_evidence"] = snapshot.get("missing_evidence") or []
-    if not record.get("competitive_signals"):
-        record["competitive_signals"] = snapshot.get("competitive_signals") or []
-    if not record.get("hard_block_reasons"):
-        record["hard_block_reasons"] = snapshot.get("hard_block_reasons") or []
-    if not compact_whitespace(record.get("details_status") or ""):
-        record["details_status"] = snapshot.get("details_status") or ""
-    if not record.get("description_source"):
-        record["description_source"] = snapshot.get("description_source") or ""
+    if record.get(RECORD_POSTED_KEY) in {None, "", "N/A"}:
+        record[RECORD_POSTED_KEY] = snapshot.get(RECORD_POSTED_KEY) or "N/A"
+    if record.get(RECORD_POSTED_AGE_DAYS_KEY) is None and snapshot.get(RECORD_POSTED_AGE_DAYS_KEY) is not None:
+        record[RECORD_POSTED_AGE_DAYS_KEY] = snapshot.get(RECORD_POSTED_AGE_DAYS_KEY)
+    if record.get(RECORD_SALARY_KEY) in {None, "", "N/A"}:
+        record[RECORD_SALARY_KEY] = snapshot.get(RECORD_SALARY_KEY) or "N/A"
+    if record.get(RECORD_TEASER_KEY) in {None, "", "N/A"}:
+        record[RECORD_TEASER_KEY] = snapshot.get(RECORD_TEASER_KEY) or "N/A"
+    if record.get(RECORD_LOCATION_KEY) in {None, "", "N/A"}:
+        record[RECORD_LOCATION_KEY] = snapshot.get(RECORD_LOCATION_KEY) or "N/A"
+    if record.get(RECORD_WORK_MODE_KEY) in {None, "", "N/A"}:
+        record[RECORD_WORK_MODE_KEY] = snapshot.get(RECORD_WORK_MODE_KEY) or "N/A"
+    if record.get(RECORD_WORK_TYPE_KEY) in {None, "", "N/A"}:
+        record[RECORD_WORK_TYPE_KEY] = snapshot.get(RECORD_WORK_TYPE_KEY) or "N/A"
+    if record.get(RECORD_ROLE_SNAPSHOT_KEY) in {None, "", "N/A"}:
+        record[RECORD_ROLE_SNAPSHOT_KEY] = snapshot.get(RECORD_ROLE_SNAPSHOT_KEY) or "N/A"
+    if not compact_whitespace(record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""):
+        record[RECORD_FIT_SOURCE_TEXT_KEY] = snapshot.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    if not compact_whitespace(record.get(RECORD_FULL_DESCRIPTION_KEY) or ""):
+        record[RECORD_FULL_DESCRIPTION_KEY] = snapshot.get(RECORD_FULL_DESCRIPTION_KEY) or ""
+    if not record.get(RECORD_FIT_CONFIDENCE_KEY):
+        record[RECORD_FIT_CONFIDENCE_KEY] = snapshot.get(RECORD_FIT_CONFIDENCE_KEY) or ""
+    if not record.get(RECORD_FIT_HIGHLIGHTS_KEY):
+        record[RECORD_FIT_HIGHLIGHTS_KEY] = snapshot.get(RECORD_FIT_HIGHLIGHTS_KEY) or []
+    if not record.get(RECORD_SOFT_RISK_REASONS_KEY):
+        record[RECORD_SOFT_RISK_REASONS_KEY] = snapshot.get(RECORD_SOFT_RISK_REASONS_KEY) or []
+    if not record.get(RECORD_MISSING_EVIDENCE_KEY):
+        record[RECORD_MISSING_EVIDENCE_KEY] = snapshot.get(RECORD_MISSING_EVIDENCE_KEY) or []
+    if not record.get(RECORD_COMPETITIVE_SIGNALS_KEY):
+        record[RECORD_COMPETITIVE_SIGNALS_KEY] = snapshot.get(RECORD_COMPETITIVE_SIGNALS_KEY) or []
+    if not record.get(RECORD_HARD_BLOCK_REASONS_KEY):
+        record[RECORD_HARD_BLOCK_REASONS_KEY] = snapshot.get(RECORD_HARD_BLOCK_REASONS_KEY) or []
+    if not compact_whitespace(record.get(RECORD_DETAILS_STATUS_KEY) or ""):
+        record[RECORD_DETAILS_STATUS_KEY] = snapshot.get(RECORD_DETAILS_STATUS_KEY) or ""
+    if not record.get(RECORD_DESCRIPTION_SOURCE_KEY):
+        record[RECORD_DESCRIPTION_SOURCE_KEY] = snapshot.get(RECORD_DESCRIPTION_SOURCE_KEY) or ""
 
-    record["content_reason"] = snapshot.get("content_reason")
-    record["llm_decision"] = snapshot.get("llm_decision")
-    record["llm_fit_grade"] = snapshot.get("llm_fit_grade")
-    record["decision"] = "KEEP"
-    record["details_length"] = 0
-    record["reused_history"] = True
+    record[RECORD_CONTENT_REASON_KEY] = snapshot.get(RECORD_CONTENT_REASON_KEY)
+    record[RECORD_LLM_DECISION_KEY] = snapshot.get(RECORD_LLM_DECISION_KEY)
+    record[RECORD_LLM_FIT_GRADE_KEY] = snapshot.get(RECORD_LLM_FIT_GRADE_KEY)
+    record[RECORD_DECISION_KEY] = "KEEP"
+    record[RECORD_DETAILS_LENGTH_KEY] = 0
+    record[RECORD_REUSED_HISTORY_KEY] = True
     return record
 
 
 def viewed_by_user(record: dict) -> bool:
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         return False
-    return int(record.get("times_viewed", 0) or 0) > 0
+    return int(record.get(RECORD_TIMES_VIEWED_KEY, 0) or 0) > 0
 
 
 def history_cluster_key_from_parts(source: Optional[str], company: Optional[str], title: Optional[str]) -> str:
@@ -147,22 +195,25 @@ def history_cluster_key_from_parts(source: Optional[str], company: Optional[str]
 
 
 def history_cluster_key(record: dict) -> str:
-    source = str(record.get("source") or "").strip().lower()
+    source = str(record.get(RECORD_SOURCE_KEY) or "").strip().lower()
     if not source:
-        job_key = str(record.get("job_key") or "")
-        source = "linkedin" if job_key.startswith("linkedin:") else "seek"
-    return history_cluster_key_from_parts(source, record.get("company"), record.get("title"))
+        # Strictly extract source from the canonical job key if missing from record fields
+        job_key = str(record.get(RECORD_JOB_KEY) or "")
+        source = job_key.split(":", 1)[0] if ":" in job_key else ""
+    if not source:
+        return ""
+    return history_cluster_key_from_parts(source, record.get(RECORD_COMPANY_KEY), record.get(RECORD_TITLE_KEY))
 
 
 def build_history_sighting(record: dict, run_iso: str) -> dict:
     return {
         "seen_at": run_iso,
-        "url": str(record.get("url") or "").strip(),
-        "posted": normalize_posted_text(record.get("posted")),
-        "posted_age_days": record.get("posted_age_days"),
-        "company": str(record.get("company") or "").strip(),
-        "title": str(record.get("title") or "").strip(),
-        "source": str(record.get("source") or "").strip().lower(),
+        RECORD_URL_KEY: str(record.get(RECORD_URL_KEY) or "").strip(),
+        RECORD_POSTED_KEY: normalize_posted_text(record.get(RECORD_POSTED_KEY)),
+        RECORD_POSTED_AGE_DAYS_KEY: record.get(RECORD_POSTED_AGE_DAYS_KEY),
+        RECORD_COMPANY_KEY: str(record.get(RECORD_COMPANY_KEY) or "").strip(),
+        RECORD_TITLE_KEY: str(record.get(RECORD_TITLE_KEY) or "").strip(),
+        RECORD_SOURCE_KEY: str(record.get(RECORD_SOURCE_KEY) or "").strip().lower(),
     }
 
 
@@ -171,10 +222,13 @@ def build_history_cluster_index(history: Dict[str, dict]) -> Dict[str, dict]:
     for job_key, entry in history.items():
         if not isinstance(entry, dict):
             continue
-        snapshot = entry.get("last_kept_snapshot") if isinstance(entry.get("last_kept_snapshot"), dict) else {}
-        source = snapshot.get("source") or ("linkedin" if str(job_key).startswith("linkedin:") else "seek")
-        company = snapshot.get("company") or entry.get("company")
-        title = snapshot.get("title") or entry.get("title")
+        snapshot = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY) if isinstance(entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY), dict) else {}
+        source = snapshot.get(RECORD_SOURCE_KEY) or (str(job_key).split(":", 1)[0] if ":" in str(job_key) else "")
+        if not source:
+            continue
+            
+        company = snapshot.get(RECORD_COMPANY_KEY) or entry.get(RECORD_COMPANY_KEY)
+        title = snapshot.get(RECORD_TITLE_KEY) or entry.get(RECORD_TITLE_KEY)
         cluster_key = history_cluster_key_from_parts(source, company, title)
         if not cluster_key:
             continue
@@ -182,13 +236,13 @@ def build_history_cluster_index(history: Dict[str, dict]) -> Dict[str, dict]:
             cluster_key,
             {
                 "job_keys": set(),
-                "times_seen": 0,
-                "first_seen_at": None,
-                "last_seen_at": None,
+                RECORD_TIMES_SEEN_KEY: 0,
+                RECORD_FIRST_SEEN_AT_KEY: None,
+                RECORD_LAST_SEEN_AT_KEY: None,
             },
         )
         stats["job_keys"].add(str(job_key))
-        stats["times_seen"] += int(entry.get("times_seen", 0) or 0)
+        stats[RECORD_TIMES_SEEN_KEY] += int(entry.get(RECORD_TIMES_SEEN_KEY, 0) or 0)
         first_seen = parse_timestamp(entry.get("first_seen_at"))
         last_seen = parse_timestamp(entry.get("last_seen_at"))
         if first_seen and (stats["first_seen_at"] is None or first_seen < stats["first_seen_at"]):
@@ -200,9 +254,9 @@ def build_history_cluster_index(history: Dict[str, dict]) -> Dict[str, dict]:
 
 def assess_history_warning_signals(record: dict, history_clusters: Optional[Dict[str, dict]] = None) -> List[str]:
     warnings: List[str] = []
-    times_seen = int(record.get("times_seen", 0) or 0)
-    first_seen = parse_timestamp(record.get("first_seen_at"))
-    last_seen = parse_timestamp(record.get("last_seen_at"))
+    times_seen = int(record.get(RECORD_TIMES_SEEN_KEY, 0) or 0)
+    first_seen = parse_timestamp(record.get(RECORD_FIRST_SEEN_AT_KEY))
+    last_seen = parse_timestamp(record.get(RECORD_LAST_SEEN_AT_KEY))
     if first_seen and last_seen:
         span_days = max((last_seen.date() - first_seen.date()).days, 0)
         if times_seen >= REPEATED_LISTING_MIN_TIMES_SEEN and span_days >= REPEATED_LISTING_MIN_SPAN_DAYS:
@@ -226,50 +280,50 @@ def assess_history_warning_signals(record: dict, history_clusters: Optional[Dict
 
 
 def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> None:
-    job_key = record.get("job_key")
+    job_key = record.get(RECORD_JOB_KEY)
     if not job_key:
-        record["seen_before"] = False
-        record["times_kept"] = 0
-        record["first_kept_at"] = None
+        record[RECORD_SEEN_BEFORE_KEY] = False
+        record[RECORD_TIMES_KEPT_KEY] = 0
+        record[RECORD_FIRST_KEPT_AT_KEY] = None
         return
 
     entry = history.get(job_key, {})
-    prior_kept_count = int(entry.get("times_kept", 0) or 0)
+    prior_kept_count = int(entry.get(RECORD_TIMES_KEPT_KEY, 0) or 0)
 
-    entry["job_key"] = job_key
-    entry["title"] = record.get("title")
-    entry["company"] = record.get("company")
-    entry["url"] = record.get("url")
-    entry["last_seen_at"] = run_iso
-    entry["times_seen"] = int(entry.get("times_seen", 0) or 0) + 1
-    if not entry.get("first_seen_at"):
-        entry["first_seen_at"] = run_iso
+    entry[RECORD_JOB_KEY] = job_key
+    entry[RECORD_TITLE_KEY] = record.get(RECORD_TITLE_KEY)
+    entry[RECORD_COMPANY_KEY] = record.get(RECORD_COMPANY_KEY)
+    entry[RECORD_URL_KEY] = record.get(RECORD_URL_KEY)
+    entry[RECORD_LAST_SEEN_AT_KEY] = run_iso
+    entry[RECORD_TIMES_SEEN_KEY] = int(entry.get(RECORD_TIMES_SEEN_KEY, 0) or 0) + 1
+    if not entry.get(RECORD_FIRST_SEEN_AT_KEY):
+        entry[RECORD_FIRST_SEEN_AT_KEY] = run_iso
 
-    record["seen_before"] = prior_kept_count > 0
-    record["times_seen"] = entry["times_seen"]
-    record["times_kept"] = prior_kept_count
-    record["times_viewed"] = int(entry.get("times_viewed", 0) or 0)
-    record["first_kept_at"] = entry.get("first_kept_at")
-    record["first_seen_at"] = entry.get("first_seen_at")
-    record["last_seen_at"] = entry.get("last_seen_at")
-    record["first_viewed_at"] = entry.get("first_viewed_at")
-    record["last_viewed_at"] = entry.get("last_viewed_at")
-    sightings = entry.get("sightings") if isinstance(entry.get("sightings"), list) else []
+    record[RECORD_SEEN_BEFORE_KEY] = prior_kept_count > 0
+    record[RECORD_TIMES_SEEN_KEY] = entry[RECORD_TIMES_SEEN_KEY]
+    record[RECORD_TIMES_KEPT_KEY] = prior_kept_count
+    record[RECORD_TIMES_VIEWED_KEY] = int(entry.get(RECORD_TIMES_VIEWED_KEY, 0) or 0)
+    record[RECORD_FIRST_KEPT_AT_KEY] = entry.get(RECORD_FIRST_KEPT_AT_KEY)
+    record[RECORD_FIRST_SEEN_AT_KEY] = entry.get(RECORD_FIRST_SEEN_AT_KEY)
+    record[RECORD_LAST_SEEN_AT_KEY] = entry.get(RECORD_LAST_SEEN_AT_KEY)
+    record[RECORD_FIRST_VIEWED_AT_KEY] = entry.get(RECORD_FIRST_VIEWED_AT_KEY)
+    record[RECORD_LAST_VIEWED_AT_KEY] = entry.get(RECORD_LAST_VIEWED_AT_KEY)
+    sightings = entry.get(RECORD_SIGHTINGS_KEY) if isinstance(entry.get(RECORD_SIGHTINGS_KEY), list) else []
     current_sighting = build_history_sighting(record, run_iso)
     if not sightings or sightings[-1] != current_sighting:
         sightings = [*sightings, current_sighting][-MAX_HISTORY_SIGHTINGS:]
-    entry["sightings"] = sightings
+    entry[RECORD_SIGHTINGS_KEY] = sightings
     record["history_sightings"] = sightings
 
-    if record.get("decision") == "KEEP":
-        if not entry.get("first_kept_at"):
-            entry["first_kept_at"] = run_iso
-        entry["last_kept_at"] = run_iso
-        entry["times_kept"] = prior_kept_count + 1
-        entry["last_kept_snapshot"] = build_keep_snapshot(record)
-        record["times_kept"] = entry["times_kept"]
-        record["first_kept_at"] = entry["first_kept_at"]
-        record["last_kept_at"] = entry["last_kept_at"]
+    if record.get(RECORD_DECISION_KEY) == "KEEP":
+        if not entry.get(RECORD_FIRST_KEPT_AT_KEY):
+            entry[RECORD_FIRST_KEPT_AT_KEY] = run_iso
+        entry[RECORD_LAST_KEPT_AT_KEY] = run_iso
+        entry[RECORD_TIMES_KEPT_KEY] = prior_kept_count + 1
+        entry[RECORD_LAST_KEPT_SNAPSHOT_KEY] = build_keep_snapshot(record)
+        record[RECORD_TIMES_KEPT_KEY] = entry[RECORD_TIMES_KEPT_KEY]
+        record[RECORD_FIRST_KEPT_AT_KEY] = entry[RECORD_FIRST_KEPT_AT_KEY]
+        record[RECORD_LAST_KEPT_AT_KEY] = entry[RECORD_LAST_KEPT_AT_KEY]
 
     history[job_key] = entry
 

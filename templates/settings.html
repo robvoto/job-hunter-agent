@@ -19,6 +19,23 @@
       display: none !important;
     }
 
+    .currency-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .currency-input-wrap .currency-prefix {
+      position: absolute;
+      left: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .currency-input-wrap input {
+      padding-left: 26px;
+    }
+
     .sidebar-brand-title {
       display: flex;
       align-items: center;
@@ -326,7 +343,6 @@
               <h2>Capability Matrix</h2>
               <p class="panel-copy">Each row is a capability Job Hunter can use when judging whether you are a good fit for a role.</p>
             </div>
-            <div id="capability_matrix_editor" class="capability-editor"></div>
             <div class="capability-toolbar">
               <div class="capability-toolbar-main">
                 <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="Filter capabilities">
@@ -334,6 +350,7 @@
               </div>
               <button class="secondary" id="add_capability_rule" type="button">Add capability</button>
             </div>
+            <div id="capability_matrix_editor" class="capability-editor"></div>
             <textarea id="capability_profile_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
           </section>
         </section>
@@ -491,6 +508,9 @@
         <section id="section-advance" class="settings-group">
           <h2 class="section-title">Advanced Settings</h2>
           <p class="panel-copy">These controls stay global and centrally managed. They cover card highlight display, search defaults, search guardrails, evidence tier weights, preference weights, onboarding defaults, and capability presets. Candidate profile fields stay elsewhere.</p>
+          <div class="panel-actions" style="margin-bottom: 18px;">
+            <button class="primary" id="save_advance_btn" type="button">Save All Changes</button>
+          </div>
           <section class="panel">
             <h2>Card Highlight Display</h2>
             <p class="panel-copy">These are global dashboard rendering controls. They change what appears on every card, not the candidate profile or scoring rules.</p>

@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
+from job_hunter_agent.match_labels import MATCH_LEVELS
 
 
 ROOT_DIR = REPO_ROOT
@@ -27,9 +28,21 @@ KEY_TELEGRAM = "telegram"
 KEY_LLM = "llm"
 KEY_ONLY_IF_NEW_MATCHES = "only_if_new_matches"
 
+
+def _possible_fit_threshold() -> int:
+    """Derive the dashboard minimum score default from the 'Possible fit' match level."""
+    for level in MATCH_LEVELS:
+        if str(level.get("label", "")).strip().lower() == "possible fit":
+            return int(level["minimum_score"])
+    sorted_levels = sorted(MATCH_LEVELS, key=lambda l: int(l.get("minimum_score", 0)))
+    if len(sorted_levels) >= 2:
+        return int(sorted_levels[1]["minimum_score"])
+    return int(sorted_levels[0]["minimum_score"]) if sorted_levels else 0
+
+
 # Validation limits and defaults
 DEFAULT_DASHBOARD_URL = "http://127.0.0.1:8765/dashboard"
-DEFAULT_DASHBOARD_MIN_SCORE = 55
+DEFAULT_DASHBOARD_MIN_SCORE = _possible_fit_threshold()
 MIN_SCORE = 0
 MAX_SCORE = 100
 

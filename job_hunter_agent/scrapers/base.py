@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Any, Optional, Set
 from urllib.parse import urlparse
 
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_COMPETITIVE_SIGNALS_KEY,
@@ -132,12 +133,6 @@ class BaseJobScraper(ABC):
             (kept_records, audit_rows, skill_observations) - three lists of dicts.
         """
         ...
-
-
-def make_namespaced_key(source: str, raw_id: str) -> str:
-    """Return 'source:raw_id', e.g. 'linkedin:4056789012'."""
-    return f"{source}:{raw_id}"
-
 
 def _safe_row_dict(row: Any) -> dict:
     if hasattr(row, "to_dict"):
@@ -271,7 +266,7 @@ def normalize_jobspy_record(
     description = _safe_str(_get(JOBSPY_DESCRIPTION_KEY), "")
     # Stable job key (namespaced)
     raw_id = _safe_str(_get(JOBSPY_ID_KEY), "")
-    job_key = make_namespaced_key(source, raw_id) if raw_id else None
+    job_key = normalize_job_key(raw_id, source=source) if raw_id else None
     apply_url = _first_non_empty(_get("job_url_direct"), _get(JOBSPY_JOB_URL_KEY))
     company_profile_url = _first_non_empty(_get("company_url_direct"), _get("company_url"))
     company_profile_name = _first_non_empty(_get("company_name"), _get(JOBSPY_COMPANY_KEY))
@@ -414,4 +409,3 @@ def _map_job_type(raw: str, mapping: dict) -> str:
 
     key = raw.lower().replace(" ", "")
     return mapping.get(key, "")
-

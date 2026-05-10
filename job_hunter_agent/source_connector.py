@@ -275,10 +275,10 @@ from job_hunter_agent.score_labels import (
     render_badge,
     viewed_badge_html,
 )
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.posting_utils import (
     parse_timestamp,
     days_since,
-    normalize_job_key,
     get_manual_skip_sets,
     format_timestamp_label,
     posted_datetime_from_age,

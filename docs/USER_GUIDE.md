@@ -13,13 +13,8 @@ That is the current source connector, not the final limit of the product.
 
 ## First-Time Use
 
-1. Start the local web UI:
-
-```powershell
-python -m job_hunter_agent.fastapi_app
-```
-
-Test/debug mode:
+1. Follow the **Environment Setup** in [OPERATIONS.md](OPERATIONS.md).
+2. Start the local web UI in test/debug mode (recommended for first run):
 
 ```powershell
 python -m job_hunter_agent.fastapi_app --debug
@@ -33,6 +28,8 @@ python -m job_hunter_agent.fastapi_app --debug
 
 - one strong detailed CV (supports .docx and plain text)
 - optionally extra notes in plain English
+
+If you open the app from another device on your local network, the login session still works over plain HTTP. The cookie only flips to `Secure` when the request is HTTPS unless you force it with `JOB_HUNTER_SESSION_COOKIE_SECURE`.
 
 4. Click `Create Profile`
 
@@ -171,80 +168,10 @@ If the variable is not found in the environment or the `.env` file, the app runs
 
 ## Security and Network Access
 
-By default, the application is configured for local use on `localhost`. 
+If you are running this app on a home server or accessing it over a network, please see the **Network Deployment & Security** section in Operations.md.
 
-If you intend to access the dashboard over a network (e.g., from a different computer or hosting it), it is strongly recommended to use a **reverse proxy** (such as Nginx, Caddy, or Traefik) to handle SSL/TLS termination (HTTPS). 
-
-When the server is bound to a non-local IP (like `0.0.0.0`), it enforces `Secure` and `__Host-` prefixed session cookies, which require an encrypted HTTPS connection to function correctly.
-
-You can customize the session cookie name by setting the `JOB_HUNTER_SESSION_COOKIE_NAME` environment variable in your `.env` file.
-
-## Testing
-
-Install development dependencies:
-
-```powershell
-pip install -r requirements-dev.txt
-```
-
-Run the local test suite:
-
-```powershell
-python -m job_hunter_agent.test_runner
-```
-
-## Which Command Does What
-
-`python -m job_hunter_agent.source_connector`
-
-- refreshes jobs
-- rebuilds the dashboard
-- updates local run outputs 
-
-Use Settings to widen source coverage instead.
-
-- raise `How far back to search` for SEEK if you want a broader SEEK pass
-- raise `How far back to search (hours)` for LinkedIn if you want a broader LinkedIn pass
-- lower `Dashboard results minimum score` if you want more borderline roles to stay visible
-
-Important:
-
-- some specialist-domain requirements can now hard-block a role entirely
-- if a source page comes back as a challenge or invalid detail page, the app rejects it instead of scoring it from bad text
-
-`python -m job_hunter_agent.source_connector --rebuild-dashboard
-
-- does not run a fresh scrape
-
-`python -m job_hunter_agent.source_connector --rebuild-dashboard --debug-dashboard`
-
-- rebuilds the dashboard from saved local state only
-- shows expanded score/debug details and borderline roles
-- shows raw score numbers (e.g. 72/100) directly on cards
-- does not run a fresh scrape or AI review
-
-`python -m job_hunter_agent.source_connector --reset-new-to-you`
-
-- resets the 'Viewed' status for all jobs so they appear as "New To You"
-- useful for testing how roles evaluate visually
-
-- expands the fit breakdown section showing exactly how points were added/subtracted
-
-Set `SEEK -> Max pages to check` in Settings.
-
-- saved in your profile and used by both manual and scheduled runs
-- clamped server-side to 1..10 even if someone sends a larger value manually
-- use `1` there when you want a fast SEEK test run
-
-`python -m job_hunter_agent.agent_runner`
-
-- runs the refresh flow and then creates a digest
-- can also send that digest by email or Telegram if configured
-
-Simple rule:
-
-- if you just want fresh jobs, run `python -m job_hunter_agent.source_connector`
-- if you want automation and notifications, use `python -m job_hunter_agent.agent_runner`
+## Operations and Commands
+For detailed CLI flags, automation setup, and troubleshooting, refer to OPERATIONS.md.
 
 ## Local Files To Keep
 

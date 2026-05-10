@@ -8,9 +8,11 @@ import re
 from typing import List, Optional
 from urllib.parse import urljoin
 
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import keywords_to_search_string
+from job_hunter_agent.record_schema import RECORD_LOCATION_KEY, RECORD_WORK_TYPE_KEY, RECORD_WORK_MODE_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY, RECORD_WORK_MODE_NEEDS_REVIEW_KEY, RECORD_CARD_SALARY_KEY, RECORD_TEASER_KEY
 from job_hunter_agent.utils import set_query_param
 from job_hunter_agent.work_mode_extraction import extract_from_seek_card
 
@@ -106,14 +108,14 @@ def extract_card_metadata(card, filter_state=None) -> dict:
 
     wm = extract_from_seek_card(card_text, filter_state)
     return {
-        "location": ", ".join(_dedupe_preserve_order(location_values)) or "",
-        "work_type": extract_work_type(card_text),
-        "work_mode": wm["work_mode"],
-        "work_mode_source": wm["work_mode_source"],
-        "work_mode_evidence": wm["work_mode_evidence"],
-        "work_mode_needs_review": wm["work_mode_needs_review"],
-        "card_salary": salary_text or "",
-        "teaser": teaser_text or "",
+        RECORD_LOCATION_KEY: ", ".join(_dedupe_preserve_order(location_values)) or "",
+        RECORD_WORK_TYPE_KEY: extract_work_type(card_text),
+        RECORD_WORK_MODE_KEY: wm["work_mode"],
+        RECORD_WORK_MODE_SOURCE_KEY: wm["work_mode_source"],
+        RECORD_WORK_MODE_EVIDENCE_KEY: wm["work_mode_evidence"],
+        RECORD_WORK_MODE_NEEDS_REVIEW_KEY: wm["work_mode_needs_review"],
+        RECORD_CARD_SALARY_KEY: salary_text or "",
+        RECORD_TEASER_KEY: teaser_text or "",
     }
 
 
@@ -238,10 +240,8 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 def stable_job_key(full_url: Optional[str]) -> Optional[str]:
     if not full_url:
         return None
-    match = re.search(r"/job/(\d+)", full_url)
-    if match:
-        return match.group(1)
-    return full_url.split("#", 1)[0]
+    # Standardize to 'seek:id' via centralized normalization
+    return normalize_job_key(full_url, source="seek")
 
 
 def build_full_seek_url(relative_or_full_url: Optional[str]) -> Optional[str]:

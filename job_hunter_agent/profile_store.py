@@ -88,6 +88,12 @@ KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 KEY_MAX_SCORE = "max_score"
+
+BRIEF_MODE_AUTO = "auto"
+BRIEF_MODE_MANUAL = "manual"
+ENGAGEMENT_TYPE_BOTH = "both"
+ENGAGEMENT_TYPE_PERMANENT = "permanent"
+ENGAGEMENT_TYPE_CONTRACT = "contract"
 MATCHING_RULE_PROFILE_KEYS = frozenset({
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_PRIMARY_PATTERNS,
@@ -126,7 +132,7 @@ DEFAULT_CANDIDATE_PROFILE_TIERS  = {
 }
 
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
-DEFAULT_LLM_PROFILE_BRIEF_MODE = "auto"
+DEFAULT_LLM_PROFILE_BRIEF_MODE = BRIEF_MODE_AUTO
 
 
 class ProfileLoadError(RuntimeError):
@@ -178,11 +184,11 @@ DEFAULT_PROFILE = {
         "secondary_location": "",
         "prefer_government": False,
         "prefer_permanent": False,
-        "engagement_type": "both",
+        "engagement_type": ENGAGEMENT_TYPE_BOTH,
         "preferred_contract_months": 12,
         "short_contract_months": 6,
     },
-    "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
+    "llm_profile_brief_mode": BRIEF_MODE_AUTO,
     "llm_profile_brief": "",
     "llm_fit_review_guidance": "",
     "llm_capability_naming_guidance": "",
@@ -413,7 +419,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
     merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
     merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
-        merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
+        merged.get("llm_profile_brief_mode", BRIEF_MODE_AUTO)
     )
     merged["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
         merged.get("llm_fit_review_guidance", "")
@@ -629,9 +635,9 @@ def normalize_profile_match_levels(payload: list[dict[str, Any]] | None) -> list
 
 def normalize_llm_profile_brief_mode(value: Any) -> str:
     normalized = str(value or "").strip().lower()
-    if normalized == "manual":
-        return "manual"
-    return DEFAULT_LLM_PROFILE_BRIEF_MODE
+    if normalized == BRIEF_MODE_MANUAL:
+        return BRIEF_MODE_MANUAL
+    return BRIEF_MODE_AUTO
 
 
 def normalize_llm_fit_review_guidance(value: Any) -> str:

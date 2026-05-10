@@ -18,6 +18,18 @@ The system is designed as a strict filtering engine, not a generic recommender.
 
 ---
 
+# Job Identification Standard
+
+To prevent "Duplicate Noise" and ensure reliable "History Reuse", all jobs are identified by a **Canonical Job Key**.
+
+Standard format: `source:platform_id` (e.g., `seek:7945621` or `linkedin:39845512`).
+
+*   **Central Authority**: `job_hunter_agent.job_identity.normalize_job_key` is the only function allowed to generate these keys.
+*   **Source Normalization**: Scrapers must normalize keys immediately upon ingestion.
+*   **Lookup**: The UI and History modules must normalize any incoming identifier (URL or ID) before querying the state store.
+
+---
+
 # Runtime Architecture
 
 ## Runtime Layers
@@ -31,7 +43,7 @@ The system is designed as a strict filtering engine, not a generic recommender.
 | Scoring           | Weighted ranking and evidence evaluation         |
 | Learning          | Capture candidate-approved learned signals       |
 | Review            | Surface uncertain or pending decisions           |
-| Security          | Dynamic session hardening and transport safety   |
+| Security          | Transport-aware session hardening and CSRF       |
 | Dashboard         | Present explainable ranked jobs                  |
 | Settings          | Runtime control surface                          |
 

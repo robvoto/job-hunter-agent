@@ -1,7 +1,13 @@
 import re
 from typing import Optional
 
-from job_hunter_agent.profile_store import DEFAULT_PROFILE, get_scoring_rules, load_profile
+from job_hunter_agent.profile_store import (
+    DEFAULT_PROFILE,
+    ENGAGEMENT_TYPE_CONTRACT,
+    ENGAGEMENT_TYPE_PERMANENT,
+    get_scoring_rules,
+    load_profile,
+)
 from job_hunter_agent.role_analysis import has_government_context, text_contains_term
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.salary_utils import _salary_includes_super_or_package, _salary_max_value
@@ -85,14 +91,14 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     is_contract = any(k in normalized_work_type for k in rules.get("contract", ["contract"]))
 
     if is_perm:
-        if eng_pref == "contract":
+        if eng_pref == ENGAGEMENT_TYPE_CONTRACT:
             return {"label": "Permanent role (preference is Contract)", "value": int(contract_rules["permanent_when_contract_preferred"])}
         return {"label": "Permanent role", "value": int(contract_rules["permanent_match"])}
 
     if not is_contract:
         return None
 
-    if eng_pref == "permanent":
+    if eng_pref == ENGAGEMENT_TYPE_PERMANENT:
         return {"label": "Contract role (preference is Permanent)", "value": int(contract_rules["contract_when_permanent_preferred"])}
 
     contract_months = extract_contract_months(source_text)

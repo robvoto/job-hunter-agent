@@ -85,6 +85,13 @@ Server logs:
 - the terminal still shows the same server output
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 
+Session cookie behavior:
+
+- cookie security is transport-aware by default
+- `Secure` is enabled when the request is HTTPS
+- `http://127.0.0.1:8765` and LAN HTTP access stay usable without a reverse proxy
+- set `JOB_HUNTER_SESSION_COOKIE_SECURE=true` or `false` to force a mode explicitly
+
 Primary routes:
 
 | Route         | Purpose               |

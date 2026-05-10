@@ -4,12 +4,51 @@ from typing import Any, Iterable, List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 from job_hunter_agent.identity_rules import load_identity_rules
+from job_hunter_agent.record_schema import (
+    RECORD_JOB_KEY, RECORD_SOURCE_KEY, RECORD_SOURCE_NAME_KEY,
+    RECORD_COMPANY_KEY, RECORD_TITLE_KEY, RECORD_URL_KEY,
+    RECORD_IDENTITY_REVIEW_KEY
+)
 
 
 @lru_cache(maxsize=1)
 def _get_identity_config() -> dict[str, Any]:
     """Load identity matching rules from managed knowledge."""
     return load_identity_rules()
+
+
+def normalize_job_key(value: str, source: Optional[str] = None) -> str:
+    """
+    Strict job key normalization (canonical format: 'source:id').
+    Does not support legacy numeric-only IDs or generic URL fallbacks.
+    """
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+
+    # 1. Already follows canonical format? (e.g. 'seek:12345')
+    if ":" in raw:
+        if re.match(r"^[a-z]+:[a-z0-9_-]+$", raw):
+            return raw
+
+    # 2. Extraction from standard URL patterns
+    id_match = re.search(r"/job(?:s)?/(?:view/)?(\d+)", raw)
+    id_part = ""
+    source_part = str(source or "").strip().lower()
+    
+    if id_match:
+        id_part = id_match.group(1)
+        if not source_part:
+            if "seek.com.au" in raw: source_part = "seek"
+            elif "linkedin.com" in raw: source_part = "linkedin"
+    elif re.fullmatch(r"\d+", raw):
+        id_part = raw
+
+    # 3. Strict Canonical Assembly
+    if id_part and source_part:
+        return f"{source_part}:{id_part}"
+    
+    return ""
 
 
 @lru_cache(maxsize=1)
@@ -34,7 +73,7 @@ def _normalize_identity_text(text: str) -> str:
 
 
 def _normalized_url(record: dict) -> str:
-    raw_url = str(record.get("url") or "").strip()
+    raw_url = str(record.get(RECORD_URL_KEY) or "").strip()
     if not raw_url:
         return ""
     try:
@@ -46,7 +85,9 @@ def _normalized_url(record: dict) -> str:
 
 
 def _normalized_job_key(record: dict) -> str:
-    return str(record.get("job_key") or "").strip().lower()
+    val = record.get(RECORD_JOB_KEY) or ""
+    source = record.get(RECORD_SOURCE_KEY) or record.get(RECORD_SOURCE_NAME_KEY)
+    return normalize_job_key(str(val), source=source)
 
 
 def _confirmed_duplicate_key(record: dict) -> Optional[tuple[str, str]]:
@@ -60,26 +101,26 @@ def _confirmed_duplicate_key(record: dict) -> Optional[tuple[str, str]]:
 
 
 def _possible_duplicate_signature(record: dict) -> Optional[tuple[str, str]]:
-    company = _normalize_identity_text(str(record.get("company") or ""))
-    title = _normalize_identity_text(str(record.get("title") or ""))
+    company = _normalize_identity_text(str(record.get(RECORD_COMPANY_KEY) or ""))
+    title = _normalize_identity_text(str(record.get(RECORD_TITLE_KEY) or ""))
     if not company or not title:
         return None
     return (company, title)
 
 
 def _mark_possible_duplicate(record: dict, candidate: dict) -> None:
-    review_items = record.setdefault("identity_review", [])
+    review_items = record.setdefault(RECORD_IDENTITY_REVIEW_KEY, [])
     review_items.append(
         {
             "kind": "possible_duplicate",
             "needs_review": True,
             "source": "normalized_company_and_title",
             "matched_record": {
-                "job_key": candidate.get("job_key"),
-                "source": candidate.get("source"),
-                "title": candidate.get("title"),
-                "company": candidate.get("company"),
-                "url": candidate.get("url"),
+                RECORD_JOB_KEY: candidate.get(RECORD_JOB_KEY),
+                RECORD_SOURCE_KEY: candidate.get(RECORD_SOURCE_KEY),
+                RECORD_TITLE_KEY: candidate.get(RECORD_TITLE_KEY),
+                RECORD_COMPANY_KEY: candidate.get(RECORD_COMPANY_KEY),
+                RECORD_URL_KEY: candidate.get(RECORD_URL_KEY),
             },
         }
     )
@@ -87,7 +128,7 @@ def _mark_possible_duplicate(record: dict, candidate: dict) -> None:
 
 def _source_priority(record: dict) -> int:
     source_map = _get_identity_config().get("source_priority", {})
-    source = _normalize_identity_text(str(record.get("source") or ""))
+    source = _normalize_identity_text(str(record.get(RECORD_SOURCE_KEY) or ""))
     fallback_priority = (max(source_map.values()) + 1) if source_map else 1
     return source_map.get(source, fallback_priority)
 

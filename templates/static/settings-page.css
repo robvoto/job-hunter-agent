@@ -480,157 +480,84 @@
       font-size: 1rem;
     }
     .capability-group-copy {
-      margin: 0;
+      margin: 4px 0 0;
       color: var(--muted);
       font-size: 0.86rem;
       line-height: 1.4;
     }
-    .capability-row-list {
+    .capability-grid {
       display: grid;
-      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
     }
-    .capability-row {
-      background: var(--bg-surface);
+    .capability-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      padding: 0;
-      overflow: hidden;
-    }
-    .capability-row[open] {
-      box-shadow: var(--shadow-soft);
-    }
-    .capability-row-summary {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px;
-      cursor: pointer;
-      list-style: none;
-    }
-    .capability-row-summary::after {
-      content: '\25BE';
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1;
-      margin-left: auto;
-      transform: rotate(-90deg);
-      transition: transform 140ms ease;
-    }
-    .capability-row[open] > .capability-row-summary::after {
-      transform: rotate(0deg);
-    }
-    .capability-row-summary::-webkit-details-marker {
-      display: none;
-    }
-    .capability-row-summary-main {
-      min-width: 0;
-      flex: 1 1 auto;
-    }
-    .capability-row-title {
-      display: block;
-      font-size: 0.98rem;
-      font-weight: 700;
-      color: var(--ink);
-    }
-    .capability-preview {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 6px;
-    }
-    .capability-row-summary-copy {
-      display: block;
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 0.84rem;
-      line-height: 1.4;
-      word-break: break-word;
-    }
-    .capability-row-summary-meta {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: 8px;
-      flex: 0 0 auto;
-      max-width: 44%;
-    }
-    .suggestion-chip-subtle {
-      background: var(--bg-chip-subtle);
-      color: var(--muted);
-    }
-    .capability-row-body {
-      padding: 0 12px 12px;
-      border-top: 1px solid var(--border-subtle);
-    }
-    .capability-column-head {
-      display: grid;
-      grid-template-columns: minmax(220px, 1.7fr) minmax(150px, 200px) auto;
-      gap: 10px;
-      margin: 12px 0 8px;
-      color: var(--muted);
-      font-size: 0.78rem;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .capability-row-fields {
-      display: grid;
-      grid-template-columns: minmax(220px, 1.7fr) minmax(150px, 200px) auto;
-      gap: 10px;
-      align-items: end;
-    }
-    .capability-row-fields > div {
-      min-width: 0;
-    }
-    .capability-row-fields input {
-      font-weight: 700;
-    }
-    .capability-row-actions {
-      display: flex;
-      justify-content: flex-end;
-      align-self: end;
-    }
-    .icon-button {
-      width: 34px;
-      height: 34px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      border: 1px solid var(--border-subtle);
       background: var(--bg-surface);
-      cursor: pointer;
-      padding: 0;
-      font: inherit;
+      min-width: 0;
     }
-    .icon-button-danger,
-    .secondary-danger {
+    .capability-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .capability-card-name {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .capability-remove-btn {
+      flex: 0 0 auto;
+      white-space: nowrap;
+      padding: 6px 10px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface-dim);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .capability-remove-btn:hover {
       color: var(--state-error-text);
       border-color: var(--state-error-border);
       background: var(--state-error-bg);
     }
-    .capability-meta {
+    .capability-card-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
+      gap: 6px 8px;
+      align-items: center;
+      min-height: 22px;
     }
-    .capability-copy {
-      margin: 8px 0 0;
-      color: var(--muted);
-      font-size: 0.86rem;
-      line-height: 1.45;
-    }
-    .capability-alias-summary {
-      cursor: pointer;
+    .cap-alias-summary {
       color: var(--accent-2);
+      font-size: 0.82rem;
       font-weight: 700;
     }
-    .capability-alias-shell {
-      margin-top: 10px;
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 10px;
+    .cap-alias-preview {
+      color: var(--muted);
+      font-size: 0.82rem;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1 1 0;
+    }
+    .cap-strength-label {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .capability-strength-select {
+      width: 100%;
+      min-width: 0;
     }
     .capability-editor-empty {
       border: 1px dashed var(--border-subtle);
@@ -645,7 +572,7 @@
       justify-content: space-between;
       gap: 10px;
       align-items: center;
-      margin-top: 10px;
+      margin-bottom: 12px;
       flex-wrap: wrap;
     }
     .capability-toolbar-main {
@@ -668,6 +595,19 @@
       padding: 10px 0 2px;
       color: var(--muted);
       font-size: 0.86rem;
+    }
+    @media (max-width: 1180px) {
+      .capability-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 760px) {
+      .capability-grid {
+        grid-template-columns: 1fr;
+      }
+      .capability-filter {
+        max-width: none;
+      }
     }
     .review-list { display: grid; gap: 12px; }
     .tuning-summary {

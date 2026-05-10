@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE
+from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE, ALLOWED_DOC_REL_PATHS
 from job_hunter_agent.agent_settings import (
     DEFAULT_AGENT_SETTINGS, 
     load_agent_state, 
@@ -38,6 +38,11 @@ from job_hunter_agent.paths import (
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
+    BRIEF_MODE_AUTO,
+    BRIEF_MODE_MANUAL,
+    ENGAGEMENT_TYPE_BOTH,
+    ENGAGEMENT_TYPE_CONTRACT,
+    ENGAGEMENT_TYPE_PERMANENT,
     build_candidate_profile_tiers_from_sections,
     load_profile, 
     normalize_onboarding_settings,
@@ -64,6 +69,7 @@ from job_hunter_agent.profile_store import (
     MATCHING_RULE_PROFILE_KEYS,
     patch_profile,
 )
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.server_review import (
     append_review_key,
@@ -71,7 +77,6 @@ from job_hunter_agent.server_review import (
     build_title_block_followups,
     get_job_description,
     load_job_history,
-    normalize_job_key,
     persist_review_event,
     rebuild_dashboard_after_rule_change,
     record_job_view,
@@ -102,13 +107,6 @@ from job_hunter_agent.advance_settings import (
     load_advance_settings,
     save_advance_settings,
 )
-# Common configuration values
-VAL_MODE_AUTO = "auto"
-VAL_MODE_MANUAL = "manual"
-VAL_ENG_BOTH = "both"
-VAL_ENG_PERM = "permanent"
-VAL_ENG_CONTRACT = "contract"
-
 _STATIC_MIME_OVERRIDES = {
     ".css": "text/css",
     ".js": "text/javascript",
@@ -119,21 +117,11 @@ _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
 
 
-#hardcoded
-_ALLOWED_DOC_REL_PATHS = (
-    "README.md",
-    "docs/ARCHITECTURE.md",
-    "docs/DEVELOPER_GUIDE.md",
-    "docs/OPERATIONS.md",
-    "docs/USER_GUIDE.md",
-)
-
-
 def get_docs() -> list[dict[str, str]]:
     """Return allowed markdown docs under the repo root (for /docs API)."""
     docs: list[dict[str, str]] = []
     root = ROOT_DIR.resolve()
-    for rel_path in _ALLOWED_DOC_REL_PATHS:
+    for rel_path in ALLOWED_DOC_REL_PATHS:
         file_path = (root / rel_path).resolve()
         if root not in file_path.parents and file_path != root:
             continue
@@ -182,7 +170,9 @@ def _parse_locations_override(value: Any) -> list[str]:
     return [part.strip() for part in re.split(r"[\r\n,]+", text) if part.strip()]
 
 
-_VALID_ENGAGEMENT_TYPES = {"both", "permanent", "contract"}
+_VALID_ENGAGEMENT_TYPES = frozenset(
+    {ENGAGEMENT_TYPE_BOTH, ENGAGEMENT_TYPE_PERMANENT, ENGAGEMENT_TYPE_CONTRACT}
+)
 _LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
 
 
@@ -222,7 +212,7 @@ def _validate_required_onboarding_inputs(
             raise ValueError("Each location should be between 2 and 80 characters.")
         if not _LOCATION_NAME_RE.match(location):
             raise ValueError("Locations should look like normal city, state, or region names.")
-    if engagement_type not in {VAL_ENG_BOTH, VAL_ENG_PERM, VAL_ENG_CONTRACT}:
+    if engagement_type not in _VALID_ENGAGEMENT_TYPES:
         raise ValueError("Please choose what type of work you are open to.")
 
     raw_yearly = search_preferences.get(KEY_MIN_SALARY_YEARLY)
@@ -374,13 +364,13 @@ class SettingsHandler:
         normalized = dict(patch or {})
         current = current or load_profile()
         brief_mode = str(
-            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, VAL_MODE_AUTO)) or VAL_MODE_AUTO
+            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, BRIEF_MODE_AUTO)) or BRIEF_MODE_AUTO
         ).strip().lower()
-        if brief_mode != VAL_MODE_MANUAL:
-            brief_mode = VAL_MODE_AUTO
+        if brief_mode != BRIEF_MODE_MANUAL:
+            brief_mode = BRIEF_MODE_AUTO
         normalized[KEY_BRIEF_MODE] = brief_mode
 
-        if brief_mode == VAL_MODE_MANUAL:
+        if brief_mode == BRIEF_MODE_MANUAL:
             normalized[KEY_BRIEF] = str(normalized.get(KEY_BRIEF) or "").strip()
         else:
             auto_brief = build_llm_profile_brief(

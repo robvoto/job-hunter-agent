@@ -16,41 +16,9 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 - guided onboarding at `http://127.0.0.1:8765/start` (supports `.docx` and plain text)
 - local settings console at `http://127.0.0.1:8765/settings`
 - local dashboard at `http://127.0.0.1:8765/dashboard`
-- persistent local profile in `data/profile.json`
-- deterministic filtering before any LLM review
-- mandatory requirement blockers and "Not For Me" feedback loop
-- optional constrained LLM decision step
-- persistent dashboard with fresh, kept-earlier, and hidden jobs
-- dashboard filtering for score, posting age, work mode, and salary-target state
-- local review tracking for opened, hidden, and applied roles
 
-## Match Score Bands
-
-- `Strong match`: `85-100`
-- `Good match`: `70-84`
-- `Possible fit`: `55-69`
-- `Stretch`: `0-54`
-
-The score is built from title match, full-description review result, content-filter pass, fit-evidence bullets, freshness, location match, work mode, salary signal, watchout penalties, and whether the role has already been viewed. Each card now also shows a short inline score summary so you can see the main drivers without opening the full breakdown.
-
-## Product Model
-
-The system has three main layers:
-
-1. Source documents
-   A detailed CV, plus optional extra background or evidence.
-
-2. Runtime profile
-   `data/profile.json` is the machine-readable profile used by filtering, matching, and LLM review.
-
-3. Dashboard and outputs
-   HTML shortlist, run stats, review data, and later application packs.
-
-The admin UI edits layer 2. The onboarding flow creates layer 2 from layer 1.
-
-## Local Commands
-
-Set up the environment:
+## Quick Start
+Detailed instructions are in the User Guide and Operations.
 
 ```powershell
 py -3.11 -m venv .venv
