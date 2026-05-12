@@ -123,22 +123,6 @@ Purpose:
 
 ---
 
-## Cost-Reduced Runtime
-
-Force cheaper review model:
-
-```powershell
-python -m job_hunter_agent.source_connector --cheap-llm
-```
-
-Purpose:
-
-* reduce operational cost
-* support large scrape runs
-* reduce experimentation overhead
-
----
-
 ## Dashboard Rebuild Runtime
 
 Rebuild dashboard only:

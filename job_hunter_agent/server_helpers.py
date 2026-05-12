@@ -38,8 +38,8 @@ from job_hunter_agent.paths import (
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
-    BRIEF_MODE_AUTO,
-    BRIEF_MODE_MANUAL,
+    LLM_PROFILE_BRIEF_MODE_AUTO,
+    LLM_PROFILE_BRIEF_MODE_MANUAL,
     ENGAGEMENT_TYPE_BOTH,
     ENGAGEMENT_TYPE_CONTRACT,
     ENGAGEMENT_TYPE_PERMANENT,
@@ -51,6 +51,7 @@ from job_hunter_agent.profile_store import (
     KEY_KEYWORDS,
     KEY_LOCATIONS,
     KEY_ENGAGEMENT_TYPE,
+    KEY_PREFER_GOVERNMENT,
     KEY_MIN_SALARY_YEARLY,
     KEY_MIN_DAILY_RATE,
     KEY_LOOKBACK_YEARS,
@@ -69,6 +70,7 @@ from job_hunter_agent.profile_store import (
     MATCHING_RULE_PROFILE_KEYS,
     patch_profile,
 )
+from job_hunter_agent.locations import default_location_value, resolve_location
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.server_review import (
@@ -170,6 +172,10 @@ def _parse_locations_override(value: Any) -> list[str]:
     return [part.strip() for part in re.split(r"[\r\n,]+", text) if part.strip()]
 
 
+def _parse_bool(value: Any) -> bool:
+    return str(value).strip().lower() == "true"
+
+
 _VALID_ENGAGEMENT_TYPES = frozenset(
     {ENGAGEMENT_TYPE_BOTH, ENGAGEMENT_TYPE_PERMANENT, ENGAGEMENT_TYPE_CONTRACT}
 )
@@ -179,12 +185,14 @@ _LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
 def _normalize_onboarding_search_preferences(payload: dict | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
     engagement_type = str(source.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
+    prefer_government = _parse_bool(source.get(KEY_PREFER_GOVERNMENT))
     keywords = str(source.get(KEY_KEYWORDS) or "").strip()
     locations = _parse_locations_override(source.get(KEY_LOCATIONS))
     normalized = {
         KEY_KEYWORDS: keywords,
-        KEY_LOCATIONS: locations,
+        KEY_LOCATIONS: locations[:1] or [default_location_value()],
         KEY_ENGAGEMENT_TYPE: engagement_type,
+        KEY_PREFER_GOVERNMENT: prefer_government,
     }
     if KEY_MIN_SALARY_YEARLY in source:
         normalized[KEY_MIN_SALARY_YEARLY] = source.get(KEY_MIN_SALARY_YEARLY)
@@ -203,15 +211,14 @@ def _validate_required_onboarding_inputs(
 
     if keywords and (len(keywords) < 2 or len(keywords) > 120):
         raise ValueError("Please keep the primary search title between 2 and 120 characters.")
-    if not locations:
-        raise ValueError("Please add at least one search location.")
-    if len(locations) > 8:
-        raise ValueError("Please keep your location list to 8 places or fewer.")
-    for location in locations:
-        if len(location) < 2 or len(location) > 80:
-            raise ValueError("Each location should be between 2 and 80 characters.")
-        if not _LOCATION_NAME_RE.match(location):
-            raise ValueError("Locations should look like normal city, state, or region names.")
+    if len(locations) != 1:
+        raise ValueError("Please choose one search location.")
+    location = locations[0]
+    if len(location) < 2 or len(location) > 80:
+        raise ValueError("Location should be between 2 and 80 characters.")
+    if not _LOCATION_NAME_RE.match(location):
+        raise ValueError("Location should look like a normal city, state, or region name.")
+    resolve_location(location)
     if engagement_type not in _VALID_ENGAGEMENT_TYPES:
         raise ValueError("Please choose what type of work you are open to.")
 
@@ -333,7 +340,7 @@ def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
     search_settings = normalize_search_settings(current.get("search_settings", {}))
     locations = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     keywords = str(search_settings.get("keywords") or "").strip()
-    return bool(target_titles and locations and keywords)
+    return bool(target_titles and locations[:1] and keywords)
 
 
 def _run_scrape_job() -> None:
@@ -364,13 +371,14 @@ class SettingsHandler:
         normalized = dict(patch or {})
         current = current or load_profile()
         brief_mode = str(
-            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, BRIEF_MODE_AUTO)) or BRIEF_MODE_AUTO
+            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, LLM_PROFILE_BRIEF_MODE_AUTO))
+            or LLM_PROFILE_BRIEF_MODE_AUTO
         ).strip().lower()
-        if brief_mode != BRIEF_MODE_MANUAL:
-            brief_mode = BRIEF_MODE_AUTO
+        if brief_mode != LLM_PROFILE_BRIEF_MODE_MANUAL:
+            brief_mode = LLM_PROFILE_BRIEF_MODE_AUTO
         normalized[KEY_BRIEF_MODE] = brief_mode
 
-        if brief_mode == BRIEF_MODE_MANUAL:
+        if brief_mode == LLM_PROFILE_BRIEF_MODE_MANUAL:
             normalized[KEY_BRIEF] = str(normalized.get(KEY_BRIEF) or "").strip()
         else:
             auto_brief = build_llm_profile_brief(
@@ -471,11 +479,11 @@ class SettingsHandler:
                 if str(value).strip()
             ]
             if not allowed_models:
-                raise ValueError("No LLM models are configured in Advanced Settings.")
+                raise ValueError("No LLM models are configured in Admin.")
             if not model:
                 raise ValueError("Please choose an LLM model.")
             if model not in allowed_models:
-                raise ValueError("Please choose a model configured in Advanced Settings.")
+                raise ValueError("Please choose a model configured in Admin.")
             sanitized[KEY_LLM] = {
                 "model": model,
             }
@@ -506,40 +514,16 @@ class SettingsHandler:
     def _public_agent_settings_payload(settings: dict) -> dict:
         dashboard = settings.get(KEY_DASHBOARD, {}) if isinstance(settings, dict) else {}
         telegram = settings.get(KEY_TELEGRAM, {}) if isinstance(settings, dict) else {}
-        llm = settings.get(KEY_LLM, {}) if isinstance(settings, dict) else {}
+        llm_settings = settings.get(KEY_LLM, {}) if isinstance(settings, dict) else {}
         schedule = settings.get(KEY_SCHEDULE, {}) if isinstance(settings, dict) else {}
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
             KEY_DASHBOARD: {
-                "minimum_score": max(
-                    0,
-                    min(
-                        int(
-                            dashboard.get(
-                                "minimum_score",
-                                DEFAULT_AGENT_SETTINGS[KEY_DASHBOARD]["minimum_score"],
-                            )
-                            or DEFAULT_AGENT_SETTINGS[KEY_DASHBOARD]["minimum_score"]
-                        ),
-                        100,
-                    ),
-                ),
+                "minimum_score": max(0, min(int(dashboard.get("minimum_score", DEFAULT_AGENT_SETTINGS[KEY_DASHBOARD]["minimum_score"]) or DEFAULT_AGENT_SETTINGS[KEY_DASHBOARD]["minimum_score"]), 100)),
             },
             KEY_SCHEDULE: {
-                "daily_time_local": str(
-                    schedule.get("daily_time_local")
-                    or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["daily_time_local"]
-                ).strip(),
-                "loop_sleep_seconds": max(
-                    60,
-                    int(
-                        schedule.get(
-                            "loop_sleep_seconds",
-                            DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"],
-                        )
-                        or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]
-                    ),
-                ),
+                "daily_time_local": str(schedule.get("daily_time_local") or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip(),
+                "loop_sleep_seconds": max(60, int(schedule.get("loop_sleep_seconds", DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]) or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"])),
             },
             KEY_TELEGRAM: {
                 "enabled": bool(telegram.get("enabled", False)),
@@ -550,8 +534,8 @@ class SettingsHandler:
                 "subscriber_count": len(subscribers),
                 "subscribers": subscribers,
             },
-            KEY_LLM: {
-                "model": str(llm.get("model") or "").strip(),
+            KEY_LLM: { # Use llm_settings here to avoid shadowing the imported KEY_LLM
+                "model": str(llm_settings.get("model") or "").strip(),
             },
         }
 

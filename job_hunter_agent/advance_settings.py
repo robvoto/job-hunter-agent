@@ -28,9 +28,12 @@ KEY_SEARCH_SETTINGS = "search_settings"
 KEY_SEARCH_LIMITS = "search_limits"
 KEY_PREFERENCE_WEIGHTS = "preference_weights"
 KEY_EVIDENCE_TIER_WEIGHTS = "candidate_profile_tier_weights"
+KEY_HISTORY_SETTINGS = "history_settings"
+KEY_DESCRIPTION_TRUST_SETTINGS = "description_trust_settings"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
 KEY_LLM_SETTINGS = "llm_settings"
 KEY_LLM_PROMPT_SETTINGS = "llm_prompt_settings"
+KEY_LLM_MAX_CHARS = "max_llm_chars"
 KEY_CAPABILITY_STRENGTH_PRESETS = "capability_strength_presets"
 # These onboarding controls shape how much learned capability structure we keep
 # and when a signal cluster is promoted into persisted profile data.
@@ -56,6 +59,13 @@ KEY_DATE_RANGE_DAYS = "date_range_days"
 KEY_SEEK_MAX_PAGES = "seek_max_pages"
 KEY_LINKEDIN_HOURS_OLD = "linkedin_hours_old"
 KEY_LINKEDIN_RESULTS_PER_SEARCH = "linkedin_results_per_search"
+KEY_PLAYWRIGHT_VIEWPORT_WIDTH = "playwright_viewport_width"
+KEY_PLAYWRIGHT_VIEWPORT_HEIGHT = "playwright_viewport_height"
+KEY_PLAYWRIGHT_SELECTOR_TIMEOUT = "playwright_selector_timeout"
+KEY_DEFAULT_COUNTRY_SUFFIX = "default_country_suffix"
+KEY_ARCHIVE_STALE_AFTER_DAYS = "archive_stale_after_days"
+KEY_HIDDEN_REVIEW_DAYS = "hidden_review_days"
+KEY_MIN_TRUSTED_DESCRIPTION_LENGTH = "min_trusted_description_length"
 
 # Global card highlight controls are shared dashboard presentation settings.
 DEFAULT_FIT_HIGHLIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_FIT_HIGHLIGHTS])
@@ -70,6 +80,10 @@ DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_PREFERENCE_
 
 DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
 
+DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_HISTORY_SETTINGS, {}))
+
+DEFAULT_DESCRIPTION_TRUST_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DESCRIPTION_TRUST_SETTINGS, {}))
+
 DEFAULT_ONBOARDING_SETTINGS = {
     k: copy.deepcopy(v)
     for k, v in _MANAGED_ADVANCE_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS].items()
@@ -79,6 +93,10 @@ DEFAULT_ONBOARDING_SETTINGS = {
 DEFAULT_LLM_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_LLM_SETTINGS])
 
 DEFAULT_LLM_PROMPT_SETTINGS = dict(DEFAULT_LLM_SETTINGS[KEY_LLM_PROMPT_SETTINGS])
+
+DEFAULT_PLAYWRIGHT_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get("playwright_settings", {}))
+
+DEFAULT_COUNTRY_SUFFIX = str(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DEFAULT_COUNTRY_SUFFIX, "Australia")).strip()
 
 # Validation bounds for every onboarding setting. Centralised here so profile_store
 # and normalize_advance_settings both use the same limits without duplication.
@@ -113,11 +131,18 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
     KEY_SEARCH_LIMITS: copy.deepcopy(SEARCH_SETTING_LIMITS),
     KEY_PREFERENCE_WEIGHTS: copy.deepcopy(DEFAULT_PREFERENCE_WEIGHTS),
     KEY_EVIDENCE_TIER_WEIGHTS: copy.deepcopy(DEFAULT_EVIDENCE_TIER_WEIGHTS),
+    KEY_HISTORY_SETTINGS: copy.deepcopy(DEFAULT_HISTORY_SETTINGS),
+    KEY_DESCRIPTION_TRUST_SETTINGS: copy.deepcopy(DEFAULT_DESCRIPTION_TRUST_SETTINGS),
     KEY_ONBOARDING_SETTINGS: {
         **copy.deepcopy(DEFAULT_ONBOARDING_SETTINGS),
         KEY_CAPABILITY_STRENGTH_PRESETS: copy.deepcopy(CAPABILITY_STRENGTH_PRESETS),
     },
     KEY_LLM_SETTINGS: copy.deepcopy(DEFAULT_LLM_SETTINGS),
+    "playwright_settings": {
+        KEY_PLAYWRIGHT_VIEWPORT_WIDTH: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_VIEWPORT_WIDTH, 1400),
+        KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_VIEWPORT_HEIGHT, 900),
+        KEY_PLAYWRIGHT_SELECTOR_TIMEOUT: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_SELECTOR_TIMEOUT, 8000),
+    },
 }
 
 
@@ -287,8 +312,11 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
     search_limits_source = source.get(KEY_SEARCH_LIMITS, {})
     preference_source = source.get(KEY_PREFERENCE_WEIGHTS, {})
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
+    history_source = source.get(KEY_HISTORY_SETTINGS, {})
+    description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
     llm_source = source.get(KEY_LLM_SETTINGS, {})
+    playwright_source = source.get("playwright_settings", {})
 
     if not isinstance(fit_source, dict):
         raise ValueError(f"advance_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
@@ -300,6 +328,12 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         raise ValueError(f"advance_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
     if not isinstance(evidence_source, dict):
         raise ValueError(f"advance_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}")
+    if not isinstance(history_source, dict):
+        raise ValueError(f"advance_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}")
+    if not isinstance(description_trust_source, dict):
+        raise ValueError(f"advance_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}")
+    if not isinstance(playwright_source, dict):
+        raise ValueError(f"advance_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}")
     if not isinstance(onboarding_source, dict):
         raise ValueError(f"advance_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
     if not isinstance(llm_source, dict):
@@ -329,6 +363,13 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
     normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source)
 
+    try:
+        max_llm_chars = int(llm_source.get(KEY_LLM_MAX_CHARS, DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS]) or DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be an integer") from exc
+    if max_llm_chars < 1 or max_llm_chars > 20_000:
+        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be between 1 and 20000")
+
     # Keep the configured preset table in the persisted settings file, not in feature code.
     preset_table_source = onboarding_source.get(KEY_CAPABILITY_STRENGTH_PRESETS, {})
     if not isinstance(preset_table_source, dict):
@@ -354,6 +395,33 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         if min_value > max_value:
             raise ValueError(f"advance_settings.search_limits.{limit_key}.min must be <= max")
         normalized_search_limits[limit_key] = {"min": min_value, "max": max_value}
+
+    normalized_history_settings = {
+        KEY_ARCHIVE_STALE_AFTER_DAYS: _require_int(
+            history_source,
+            KEY_ARCHIVE_STALE_AFTER_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_ARCHIVE_STALE_AFTER_DAYS],
+            1,
+            365,
+        ),
+        KEY_HIDDEN_REVIEW_DAYS: _require_int(
+            history_source,
+            KEY_HIDDEN_REVIEW_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_HIDDEN_REVIEW_DAYS],
+            1,
+            365,
+        ),
+    }
+
+    normalized_description_trust_settings = {
+        KEY_MIN_TRUSTED_DESCRIPTION_LENGTH: _require_int(
+            description_trust_source,
+            KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
+            DEFAULT_DESCRIPTION_TRUST_SETTINGS[KEY_MIN_TRUSTED_DESCRIPTION_LENGTH],
+            1,
+            100_000,
+        ),
+    }
 
     return {
         KEY_FIT_HIGHLIGHTS: {
@@ -408,12 +476,32 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
                     else None
                 )
             ),
+            KEY_PLAYWRIGHT_VIEWPORT_WIDTH: _require_int(
+                search_source,
+                KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_WIDTH],
+                100, 4000
+            ),
+            KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: _require_int(
+                search_source,
+                KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_HEIGHT],
+                100, 4000
+            ),
+            KEY_PLAYWRIGHT_SELECTOR_TIMEOUT: _require_int(
+                search_source,
+                KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT],
+                1000, 60000
+            ),
         },
         KEY_SEARCH_LIMITS: {
             **normalized_search_limits,
         },
         KEY_PREFERENCE_WEIGHTS: _normalize_float_map(preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0),
         KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
+        KEY_HISTORY_SETTINGS: normalized_history_settings,
+        KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
         KEY_ONBOARDING_SETTINGS: {
             **{
                 key: _require_int(merged_onboarding, key, DEFAULT_ONBOARDING_SETTINGS[key], minimum, maximum)
@@ -423,12 +511,56 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             KEY_CAPABILITY_STRENGTH_PRESETS: normalized_preset_table,
         },
         KEY_LLM_SETTINGS: {
+            "model": str(llm_source.get("model") or DEFAULT_LLM_SETTINGS.get("model")).strip(),
             KEY_MODEL_OPTIONS: normalized_model_options,
             KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
+            KEY_LLM_MAX_CHARS: max_llm_chars,
+        },
+        "playwright_settings": {
+            KEY_PLAYWRIGHT_VIEWPORT_WIDTH: _require_int(
+                playwright_source,
+                KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_WIDTH],
+                100,
+                4000,
+            ),
+            KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: _require_int(
+                playwright_source,
+                KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_HEIGHT],
+                100,
+                4000,
+            ),
+            KEY_PLAYWRIGHT_SELECTOR_TIMEOUT: _require_int(
+                playwright_source,
+                KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT],
+                1000,
+                60000,
+            ),
         },
     }
 
+
+def get_default_country_suffix() -> str:
+    return load_advance_settings().get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)
+
+
+def get_llm_max_chars() -> int:
+    return int(load_advance_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_CHARS])
+
+
+def get_archive_stale_after_days() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
+
+
+def get_hidden_review_days() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
+
+
+def get_min_trusted_description_length() -> int:
+    return int(load_advance_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
 
 @lru_cache(maxsize=1)
 def load_advance_settings() -> dict[str, Any]:

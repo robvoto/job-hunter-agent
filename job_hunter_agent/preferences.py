@@ -1,15 +1,10 @@
 import re
 from typing import Optional
 
-from job_hunter_agent.profile_store import (
-    DEFAULT_PROFILE,
-    ENGAGEMENT_TYPE_CONTRACT,
-    ENGAGEMENT_TYPE_PERMANENT,
-    get_scoring_rules,
-    load_profile,
-)
-from job_hunter_agent.role_analysis import has_government_context, text_contains_term
+from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.profile_store import DEFAULT_PROFILE, get_scoring_rules, load_profile
+from job_hunter_agent.role_analysis import has_government_context, text_contains_term
 from job_hunter_agent.salary_utils import _salary_includes_super_or_package, _salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
@@ -91,14 +86,14 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     is_contract = any(k in normalized_work_type for k in rules.get("contract", ["contract"]))
 
     if is_perm:
-        if eng_pref == ENGAGEMENT_TYPE_CONTRACT:
+        if eng_pref == "contract":
             return {"label": "Permanent role (preference is Contract)", "value": int(contract_rules["permanent_when_contract_preferred"])}
         return {"label": "Permanent role", "value": int(contract_rules["permanent_match"])}
 
     if not is_contract:
         return None
 
-    if eng_pref == ENGAGEMENT_TYPE_PERMANENT:
+    if eng_pref == "permanent":
         return {"label": "Contract role (preference is Permanent)", "value": int(contract_rules["contract_when_permanent_preferred"])}
 
     contract_months = extract_contract_months(source_text)
@@ -123,10 +118,47 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     title = compact_whitespace(record.get("title") or "").lower()
     company = compact_whitespace(record.get("company") or "").lower()
     source_text = build_scoring_source_text(record).lower()
-    combined = "\n".join([title, company, source_text])
-    if has_government_context(combined) or text_contains_term(combined, "ministerial"):
+    combined = "\n".join([title, company, source_text]) # type: ignore
+    if has_government_context(combined):
         return {"label": "Government context", "value": int(scoring_rules["government"]["match_bonus"])}
     return None
+
+
+def _canonical_job_type(work_type: str) -> str:
+    normalized = compact_whitespace(work_type).lower().replace(" ", "")
+    if not normalized:
+        return ""
+    mapping = load_job_type()
+    return compact_whitespace(str(mapping.get(normalized) or "")).lower()
+
+
+def _salary_period_hint(salary_text: str) -> str:
+    indicators = load_parsing_rules().get("salary_indicators", {})
+    if not isinstance(indicators, dict):
+        return ""
+
+    lowered = salary_text.lower()
+    daily_indicators = [str(item).strip().lower() for item in indicators.get("daily_rate", []) if str(item).strip()]
+    annual_indicators = [str(item).strip().lower() for item in indicators.get("annual_rate", []) if str(item).strip()]
+
+    daily_match = any(re.search(re.escape(indicator), lowered) for indicator in daily_indicators)
+    annual_match = any(re.search(re.escape(indicator), lowered) for indicator in annual_indicators)
+    if daily_match and not annual_match:
+        return "daily"
+    if annual_match and not daily_match:
+        return "annual"
+    return ""
+
+
+def _salary_has_non_comparable_period(salary_text: str) -> bool:
+    lowered = salary_text.lower()
+    return bool(
+        re.search(
+            r"\b(per\s+hour|hourly|p/h|ph|per\s+week|weekly|per\s+month|monthly)\b"
+            r"|/(?:hr|hour|wk|week|mo|month)",
+            lowered,
+        )
+    )
 
 
 def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
@@ -140,39 +172,26 @@ def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
     scoring_rules = get_scoring_rules(active_profile)
     salary_rules = scoring_rules["salary"]
     salary_preferences = active_profile.get("salary_preferences", {})
+    work_type = _canonical_job_type(str(record.get("work_type") or ""))
+    if not work_type:
+        return 0
+    target_period = "daily" if work_type == "contract" else "annual"
+    salary_period = _salary_period_hint(salary_text)
+    if salary_period and salary_period != target_period:
+        return 0
+    if not salary_period and _salary_has_non_comparable_period(salary_text):
+        return 0
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
     parsed_value = _salary_max_value(salary_text)
-    lowered = salary_text.lower()
-    is_daily = bool(re.search(r"\b(per\s+day|daily\s+rate|day\s+rate|p/d|pd)\b|/day", lowered))
-    is_non_comparable_period = bool(
-        re.search(
-            r"\b(per\s+hour|hourly|p/h|ph|per\s+week|weekly|per\s+month|monthly)\b"
-            r"|/(?:hr|hour|wk|week|mo|month)",
-            lowered,
-        )
-    )
+    minimum_target = minimum_daily_rate if target_period == "daily" else minimum_salary_yearly
 
-    if is_daily:
-        if minimum_daily_rate <= 0 or parsed_value <= 0:
-            return 0
-        if parsed_value >= minimum_daily_rate:
-            return int(salary_rules["meeting_target"])
-        ratio = parsed_value / minimum_daily_rate
-        if ratio >= float(salary_rules["below_target_near_min_ratio"]):
-            return int(salary_rules["below_target_near_adjustment"])
-        if ratio >= float(salary_rules["below_target_mid_min_ratio"]):
-            return int(salary_rules["below_target_mid_adjustment"])
-        return int(salary_rules["below_target_far_adjustment"])
-
-    if is_non_comparable_period:
+    if minimum_target <= 0 or parsed_value <= 0:
         return 0
-
-    if minimum_salary_yearly <= 0 or parsed_value <= 0:
-        return 0
-    if parsed_value >= minimum_salary_yearly:
+    if parsed_value >= minimum_target:
         return int(salary_rules["meeting_target"])
-    ratio = parsed_value / minimum_salary_yearly
+
+    ratio = parsed_value / minimum_target
     if ratio >= float(salary_rules["below_target_near_min_ratio"]):
         return int(salary_rules["below_target_near_adjustment"])
     if ratio >= float(salary_rules["below_target_mid_min_ratio"]):

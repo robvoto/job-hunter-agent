@@ -29,6 +29,19 @@ def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
         cleaned_priority[cleaned_key] = int(value)
     if not cleaned_priority:
         raise ValueError("identity_rules.json must define at least one source priority")
+
+    domain_to_source_map = normalized.get("domain_to_source_map")
+    if not isinstance(domain_to_source_map, dict):
+        raise ValueError("identity_rules.json must define domain_to_source_map as an object")
+    cleaned_domain_map: dict[str, str] = {}
+    for domain, source in domain_to_source_map.items():
+        cleaned_domain = str(domain).strip().lower()
+        cleaned_source = str(source).strip().lower()
+        if not cleaned_domain or not cleaned_source:
+            continue
+        cleaned_domain_map[cleaned_domain] = cleaned_source
+    if not cleaned_domain_map:
+        raise ValueError("identity_rules.json must define at least one domain to source mapping")
     normalized["source_priority"] = cleaned_priority
 
     # Similar-title thresholds are intentionally not part of identity rules.
@@ -50,6 +63,7 @@ def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
         seen.add(key)
         cleaned_suffixes.append(suffix)
     normalized["company_suffixes"] = cleaned_suffixes
+    normalized["domain_to_source_map"] = cleaned_domain_map
     return normalized
 
 

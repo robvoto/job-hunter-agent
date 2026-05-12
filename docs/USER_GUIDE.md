@@ -48,6 +48,7 @@ That profile includes:
 - candidate summary
 - fit brief
 - CV/background text
+- one search location, chosen from the canonical AU states and capital cities list
 - evidence tiers
 - capability rules
 - title targeting hints
@@ -66,6 +67,22 @@ Tabs:
 - `Test`: latest run stats and rejected samples
 
 Think of settings as the maintenance surface for your profile, not the place where you upload raw source files every time.
+
+Search location uses one canonical AU choice only. The UI defaults to a recommended state or capital city, then SEEK and LinkedIn adapt that same value to their own search format.
+
+Government preference is a search preference too. Turn it on when you want public sector roles to receive government preference scoring.
+
+## What Admin Is For
+
+Use the Admin screen for owner-only global controls.
+
+It covers:
+
+- global display and search defaults
+- onboarding defaults and capability presets
+- shared learning and signal review
+
+Changes here affect the app globally, but users do not edit them from their own Settings screen.
 
 ## What The Main Profile Fields Mean
 
@@ -146,7 +163,17 @@ If the agent keeps suggesting roles with a specific requirement you don't have (
 
 - It will prompt you to select the "mandatory blockers" found in that job description.
 - Once saved, the agent learns to automatically reject future roles that list those terms as mandatory requirements.
-- You can review and delete these rules in the **Settings > Review** tab.
+- You can review and delete these rules in the **Admin > Learning** screen.
+
+## Dodgy Jobs
+
+The app also flags job ads that look suspicious or stale.
+
+- `job_closed` means the posting page says the role is no longer available.
+- `date_mismatch` means the external job page looks much older than the source listing.
+- `cv_farming` means the wording looks like the employer is collecting CVs rather than advertising a live role.
+
+These checks are shown for review and do not replace your own judgment.
 
 ## LLM Use
 

@@ -36,7 +36,6 @@ python -m job_hunter_agent.source_connector
 Useful flags:
 
 - `--no-llm` to stay deterministic and avoid live LLM review
-- `--cheap-llm` to force the cheaper review model
 - `--debug` to show extra dashboard scoring detail
 
 Search design note:

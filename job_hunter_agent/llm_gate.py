@@ -24,7 +24,6 @@ from job_hunter_agent.agent_settings import load_agent_settings, DEFAULT_AGENT_S
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
-    LLM_CHEAP_MODEL,
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
     LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER,
@@ -89,7 +88,7 @@ from job_hunter_agent.paths import (
     PROFILE_PATH as _PROFILE_PATH,
 )
 from job_hunter_agent.runtime_helpers import (
-    CLI_FLAG_CHEAP_LLM,
+    CLI_FLAG_NO_LLM,
     append_llm_cost_log,
     build_llm_cost_entry,
     has_cli_flag,
@@ -104,8 +103,7 @@ from job_hunter_agent.signal_schema import (
 
 load_dotenv()
 
-# Cheap-llm flag: mirrors the same argv check in source_connector
-_CHEAP_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_CHEAP_LLM)
+_NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 
 MODEL_FALLBACK = DEFAULT_AGENT_SETTINGS["llm"]["model"]
 
@@ -119,14 +117,14 @@ _session_cost_usd: float = 0.0
 def _get_llm_pricing_per_1m() -> dict[str, dict[str, float]]:
     pricing = load_advance_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PRICING_PER_1M, {})
     if not isinstance(pricing, dict) or not pricing:
-        raise ValueError("No LLM pricing is configured in Advanced Settings.")
+        raise ValueError("No LLM pricing is configured in Admin.")
     return pricing  # type: ignore[return-value]
 
 
 def _get_llm_prompt_settings() -> dict[str, Any]:
     prompt_settings = load_advance_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
     if not isinstance(prompt_settings, dict) or not prompt_settings:
-        raise ValueError("No LLM prompt settings are configured in Advanced Settings.")
+        raise ValueError("No LLM prompt settings are configured in Admin.")
     return prompt_settings
 
 
@@ -179,11 +177,7 @@ def _profile_fingerprint() -> str:
 
 
 def _get_llm_model() -> str:
-    """Return the configured model, falling back to MODEL_FALLBACK.
-    In cheap-llm mode uses LLM_CHEAP_MODEL to reduce cost when evaluating more jobs.
-    """
-    if _CHEAP_LLM_MODE:
-        return LLM_CHEAP_MODEL
+    """Return the configured model, falling back to MODEL_FALLBACK."""
     return load_agent_settings().get("llm", {}).get("model", MODEL_FALLBACK)
 
 
@@ -195,14 +189,13 @@ def _log_llm_model_once() -> str:
     global _llm_model_logged
     model = _get_llm_model()
     if not _llm_model_logged:
-        source = "cheap-llm override" if _CHEAP_LLM_MODE else "agent_settings.json"
-        print(f"[LLM] Model: {model}  (source: {source})")
+        print(f"[LLM] Model: {model}  (source: agent_settings.json)")
         _llm_model_logged = True
     return model
 
 
 _api_key = os.environ.get("OPENAI_API_KEY")
-client = OpenAI(api_key=_api_key) if _api_key else None
+client = OpenAI(api_key=_api_key) if (_api_key and not _NO_LLM_MODE) else None
 ALLOWED_LEARNING_CATEGORIES = frozenset(VALID_SIGNAL_CATEGORIES - {CATEGORY_HARD_BLOCKER_PATTERN})
 
 
@@ -618,10 +611,10 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
 
 def _request_learning_payload(job_description_text: str, *, fit_review: bool) -> dict[str, Any]:
     if client is None:
-        raise RuntimeError("LLM review requested but OPENAI_API_KEY is missing")
+        raise RuntimeError("LLM review requested but LLM is disabled or OPENAI_API_KEY is missing")
 
     try:
-        model = _log_llm_model_once() if fit_review else LLM_CHEAP_MODEL
+        model = _log_llm_model_once()
         resp = client.responses.create(
             model=model,
             input=[

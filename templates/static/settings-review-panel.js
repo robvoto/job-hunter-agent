@@ -135,8 +135,8 @@
       flushChipEditorInputs();
       return {
         search_settings: {
-          keywords: document.getElementById('keywords').value.trim(),
-          locations: toLines(document.getElementById('locations').value),
+          keywords: toLines(settingsField('keywords').value).join(', '),
+          locations: document.getElementById('locations').value.trim() ? [document.getElementById('locations').value.trim()] : [],
           classification_ids: toLines(document.getElementById('classification_ids').value),
           date_range_days: Number(document.getElementById('date_range_days').value),
           seek_max_pages: Number(document.getElementById('seek_max_pages').value),
@@ -147,8 +147,12 @@
           [LINKEDIN_EASY_APPLY_ONLY]: (() => { const v = document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value; return v === '' ? null : v === 'true'; })(),
         },
         salary_preferences: {
-          minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value || 0),
-          minimum_daily_rate: Number(document.getElementById('minimum_daily_rate').value || 0),
+          minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value ?? 0),
+          minimum_daily_rate: Number(document.getElementById('minimum_daily_rate').value ?? 0),
+        },
+        match_preferences: {
+          engagement_type: document.getElementById('engagement_type').value,
+          prefer_government: document.getElementById('prefer_government').value === 'true',
         },
         preference_weights: {
           fit: Number(document.getElementById('fit_weight').value || 1),

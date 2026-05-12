@@ -136,3 +136,18 @@ def profile_recency_multiplier(profile: dict, aliases: List[str]) -> float:
     if years_ago <= 10:
         return 0.6
     return 0.3
+
+
+def get_deterministic_review_thresholds(scoring_rules: dict) -> dict:
+    """
+    Retrieve deterministic review thresholds from scoring rules.
+    """
+    thresholds = scoring_rules.get("deterministic_review_thresholds")
+    if not isinstance(thresholds, dict):
+        raise ValueError("scoring_rules.json must define 'deterministic_review_thresholds'")
+    return {
+        "min_high_risks_for_mismatch": int(thresholds.get("min_high_risks_for_mismatch", 2)),
+        "min_strong_signals_for_mismatch": int(thresholds.get("min_strong_signals_for_mismatch", 1)),
+        "min_strong_signals_for_strong_keep": int(thresholds.get("min_strong_signals_for_strong_keep", 4)),
+        "min_strong_signals_for_solid_keep": int(thresholds.get("min_strong_signals_for_solid_keep", 3)),
+    }

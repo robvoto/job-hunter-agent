@@ -6,6 +6,7 @@
     const runNowButton = document.getElementById('run_now');
     const rebuildProfileButton = document.getElementById('rebuild_profile');
     const capabilityUi = window.JobHunterCapabilityUi || {};
+    const locationUi = window.JobHunterLocationUi || {};
     let telegramConnectLink = '';
     let loadedAgentSettings = null;
     let loadedProfile = null;
@@ -14,14 +15,18 @@
     let expandedCapabilityRows = new Set();
     let suppressDirtyTracking = true;
     let statusHideTimer = null;
+    const pageMode = document.body?.dataset.pageMode === 'admin' ? 'admin' : 'settings';
+    const isAdminPage = pageMode === 'admin';
     document.querySelectorAll('[data-test-only]').forEach((element) => {
       element.hidden = !isTestMode;
     });
     document.querySelectorAll('[data-debug-only]').forEach((element) => {
       element.hidden = !isTestMode;
     });
+    document.querySelectorAll('[data-screen]').forEach((element) => {
+      element.hidden = element.dataset.screen !== pageMode;
+    });
     const listTextAreas = [
-      'locations',
       'primary_job_title_pattern',
       'secondary_title_patterns',
       'classification_ids',
@@ -40,6 +45,16 @@
         secondary_title_patterns_chips: 'adjacent_title_patterns_chips',
       };
       return document.getElementById(id) || document.getElementById(aliases[id] || '');
+    }
+
+    function renderLocationOptions() {
+      const select = document.getElementById('locations');
+      if (!select || !locationUi.renderLocationOptions) return;
+      locationUi.renderLocationOptions(select);
+      const preferred = String(loadedProfile?.search_settings?.locations?.[0] || locationUi.defaultLocation || select.value || '').trim();
+      if (preferred) {
+        select.value = preferred;
+      }
     }
 
     function hideStatus() {
@@ -236,6 +251,7 @@
 
 
     const chipEditors = {
+      keywords: { kind: 'list', listId: 'keywords_chips', inputId: 'keywords_add', emptyText: 'No search titles yet.', minItems: 1 },
       primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No job primary titles yet.' },
       secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
@@ -324,11 +340,17 @@
 
     function markDirty() {
       if (suppressDirtyTracking) return;
-      stickySaveBar?.removeAttribute('hidden');
+      if (activeSaveButton) activeSaveButton.disabled = false;
+      if (stickySaveBar) {
+        stickySaveBar.dataset.dirty = 'true';
+      }
     }
 
     function clearDirty() {
-      stickySaveBar?.setAttribute('hidden', '');
+      if (activeSaveButton) activeSaveButton.disabled = true;
+      if (stickySaveBar) {
+        delete stickySaveBar.dataset.dirty;
+      }
       showInlineStatus(globalStatus, '', '');
     }
 
@@ -406,10 +428,12 @@
       if (!editor) return;
       if (editor.kind === 'rule') {
         const items = getRuleItems(id);
+        if (editor.minItems && items.length <= editor.minItems) return;
         items.splice(index, 1);
         setRuleItems(id, items);
       } else {
         const items = getListItems(id);
+        if (editor.minItems && items.length <= editor.minItems) return;
         items.splice(index, 1);
         setListItems(id, items);
       }
@@ -425,8 +449,14 @@
     }
 
     function fillForm(profile) {
-      document.getElementById('keywords').value = profile.search_settings?.keywords || '';
-      document.getElementById('locations').value = (profile.search_settings?.locations || []).join('\n');
+      const keywordList = (profile.search_settings?.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+      settingsField('keywords').value = keywordList.join('\n');
+      renderChipEditor('keywords');
+      renderLocationOptions();
+      const locationSelect = document.getElementById('locations');
+      if (locationSelect) {
+        locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
+      }
       document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
       document.getElementById('date_range_days').value = String(profile.search_settings?.date_range_days ?? '');
       document.getElementById('seek_max_pages').value = String(profile.search_settings?.seek_max_pages ?? 10);
@@ -436,9 +466,14 @@
       document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search ?? 25);
       const _liEasyApply = profile.search_settings?.[LINKEDIN_EASY_APPLY_ONLY];
       document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
+      document.getElementById('engagement_type').value = profile.match_preferences?.engagement_type || 'both';
+      const governmentPreference = document.getElementById('prefer_government');
+      if (governmentPreference) {
+        governmentPreference.value = String(Boolean(profile.match_preferences?.prefer_government));
+      }
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
-      document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly || '');
-      document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate || '');
+      document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly ?? 0);
+      document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate ?? 0);
       document.getElementById('fit_weight').value = String(profile.preference_weights?.fit ?? 1);
       document.getElementById('salary_weight').value = String(profile.preference_weights?.salary ?? 1);
       document.getElementById('location_weight').value = String(profile.preference_weights?.location ?? 1);
@@ -457,7 +492,7 @@
       renderAdvancedChipEditors();
     }
 
-    // Populate the global advance-settings form from the server payload.
+    // Populate the global admin form from the server payload.
     function fillAdvanceForm(settings) {
       loadedAdvanceSettings = settings || {};
       const fitHl = loadedAdvanceSettings.fit_highlights || {};
@@ -465,6 +500,8 @@
       const searchLimits = loadedAdvanceSettings.search_limits || {};
       const evidenceWeights = loadedAdvanceSettings.candidate_profile_tier_weights || {};
       const preferenceWeights = loadedAdvanceSettings.preference_weights || {};
+      const historySettings = loadedAdvanceSettings.history_settings || {};
+      const descriptionTrustSettings = loadedAdvanceSettings.description_trust_settings || {};
       const onboarding = loadedAdvanceSettings.onboarding_settings || {};
       const llmSettings = loadedAdvanceSettings.llm_settings || {};
       const setBounds = (id, bounds) => {
@@ -521,8 +558,13 @@
       document.getElementById('onboarding_signal_cluster_dense_snippet_alias_hits').value = String(onboarding.signal_cluster_dense_snippet_alias_hits ?? '');
       document.getElementById('onboarding_capability_strength_preset').value = onboarding.capability_strength_preset || '';
       document.getElementById('llm_model_options').value = (llmSettings.model_options || []).join('\n');
+      document.getElementById('llm_max_llm_chars').value = String(llmSettings.max_llm_chars ?? '');
       document.getElementById('llm_pricing_per_1m').value = JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2);
       document.getElementById('llm_prompt_settings').value = JSON.stringify(llmSettings.llm_prompt_settings || {}, null, 2);
+
+      document.getElementById('history_archive_stale_after_days').value = String(historySettings.archive_stale_after_days ?? '');
+      document.getElementById('history_hidden_review_days').value = String(historySettings.hidden_review_days ?? '');
+      document.getElementById('description_trust_min_trusted_description_length').value = String(descriptionTrustSettings.min_trusted_description_length ?? '');
 
       // Keep the shared search guardrails editable from the same global settings source.
       document.getElementById('search_limit_date_range_days_min').value = String(searchLimits.date_range_days?.min ?? '');
@@ -561,11 +603,13 @@
       renderLlmModelOptions();
     }
 
-    // Build the payload that saves only the global optimiser settings.
+    // Build the payload that saves only the global admin settings.
     function collectAdvanceSettings() {
       const current = loadedAdvanceSettings || {};
       const currentSearch = current.search_settings || {};
       const currentLimits = current.search_limits || {};
+      const currentHistory = current.history_settings || {};
+      const currentDescriptionTrust = current.description_trust_settings || {};
       const currentOnboarding = current.onboarding_settings || {};
       const readNumber = (id, fallback) => {
         const raw = Number(document.getElementById(id).value);
@@ -631,6 +675,13 @@
           secondary_candidate_profile_context: readNumber('evidence_secondary_weight', current.candidate_profile_tier_weights?.secondary_candidate_profile_context),
           supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', current.candidate_profile_tier_weights?.supplementary_candidate_profile_context),
         },
+        history_settings: {
+          archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
+          hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
+        },
+        description_trust_settings: {
+          min_trusted_description_length: readNumber('description_trust_min_trusted_description_length', currentDescriptionTrust.min_trusted_description_length),
+        },
         onboarding_settings: {
           ...currentOnboarding,
           extraction_lookback_years: readNumber('onboarding_extraction_lookback_years', currentOnboarding.extraction_lookback_years),
@@ -645,6 +696,7 @@
         },
         llm_settings: {
           model_options: toLines(document.getElementById('llm_model_options').value),
+          max_llm_chars: readNumber('llm_max_llm_chars', current.llm_settings?.max_llm_chars),
           pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
           llm_prompt_settings: JSON.parse(document.getElementById('llm_prompt_settings').value.trim() || '{}'),
         },
@@ -740,7 +792,7 @@
     function fillAgentSettings(settings) {
       loadedAgentSettings = settings || {};
       const dashboard = settings?.dashboard || {};
-      document.getElementById('dashboard_minimum_score').value = String(dashboard.minimum_score ?? 55);
+      document.getElementById('dashboard_minimum_score').value = String(dashboard.minimum_score ?? '');
       const schedule = settings?.schedule || {};
       document.getElementById('schedule_daily_time_local').value = schedule.daily_time_local || '08:30';
       const telegram = settings?.telegram || {};
@@ -765,7 +817,7 @@
 
     async function loadAdvanceSettings() {
       const response = await jobHunterFetch('/api/advance-settings');
-      if (!response.ok) throw new Error('Could not load advanced settings');
+      if (!response.ok) throw new Error('Could not load admin settings');
       const settings = await response.json();
       loadedAdvanceSettings = settings;
       fillAdvanceForm(settings);
@@ -775,7 +827,10 @@
       const currentSchedule = loadedAgentSettings?.schedule || {};
       return {
         dashboard: {
-          minimum_score: Number(document.getElementById('dashboard_minimum_score').value || 55),
+          minimum_score: (() => {
+            const raw = document.getElementById('dashboard_minimum_score').value;
+            return raw !== '' ? Number(raw) : (loadedAgentSettings?.dashboard?.minimum_score ?? 0);
+          })(),
         },
         schedule: {
           daily_time_local: document.getElementById('schedule_daily_time_local').value || '08:30',
@@ -1027,7 +1082,20 @@
 
     if (window.location.hash) {
       const target = document.querySelector(`.nav-item[data-section="${window.location.hash.replace('#','')}"]`);
-      if (target) target.click();
+      if (target && !target.hidden) target.click();
+    }
+    if (!document.querySelector(`.settings-group.is-active[data-screen="${pageMode}"]`)) {
+      const firstVisibleSection = document.querySelector(`.settings-group[data-screen="${pageMode}"]`);
+      const firstVisibleNav = document.querySelector(`.nav-item[data-screen="${pageMode}"][data-section="${firstVisibleSection?.id || ''}"]`);
+      document.querySelectorAll('.settings-group').forEach(group => {
+        group.classList.toggle('is-active', group === firstVisibleSection);
+      });
+      document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+        item.classList.toggle('is-active', item === firstVisibleNav);
+      });
+      if (firstVisibleSection) {
+        window.location.hash = firstVisibleSection.id;
+      }
     }
 
     // -- Sliders -----------------------------------------------
@@ -1052,9 +1120,17 @@
 
     // -- Save Management ---------------------------------------
     const stickySaveBar = document.getElementById('sticky_save_bar');
-    const saveAllBtn = document.getElementById('save_all_btn');
-    const saveAdvanceBtn = document.getElementById('save_advance_btn');
+    const saveSettingsBtn = document.getElementById('save_settings_btn');
+    const saveAdminBtn = document.getElementById('save_admin_btn');
+    const activeSaveButton = isAdminPage ? saveAdminBtn : saveSettingsBtn;
+    const discardSettingsBtn = document.getElementById('discard_changes_btn');
+    const discardAdminBtn = document.getElementById('discard_admin_changes_btn');
+    const activeDiscardButton = isAdminPage ? discardAdminBtn : discardSettingsBtn;
     const globalStatus = document.getElementById('global_save_status');
+
+    if (activeSaveButton) {
+      activeSaveButton.disabled = true;
+    }
 
     document.querySelectorAll('input, select, textarea').forEach(el => {
       if (el.id === 'capability_matrix_filter' || el.classList.contains('is-readonly') || el.type === 'hidden') return;
@@ -1064,76 +1140,87 @@
       }
     });
 
-    document.getElementById('discard_changes_btn')?.addEventListener('click', () => {
+    ['minimum_salary_yearly', 'minimum_daily_rate'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', function() {
+        if (Number(this.value) < 0) this.value = '0';
+      });
+    });
+
+    activeDiscardButton?.addEventListener('click', () => {
       window.location.reload();
     });
 
-    async function saveAll() {
-      if (!saveAllBtn) return;
-      saveAllBtn.classList.add('is-working');
-      saveAllBtn.disabled = true;
-      saveAllBtn.textContent = 'Saving...';
-      showInlineStatus(globalStatus, 'Saving changes...', 'loading');
+    async function saveActivePage() {
+      if (!activeSaveButton) return;
+      const originalLabel = activeSaveButton.textContent;
+      activeSaveButton.classList.add('is-working');
+      activeSaveButton.disabled = true;
+      activeSaveButton.textContent = 'Saving...';
+      showInlineStatus(globalStatus, isAdminPage ? 'Saving admin changes...' : 'Saving settings...', 'loading');
       try {
-        const profile = collectProfile();
-        const advanceSettings = collectAdvanceSettings();
-        const agentSettings = collectAgentSettings();
+        if (isAdminPage) {
+          const advanceSettings = collectAdvanceSettings();
+          const advanceResponse = await jobHunterFetch('/api/advance-settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(advanceSettings),
+          });
+          const advancePayload = await advanceResponse.json().catch(() => ({}));
+          if (!advanceResponse.ok) {
+            throw new Error(advancePayload.error || 'Could not save admin settings.');
+          }
+          fillAdvanceForm(advancePayload);
+          showInlineStatus(globalStatus, 'Admin settings saved.', 'ok');
+          showStatus('Admin settings saved successfully.', 'ok');
+        } else {
+          const profile = collectProfile();
+          const agentSettings = collectAgentSettings();
 
-        const advanceResponse = await jobHunterFetch('/api/advance-settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(advanceSettings),
-        });
-        const advancePayload = await advanceResponse.json().catch(() => ({}));
-        if (!advanceResponse.ok) {
-          throw new Error(advancePayload.error || 'Could not save advanced settings.');
+          const profileResponse = await jobHunterFetch('/api/profile', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(profile),
+          });
+          const profilePayload = await profileResponse.json().catch(() => ({}));
+          if (!profileResponse.ok) {
+            throw new Error(profilePayload.error || 'Could not save profile settings.');
+          }
+
+          const agentResponse = await jobHunterFetch('/api/agent-settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(agentSettings),
+          });
+          const agentPayload = await agentResponse.json().catch(() => ({}));
+          if (!agentResponse.ok) {
+            throw new Error(agentPayload.error || 'Could not save alert settings.');
+          }
+
+          fillForm(profilePayload);
+          fillAgentSettings(agentPayload);
+          initSliders();
+          showInlineStatus(globalStatus, 'Settings saved.', 'ok');
+          showStatus('Settings saved successfully.', 'ok');
         }
-
-        fillAdvanceForm(advancePayload);
-        const profileResponse = await jobHunterFetch('/api/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(profile),
-        });
-        const profilePayload = await profileResponse.json().catch(() => ({}));
-        if (!profileResponse.ok) {
-          throw new Error(profilePayload.error || 'Profile save failed after advanced settings were saved.');
-        }
-
-        const agentResponse = await jobHunterFetch('/api/agent-settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(agentSettings),
-        });
-        const agentPayload = await agentResponse.json().catch(() => ({}));
-        if (!agentResponse.ok) {
-          throw new Error(agentPayload.error || 'Could not save alert settings.');
-        }
-
-        fillForm(profilePayload);
-        fillAgentSettings(agentPayload);
-        initSliders();
         clearDirty();
-        showInlineStatus(globalStatus, 'All changes saved.', 'ok');
-        showStatus('All settings saved successfully.', 'ok');
       } catch (err) {
-        showInlineStatus(globalStatus, err?.message || 'Could not save all settings.', 'error');
-        showStatus(err?.message || 'Could not save all settings.', 'error');
+        if (activeSaveButton) activeSaveButton.disabled = false;
+        showInlineStatus(globalStatus, err?.message || 'Could not save changes.', 'error');
+        showStatus(err?.message || 'Could not save changes.', 'error');
       } finally {
-        saveAllBtn.classList.remove('is-working');
-        saveAllBtn.disabled = false;
-        saveAllBtn.textContent = 'Save All Changes';
+        activeSaveButton.classList.remove('is-working');
+        activeSaveButton.textContent = originalLabel;
       }
     }
 
-    saveAllBtn?.addEventListener('click', saveAll);
-    saveAdvanceBtn?.addEventListener('click', saveAll);
-    Promise.all([
-      loadProfile(),
-      loadAdvanceSettings(),
-      loadAgentSettings(),
-      loadRunStats(),
-    ]).then(() => {
+    activeSaveButton?.addEventListener('click', saveActivePage);
+    const pageLoads = isAdminPage
+      ? [loadAdvanceSettings()]
+      : [loadProfile(), loadAgentSettings()];
+    if (!isAdminPage) {
+      pageLoads.push(loadRunStats());
+    }
+    Promise.all(pageLoads).then(() => {
         initSliders();
         suppressDirtyTracking = false;
         clearDirty();

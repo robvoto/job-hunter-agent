@@ -354,7 +354,7 @@
         renderSignalRegistry();
       } catch (err) {
         _srLoaded = false;
-        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} - click Advanced Settings again to retry.</p>`;
+        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} - click Learning again to retry.</p>`;
       }
     }
     function maybeLoadSignalRegistry() {

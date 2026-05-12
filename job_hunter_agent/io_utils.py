@@ -17,9 +17,9 @@ from job_hunter_agent.paths import (
     UI_LABELS_PATH,
     WORK_MODE_RULES_PATH,
 )
-from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS
+from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS, DEBUG_MODE
 
-DEBUG_CAPTURE_SOURCE_PAYLOADS = True
+DEBUG_CAPTURE_SOURCE_PAYLOADS = DEBUG_MODE
 
 
 def normalize_posted_text(value: Optional[str]) -> str:

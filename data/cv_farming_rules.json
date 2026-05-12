@@ -1,0 +1,76 @@
+{
+  "kind": "managed_knowledge",
+  "name": "cv_farming_rules",
+  "version": 1,
+  "description": "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role.",
+  "entries": [
+    {
+      "value": "send (?:us |your |me )?(?:your )?(?:cv|resume|application)",
+      "aliases": []
+    },
+    {
+      "value": "email (?:your )?(?:cv|resume|application) to",
+      "aliases": []
+    },
+    {
+      "value": "forward (?:your )?(?:cv|resume)",
+      "aliases": []
+    },
+    {
+      "value": "submit (?:your )?(?:cv|resume) (?:to|via email)",
+      "aliases": []
+    },
+    {
+      "value": "expression of interest",
+      "aliases": []
+    },
+    {
+      "value": "talent pool",
+      "aliases": []
+    },
+    {
+      "value": "talent bank",
+      "aliases": []
+    },
+    {
+      "value": "talent pipeline",
+      "aliases": []
+    },
+    {
+      "value": "we(?:'re| are) always looking",
+      "aliases": []
+    },
+    {
+      "value": "always on the lookout",
+      "aliases": []
+    },
+    {
+      "value": "ongoing opportunity",
+      "aliases": []
+    },
+    {
+      "value": "register your interest",
+      "aliases": []
+    },
+    {
+      "value": "no (?:specific )?position (?:available )?at this time",
+      "aliases": []
+    },
+    {
+      "value": "collecting resumes",
+      "aliases": []
+    },
+    {
+      "value": "collecting cvs",
+      "aliases": []
+    },
+    {
+      "value": "building (?:our )?talent",
+      "aliases": []
+    },
+    {
+      "value": "send your resume",
+      "aliases": []
+    }
+  ]
+}

@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="/static/onboarding-page.css">
   <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
   <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN__";</script>
+  <script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = __JOB_HUNTER_LOCATION_OPTIONS__;</script>
+  <script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = "__JOB_HUNTER_DEFAULT_LOCATION__";</script>
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
@@ -592,16 +594,9 @@
           <div class="help">If you work across more than one role type, separate them with a comma — e.g. Senior Business Analyst, Scrum Master. Each title will be searched using OR.</div>
 
           <label for="location_search">Where should we search?</label>
-          <div class="location-picker">
-            <div class="location-input-row">
-              <input id="location_search" list="location_suggestions" type="text" placeholder="Start typing a city or region" maxlength="80">
-              <button class="secondary location-add-button" id="add_location" type="button">Add location</button>
-            </div>
-            <datalist id="location_suggestions"></datalist>
-            <div class="location-suggestions" id="location_quick_picks"></div>
-            <div class="location-selected" id="location_selected"></div>
-          </div>
-          <div class="help">Required. Add at least one city, state, or region.</div>
+          <select id="location_search"></select>
+          <div class="help">Required. Choose one state or capital city. SEEK and LinkedIn will each use the same location in their own query format.</div>
+          <div class="location-selected" id="location_selected"></div>
 
           <label>What type of work are you open to?</label>
           <div class="choice-list">
@@ -609,6 +604,13 @@
             <label class="choice-card"><input type="radio" name="engagement_pref" value="permanent"><span>Permanent only</span></label>
             <label class="choice-card"><input type="radio" name="engagement_pref" value="contract"><span>Contract only</span></label>
           </div>
+
+          <label for="government_preference">Government preference</label>
+          <select id="government_preference">
+            <option value="false" selected>No preference</option>
+            <option value="true">Prefer public sector roles</option>
+          </select>
+          <div class="help">Optional. Turn this on when public sector roles should receive government preference scoring.</div>
 
           <div class="review-grid">
             <section class="review-block" id="salary_yearly_block">
@@ -677,6 +679,10 @@
                   <dd id="check_engagement_type"></dd>
                 </div>
                 <div>
+                  <dt>Government preference</dt>
+                  <dd id="check_government_preference"></dd>
+                </div>
+                <div>
                   <dt>Minimum salary (excluding super)</dt>
                   <dd id="check_salary_yearly"></dd>
                 </div>
@@ -699,7 +705,8 @@
     </div>
   </main>
 
-  <script src="/static/onboarding-page.js"></script>
+    <script src="/static/location-options.js"></script>
+    <script src="/static/onboarding-page.js"></script>
   <script src="/static/onboarding-flow.js"></script>
 </body>
 </html>

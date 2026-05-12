@@ -9,6 +9,7 @@ from typing import Any
 
 from job_hunter_agent.paths import (
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
+    CV_FARMING_RULES_PATH,
     HARD_BLOCKER_RULES_PATH,
     IGNORED_SIGNAL_ARCHIVE_PATH,
     PARSING_RULES_PATH,
@@ -17,11 +18,13 @@ from job_hunter_agent.paths import (
     TITLE_NORMALIZATION_RULES_PATH,
 )
 from job_hunter_agent.parsing_schema import PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY
+from job_hunter_agent.job_types import JOB_TYPE_STORE_PATH, load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.hard_blocker_rules import (
     load_hard_blocker_rules,
     save_hard_blocker_rules,
     upsert_hard_blocker_rule,
 )
+from job_hunter_agent.job_quality import upsert_cv_farming_rule
 from job_hunter_agent.capability_knowledge import (
     CAPABILITY_KNOWLEDGE_PATH,
     load_capability_knowledge,
@@ -35,8 +38,10 @@ from job_hunter_agent.role_title_knowledge import (
 )
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
+    CATEGORY_CV_FARMING_PATTERN,
     CATEGORY_GOVERNMENT_CONTEXT,
     CATEGORY_HARD_BLOCKER_PATTERN,
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
     CATEGORY_TITLE_PARSE_BLOCKER,
@@ -63,8 +68,10 @@ from job_hunter_agent.signal_schema import (
 
 CATEGORY_LABELS = {
     CATEGORY_CAPABILITY_CONCEPT: "Capability",
+    CATEGORY_CV_FARMING_PATTERN: "CV farming pattern",
     CATEGORY_GOVERNMENT_CONTEXT: "Government context",
     CATEGORY_HARD_BLOCKER_PATTERN: "Hard blocker pattern",
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "Job type",
     CATEGORY_ROLE_TITLE_TOKEN: "Role title",
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "Title abbreviation",
     CATEGORY_TITLE_PARSE_BLOCKER: "Title parse blocker",
@@ -72,8 +79,10 @@ CATEGORY_LABELS = {
 
 _CATEGORY_KNOWLEDGE_PATHS = {
     CATEGORY_CAPABILITY_CONCEPT: CAPABILITY_KNOWLEDGE_PATH,
+    CATEGORY_CV_FARMING_PATTERN: CV_FARMING_RULES_PATH,
     CATEGORY_GOVERNMENT_CONTEXT: GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
     CATEGORY_HARD_BLOCKER_PATTERN: HARD_BLOCKER_RULES_PATH,
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: JOB_TYPE_STORE_PATH,
     CATEGORY_ROLE_TITLE_TOKEN: ROLE_TITLE_KNOWLEDGE_PATH,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: TITLE_NORMALIZATION_RULES_PATH,
     CATEGORY_TITLE_PARSE_BLOCKER: PARSING_RULES_PATH,
@@ -446,11 +455,18 @@ def save_registry(registry: dict[str, dict[str, Any]]) -> None:
 
 def signal_in_approved_knowledge(category: str, signal: str, aliases: list[str] | None = None) -> tuple[bool, str]:
     category_key = _clean_term(category)
-    if category_key not in _CATEGORY_KNOWLEDGE_PATHS:
+    if category_key not in _CATEGORY_KNOWLEDGE_PATHS and category_key != CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
         return False, ""
 
     query_terms = _clean_text_list([signal, *(aliases or [])])
     if not query_terms:
+        return False, ""
+
+    if category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
+        query_keys = {_signal_key(term) for term in query_terms}
+        for raw_value, canonical_value in load_job_type().items():
+            if _signal_key(raw_value) in query_keys or _signal_key(canonical_value) in query_keys:
+                return True, _clean_text(canonical_value)
         return False, ""
 
     for item in load_approved_signal_catalog():
@@ -564,10 +580,15 @@ def approve_signal(key: str, category: str = "") -> dict[str, Any] | None:
     value = _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
     if category_key == CATEGORY_CAPABILITY_CONCEPT:
         upsert_capability_entry(value, [])
+    elif category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
+        suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
+        upsert_job_type_entry(value, suggested[0] if suggested else value)
     elif category_key == CATEGORY_ROLE_TITLE_TOKEN:
         upsert_role_title_entry(value)
     elif category_key == CATEGORY_HARD_BLOCKER_PATTERN:
         upsert_hard_blocker_rule(value, [])
+    elif category_key == CATEGORY_CV_FARMING_PATTERN:
+        upsert_cv_farming_rule(value, [])
     elif category_key == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         if suggested:
@@ -615,6 +636,7 @@ def clear_signal_learning_state() -> None:
     save_registry({})
     _save_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH, {})
     save_capability_knowledge([])
+    save_job_type({})
     save_role_title_knowledge([])
     save_hard_blocker_rules([])
     for category, path in _CATEGORY_KNOWLEDGE_PATHS.items():
@@ -666,6 +688,21 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                         terms.append(expanded)
                     catalog.append({"category": category, "label": abbrev, "terms": terms})
             continue
+        if category == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
+            for raw_value, canonical_value in load_job_type().items():
+                cleaned_raw = _clean_text(raw_value)
+                cleaned_canonical = _clean_text(canonical_value)
+                if not cleaned_raw or not cleaned_canonical:
+                    continue
+                terms = [cleaned_raw]
+                if cleaned_canonical.lower() != cleaned_raw.lower():
+                    terms.append(cleaned_canonical)
+                catalog.append({
+                    "category": category,
+                    "label": cleaned_canonical,
+                    "terms": terms,
+                })
+            continue
         if category == CATEGORY_TITLE_PARSE_BLOCKER:
             try:
                 payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -684,6 +721,9 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
             continue
         if category == CATEGORY_CAPABILITY_CONCEPT:
             entries = load_capability_knowledge()
+        elif category == CATEGORY_CV_FARMING_PATTERN:
+            payload = _load_approved_knowledge_payload(path)
+            entries = payload.get("entries", [])
         elif category == CATEGORY_ROLE_TITLE_TOKEN:
             entries = load_role_title_knowledge()
         elif category == CATEGORY_HARD_BLOCKER_PATTERN:

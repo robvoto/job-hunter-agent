@@ -1,0 +1,20 @@
+{
+  "kind": "managed_knowledge",
+  "name": "dodgy_job_rules",
+  "version": 2,
+  "job_closed_indicators": [
+    "job (?:is )?no longer available",
+    "this job has expired",
+    "this job has closed",
+    "this (?:job )?listing has expired",
+    "position has been filled",
+    "vacancy (?:has been )?(?:closed|filled)",
+    "applications? (?:(?:are|is) )?(?:closed|no longer (?:being )?accepted)",
+    "this role is no longer available",
+    "this position (?:has been )?(?:closed|filled)",
+    "no longer accepting applications",
+    "job expired",
+    "listing expired"
+  ],
+  "external_date_mismatch_flag_days": 14
+}

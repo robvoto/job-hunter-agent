@@ -24,7 +24,8 @@ from job_hunter_agent.record_schema import (
     RECORD_MISSING_EVIDENCE_KEY, RECORD_REVIEWED_SIGNAL_MATCHES_KEY, RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_SOURCE_METADATA_KEY, RECORD_SEARCH_LOCATION_KEY, RECORD_SEARCH_KEYWORDS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY, RECORD_POSTED_KEY, DETAILS_STATUS_OK, CONFIDENCE_HIGH,
-    CONFIDENCE_LOW, RECORD_RUN_STARTED_AT_KEY, RECORD_SOURCE_KEY
+    CONFIDENCE_LOW, RECORD_RUN_STARTED_AT_KEY, RECORD_SOURCE_KEY,
+    RECORD_JOB_QUALITY_SIGNALS_KEY,
 )
 from job_hunter_agent.advance_settings import (
     DEFAULT_SEARCH_SETTINGS,
@@ -33,6 +34,7 @@ from job_hunter_agent.advance_settings import (
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
 )
+from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
@@ -99,9 +101,6 @@ class LinkedInScraper(BaseJobScraper):
         # (source_connector imports LinkedInScraper; scraper_linkedin needs
         # enrichment functions defined in source_connector)
         from job_hunter_agent.source_connector import (  # noqa: PLC0415
-            MAX_LLM_CHARS,
-            MIN_TRUSTED_DESCRIPTION_LENGTH,
-            get_trusted_sources,
             build_fit_highlights,
             build_ad_learning_signals,
             build_risk_and_missing_evidence,
@@ -123,6 +122,7 @@ class LinkedInScraper(BaseJobScraper):
             _register_pending_learning_signals,
             register_hard_blocker_learning_from_rejection,
         )
+        min_trusted_description_length = get_min_trusted_description_length()
 
         kept_records: List[dict] = []
         audit_rows: List[dict] = []
@@ -240,7 +240,7 @@ class LinkedInScraper(BaseJobScraper):
                 record[RECORD_FULL_DESCRIPTION_KEY] = details_text
                 record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
                 source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
-                is_trusted = source in get_trusted_sources() and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+                is_trusted = source in get_trusted_sources() and len(details_text) >= min_trusted_description_length
                 record[RECORD_FIT_CONFIDENCE_KEY] = CONFIDENCE_HIGH if is_trusted else CONFIDENCE_LOW
                 record[RECORD_DETAILS_STATUS_KEY] = DETAILS_STATUS_OK
 
@@ -262,6 +262,40 @@ class LinkedInScraper(BaseJobScraper):
                     record[RECORD_REJECT_REASON_KEY] = desc_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
+                # Job quality signals (evidence only — do not reject based on these)
+                _job_quality_signals: list = []
+                try:
+                    from datetime import datetime as _dt  # noqa: PLC0415
+                    from job_hunter_agent.job_quality import (  # noqa: PLC0415
+                        load_dodgy_job_rules,
+                        fetch_external_html,
+                        detect_external_date_signals,
+                        detect_cv_farming_signals,
+                    )
+                    _dodgy_rules = load_dodgy_job_rules()
+                    _job_quality_signals.extend(detect_cv_farming_signals(details_text, _dodgy_rules))
+                    _raw_fields = record.get(RECORD_SOURCE_METADATA_KEY, {}).get("raw_source_fields", {})
+                    _is_easy_apply = bool(_raw_fields.get("easy_apply"))
+                    _apply_url = str(record.get(RECORD_SOURCE_METADATA_KEY, {}).get("apply_url") or "").strip()
+                    _linkedin_url = str(record.get(RECORD_URL_KEY) or "").strip()
+                    if not _is_easy_apply and _apply_url and _apply_url != _linkedin_url:
+                        _ext_html = fetch_external_html(_apply_url)
+                        _run_date = _dt.fromisoformat(self.run_iso).date()
+                        _job_quality_signals.extend(
+                            detect_external_date_signals(
+                                _ext_html,
+                                record.get(RECORD_POSTED_AGE_DAYS_KEY),
+                                _dodgy_rules,
+                                _run_date,
+                            )
+                        )
+                except Exception as _qe:
+                    print(f"[LinkedIn] Job quality check skipped: {type(_qe).__name__}: {_qe}")
+                record[RECORD_JOB_QUALITY_SIGNALS_KEY] = _job_quality_signals
+                if _job_quality_signals:
+                    _kinds = ", ".join(s.get("kind", "?") for s in _job_quality_signals)
+                    print(f"[LinkedIn] Quality signals [{_kinds}]: {title} @ {company}")
+
                 # Enrich from full description text
                 salary = extract_salary(details_text)
                 if salary == "N/A":

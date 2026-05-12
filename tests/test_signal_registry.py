@@ -4,6 +4,7 @@ import json
 
 from job_hunter_agent import capability_knowledge, signal_registry
 from job_hunter_agent import hard_blocker_rules
+from job_hunter_agent import job_quality
 from job_hunter_agent import role_title_knowledge
 from job_hunter_agent import title_normalization_rules
 
@@ -126,6 +127,53 @@ def test_approve_signal_promotes_hard_blocker_pattern_with_clean_shape(tmp_path,
     assert knowledge["entries"] == [
         {
             "value": "demonstrated experience in {term}",
+            "aliases": [],
+        }
+    ]
+
+
+def test_approve_signal_promotes_cv_farming_pattern_with_clean_shape(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    cv_farming_path = tmp_path / "cv_farming_rules.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setattr(signal_registry, "CV_FARMING_RULES_PATH", cv_farming_path)
+    monkeypatch.setattr(job_quality, "CV_FARMING_RULES_PATH", cv_farming_path)
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "cv_farming_pattern", cv_farming_path)
+
+    signal_registry.save_registry({
+        "send your resume": {
+            "signal": "send your resume",
+            "normalized_key": "send your resume",
+            "original_texts": ["Send your resume"],
+            "category": "cv_farming_pattern",
+            "history": [{"action": "added", "timestamp": "2026-05-03T00:00:00+00:00"}],
+        }
+    })
+
+    updated = signal_registry.approve_signal("send your resume", "cv_farming_pattern")
+
+    assert updated == {
+        "signal": "send your resume",
+        "normalized_key": "send your resume",
+        "original_texts": ["send your resume"],
+        "category": "cv_farming_pattern",
+    }
+
+    saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert saved_registry == {}
+
+    knowledge = json.loads(cv_farming_path.read_text(encoding="utf-8"))
+    assert knowledge["kind"] == "managed_knowledge"
+    assert knowledge["name"] == "cv_farming_rules"
+    assert knowledge["version"] == 1
+    assert knowledge["entries"] == [
+        {
+            "value": "send your resume",
             "aliases": [],
         }
     ]

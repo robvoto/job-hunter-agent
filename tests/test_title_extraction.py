@@ -48,7 +48,7 @@ def test_extract_title_pattern_suggestions_returns_deterministic_patterns():
     result = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 8})
 
     assert "senior devops engineer" in result["primary_job_title_pattern"]
-    assert "technical consultant" in result["primary_job_title_pattern"]
+    assert "technical consultant" in result["secondary_title_patterns"]
     assert "devops engineer" not in result["secondary_title_patterns"]
 
 
@@ -71,6 +71,54 @@ def test_extract_title_pattern_suggestions_splits_compound_role_titles_cleanly()
     assert "senior business analyst and scrum master" not in combined
     assert "scrum master business analyst" not in combined
     assert "business analyst" not in result["secondary_title_patterns"]
+
+
+def test_extract_title_pattern_suggestions_splits_multiple_compound_professions():
+    cases = [
+        (
+            """
+            # Professional Experience
+            Senior Business Analyst and Scrum Master
+            Acme
+            2020 - 2021
+            - Delivery ceremonies and requirements workshops.
+            """,
+            ["senior business analyst", "scrum master"],
+            "senior business analyst and scrum master",
+        ),
+        (
+            """
+            # Professional Experience
+            Product Owner / Delivery Manager
+            Beta
+            2021 - 2023
+            - Backlog ownership and delivery coordination.
+            """,
+            ["product owner", "delivery manager"],
+            "product owner / delivery manager",
+        ),
+        (
+            """
+            # Professional Experience
+            Data Engineer & Platform Lead
+            Gamma
+            2022 - Present
+            - Platform delivery and data pipelines.
+            """,
+            ["data engineer", "platform lead"],
+            "data engineer & platform lead",
+        ),
+    ]
+
+    for cv_text, expected_titles, forbidden in cases:
+        result = extract_title_pattern_suggestions(cv_text, {"extraction_lookback_years": 8})
+        combined = {
+            *result["primary_job_title_pattern"],
+            *result["secondary_title_patterns"],
+        }
+        for title in expected_titles:
+            assert title in combined
+        assert forbidden not in combined
 
 
 def test_extract_title_pattern_suggestions_empty_when_no_role_headers():

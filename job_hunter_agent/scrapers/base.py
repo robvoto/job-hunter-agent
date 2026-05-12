@@ -47,6 +47,16 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
     RECORD_WORK_TYPE_KEY,
 )
+from job_hunter_agent.signal_schema import (
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+    LEARNING_CATEGORY_KEY,
+    LEARNING_EVIDENCE_KEY,
+    LEARNING_NEEDS_REVIEW_KEY,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SOURCE_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
+)
 from job_hunter_agent.work_mode_extraction import extract_from_linkedin
 from job_hunter_agent.salary import (
     KEY_CURRENCIES_WITH_DOLLAR,
@@ -407,5 +417,29 @@ def _map_job_type(raw: str, mapping: dict) -> str:
     if not raw:
         return ""
 
-    key = raw.lower().replace(" ", "")
-    return mapping.get(key, "")
+    cleaned_raw = str(raw or "").strip()
+    key = cleaned_raw.lower().replace(" ", "")
+    mapped = mapping.get(key, "")
+    if mapped:
+        return mapped
+    _register_unknown_job_type(cleaned_raw)
+    return cleaned_raw
+
+
+def _register_unknown_job_type(raw_value: str) -> None:
+    cleaned_raw = str(raw_value or "").strip()
+    if not cleaned_raw or cleaned_raw.lower() in {"unknown", "n/a", "na"}:
+        return
+    from job_hunter_agent.signal_registry import register_signals
+
+    register_signals([
+        {
+            LEARNING_SIGNAL_KEY: cleaned_raw,
+            LEARNING_CATEGORY_KEY: CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+            LEARNING_SOURCE_KEY: "job parsing",
+            LEARNING_EVIDENCE_KEY: [cleaned_raw],
+            LEARNING_ORIGINAL_TEXTS_KEY: [cleaned_raw],
+            LEARNING_SUGGESTED_VALUES_KEY: [cleaned_raw],
+            LEARNING_NEEDS_REVIEW_KEY: True,
+        }
+    ], category=CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE)

@@ -57,8 +57,13 @@ ROOT_DIR = REPO_ROOT
 KEY_KEYWORDS = "keywords"
 KEY_LOCATIONS = "locations"
 KEY_ENGAGEMENT_TYPE = "engagement_type"
+KEY_PREFER_GOVERNMENT = "prefer_government"
 KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
+
+ENGAGEMENT_TYPE_BOTH = "both"
+ENGAGEMENT_TYPE_PERMANENT = "permanent"
+ENGAGEMENT_TYPE_CONTRACT = "contract"
 
 KEY_LOOKBACK_YEARS = "extraction_lookback_years"
 KEY_MIN_MONTHS = "title_extraction_min_months"
@@ -88,12 +93,6 @@ KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 KEY_MAX_SCORE = "max_score"
-
-BRIEF_MODE_AUTO = "auto"
-BRIEF_MODE_MANUAL = "manual"
-ENGAGEMENT_TYPE_BOTH = "both"
-ENGAGEMENT_TYPE_PERMANENT = "permanent"
-ENGAGEMENT_TYPE_CONTRACT = "contract"
 MATCHING_RULE_PROFILE_KEYS = frozenset({
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_PRIMARY_PATTERNS,
@@ -132,7 +131,9 @@ DEFAULT_CANDIDATE_PROFILE_TIERS  = {
 }
 
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
-DEFAULT_LLM_PROFILE_BRIEF_MODE = BRIEF_MODE_AUTO
+LLM_PROFILE_BRIEF_MODE_AUTO = "auto"
+LLM_PROFILE_BRIEF_MODE_MANUAL = "manual"
+DEFAULT_LLM_PROFILE_BRIEF_MODE = LLM_PROFILE_BRIEF_MODE_AUTO
 
 
 class ProfileLoadError(RuntimeError):
@@ -162,7 +163,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
 DEFAULT_SCORING_RULES = _load_default_scoring_rules()
 
 DEFAULT_PROFILE = {
-    "enabled_sources": ["seek", "linkedin"],
+    "enabled_sources": ["seek"], # Default to 'seek' if not explicitly configured
     "search_settings": {
         **DEFAULT_SEARCH_SETTINGS,
     },
@@ -182,13 +183,13 @@ DEFAULT_PROFILE = {
     "match_preferences": {
         "home_location": "",
         "secondary_location": "",
-        "prefer_government": False,
+        KEY_PREFER_GOVERNMENT: False,
         "prefer_permanent": False,
         "engagement_type": ENGAGEMENT_TYPE_BOTH,
         "preferred_contract_months": 12,
         "short_contract_months": 6,
     },
-    "llm_profile_brief_mode": BRIEF_MODE_AUTO,
+    "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
     "llm_fit_review_guidance": "",
     "llm_capability_naming_guidance": "",
@@ -419,7 +420,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
     merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
     merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
-        merged.get("llm_profile_brief_mode", BRIEF_MODE_AUTO)
+        merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
     )
     merged["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
         merged.get("llm_fit_review_guidance", "")
@@ -635,9 +636,9 @@ def normalize_profile_match_levels(payload: list[dict[str, Any]] | None) -> list
 
 def normalize_llm_profile_brief_mode(value: Any) -> str:
     normalized = str(value or "").strip().lower()
-    if normalized == BRIEF_MODE_MANUAL:
-        return BRIEF_MODE_MANUAL
-    return BRIEF_MODE_AUTO
+    if normalized == LLM_PROFILE_BRIEF_MODE_MANUAL:
+        return LLM_PROFILE_BRIEF_MODE_MANUAL
+    return DEFAULT_LLM_PROFILE_BRIEF_MODE
 
 
 def normalize_llm_fit_review_guidance(value: Any) -> str:

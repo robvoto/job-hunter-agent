@@ -26,7 +26,6 @@ from playwright.sync_api import sync_playwright
 from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.agent_settings import get_dashboard_minimum_score
-from job_hunter_agent.config import OUTPUT_HTML
 from job_hunter_agent import dashboard_data
 from job_hunter_agent.filters import (
     analyze_title_filters,
@@ -47,18 +46,23 @@ from job_hunter_agent.llm_gate import (
 )
 from job_hunter_agent.match_labels import score_to_match_level, score_to_match_label
 from job_hunter_agent.runtime_helpers import (
-    CLI_FLAG_CHEAP_LLM,
-    CLI_FLAG_DEBUG_MODE,
+    CLI_FLAG_DEBUG,
     CLI_FLAG_NO_LLM,
     CLI_FLAG_REBUILD_DASHBOARD,
     has_cli_flag,
 )
 from job_hunter_agent.advance_settings import (
     DEFAULT_SEARCH_SETTINGS,
+    get_archive_stale_after_days,
+    get_hidden_review_days,
+    get_llm_max_chars,
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SEEK_MAX_PAGES,
+    KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+    KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
+    KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
 )
 from job_hunter_agent.profile_store import (
     get_match_levels,
@@ -133,6 +137,7 @@ from job_hunter_agent.scrapers.seek import (
 )
 from job_hunter_agent.paths import (
     AUDIT_RECORDS_PATH as DEBUG_JSON_PATH,
+    DASHBOARD_PATH,
     DATA_DIR,
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
     GOVERNMENT_CONTEXT_RULES_PATH,
@@ -207,7 +212,7 @@ from job_hunter_agent.scoring_utils import (
     profile_recency_multiplier,
 )
 from job_hunter_agent.description_trust import (
-    MIN_TRUSTED_DESCRIPTION_LENGTH,
+    get_min_trusted_description_length,
     get_trusted_sources,
     get_trusted_full_description,
     full_description_confidence,
@@ -303,8 +308,6 @@ from job_hunter_agent.fit_scoring import (
     llm_description_fit_entry,
 )
 from job_hunter_agent.history import (
-    ARCHIVE_STALE_AFTER_DAYS,
-    HIDDEN_REVIEW_DAYS,
     KEEP_SNAPSHOT_FIELDS,
     TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
     apply_kept_job_reuse,
@@ -320,11 +323,8 @@ from job_hunter_agent.history import (
     viewed_by_user,
 )
 
-MAX_LLM_CHARS = 3000
-CLI_FLAGS = set(sys.argv[1:])
-NO_LLM_MODE = has_cli_flag(list(CLI_FLAGS), CLI_FLAG_NO_LLM)
-CHEAP_LLM_MODE = has_cli_flag(list(CLI_FLAGS), CLI_FLAG_CHEAP_LLM)
-DASHBOARD_DEBUG_MODE = has_cli_flag(list(CLI_FLAGS), CLI_FLAG_DEBUG_MODE)
+NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
+DASHBOARD_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
 from job_hunter_agent.dashboard_renderer import (  # noqa: E402 — after CLI_FLAGS
     ARCHIVE_BADGE_TOOLTIP,
@@ -532,7 +532,8 @@ def _resolve_llm_review_payload(
     title_text = str(record.get(RECORD_TITLE_KEY) or "").strip()
     body_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
     llm_input_text = "\n".join(part for part in [title_text, str(body_text).strip()] if part)
-    llm_fp = build_llm_cache_key(llm_input_text[:MAX_LLM_CHARS])
+    max_llm_chars = get_llm_max_chars()
+    llm_fp = build_llm_cache_key(llm_input_text[:max_llm_chars])
     cached = normalize_llm_review_payload(llm_cache.get(llm_fp)) if llm_fp in llm_cache else None
 
     if cached:
@@ -545,9 +546,9 @@ def _resolve_llm_review_payload(
         raise RuntimeError("LLM review requested but OPENAI_API_KEY is missing")
 
     if learning_only:
-        payload = {"fit_review": None, "learning_candidates": llm_should_consider_learning_candidates(llm_input_text[:MAX_LLM_CHARS])}
+        payload = {"fit_review": None, "learning_candidates": llm_should_consider_learning_candidates(llm_input_text[:max_llm_chars])}
     else:
-        payload = llm_should_consider_with_learning(llm_input_text[:MAX_LLM_CHARS])
+        payload = llm_should_consider_with_learning(llm_input_text[:max_llm_chars])
 
     if cached:
         merged = dict(cached)
@@ -588,7 +589,7 @@ def build_history_dashboard_record(job_key: str, entry: dict, run_started_at: da
         entry,
         run_started_at,
         days_since_fn=days_since,
-        archive_stale_after_days=ARCHIVE_STALE_AFTER_DAYS,
+        archive_stale_after_days=get_archive_stale_after_days(),
     )
 
 
@@ -631,7 +632,7 @@ def build_hidden_records(
         run_started_at,
         parse_timestamp_fn=parse_timestamp,
         days_since_fn=days_since,
-        hidden_review_days=HIDDEN_REVIEW_DAYS,
+        hidden_review_days=get_hidden_review_days(),
         build_hidden_dashboard_record_fn=build_hidden_dashboard_record,
     )
 
@@ -725,7 +726,7 @@ def build_run_stats(
 
 
 def render_html(
-    output_path: str,
+    output_path: str | Path,
     kept_records: List[dict],
     run_started_at: datetime,
     date_range_days: int,
@@ -1071,7 +1072,7 @@ def _process_seek_job_details(
     record[RECORD_FULL_DESCRIPTION_KEY] = details_text
     record[RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
     source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
-    is_trusted = source in get_trusted_sources() and len(details_text) >= MIN_TRUSTED_DESCRIPTION_LENGTH
+    is_trusted = source in get_trusted_sources() and len(details_text) >= get_min_trusted_description_length()
     record[RECORD_FIT_CONFIDENCE_KEY] = "HIGH" if is_trusted else "LOW"
     source_metadata, raw_source_payload = _seek_source_metadata(detail_page, details_payload)
     record[RECORD_SOURCE_METADATA_KEY] = source_metadata
@@ -1142,6 +1143,19 @@ def _process_seek_job_details(
     record[RECORD_SOFT_RISK_REASONS_KEY], record[RECORD_MISSING_EVIDENCE_KEY] = build_risk_and_missing_evidence(
         details_text, title_reason, profile, competitive_signals=record[RECORD_COMPETITIVE_SIGNALS_KEY]
     )
+
+    if DASHBOARD_DEBUG_MODE:
+        print(f"[DEBUG][CONTENT] Analysis for: {record[RECORD_TITLE_KEY]}")
+        lowered_text = details_text.lower()
+        for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
+            terms = expand_capability_terms(rule)
+            matching = [t for t in terms if text_contains_term(lowered_text, t)]
+            if matching:
+                print(f"  - Capability: {rule.get('name')} ({rule.get('level')}) | Hits: {', '.join(matching)}")
+        if record[RECORD_COMPETITIVE_SIGNALS_KEY]:
+            print("  - Competitive signals:")
+            for s in record[RECORD_COMPETITIVE_SIGNALS_KEY]:
+                print(f"    {s.get(SIGNAL_LABEL_KEY)}: {s.get('alignment')} ({s.get('adjustment', 0):+d})")
     
     return True, "OK"
 
@@ -1193,6 +1207,9 @@ def _seek_scrape_to_records(
     configured_date_range: int,
     enforce_posted_age_limit: bool,
     configured_seek_max_pages: int,
+    playwright_viewport_width: int,
+    playwright_viewport_height: int,
+    playwright_selector_timeout: int,
     headless: bool,
 ) -> tuple:
     """Run the SEEK Playwright scraping loop.
@@ -1205,9 +1222,9 @@ def _seek_scrape_to_records(
     skill_observations: List[dict] = []
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=headless)
-        list_page = browser.new_page(viewport={"width": 1400, "height": 900})
-        detail_page = browser.new_page(viewport={"width": 1400, "height": 900})
+        browser = playwright.chromium.launch(headless=headless) # type: ignore
+        list_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}) # type: ignore
+        detail_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}) # type: ignore
 
         try:
             seen_urls: Set[str] = set()
@@ -1229,8 +1246,8 @@ def _seek_scrape_to_records(
                     print("URL:", page_url)
 
                     try:
-                        list_page.goto(page_url, wait_until="domcontentloaded")
-                        list_page.wait_for_selector(SELECTOR_CARDS, timeout=8000)
+                        list_page.goto(page_url, wait_until="domcontentloaded") # type: ignore
+                        list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout) # type: ignore
                     except Exception as exc:
                         print(
                             f"No visible job cards for {search_location} on page {current_page_num}. "
@@ -1238,7 +1255,7 @@ def _seek_scrape_to_records(
                         )
                         break
 
-                    job_cards = list_page.query_selector_all(SELECTOR_CARDS)
+                    job_cards = list_page.query_selector_all(SELECTOR_CARDS) # type: ignore
                     print(f"Found {len(job_cards)} job cards")
 
                     if len(job_cards) == 0:
@@ -1247,7 +1264,7 @@ def _seek_scrape_to_records(
 
                     # Extract work arrangement filter state once per page load.
                     # This is search-level context passed to each card extractor.
-                    filter_state = extract_seek_filter_panel_state(list_page)
+                    filter_state = extract_seek_filter_panel_state(list_page) # type: ignore
 
                     page_has_fresh_card = False
 
@@ -1265,6 +1282,11 @@ def _seek_scrape_to_records(
                             title_reason = str(title_analysis.get("reason") or "")
                             record[TITLE_REASON_KEY] = title_reason
                             record[RECORD_TITLE_MATCH_METADATA_KEY] = title_analysis
+                            if DASHBOARD_DEBUG_MODE:
+                                print(f"[DEBUG][TITLE] {title}")
+                                print(f"  Match family: {title_analysis.get('match_family')} | Pattern: {title_analysis.get('matched_pattern')}")
+                                print(f"  Base role: {title_analysis.get('base_role')} | Seniority: {title_analysis.get('title_seniority')} (adj: {title_analysis.get('seniority_adjustment')})")
+
                             if not ok_title:
                                 print(f"REJECTED (title) [{title_reason}] {title}")
                                 record[RECORD_REJECT_REASON_KEY] = title_reason
@@ -1328,6 +1350,13 @@ def _seek_scrape_to_records(
                             fit_eval = _evaluate_job_fit(record, profile, llm_cache)
                             record.update(fit_eval)
                             
+                            if DASHBOARD_DEBUG_MODE:
+                                score = fit_score(record, profile)
+                                breakdown = fit_score_breakdown(record, profile)
+                                print(f"[DEBUG][SCORE] {score}/100 | {record[RECORD_TITLE_KEY]} @ {record[RECORD_COMPANY_KEY]} | Grade: {record.get('llm_fit_grade')} ({record.get('review_source')})")
+                                for entry in breakdown:
+                                    print(f"    {entry['label']}: {entry['value']:+d}")
+
                             if record[RECORD_DECISION_KEY] == "REJECT":
                                 print(f"REJECTED ({record['review_source']}) {title} @ {company}")
                                 record[RECORD_REJECT_REASON_KEY] = "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT"
@@ -1377,10 +1406,12 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     print("  Trigger            : manual scrape command")
     print("  Action             : scrape fresh jobs, review them, rebuild dashboard")
     print("  Fresh scrape       : YES")
-    print(f"  Dashboard debug    : {'ON (--debug-mode)' if DASHBOARD_DEBUG_MODE else 'OFF'}")
-    print(f"  Cheap LLM          : {'ON (--cheap-llm)' if CHEAP_LLM_MODE else 'OFF'}")
-    print(f"  LLM Disabled       : {'YES (--no-llm flag)' if NO_LLM_MODE else 'NO'}")
-    print(f"  LLM Model          : {_get_llm_model()}")
+    print(f"  Dashboard debug    : {'ON (--debug)' if DASHBOARD_DEBUG_MODE else 'OFF'}")
+    print(f"  LLM Disabled       : {'YES (--no-llm)' if NO_LLM_MODE else 'NO'}")
+    if NO_LLM_MODE:
+        print("  LLM Model          : disabled")
+    else:
+        print(f"  LLM Model          : {_get_llm_model()}")
     print(f"  Score Floor        : {dashboard_min_score}")
     print(f"  Reset New To You   : {'YES (--reset-new-to-you)' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
     print("=" * 60)
@@ -1393,6 +1424,9 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
     enforce_posted_age_limit = bool(search_settings.get("enforce_posted_age_limit", DEFAULT_SEARCH_SETTINGS["enforce_posted_age_limit"]))
     sort_newest_first = bool(search_settings.get("sort_newest_first", DEFAULT_SEARCH_SETTINGS["sort_newest_first"]))
+    playwright_viewport_width = int(search_settings.get(KEY_PLAYWRIGHT_VIEWPORT_WIDTH, 1400) or 1400)
+    playwright_viewport_height = int(search_settings.get(KEY_PLAYWRIGHT_VIEWPORT_HEIGHT, 900) or 900)
+    playwright_selector_timeout = int(search_settings.get(KEY_PLAYWRIGHT_SELECTOR_TIMEOUT, 8000) or 8000)
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
 
     run_started_at = datetime.now().astimezone()
@@ -1401,7 +1435,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     llm_cache: Dict[str, Any] = load_llm_cache()
     job_history = load_job_history()
 
-    enabled_sources = [s.lower().strip() for s in (profile.get("enabled_sources") or ["seek"])]
+    enabled_sources = [s.lower().strip() for s in (profile.get("enabled_sources") or [])]
 
     kept_records: List[dict] = []
     audit_rows: List[dict] = []
@@ -1421,6 +1455,9 @@ def scrape_jobs_direct(headless: bool = False) -> str:
             configured_date_range=configured_date_range,
             enforce_posted_age_limit=enforce_posted_age_limit,
             configured_seek_max_pages=configured_seek_max_pages,
+            playwright_viewport_width=playwright_viewport_width,
+            playwright_viewport_height=playwright_viewport_height,
+            playwright_selector_timeout=playwright_selector_timeout,
             headless=headless,
         )
         kept_records.extend(s_kept)
@@ -1452,7 +1489,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
 
     if not audit_rows and previous_audit_rows:
         render_html(
-            OUTPUT_HTML,
+            DASHBOARD_PATH,
             load_last_kept_records(),
             parse_timestamp(previous_run_stats.get("run_started_at")) or run_started_at,
             configured_date_range,
@@ -1466,8 +1503,8 @@ def scrape_jobs_direct(headless: bool = False) -> str:
         save_llm_cache(llm_cache)
         save_job_history(job_history)
         print("\nNo fresh cards were captured in this run, so the previous dashboard state was preserved.")
-        print(f"Dashboard preserved at {OUTPUT_HTML}")
-        return OUTPUT_HTML
+        print(f"Dashboard preserved at {DASHBOARD_PATH}")
+        return str(DASHBOARD_PATH)
 
     run_finished_at = datetime.now().astimezone()
     run_stats = build_run_stats(
@@ -1482,7 +1519,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     run_stats["last_run_attempt_at"] = run_iso
 
     render_html(
-        OUTPUT_HTML,
+        DASHBOARD_PATH,
         kept_records,
         run_started_at,
         configured_date_range,
@@ -1498,12 +1535,12 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     write_debug_json(audit_rows)
     write_run_stats(run_stats)
     write_review_data(build_review_data(audit_rows, skill_observations, profile))
-    print(f"\nSaved {len(kept_records)} jobs to {OUTPUT_HTML}")
+    print(f"\nSaved {len(kept_records)} jobs to {DASHBOARD_PATH}")
     print(f"Saved {len(audit_rows)} audit rows to {DEBUG_JSON_PATH}")
     print(f"Saved run stats to {RUN_STATS_PATH}")
     print(f"Saved review data to {REVIEW_DATA_PATH}")
     print(f"Saved history for {len(job_history)} jobs to {JOB_HISTORY_PATH}")
-    return OUTPUT_HTML
+    return str(DASHBOARD_PATH)
 
 
 def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -> str:
@@ -1515,7 +1552,7 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
     print("  Action             : re-render saved dashboard only")
     print("  Fresh scrape       : NO")
     print("  AI review          : NO")
-    print(f"  Debug dashboard   : {'ON (--debug-mode)' if DASHBOARD_DEBUG_MODE else 'OFF'}")
+    print(f"  Debug dashboard   : {'ON (--debug)' if DASHBOARD_DEBUG_MODE else 'OFF'}")
     print(f"  Reset New To You   : {'YES (--reset-new-to-you)' if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING else 'NO'}")
     print("=" * 60)
     profile = load_profile()
@@ -1535,7 +1572,7 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
     print("=" * 60)
 
     render_html(
-        OUTPUT_HTML,
+        DASHBOARD_PATH,
         kept_records, 
         run_started_at,
         configured_date_range,
@@ -1546,8 +1583,8 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
         hidden_job_keys,
         reference_time,
     )
-    print(f"Dashboard rebuilt at {OUTPUT_HTML}")
-    return OUTPUT_HTML
+    print(f"Dashboard rebuilt at {DASHBOARD_PATH}")
+    return str(DASHBOARD_PATH)
 
 
 if __name__ == "__main__":

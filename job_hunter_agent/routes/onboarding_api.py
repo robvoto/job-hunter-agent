@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body
 
+from job_hunter_agent.locations import resolve_location
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -11,6 +12,7 @@ from job_hunter_agent.profile_store import (
     KEY_MATCH_PREFS,
     KEY_MIN_DAILY_RATE,
     KEY_MIN_SALARY_YEARLY,
+    KEY_PREFER_GOVERNMENT,
     KEY_ONBOARDING_SETTINGS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
@@ -66,6 +68,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         keyword = str(body.get(REQUEST_SEARCH_KEYWORD_KEY) or "").strip()
         locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
         engagement_type = str(body.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
+        prefer_government = str(body.get(KEY_PREFER_GOVERNMENT) or "").strip().lower() == "true"
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
@@ -75,15 +78,14 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             raise ValueError("Primary job title must not be empty")
         if keyword and (len(keyword) < 2 or len(keyword) > 120):
             raise ValueError("Please keep the primary search title between 2 and 120 characters.")
-        if not locations:
-            raise ValueError("Please add at least one search location.")
-        if len(locations) > 8:
-            raise ValueError("Please keep your location list to 8 places or fewer.")
-        for location in locations:
-            if len(location) < 2 or len(location) > 80:
-                raise ValueError("Each search location must be between 2 and 80 characters.")
-            if not srv._LOCATION_NAME_RE.fullmatch(location):
-                raise ValueError("Search locations should look like normal city, state, or region names.")
+        if len(locations) != 1:
+            raise ValueError("Please choose one search location.")
+        location = locations[0]
+        if len(location) < 2 or len(location) > 80:
+            raise ValueError("Location should be between 2 and 80 characters.")
+        if not srv._LOCATION_NAME_RE.fullmatch(location):
+            raise ValueError("Location should look like a normal city, state, or region name.")
+        locations = [resolve_location(location)["name"]]
         if engagement_type not in srv._VALID_ENGAGEMENT_TYPES:
             raise ValueError("Please choose what type of work you are open to.")
         try:
@@ -110,6 +112,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         profile_patch[PROFILE_SEARCH_SETTINGS_KEY] = search_settings
         match_preferences = dict(current.get(KEY_MATCH_PREFS, {}))
         match_preferences[KEY_ENGAGEMENT_TYPE] = engagement_type
+        match_preferences[KEY_PREFER_GOVERNMENT] = prefer_government
         profile_patch[KEY_MATCH_PREFS] = match_preferences
         profile_patch[PROFILE_SALARY_PREFS_KEY] = {
             KEY_MIN_SALARY_YEARLY: minimum_salary_yearly,

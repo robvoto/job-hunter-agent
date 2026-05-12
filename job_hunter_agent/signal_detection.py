@@ -24,6 +24,7 @@ from job_hunter_agent.signal_schema import (
     ALIGNMENT_STRONG,
     ALIGNMENT_WEAK,
     CATEGORY_CAPABILITY_CONCEPT,
+    CATEGORY_CV_FARMING_PATTERN,
     CATEGORY_GOVERNMENT_CONTEXT,
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_ROLE_TITLE_TOKEN,
@@ -78,6 +79,7 @@ from job_hunter_agent.parsing_schema import (
     PARSING_GOVERNMENT_TERMS_KEY,
 )
 from job_hunter_agent.signal_registry import signal_in_approved_knowledge
+from job_hunter_agent.job_quality import detect_cv_farming_signals, load_dodgy_job_rules
 from job_hunter_agent.io_utils import load_parsing_rules, load_signal_defaults
 from job_hunter_agent.text_processing import (
     compact_whitespace,
@@ -415,6 +417,34 @@ def build_job_learning_signals(
         review_token = _role_title_review_token(title)
         if review_token:
             _add_to_pending(review_token, CATEGORY_ROLE_TITLE_TOKEN, record, pending, seen, context=[title])
+
+    if details_text:
+        for item in detect_cv_farming_signals(details_text, load_dodgy_job_rules()):
+            sig = compact_whitespace(item.get(LEARNING_SIGNAL_KEY) or "")
+            if not sig:
+                continue
+            sig_key = _dedupe_key(sig)
+            if sig_key in seen:
+                continue
+            seen.add(sig_key)
+            pending.append(
+                {
+                    LEARNING_SIGNAL_KEY: sig,
+                    LEARNING_CATEGORY_KEY: item.get("suggested_category") or CATEGORY_CV_FARMING_PATTERN,
+                    LEARNING_SOURCE_KEY: SOURCE_JOB_PARSING,
+                    LEARNING_CONTEXT_KEY: [
+                        compact_whitespace(record.get(RECORD_TITLE_KEY) or ""),
+                        compact_whitespace(record.get(RECORD_COMPANY_KEY) or ""),
+                    ],
+                    LEARNING_EVIDENCE_KEY: [compact_whitespace(item.get("evidence") or sig)],
+                    LEARNING_NEEDS_REVIEW_KEY: True,
+                    LEARNING_ORIGINAL_TEXTS_KEY: [
+                        compact_whitespace(text)
+                        for text in (item.get("original_texts") or [sig])
+                        if compact_whitespace(text)
+                    ],
+                }
+            )
 
     return pending
 

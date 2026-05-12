@@ -56,6 +56,8 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SOURCE_KEY,
     SOURCE_CV_PARSING,
 )
+from job_hunter_agent.llm_protocol import LLM_MAX_CV_EVIDENCE_JSON_CHARS, LLM_MAX_CV_FALLBACK_CHARS
+
 from job_hunter_agent.parsing_schema import (
     PARSING_TITLE_CANDIDATE_LINE_RULES_KEY,
     PARSING_TITLE_CANDIDATE_MAX_LENGTH_KEY,
@@ -710,6 +712,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
         "- Return only schema-valid output.\n\n"
         f"Evidence pack JSON:\n{evidence_json[:12000]}\n\n"
         f"Raw CV fallback:\n{source_text[:3000]}"
+        f"Evidence pack JSON:\n{evidence_json[:LLM_MAX_CV_EVIDENCE_JSON_CHARS]}\n\n"
+        f"Raw CV fallback:\n{source_text[:LLM_MAX_CV_FALLBACK_CHARS]}"
     )
 
     try:
@@ -946,12 +950,13 @@ def _role_title_review_token(title: str) -> str:
 
 
 def _split_compound_role_title(title: str) -> list[str]:
-    cleaned = _normalize_role_title_value(title)
+    raw_title = _clean_line(title)
+    cleaned = _normalize_role_title_value(raw_title)
     if not cleaned:
         return []
     raw_parts = [
         _normalize_role_title_value(part)
-        for part in re.split(r"\s*/\s*|\s*\|\s*|\s+\band\b\s+|\s*&\s+", cleaned)
+        for part in re.split(r"\s*/\s*|\s*\|\s*|\s+\band\b\s+|\s*&\s+", raw_title)
         if _normalize_role_title_value(part)
     ]
     if len(raw_parts) <= 1:
@@ -959,6 +964,18 @@ def _split_compound_role_title(title: str) -> list[str]:
     if not all(len(_pattern_tokens(part)) >= 2 for part in raw_parts):
         return [cleaned]
     return list(dict.fromkeys(raw_parts))
+
+
+def _split_compound_role_titles(titles: list[str]) -> list[str]:
+    split_titles: list[str] = []
+    seen: set[str] = set()
+    for title in titles or []:
+        for part in _split_compound_role_title(title):
+            if not part or part in seen:
+                continue
+            seen.add(part)
+            split_titles.append(part)
+    return split_titles
 
 
 def _sorted_roles_for_title_selection(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1134,6 +1151,7 @@ def build_learning_patch(
         for role in _parse_role_entries(source_text)
         if str(role.get("title") or "").strip()
     ]
+    role_titles = _split_compound_role_titles(role_titles)
     if role_titles:
         learn_title_normalization_candidates(
             role_titles,

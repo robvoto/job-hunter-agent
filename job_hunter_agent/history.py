@@ -60,15 +60,26 @@ from job_hunter_agent.record_schema import (
     RECORD_SEARCH_LOCATION_KEY,
     RECORD_SEARCH_KEYWORDS_KEY
 )
-
-ARCHIVE_STALE_AFTER_DAYS = 15
-HIDDEN_REVIEW_DAYS = 30
+from job_hunter_agent.advance_settings import (
+    KEY_ARCHIVE_STALE_AFTER_DAYS,
+    KEY_HISTORY_SETTINGS,
+    KEY_HIDDEN_REVIEW_DAYS,
+    load_advance_settings,
+)
 MAX_HISTORY_SIGHTINGS = 24
 REPEATED_LISTING_MIN_TIMES_SEEN = 4
 REPEATED_LISTING_MIN_SPAN_DAYS = 21
 MULTI_LISTING_RED_FLAG_MIN_LISTINGS = 3
 MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = 30
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = CLI_FLAG_RESET_NEW_TO_YOU in set(sys.argv[1:])
+
+
+def get_archive_stale_after_days() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
+
+
+def get_hidden_review_days() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
 
 KEEP_SNAPSHOT_FIELDS = (
     RECORD_TITLE_KEY,

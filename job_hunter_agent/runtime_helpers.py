@@ -5,9 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CLI_FLAG_CHEAP_LLM = "--cheap-llm"
 CLI_FLAG_NO_LLM = "--no-llm"
-CLI_FLAG_DEBUG_MODE = "--debug-mode"
+CLI_FLAG_DEBUG = "--debug"
 CLI_FLAG_REBUILD_DASHBOARD = "--rebuild-dashboard"
 CLI_FLAG_RESET_NEW_TO_YOU = "--reset-new-to-you"
 

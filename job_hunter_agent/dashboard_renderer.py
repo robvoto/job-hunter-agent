@@ -46,6 +46,7 @@ from job_hunter_agent.preferences import assess_contract_preference
 from job_hunter_agent.profile_store import get_match_levels, load_profile
 from job_hunter_agent.role_analysis import infer_role_sector
 from job_hunter_agent.io_utils import load_ui_labels
+from job_hunter_agent.advance_settings import get_default_country_suffix
 from job_hunter_agent.salary_utils import salary_sort_value
 from job_hunter_agent.score_labels import (
     render_badge,
@@ -53,6 +54,7 @@ from job_hunter_agent.score_labels import (
     score_to_tone_class,
     viewed_badge_html,
 )
+from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.signal_detection import (
     competitive_signal_assessments,
     hard_block_reasons,
@@ -67,7 +69,7 @@ from job_hunter_agent.text_processing import (
 from job_hunter_agent.utils import safe_html
 from job_hunter_agent.work_mode_extraction import extract_from_text, WORK_MODE_UNKNOWN
 
-DASHBOARD_DEBUG_MODE = "--debug-mode" in sys.argv
+DASHBOARD_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
 ARCHIVE_LABEL = "Saved From Earlier Searches"
@@ -287,11 +289,12 @@ def render_job_card(
     applied_pool: Optional[List[dict]] = None,
     history_clusters: Optional[Dict[str, dict]] = None,
 ) -> str:
+    default_country_suffix = get_default_country_suffix()
     active_profile = scoring_profile or load_profile()
     display_record = dict(record)
     loc = str(display_record.get("location") or "").strip()
-    if loc.endswith(", Australia"):
-        display_record["location"] = loc[:-11].strip()
+    if default_country_suffix and loc.endswith(f", {default_country_suffix}"):
+        display_record["location"] = loc[:-(len(default_country_suffix) + 2)].strip()
 
     title = safe_html(record.get("title", "Untitled"))
     company = safe_html(record.get("company", "N/A"))
@@ -440,6 +443,9 @@ def render_job_card(
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if history_warning_signals:
         badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))
+    job_quality_signals = [s for s in (record.get("job_quality_signals") or []) if isinstance(s, dict)]
+    for _sig in job_quality_signals:
+        badges.append(render_badge(_sig.get("label", "Quality Concern"), "badge-warning", _sig.get("evidence", "")))
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
         f'<div class="match-tile {fit_tone_class}" style="--match-score: {score_percent}%;">'
@@ -583,6 +589,16 @@ def render_job_card(
             '<div class="job-insight-group job-insight-warning">'
             '<strong>Potential red flags</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in history_warning_signals)}</ul>'
+            '</div>'
+        )
+    if job_quality_signals:
+        _quality_items = "".join(
+            f"<li>{safe_html(s.get('evidence', ''))}</li>" for s in job_quality_signals
+        )
+        insight_sections.append(
+            '<div class="job-insight-group job-insight-warning">'
+            '<strong>Job quality concerns</strong>'
+            f'<ul>{_quality_items}</ul>'
             '</div>'
         )
     if negative_items:

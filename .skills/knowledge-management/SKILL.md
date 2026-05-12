@@ -16,6 +16,7 @@ Use before editing managed JSON knowledge, rule loaders, paths, or approval-back
 - `capability_knowledge.py`: capability knowledge.
 - `hard_blocker_rules.py`: hard blocker patterns.
 - `role_title_knowledge.py`: title knowledge.
+- `job_quality.py`: quality-rule loaders and learnable CV-farming patterns.
 - `signal_registry.py`: pending learned signals.
 
 ## Checklist

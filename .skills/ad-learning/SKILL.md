@@ -16,6 +16,7 @@ Use before editing logic that learns from job ads or proposes new knowledge from
 - `role_title_token`: role-title token or phrase useful for title matching.
 - `hard_blocker_pattern`: explicit requirement that may become a blocker after approval.
 - `title_normalization_candidate`: possible title wording/normalisation candidate.
+- `cv_farming_pattern`: learned job-quality phrase or regex that suggests CV collection behaviour.
 
 ## Boundaries
 - Ad learning suggests; signal registry owns review state.

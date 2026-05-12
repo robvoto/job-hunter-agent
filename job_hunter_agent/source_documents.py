@@ -333,7 +333,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         search_settings["keywords"] = manual_keywords
     
     # 2. Locations
-    manual_locations = [str(l).strip() for l in prefs.get("locations", []) if str(l).strip()]
+    manual_locations = [str(l).strip() for l in prefs.get("locations", []) if str(l).strip()][:1]
     if manual_locations:
         search_settings["locations"] = manual_locations
     else:
@@ -353,6 +353,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         match_preferences.update(text_prefs)
         if text_prefs.get("home_location") and not search_settings.get("locations"):
             search_settings["locations"] = [text_prefs["home_location"]]
+
+    search_settings["locations"] = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()][:1]
 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences

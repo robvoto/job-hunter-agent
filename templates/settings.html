@@ -3,11 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Settings - Job Hunter</title>
+  <title>__JOB_HUNTER_PAGE_TITLE__</title>
   <link rel="stylesheet" href="/static/themes.css">
   <link rel="stylesheet" href="/static/settings-page.css">
   <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
   <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN__";</script>
+  <script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = __JOB_HUNTER_LOCATION_OPTIONS__;</script>
+  <script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = "__JOB_HUNTER_DEFAULT_LOCATION__";</script>
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
@@ -50,9 +52,9 @@
     }
   </style>
 </head>
-<body data-test-mode="__JOB_HUNTER_DEBUG_MODE__">
+  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
   <div class="settings-container">
-    <nav class="settings-sidebar" aria-label="Settings sections">
+    <nav class="settings-sidebar" aria-label="Page sections">
       <div class="sidebar-brand">
         <h1 class="sidebar-brand-title">
           <img src="/static/job_hunter_img.png" alt="" class="sidebar-brand-icon">
@@ -60,14 +62,14 @@
         </h1>
       </div>
       <div class="sidebar-nav">
-        <button class="nav-item is-active" type="button" data-section="section-search">Search</button>
-        <button class="nav-item" type="button" data-section="section-profile">Profile</button>
-        <button class="nav-item" type="button" data-section="section-matrix">Capability Matrix</button>
-        <button class="nav-item" type="button" data-section="section-rules">Rules</button>
-        <button class="nav-item" type="button" data-section="section-alerts">Alerts &amp; AI</button>
-        <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise">Optimise</button>
-        <button class="nav-item" type="button" data-section="section-advance">Advanced Settings</button>
-        <button class="nav-item" type="button" data-section="section-learning">Learning</button>
+        <button class="nav-item is-active" type="button" data-section="section-search" data-screen="settings">Search</button>
+        <button class="nav-item" type="button" data-section="section-profile" data-screen="settings">Profile</button>
+        <button class="nav-item" type="button" data-section="section-matrix" data-screen="settings">Capability Matrix</button>
+        <button class="nav-item" type="button" data-section="section-rules" data-screen="settings">Rules</button>
+        <button class="nav-item" type="button" data-section="section-alerts" data-screen="settings">Alerts &amp; AI</button>
+        <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise" data-screen="settings">Optimise</button>
+        <button class="nav-item" type="button" data-section="section-admin" data-screen="admin">Admin</button>
+        <button class="nav-item" type="button" data-section="section-learning" data-screen="admin">Learning</button>
       </div>
       <a href="/" class="nav-item-back">View Dashboard</a>
     </nav>
@@ -76,8 +78,8 @@
       <div class="settings-content-area">
         <section class="hero">
           <div class="hero-text">
-            <h1>Settings</h1>
-            <p>Configure candidate search and matching settings here. Global admin tools live in Advanced Settings.</p>
+            <h1>__JOB_HUNTER_PAGE_HEADING__</h1>
+            <p>__JOB_HUNTER_PAGE_COPY__</p>
           </div>
           <div class="theme-switcher-widget" style="margin-left:auto;flex-shrink:0;">
             <span>Theme test:</span>
@@ -91,34 +93,62 @@
 
         <div class="status" id="status"></div>
 
-        <section id="section-search" class="settings-group is-active">
+        <section id="section-search" class="settings-group is-active" data-screen="settings">
           <h2 class="section-title">Search</h2>
           <div class="grid search-settings-grid">
             <section class="panel">
               <h2>Common Search Settings</h2>
               <p class="panel-copy">Shared source-search inputs that apply across SEEK and LinkedIn.</p>
-              <label for="keywords">Primary search title</label>
-              <input id="keywords" type="text" placeholder="e.g. Business Analyst">
-              <div class="help">Use one clear job title here. This is the source query used to fetch candidate roles before CV-based scoring and capability rules refine them.</div>
+              <label>Search titles</label>
+              <div class="badge-editor" data-chip-editor="keywords">
+                <div id="keywords_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="keywords_add" type="text" data-chip-input="keywords" placeholder="Add a search title">
+                  <button class="secondary" type="button" data-add-chip="keywords">Add</button>
+                </div>
+              </div>
+              <textarea id="keywords" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="help">Each title is sent as a separate search query to job boards. At least one must remain.</div>
 
-              <label for="dashboard_minimum_score">Dashboard results minimum score</label>
+              <label for="engagement_type">Work type</label>
+              <select id="engagement_type">
+                <option value="both">Both (no filter)</option>
+                <option value="permanent">Permanent only</option>
+                <option value="contract">Contract only</option>
+              </select>
+              <div class="help">Filter which engagement types are searched. Both includes permanent and contract roles.</div>
+
+              <label for="prefer_government">Government preference</label>
+              <select id="prefer_government">
+                <option value="false">No preference</option>
+                <option value="true">Prefer public sector roles</option>
+              </select>
+              <div class="help">Turn this on when public sector roles should receive government preference scoring.</div>
+
+              <label for="dashboard_minimum_score">Minimum fit level to show</label>
               <input id="dashboard_minimum_score" type="number" min="0" max="100">
-              <div class="help">Dashboard shortlist keeps roles at or above this fit score. This changes visibility after scoring, not how many source pages are scraped.</div>
+              <div class="help">Roles scoring below this threshold are hidden from the shortlist. Matches your fit level thresholds — raise it to see only stronger matches.</div>
 
               <label for="minimum_salary_yearly">Minimum annual salary</label>
-              <input id="minimum_salary_yearly" type="number" min="0" step="1000">
+              <div class="currency-input-wrap">
+                <span class="currency-prefix">$</span>
+                <input id="minimum_salary_yearly" type="number" min="0" step="1000" value="0">
+              </div>
               <div class="help">Used when permanent roles list salary. Set 0 to ignore.</div>
 
               <label for="minimum_daily_rate">Minimum daily rate</label>
-              <input id="minimum_daily_rate" type="number" min="0" step="50">
+              <div class="currency-input-wrap">
+                <span class="currency-prefix">$</span>
+                <input id="minimum_daily_rate" type="number" min="0" step="50" value="0">
+              </div>
               <div class="help">Used when contract roles list a day rate. Set 0 to ignore.</div>
             </section>
 
             <section class="panel">
               <h2>SEEK</h2>
-              <label for="locations">Locations</label>
-              <textarea id="locations" placeholder="One location per line"></textarea>
-              <div class="help">Use source-specific location text you actually want to search.</div>
+              <label for="locations">Location</label>
+              <select id="locations"></select>
+              <div class="help">Choose one state or capital city. Job Hunter uses the same canonical location for SEEK and LinkedIn, then adapts the query format per source.</div>
 
               <label for="classification_ids" hidden>Classification IDs</label>
               <textarea id="classification_ids" placeholder="One id per line" hidden></textarea>
@@ -197,7 +227,7 @@
           </div>
         </section>
 
-        <section id="section-profile" class="settings-group">
+        <section id="section-profile" class="settings-group" data-screen="settings">
           <h2 class="section-title">Profile</h2>
           <div class="profile-shell">
             <div class="profile-main">
@@ -335,7 +365,7 @@
           </div>
         </section>
 
-        <section id="section-matrix" class="settings-group">
+        <section id="section-matrix" class="settings-group" data-screen="settings">
           <h2 class="section-title">Capability Matrix</h2>
           <section class="panel advanced-shell">
             <div class="advanced-head">
@@ -355,7 +385,7 @@
           </section>
         </section>
 
-        <section id="section-rules" class="settings-group">
+        <section id="section-rules" class="settings-group" data-screen="settings">
           <h2 class="section-title">Rules</h2>
           <div class="advanced-grid">
             <section class="subpanel">
@@ -427,7 +457,7 @@
           </div>
         </section>
 
-        <section id="section-alerts" class="settings-group">
+        <section id="section-alerts" class="settings-group" data-screen="settings">
           <h2 class="section-title">Alerts &amp; AI</h2>
           <div class="grid">
             <section class="panel">
@@ -477,12 +507,12 @@
               <select id="llm_model">
                 <option value="">Select a model</option>
               </select>
-              <div class="help">Used for fit decisions and CV extraction. The available models are managed in Advanced Settings.</div>
+              <div class="help">Used for fit decisions and CV extraction. The available models are managed in Admin.</div>
             </section>
           </div>
         </section>
 
-        <section id="section-optimise" class="settings-group">
+        <section id="section-optimise" class="settings-group" data-screen="settings">
           <h2 class="section-title">Optimise</h2>
           <div class="grid">
             <section class="panel" data-debug-only hidden>
@@ -505,12 +535,9 @@
           </div>
         </section>
 
-        <section id="section-advance" class="settings-group">
-          <h2 class="section-title">Advanced Settings</h2>
+        <section id="section-admin" class="settings-group" data-screen="admin">
+          <h2 class="section-title">Admin</h2>
           <p class="panel-copy">These controls stay global and centrally managed. They cover card highlight display, search defaults, search guardrails, evidence tier weights, preference weights, onboarding defaults, and capability presets. Candidate profile fields stay elsewhere.</p>
-          <div class="panel-actions" style="margin-bottom: 18px;">
-            <button class="primary" id="save_advance_btn" type="button">Save All Changes</button>
-          </div>
           <section class="panel">
             <h2>Card Highlight Display</h2>
             <p class="panel-copy">These are global dashboard rendering controls. They change what appears on every card, not the candidate profile or scoring rules.</p>
@@ -649,6 +676,28 @@
           </section>
 
           <section class="panel">
+            <h2>History Retention</h2>
+            <p class="panel-copy">These shared retention limits control when archive and hidden jobs are re-reviewed.</p>
+
+            <label for="history_archive_stale_after_days">Archive stale after days</label>
+            <input id="history_archive_stale_after_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How long an archived job stays fresh before the dashboard treats it as stale.</div>
+
+            <label for="history_hidden_review_days">Hidden review days</label>
+            <input id="history_hidden_review_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How long a hidden job stays hidden before it is eligible for another review.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Description Trust</h2>
+            <p class="panel-copy">This controls when a description fallback is trusted enough to use as full text.</p>
+
+            <label for="description_trust_min_trusted_description_length">Minimum trusted description length</label>
+            <input id="description_trust_min_trusted_description_length" type="number" min="1" max="100000" step="1">
+            <div class="field-help">If the fallback text is shorter than this, the system will not treat it as a trusted full description.</div>
+          </section>
+
+          <section class="panel">
             <h2>Onboarding Defaults</h2>
             <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
             <div class="field-help">These controls also shape how the learning pass keeps aliases and signal clusters when the system extracts your CV.</div>
@@ -701,6 +750,10 @@
             <textarea id="llm_model_options" rows="4" placeholder="One model id per line"></textarea>
             <div class="field-help">Keep one model id per line. The runtime selector uses this list directly.</div>
 
+            <label for="llm_max_llm_chars">Maximum LLM characters</label>
+            <input id="llm_max_llm_chars" type="number" min="1" max="20000" step="1">
+            <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts.</div>
+
             <label for="llm_pricing_per_1m">Model pricing per 1M tokens</label>
             <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"gpt-4o-mini": {"input": 0.15, "output": 0.6}}'></textarea>
             <div class="field-help">Managed pricing used for cost logging. Keep it as JSON with `input` and `output` rates per model.</div>
@@ -714,13 +767,13 @@
             <h2>Capability Presets</h2>
             <p class="panel-copy">These preset tables are global. The selector above chooses which one onboarding uses.</p>
             <div id="capability_strength_presets_panel">
-              <p class="help">Load Advanced Settings to view the preset tables.</p>
+              <p class="help">Load Admin to view the preset tables.</p>
             </div>
           </section>
 
         </section>
 
-        <section id="section-learning" class="settings-group">
+        <section id="section-learning" class="settings-group" data-screen="admin">
           <h2 class="section-title">Learning</h2>
           <section class="panel">
             <div class="panel-kicker">Global learning</div>
@@ -734,19 +787,22 @@
       </div>
     </main>
 
-    <footer class="save-footer" id="sticky_save_bar" hidden>
+    <footer class="save-footer" id="sticky_save_bar">
       <div class="save-footer-info">
         <p>Unsaved changes detected</p>
         <span class="inline-status" id="global_save_status"></span>
       </div>
       <div class="save-footer-actions">
-        <button class="secondary" id="discard_changes_btn" type="button">Discard</button>
-        <button class="primary" id="save_all_btn" type="button">Save All Changes</button>
+        <button class="secondary" id="discard_changes_btn" type="button" data-screen="settings">Discard</button>
+        <button class="secondary" id="discard_admin_changes_btn" type="button" data-screen="admin">Discard</button>
+        <button class="primary" id="save_settings_btn" type="button" data-screen="settings" disabled>Save Settings</button>
+        <button class="primary" id="save_admin_btn" type="button" data-screen="admin" disabled>Save Admin Changes</button>
       </div>
     </footer>
   </div>
 
   <script src="/static/capability-ui.js"></script>
+  <script src="/static/location-options.js"></script>
   <script src="/static/settings-page.js"></script>
   <script src="/static/settings-review-panel.js"></script>
   <script src="/static/settings-signal-registry.js"></script>

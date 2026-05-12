@@ -50,6 +50,13 @@
     "secondary_candidate_profile_context": 0.55,
     "supplementary_candidate_profile_context": 0.25
   },
+  "history_settings": {
+    "archive_stale_after_days": 15,
+    "hidden_review_days": 30
+  },
+  "description_trust_settings": {
+    "min_trusted_description_length": 600
+  },
   "onboarding_settings": {
     "extraction_lookback_years": 8,
     "title_extraction_min_months": 6,
@@ -118,6 +125,7 @@
       "gpt-4o-mini",
       "gpt-4o"
     ],
+    "max_llm_chars": 3000,
     "pricing_per_1m": {
       "gpt-4o-mini": {
         "input": 0.15,
@@ -170,5 +178,10 @@
       "rejection_blocker_suggestions_max_items": 6,
       "rejection_blocker_suggestions_max_words": 6
     }
+  },
+  "playwright_settings": {
+    "playwright_viewport_width": 1400,
+    "playwright_viewport_height": 900,
+    "playwright_selector_timeout": 8000
   }
 }

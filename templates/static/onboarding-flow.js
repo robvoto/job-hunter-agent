@@ -143,6 +143,9 @@ function updateCheckStep() {
         ? 'Contract only'
         : 'Both permanent and contract'
   );
+  document.getElementById('check_government_preference').textContent = searchPrefs.prefer_government
+    ? 'Prefer public sector roles'
+    : 'No preference';
   document.getElementById('check_salary_yearly').textContent = searchPrefs.minimum_salary_yearly
     ? `$${Number(searchPrefs.minimum_salary_yearly).toLocaleString()}`
     : 'Not provided';
@@ -163,6 +166,8 @@ function hydrateSearchBasics(profile) {
   const engagementInput = document.querySelector(`input[name="engagement_pref"][value="${engagementType}"]`)
     || document.querySelector('input[name="engagement_pref"][value="both"]');
   if (engagementInput) engagementInput.checked = true;
+  const governmentPreference = document.getElementById('government_preference');
+  if (governmentPreference) governmentPreference.value = String(Boolean(matchPreferences.prefer_government));
   updateCompensationVisibility();
 }
 
@@ -443,13 +448,14 @@ async function finishSetup() {
     throw new Error('Please keep at least one target title before finishing setup.');
   }
 
-      const response = await jobHunterFetch('/api/onboarding/confirm-profile-signals', {
+  const response = await jobHunterFetch('/api/onboarding/confirm-profile-signals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       search_keyword: searchPrefs.keywords,
       search_locations: searchPrefs.locations,
       engagement_type: searchPrefs.engagement_type,
+      prefer_government: searchPrefs.prefer_government,
       minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
       minimum_daily_rate: searchPrefs.minimum_daily_rate,
       primary_job_title_pattern: reviewTargetTitles,
@@ -467,6 +473,7 @@ async function finishSetup() {
     keywords: searchPrefs.keywords || String(payload?.profile?.search_settings?.keywords || '').trim(),
     locations: searchPrefs.locations,
     engagement_type: searchPrefs.engagement_type,
+    prefer_government: searchPrefs.prefer_government,
   };
   storeCompletionRedirectState(payload, finalSearchPrefs);
   showStatus(payload.message || 'Setup complete.', 'ok');
@@ -742,6 +749,7 @@ locationQuickPicks.addEventListener('click', (event) => {
 document.querySelectorAll('input[name="engagement_pref"]').forEach((input) => {
   input.addEventListener('change', updateCompensationVisibility);
 });
+document.getElementById('government_preference')?.addEventListener('change', saveWizardState);
 locationSelected.addEventListener('click', (event) => {
   const button = event.target.closest('[data-remove-location]');
   if (!button) return;

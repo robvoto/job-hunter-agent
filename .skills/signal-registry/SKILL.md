@@ -17,11 +17,13 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - `role_title_token`
 - `hard_blocker_pattern`
 - `title_normalization_candidate`
+- `cv_farming_pattern`
 
 ## Owners
 - `signal_registry.py`: pending signal storage and review flow.
 - `signal_schema.py`: signal keys/categories/constants.
 - Managed knowledge modules: approved runtime knowledge after review.
+- `job_quality.py`: job-quality detection that emits pending review signals.
 
 ## Checklist
 - Does the signal include original evidence?

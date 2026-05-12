@@ -44,6 +44,7 @@ RECORD_SOFT_RISK_REASONS_KEY = "soft_risk_reasons"
 RECORD_MISSING_EVIDENCE_KEY = "missing_evidence"
 RECORD_REVIEWED_SIGNAL_MATCHES_KEY = "reviewed_signal_matches"
 RECORD_POSTING_CHANNEL_EVIDENCE_KEY = "posting_channel_evidence"
+RECORD_JOB_QUALITY_SIGNALS_KEY = "job_quality_signals"
 
 RECORD_LAST_KEPT_SNAPSHOT_KEY = "last_kept_snapshot"
 RECORD_TIMES_KEPT_KEY = "times_kept"

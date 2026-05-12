@@ -11,11 +11,9 @@ const progressFillEl = document.getElementById('wizard_progress_fill');
 const primaryCvInput = document.getElementById('primary_cv');
 const primaryCvDropZone = document.getElementById('cv_drop_zone');
 const primaryCvStatusEl = document.getElementById('primary_cv_status');
-const locationInput = document.getElementById('location_search');
-const addLocationButton = document.getElementById('add_location');
-const locationSuggestions = document.getElementById('location_suggestions');
-const locationQuickPicks = document.getElementById('location_quick_picks');
+const locationSelect = document.getElementById('location_search');
 const locationSelected = document.getElementById('location_selected');
+const governmentPreferenceSelect = document.getElementById('government_preference');
 const reviewCapabilityCountEl = document.getElementById('review_capability_count');
 const salaryYearlyBlock = document.getElementById('salary_yearly_block');
 const salaryDailyBlock = document.getElementById('salary_daily_block');
@@ -30,7 +28,9 @@ const STEP_COUNT = 4;
 const REVIEW_STEP = 2;
 const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
-const COMMON_LOCATION_OPTIONS = [];
+const locationUi = window.JobHunterLocationUi || {};
+const COMMON_LOCATION_OPTIONS = Array.isArray(locationUi.options) ? locationUi.options : [];
+const DEFAULT_LOCATION = String(locationUi.defaultLocation || '').trim();
 const WIZARD_STATE_KEY = 'jobHunter.onboardingWizard';
 const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
 const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
@@ -45,7 +45,7 @@ let lastImportPayload = null;
 let reviewTargetTitles = [];
 let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
-let selectedLocations = [];
+let selectedLocations = DEFAULT_LOCATION ? [DEFAULT_LOCATION] : [];
 let selectedReviewCapabilityIndexes = new Set();
 let reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
 let maxUnlockedStep = 1;
@@ -183,6 +183,7 @@ function saveWizardState() {
     minimumSalaryYearly: document.getElementById('review_minimum_salary_yearly')?.value || '',
     minimumDailyRate: document.getElementById('review_minimum_daily_rate')?.value || '',
     engagementType: engagementInput?.value || 'both',
+    preferGovernment: governmentPreferenceSelect?.value || 'false',
   }));
 }
 
@@ -205,7 +206,10 @@ function restoreWizardState() {
       ? Number(state.reviewCapabilityVisibleCount)
       : INITIAL_CAPABILITY_VISIBLE_COUNT;
     setStep(state.step, { scroll: false, persist: false });
-    setSelectedLocations(state.selectedLocations || []);
+    setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || DEFAULT_LOCATION);
+    if (governmentPreferenceSelect) {
+      governmentPreferenceSelect.value = String(state.preferGovernment ?? 'false');
+    }
     renderReviewStep();
     const kwEl = document.getElementById('review_search_keywords');
     if (kwEl) kwEl.value = state.searchKeywords || '';
@@ -387,79 +391,34 @@ function normalizeLocationValue(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
-function locationKey(value) {
-  return normalizeLocationValue(value).toLowerCase();
-}
-
-function renderLocationSuggestions() {
-  locationSuggestions.innerHTML = COMMON_LOCATION_OPTIONS
-    .map((value) => `<option value="${value}"></option>`)
-    .join('');
-
-  locationQuickPicks.innerHTML = COMMON_LOCATION_OPTIONS.slice(0, 8)
-    .map((value) => {
-      const activeClass = selectedLocations.some((item) => locationKey(item) === locationKey(value)) ? ' is-active' : '';
-      return `<button class="chip-button${activeClass}" type="button" data-location="${value}">${value}</button>`;
-    })
-    .join('');
-}
-
-function renderSelectedLocations() {
-  if (!selectedLocations.length) {
-    locationSelected.innerHTML = '';
-    renderLocationSuggestions();
-    return;
+function renderLocationSelect() {
+  if (!locationSelect) return;
+  if (locationUi.renderLocationOptions) {
+    locationUi.renderLocationOptions(locationSelect);
   }
-
-  locationSelected.innerHTML = selectedLocations
-    .map((value) => (
-      `<span class="location-chip">${value}<button type="button" data-remove-location="${value}" aria-label="Remove ${value}">&#215;</button></span>`
-    ))
-    .join('');
-  renderLocationSuggestions();
-}
-
-function setSelectedLocations(values) {
-  const deduped = [];
-  const seen = new Set();
-  for (const value of values || []) {
-    const normalized = normalizeLocationValue(value);
-    const key = locationKey(normalized);
-    if (!normalized || seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(normalized);
+  const current = normalizeLocationValue(selectedLocations[0] || locationSelect.value || DEFAULT_LOCATION || COMMON_LOCATION_OPTIONS[0]?.value);
+  if (current) {
+    locationSelect.value = current;
+    selectedLocations = [current];
   }
-  selectedLocations = deduped;
-  renderSelectedLocations();
-  saveWizardState();
+  renderSelectedLocation();
 }
 
-function addLocation(value) {
+function renderSelectedLocation() {
+  if (!locationSelected) return;
+  const current = normalizeLocationValue(selectedLocations[0] || locationSelect?.value || '');
+  locationSelected.innerHTML = current
+    ? `<span class="location-chip">${current}</span>`
+    : '';
+}
+
+function setSelectedLocation(value) {
   const normalized = normalizeLocationValue(value);
-  if (!normalized) return;
-  if (normalized.length < 2 || normalized.length > 80) {
-    showStatus('Please use a location name between 2 and 80 characters.', 'error');
-    return;
+  selectedLocations = normalized ? [normalized] : [];
+  if (locationSelect && normalized) {
+    locationSelect.value = normalized;
   }
-  if (!/^[A-Za-z\s,'()-]+$/.test(normalized)) {
-    showStatus('Locations should look like a normal city, state, or region name.', 'error');
-    return;
-  }
-  if (selectedLocations.some((item) => locationKey(item) === locationKey(normalized))) {
-    locationInput.value = '';
-    return;
-  }
-  selectedLocations = [...selectedLocations, normalized];
-  locationInput.value = '';
-  showStatus('', '');
-  renderSelectedLocations();
-  saveWizardState();
-}
-
-function removeLocation(value) {
-  const key = locationKey(value);
-  selectedLocations = selectedLocations.filter((item) => locationKey(item) !== key);
-  renderSelectedLocations();
+  renderSelectedLocation();
   saveWizardState();
 }
 
@@ -492,8 +451,9 @@ function onboardingSettingsPayload() {
 function searchPreferencesPayload() {
   return {
     keywords: document.getElementById('review_search_keywords')?.value.trim() || '',
-    locations: selectedLocations,
+    locations: selectedLocations.length ? [selectedLocations[0]] : [],
     engagement_type: document.querySelector('input[name="engagement_pref"]:checked').value,
+    prefer_government: governmentPreferenceSelect?.value === 'true',
     minimum_salary_yearly: document.getElementById('review_minimum_salary_yearly')?.value.trim() || '',
     minimum_daily_rate: document.getElementById('review_minimum_daily_rate')?.value.trim() || '',
   };
@@ -533,19 +493,15 @@ function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.keywords && (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120)) {
     throw new Error('Please keep the primary search title between 2 and 120 characters.');
   }
-  if (!searchPrefs.locations.length) {
-    throw new Error('Please add at least one search location.');
+  if (searchPrefs.locations.length !== 1) {
+    throw new Error('Please choose one search location.');
   }
-  if (searchPrefs.locations.length > 8) {
-    throw new Error('Please keep your location list to 8 places or fewer.');
+  const location = searchPrefs.locations[0];
+  if (location.length < 2 || location.length > 80) {
+    throw new Error('Location should be between 2 and 80 characters.');
   }
-  for (const location of searchPrefs.locations) {
-    if (location.length < 2 || location.length > 80) {
-      throw new Error('Each location should be between 2 and 80 characters.');
-    }
-    if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
-      throw new Error('Locations should look like normal city, state, or region names.');
-    }
+  if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
+    throw new Error('Location should look like a normal city, state, or region name.');
   }
   if (!['both', 'permanent', 'contract'].includes(searchPrefs.engagement_type)) {
     throw new Error('Please choose what type of work you are open to.');
@@ -612,4 +568,10 @@ function applyProfileDefaults(profile) {
   document.getElementById('os_lookback_years').value = String(lookback);
   document.getElementById('os_min_months').value = String(minMonths);
   document.getElementById('os_capability_strength_preset').value = String(preset);
+  setSelectedLocation((profile?.search_settings?.locations || [])[0] || DEFAULT_LOCATION);
 }
+
+if (locationSelect) {
+  locationSelect.addEventListener('change', () => setSelectedLocation(locationSelect.value));
+}
+renderLocationSelect();

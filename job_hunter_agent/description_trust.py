@@ -8,8 +8,15 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
 )
+from job_hunter_agent.advance_settings import (
+    KEY_DESCRIPTION_TRUST_SETTINGS,
+    KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
+    load_advance_settings,
+)
 
-MIN_TRUSTED_DESCRIPTION_LENGTH = 600
+
+def get_min_trusted_description_length() -> int:
+    return int(load_advance_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
 
 def _trusted_sources():
     return set(load_parsing_rules().get(PARSING_TRUSTED_DESCRIPTION_SOURCES_KEY, []))
@@ -32,7 +39,7 @@ def get_trusted_full_description(record: dict) -> str:
     source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
     fallback_text = compact_whitespace(record.get(RECORD_FIT_SOURCE_TEXT_KEY) or "")
 
-    if len(fallback_text) < MIN_TRUSTED_DESCRIPTION_LENGTH:
+    if len(fallback_text) < get_min_trusted_description_length():
         return ""
 
     if source in _trusted_sources():
