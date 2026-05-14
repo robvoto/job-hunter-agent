@@ -13,6 +13,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
     const pageSizeSelect = document.getElementById('page_size_select');
     const scopeFilter = document.getElementById('scope_filter');
     const postedFilter = document.getElementById('posted_filter');
+    const workTypeFilter = document.getElementById('work_type_filter');
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
@@ -395,6 +396,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
         pageSize: pageSizeSelect?.value,
         scope: scopeFilter?.value,
         posted: postedFilter?.value,
+        workType: workTypeFilter?.value,
         workMode: workModeFilter?.value,
         score: scoreFilter?.value,
         salary: salaryFilter?.value,
@@ -424,6 +426,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
         setSelectValueIfAvailable(pageSizeSelect, filters.pageSize);
         setSelectValueIfAvailable(scopeFilter, filters.scope);
         setSelectValueIfAvailable(postedFilter, filters.posted);
+        setSelectValueIfAvailable(workTypeFilter, filters.workType);
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
         setSelectValueIfAvailable(scoreFilter, filters.score);
         setSelectValueIfAvailable(salaryFilter, filters.salary);
@@ -435,6 +438,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       if (pageSizeSelect) pageSizeSelect.value = '12';
       if (scopeFilter) scopeFilter.value = 'all';
       if (postedFilter) postedFilter.value = 'all';
+      if (workTypeFilter) workTypeFilter.value = 'all';
       if (workModeFilter) workModeFilter.value = 'all';
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
@@ -502,6 +506,8 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       const sortMode = sortSelect?.value || 'fit';
       const scopeMode = scopeFilter?.value || 'all';
       const postedLimit = postedFilter?.value || 'all';
+      const workType = workTypeFilter?.value || 'all';
+      const workTypeValues = workType !== 'all' ? workType.split('|') : null;
       const workMode = workModeFilter?.value || 'all';
       const scoreMode = scoreFilter?.value || 'all';
       const salaryMode = salaryFilter?.value || 'all';
@@ -510,6 +516,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       for (const card of getVisibleCards()) {
         const cardScope = card.dataset.recordKind || 'current';
         const viewed = card.dataset.viewed === '1';
+        const cardWorkType = (card.dataset.workType || '').toLowerCase();
         const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
         const cardScore = Number(card.dataset.fitScore || 0);
         const postedAge = Number(card.dataset.postedAge || 9999);
@@ -524,6 +531,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
           if (scopeMode === 'unseen' && viewed) visible = false;
           if (scopeMode === 'viewed' && !viewed) visible = false;
           if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
+          if (workTypeValues && !workTypeValues.includes(cardWorkType)) visible = false;
           if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
           if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
           if (salaryMode === 'listed' && salaryState === 'missing') visible = false;
@@ -1000,7 +1008,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workModeFilter, scoreFilter, salaryFilter]) {
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, scoreFilter, salaryFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveDashboardFilters();

@@ -54,6 +54,17 @@
       "queensland"
     ]
   },
+  "Brisbane": {
+    "code": "Brisbane",
+    "name": "Brisbane",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Brisbane",
+    "aliases": [
+      "brisbane",
+      "brisbane qld"
+    ]
+  },
   "SA": {
     "code": "SA",
     "name": "South Australia",
@@ -63,6 +74,17 @@
     "aliases": [
       "sa",
       "south australia"
+    ]
+  },
+  "Adelaide": {
+    "code": "Adelaide",
+    "name": "Adelaide",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Adelaide",
+    "aliases": [
+      "adelaide",
+      "adelaide sa"
     ]
   },
   "WA": {
@@ -76,6 +98,17 @@
       "western australia"
     ]
   },
+  "Perth": {
+    "code": "Perth",
+    "name": "Perth",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Perth",
+    "aliases": [
+      "perth",
+      "perth wa"
+    ]
+  },
   "TAS": {
     "code": "TAS",
     "name": "Tasmania",
@@ -85,6 +118,17 @@
     "aliases": [
       "tas",
       "tasmania"
+    ]
+  },
+  "Hobart": {
+    "code": "Hobart",
+    "name": "Hobart",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Hobart",
+    "aliases": [
+      "hobart",
+      "hobart tas"
     ]
   },
   "ACT": {
@@ -99,6 +143,17 @@
       "canberra act"
     ]
   },
+  "Canberra": {
+    "code": "Canberra",
+    "name": "Canberra",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Canberra",
+    "aliases": [
+      "canberra",
+      "canberra act"
+    ]
+  },
   "NT": {
     "code": "NT",
     "name": "Northern Territory",
@@ -108,6 +163,17 @@
     "aliases": [
       "nt",
       "northern territory"
+    ]
+  },
+  "Darwin": {
+    "code": "Darwin",
+    "name": "Darwin",
+    "country": "AU",
+    "kind": "city",
+    "capital": "Darwin",
+    "aliases": [
+      "darwin",
+      "darwin nt"
     ]
   }
 }

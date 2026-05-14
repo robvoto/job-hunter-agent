@@ -1,0 +1,3 @@
+display_name: Capability Alias Map
+short_description: Trace capability aliases through onboarding and learning
+default_prompt: Use this skill when working on job_hunter_agent onboarding, admin learning review, dominant_signal_clusters, capability_profile_rules, or alias tracing. Keep the two-layer model clear: dominant_signal_clusters are raw evidence, capability_profile_rules are approved runtime rules. Focus on where aliases are created, preserved, or dropped.

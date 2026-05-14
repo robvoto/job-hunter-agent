@@ -34,6 +34,7 @@ from job_hunter_agent.advance_settings import (
     KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
     ONBOARDING_SETTING_LIMITS,
+    get_salary_limits,
     load_advance_settings,
 )
 from job_hunter_agent.io_utils import load_parsing_rules
@@ -57,6 +58,7 @@ ROOT_DIR = REPO_ROOT
 KEY_KEYWORDS = "keywords"
 KEY_LOCATIONS = "locations"
 KEY_ENGAGEMENT_TYPE = "engagement_type"
+KEY_WORK_MODE_PREFERENCE = "work_mode_preference"
 KEY_PREFER_GOVERNMENT = "prefer_government"
 KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
@@ -64,6 +66,42 @@ KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 ENGAGEMENT_TYPE_BOTH = "both"
 ENGAGEMENT_TYPE_PERMANENT = "permanent"
 ENGAGEMENT_TYPE_CONTRACT = "contract"
+ENGAGEMENT_TYPE_OPTIONS = (
+    {"value": ENGAGEMENT_TYPE_BOTH, "label": "Both permanent and contract"},
+    {"value": ENGAGEMENT_TYPE_PERMANENT, "label": "Permanent only"},
+    {"value": ENGAGEMENT_TYPE_CONTRACT, "label": "Contract only"},
+)
+
+WORK_MODE_PREFERENCE_NONE = ""
+WORK_MODE_PREFERENCE_REMOTE = "remote"
+WORK_MODE_PREFERENCE_HYBRID = "hybrid"
+WORK_MODE_PREFERENCE_ONSITE = "onsite"
+WORK_MODE_PREFERENCE_OPTIONS = (
+    {"value": WORK_MODE_PREFERENCE_NONE, "label": "No preference"},
+    {"value": WORK_MODE_PREFERENCE_REMOTE, "label": "Remote only"},
+    {"value": WORK_MODE_PREFERENCE_HYBRID, "label": "Hybrid only"},
+    {"value": WORK_MODE_PREFERENCE_ONSITE, "label": "On-site only"},
+)
+_VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
+WORK_MODE_PREFERENCE_HELP_TEXT = "Optional. Choose remote only, hybrid only, or on-site only."
+
+GOVERNMENT_PREFERENCE_ANY = "any"
+GOVERNMENT_PREFERENCE_GOVERNMENT = "government"
+GOVERNMENT_PREFERENCE_PRIVATE = "private"
+GOVERNMENT_PREFERENCE_OPTIONS = (
+    {"value": GOVERNMENT_PREFERENCE_ANY, "label": "No preference"},
+    {"value": GOVERNMENT_PREFERENCE_GOVERNMENT, "label": "Government only"},
+    {"value": GOVERNMENT_PREFERENCE_PRIVATE, "label": "Private only"},
+)
+_VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
+GOVERNMENT_PREFERENCE_HELP_TEXT = "Optional. Choose government only, private only, or no preference."
+
+SALARY_MIN_ANNUAL_LABEL = "Minimum annual base"
+SALARY_MIN_DAILY_LABEL = "Minimum daily rate"
+SALARY_ANNUAL_HELP_TEXT = "Optional. Excludes super."
+SALARY_DAILY_HELP_TEXT = "Optional. Excludes super."
+SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Optional. Used when permanent roles list salary. Excludes super."
+SETTINGS_SALARY_DAILY_HELP_TEXT = "Optional. Used when contract roles list a day rate. Excludes super."
 
 KEY_LOOKBACK_YEARS = "extraction_lookback_years"
 KEY_MIN_MONTHS = "title_extraction_min_months"
@@ -183,6 +221,7 @@ DEFAULT_PROFILE = {
     "match_preferences": {
         "home_location": "",
         "secondary_location": "",
+        KEY_WORK_MODE_PREFERENCE: WORK_MODE_PREFERENCE_NONE,
         KEY_PREFER_GOVERNMENT: False,
         "prefer_permanent": False,
         "engagement_type": ENGAGEMENT_TYPE_BOTH,
@@ -323,6 +362,32 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     return result
 
 
+def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any]:
+    source = payload if isinstance(payload, dict) else {}
+    merged = dict(DEFAULT_PROFILE["match_preferences"])
+    merged.update({k: v for k, v in source.items() if v is not None})
+
+    raw_government = merged.get(KEY_PREFER_GOVERNMENT)
+    if isinstance(raw_government, bool):
+        merged[KEY_PREFER_GOVERNMENT] = GOVERNMENT_PREFERENCE_GOVERNMENT if raw_government else GOVERNMENT_PREFERENCE_ANY
+    else:
+        normalized_government = str(raw_government or "").strip().lower()
+        if normalized_government not in _VALID_GOVERNMENT_PREFERENCES:
+            normalized_government = GOVERNMENT_PREFERENCE_ANY
+        merged[KEY_PREFER_GOVERNMENT] = normalized_government
+
+    normalized_work_mode = str(merged.get(KEY_WORK_MODE_PREFERENCE) or "").strip().lower()
+    if normalized_work_mode not in _VALID_WORK_MODE_PREFERENCES:
+        normalized_work_mode = WORK_MODE_PREFERENCE_NONE
+    merged[KEY_WORK_MODE_PREFERENCE] = normalized_work_mode
+
+    merged["prefer_permanent"] = bool(merged.get("prefer_permanent", False))
+    merged["engagement_type"] = str(merged.get("engagement_type") or ENGAGEMENT_TYPE_BOTH).strip().lower()
+    merged["preferred_contract_months"] = int(merged.get("preferred_contract_months") or 12)
+    merged["short_contract_months"] = int(merged.get("short_contract_months") or 6)
+    return merged
+
+
 def normalize_capability_rules(
     rules: list[dict[str, Any]] | None,
     onboarding_settings: dict[str, Any] | None = None,
@@ -439,6 +504,9 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     merged["onboarding_settings"] = normalize_onboarding_settings(
         merged.get("onboarding_settings", {})
+    )
+    merged["match_preferences"] = normalize_match_preferences(
+        merged.get("match_preferences", {})
     )
     merged[KEY_CAPABILITY_PROFILE_RULES] = normalize_capability_rules(
         merged.get(KEY_CAPABILITY_PROFILE_RULES, []),
@@ -576,14 +644,19 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
 
 def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, int]:
     source = payload if isinstance(payload, dict) else {}
+    salary_limits = get_salary_limits()
+    yearly_cap = int(salary_limits.get(KEY_MIN_SALARY_YEARLY, {}).get("max", 0) or 0)
+    daily_cap = int(salary_limits.get(KEY_MIN_DAILY_RATE, {}).get("max", 0) or 0)
     try:
-        minimum_salary_yearly = max(0, int(source.get("minimum_salary_yearly", 0) or 0))
+        minimum_salary_yearly = max(0, int(str(source.get("minimum_salary_yearly", 0)).replace(",", "").strip() or 0))
     except Exception:
         minimum_salary_yearly = 0
+    minimum_salary_yearly = min(minimum_salary_yearly, yearly_cap) if yearly_cap > 0 else minimum_salary_yearly
     try:
-        minimum_daily_rate = max(0, int(source.get("minimum_daily_rate", 0) or 0))
+        minimum_daily_rate = max(0, int(str(source.get("minimum_daily_rate", 0)).replace(",", "").strip() or 0))
     except Exception:
         minimum_daily_rate = 0
+    minimum_daily_rate = min(minimum_daily_rate, daily_cap) if daily_cap > 0 else minimum_daily_rate
     return {
         "minimum_salary_yearly": minimum_salary_yearly,
         "minimum_daily_rate": minimum_daily_rate,

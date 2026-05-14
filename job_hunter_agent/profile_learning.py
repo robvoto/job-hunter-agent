@@ -56,7 +56,12 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SOURCE_KEY,
     SOURCE_CV_PARSING,
 )
-from job_hunter_agent.llm_protocol import LLM_MAX_CV_EVIDENCE_JSON_CHARS, LLM_MAX_CV_FALLBACK_CHARS
+from job_hunter_agent.llm_protocol import (
+    LLM_MAX_CV_EVIDENCE_JSON_CHARS,
+    LLM_MAX_CV_FALLBACK_CHARS,
+    LLM_MAX_TOKENS_PROFILE_EXTRACTION,
+)
+from job_hunter_agent.advance_settings import KEY_CAPABILITY_ALIAS_LIMIT
 
 from job_hunter_agent.parsing_schema import (
     PARSING_TITLE_CANDIDATE_LINE_RULES_KEY,
@@ -676,9 +681,9 @@ def _build_cv_evidence_payload(source_text: str, lookback_years: int) -> dict[st
 
 # ── LLM extraction ─────────────────────────────────────────────────────────────
 
-def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any]:
+def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int) -> dict[str, Any]:
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
-    cache_key = hashlib.sha256(f"{lookback_years}:{source_text}".encode()).hexdigest()[:16]
+    cache_key = hashlib.sha256(f"{lookback_years}:{alias_limit}:{source_text}".encode()).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
         return _cv_extraction_cache[cache_key]
 
@@ -705,13 +710,14 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
         "Each capability must be a named skill or practice area grounded in the CV bullets or role headers. "
         "Use explicit role titles when present, plus header_lines and bullets, as evidence. "
         "Set level=strong only for current or recent strengths that are repeated and clearly senior. "
-        "Older evidence should usually be working or basic unless the CV still shows current depth. "
-        "Set needs_review=true when the capability is plausible but you are not confident it belongs in the final profile.\n"
+        "Older evidence should usually be intermediate or historical unless the CV still shows current depth. "
+        "Set needs_review=true when the capability is plausible but you are not confident it belongs in the final profile. "
+        f"For each capability include up to {alias_limit} aliases: known abbreviations, acronyms, and recruiter synonyms "
+        "that refer to the same skill (e.g. for 'business process modeling': ['bpmn', 'process mapping', 'workflow design']). "
+        "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
-        f"Evidence pack JSON:\n{evidence_json[:12000]}\n\n"
-        f"Raw CV fallback:\n{source_text[:3000]}"
         f"Evidence pack JSON:\n{evidence_json[:LLM_MAX_CV_EVIDENCE_JSON_CHARS]}\n\n"
         f"Raw CV fallback:\n{source_text[:LLM_MAX_CV_FALLBACK_CHARS]}"
     )
@@ -722,7 +728,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int) -> dict[str, Any
             model=model,
             input=[{"role": "user", "content": prompt}],
             text_format=_CvExtractionResponse,
-            max_output_tokens=1500,
+            max_output_tokens=LLM_MAX_TOKENS_PROFILE_EXTRACTION,
         )
         _log_llm_call(resp, "cv_extraction", model)
         parsed = resp.output_parsed
@@ -1142,7 +1148,8 @@ def build_learning_patch(
         return {}
 
     lookback_years = _resolve_extraction_lookback_years(onboarding_settings)
-    extracted = _llm_extract_from_cv(source_text, lookback_years)
+    alias_limit = _resolve_onboarding_int(onboarding_settings or {}, KEY_CAPABILITY_ALIAS_LIMIT)
+    extracted = _llm_extract_from_cv(source_text, lookback_years, alias_limit)
 
     patch: dict[str, Any] = {KEY_CV_TEXT: source_text}
 
@@ -1222,19 +1229,3 @@ def extract_title_pattern_suggestions(
         KEY_SECONDARY_PATTERNS: list(dict.fromkeys(secondary_patterns)),
         KEY_SUGGESTED_KEYWORDS: list(dict.fromkeys(suggested_search_keywords))[:4],
     }
-
-
-def merge_capability_rules(
-    existing: list[dict[str, Any]],
-    learned: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: dict[str, dict[str, Any]] = {}
-    for rule in existing or []:
-        name = str(rule.get("name") or "").strip().lower()
-        if name:
-            merged[name] = dict(rule)
-    for rule in learned or []:
-        name = str(rule.get("name") or "").strip().lower()
-        if name:
-            merged[name] = dict(rule)
-    return list(merged.values())

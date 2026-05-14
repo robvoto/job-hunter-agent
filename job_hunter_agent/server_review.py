@@ -288,6 +288,8 @@ def remove_review_key(
     teaser: str = "",
 ) -> dict:
     normalized = normalize_job_key(job_key)
+    if not normalized and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(job_key or "").strip().lower()):
+        normalized = str(job_key).strip().lower()
     if not normalized:
         raise ValueError("Missing job key")
 
@@ -713,6 +715,8 @@ def save_requirement_blockers_feedback(
     description_block_phrases: list[str] | None = None,
 ) -> dict[str, Any]:
     normalized = normalize_job_key(job_key or url)
+    if not normalized and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(job_key or "").strip().lower()):
+        normalized = str(job_key).strip().lower()
     if not normalized:
         raise ValueError("Missing job key")
 

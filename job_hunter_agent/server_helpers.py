@@ -1,5 +1,6 @@
 import json
 import hashlib
+from html import escape
 import re
 import shutil
 import threading
@@ -23,6 +24,8 @@ from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import (
     DATA_DIR,
+    USERS_DIR,
+    DASHBOARD_FILENAME,
     REPO_ROOT as ROOT_DIR,
     SETTINGS_HTML_PATH,
     SHOWCASE_PATH,
@@ -44,6 +47,19 @@ from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_BOTH,
     ENGAGEMENT_TYPE_CONTRACT,
     ENGAGEMENT_TYPE_PERMANENT,
+    ENGAGEMENT_TYPE_OPTIONS,
+    GOVERNMENT_PREFERENCE_ANY,
+    GOVERNMENT_PREFERENCE_OPTIONS,
+    GOVERNMENT_PREFERENCE_HELP_TEXT,
+    WORK_MODE_PREFERENCE_HELP_TEXT,
+    WORK_MODE_PREFERENCE_NONE,
+    WORK_MODE_PREFERENCE_OPTIONS,
+    SALARY_MIN_ANNUAL_LABEL,
+    SALARY_MIN_DAILY_LABEL,
+    SALARY_ANNUAL_HELP_TEXT,
+    SALARY_DAILY_HELP_TEXT,
+    SETTINGS_SALARY_ANNUAL_HELP_TEXT,
+    SETTINGS_SALARY_DAILY_HELP_TEXT,
     build_candidate_profile_tiers_from_sections,
     load_profile, 
     normalize_onboarding_settings,
@@ -71,7 +87,7 @@ from job_hunter_agent.profile_store import (
     MATCHING_RULE_PROFILE_KEYS,
     patch_profile,
 )
-from job_hunter_agent.locations import default_location_value, resolve_location
+from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
 from job_hunter_agent.server_review import (
@@ -100,13 +116,19 @@ from job_hunter_agent.source_documents import (
     save_source_materials,
 )
 from job_hunter_agent.advance_settings import (
+    CAPABILITY_STRENGTH_PRESETS,
+    KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_DATE_RANGE_DAYS,
     KEY_LLM_SETTINGS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_MODEL_OPTIONS,
     KEY_SEEK_MAX_PAGES,
+    KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
+    KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
+    KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     load_advance_settings,
+    get_salary_limits,
     save_advance_settings,
 )
 _STATIC_MIME_OVERRIDES = {
@@ -156,12 +178,81 @@ def _normalize_suggestion_phrase(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
+def _parse_non_negative_salary_value(value: Any, *, label: str) -> int:
+    try:
+        parsed = int(str(value).replace(",", "").strip() or 0)
+    except Exception as exc:
+        raise ValueError(f"{label} must be a whole number.") from exc
+    if parsed < 0:
+        raise ValueError(f"{label} cannot be negative.")
+    return parsed
+
+
+def _enforce_salary_caps(value: int, *, label: str, limit_key: str) -> int:
+    salary_limits = get_salary_limits()
+    limit = salary_limits.get(limit_key, {}) if isinstance(salary_limits, dict) else {}
+    try:
+        maximum = int(limit.get("max", value))
+    except Exception:
+        maximum = value
+    if value > maximum:
+        raise ValueError(f"{label} cannot exceed {maximum:,}.")
+    return value
+
+
 def _render_template(path: Path) -> str:
-    return (
-        path.read_text(encoding="utf-8", errors="ignore")
-        .replace("__JOB_HUNTER_DEBUG_MODE_VALUE__", "true" if DEBUG_MODE else "false")
-        .replace("__JOB_HUNTER_ONBOARDING_DEFAULTS_JSON__", json.dumps(DEFAULT_ONBOARDING_SETTINGS, ensure_ascii=True))
+    return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def build_bootstrap_script(
+    *,
+    csrf_token: str | None = None,
+    location_options: list[dict[str, Any]] | None = None,
+    default_location: str | None = None,
+    onboarding_defaults: dict[str, Any] | None = None,
+) -> str:
+    parts = [f'<script>window.__JOB_HUNTER_DEBUG_MODE__ = {"true" if DEBUG_MODE else "false"};</script>']
+    if onboarding_defaults is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ = {json.dumps(onboarding_defaults, ensure_ascii=True)};</script>'
+        )
+    if csrf_token is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_CSRF_TOKEN__ = {json.dumps(csrf_token, ensure_ascii=True)};</script>'
+        )
+    if location_options is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = {json.dumps(location_options, ensure_ascii=True)};</script>'
+        )
+    if default_location is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = {json.dumps(default_location, ensure_ascii=True)};</script>'
+        )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'
     )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__ = {json.dumps(ENGAGEMENT_TYPE_OPTIONS, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_LABELS__ = {json.dumps(_ENGAGEMENT_TYPE_LABELS, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__ = {json.dumps(ENGAGEMENT_TYPE_BOTH, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__ = {json.dumps(WORK_MODE_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(WORK_MODE_PREFERENCE_NONE, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__ = {json.dumps(GOVERNMENT_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__ = {json.dumps(GOVERNMENT_PREFERENCE_ANY, ensure_ascii=True)};</script>'
+    )
+    return "\n  ".join(parts)
 
 
 def _parse_locations_override(value: Any) -> list[str]:
@@ -180,20 +271,64 @@ def _parse_bool(value: Any) -> bool:
 _VALID_ENGAGEMENT_TYPES = frozenset(
     {ENGAGEMENT_TYPE_BOTH, ENGAGEMENT_TYPE_PERMANENT, ENGAGEMENT_TYPE_CONTRACT}
 )
+_VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
+_ENGAGEMENT_TYPE_LABELS = {item["value"]: item["label"] for item in ENGAGEMENT_TYPE_OPTIONS}
 _LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
+
+
+def render_engagement_type_radio_group(*, name: str, selected_value: str) -> str:
+    selected = str(selected_value or ENGAGEMENT_TYPE_BOTH).strip().lower()
+    options = []
+    for item in ENGAGEMENT_TYPE_OPTIONS:
+        checked = " checked" if item["value"] == selected else ""
+        options.append(
+            f'<label class="choice-card choice-card--engagement"><input type="radio" name="{escape(name)}" value="{escape(item["value"])}"{checked}><span>{escape(item["label"])}</span></label>'
+        )
+    return f'<div class="choice-list choice-list--engagement" role="radiogroup" aria-labelledby="engagement_pref_label">{"".join(options)}</div>'
+
+
+def render_engagement_type_select_options(*, selected_value: str) -> str:
+    selected = str(selected_value or ENGAGEMENT_TYPE_BOTH).strip().lower()
+    options = []
+    for item in ENGAGEMENT_TYPE_OPTIONS:
+        selected_attr = " selected" if item["value"] == selected else ""
+        options.append(
+            f'<option value="{escape(item["value"])}"{selected_attr}>{escape(item["label"])}</option>'
+        )
+    return "".join(options)
+
+
+def render_government_preference_select_options(*, selected_value: str) -> str:
+    selected = str(selected_value or GOVERNMENT_PREFERENCE_ANY).strip().lower()
+    options = []
+    for item in GOVERNMENT_PREFERENCE_OPTIONS:
+        selected_attr = " selected" if item["value"] == selected else ""
+        options.append(
+            f'<option value="{escape(item["value"])}"{selected_attr}>{escape(item["label"])}</option>'
+        )
+    return "".join(options)
+
+
+def render_work_mode_preference_select_options(*, selected_value: str) -> str:
+    selected = str(selected_value or WORK_MODE_PREFERENCE_NONE).strip().lower()
+    options = []
+    for item in WORK_MODE_PREFERENCE_OPTIONS:
+        selected_attr = " selected" if item["value"] == selected else ""
+        options.append(
+            f'<option value="{escape(item["value"])}"{selected_attr}>{escape(item["label"])}</option>'
+        )
+    return "".join(options)
 
 
 def _normalize_onboarding_search_preferences(payload: dict | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
     engagement_type = str(source.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
-    prefer_government = _parse_bool(source.get(KEY_PREFER_GOVERNMENT))
     keywords = str(source.get(KEY_KEYWORDS) or "").strip()
     locations = _parse_locations_override(source.get(KEY_LOCATIONS))
     normalized = {
         KEY_KEYWORDS: keywords,
-        KEY_LOCATIONS: locations[:1] or [default_location_value()],
+        KEY_LOCATIONS: locations,
         KEY_ENGAGEMENT_TYPE: engagement_type,
-        KEY_PREFER_GOVERNMENT: prefer_government,
     }
     if KEY_MIN_SALARY_YEARLY in source:
         normalized[KEY_MIN_SALARY_YEARLY] = source.get(KEY_MIN_SALARY_YEARLY)
@@ -225,21 +360,13 @@ def _validate_required_onboarding_inputs(
 
     raw_yearly = search_preferences.get(KEY_MIN_SALARY_YEARLY)
     if raw_yearly not in (None, ""):
-        try:
-            yearly = int(raw_yearly)
-        except Exception as exc:
-            raise ValueError("Minimum permanent salary must be a whole number.") from exc
-        if yearly < 0:
-            raise ValueError("Minimum permanent salary cannot be negative.")
+        yearly = _parse_non_negative_salary_value(raw_yearly, label="Minimum permanent salary")
+        _enforce_salary_caps(yearly, label="Minimum permanent salary", limit_key=KEY_MIN_SALARY_YEARLY)
 
     raw_daily = search_preferences.get(KEY_MIN_DAILY_RATE)
     if raw_daily not in (None, ""):
-        try:
-            daily = int(raw_daily)
-        except Exception as exc:
-            raise ValueError("Minimum contract daily rate must be a whole number.") from exc
-        if daily < 0:
-            raise ValueError("Minimum contract daily rate cannot be negative.")
+        daily = _parse_non_negative_salary_value(raw_daily, label="Minimum contract daily rate")
+        _enforce_salary_caps(daily, label="Minimum contract daily rate", limit_key=KEY_MIN_DAILY_RATE)
 
     raw_settings = onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
     if isinstance(raw_settings.get(KEY_ONBOARDING_SETTINGS), dict):
@@ -316,10 +443,14 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
 
 def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, int]:
     allowed_keys = (
+            KEY_CAPABILITY_ALIAS_LIMIT,
             KEY_LOOKBACK_YEARS,
             KEY_MIN_MONTHS,
             KEY_MAX_TARGET,
             KEY_MAX_SECONDARY,
+            KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
+            KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
+            KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     )
     source = payload if isinstance(payload, dict) else {}
     if isinstance(source.get(KEY_ONBOARDING_SETTINGS), dict):
@@ -334,6 +465,16 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
 
     normalized = normalize_onboarding_settings(source)
     return {key: int(normalized[key]) for key in allowed_keys if key in normalized}
+
+
+def describe_capability_strength_preset(preset_name: str) -> dict[str, Any]:
+    preset_key = str(preset_name or "").strip().lower()
+    if preset_key not in CAPABILITY_STRENGTH_PRESETS:
+        preset_key = str(DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]).strip().lower()
+    return {
+        "capability_strength_preset": preset_key,
+        "values": dict(CAPABILITY_STRENGTH_PRESETS[preset_key]),
+    }
 
 
 def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
@@ -420,26 +561,40 @@ class SettingsHandler:
 
     @classmethod
     def _reset_current_user_state(cls) -> dict[str, Any]:
+        # Wipe every per-user data directory under data/users/
+        if USERS_DIR.exists():
+            for user_dir in USERS_DIR.iterdir():
+                if user_dir.is_dir():
+                    shutil.rmtree(user_dir)
+
+        # Reset root-level fallback files (used when no user is authenticated)
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
-        source_pack_dir = get_source_pack_dir()
-        if source_pack_dir.exists():
-            shutil.rmtree(source_pack_dir)
+        root_source_pack = DATA_DIR / "application_inputs" / "source_pack"
+        if root_source_pack.exists():
+            shutil.rmtree(root_source_pack)
 
-        cls._write_json_file(get_job_history_path(), {})
-        cls._write_json_file(get_review_data_path(), {})
-        cls._write_json_file(get_run_stats_path(), {})
-        cls._write_json_file(get_audit_records_path(), [])
+        for path, default in [
+            (DATA_DIR / "job_history.json", {}),
+            (DATA_DIR / "review_data.json", {}),
+            (DATA_DIR / "run_stats.json", {}),
+            (DATA_DIR / "audit_records.json", []),
+        ]:
+            cls._write_json_file(path, default)
 
-        try:
-            get_dashboard_path().unlink(missing_ok=True)
-        except Exception:
-            pass
+        for output_path in [
+            DATA_DIR / DASHBOARD_FILENAME,
+            DATA_DIR.parent / "output" / DASHBOARD_FILENAME,
+        ]:
+            try:
+                output_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
         return {
             "ok": True,
-            "message": "Current user state reset. Shared learning was preserved.",
+            "message": "All user state reset. Shared learning was preserved.",
             "redirect_to": "/start",
         }
 
@@ -486,7 +641,7 @@ class SettingsHandler:
             if not model:
                 raise ValueError("Please choose an LLM model.")
             if model not in allowed_models:
-                raise ValueError("Please choose a model configured in Admin.")
+                raise ValueError("Please choose a model configured in Advanced Settings.")
             sanitized[KEY_LLM] = {
                 "model": model,
             }

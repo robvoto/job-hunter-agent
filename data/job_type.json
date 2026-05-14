@@ -1,13 +1,21 @@
 {
-  "fulltime": "Full time",
-  "full-time": "Full time",
-  "full_time": "Full time",
-  "parttime": "Part time",
-  "part-time": "Part time",
-  "part_time": "Part time",
-  "contract": "Contract",
-  "contractor": "Contract",
-  "temporary": "Temporary",
-  "internship": "Internship",
-  "casual": "Casual"
+  "mapping": {
+    "fulltime": "Full time",
+    "full-time": "Full time",
+    "full_time": "Full time",
+    "parttime": "Part time",
+    "part-time": "Part time",
+    "part_time": "Part time",
+    "contract": "Contract",
+    "contractor": "Contract",
+    "temporary": "Temporary",
+    "internship": "Internship",
+    "casual": "Casual"
+  },
+  "filter_groups": [
+    { "label": "Full time", "values": ["Full time"] },
+    { "label": "Part time", "values": ["Part time"] },
+    { "label": "Contract / Temp", "values": ["Contract", "Temporary"] },
+    { "label": "Casual", "values": ["Casual", "Internship"] }
+  ]
 }

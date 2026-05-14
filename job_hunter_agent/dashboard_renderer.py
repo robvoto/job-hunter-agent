@@ -47,6 +47,7 @@ from job_hunter_agent.preferences import assess_contract_preference
 from job_hunter_agent.profile_store import get_match_levels, load_profile
 from job_hunter_agent.role_analysis import infer_role_sector
 from job_hunter_agent.io_utils import load_ui_labels
+from job_hunter_agent.job_types import load_job_type_filter_groups
 from job_hunter_agent.advance_settings import get_default_country_suffix
 from job_hunter_agent.salary_utils import salary_sort_value
 from job_hunter_agent.score_labels import (
@@ -244,6 +245,18 @@ def render_posted_filter_options(records: List[dict], now: Optional[datetime] = 
             f'<option {"selected" if threshold == 1 else ""} value="{threshold}">'
             f'{safe_html(posted_filter_option_label(threshold))} ({count})</option>'
         )
+    return "".join(options)
+
+
+def render_work_type_filter_options() -> str:
+    options = ['<option value="all">Any type</option>']
+    for group in load_job_type_filter_groups():
+        label = str(group.get("label") or "").strip()
+        values = [str(v).lower() for v in group.get("values", []) if v]
+        if not label or not values:
+            continue
+        value_attr = "|".join(values)
+        options.append(f'<option value="{safe_html(value_attr)}">{safe_html(label)}</option>')
     return "".join(options)
 
 
@@ -788,7 +801,7 @@ def render_job_card(
     card_classes = f'job-card {fit_tone_class}' + (" is-description-issue" if description_issue else "")
 
     return (
-        f'<article class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}">'
+        f'<article class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html((record.get("work_type") or "").lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         '<div class="job-header-row">'
         '<div class="job-header-copy">'

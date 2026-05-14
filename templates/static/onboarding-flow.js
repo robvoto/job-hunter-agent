@@ -21,6 +21,8 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+const currencyUi = window.JobHunterCurrencyUi || {};
+
 function normalizeReviewTitle(value) {
   return patternToLabel(value) || normalizeReviewText(value);
 }
@@ -74,6 +76,68 @@ function normalizeReviewTitleLists(primaryValues, secondaryValues) {
   return { primary, secondary };
 }
 
+const flowRefs = Object.freeze({
+  reviewStepRoot: document.querySelector('[data-step="2"]'),
+  wizardProgressSteps: document.querySelector('.wizard-progress-steps'),
+  checkTargetTitles: document.getElementById('check_target_titles'),
+  checkSecondaryTitles: document.getElementById('check_secondary_titles'),
+  checkCapabilities: document.getElementById('check_capabilities'),
+  checkSearchTitle: document.getElementById('check_search_title'),
+  checkLocations: document.getElementById('check_locations'),
+  checkEngagementType: document.getElementById('check_engagement_type'),
+  checkWorkModePreference: document.getElementById('check_work_mode_preference'),
+  checkGovernmentPreference: document.getElementById('check_government_preference'),
+  checkSalaryYearly: document.getElementById('check_salary_yearly'),
+  checkSalaryDaily: document.getElementById('check_salary_daily'),
+  locationSearch: document.getElementById('location_search'),
+  reviewSearchKeywords: document.getElementById('review_search_keywords'),
+  reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
+  reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
+  workModePreference: document.getElementById('work_mode_preference'),
+  governmentPreference: document.getElementById('government_preference'),
+  reviewCapabilityFilter: document.getElementById('review_capability_filter'),
+  reviewCapabilityCards: document.getElementById('review_capability_cards'),
+  reviewTargetTitlesList: document.getElementById('review_target_titles_list'),
+  reviewSecondaryTitlesList: document.getElementById('review_secondary_titles_list'),
+  reviewTargetTitlesInput: document.getElementById('review_target_titles_input'),
+  reviewSecondaryTitlesInput: document.getElementById('review_secondary_titles_input'),
+  reviewAddTargetTitle: document.getElementById('review_add_target_title'),
+  reviewAddSecondaryTitle: document.getElementById('review_add_secondary_title'),
+  primaryCvInput: document.getElementById('primary_cv'),
+  continueToSearchBasics: document.getElementById('continue_to_search_basics'),
+  continueToCheck: document.getElementById('continue_to_check'),
+  confirmReview: document.getElementById('confirm_review'),
+  backToUploadFooter: document.getElementById('back_to_upload_footer'),
+  backToReviewFooter: document.getElementById('back_to_review_footer'),
+  backToSearchBasicsFooter: document.getElementById('back_to_search_basics_footer'),
+  editDraftProfile: document.getElementById('edit_draft_profile'),
+  editSearchBasics: document.getElementById('edit_search_basics'),
+});
+const engagementTypeLabels = window.__JOB_HUNTER_ENGAGEMENT_TYPE_LABELS__ || {};
+const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+  : [];
+const governmentPreferenceDefault = String(
+  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
+  || governmentPreferenceOptions?.[0]?.value
+  || 'any'
+).trim().toLowerCase();
+const governmentPreferenceLabels = Object.fromEntries(
+  governmentPreferenceOptions
+    .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
+    .filter(([value]) => Boolean(value))
+);
+
+function engagementTypeLabel(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return engagementTypeLabels[key] || engagementTypeLabels[window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__] || '';
+}
+
+function governmentPreferenceLabel(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return governmentPreferenceLabels[key] || governmentPreferenceLabels[governmentPreferenceDefault] || '';
+}
+
 function preventFileNavigation(event) {
   event.preventDefault();
 }
@@ -114,8 +178,10 @@ function addReviewTitle(targetList, value) {
   renderReviewStep();
 }
 
-function renderReviewChipList(elementId, values, emptyLabel, removeAttribute, moveAttribute, moveLabel) {
-  const container = document.getElementById(elementId);
+const CHIP_MOVE_ICON = '<svg viewBox="0 0 16 14" width="13" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1 4h14M11 1l4 3-4 3"/><path d="M15 10H1M5 7l-4 3 4 3"/></svg>';
+
+function renderReviewChipList(containerKey, values, emptyLabel, removeAttribute, moveAttribute, moveAriaPrefix) {
+  const container = document.getElementById(containerKey);
   if (!container) return;
   if (!values.length) {
     container.innerHTML = `<span class="chip-empty">${emptyLabel}</span>`;
@@ -124,7 +190,7 @@ function renderReviewChipList(elementId, values, emptyLabel, removeAttribute, mo
   container.innerHTML = values.map((value, index) => `
     <span class="chip-item">
       <span>${escapeHtml(value)}</span>
-      <button type="button" ${moveAttribute}="${index}" aria-label="${escapeHtml(moveLabel)} ${escapeHtml(value)}">${escapeHtml(moveLabel)}</button>
+      <button type="button" ${moveAttribute}="${index}" aria-label="${escapeHtml(moveAriaPrefix)} ${escapeHtml(value)}" title="${escapeHtml(moveAriaPrefix)}">${CHIP_MOVE_ICON}</button>
       <button type="button" ${removeAttribute}="${index}" aria-label="Remove ${escapeHtml(value)}">&#215;</button>
     </span>
   `).join('');
@@ -133,45 +199,64 @@ function renderReviewChipList(elementId, values, emptyLabel, removeAttribute, mo
 
 function updateCheckStep() {
   const searchPrefs = searchPreferencesPayload();
-  document.getElementById('check_target_titles').textContent = reviewTargetTitles.length ? reviewTargetTitles.join(' | ') : 'Not provided';
-  document.getElementById('check_secondary_titles').textContent = reviewSecondaryTitles.length ? reviewSecondaryTitles.join(' | ') : 'Not provided';
-  document.getElementById('check_capabilities').textContent = reviewCapabilityRules.length
+  flowRefs.checkTargetTitles.textContent = reviewTargetTitles.length ? reviewTargetTitles.join(' | ') : 'Not provided';
+  flowRefs.checkSecondaryTitles.textContent = reviewSecondaryTitles.length ? reviewSecondaryTitles.join(' | ') : 'Not provided';
+  flowRefs.checkCapabilities.textContent = reviewCapabilityRules.length
     ? `${reviewCapabilityRules.length} capability row${reviewCapabilityRules.length === 1 ? '' : 's'}`
     : 'None';
-  document.getElementById('check_search_title').textContent = searchPrefs.keywords || 'Not provided';
-  document.getElementById('check_locations').textContent = searchPrefs.locations.length ? searchPrefs.locations.join(' | ') : 'Not provided';
-  document.getElementById('check_engagement_type').textContent = (
-    searchPrefs.engagement_type === 'permanent'
-      ? 'Permanent only'
-      : searchPrefs.engagement_type === 'contract'
-        ? 'Contract only'
-        : 'Both permanent and contract'
-  );
-  document.getElementById('check_government_preference').textContent = searchPrefs.prefer_government
-    ? 'Prefer public sector roles'
-    : 'No preference';
-  document.getElementById('check_salary_yearly').textContent = searchPrefs.minimum_salary_yearly
+  flowRefs.checkSearchTitle.textContent = searchPrefs.keywords || 'Not provided';
+  flowRefs.checkLocations.textContent = searchPrefs.locations.length ? searchPrefs.locations.join(' | ') : 'Not provided';
+  flowRefs.checkEngagementType.textContent = engagementTypeLabel(searchPrefs.engagement_type);
+  flowRefs.checkWorkModePreference.textContent = workModePreferenceLabel(searchPrefs.work_mode_preference);
+  flowRefs.checkGovernmentPreference.textContent = governmentPreferenceLabel(searchPrefs.prefer_government);
+  flowRefs.checkSalaryYearly.textContent = searchPrefs.minimum_salary_yearly
     ? `$${Number(searchPrefs.minimum_salary_yearly).toLocaleString()}`
     : 'Not provided';
-  document.getElementById('check_salary_daily').textContent = searchPrefs.minimum_daily_rate
+  flowRefs.checkSalaryDaily.textContent = searchPrefs.minimum_daily_rate
     ? `$${Number(searchPrefs.minimum_daily_rate).toLocaleString()}`
     : 'Not provided';
+}
+
+function setSelectedLocations(locations) {
+  const select = flowRefs.locationSearch;
+  const value = String(Array.isArray(locations) && locations.length ? locations[0] : '').trim();
+  const current = String(select?.value || selectedLocations[0] || '').trim();
+  const next = value || current;
+  selectedLocations = next ? [next] : [];
+  if (select) select.value = next;
+  renderSelectedLocation();
+}
+
+function defaultSearchKeywordsFromReviewedTitles(profile) {
+  const reviewedTitles = Array.isArray(reviewTargetTitles) ? reviewTargetTitles : [];
+  const profileTitles = Array.isArray(profile?.primary_job_title_pattern) ? profile.primary_job_title_pattern : [];
+  return dedupeReviewList([...reviewedTitles, ...profileTitles]).join(', ');
 }
 
 function hydrateSearchBasics(profile) {
   const searchSettings = profile?.search_settings || {};
   const matchPreferences = profile?.match_preferences || {};
   const salaryPreferences = profile?.salary_preferences || {};
-  document.getElementById('review_search_keywords').value = String(searchSettings.keywords || '').trim();
-  document.getElementById('review_minimum_salary_yearly').value = normalizeOptionalNonNegativeIntegerInput(salaryPreferences.minimum_salary_yearly);
-  document.getElementById('review_minimum_daily_rate').value = normalizeOptionalNonNegativeIntegerInput(salaryPreferences.minimum_daily_rate);
+  const currentKeywords = String(flowRefs.reviewSearchKeywords.value || '').trim();
+  const savedKeywords = String(searchSettings.keywords || '').trim();
+  flowRefs.reviewSearchKeywords.value = currentKeywords || savedKeywords || defaultSearchKeywordsFromReviewedTitles(profile);
+  const currentSalaryYearly = String(flowRefs.reviewMinimumSalaryYearly.value || '').trim();
+  const currentSalaryDaily = String(flowRefs.reviewMinimumDailyRate.value || '').trim();
+  if (!currentSalaryYearly) {
+    setCurrencyFieldValue(flowRefs.reviewMinimumSalaryYearly, salaryPreferences.minimum_salary_yearly ?? 0);
+  }
+  if (!currentSalaryDaily) {
+    setCurrencyFieldValue(flowRefs.reviewMinimumDailyRate, salaryPreferences.minimum_daily_rate ?? 0);
+  }
   setSelectedLocations(searchSettings.locations || []);
   const engagementType = String(matchPreferences.engagement_type || 'both').trim().toLowerCase();
-  const engagementInput = document.querySelector(`input[name="engagement_pref"][value="${engagementType}"]`)
-    || document.querySelector('input[name="engagement_pref"][value="both"]');
-  if (engagementInput) engagementInput.checked = true;
-  const governmentPreference = document.getElementById('government_preference');
-  if (governmentPreference) governmentPreference.value = String(Boolean(matchPreferences.prefer_government));
+  setSelectedEngagementType(engagementType);
+  if (flowRefs.workModePreference && !String(flowRefs.workModePreference.value || '').trim()) {
+    flowRefs.workModePreference.value = String(matchPreferences.work_mode_preference || '').trim().toLowerCase();
+  }
+  if (flowRefs.governmentPreference && !String(flowRefs.governmentPreference.value || '').trim()) {
+    flowRefs.governmentPreference.value = String(matchPreferences.prefer_government || governmentPreferenceDefault).trim().toLowerCase();
+  }
   updateCompensationVisibility();
 }
 
@@ -207,7 +292,7 @@ function applyBulkReviewCapabilityAction(action) {
 }
 
 function selectVisibleReviewCapabilities() {
-  const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
+  const filterTerm = String(flowRefs.reviewCapabilityFilter?.value || '').trim().toLowerCase();
   const orderedRules = reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
     .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
@@ -232,17 +317,17 @@ function toggleSelectedReviewCapability(index, checked) {
 }
 
 function renderReviewCapabilities() {
-  const container = document.getElementById('review_capability_cards');
+  const container = flowRefs.reviewCapabilityCards;
   if (!container) return;
   if (!reviewCapabilityRules.length) {
     if (reviewCapabilityCountEl) {
       reviewCapabilityCountEl.textContent = '0 shown';
       reviewCapabilityCountEl.classList.remove('is-selected');
-    }
+      }
     container.innerHTML = '<div class="chip-empty">No capabilities found yet.</div>';
     return;
   }
-  const filterTerm = String(document.getElementById('review_capability_filter')?.value || '').trim().toLowerCase();
+  const filterTerm = String(flowRefs.reviewCapabilityFilter?.value || '').trim().toLowerCase();
   const orderedRules = reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
     .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
@@ -260,20 +345,24 @@ function renderReviewCapabilities() {
   }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    const aliasHtml = rule.aliases.length && isTestMode
-      ? `
-        <div class="review-capability-aliases capability-aliases test-only" aria-label="Background keywords">
-          ${rule.aliases.map((alias) => `<span class="review-capability-alias alias-tag">${escapeHtml(patternToLabel(alias) || alias)}</span>`).join('')}
-        </div>
-      `
-      : '';
+    const aliasHtml = (() => {
+      if (!rule.aliases.length) return '';
+      const aliasChips = rule.aliases.map((alias) =>
+        `<span class="review-capability-alias">${escapeHtml(patternToLabel(alias) || alias)}</span>`
+      ).join('');
+      return `
+        <details class="review-capability-alias-drawer">
+          <summary>Aliases (${rule.aliases.length})</summary>
+          <div class="review-capability-aliases" aria-label="Aliases">${aliasChips}</div>
+        </details>
+      `;
+    })();
     const selectedClass = selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
     return `
       <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
           <span class="review-capability-head">
             <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
-            <span class="review-capability-selected-badge" aria-hidden="true">Selected</span>
           </span>
           ${aliasHtml}
         </div>
@@ -291,8 +380,8 @@ function renderReviewCapabilities() {
   const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
   const footerHtml = hiddenCount > 0 ? `
     <div class="review-capability-footer">
-      <button class="secondary" type="button" data-review-show-more="true">Show ${escapeHtml(String(Math.min(CAPABILITY_VISIBLE_INCREMENT, hiddenCount)))} more</button>
-      <button class="secondary review-capability-footer-link" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))}</button>
+      <button class="btn btn-secondary" type="button" data-review-show-more="true">Show ${escapeHtml(String(Math.min(CAPABILITY_VISIBLE_INCREMENT, hiddenCount)))} more</button>
+      <button class="btn btn-secondary review-capability-footer-link" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))}</button>
     </div>
   ` : '';
   const toolbarHtml = selectedReviewCapabilityIndexes.size ? `
@@ -300,9 +389,9 @@ function renderReviewCapabilities() {
       <div class="review-capability-toolbar-main">
         <span class="review-capability-toolbar-copy">${selectedVisibleCount} shown selected</span>
         <div class="review-capability-bulk-actions">
-          <button class="secondary" type="button" data-review-select-visible="true">Select shown</button>
-          <button class="secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>Clear selection</button>
-          <button class="secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>Remove selected</button>
+          <button class="btn btn-secondary" type="button" data-review-select-visible="true">Select shown</button>
+          <button class="btn btn-secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>Clear selection</button>
+          <button class="btn btn-secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>Remove selected</button>
         </div>
       </div>
     </div>
@@ -382,7 +471,7 @@ function storeCompletionRedirectState(payload, searchPrefs) {
 }
 
 async function createProfile() {
-  const primary = document.getElementById('primary_cv').files[0];
+  const primary = flowRefs.primaryCvInput.files[0];
   const onboardingSettings = onboardingSettingsPayload();
 
   validatePrimaryFile(primary);
@@ -416,7 +505,6 @@ async function createProfile() {
   lastImportPayload = payload;
   maxUnlockedStep = Math.max(maxUnlockedStep, REVIEW_STEP);
   hydrateDraftStep(payload.profile || {});
-  hydrateSearchBasics(payload.profile || {});
   setStep(REVIEW_STEP);
   showStatus(
     payload?.fresh_onboarding_run_started
@@ -432,11 +520,17 @@ function continueFromReview() {
   }
   maxUnlockedStep = Math.max(maxUnlockedStep, SEARCH_STEP);
   renderReviewStep();
+  hydrateSearchBasics((lastImportPayload || {}).profile || {});
   setStep(SEARCH_STEP);
   showStatus('', '');
 }
 
-function continueFromSearchBasics() {
+async function continueFromSearchBasics() {
+  if (typeof flushSearchBasicsPersistence === 'function') {
+    await flushSearchBasicsPersistence().catch((error) => {
+      console.warn('Could not save onboarding search basics before continuing.', error);
+    });
+  }
   const searchPrefs = searchPreferencesPayload();
   validateSearchPreferences(searchPrefs);
   maxUnlockedStep = Math.max(maxUnlockedStep, CHECK_STEP);
@@ -455,13 +549,14 @@ async function finishSetup() {
   const response = await jobHunterFetch('/api/onboarding/confirm-profile-signals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      search_keyword: searchPrefs.keywords,
-      search_locations: searchPrefs.locations,
-      engagement_type: searchPrefs.engagement_type,
-      prefer_government: searchPrefs.prefer_government,
-      minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
-      minimum_daily_rate: searchPrefs.minimum_daily_rate,
+      body: JSON.stringify({
+        search_keyword: searchPrefs.keywords,
+        search_locations: searchPrefs.locations,
+        engagement_type: searchPrefs.engagement_type,
+        work_mode_preference: searchPrefs.work_mode_preference,
+        prefer_government: searchPrefs.prefer_government,
+        minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
+        minimum_daily_rate: searchPrefs.minimum_daily_rate,
       primary_job_title_pattern: reviewTargetTitles,
       secondary_title_patterns: reviewSecondaryTitles,
       capability_profile_rules: reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
@@ -574,7 +669,7 @@ createProfileButton.addEventListener('click', async (event) => {
   }
 });
 
-document.getElementById('continue_to_search_basics').addEventListener('click', () => {
+flowRefs.continueToSearchBasics.addEventListener('click', () => {
   try {
     continueFromReview();
   } catch (error) {
@@ -582,15 +677,13 @@ document.getElementById('continue_to_search_basics').addEventListener('click', (
   }
 });
 
-document.getElementById('continue_to_check').addEventListener('click', () => {
-  try {
-    continueFromSearchBasics();
-  } catch (error) {
+flowRefs.continueToCheck.addEventListener('click', () => {
+  continueFromSearchBasics().catch((error) => {
     showStatus(error.message, 'error');
-  }
+  });
 });
 
-document.getElementById('confirm_review').addEventListener('click', async (event) => {
+flowRefs.confirmReview.addEventListener('click', async (event) => {
   const btn = event.currentTarget;
   const originalLabel = btn.textContent;
   btn.classList.add('is-working');
@@ -612,11 +705,11 @@ document.getElementById('confirm_review').addEventListener('click', async (event
   }
 });
 
-document.getElementById('back_to_upload_footer').addEventListener('click', () => setStep(1));
-document.getElementById('back_to_review_footer').addEventListener('click', () => setStep(REVIEW_STEP));
-document.getElementById('back_to_search_basics_footer').addEventListener('click', () => setStep(SEARCH_STEP));
-document.getElementById('edit_draft_profile').addEventListener('click', () => setStep(REVIEW_STEP));
-document.getElementById('edit_search_basics').addEventListener('click', () => setStep(SEARCH_STEP));
+flowRefs.backToUploadFooter.addEventListener('click', () => setStep(1));
+flowRefs.backToReviewFooter.addEventListener('click', () => setStep(REVIEW_STEP));
+flowRefs.backToSearchBasicsFooter.addEventListener('click', () => setStep(SEARCH_STEP));
+flowRefs.editDraftProfile.addEventListener('click', () => setStep(REVIEW_STEP));
+flowRefs.editSearchBasics.addEventListener('click', () => setStep(SEARCH_STEP));
 stepNavButtons.forEach((button) => {
   button.addEventListener('click', () => {
     if (button.disabled) return;
@@ -625,7 +718,7 @@ stepNavButtons.forEach((button) => {
     setStep(targetStep);
   });
 });
-document.querySelector('.wizard-progress-steps')?.addEventListener('click', (event) => {
+flowRefs.wizardProgressSteps?.addEventListener('click', (event) => {
   const trigger = event.target.closest('[data-step-nav]');
   if (!trigger || trigger.disabled) return;
   const targetStep = Number(trigger.dataset.stepNav || 0);
@@ -633,24 +726,24 @@ document.querySelector('.wizard-progress-steps')?.addEventListener('click', (eve
   setStep(targetStep);
 });
 
-document.getElementById('review_add_target_title').addEventListener('click', () => {
-  const input = document.getElementById('review_target_titles_input');
+flowRefs.reviewAddTargetTitle.addEventListener('click', () => {
+  const input = flowRefs.reviewTargetTitlesInput;
   addReviewTitle('primary', input.value);
   input.value = '';
 });
 
-document.getElementById('review_add_secondary_title').addEventListener('click', () => {
-  const input = document.getElementById('review_secondary_titles_input');
+flowRefs.reviewAddSecondaryTitle.addEventListener('click', () => {
+  const input = flowRefs.reviewSecondaryTitlesInput;
   addReviewTitle('secondary', input.value);
   input.value = '';
 });
 
-document.getElementById('review_capability_filter').addEventListener('input', () => {
+flowRefs.reviewCapabilityFilter.addEventListener('input', () => {
   renderReviewCapabilities();
   saveWizardState();
 });
 
-document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
+flowRefs.reviewStepRoot.addEventListener('click', (event) => {
   const removeTarget = event.target.closest('[data-remove-review-target]');
   if (removeTarget) {
     reviewTargetTitles.splice(Number(removeTarget.dataset.removeReviewTarget), 1);
@@ -720,47 +813,52 @@ document.querySelector('[data-step="2"]').addEventListener('click', (event) => {
   }
 });
 
-document.querySelectorAll(
-  '#review_search_keywords, #review_minimum_salary_yearly, #review_minimum_daily_rate, input[name="engagement_pref"]'
-).forEach((input) => {
-  input.addEventListener('input', saveWizardState);
-  input.addEventListener('change', saveWizardState);
+[
+  flowRefs.reviewSearchKeywords,
+  flowRefs.reviewMinimumSalaryYearly,
+  flowRefs.reviewMinimumDailyRate,
+  ...refs.engagementInputs,
+].filter(Boolean).forEach((input) => {
+  input.addEventListener('input', () => {
+    saveWizardState();
+    if (typeof scheduleSearchBasicsPersistence === 'function') {
+      scheduleSearchBasicsPersistence();
+    }
+  });
+  input.addEventListener('change', () => {
+    saveWizardState();
+    if (typeof scheduleSearchBasicsPersistence === 'function') {
+      scheduleSearchBasicsPersistence();
+    }
+  });
 });
 
-document.querySelector('[data-step="2"]').addEventListener('keydown', (event) => {
+flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && event.target.id === 'review_target_titles_input') {
     event.preventDefault();
-    document.getElementById('review_add_target_title').click();
+    flowRefs.reviewAddTargetTitle.click();
   }
   if (event.key === 'Enter' && event.target.id === 'review_secondary_titles_input') {
     event.preventDefault();
-    document.getElementById('review_add_secondary_title').click();
+    flowRefs.reviewAddSecondaryTitle.click();
   }
 });
 
-addLocationButton.addEventListener('click', () => addLocation(locationInput.value));
-locationInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    addLocation(locationInput.value);
-  }
-});
-locationQuickPicks.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-location]');
-  if (!button) return;
-  addLocation(button.getAttribute('data-location'));
-});
-document.querySelectorAll('input[name="engagement_pref"]').forEach((input) => {
+refs.engagementInputs.forEach((input) => {
   input.addEventListener('change', updateCompensationVisibility);
 });
-document.getElementById('government_preference')?.addEventListener('change', saveWizardState);
-locationSelected.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-remove-location]');
-  if (!button) return;
-  removeLocation(button.getAttribute('data-remove-location'));
+[
+  flowRefs.reviewMinimumSalaryYearly,
+  flowRefs.reviewMinimumDailyRate,
+].filter(Boolean).forEach((input) => {
+  currencyUi.bindCurrencyInput?.(input);
 });
-
-renderLocationSuggestions();
+flowRefs.governmentPreference?.addEventListener('change', () => {
+  saveWizardState();
+  if (typeof scheduleSearchBasicsPersistence === 'function') {
+    scheduleSearchBasicsPersistence();
+  }
+});
 loadProfileDefaults().catch(() => {});
 if (!restoreWizardState()) {
   setStep(1, { scroll: false });
@@ -806,6 +904,6 @@ if (primaryCvDropZone && primaryCvInput) {
       updateCreateProfileAvailability();
       return;
     }
-    window.JobHunterOnboardingSelectCv?.(selectedFile);
+    assignPrimaryCvFile(selectedFile);
   });
 }

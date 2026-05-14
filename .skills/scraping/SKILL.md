@@ -17,12 +17,16 @@ Use before editing SEEK/LinkedIn scrapers or scraped job data shape.
 - Only use fallback text heuristics for work mode when no structured or visible board metadata is available.
 - Preserve work mode provenance so later review can distinguish trusted board metadata from inferred text.
 
+## Work type normalization
+Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(raw, load_job_type())` from `scrapers/base.py` and `job_types.py`. The normalization mapping lives in `data/job_type.json` under the `"mapping"` key — no source-specific logic or hardcoded labels in scraper code. Unknown values are passed through and registered via the signal registry. The `"filter_groups"` key in the same file defines how canonical values map to dashboard filter options; scrapers do not use filter_groups.
+
 ## Owners
 - `scrapers/seek.py`: SEEK scraping.
 - `scrapers/linkedin.py`: LinkedIn via python-jobspy.
 - `source_connector.py`: orchestration.
 - `job_identity.py`: cross-source identity/dedup.
 - `description_trust.py`: full-description confidence.
+- `job_types.py`: work type normalization mapping and filter group definitions.
 
 ## Work mode extraction
 

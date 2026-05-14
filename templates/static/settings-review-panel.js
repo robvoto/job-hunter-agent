@@ -1,5 +1,15 @@
 ﻿    const LINKEDIN_EASY_APPLY_ONLY = 'linkedin_easy_apply_only';
 
+    const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
+      ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+      : [];
+    const governmentPreferenceDefault = String(
+      window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
+      || governmentPreferenceOptions?.[0]?.value
+      || 'any'
+    ).trim().toLowerCase();
+    const currencyUi = window.JobHunterCurrencyUi || {};
+
     function getReviewChoiceMeta(choice) {
       if (!choice) return { label: 'Choose a strength' };
       return capabilityStrengthMeta(choice) || { label: 'Choose a strength' };
@@ -18,7 +28,7 @@
         ['', 'Choose a strength'],
         ['strong', capabilityStrengthMeta('strong')?.label || 'Expert'],
         ['working', capabilityStrengthMeta('working')?.label || 'Intermediate'],
-        ['basic', capabilityStrengthMeta('basic')?.label || 'Basic'],
+        ['basic', capabilityStrengthMeta('basic')?.label || 'Historical'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -43,17 +53,17 @@
       const ruleSuggestions = suggestions.rule_suggestions || [];
       const summary = suggestions.summary || {};
       if (!capabilitySuggestions.length && !ruleSuggestions.length) {
-        panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capability signals and repeat junk-role patterns will show up here for confirmation.</p>';
+        panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capabilities and repeat junk-role patterns will show up here for confirmation.</p>';
         return;
       }
       const capabilityHtml = capabilitySuggestions.length ? `
         <div class="tuning-group">
-          <h3>Capability signals from viable roles</h3>
+          <h3>Capabilities from viable roles</h3>
           <p class="tuning-group-copy">Repeated skills from kept roles that need a decision before the engine can learn how to classify them consistently.</p>
           <div class="review-list">
             ${capabilitySuggestions.map(item => `
               <div class="review-card">
-                <h3>${escapeHtml(item.skill || 'Capability signal')}</h3>
+                <h3>${escapeHtml(item.skill || 'Capability')}</h3>
                 <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
                 <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
                 <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel || 'How strong is this capability for you?')}</label>
@@ -64,7 +74,7 @@
                 </details>
                 <details class="review-examples">
                   <summary>Examples from kept roles</summary>
-                  <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this signal yet.')}</div>
+                   <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this capability yet.')}</div>
                 </details>
                 <div class="card-actions" style="margin-top:10px;">
                   <button class="primary confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">Confirm</button>
@@ -81,15 +91,15 @@
       function ruleCardMarkup(item) {
         return `
           <div class="review-card">
-            <h3>${escapeHtml(item.headline || item.reason || 'Rule signal')}</h3>
+            <h3>${escapeHtml(item.headline || item.reason || 'Rule suggestion')}</h3>
             <p>${escapeHtml(item.detail || '')}</p>
             <div class="suggestion-meta">
               <span class="suggestion-chip">Target: ${escapeHtml(item.target || 'Matching rules')}</span>
               <span class="suggestion-chip">Count: ${escapeHtml(String(item.count || 0))}</span>
             </div>
-            <p><strong>Suggested action:</strong> ${escapeHtml(item.recommendation || 'Review this signal and decide whether the matching rules need refinement.')}</p>
+            <p><strong>Suggested action:</strong> ${escapeHtml(item.recommendation || 'Review this suggestion and decide whether the matching rules need refinement.')}</p>
             <p>Examples:</p>
-            ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this signal yet.')}
+            ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this suggestion yet.')}
             ${(item.reason || '').startsWith('DESC_CAPABILITY_LOW') ? `
             <div class="card-actions" style="margin-top:10px;">
               <button class="secondary add-phrase-exclusion-btn" data-reason="${escapeHtml(item.reason || '')}" style="font-size:0.9rem;padding:8px 16px;border-color:var(--state-error-border);color:var(--state-error-text);background:var(--state-error-bg);">Add to exclusions</button>
@@ -103,7 +113,7 @@
 
       const ruleHtml = (actionableRules.length || workingFilters.length) ? `
         <div class="tuning-group">
-          <h3>Repeated junk-role signals</h3>
+          <h3>Repeated junk-role patterns</h3>
           <p class="tuning-group-copy">Patterns from rejects that are worth keeping, strengthening, or watching before you touch search keywords.</p>
           ${actionableRules.length ? `<div class="review-list">${actionableRules.map(ruleCardMarkup).join('')}</div>` : ''}
           ${workingFilters.length ? `
@@ -117,7 +127,7 @@
       panel.innerHTML = `
         <div class="tuning-summary">
           <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.capability_count || capabilitySuggestions.length || 0))}</strong><span>Capability suggestions</span></div>
-          <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.rule_count || ruleSuggestions.length || 0))}</strong><span>Rule signals to review</span></div>
+          <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.rule_count || ruleSuggestions.length || 0))}</strong><span>Rule suggestions to review</span></div>
         </div>
         ${capabilityHtml}
         ${ruleHtml}
@@ -147,12 +157,17 @@
           [LINKEDIN_EASY_APPLY_ONLY]: (() => { const v = document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value; return v === '' ? null : v === 'true'; })(),
         },
         salary_preferences: {
-          minimum_salary_yearly: Number(document.getElementById('minimum_salary_yearly').value ?? 0),
-          minimum_daily_rate: Number(document.getElementById('minimum_daily_rate').value ?? 0),
+          minimum_salary_yearly: currencyUi.parseCurrencyValue
+            ? currencyUi.parseCurrencyValue(document.getElementById('minimum_salary_yearly')?.value)
+            : Number(String(document.getElementById('minimum_salary_yearly')?.value || '').replace(/,/g, '')) || 0,
+          minimum_daily_rate: currencyUi.parseCurrencyValue
+            ? currencyUi.parseCurrencyValue(document.getElementById('minimum_daily_rate')?.value)
+            : Number(String(document.getElementById('minimum_daily_rate')?.value || '').replace(/,/g, '')) || 0,
         },
         match_preferences: {
           engagement_type: document.getElementById('engagement_type').value,
-          prefer_government: document.getElementById('prefer_government').value === 'true',
+          work_mode_preference: String(document.getElementById('work_mode_preference').value || '').trim().toLowerCase(),
+          prefer_government: String(document.getElementById('prefer_government').value || governmentPreferenceDefault).trim().toLowerCase(),
         },
         preference_weights: {
           fit: Number(document.getElementById('fit_weight').value || 1),

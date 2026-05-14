@@ -26,6 +26,7 @@ _MANAGED_ADVANCE_SETTINGS_SEED = _load_managed_advance_settings_seed()
 KEY_FIT_HIGHLIGHTS = "fit_highlights"
 KEY_SEARCH_SETTINGS = "search_settings"
 KEY_SEARCH_LIMITS = "search_limits"
+KEY_SALARY_LIMITS = "salary_limits"
 KEY_PREFERENCE_WEIGHTS = "preference_weights"
 KEY_EVIDENCE_TIER_WEIGHTS = "candidate_profile_tier_weights"
 KEY_HISTORY_SETTINGS = "history_settings"
@@ -79,6 +80,8 @@ DEFAULT_SEARCH_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SEARCH_SETTING
 # Validation bounds live beside the defaults so profile code does not own hidden limits.
 SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SEARCH_LIMITS])
 
+DEFAULT_SALARY_LIMITS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SALARY_LIMITS])
+
 DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_PREFERENCE_WEIGHTS])
 
 DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
@@ -122,12 +125,10 @@ ONBOARDING_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     "capability_recent_years":                             (1, 15),
     "capability_strong_max_years_since_use":               (1, 20),
     "capability_strong_min_months":                        (1, 240),
-    "capability_strong_min_roles":                         (1, 10),
     "capability_working_max_years_since_use":              (1, 25),
     "capability_working_min_months":                       (1, 240),
     "capability_working_long_history_max_years_since_use": (1, 30),
     "capability_working_long_history_min_months":          (1, 360),
-    "capability_single_role_old_max_years_since_use":      (1, 25),
     "capability_drop_to_basic_after_years":                (1, 40),
     "capability_max_items":                                (1, 50),
     "capability_alias_limit":                              (1, 20),
@@ -143,6 +144,7 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
     KEY_FIT_HIGHLIGHTS: copy.deepcopy(DEFAULT_FIT_HIGHLIGHTS),
     KEY_SEARCH_SETTINGS: copy.deepcopy(DEFAULT_SEARCH_SETTINGS),
     KEY_SEARCH_LIMITS: copy.deepcopy(SEARCH_SETTING_LIMITS),
+    KEY_SALARY_LIMITS: copy.deepcopy(DEFAULT_SALARY_LIMITS),
     KEY_PREFERENCE_WEIGHTS: copy.deepcopy(DEFAULT_PREFERENCE_WEIGHTS),
     KEY_EVIDENCE_TIER_WEIGHTS: copy.deepcopy(DEFAULT_EVIDENCE_TIER_WEIGHTS),
     KEY_HISTORY_SETTINGS: copy.deepcopy(DEFAULT_HISTORY_SETTINGS),
@@ -341,12 +343,34 @@ def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[s
     return normalized
 
 
+def _normalize_limit_map(
+    source: dict[str, Any],
+    defaults: dict[str, dict[str, int]],
+    *,
+    minimum: int = 0,
+    maximum: int = 10_000_000,
+) -> dict[str, dict[str, int]]:
+    normalized: dict[str, dict[str, int]] = {}
+    for key, default in defaults.items():
+        raw_bounds = source.get(key, {})
+        if not isinstance(raw_bounds, dict):
+            raw_bounds = {}
+        normalized[key] = {
+            "min": _require_int(raw_bounds, "min", int(default.get("min", minimum)), minimum, maximum),
+            "max": _require_int(raw_bounds, "max", int(default.get("max", maximum)), minimum, maximum),
+        }
+        if normalized[key]["min"] > normalized[key]["max"]:
+            raise ValueError(f"advance_settings.{key}.min must be <= max")
+    return normalized
+
+
 def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
     search_source = source.get(KEY_SEARCH_SETTINGS, {})
     search_limits_source = source.get(KEY_SEARCH_LIMITS, {})
+    salary_limits_source = source.get(KEY_SALARY_LIMITS, {})
     preference_source = source.get(KEY_PREFERENCE_WEIGHTS, {})
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
     history_source = source.get(KEY_HISTORY_SETTINGS, {})
@@ -362,6 +386,8 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         raise ValueError(f"advance_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}")
     if not isinstance(search_limits_source, dict):
         raise ValueError(f"advance_settings.{KEY_SEARCH_LIMITS} must be a dict, got {type(search_limits_source).__name__!r}")
+    if not isinstance(salary_limits_source, dict):
+        raise ValueError(f"advance_settings.{KEY_SALARY_LIMITS} must be a dict, got {type(salary_limits_source).__name__!r}")
     if not isinstance(preference_source, dict):
         raise ValueError(f"advance_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
     if not isinstance(evidence_source, dict):
@@ -435,6 +461,8 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         if min_value > max_value:
             raise ValueError(f"advance_settings.search_limits.{limit_key}.min must be <= max")
         normalized_search_limits[limit_key] = {"min": min_value, "max": max_value}
+
+    normalized_salary_limits = _normalize_limit_map(salary_limits_source, DEFAULT_SALARY_LIMITS, maximum=10_000_000)
 
     normalized_history_settings = {
         KEY_ARCHIVE_STALE_AFTER_DAYS: _require_int(
@@ -551,6 +579,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         KEY_SEARCH_LIMITS: {
             **normalized_search_limits,
         },
+        KEY_SALARY_LIMITS: normalized_salary_limits,
         KEY_PREFERENCE_WEIGHTS: _normalize_float_map(preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0),
         KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
         KEY_HISTORY_SETTINGS: normalized_history_settings,
@@ -621,6 +650,11 @@ def get_min_trusted_description_length() -> int:
 def get_playwright_browser_mode() -> str:
     settings = load_advance_settings().get("playwright_settings", {})
     return str(settings.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE)).strip().lower()
+
+
+def get_salary_limits() -> dict[str, dict[str, int]]:
+    settings = load_advance_settings().get(KEY_SALARY_LIMITS, {})
+    return settings if isinstance(settings, dict) else copy.deepcopy(DEFAULT_SALARY_LIMITS)
 
 
 def get_allowed_source_document_suffixes() -> frozenset[str]:

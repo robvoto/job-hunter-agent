@@ -11,15 +11,14 @@
       summary: 'Professional proficiency. Independent execution with solid recent evidence in production environments.',
     },
     basic: {
-      label: 'Basic',
+      label: 'Historical',
       tone: 'strength-basic',
-      summary: 'Use this when you have usable experience, but it is not one of your strongest current signals.',
+      summary: 'Use this when the experience is real but stale, thin, or no longer a current strength capability.',
     },
   };
 
   window.JobHunterCapabilityUi = {
     capabilityLevelMeta,
-    strengthGuideTitle: 'Strength shows your current depth for this capability.',
     reviewStrengthPromptLabel: 'How strong is this capability for you?',
   };
 }());

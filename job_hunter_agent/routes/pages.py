@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -16,17 +15,32 @@ router = APIRouter()
 
 def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str, page_title: str, page_heading: str, page_copy: str) -> str:
     csrf_token = issue_csrf_token(request) or ""
+    bootstrap_script = srv.build_bootstrap_script(
+        csrf_token=csrf_token,
+        location_options=load_location_options(),
+        default_location=default_location_value(),
+    )
     html = srv._render_template(template_path)
     return (
         html
-        .replace("__JOB_HUNTER_DEBUG_MODE_VALUE__", "true" if srv.DEBUG_MODE else "false")
-        .replace("__JOB_HUNTER_CSRF_TOKEN_VALUE__", csrf_token)
+        .replace("__JOB_HUNTER_DEBUG_MODE_BOOL__", "true" if srv.DEBUG_MODE else "false")
+        .replace("__JOB_HUNTER_BOOTSTRAP_SCRIPTS__", bootstrap_script)
+        .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__", srv.render_engagement_type_radio_group(name="engagement_pref", selected_value=srv.ENGAGEMENT_TYPE_BOTH))
+        .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__", srv.render_engagement_type_select_options(selected_value=srv.ENGAGEMENT_TYPE_BOTH))
+        .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__", srv.render_work_mode_preference_select_options(selected_value=srv.WORK_MODE_PREFERENCE_NONE))
+        .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__", srv.WORK_MODE_PREFERENCE_HELP_TEXT)
+        .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__", srv.render_government_preference_select_options(selected_value=srv.GOVERNMENT_PREFERENCE_ANY))
+        .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__", srv.GOVERNMENT_PREFERENCE_HELP_TEXT)
+        .replace("__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__", srv.SALARY_MIN_ANNUAL_LABEL)
+        .replace("__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__", srv.SALARY_MIN_DAILY_LABEL)
+        .replace("__JOB_HUNTER_SALARY_ANNUAL_HELP__", srv.SALARY_ANNUAL_HELP_TEXT)
+        .replace("__JOB_HUNTER_SALARY_DAILY_HELP__", srv.SALARY_DAILY_HELP_TEXT)
+        .replace("__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__", srv.SETTINGS_SALARY_ANNUAL_HELP_TEXT)
+        .replace("__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__", srv.SETTINGS_SALARY_DAILY_HELP_TEXT)
         .replace("__JOB_HUNTER_PAGE_MODE__", page_mode)
         .replace("__JOB_HUNTER_PAGE_TITLE__", page_title)
         .replace("__JOB_HUNTER_PAGE_HEADING__", page_heading)
         .replace("__JOB_HUNTER_PAGE_COPY__", page_copy)
-        .replace("__JOB_HUNTER_LOCATION_OPTIONS_JSON__", json.dumps(load_location_options(), ensure_ascii=True))
-        .replace("__JOB_HUNTER_DEFAULT_LOCATION_VALUE__", default_location_value())
     )
 
 
@@ -98,11 +112,27 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
 def page_onboarding(request: Request):  # type: ignore[no-untyped-def]
     if srv.ONBOARDING_HTML_PATH.exists():
         csrf_token = issue_csrf_token(request) or ""
+        bootstrap_script = srv.build_bootstrap_script(
+            csrf_token=csrf_token,
+            location_options=load_location_options(),
+            default_location=default_location_value(),
+            onboarding_defaults=srv.DEFAULT_ONBOARDING_SETTINGS,
+        )
         html = (
             srv._render_template(srv.ONBOARDING_HTML_PATH)
-            .replace("__JOB_HUNTER_CSRF_TOKEN_VALUE__", csrf_token)
-            .replace("__JOB_HUNTER_LOCATION_OPTIONS_JSON__", json.dumps(load_location_options(), ensure_ascii=True))
-            .replace("__JOB_HUNTER_DEFAULT_LOCATION_VALUE__", default_location_value())
+            .replace("__JOB_HUNTER_DEBUG_MODE_BOOL__", "true" if srv.DEBUG_MODE else "false")
+            .replace("__JOB_HUNTER_BOOTSTRAP_SCRIPTS__", bootstrap_script)
+            .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__", srv.render_engagement_type_radio_group(name="engagement_pref", selected_value=srv.ENGAGEMENT_TYPE_BOTH))
+            .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__", srv.render_work_mode_preference_select_options(selected_value=srv.WORK_MODE_PREFERENCE_NONE))
+            .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__", srv.WORK_MODE_PREFERENCE_HELP_TEXT)
+            .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__", srv.render_government_preference_select_options(selected_value=srv.GOVERNMENT_PREFERENCE_ANY))
+            .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__", srv.GOVERNMENT_PREFERENCE_HELP_TEXT)
+            .replace("__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__", srv.SALARY_MIN_ANNUAL_LABEL)
+            .replace("__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__", srv.SALARY_MIN_DAILY_LABEL)
+            .replace("__JOB_HUNTER_SALARY_ANNUAL_HELP__", srv.SALARY_ANNUAL_HELP_TEXT)
+            .replace("__JOB_HUNTER_SALARY_DAILY_HELP__", srv.SALARY_DAILY_HELP_TEXT)
+            .replace("__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__", srv.SETTINGS_SALARY_ANNUAL_HELP_TEXT)
+            .replace("__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__", srv.SETTINGS_SALARY_DAILY_HELP_TEXT)
         )
         return html_response(html)
     return html_response("<h1>Template missing</h1><p>Missing templates/onboarding.html</p>")

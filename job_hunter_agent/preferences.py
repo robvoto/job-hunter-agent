@@ -1,13 +1,64 @@
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.profile_store import DEFAULT_PROFILE, get_scoring_rules, load_profile
-from job_hunter_agent.role_analysis import has_government_context, text_contains_term
+from job_hunter_agent.profile_store import (
+    DEFAULT_PROFILE,
+    GOVERNMENT_PREFERENCE_ANY,
+    GOVERNMENT_PREFERENCE_GOVERNMENT,
+    GOVERNMENT_PREFERENCE_PRIVATE,
+    WORK_MODE_PREFERENCE_HYBRID,
+    WORK_MODE_PREFERENCE_ONSITE,
+    WORK_MODE_PREFERENCE_REMOTE,
+    KEY_WORK_MODE_PREFERENCE,
+    get_scoring_rules,
+    load_profile,
+    normalize_match_preferences,
+)
+from job_hunter_agent.role_analysis import has_government_context
 from job_hunter_agent.salary_utils import _salary_includes_super_or_package, _salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
+
+def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> Tuple[bool, str]:
+    """Hard eligibility gate: exclude only when a value is explicitly known to be incompatible.
+    Unknown / unlisted values always pass through."""
+    active_profile = profile or load_profile()
+    preferences = get_match_preferences(active_profile)
+
+    # Work type — exclude only when type is unambiguously incompatible with the stated preference
+    eng_pref = str(preferences.get("engagement_type") or "").strip().lower()
+    if eng_pref and eng_pref != "both":
+        is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
+        if is_perm and eng_pref == "contract":
+            return False, "PREF_CONTRACT_TYPE"
+        if not is_perm and is_contract and eng_pref == "permanent":
+            return False, "PREF_CONTRACT_TYPE"
+
+    work_mode_pref = str(preferences.get(KEY_WORK_MODE_PREFERENCE) or "").strip().lower()
+    if work_mode_pref:
+        work_mode = _normalize_work_mode(record.get("work_mode") or "")
+        if work_mode and work_mode != work_mode_pref:
+            return False, "PREF_WORK_MODE"
+
+    # Sector — exclude only when government context is explicitly detected and user wants private only.
+    # "Government only" preference does NOT hard-filter: absence of government context ≠ confirmed private.
+    sector_pref = str(preferences.get("prefer_government") or GOVERNMENT_PREFERENCE_ANY).strip().lower()
+    if sector_pref == GOVERNMENT_PREFERENCE_PRIVATE:
+        if has_government_context(_government_combined_text(record)):
+            return False, "PREF_SECTOR_GOVERNMENT"
+
+    # Salary — exclude only when salary is explicitly stated, parseable, and below the minimum.
+    # Missing or non-comparable salary (hourly/weekly/package) always passes through.
+    comparison = _resolve_salary_comparison(record, active_profile)
+    if comparison is not None:
+        parsed_value, minimum_target = comparison
+        if parsed_value < minimum_target:
+            return False, "PREF_SALARY_BELOW_MIN"
+
+    return True, "OK"
+
 
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
     active_profile = profile or load_profile()
@@ -15,7 +66,7 @@ def get_match_preferences(profile: Optional[dict] = None) -> dict:
     preferences = active_profile.get("match_preferences", {})
     if isinstance(preferences, dict):
         defaults.update(preferences)
-    return defaults
+    return normalize_match_preferences(defaults)
 
 
 def assess_location_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
@@ -75,15 +126,10 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     scoring_rules = get_scoring_rules(active_profile)
     contract_rules = scoring_rules["contract"]
     source_text = build_scoring_source_text(record)
-    work_type = compact_whitespace(record.get("work_type") or "").lower()
     preferred_contract_months = int(preferences["preferred_contract_months"])
     short_contract_months = int(preferences["short_contract_months"])
     eng_pref = str(preferences["engagement_type"]).strip().lower()
-    rules = load_parsing_rules().get("engagement_keywords", {})
-
-    normalized_work_type = re.sub(r"[\s_-]+", " ", work_type).strip()
-    is_perm = any(k in normalized_work_type for k in rules.get("permanent", ["full time", "permanent"]))
-    is_contract = any(k in normalized_work_type for k in rules.get("contract", ["contract"]))
+    is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
 
     if is_perm:
         if eng_pref == "contract":
@@ -112,15 +158,21 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
-    if not bool(preferences["prefer_government"]):
+    preference = str(preferences["prefer_government"] or GOVERNMENT_PREFERENCE_ANY).strip().lower()
+    if preference == GOVERNMENT_PREFERENCE_ANY:
         return None
 
-    title = compact_whitespace(record.get("title") or "").lower()
-    company = compact_whitespace(record.get("company") or "").lower()
-    source_text = build_scoring_source_text(record).lower()
-    combined = "\n".join([title, company, source_text]) # type: ignore
-    if has_government_context(combined):
-        return {"label": "Government context", "value": int(scoring_rules["government"]["match_bonus"])}
+    combined = _government_combined_text(record)
+    if preference == GOVERNMENT_PREFERENCE_GOVERNMENT:
+        if has_government_context(combined):
+            return {"label": "Government context", "value": abs(int(scoring_rules["government"]["match_bonus"]))}
+        return None
+
+    if preference == GOVERNMENT_PREFERENCE_PRIVATE:
+        if has_government_context(combined):
+            return {"label": "Government context (private only)", "value": -abs(int(scoring_rules["government"]["match_bonus"]))}
+        return None
+
     return None
 
 
@@ -161,36 +213,73 @@ def _salary_has_non_comparable_period(salary_text: str) -> bool:
     )
 
 
-def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
+def _parse_work_type_flags(work_type: str) -> tuple[bool, bool]:
+    """Returns (is_perm, is_contract) from a raw work_type string."""
+    normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(work_type).lower()).strip()
+    kw = load_parsing_rules().get("engagement_keywords", {})
+    is_perm = any(k in normalized for k in kw.get("permanent", ["full time", "permanent"]))
+    is_contract = any(k in normalized for k in kw.get("contract", ["contract"]))
+    return is_perm, is_contract
+
+
+def _normalize_work_mode(value: str) -> str:
+    normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(value).lower()).strip()
+    if normalized in {"on site", "onsite"}:
+        return WORK_MODE_PREFERENCE_ONSITE
+    if normalized == WORK_MODE_PREFERENCE_REMOTE:
+        return WORK_MODE_PREFERENCE_REMOTE
+    if normalized == WORK_MODE_PREFERENCE_HYBRID:
+        return WORK_MODE_PREFERENCE_HYBRID
+    return ""
+
+
+def _government_combined_text(record: dict) -> str:
+    title = compact_whitespace(record.get("title") or "").lower()
+    company = compact_whitespace(record.get("company") or "").lower()
+    source_text = build_scoring_source_text(record).lower()
+    return "\n".join([title, company, source_text])
+
+
+def _resolve_salary_comparison(record: dict, profile: Optional[dict] = None) -> Optional[tuple[int, int]]:
+    """Returns (parsed_value, minimum_target) when salary is stated and comparable, else None."""
     salary_text = str(record.get("salary") or "").strip()
     if not salary_text or salary_text == "N/A":
-        return 0
+        return None
     if _salary_includes_super_or_package(salary_text):
-        return 0
-
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    salary_rules = scoring_rules["salary"]
-    salary_preferences = active_profile.get("salary_preferences", {})
-    work_type = _canonical_job_type(str(record.get("work_type") or ""))
-    if not work_type:
-        return 0
-    target_period = "daily" if work_type == "contract" else "annual"
+        return None
     salary_period = _salary_period_hint(salary_text)
-    if salary_period and salary_period != target_period:
-        return 0
     if not salary_period and _salary_has_non_comparable_period(salary_text):
-        return 0
+        return None
+    work_type_canon = _canonical_job_type(str(record.get("work_type") or ""))
+    if salary_period == "daily":
+        target_period = "daily"
+    elif salary_period == "annual":
+        target_period = "annual"
+    elif work_type_canon == "contract":
+        target_period = "daily"
+    else:
+        target_period = "annual"
+    active_profile = profile or load_profile()
+    salary_preferences = active_profile.get("salary_preferences", {})
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
     parsed_value = _salary_max_value(salary_text)
     minimum_target = minimum_daily_rate if target_period == "daily" else minimum_salary_yearly
-
     if minimum_target <= 0 or parsed_value <= 0:
+        return None
+    return parsed_value, minimum_target
+
+
+def salary_fit_adjustment(record: dict, profile: Optional[dict] = None) -> int:
+    comparison = _resolve_salary_comparison(record, profile)
+    if comparison is None:
         return 0
+    parsed_value, minimum_target = comparison
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    salary_rules = scoring_rules["salary"]
     if parsed_value >= minimum_target:
         return int(salary_rules["meeting_target"])
-
     ratio = parsed_value / minimum_target
     if ratio >= float(salary_rules["below_target_near_min_ratio"]):
         return int(salary_rules["below_target_near_adjustment"])

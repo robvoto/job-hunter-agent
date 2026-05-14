@@ -6,7 +6,16 @@
     const runNowButton = document.getElementById('run_now');
     const rebuildProfileButton = document.getElementById('rebuild_profile');
     const capabilityUi = window.JobHunterCapabilityUi || {};
-    const locationUi = window.JobHunterLocationUi || {};
+    const currencyUi = window.JobHunterCurrencyUi || {};
+const locationUi = window.JobHunterLocationUi || {};
+const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+  : [];
+const governmentPreferenceDefault = String(
+  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
+  || governmentPreferenceOptions?.[0]?.value
+  || 'any'
+).trim().toLowerCase();
     let telegramConnectLink = '';
     let loadedAgentSettings = null;
     let loadedProfile = null;
@@ -45,6 +54,29 @@
         secondary_title_patterns_chips: 'adjacent_title_patterns_chips',
       };
       return document.getElementById(id) || document.getElementById(aliases[id] || '');
+    }
+
+    function bindCurrencyFields() {
+      ['minimum_salary_yearly', 'minimum_daily_rate', 'salary_limit_minimum_salary_yearly_max', 'salary_limit_minimum_daily_rate_max'].forEach((id) => {
+        currencyUi.bindCurrencyInput?.(document.getElementById(id));
+      });
+    }
+
+    function setCurrencyFieldValue(id, value) {
+      const input = document.getElementById(id);
+      if (!input) return;
+      if (currencyUi.setCurrencyInputValue) {
+        currencyUi.setCurrencyInputValue(input, value);
+      } else {
+        input.value = String(value ?? '');
+      }
+    }
+
+    function readCurrencyFieldValue(id, fallback = 0) {
+      const input = document.getElementById(id);
+      if (!input) return fallback;
+      const parsed = currencyUi.parseCurrencyValue ? currencyUi.parseCurrencyValue(input.value) : Number(String(input.value || '').replace(/,/g, ''));
+      return Number.isFinite(parsed) && parsed !== '' ? parsed : fallback;
     }
 
     function renderLocationOptions() {
@@ -142,13 +174,20 @@
         seen.add(cleaned);
         aliases.push(cleaned);
       }
-      return { name, level, fit, aliases, needs_review: Boolean(rule?.needs_review) || aliases.length > 0 };
+      return {
+        name,
+        level,
+        fit,
+        aliases,
+        aliases_open: Boolean(rule?.aliases_open),
+        needs_review: Boolean(rule?.needs_review) || aliases.length > 0,
+      };
     }
 
     function capabilityStrengthMeta(level) {
       const key = String(level || '').trim().toLowerCase();
       if (!key) return null;
-      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Basic' };
+      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Historical' };
     }
 
     function setCapabilityRuleState(rules) {
@@ -191,7 +230,9 @@
             const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
             const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
             const aliasCount = aliases.length;
-            const aliasPreview = aliases.slice(0, 3).join(', ');
+            const aliasChips = aliases.map(alias => `
+              <span class="cap-alias-chip" title="${escapeHtml(alias)}">${escapeHtml(alias)}</span>
+            `).join('');
             return `
               <article class="capability-card" data-capability-index="${index}">
                 <div class="capability-card-head">
@@ -203,16 +244,21 @@
                           title="Remove capability">Remove</button>
                 </div>
                 <div class="capability-card-meta">
-                  <span class="cap-alias-summary">${escapeHtml(aliasCount ? `${aliasCount} aliases` : 'No aliases')}</span>
-                  ${aliasCount ? `<span class="cap-alias-preview">${escapeHtml(aliasPreview)}${aliasCount > 3 ? '...' : ''}</span>` : ''}
+                  <span class="cap-alias-summary">${escapeHtml(aliasCount ? `${aliasCount} alias${aliasCount === 1 ? '' : 'es'}` : 'No aliases')}</span>
+                  ${aliasCount ? `
+                    <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
+                      <summary>View aliases</summary>
+                      <div class="cap-alias-chips">${aliasChips}</div>
+                    </details>
+                  ` : ''}
                 </div>
                 <label class="cap-strength-label">
                   <span>Strength</span>
                   <select class="cap-level-select capability-strength-select level-${escapeHtml(rule.level || 'basic')}"
                           data-capability-field="level" aria-label="Capability strength">
-                    <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>Expert</option>
-                    <option value="working"${rule.level === 'working' ? ' selected' : ''}>Intermediate</option>
-                    <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>Basic</option>
+                    <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('strong')?.label || 'Expert')}</option>
+                    <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('working')?.label || 'Intermediate')}</option>
+                    <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('basic')?.label || 'Historical')}</option>
                   </select>
                 </label>
               </article>
@@ -225,7 +271,7 @@
           <div class="capability-group-head">
             <div>
               <h4 style="color: var(--accent);">Capabilities</h4>
-              <p class="capability-group-copy">Keep the set tight. These rows feed fit scoring, CV learning, and review signals.</p>
+              <p class="capability-group-copy">Keep the set tight. These rows feed fit scoring, CV learning, and review.</p>
             </div>
             <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
           </div>
@@ -238,9 +284,20 @@
 
     // Attach listener globally to document so that it actually catches the non-bubbling 'toggle' event [3]
     document.addEventListener('toggle', function(e) {
-      if (e.target.tagName === 'DETAILS' && e.target.open) {
+      if (e.target.classList?.contains('capability-alias-drawer')) {
+        const card = e.target.closest('[data-capability-index]');
+        if (card) {
+          const index = Number(card.dataset.capabilityIndex);
+          if (e.target.open) {
+            expandedCapabilityRows.add(index);
+          } else {
+            expandedCapabilityRows.delete(index);
+          }
+        }
+      }
+      if (e.target.classList?.contains('capability-alias-drawer') && e.target.open) {
         // Find all details elements strictly inside your matrix container
-        const allDetails = document.querySelectorAll('#capability_matrix_editor details');
+        const allDetails = document.querySelectorAll('#capability_matrix_editor details.capability-alias-drawer');
         allDetails.forEach(details => {
           if (details !== e.target && details.open) {
             details.open = false;
@@ -251,7 +308,7 @@
 
 
     const chipEditors = {
-      keywords: { kind: 'list', listId: 'keywords_chips', inputId: 'keywords_add', emptyText: 'No search titles yet.', minItems: 1 },
+      keywords: { kind: 'list', listId: 'keywords_chips', inputId: 'keywords_add', emptyText: 'No search keywords yet.', minItems: 1 },
       primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No job primary titles yet.' },
       secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
       must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
@@ -467,13 +524,14 @@
       const _liEasyApply = profile.search_settings?.[LINKEDIN_EASY_APPLY_ONLY];
       document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
       document.getElementById('engagement_type').value = profile.match_preferences?.engagement_type || 'both';
+      document.getElementById('work_mode_preference').value = String(profile.match_preferences?.work_mode_preference || '').trim().toLowerCase();
       const governmentPreference = document.getElementById('prefer_government');
       if (governmentPreference) {
-        governmentPreference.value = String(Boolean(profile.match_preferences?.prefer_government));
+        governmentPreference.value = String(profile.match_preferences?.prefer_government || governmentPreferenceDefault).trim().toLowerCase();
       }
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
-      document.getElementById('minimum_salary_yearly').value = String(profile.salary_preferences?.minimum_salary_yearly ?? 0);
-      document.getElementById('minimum_daily_rate').value = String(profile.salary_preferences?.minimum_daily_rate ?? 0);
+      setCurrencyFieldValue('minimum_salary_yearly', profile.salary_preferences?.minimum_salary_yearly ?? 0);
+      setCurrencyFieldValue('minimum_daily_rate', profile.salary_preferences?.minimum_daily_rate ?? 0);
       document.getElementById('fit_weight').value = String(profile.preference_weights?.fit ?? 1);
       document.getElementById('salary_weight').value = String(profile.preference_weights?.salary ?? 1);
       document.getElementById('location_weight').value = String(profile.preference_weights?.location ?? 1);
@@ -503,6 +561,7 @@
       const historySettings = loadedAdvanceSettings.history_settings || {};
       const descriptionTrustSettings = loadedAdvanceSettings.description_trust_settings || {};
       const sourceDocumentSettings = loadedAdvanceSettings.source_document_settings || {};
+      const salaryLimits = loadedAdvanceSettings.salary_limits || {};
       const onboarding = loadedAdvanceSettings.onboarding_settings || {};
       const llmSettings = loadedAdvanceSettings.llm_settings || {};
       const setBounds = (id, bounds) => {
@@ -578,6 +637,8 @@
       document.getElementById('search_limit_linkedin_hours_old_max').value = String(searchLimits.linkedin_hours_old?.max ?? '');
       document.getElementById('search_limit_linkedin_results_per_search_min').value = String(searchLimits.linkedin_results_per_search?.min ?? '');
       document.getElementById('search_limit_linkedin_results_per_search_max').value = String(searchLimits.linkedin_results_per_search?.max ?? '');
+      setCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', salaryLimits.minimum_salary_yearly?.max ?? '');
+      setCurrencyFieldValue('salary_limit_minimum_daily_rate_max', salaryLimits.minimum_daily_rate?.max ?? '');
 
       // Render the preset table read-only so the global tuning remains visible without duplicating edit logic.
       const presetPanel = document.getElementById('capability_strength_presets_panel');
@@ -614,6 +675,7 @@
       const currentHistory = current.history_settings || {};
       const currentDescriptionTrust = current.description_trust_settings || {};
       const currentSourceDocuments = current.source_document_settings || {};
+      const currentSalaryLimits = current.salary_limits || {};
       const currentOnboarding = current.onboarding_settings || {};
       const readNumber = (id, fallback) => {
         const raw = Number(document.getElementById(id).value);
@@ -663,6 +725,16 @@
           linkedin_results_per_search: {
             min: readNumber('search_limit_linkedin_results_per_search_min', currentLimits.linkedin_results_per_search?.min),
             max: readNumber('search_limit_linkedin_results_per_search_max', currentLimits.linkedin_results_per_search?.max),
+          },
+        },
+        salary_limits: {
+          minimum_salary_yearly: {
+            min: currentSalaryLimits.minimum_salary_yearly?.min ?? 0,
+            max: readCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', currentSalaryLimits.minimum_salary_yearly?.max),
+          },
+          minimum_daily_rate: {
+            min: currentSalaryLimits.minimum_daily_rate?.min ?? 0,
+            max: readCurrencyFieldValue('salary_limit_minimum_daily_rate_max', currentSalaryLimits.minimum_daily_rate?.max),
           },
         },
         preference_weights: {
@@ -1141,18 +1213,14 @@
       activeSaveButton.disabled = true;
     }
 
+    bindCurrencyFields();
+
     document.querySelectorAll('input, select, textarea').forEach(el => {
       if (el.id === 'capability_matrix_filter' || el.classList.contains('is-readonly') || el.type === 'hidden') return;
       el.addEventListener('change', markDirty);
       if (el.tagName === 'TEXTAREA' || ['text', 'time', 'number', 'password', 'search'].includes(el.type)) {
         el.addEventListener('input', markDirty);
       }
-    });
-
-    ['minimum_salary_yearly', 'minimum_daily_rate'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', function() {
-        if (Number(this.value) < 0) this.value = '0';
-      });
     });
 
     activeDiscardButton?.addEventListener('click', () => {

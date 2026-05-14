@@ -1,37 +1,122 @@
-const statusEl = document.getElementById('status');
 const urlParams = new URLSearchParams(window.location.search);
 const isRebuildMode = urlParams.get('mode') === 'rebuild';
-const stepEls = Array.from(document.querySelectorAll('.wizard-step'));
-const heroSectionEl = document.querySelector('.hero');
-const heroTitleEl = document.getElementById('hero_title');
-const heroCopyEl = document.getElementById('hero_copy');
-const formTitleEl = document.getElementById('form_title');
-const workflowSummaryEl = document.getElementById('workflow_summary');
-const progressFillEl = document.getElementById('wizard_progress_fill');
-const primaryCvInput = document.getElementById('primary_cv');
-const primaryCvDropZone = document.getElementById('cv_drop_zone');
-const primaryCvStatusEl = document.getElementById('primary_cv_status');
-const locationSelect = document.getElementById('location_search');
-const locationSelected = document.getElementById('location_selected');
-const governmentPreferenceSelect = document.getElementById('government_preference');
-const reviewCapabilityCountEl = document.getElementById('review_capability_count');
-const salaryYearlyBlock = document.getElementById('salary_yearly_block');
-const salaryDailyBlock = document.getElementById('salary_daily_block');
-const createProfileButton = document.getElementById('create_profile');
-const stepNavButtons = Array.from(document.querySelectorAll('[data-step-nav]'));
-const onbTestPanel = document.getElementById('onb_test_panel');
-const onbTestTrigger = document.getElementById('onb_test_trigger');
-const onbTestMenu = document.getElementById('onb_test_menu');
-const onbResetUserBtn = document.getElementById('onb_reset_user_btn');
-const onbResetLearningBtn = document.getElementById('onb_reset_learning_btn');
+const refs = Object.freeze({
+  status: document.getElementById('status'),
+  stepEls: Array.from(document.querySelectorAll('.wizard-step')),
+  wizardProgressSteps: Array.from(document.querySelectorAll('.wizard-progress-step')),
+  heroSection: document.querySelector('.hero'),
+  heroTitle: document.getElementById('hero_title'),
+  heroCopy: document.getElementById('hero_copy'),
+  formTitle: document.getElementById('form_title'),
+  workflowSummary: document.getElementById('workflow_summary'),
+  progressFill: document.getElementById('wizard_progress_fill'),
+  primaryCvInput: document.getElementById('primary_cv'),
+  primaryCvDropZone: document.getElementById('cv_drop_zone'),
+  primaryCvStatus: document.getElementById('primary_cv_status'),
+  cvDropZoneContent: document.getElementById('cv_drop_zone_content'),
+  locationSelect: document.getElementById('location_search'),
+  locationSelected: document.getElementById('location_selected'),
+  workModePreference: document.getElementById('work_mode_preference'),
+  governmentPreferenceSelect: document.getElementById('government_preference'),
+  reviewCapabilityCount: document.getElementById('review_capability_count'),
+  salaryYearlyBlock: document.getElementById('salary_yearly_block'),
+  salaryDailyBlock: document.getElementById('salary_daily_block'),
+  createProfileButton: document.getElementById('create_profile'),
+  stepNavButtons: Array.from(document.querySelectorAll('[data-step-nav]')),
+  onbTestPanel: document.getElementById('onb_test_panel'),
+  onbTestTrigger: document.getElementById('onb_test_trigger'),
+  onbTestMenu: document.getElementById('onb_test_menu'),
+  onbResetUserBtn: document.getElementById('onb_reset_user_btn'),
+  onbResetLearningBtn: document.getElementById('onb_reset_learning_btn'),
+  capabilityStrengthPreset: document.getElementById('os_capability_strength_preset'),
+  reviewSearchKeywords: document.getElementById('review_search_keywords'),
+  reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
+  reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
+  reviewCapabilityFilter: document.getElementById('review_capability_filter'),
+  reviewCapabilityCards: document.getElementById('review_capability_cards'),
+  engagementInputs: Array.from(document.querySelectorAll('input[name="engagement_pref"]')),
+});
+const {
+  status: statusEl,
+  stepEls,
+  wizardProgressSteps,
+  heroSection: heroSectionEl,
+  heroTitle: heroTitleEl,
+  heroCopy: heroCopyEl,
+  formTitle: formTitleEl,
+  workflowSummary: workflowSummaryEl,
+  progressFill: progressFillEl,
+  primaryCvInput,
+  primaryCvDropZone,
+  primaryCvStatus: primaryCvStatusEl,
+  cvDropZoneContent: primaryCvDropZoneContentEl,
+  locationSelect,
+  locationSelected,
+  governmentPreferenceSelect,
+  reviewCapabilityCount: reviewCapabilityCountEl,
+  salaryYearlyBlock,
+  salaryDailyBlock,
+  createProfileButton,
+  stepNavButtons,
+  onbTestPanel,
+  onbTestTrigger,
+  onbTestMenu,
+  onbResetUserBtn,
+  onbResetLearningBtn,
+  capabilityStrengthPreset: capabilityStrengthPresetEl,
+  reviewSearchKeywords: reviewSearchKeywordsEl,
+  reviewMinimumSalaryYearly: reviewMinimumSalaryYearlyEl,
+  reviewMinimumDailyRate: reviewMinimumDailyRateEl,
+  reviewCapabilityFilter: reviewCapabilityFilterEl,
+  reviewCapabilityCards: reviewCapabilityCardsEl,
+} = refs;
 const STEP_COUNT = 4;
 const REVIEW_STEP = 2;
 const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
 const locationUi = window.JobHunterLocationUi || {};
-const COMMON_LOCATION_OPTIONS = Array.isArray(locationUi.options) ? locationUi.options : [];
-const DEFAULT_LOCATION = String(locationUi.defaultLocation || '').trim();
+const currencyUi = window.JobHunterCurrencyUi || {};
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
+const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
+const ENGAGEMENT_TYPE_OPTIONS = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
+  ? window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
+  : [];
+const ENGAGEMENT_TYPE_DEFAULT = String(
+  window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__
+  || window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__?.[0]?.value
+  || ''
+).trim().toLowerCase();
+const ENGAGEMENT_TYPE_VALUES = new Set(ENGAGEMENT_TYPE_OPTIONS.map((option) => String(option.value || '').trim().toLowerCase()).filter(Boolean));
+const GOVERNMENT_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+  : [];
+const GOVERNMENT_PREFERENCE_DEFAULT = String(
+  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
+  || GOVERNMENT_PREFERENCE_OPTIONS?.[0]?.value
+  || 'any'
+).trim().toLowerCase();
+const GOVERNMENT_PREFERENCE_LABELS = Object.fromEntries(
+  GOVERNMENT_PREFERENCE_OPTIONS
+    .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
+    .filter(([value]) => Boolean(value))
+);
+const WORK_MODE_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
+  : [];
+const WORK_MODE_PREFERENCE_DEFAULT = String(
+  window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__
+  || WORK_MODE_PREFERENCE_OPTIONS?.[0]?.value
+  || ''
+).trim().toLowerCase();
+const WORK_MODE_PREFERENCE_LABELS = Object.fromEntries(
+  WORK_MODE_PREFERENCE_OPTIONS
+    .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
+);
+const WORK_MODE_PREFERENCE_VALUES = new Set(
+  WORK_MODE_PREFERENCE_OPTIONS
+    .map((option) => String(option.value || '').trim().toLowerCase())
+    .filter((value) => Boolean(value))
+);
 const PRIMARY_CV_COPY = {
   emptyTitle: 'Drop your CV here or click to browse',
   emptyHint: 'Formats: .docx, .pdf, .md, .txt',
@@ -51,10 +136,11 @@ let lastImportPayload = null;
 let reviewTargetTitles = [];
 let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
-let selectedLocations = DEFAULT_LOCATION ? [DEFAULT_LOCATION] : [];
+let selectedLocations = [];
 let selectedReviewCapabilityIndexes = new Set();
 let reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
 let maxUnlockedStep = 1;
+let searchBasicsPersistTimer = null;
 
 function hasDraftProfileState() {
   return Boolean(
@@ -70,7 +156,7 @@ function hasSearchBasicsState() {
     hasDraftProfileState()
     && (
       selectedLocations.length
-      || String(document.getElementById('review_search_keywords')?.value || '').trim()
+      || String(reviewSearchKeywordsEl?.value || '').trim()
     )
   );
 }
@@ -155,6 +241,69 @@ function normalizeReviewTitleLists(primaryValues, secondaryValues) {
   return { primary, secondary };
 }
 
+function getSelectedEngagementType() {
+  return String(refs.engagementInputs.find((input) => input.checked)?.value || ENGAGEMENT_TYPE_DEFAULT).trim().toLowerCase();
+}
+
+function setSelectedEngagementType(value) {
+  const selected = String(value || ENGAGEMENT_TYPE_DEFAULT).trim().toLowerCase();
+  const input = refs.engagementInputs.find((item) => item.value === selected)
+    || refs.engagementInputs.find((item) => item.value === ENGAGEMENT_TYPE_DEFAULT);
+  if (input) input.checked = true;
+}
+
+function getGovernmentPreferenceValue() {
+  return String(governmentPreferenceSelect?.value || GOVERNMENT_PREFERENCE_DEFAULT).trim().toLowerCase();
+}
+
+function setGovernmentPreferenceValue(value) {
+  const selected = String(value || GOVERNMENT_PREFERENCE_DEFAULT).trim().toLowerCase();
+  if (governmentPreferenceSelect) {
+    const validValue = GOVERNMENT_PREFERENCE_LABELS[selected] ? selected : GOVERNMENT_PREFERENCE_DEFAULT;
+    governmentPreferenceSelect.value = validValue;
+  }
+}
+
+function getWorkModePreferenceValue() {
+  return String(refs.workModePreference?.value || WORK_MODE_PREFERENCE_DEFAULT).trim().toLowerCase();
+}
+
+function setWorkModePreferenceValue(value) {
+  const selected = String(value || WORK_MODE_PREFERENCE_DEFAULT).trim().toLowerCase();
+  if (refs.workModePreference) {
+    const validValue = WORK_MODE_PREFERENCE_LABELS[selected] ? selected : WORK_MODE_PREFERENCE_DEFAULT;
+    refs.workModePreference.value = validValue;
+  }
+}
+
+function workModePreferenceLabel(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return WORK_MODE_PREFERENCE_LABELS[key] || WORK_MODE_PREFERENCE_LABELS[WORK_MODE_PREFERENCE_DEFAULT] || '';
+}
+
+function getSalaryLimitMaximum(key) {
+  const limit = salaryLimits?.[key] || {};
+  const parsed = Number(limit.max);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : Infinity;
+}
+
+function setCurrencyFieldValue(input, value) {
+  if (!input) return;
+  if (currencyUi.setCurrencyInputValue) {
+    currencyUi.setCurrencyInputValue(input, value);
+    return;
+  }
+  input.value = String(value ?? '');
+}
+
+function parseCurrencyFieldValue(value) {
+  if (currencyUi.parseCurrencyValue) {
+    return currencyUi.parseCurrencyValue(value);
+  }
+  const cleaned = String(value ?? '').replace(/[^\d]/g, '');
+  return cleaned ? Number(cleaned) : '';
+}
+
 function resetOnboardingWizardState() {
   lastImportPayload = null;
   reviewTargetTitles = [];
@@ -164,10 +313,8 @@ function resetOnboardingWizardState() {
   reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
   maxUnlockedStep = 1;
   window.sessionStorage.removeItem(WIZARD_STATE_KEY);
-  const filterInput = document.getElementById('review_capability_filter');
-  if (filterInput) filterInput.value = '';
-  const reviewCards = document.getElementById('review_capability_cards');
-  if (reviewCards) reviewCards.innerHTML = '';
+  if (reviewCapabilityFilterEl) reviewCapabilityFilterEl.value = '';
+  if (reviewCapabilityCardsEl) reviewCapabilityCardsEl.innerHTML = '';
   refreshStepNavigation();
 }
 
@@ -176,7 +323,6 @@ function saveWizardState() {
     window.sessionStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
-  const engagementInput = document.querySelector('input[name="engagement_pref"]:checked');
   window.sessionStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: currentStep,
     maxUnlockedStep,
@@ -185,12 +331,71 @@ function saveWizardState() {
     reviewCapabilityRules,
     reviewCapabilityVisibleCount,
     selectedLocations,
-    searchKeywords: document.getElementById('review_search_keywords')?.value || '',
-    minimumSalaryYearly: document.getElementById('review_minimum_salary_yearly')?.value || '',
-    minimumDailyRate: document.getElementById('review_minimum_daily_rate')?.value || '',
-    engagementType: engagementInput?.value || 'both',
-    preferGovernment: governmentPreferenceSelect?.value || 'false',
+    workModePreference: getWorkModePreferenceValue(),
+    searchKeywords: reviewSearchKeywordsEl?.value || '',
+    minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
+    minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
+    engagementType: getSelectedEngagementType() || ENGAGEMENT_TYPE_DEFAULT,
+    preferGovernment: getGovernmentPreferenceValue(),
   }));
+}
+
+function buildSearchBasicsProfilePatch() {
+  const location = String(selectedLocations[0] || locationSelect?.value || '').trim();
+  const keywords = String(reviewSearchKeywordsEl?.value || '').trim();
+  const minimumSalaryYearly = parseCurrencyFieldValue(reviewMinimumSalaryYearlyEl?.value || '');
+  const minimumDailyRate = parseCurrencyFieldValue(reviewMinimumDailyRateEl?.value || '');
+  const engagementType = getSelectedEngagementType();
+  const preferGovernment = getGovernmentPreferenceValue();
+
+  return {
+    search_settings: {
+      keywords,
+      locations: location ? [location] : [],
+    },
+    match_preferences: {
+      engagement_type: engagementType,
+      work_mode_preference: getWorkModePreferenceValue(),
+      prefer_government: preferGovernment,
+    },
+    salary_preferences: {
+      minimum_salary_yearly: Number(minimumSalaryYearly || 0),
+      minimum_daily_rate: Number(minimumDailyRate || 0),
+    },
+  };
+}
+
+async function persistSearchBasicsToProfile() {
+  const response = await jobHunterFetch('/api/profile', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildSearchBasicsProfilePatch()),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || 'Could not save search basics');
+  }
+  return response.json().catch(() => ({}));
+}
+
+function scheduleSearchBasicsPersistence() {
+  if (searchBasicsPersistTimer) {
+    window.clearTimeout(searchBasicsPersistTimer);
+  }
+  searchBasicsPersistTimer = window.setTimeout(() => {
+    searchBasicsPersistTimer = null;
+    persistSearchBasicsToProfile().catch((error) => {
+      console.warn('Could not persist onboarding search basics.', error);
+    });
+  }, 500);
+}
+
+async function flushSearchBasicsPersistence() {
+  if (searchBasicsPersistTimer) {
+    window.clearTimeout(searchBasicsPersistTimer);
+    searchBasicsPersistTimer = null;
+  }
+  await persistSearchBasicsToProfile();
 }
 
 function restoreWizardState() {
@@ -212,20 +417,17 @@ function restoreWizardState() {
       ? Number(state.reviewCapabilityVisibleCount)
       : INITIAL_CAPABILITY_VISIBLE_COUNT;
     setStep(state.step, { scroll: false, persist: false });
-    setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || DEFAULT_LOCATION);
-    if (governmentPreferenceSelect) {
-      governmentPreferenceSelect.value = String(state.preferGovernment ?? 'false');
-    }
+    setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '');
     renderReviewStep();
-    const kwEl = document.getElementById('review_search_keywords');
+    const kwEl = reviewSearchKeywordsEl;
     if (kwEl) kwEl.value = state.searchKeywords || '';
-    const salaryEl = document.getElementById('review_minimum_salary_yearly');
-    if (salaryEl) salaryEl.value = state.minimumSalaryYearly || '';
-    const dailyEl = document.getElementById('review_minimum_daily_rate');
-    if (dailyEl) dailyEl.value = state.minimumDailyRate || '';
-    const engEl = document.querySelector(`input[name="engagement_pref"][value="${state.engagementType || 'both'}"]`)
-      || document.querySelector('input[name="engagement_pref"][value="both"]');
-    if (engEl) engEl.checked = true;
+    const salaryEl = reviewMinimumSalaryYearlyEl;
+    if (salaryEl) setCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
+    const dailyEl = reviewMinimumDailyRateEl;
+    if (dailyEl) setCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
+    setSelectedEngagementType(state.engagementType || ENGAGEMENT_TYPE_DEFAULT);
+    setWorkModePreferenceValue(state.workModePreference || WORK_MODE_PREFERENCE_DEFAULT);
+    setGovernmentPreferenceValue(state.preferGovernment || GOVERNMENT_PREFERENCE_DEFAULT);
     updateCompensationVisibility();
     if (state.step >= CHECK_STEP) {
       updateCheckStep();
@@ -296,14 +498,13 @@ function startWorkingStatus(messages, stepMs = 1400) {
 }
 
 function updatePrimaryCvStatus(file) {
-  const dropZoneContent = document.getElementById('cv_drop_zone_content');
-  if (!primaryCvStatusEl || !dropZoneContent) return;
+  if (!primaryCvStatusEl || !primaryCvDropZoneContentEl) return;
 
   if (!file) {
     primaryCvStatusEl.textContent = 'No file selected yet.';
     primaryCvStatusEl.classList.remove('is-selected');
     primaryCvDropZone?.classList.remove('has-file');
-    dropZoneContent.innerHTML = `
+    primaryCvDropZoneContentEl.innerHTML = `
       <div class="drop-zone-content-shell">
         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon" style="margin-bottom: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">${PRIMARY_CV_COPY.emptyTitle}</p>
@@ -319,7 +520,7 @@ function updatePrimaryCvStatus(file) {
   primaryCvDropZone?.classList.add('has-file');
   resetPrimaryCvDropZoneAppearance();
 
-  dropZoneContent.innerHTML = `
+  primaryCvDropZoneContentEl.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
     <p class="file-loaded-label">File Loaded: ${file.name}</p>
     <p class="drop-zone-hint">${PRIMARY_CV_COPY.loadedHint}</p>
@@ -359,10 +560,6 @@ function setStep(stepNumber, options = {}) {
   const meta = stepMeta[stepNumber];
   heroTitleEl.textContent = meta.heroTitle();
   heroCopyEl.textContent = meta.heroCopy();
-  if (heroTitleEl) {
-    heroTitleEl.classList.toggle('is-review-draft', stepNumber === 2 && meta.heroTitle() === 'Review Your Draft Profile');
-  }
-
   const isDetailStep = stepNumber > 1;
   if (heroSectionEl) heroSectionEl.classList.toggle('is-compact', isDetailStep);
   if (workflowSummaryEl) {
@@ -376,11 +573,11 @@ function setStep(stepNumber, options = {}) {
   }
 
   if (formTitleEl) formTitleEl.textContent = `Step ${stepNumber}. ${meta.title()}`;
-  const percent = Math.round((stepNumber / STEP_COUNT) * 100);
+  const percent = STEP_COUNT > 1 ? Math.round(((stepNumber - 1) / (STEP_COUNT - 1)) * 100) : 100;
   if (progressFillEl) {
     progressFillEl.style.width = `${percent}%`;
   }
-  document.querySelectorAll('.wizard-progress-step').forEach((el, idx) => {
+  wizardProgressSteps.forEach((el, idx) => {
     const s = idx + 1;
     el.classList.toggle('is-active', s === stepNumber);
     el.classList.toggle('is-complete', s < stepNumber);
@@ -405,11 +602,9 @@ function renderLocationSelect() {
   if (locationUi.renderLocationOptions) {
     locationUi.renderLocationOptions(locationSelect);
   }
-  const current = normalizeLocationValue(selectedLocations[0] || locationSelect.value || DEFAULT_LOCATION || COMMON_LOCATION_OPTIONS[0]?.value);
-  if (current) {
-    locationSelect.value = current;
-    selectedLocations = [current];
-  }
+  const current = normalizeLocationValue(selectedLocations[0] || '');
+  locationSelect.value = current;
+  selectedLocations = current ? [current] : [];
   renderSelectedLocation();
 }
 
@@ -424,7 +619,7 @@ function renderSelectedLocation() {
 function setSelectedLocation(value) {
   const normalized = normalizeLocationValue(value);
   selectedLocations = normalized ? [normalized] : [];
-  if (locationSelect && normalized) {
+  if (locationSelect) {
     locationSelect.value = normalized;
   }
   renderSelectedLocation();
@@ -447,52 +642,32 @@ async function fileToPayload(file, label) {
 }
 
 function onboardingSettingsPayload() {
-  const lookbackYears = document.getElementById('os_lookback_years').value.trim();
-  const minMonths = document.getElementById('os_min_months').value.trim();
-  const capabilityStrengthPreset = document.getElementById('os_capability_strength_preset').value.trim();
+  const capabilityStrengthPreset = capabilityStrengthPresetEl?.value.trim() || '';
   return {
-    extraction_lookback_years: lookbackYears ? Number(lookbackYears) : undefined,
-    title_extraction_min_months: minMonths ? Number(minMonths) : undefined,
     capability_strength_preset: capabilityStrengthPreset || 'balanced',
   };
 }
 
 function searchPreferencesPayload() {
   return {
-    keywords: document.getElementById('review_search_keywords')?.value.trim() || '',
+    keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
-    engagement_type: document.querySelector('input[name="engagement_pref"]:checked').value,
-    prefer_government: governmentPreferenceSelect?.value === 'true',
-    minimum_salary_yearly: document.getElementById('review_minimum_salary_yearly')?.value.trim() || '',
-    minimum_daily_rate: document.getElementById('review_minimum_daily_rate')?.value.trim() || '',
+    engagement_type: getSelectedEngagementType(),
+    work_mode_preference: getWorkModePreferenceValue(),
+    prefer_government: getGovernmentPreferenceValue(),
+    minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
+    minimum_daily_rate: reviewMinimumDailyRateEl?.value.trim() || '',
   };
 }
 
 function updateCompensationVisibility() {
-  const engagementType = String(document.querySelector('input[name="engagement_pref"]:checked')?.value || 'both').trim().toLowerCase();
+  const engagementType = getSelectedEngagementType();
   if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType === 'contract';
   if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType === 'permanent';
 }
 
-function normalizeOptionalNonNegativeIntegerInput(value) {
-  const text = String(value ?? '').trim();
-  if (!text) return '';
-  const numeric = Number(text);
-  if (!Number.isFinite(numeric)) return text;
-  return numeric <= 0 ? '' : String(Math.trunc(numeric));
-}
-
 function validateOnboardingSettings(settings) {
-  const lookback = Number(settings.extraction_lookback_years);
-  const minMonths = Number(settings.title_extraction_min_months);
   const preset = String(settings.capability_strength_preset || '').trim();
-
-  if (!Number.isInteger(lookback) || lookback < 1 || lookback > 20) {
-    throw new Error('Please enter a lookback between 1 and 20 years.');
-  }
-  if (!Number.isInteger(minMonths) || minMonths < 1 || minMonths > 24) {
-    throw new Error('Please enter a short-role threshold between 1 and 24 months.');
-  }
   if (!['recent_focus', 'balanced', 'include_older_experience'].includes(preset)) {
     throw new Error('Please choose how older experience should be treated.');
   }
@@ -512,22 +687,31 @@ function validateSearchPreferences(searchPrefs) {
   if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
     throw new Error('Location should look like a normal city, state, or region name.');
   }
-  if (!['both', 'permanent', 'contract'].includes(searchPrefs.engagement_type)) {
+  if (!ENGAGEMENT_TYPE_VALUES.has(searchPrefs.engagement_type)) {
     throw new Error('Please choose what type of work you are open to.');
+  }
+  if (searchPrefs.work_mode_preference && !WORK_MODE_PREFERENCE_VALUES.has(searchPrefs.work_mode_preference)) {
+    throw new Error('Please choose a work mode or leave it as no preference.');
   }
   if (!searchPrefs.keywords) {
     throw new Error('Please confirm one primary search title.');
   }
-  if (searchPrefs.minimum_salary_yearly) {
-    const yearly = Number(searchPrefs.minimum_salary_yearly);
-    if (!Number.isFinite(yearly) || yearly < 0) {
+  if (searchPrefs.minimum_salary_yearly !== '' && searchPrefs.minimum_salary_yearly !== null && searchPrefs.minimum_salary_yearly !== undefined) {
+    const yearly = parseCurrencyFieldValue(searchPrefs.minimum_salary_yearly);
+    if (yearly === '' || !Number.isFinite(yearly) || yearly < 0) {
       throw new Error('Please enter a valid minimum permanent salary excluding super.');
     }
+    if (yearly > getSalaryLimitMaximum('minimum_salary_yearly')) {
+      throw new Error('Minimum permanent salary is above the allowed maximum.');
+    }
   }
-  if (searchPrefs.minimum_daily_rate) {
-    const daily = Number(searchPrefs.minimum_daily_rate);
-    if (!Number.isFinite(daily) || daily < 0) {
+  if (searchPrefs.minimum_daily_rate !== '' && searchPrefs.minimum_daily_rate !== null && searchPrefs.minimum_daily_rate !== undefined) {
+    const daily = parseCurrencyFieldValue(searchPrefs.minimum_daily_rate);
+    if (daily === '' || !Number.isFinite(daily) || daily < 0) {
       throw new Error('Please enter a valid minimum contract daily rate excluding super.');
+    }
+    if (daily > getSalaryLimitMaximum('minimum_daily_rate')) {
+      throw new Error('Minimum contract daily rate is above the allowed maximum.');
     }
   }
 }
@@ -551,8 +735,6 @@ function assignPrimaryCvFile(file) {
   refreshStepNavigation();
 }
 
-window.JobHunterOnboardingSelectCv = assignPrimaryCvFile;
-
 function handlePrimaryCvDrop(event) {
   event.preventDefault();
   event.stopPropagation();
@@ -573,17 +755,68 @@ function handlePrimaryCvDrop(event) {
 
 function applyProfileDefaults(profile) {
   const onboarding = profile?.onboarding_settings || {};
-  const lookback = onboarding.extraction_lookback_years ?? ONBOARDING_DEFAULTS.extraction_lookback_years;
-  const minMonths = onboarding.title_extraction_min_months ?? ONBOARDING_DEFAULTS.title_extraction_min_months;
   const preset = onboarding.capability_strength_preset || ONBOARDING_DEFAULTS.capability_strength_preset;
+  const searchSettings = profile?.search_settings || {};
+  const matchPreferences = profile?.match_preferences || {};
+  const salaryPreferences = profile?.salary_preferences || {};
 
-  document.getElementById('os_lookback_years').value = String(lookback);
-  document.getElementById('os_min_months').value = String(minMonths);
-  document.getElementById('os_capability_strength_preset').value = String(preset);
-  setSelectedLocation((profile?.search_settings?.locations || [])[0] || DEFAULT_LOCATION);
+  if (capabilityStrengthPresetEl) capabilityStrengthPresetEl.value = String(preset);
+  if (!reviewTargetTitles.length && !reviewSecondaryTitles.length) {
+    const normalizedTitles = normalizeReviewTitleLists(
+      profile?.primary_job_title_pattern || [],
+      profile?.secondary_title_patterns || [],
+    );
+    reviewTargetTitles = normalizedTitles.primary;
+    reviewSecondaryTitles = normalizedTitles.secondary;
+  }
+  if (reviewSearchKeywordsEl && !String(reviewSearchKeywordsEl.value || '').trim()) {
+    const savedKeywords = String(searchSettings.keywords || '').trim();
+    reviewSearchKeywordsEl.value = savedKeywords || reviewTargetTitles.join(', ');
+  }
+  if (reviewMinimumSalaryYearlyEl && !String(reviewMinimumSalaryYearlyEl.value || '').trim()) {
+    setCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly ?? 0);
+  }
+  if (reviewMinimumDailyRateEl && !String(reviewMinimumDailyRateEl.value || '').trim()) {
+    setCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate ?? 0);
+  }
+  if (!String(refs.workModePreference?.value || '').trim()) {
+    setWorkModePreferenceValue(matchPreferences.work_mode_preference || WORK_MODE_PREFERENCE_DEFAULT);
+  }
+  if (governmentPreferenceSelect && !String(governmentPreferenceSelect.value || '').trim()) {
+    setGovernmentPreferenceValue(matchPreferences.prefer_government || GOVERNMENT_PREFERENCE_DEFAULT);
+  }
+  if (!selectedLocations.length) {
+    setSelectedLocation((searchSettings.locations || [])[0] || '');
+  }
+  if (currentStep >= REVIEW_STEP && (reviewTargetTitles.length || reviewSecondaryTitles.length)) {
+    renderReviewStep();
+  } else {
+    refreshStepNavigation();
+  }
 }
 
 if (locationSelect) {
-  locationSelect.addEventListener('change', () => setSelectedLocation(locationSelect.value));
+  locationSelect.addEventListener('change', () => {
+    setSelectedLocation(locationSelect.value);
+    scheduleSearchBasicsPersistence();
+  });
 }
+if (governmentPreferenceSelect) {
+  governmentPreferenceSelect.addEventListener('change', () => {
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+}
+if (refs.workModePreference) {
+  refs.workModePreference.addEventListener('change', () => {
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+}
+[
+  reviewMinimumSalaryYearlyEl,
+  reviewMinimumDailyRateEl,
+].filter(Boolean).forEach((input) => {
+  currencyUi.bindCurrencyInput?.(input);
+});
 renderLocationSelect();

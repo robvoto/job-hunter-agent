@@ -12,7 +12,8 @@ from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.source_registry import SOURCE_SEEK
-from job_hunter_agent.scrapers.base import keywords_to_search_string
+from job_hunter_agent.scrapers.base import keywords_to_search_string, map_job_type
+from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.record_schema import RECORD_LOCATION_KEY, RECORD_WORK_TYPE_KEY, RECORD_WORK_MODE_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY, RECORD_WORK_MODE_NEEDS_REVIEW_KEY, RECORD_CARD_SALARY_KEY, RECORD_TEASER_KEY
 from job_hunter_agent.utils import set_query_param
 from job_hunter_agent.work_mode_extraction import extract_from_seek_card
@@ -110,7 +111,7 @@ def extract_card_metadata(card, filter_state=None) -> dict:
     wm = extract_from_seek_card(card_text, filter_state)
     return {
         RECORD_LOCATION_KEY: ", ".join(_dedupe_preserve_order(location_values)) or "",
-        RECORD_WORK_TYPE_KEY: extract_work_type(card_text),
+        RECORD_WORK_TYPE_KEY: map_job_type(extract_work_type(card_text), load_job_type()),
         RECORD_WORK_MODE_KEY: wm["work_mode"],
         RECORD_WORK_MODE_SOURCE_KEY: wm["work_mode_source"],
         RECORD_WORK_MODE_EVIDENCE_KEY: wm["work_mode_evidence"],

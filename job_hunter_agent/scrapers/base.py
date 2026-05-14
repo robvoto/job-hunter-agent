@@ -298,6 +298,9 @@ def normalize_jobspy_record(
             "raw_source_fields": _json_safe_value(_safe_row_dict(row)),
         }
     )
+    if not source_metadata.get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY):
+        source_metadata.pop(RECORD_SOURCE_ATS_REQUISITION_ID_KEY, None)
+    source_metadata.pop(RECORD_SOURCE_PLATFORM_JOB_ID_KEY, None)
     return {
         RECORD_RUN_STARTED_AT_KEY: run_iso,
         RECORD_SEARCH_LOCATION_KEY: search_location,
@@ -429,6 +432,9 @@ def _map_job_type(raw: str, mapping: dict) -> str:
         return mapped
     _register_unknown_job_type(cleaned_raw)
     return cleaned_raw
+
+
+map_job_type = _map_job_type
 
 
 def _register_unknown_job_type(raw_value: str) -> None:

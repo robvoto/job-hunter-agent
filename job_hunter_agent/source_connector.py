@@ -273,6 +273,7 @@ from job_hunter_agent.preferences import (
     assess_location_preference,
     assess_contract_preference,
     assess_government_preference,
+    passes_preference_filters,
     salary_fit_adjustment,
 )
 from job_hunter_agent.score_labels import (
@@ -340,6 +341,7 @@ from job_hunter_agent.dashboard_renderer import (  # noqa: E402 — after CLI_FL
     render_job_card,
     render_posted_filter_options,
     render_score_filter_options,
+    render_work_type_filter_options,
     render_section,
     score_filter_option_label,
     score_filter_thresholds,
@@ -766,6 +768,7 @@ def render_html(
         dashboard_min_score,
     )
     posted_filter_options_html = render_posted_filter_options(potential_records, reference_time)
+    work_type_filter_options_html = render_work_type_filter_options()
     shortlist_count = len(shortlist_records)
     dashboard_run_id = str(
         run_stats.get("run_started_at")
@@ -853,6 +856,7 @@ def render_html(
             "HIDDEN_COUNT": str(len(hidden_records)),
             "POSTED_FILTER_OPTIONS_HTML": posted_filter_options_html,
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
+            "WORK_TYPE_FILTER_OPTIONS_HTML": work_type_filter_options_html,
             "CURRENT_SECTION_HTML": render_section(
                 "Best Matches",
                 shortlist_records,
@@ -982,12 +986,16 @@ def _seek_source_metadata(detail_page, details_payload: dict) -> tuple[dict, obj
             "company_profile_name": company_profile_name,
             "poster_company": poster_company,
             "hiring_company": hiring_company,
-            "ats_source": "",
-            RECORD_SOURCE_ATS_REQUISITION_ID_KEY: str(_seek_string_value(combined_payload, ("seekHirerJobReference",)) or "").strip(),
-            RECORD_SOURCE_PLATFORM_JOB_ID_KEY: str(_seek_string_value(combined_payload, ("seekPostingSourceCode",)) or "").strip(),
             "raw_source_fields": raw_source_fields,
         }
     )
+    ats_requisition_id = str(_seek_string_value(combined_payload, ("seekHirerJobReference",)) or "").strip()
+    platform_job_id = str(_seek_string_value(combined_payload, ("seekPostingSourceCode",)) or "").strip()
+    if ats_requisition_id:
+        metadata[RECORD_SOURCE_ATS_REQUISITION_ID_KEY] = ats_requisition_id
+        metadata["ats_source"] = "seek"
+    if platform_job_id:
+        metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] = platform_job_id
     return metadata, combined_payload
 
 
@@ -1131,6 +1139,12 @@ def _process_seek_job_details(
     record["ad_learning_signals"] = build_ad_learning_signals(record, details_text, profile)
 
     record[RECORD_SALARY_KEY] = extract_salary(details_text) or record.get(RECORD_CARD_SALARY_KEY) or ""
+
+    ok_pref, pref_reason = passes_preference_filters(record, profile)
+    if not ok_pref:
+        print(f"REJECTED (preference gate) [{pref_reason}] {record.get(RECORD_TITLE_KEY)} @ {record.get(RECORD_COMPANY_KEY)}")
+        return False, pref_reason
+
     # Upgrade work mode from detail page. raw_source_payload is the SEEK_REDUX_DATA extracted
     # above — structured server state takes priority over card-level text inference.
     detail_extraction = extract_from_seek_detail(raw_source_payload, details_text)

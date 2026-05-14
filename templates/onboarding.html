@@ -10,364 +10,7 @@
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
-  <style>
-    /* Drop zone — themed overrides */
-    body {
-      background: var(--bg-page);
-    }
-
-    .hero-shell {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .hero-copy-shell {
-      flex: 1 1 0;
-      min-width: 0;
-    }
-
-    .hero-brand-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .brand-logo {
-      width: 77px;
-      height: 77px;
-      object-fit: contain;
-      flex-shrink: 0;
-    }
-
-    .brand-lockup {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .brand-eyebrow {
-      margin: 0;
-      color: var(--accent);
-      font-size: 0.68rem;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-
-    .brand-title {
-      margin: 0;
-      color: var(--ink);
-      font-size: 0.95rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-
-    .theme-switcher-widget {
-      align-self: flex-start;
-      margin-left: auto;
-    }
-    .hero-tools {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      margin-left: auto;
-      flex-wrap: wrap;
-    }
-    .onb-test-panel {
-      position: relative;
-      align-self: flex-start;
-    }
-    .onb-test-trigger {
-      border: 0;
-      padding: 0;
-      background: transparent;
-      color: var(--text-muted);
-      font: inherit;
-      font-size: 0.84rem;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 0.15em;
-    }
-    .onb-test-trigger:hover,
-    .onb-test-trigger[aria-expanded="true"] {
-      color: var(--text-primary);
-    }
-    .onb-test-menu {
-      position: absolute;
-      top: calc(100% + 10px);
-      right: 0;
-      min-width: 196px;
-      padding: 8px;
-      border-radius: 16px;
-      border: 1px solid var(--border-subtle);
-      background: var(--bg-surface);
-      box-shadow: var(--shadow-deep);
-      display: none;
-      z-index: 220;
-    }
-    .onb-test-menu.is-open {
-      display: block;
-    }
-    .onb-test-menu-title {
-      padding: 4px 8px 8px;
-      color: var(--text-muted);
-      font-size: 0.76rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .onb-test-menu-separator {
-      height: 1px;
-      margin: 0 4px 6px;
-      background: var(--border-subtle);
-    }
-    .onb-test-action {
-      width: 100%;
-      border: 0;
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: transparent;
-      color: var(--text-primary);
-      font: inherit;
-      font-size: 0.88rem;
-      text-align: left;
-      cursor: pointer;
-    }
-    .onb-test-action:hover {
-      background: var(--bg-muted);
-    }
-    .onb-test-action-danger {
-      color: var(--state-error-text);
-    }
-
-    .panel {
-      border: 1px solid var(--border-subtle);
-      box-shadow: var(--shadow-soft);
-      border-radius: var(--radius-lg);
-    }
-
-    input[type="text"],
-    input[type="number"],
-    input[type="search"],
-    select {
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      padding-top: 8px;
-      padding-bottom: 8px;
-    }
-
-    input:focus,
-    select:focus {
-      outline: 2px solid var(--accent) !important;
-      outline-offset: 2px !important;
-    }
-
-    .capability-shell {
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-    }
-
-    .hero-progress {
-      margin-top: 22px;
-      display: grid;
-      gap: 8px;
-    }
-
-    .wizard-progress {
-      height: 12px;
-      background-color: var(--bg-muted);
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid var(--border-subtle);
-    }
-
-    #wizard_progress_fill {
-      display: block;
-      height: 100%;
-      min-width: 0;
-      transition: width 0.35s ease;
-      box-shadow: var(--shadow-inset);
-      background: var(--accent) !important;
-    }
-
-    .wizard-progress-steps {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .wizard-progress-step {
-      min-width: 0;
-    }
-
-    .wizard-progress-nav {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      color: var(--muted);
-      font: inherit;
-      font-size: 0.84rem;
-      font-weight: 600;
-      text-align: left;
-    }
-
-    .wizard-progress-nav:not(:disabled) {
-      cursor: pointer;
-    }
-
-    .wizard-progress-nav:disabled {
-      cursor: default;
-    }
-
-    .wizard-progress-nav:not(:disabled):hover .wizard-progress-label,
-    .wizard-progress-nav:not(:disabled):focus-visible .wizard-progress-label {
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-
-    .wizard-progress-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 999px;
-      border: 2px solid color-mix(in srgb, var(--button-text) 18%, transparent);
-      background: transparent;
-    }
-    .wizard-progress-step.is-active,
-    .wizard-progress-step.is-complete {
-      color: var(--ink);
-    }
-
-    .wizard-progress-step.is-active .wizard-progress-dot {
-      border-color: var(--accent);
-      background: var(--accent);
-      box-shadow: 0 0 0 4px var(--accent-soft);
-    }
-
-    .wizard-progress-step.is-complete .wizard-progress-dot {
-      border-color: var(--accent);
-      background: transparent;
-    }
-
-    @media (max-width: 720px) {
-      .hero-shell {
-        gap: 16px;
-      }
-
-      .hero-tools {
-        margin-left: 0;
-      }
-
-      .theme-switcher-widget {
-        margin-left: 0;
-      }
-
-      .wizard-progress-steps {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    .drop-zone {
-      border: 2px dashed var(--border-strong);
-      border-radius: var(--radius-md);
-      padding: 48px 24px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      background-color: var(--bg-surface);
-      margin-bottom: 20px;
-    }
-    .drop-zone.has-file {
-      border-style: solid;
-      border-color: var(--state-success-border);
-      background-color: var(--bg-muted);
-    }
-    .drop-zone:hover {
-      border-color: var(--accent);
-      background-color: var(--bg-muted);
-      transform: translateY(-1px);
-    }
-    .upload-icon {
-      color: var(--text-muted);
-      margin-bottom: 16px;
-      transition: color 0.2s ease;
-    }
-    .drop-zone:hover .upload-icon {
-      color: var(--accent);
-    }
-    .drop-zone.has-file .upload-icon {
-      color: var(--state-success-text);
-    }
-    .drop-zone p {
-      margin: 0;
-      color: var(--text-primary);
-      font-size: 1.1rem;
-      font-weight: 500;
-    }
-    .drop-zone-hint {
-      font-size: 0.875rem;
-      color: var(--text-muted);
-      margin-top: 8px;
-    }
-    .file-loaded-label {
-      color: var(--state-success-text) !important;
-      font-weight: 700 !important;
-    }
-
-    /* Hide aliases when not in test mode */
-    [data-test-mode="false"] .test-only,
-    [data-test-mode="false"] .capability-aliases,
-    [data-test-mode="false"] .alias-tag {
-      display: none !important;
-    }
-
-    /* Step 2 Review UI Improvements */
-    .review-block {
-      margin-bottom: 20px;
-    }
-
-    /* Fix search bar: constrain width and tighten connection to the list */
-    .review-capability-filter {
-      max-width: 320px;
-      margin-bottom: 0 !important;
-      display: block;
-    }
-
-    /* Reduce height of items and move actions (Remove buttons) closer to text */
-    .chip-list {
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-
-    /* Target dynamically generated items like chips and capability rows */
-    .chip, 
-    .capability-card,
-    .review-capability-list > * {
-      padding: 4px 10px !important; /* Reduce vertical height */
-      display: flex !important;
-      align-items: center;
-      justify-content: flex-start !important; /* Align actions next to text */
-      gap: 8px !important; /* Minimize eye travel between text and button */
-      min-height: unset !important;
-    }
-
-    .review-capability-list {
-      display: grid;
-      gap: 6px;
-    }
-  </style>
+  <script src="/static/currency-input.js"></script>
 </head>
 <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__">
   <main class="page">
@@ -377,7 +20,7 @@
           <div class="hero-brand-row">
             <img src="/static/job_hunter_img.png" alt="Job Hunter Logo" class="brand-logo">
             <div class="brand-lockup">
-              <p class="brand-eyebrow">Job Hunter</p>              
+              <p class="brand-eyebrow">Job Hunter</p>
             </div>
           </div>
           <h1 id="hero_title">Set Up Your Job Search Profile</h1>
@@ -466,8 +109,8 @@
                 </div>
               </div>
               <div class="help" id="primary_cv_status">No file selected yet.</div>
-              <div class="help">Required. Use the most detailed CV you have, not the prettiest final layout.</div>
-              <div class="help">Privacy tip: only upload the CV content needed for matching. Remove date of birth, licence numbers, passport details, street address, and other sensitive personal identifiers.</div>
+              <div class="help">ⓘ Use your most detailed CV, not the prettiest version.</div>
+              <div class="help">🔒 Privacy tip: only upload the CV content needed for matching. Remove date of birth, licence numbers, passport details, street address, and other sensitive personal identifiers.</div>
               <details class="guidance-card">
                 <summary>What makes a good CV for setup?</summary>
                 <p class="help">Best results come from a detailed CV with role titles, dates, employers, and bullet points.</p>
@@ -498,42 +141,17 @@
 
             <div class="setting-row">
               <div class="setting-copy">
-                <label for="os_capability_strength_preset">How should older experience be treated?</label>
-                <div class="help">Choose the profile style you want. This is the only rebuild decision most people should need.</div>
+                <label for="os_capability_strength_preset">Prioritise recent or total experience?</label>
+                <div class="help">Select a weighting preset. This determines if older experience is treated as a current strength or supporting background.</div>
               </div>
               <div>
                 <select id="os_capability_strength_preset">
                   <option value="recent_focus">Focus on recent experience</option>
                   <option value="balanced">Balanced</option>
-                  <option value="include_older_experience">Keep older experience visible longer</option>
+                  <option value="include_older_experience">Include full career</option>
                 </select>
               </div>
             </div>
-
-            <details class="guidance-accordion test-only" data-test-only>
-              <summary>Advanced options (usually leave these alone)</summary>
-              <div class="setting-row">
-                <div class="setting-copy">
-                  <label for="os_lookback_years">CV lookback window</label>
-                  <div class="help">How far back Job Hunter should scan your CV for role history and evidence during profile rebuild.</div>
-                </div>
-                <div class="number-input">
-                  <input id="os_lookback_years" class="compact-number" type="number" min="1" max="20" step="1" inputmode="numeric" required>
-                  <span>years</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-copy">
-                  <label for="os_min_months">Ignore very short roles</label>
-                  <div class="help">Roles shorter than this are treated as background context instead of strong role signals.</div>
-                </div>
-                <div class="number-input">
-                  <input id="os_min_months" class="compact-number" type="number" min="1" max="24" step="1" inputmode="numeric" required>
-                  <span>months</span>
-                </div>
-              </div>
-            </details>
           </div>
 
           <div class="actions">
@@ -552,7 +170,7 @@
               <div class="chip-list" id="review_target_titles_list"></div>
               <div class="chip-editor-row">
                 <input id="review_target_titles_input" type="text" placeholder="Add a primary title">
-                <button class="secondary" id="review_add_target_title" type="button">Add</button>
+                <button class="btn btn-secondary" id="review_add_target_title" type="button">Add</button>
               </div>
             </section>
 
@@ -562,7 +180,7 @@
               <div class="chip-list" id="review_secondary_titles_list"></div>
               <div class="chip-editor-row">
                 <input id="review_secondary_titles_input" type="text" placeholder="Add a secondary title">
-                <button class="secondary" id="review_add_secondary_title" type="button">Add</button>
+                <button class="btn btn-secondary" id="review_add_secondary_title" type="button">Add</button>
               </div>
             </section>
           </div>
@@ -586,43 +204,61 @@
           <h2>Set Search Basics</h2>
           <p class="section-copy">Set the minimum information Job Hunter needs to search safely and score roles in the right direction.</p>
 
-          <label for="review_search_keywords">Search titles</label>
-          <input id="review_search_keywords" type="text" placeholder="We will prefill this from your CV when possible">
-          <div class="help">If you work across more than one role type, separate them with a comma — e.g. Senior Business Analyst, Scrum Master. Each title will be searched using OR.</div>
-
-          <label for="location_search">Where should we search?</label>
-          <select id="location_search"></select>
-          <div class="help">Required. Choose one state or capital city. SEEK and LinkedIn will each use the same location in their own query format.</div>
-          <div class="location-selected" id="location_selected"></div>
-
-          <label>What type of work are you open to?</label>
-          <div class="choice-list">
-            <label class="choice-card"><input type="radio" name="engagement_pref" value="both" checked><span>Both permanent and contract</span></label>
-            <label class="choice-card"><input type="radio" name="engagement_pref" value="permanent"><span>Permanent only</span></label>
-            <label class="choice-card"><input type="radio" name="engagement_pref" value="contract"><span>Contract only</span></label>
+          <div class="onb-field">
+            <label for="review_search_keywords">Search keyword</label>
+            <input id="review_search_keywords" type="text" placeholder="e.g. Technical Business Analyst, Integration BA">
+            <div class="help">These titles guide what Job Hunter searches for. Matching still uses your CV experience and capabilities.
+              <br> Separate multiple role types with commas.</div>
           </div>
 
-          <label for="government_preference">Government preference</label>
-          <select id="government_preference">
-            <option value="false" selected>No preference</option>
-            <option value="true">Prefer public sector roles</option>
-          </select>
-          <div class="help">Optional. Turn this on when public sector roles should receive government preference scoring.</div>
+          <div class="onb-field">
+            <label for="location_search">Where should we search?</label>
+            <select id="location_search"></select>
+            <div class="help">Required. Choose one state or capital city. All job boards will use the same location in their own query format.</div>
+            <div class="location-selected" id="location_selected"></div>
+          </div>
 
-          <div class="review-grid">
-            <section class="review-block" id="salary_yearly_block">
-              <h3>Minimum salary</h3>
-              <label for="review_minimum_salary_yearly">Minimum permanent base (excl. super).</label>
-              <input id="review_minimum_salary_yearly" type="number" min="0" step="1000" inputmode="numeric" placeholder="e.g. 140000">
-              <div class="help">Optional. Leave blank if you do not want a minimum.</div>
-            </section>
+          <div class="onb-field">
+            <label id="engagement_pref_label">What type of work  you open to?</label>
+            __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+          </div>
 
-            <section class="review-block" id="salary_daily_block">
-              <h3>Minimum daily rate</h3>
-              <label for="review_minimum_daily_rate">Minimum contract base (excl. super).</label>
-              <input id="review_minimum_daily_rate" type="number" min="0" step="10" inputmode="numeric" placeholder="e.g. 900">
-              <div class="help">Optional. Leave blank if you do not want a minimum.</div>
-            </section>
+          <div class="onb-field">
+            <label for="work_mode_preference">Work mode</label>
+            <select id="work_mode_preference">
+              __JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
+            </select>
+            <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
+          </div>
+
+          <div class="onb-field">
+            <label for="government_preference">Sector preference</label>
+            <select id="government_preference">
+              __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+            </select>
+            <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__</div>
+          </div>
+
+          <div class="onb-field">
+            <label>Minimum compensation</label>
+            <div class="salary-pair">
+              <div id="salary_yearly_block">
+                <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                <div class="currency-input-wrap">
+                  <span class="currency-prefix">$</span>
+                  <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 140,000">
+                </div>
+                <div class="help">__JOB_HUNTER_SALARY_ANNUAL_HELP__</div>
+              </div>
+              <div id="salary_daily_block">
+                <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                <div class="currency-input-wrap">
+                  <span class="currency-prefix">$</span>
+                  <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 900">
+                </div>
+                <div class="help">__JOB_HUNTER_SALARY_DAILY_HELP__</div>
+              </div>
+            </div>
           </div>
 
           <div class="actions">
@@ -676,15 +312,19 @@
                   <dd id="check_engagement_type"></dd>
                 </div>
                 <div>
+                  <dt>Work mode</dt>
+                  <dd id="check_work_mode_preference"></dd>
+                </div>
+                <div>
                   <dt>Government preference</dt>
                   <dd id="check_government_preference"></dd>
                 </div>
                 <div>
-                  <dt>Minimum salary (excluding super)</dt>
+                  <dt>__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</dt>
                   <dd id="check_salary_yearly"></dd>
                 </div>
                 <div>
-                  <dt>Minimum daily rate (excluding super)</dt>
+                  <dt>__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</dt>
                   <dd id="check_salary_daily"></dd>
                 </div>
               </dl>
@@ -702,8 +342,8 @@
     </div>
   </main>
 
-    <script src="/static/location-options.js"></script>
-    <script src="/static/onboarding-page.js"></script>
+  <script src="/static/location-options.js"></script>
+  <script src="/static/onboarding-page.js"></script>
   <script src="/static/onboarding-flow.js"></script>
 </body>
 </html>

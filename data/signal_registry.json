@@ -241,5 +241,28 @@
       "performance optimization"
     ],
     "needs_review": true
+  },
+  "master": {
+    "signal": "master",
+    "normalized_key": "master",
+    "original_texts": [
+      "master"
+    ],
+    "category": "role_title_token",
+    "suggested_category": "",
+    "history": [
+      {
+        "action": "added",
+        "timestamp": "2026-05-13T06:28:03.765301+00:00"
+      }
+    ],
+    "source": "CV parsing",
+    "context": [
+      "Primary CV: Scrum Master & Delivery Manager | 2016-2020 | Contract (US)"
+    ],
+    "evidence": [
+      "scrum master"
+    ],
+    "needs_review": true
   }
 }

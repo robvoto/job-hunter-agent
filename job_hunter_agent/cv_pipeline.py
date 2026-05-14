@@ -1,7 +1,7 @@
 """CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
 
-Produces 3 profile fields from raw CV text:
-  capability_profile_rules, dominant_signal_clusters, and must_not_require_skills.
+Produces the deterministic review fields from raw CV text:
+  dominant_signal_clusters and must_not_require_skills.
 
 Layers:
   A - parse_roles: extract structured role list
@@ -28,7 +28,6 @@ from job_hunter_agent.profile_learning import (
     repair_text,
 )
 from job_hunter_agent.profile_store import (
-    KEY_CAPABILITY_PROFILE_RULES,
     KEY_SIGNAL_CLUSTERS,
     KEY_REQUIRED_SKILLS,
     normalize_onboarding_settings,
@@ -116,8 +115,7 @@ def _tool_terms(text: str) -> list[str]:
             if piece.strip()
         ]
         for piece in pieces or [cleaned_part]:
-            tokens = [_normalize_token(token) for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", piece)]
-            tokens = [token for token in tokens if token and token not in _stopwords()]
+            tokens = [t for t in (_normalize_token(token) for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", piece)) if t and len(t) > 1 and t not in _stopwords()]
             if not tokens:
                 continue
             term = " ".join(tokens[:4]).strip()
@@ -130,10 +128,11 @@ def _ngrams(text: str, excluded_tokens: set[str] | None = None) -> list[str]:
     blocked = excluded_tokens or set()
     sw = _stopwords()
     tokens = [
-        _normalize_token(token)
-        for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
-        if _normalize_token(token) not in sw
-        and _normalize_token(token) not in blocked
+        t for t in (
+            _normalize_token(token)
+            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9+#/-]*", text)
+        )
+        if t and len(t) > 1 and t not in sw and t not in blocked
     ]
     phrases: list[str] = []
     for size in (3, 2):
@@ -281,7 +280,6 @@ def cluster_phrases(phrase_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         role_meta = list(cluster["_internal_role_meta"].values())
         cluster["role_count"] = len(cluster["_internal_roles"])
         cluster["recent_role_count"] = int(cluster["_internal_recent_hits"])
-        cluster["current_role_count"] = sum(1 for item in role_meta if bool(item.get("is_current")))
         cluster["most_recent_year"] = max((int(item.get("end_year") or 0) for item in role_meta), default=0)
         cluster["total_duration_months"] = sum(max(int(item.get("duration_months") or 0), 0) for item in role_meta)
 
@@ -301,7 +299,6 @@ def _score(cluster: dict[str, Any]) -> float:
 def _classify_cluster_level(cluster: dict[str, Any], onboarding_settings: dict[str, Any] | None = None) -> str:
     settings = normalize_onboarding_settings(onboarding_settings)
     total_duration_months = max(int(cluster.get("total_duration_months") or 0), 0)
-    role_count = max(int(cluster.get("role_count") or 0), 0)
     most_recent_year = int(cluster.get("most_recent_year") or 0)
     years_since_last_use = max(_CURRENT_YEAR - most_recent_year, 0) if most_recent_year else 99
     is_recent = years_since_last_use <= int(settings["capability_recent_years"])
@@ -310,7 +307,6 @@ def _classify_cluster_level(cluster: dict[str, Any], onboarding_settings: dict[s
         is_recent
         and years_since_last_use <= int(settings["capability_strong_max_years_since_use"])
         and total_duration_months >= int(settings["capability_strong_min_months"])
-        and role_count >= int(settings["capability_strong_min_roles"])
     ):
         return "strong"
     if (
@@ -321,11 +317,6 @@ def _classify_cluster_level(cluster: dict[str, Any], onboarding_settings: dict[s
     if (
         total_duration_months >= int(settings["capability_working_long_history_min_months"])
         and years_since_last_use <= int(settings["capability_working_long_history_max_years_since_use"])
-    ):
-        return "working"
-    if (
-        role_count == 1
-        and years_since_last_use <= int(settings["capability_single_role_old_max_years_since_use"])
     ):
         return "working"
     return "basic"
@@ -450,23 +441,7 @@ def _build_output(
             "needs_review": True,
         })
 
-    capability_profile_rules: list[dict[str, Any]] = []
-    seen_cap_names: set[str] = set()
-    for cluster in dominant_signal_clusters:
-        rule_name = str(cluster.get("name") or "").strip()
-        rule_name_norm = rule_name.lower()
-        if not rule_name_norm or rule_name_norm in seen_cap_names:
-            continue
-        seen_cap_names.add(rule_name_norm)
-        capability_profile_rules.append({
-            "name": rule_name_norm,
-            "level": str(cluster.get("level") or "basic"),
-            "aliases": list(cluster.get("aliases") or []),
-            "needs_review": True,
-        })
-
     return {
-        KEY_CAPABILITY_PROFILE_RULES: capability_profile_rules,
         KEY_SIGNAL_CLUSTERS: dominant_signal_clusters,
         KEY_REQUIRED_SKILLS: [],
     }
@@ -504,7 +479,6 @@ def run_cv_pipeline(
     _cap_log(
         f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "
         f"{len(clusters)} clusters -> {len(candidates)} candidates -> "
-        f"{len(output.get(KEY_CAPABILITY_PROFILE_RULES, []))} cap rules, "
         f"{len(dominant)} dominant signal clusters (evidence/review only)"
     )
     if dominant:

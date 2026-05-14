@@ -6,10 +6,7 @@
   <title>__JOB_HUNTER_PAGE_TITLE__</title>
   <link rel="stylesheet" href="/static/themes.css">
   <link rel="stylesheet" href="/static/settings-page.css">
-  <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE_VALUE__;</script>
-  <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN_VALUE__";</script>
-  <script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = __JOB_HUNTER_LOCATION_OPTIONS_JSON__;</script>
-  <script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = "__JOB_HUNTER_DEFAULT_LOCATION_VALUE__";</script>
+  __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
@@ -19,23 +16,6 @@
     [data-test-mode="false"] .capability-aliases,
     [data-test-mode="false"] .alias-tag {
       display: none !important;
-    }
-
-    .currency-input-wrap {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-    .currency-input-wrap .currency-prefix {
-      position: absolute;
-      left: 12px;
-      color: var(--text-secondary);
-      font-weight: 600;
-      pointer-events: none;
-      z-index: 1;
-    }
-    .currency-input-wrap input {
-      padding-left: 26px;
     }
 
     .sidebar-brand-title {
@@ -52,7 +32,7 @@
     }
   </style>
 </head>
-  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_VALUE__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
+  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Page sections">
       <div class="sidebar-brand">
@@ -99,7 +79,7 @@
             <section class="panel">
               <h2>Common Search Settings</h2>
               <p class="panel-copy">Shared source-search inputs that apply across SEEK and LinkedIn.</p>
-              <label>Search titles</label>
+              <label>Search keywords</label>
               <div class="badge-editor" data-chip-editor="keywords">
                 <div id="keywords_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
@@ -112,36 +92,39 @@
 
               <label for="engagement_type">Work type</label>
               <select id="engagement_type">
-                <option value="both">Both (no filter)</option>
-                <option value="permanent">Permanent only</option>
-                <option value="contract">Contract only</option>
+                __JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
               </select>
               <div class="help">Filter which engagement types are searched. Both includes permanent and contract roles.</div>
 
+              <label for="work_mode_preference">Work mode</label>
+              <select id="work_mode_preference">
+                __JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
+              </select>
+              <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__ Explicitly different work modes are filtered out.</div>
+
               <label for="prefer_government">Government preference</label>
               <select id="prefer_government">
-                <option value="false">No preference</option>
-                <option value="true">Prefer public sector roles</option>
+                __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
               </select>
-              <div class="help">Turn this on when public sector roles should receive government preference scoring.</div>
+              <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__ This affects matching, not eligibility.</div>
 
               <label for="dashboard_minimum_score">Minimum fit level to show</label>
               <input id="dashboard_minimum_score" type="number" min="0" max="100">
               <div class="help">Roles scoring below this threshold are hidden from the shortlist. Matches your fit level thresholds — raise it to see only stronger matches.</div>
 
-              <label for="minimum_salary_yearly">Minimum annual salary</label>
+              <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
               <div class="currency-input-wrap">
                 <span class="currency-prefix">$</span>
-                <input id="minimum_salary_yearly" type="number" min="0" step="1000" value="0">
+                <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
               </div>
-              <div class="help">Used when permanent roles list salary. Set 0 to ignore.</div>
+              <div class="help">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
 
-              <label for="minimum_daily_rate">Minimum daily rate</label>
+              <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
               <div class="currency-input-wrap">
                 <span class="currency-prefix">$</span>
-                <input id="minimum_daily_rate" type="number" min="0" step="50" value="0">
+                <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
               </div>
-              <div class="help">Used when contract roles list a day rate. Set 0 to ignore.</div>
+              <div class="help">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
             </section>
 
             <section class="panel">
@@ -527,7 +510,7 @@
 
             <section class="panel">
               <h2>Suggested Tuning</h2>
-              <div id="tuning_suggestions_panel" class="help">This fills after a scrape run. It shows capability decisions and repeated junk-role signals worth confirming.</div>
+              <div id="tuning_suggestions_panel" class="help">This fills after a scrape run. It shows capability decisions and repeated junk-role patterns worth confirming.</div>
               <div class="panel-actions">
                 <button class="secondary" id="refresh_review_data" type="button">Refresh Suggestions</button>
               </div>
@@ -546,17 +529,17 @@
             <input id="highlight_strong_capability_count" type="number" min="0" max="10" step="1">
             <div class="field-help">Shown on dashboard job cards only. Controls how many strong capability matches appear before the card runs out of space.</div>
 
-            <label for="highlight_working_capability_count">Working capability matches shown</label>
+            <label for="highlight_working_capability_count">Intermediate capability matches shown</label>
             <input id="highlight_working_capability_count" type="number" min="0" max="10" step="1">
-            <div class="field-help">Shown on dashboard job cards only. Controls how many working-level capability matches appear per card.</div>
+            <div class="field-help">Shown on dashboard job cards only. Controls how many intermediate capability matches appear per card.</div>
 
-            <label for="highlight_basic_capability_count">Basic capability matches shown</label>
+            <label for="highlight_basic_capability_count">Historical capability matches shown</label>
             <input id="highlight_basic_capability_count" type="number" min="0" max="10" step="1">
-            <div class="field-help">Shown on dashboard job cards only. Controls how many basic capability matches appear per card.</div>
+            <div class="field-help">Shown on dashboard job cards only. Controls how many historical capability matches appear per card.</div>
 
-            <label for="highlight_reviewed_signal_count">Reviewed signal matches shown</label>
+            <label for="highlight_reviewed_signal_count">Reviewed capability matches shown</label>
             <input id="highlight_reviewed_signal_count" type="number" min="0" max="10" step="1">
-            <div class="field-help">Shown on dashboard job cards only. Controls how many approved learning signals are displayed per card.</div>
+            <div class="field-help">Shown on dashboard job cards only. Controls how many approved learning capabilities are displayed per card.</div>
 
             <label for="highlight_max_highlights">Maximum highlights per card</label>
             <input id="highlight_max_highlights" type="number" min="1" max="20" step="1">
@@ -636,6 +619,25 @@
           </section>
 
           <section class="panel">
+            <h2>Salary Limits</h2>
+            <p class="panel-copy">These caps control the largest salary values users can save in Search and Onboarding. They are managed globally so the UI and API stay aligned.</p>
+
+            <label for="salary_limit_minimum_salary_yearly_max">Maximum permanent salary</label>
+            <div class="currency-input-wrap">
+              <span class="currency-prefix">$</span>
+              <input id="salary_limit_minimum_salary_yearly_max" type="text" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field-help">Upper cap for annual salary inputs. Leave it high enough to cover any realistic target.</div>
+
+            <label for="salary_limit_minimum_daily_rate_max">Maximum contract daily rate</label>
+            <div class="currency-input-wrap">
+              <span class="currency-prefix">$</span>
+              <input id="salary_limit_minimum_daily_rate_max" type="text" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field-help">Upper cap for daily rate inputs. Leave it high enough to cover any realistic target.</div>
+          </section>
+
+          <section class="panel">
             <h2>Evidence Tier Weights</h2>
             <p class="panel-copy">These global weights control how much each profile tier contributes when evidence is scored.</p>
 
@@ -711,7 +713,7 @@
           <section class="panel">
             <h2>Onboarding Defaults</h2>
             <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
-            <div class="field-help">These controls also shape how the learning pass keeps aliases and signal clusters when the system extracts your CV.</div>
+            <div class="field-help">These controls also shape how the learning pass keeps aliases and capability clusters when the system extracts your CV.</div>
 
             <label for="onboarding_extraction_lookback_years">Extraction lookback years</label>
             <input id="onboarding_extraction_lookback_years" type="number" min="1" max="20" step="1">
@@ -731,7 +733,7 @@
 
             <label for="onboarding_capability_alias_limit">Capability alias limit</label>
             <input id="onboarding_capability_alias_limit" type="number" min="1" max="20" step="1">
-            <div class="field-help">How many aliases a learned capability row can keep before the extras are dropped.</div>
+            <div class="field-help">Controls two things: how many aliases the LLM is asked to generate per capability during CV extraction, and the maximum kept per capability rule. Raise this if capabilities are matching too few job-description variants.</div>
 
             <label for="onboarding_signal_cluster_min_alias_hits">Signal cluster minimum alias hits</label>
             <input id="onboarding_signal_cluster_min_alias_hits" type="number" min="1" max="10" step="1">
@@ -789,7 +791,7 @@
           <section class="panel">
             <div class="panel-kicker">Global learning</div>
             <h2>Learning</h2>
-            <p class="panel-copy">This inbox is shared across the whole system. It helps the parser, capability learning, and signal registry for every candidate profile, so it stays out of candidate-specific settings.</p>
+            <p class="panel-copy">This inbox is shared across the whole system. It helps the parser, signal learning, and signal registry for every candidate profile, so it stays out of candidate-specific settings.</p>
             <div id="signal_registry_panel">
               <p class="help">Open Learning to load the shared learning inbox.</p>
             </div>
@@ -813,6 +815,7 @@
   </div>
 
   <script src="/static/capability-ui.js"></script>
+  <script src="/static/currency-input.js"></script>
   <script src="/static/location-options.js"></script>
   <script src="/static/settings-page.js"></script>
   <script src="/static/settings-review-panel.js"></script>

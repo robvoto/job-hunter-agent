@@ -47,6 +47,59 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
     assert payload["ok"] is True
 
 
+def test_api_onboarding_confirm_allows_no_government_preference(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
+    monkeypatch.setattr(onboarding_api, "normalize_capability_rules", lambda rules, current_onboarding: [])
+
+    response = onboarding_api.api_onboarding_confirm(
+        {
+            "primary_job_title_pattern": ["Business Analyst"],
+            "secondary_title_patterns": [],
+            "search_keyword": "business analyst",
+            "search_locations": ["Sydney NSW"],
+            "engagement_type": "both",
+            "prefer_government": "",
+            "minimum_salary_yearly": 0,
+            "minimum_daily_rate": 0,
+            "capability_profile_rules": [],
+        }
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["ok"] is True
+    assert captured["patch"]["match_preferences"]["prefer_government"] == profile_store.GOVERNMENT_PREFERENCE_ANY
+
+
+def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
+    monkeypatch.setattr(onboarding_api, "normalize_capability_rules", lambda rules, current_onboarding: [])
+
+    response = onboarding_api.api_onboarding_confirm(
+        {
+            "primary_job_title_pattern": ["Business Analyst"],
+            "secondary_title_patterns": [],
+            "search_keyword": "business analyst",
+            "search_locations": ["Sydney NSW"],
+            "engagement_type": "both",
+            "work_mode_preference": "hybrid",
+            "prefer_government": "",
+            "minimum_salary_yearly": 0,
+            "minimum_daily_rate": 0,
+            "capability_profile_rules": [],
+        }
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["ok"] is True
+    assert captured["patch"]["match_preferences"]["work_mode_preference"] == "hybrid"
+
+
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
     try:
         server_helpers._validate_required_onboarding_inputs(

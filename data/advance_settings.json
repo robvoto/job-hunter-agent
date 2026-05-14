@@ -36,6 +36,16 @@
       "max": 100
     }
   },
+  "salary_limits": {
+    "minimum_salary_yearly": {
+      "min": 0,
+      "max": 1000000
+    },
+    "minimum_daily_rate": {
+      "min": 0,
+      "max": 10000
+    }
+  },
   "preference_weights": {
     "fit": 1,
     "salary": 1,
@@ -85,12 +95,10 @@
     "capability_recent_years": 4,
     "capability_strong_max_years_since_use": 4,
     "capability_strong_min_months": 36,
-    "capability_strong_min_roles": 2,
     "capability_working_max_years_since_use": 8,
     "capability_working_min_months": 18,
     "capability_working_long_history_max_years_since_use": 12,
     "capability_working_long_history_min_months": 48,
-    "capability_single_role_old_max_years_since_use": 8,
     "capability_drop_to_basic_after_years": 12,
     "capability_max_items": 20,
     "capability_strength_presets": {
@@ -98,12 +106,10 @@
         "capability_recent_years": 3,
         "capability_strong_max_years_since_use": 3,
         "capability_strong_min_months": 36,
-        "capability_strong_min_roles": 2,
         "capability_working_max_years_since_use": 6,
         "capability_working_min_months": 18,
         "capability_working_long_history_max_years_since_use": 10,
         "capability_working_long_history_min_months": 60,
-        "capability_single_role_old_max_years_since_use": 6,
         "capability_drop_to_basic_after_years": 10,
         "capability_max_items": 20
       },
@@ -111,12 +117,10 @@
         "capability_recent_years": 4,
         "capability_strong_max_years_since_use": 4,
         "capability_strong_min_months": 36,
-        "capability_strong_min_roles": 2,
         "capability_working_max_years_since_use": 8,
         "capability_working_min_months": 18,
         "capability_working_long_history_max_years_since_use": 12,
         "capability_working_long_history_min_months": 48,
-        "capability_single_role_old_max_years_since_use": 8,
         "capability_drop_to_basic_after_years": 12,
         "capability_max_items": 20
       },
@@ -124,12 +128,10 @@
         "capability_recent_years": 5,
         "capability_strong_max_years_since_use": 5,
         "capability_strong_min_months": 30,
-        "capability_strong_min_roles": 2,
         "capability_working_max_years_since_use": 10,
         "capability_working_min_months": 12,
         "capability_working_long_history_max_years_since_use": 15,
         "capability_working_long_history_min_months": 36,
-        "capability_single_role_old_max_years_since_use": 10,
         "capability_drop_to_basic_after_years": 15,
         "capability_max_items": 24
       }

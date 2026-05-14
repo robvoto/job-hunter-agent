@@ -84,13 +84,20 @@ Total = sum of contributions, capped at 20.
 
 Rationale: 20 pts = 20% of total. The `max()` rule means the stronger of the two signals wins — self-assessed proficiency or demonstrated evidence. The cap at 20 matches the budget.
 
-**Why `max` not average:** If your evidence text shows deep usage even though the rule is "basic", the stronger signal should count. If your rule is "strong" but the profile has thin evidence for this term, the rule still anchors the contribution.
+Internal levels are `strong`, `working`, and `basic`, displayed in the UI as Expert, Intermediate, and Historical.
 
----
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| `strong_min_months` | 36 | **Duration:** You need 3+ years (36 months) of total experience to be automatically labeled "Strong". |
+| `strong_max_years_since_use` | 4 | **Freshness:** If the capability has not been used recently, it should not stay "Strong". One long current role can still be strong if it is recent enough. |
+| `working_min_months` | 18 | **Floor:** You need at least 1.5 years (18 months) for "Intermediate" level. Anything less becomes "Historical". |
 
 ## Logistics budget (30 pts total)
 
 ### Contract preference — budget 10 pts
+
+**Hard filter (pre-scoring):** If the work type is explicitly known (e.g. "Permanent" or "Contract" stated on the listing) and is incompatible with your engagement preference, the role is excluded before scoring. Unknown/blank work type always passes through.
 
 | Outcome | Points |
 |---------|--------|
@@ -101,7 +108,7 @@ Rationale: 20 pts = 20% of total. The `max()` rule means the stronger of the two
 | Contract shorter than preferred | −4 |
 | Wrong engagement type | −5 |
 
-Rationale: 10 pts = 10% of total. The largest logistics component because contract type is a hard, early filter. Tiers step down proportionally from the 10-pt maximum.
+Rationale: 10 pts = 10% of total. Scoring applies to compatible or unknown types only — explicit mismatches are removed before scoring.
 
 ### Location preference — budget 8 pts
 
@@ -117,6 +124,8 @@ Rationale: 8 pts = 8% of total. Primary match = full budget. Secondary match wit
 
 ### Salary signal — budget 7 pts
 
+**Hard filter (pre-scoring):** If salary is explicitly stated, parseable as annual or daily, and falls below your minimum target, the role is excluded before scoring. Unlisted salary, package/super-inclusive figures, and hourly/weekly rates always pass through.
+
 | Outcome | Points |
 |---------|--------|
 | Meets or exceeds target | 7 |
@@ -125,7 +134,7 @@ Rationale: 8 pts = 8% of total. Primary match = full budget. Secondary match wit
 | Below 60% of target | −5 |
 | Not listed | 0 |
 
-Rationale: 7 pts = 7% of total. Salary is listed infrequently, so the budget is modest. When it does appear and meets target, it's a full-budget positive. Below target penalises increasingly steeply — 60% of target is a genuine dealbreaker.
+Rationale: 7 pts = 7% of total. Salary is listed infrequently, so the budget is modest. The hard filter means below-minimum salaries never reach the score table — scoring only applies to roles that met or are close to the target, or where salary is unknown.
 
 ### Work mode — budget 5 pts
 
@@ -195,6 +204,14 @@ Penalties are intentionally smaller than in earlier versions. The capability evi
 
 ---
 
+## Sector preference (hard filter, not scored)
+
+**Hard filter (pre-scoring):** If your sector preference is "Private only" and the role explicitly shows government context (agency name, government language), the role is excluded before scoring. "Government only" preference does not hard-filter — absence of government context does not confirm a role is private; it just means we don't know.
+
+Government context match (when preference is "Government only") earns a bonus in the government weight category; government context detected when preference is "Private only" used to penalise the score, but is now handled entirely by the hard filter above.
+
+---
+
 ## Preference weights
 
 Each component belongs to a weight category (fit, freshness, location, contract, work_mode, salary, government). Weights default to 1.0 and can be raised up to 2.0 from the settings UI.
@@ -242,4 +259,3 @@ What makes them better than the old system is not that they're empirically corre
 How to make it genuinely evidence-based
 The only way to derive the weights from data is outcome calibration: track which jobs you applied for and whether you got an interview, then fit the weights to maximise predictive accuracy. After ~30–50 outcomes you'd have enough signal to calibrate. That's the path to true empirical grounding — but it requires your own historical data, which this system could start collecting now.
  
-

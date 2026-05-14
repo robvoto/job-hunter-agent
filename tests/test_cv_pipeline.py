@@ -1,8 +1,5 @@
 from job_hunter_agent.cv_pipeline import parse_roles, run_cv_pipeline, score_and_promote
 from job_hunter_agent.profile_learning import _CURRENT_YEAR
-from pathlib import Path
-
-
 def test_parse_roles_uses_configured_lookback_years_for_recency():
     cv_text = f"""
 # Professional Experience
@@ -31,7 +28,7 @@ Produced delivery plans and backlog refinement outcomes.
 
     output = run_cv_pipeline(cv_text, llm_client=None)
 
-    assert output["capability_profile_rules"]
+    assert output["dominant_signal_clusters"]
 
  
 
@@ -47,9 +44,7 @@ Tools: project, tools, technologies
 
     output = run_cv_pipeline(cv_text, llm_client=None)
 
-    assert any("project" in item["name"] for item in output["capability_profile_rules"])
     assert any("project" in item["name"] for item in output["dominant_signal_clusters"])
-    assert any(item["needs_review"] is True for item in output["capability_profile_rules"])
     assert any(item["needs_review"] is True for item in output["dominant_signal_clusters"])
 
 
@@ -91,11 +86,10 @@ def test_score_and_promote_uses_onboarding_strength_preset():
             {
                 "seed": "process mapping",
                 "occurrences": 3,
-                "role_count": 2,
+                "role_count": 1,
                 "recent_role_count": 3,
                 "total_duration_months": 36,
                 "most_recent_year": _CURRENT_YEAR - 1,
-                "current_role_count": 1,
             }
         ],
         onboarding_settings={"capability_strength_preset": "balanced"},
@@ -109,7 +103,6 @@ def test_score_and_promote_uses_onboarding_strength_preset():
                 "recent_role_count": 1,
                 "total_duration_months": 18,
                 "most_recent_year": _CURRENT_YEAR - 5,
-                "current_role_count": 0,
             }
         ],
         onboarding_settings={"capability_strength_preset": "balanced"},
@@ -123,7 +116,6 @@ def test_score_and_promote_uses_onboarding_strength_preset():
                 "recent_role_count": 0,
                 "total_duration_months": 6,
                 "most_recent_year": _CURRENT_YEAR - 15,
-                "current_role_count": 0,
             }
         ],
         onboarding_settings={"capability_strength_preset": "balanced"},

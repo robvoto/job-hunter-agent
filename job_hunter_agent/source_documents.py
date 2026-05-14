@@ -24,7 +24,6 @@ from job_hunter_agent.profile_learning import (
     build_role_title_review_signals,
     clear_capability_debug_log,
     extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
-    merge_capability_rules,
     repair_text,
 )
 from job_hunter_agent.profile_store import (
@@ -317,10 +316,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         if key in {"cv_text", KEY_CAPABILITY_PROFILE_RULES}:
             continue
         patch[key] = value
-    patch[KEY_CAPABILITY_PROFILE_RULES] = merge_capability_rules(
-        [],
-        learning_patch.get(KEY_CAPABILITY_PROFILE_RULES, []),
-    )
+    patch[KEY_CAPABILITY_PROFILE_RULES] = list(learning_patch.get(KEY_CAPABILITY_PROFILE_RULES, []))
 
     brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CAPABILITY_PROFILE_RULES) or [])
     if brief:

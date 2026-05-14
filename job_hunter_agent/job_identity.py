@@ -24,7 +24,7 @@ def _get_identity_config() -> dict[str, Any]:
 def normalize_job_key(value: str, source: Optional[str] = None) -> str:
     """
     Strict job key normalization (canonical format: 'source:id').
-    Does not support legacy numeric-only IDs or generic URL fallbacks.
+    When a source is provided, raw slugs and numeric ids are namespaced to that source.
     """
     raw = str(value or "").strip().lower()
     if not raw:
@@ -34,6 +34,10 @@ def normalize_job_key(value: str, source: Optional[str] = None) -> str:
     if ":" in raw:
         if re.match(r"^[a-z]+:[a-z0-9_-]+$", raw):
             return raw
+
+    # 1b. Some review flows store already-canonical slug keys without a source.
+    if source is None and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", raw):
+        return raw
 
     # 2. Extraction from standard URL patterns
     id_match = re.search(r"/job(?:s)?/(?:view/)?(\d+)", raw)
@@ -49,6 +53,8 @@ def normalize_job_key(value: str, source: Optional[str] = None) -> str:
                     source_part = mapped_source
                     break
     elif re.fullmatch(r"\d+", raw):
+        id_part = raw
+    elif source_part and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", raw):
         id_part = raw
 
     # 3. Strict Canonical Assembly

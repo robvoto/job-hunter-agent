@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Body
@@ -14,10 +15,14 @@ from job_hunter_agent.profile_store import (
     KEY_MIN_DAILY_RATE,
     KEY_MIN_SALARY_YEARLY,
     KEY_PREFER_GOVERNMENT,
+    KEY_WORK_MODE_PREFERENCE,
     KEY_ONBOARDING_SETTINGS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
+    WORK_MODE_PREFERENCE_OPTIONS,
+    normalize_capability_rules,
 )
+from job_hunter_agent.advance_settings import get_salary_limits
 from job_hunter_agent.routes.responses import json_response
 
 router = APIRouter()
@@ -51,6 +56,12 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
             if suffix not in get_allowed_source_document_suffixes():
                 raise ValueError(f"Please upload CV files as {get_allowed_source_document_suffixes_label()}.")
         materials = srv.persist_uploaded_source_pack(files) if files else srv.load_source_materials(create_if_missing=True)
+        preset_info = srv.describe_capability_strength_preset(onboarding_settings.get("capability_strength_preset"))
+        print(
+            "[ONBOARDING][CAPABILITY_STRENGTH] "
+            f"preset={preset_info['capability_strength_preset']} "
+            f"values={json.dumps(preset_info['values'], ensure_ascii=True)}"
+        )
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
         result = srv.run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
         result["materials"] = materials
@@ -67,12 +78,13 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         keyword = str(body.get(REQUEST_SEARCH_KEYWORD_KEY) or "").strip()
         locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
         engagement_type = str(body.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
-        prefer_government = str(body.get(KEY_PREFER_GOVERNMENT) or "").strip().lower() == "true"
+        work_mode_preference = str(body.get(KEY_WORK_MODE_PREFERENCE) or "").strip().lower()
+        prefer_government = str(body.get(KEY_PREFER_GOVERNMENT) or "").strip().lower()
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
         # Keep the current onboarding limits in the learning path so profile saves do not drop them.
-        capability_rules = srv.normalize_capability_rules(body.get(KEY_CAPABILITY_PROFILE_RULES) or [], current_onboarding)
+        capability_rules = normalize_capability_rules(body.get(KEY_CAPABILITY_PROFILE_RULES) or [], current_onboarding)
         if not target:
             raise ValueError("Primary job title must not be empty")
         if keyword and (len(keyword) < 2 or len(keyword) > 120):
@@ -87,14 +99,30 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         locations = [resolve_location(location)["name"]]
         if engagement_type not in srv._VALID_ENGAGEMENT_TYPES:
             raise ValueError("Please choose what type of work you are open to.")
+        valid_work_modes = {str(item["value"]).strip().lower() for item in WORK_MODE_PREFERENCE_OPTIONS}
+        if work_mode_preference not in valid_work_modes:
+            raise ValueError("Please choose a work mode.")
+        if prefer_government not in srv._VALID_GOVERNMENT_PREFERENCES:
+            prefer_government = srv.GOVERNMENT_PREFERENCE_ANY
         try:
-            minimum_salary_yearly = max(0, int(raw_minimum_salary_yearly or 0))
+            minimum_salary_yearly = int(str(raw_minimum_salary_yearly).replace(",", "").strip() or 0)
         except Exception as exc:
             raise ValueError("Minimum permanent salary must be a whole number.") from exc
+        if minimum_salary_yearly < 0:
+            raise ValueError("Minimum permanent salary cannot be negative.")
         try:
-            minimum_daily_rate = max(0, int(raw_minimum_daily_rate or 0))
+            minimum_daily_rate = int(str(raw_minimum_daily_rate).replace(",", "").strip() or 0)
         except Exception as exc:
             raise ValueError("Minimum contract daily rate must be a whole number.") from exc
+        if minimum_daily_rate < 0:
+            raise ValueError("Minimum contract daily rate cannot be negative.")
+        salary_limits = get_salary_limits()
+        yearly_cap = int(salary_limits.get(KEY_MIN_SALARY_YEARLY, {}).get("max", minimum_salary_yearly))
+        daily_cap = int(salary_limits.get(KEY_MIN_DAILY_RATE, {}).get("max", minimum_daily_rate))
+        if minimum_salary_yearly > yearly_cap:
+            raise ValueError(f"Minimum permanent salary cannot exceed {yearly_cap:,}.")
+        if minimum_daily_rate > daily_cap:
+            raise ValueError(f"Minimum contract daily rate cannot exceed {daily_cap:,}.")
         profile_patch: dict = {
             KEY_PRIMARY_PATTERNS: target,
             KEY_SECONDARY_PATTERNS: secondary,
@@ -111,6 +139,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         profile_patch[PROFILE_SEARCH_SETTINGS_KEY] = search_settings
         match_preferences = dict(current.get(KEY_MATCH_PREFS, {}))
         match_preferences[KEY_ENGAGEMENT_TYPE] = engagement_type
+        match_preferences[KEY_WORK_MODE_PREFERENCE] = work_mode_preference
         match_preferences[KEY_PREFER_GOVERNMENT] = prefer_government
         profile_patch[KEY_MATCH_PREFS] = match_preferences
         profile_patch[PROFILE_SALARY_PREFS_KEY] = {

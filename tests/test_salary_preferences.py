@@ -1,5 +1,5 @@
 from job_hunter_agent import filters
-from job_hunter_agent.preferences import assess_contract_preference, salary_fit_adjustment
+from job_hunter_agent.preferences import assess_contract_preference, passes_preference_filters, salary_fit_adjustment
 
 
 def _profile():
@@ -98,3 +98,16 @@ def test_unknown_work_type_still_passes_quick_card_filter(monkeypatch):
 
     assert ok is True
     assert reason == "OK"
+
+
+def test_work_mode_preference_blocks_mismatched_known_modes():
+    profile = {
+        "match_preferences": {
+            "work_mode_preference": "remote",
+        },
+    }
+
+    ok, reason = passes_preference_filters({"work_mode": "Hybrid"}, profile)
+
+    assert ok is False
+    assert reason == "PREF_WORK_MODE"

@@ -78,7 +78,7 @@ def _is_structurally_valid_alias(raw_alias: Any) -> bool:
 def derive_job_description_aliases(
     name: str,
     raw_aliases: list[str] | None,
-    max_aliases: int,
+    max_aliases: int = 10,
 ) -> list[str]:
     """Return clean, deduplicated aliases excluding the canonical name."""
     excluded = {_clean_term(name)}
