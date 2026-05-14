@@ -30,6 +30,7 @@ KEY_PREFERENCE_WEIGHTS = "preference_weights"
 KEY_EVIDENCE_TIER_WEIGHTS = "candidate_profile_tier_weights"
 KEY_HISTORY_SETTINGS = "history_settings"
 KEY_DESCRIPTION_TRUST_SETTINGS = "description_trust_settings"
+KEY_SOURCE_DOCUMENT_SETTINGS = "source_document_settings"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
 KEY_LLM_SETTINGS = "llm_settings"
 KEY_LLM_PROMPT_SETTINGS = "llm_prompt_settings"
@@ -54,6 +55,7 @@ KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
 
 KEY_LINKEDIN_EASY_APPLY_ONLY = "linkedin_easy_apply_only"
+KEY_SOURCE_DOCUMENT_SUFFIXES = "allowed_suffixes"
 
 KEY_DATE_RANGE_DAYS = "date_range_days"
 KEY_SEEK_MAX_PAGES = "seek_max_pages"
@@ -62,6 +64,7 @@ KEY_LINKEDIN_RESULTS_PER_SEARCH = "linkedin_results_per_search"
 KEY_PLAYWRIGHT_VIEWPORT_WIDTH = "playwright_viewport_width"
 KEY_PLAYWRIGHT_VIEWPORT_HEIGHT = "playwright_viewport_height"
 KEY_PLAYWRIGHT_SELECTOR_TIMEOUT = "playwright_selector_timeout"
+KEY_PLAYWRIGHT_BROWSER_MODE = "playwright_browser_mode"
 KEY_DEFAULT_COUNTRY_SUFFIX = "default_country_suffix"
 KEY_ARCHIVE_STALE_AFTER_DAYS = "archive_stale_after_days"
 KEY_HIDDEN_REVIEW_DAYS = "hidden_review_days"
@@ -84,6 +87,14 @@ DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_HISTORY_S
 
 DEFAULT_DESCRIPTION_TRUST_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DESCRIPTION_TRUST_SETTINGS, {}))
 
+DEFAULT_SOURCE_DOCUMENT_SETTINGS = {
+    KEY_SOURCE_DOCUMENT_SUFFIXES: [
+        str(value).strip().lower()
+        for value in _MANAGED_ADVANCE_SETTINGS_SEED[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_SOURCE_DOCUMENT_SUFFIXES]
+        if str(value).strip()
+    ],
+}
+
 DEFAULT_ONBOARDING_SETTINGS = {
     k: copy.deepcopy(v)
     for k, v in _MANAGED_ADVANCE_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS].items()
@@ -95,6 +106,9 @@ DEFAULT_LLM_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_LLM_SETT
 DEFAULT_LLM_PROMPT_SETTINGS = dict(DEFAULT_LLM_SETTINGS[KEY_LLM_PROMPT_SETTINGS])
 
 DEFAULT_PLAYWRIGHT_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get("playwright_settings", {}))
+DEFAULT_PLAYWRIGHT_BROWSER_MODE = str(
+    DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_BROWSER_MODE, "ephemeral")
+).strip().lower()
 
 DEFAULT_COUNTRY_SUFFIX = str(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DEFAULT_COUNTRY_SUFFIX, "Australia")).strip()
 
@@ -133,6 +147,7 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
     KEY_EVIDENCE_TIER_WEIGHTS: copy.deepcopy(DEFAULT_EVIDENCE_TIER_WEIGHTS),
     KEY_HISTORY_SETTINGS: copy.deepcopy(DEFAULT_HISTORY_SETTINGS),
     KEY_DESCRIPTION_TRUST_SETTINGS: copy.deepcopy(DEFAULT_DESCRIPTION_TRUST_SETTINGS),
+    KEY_SOURCE_DOCUMENT_SETTINGS: copy.deepcopy(DEFAULT_SOURCE_DOCUMENT_SETTINGS),
     KEY_ONBOARDING_SETTINGS: {
         **copy.deepcopy(DEFAULT_ONBOARDING_SETTINGS),
         KEY_CAPABILITY_STRENGTH_PRESETS: copy.deepcopy(CAPABILITY_STRENGTH_PRESETS),
@@ -142,6 +157,7 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
         KEY_PLAYWRIGHT_VIEWPORT_WIDTH: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_VIEWPORT_WIDTH, 1400),
         KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_VIEWPORT_HEIGHT, 900),
         KEY_PLAYWRIGHT_SELECTOR_TIMEOUT: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_SELECTOR_TIMEOUT, 8000),
+        KEY_PLAYWRIGHT_BROWSER_MODE: DEFAULT_PLAYWRIGHT_BROWSER_MODE,
     },
 }
 
@@ -304,6 +320,27 @@ def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
     return bool(raw)
 
 
+def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[str]) -> list[str]:
+    raw_suffixes = source.get(KEY_SOURCE_DOCUMENT_SUFFIXES, defaults)
+    if not isinstance(raw_suffixes, list):
+        raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must be a list")
+
+    normalized: list[str] = []
+    for value in raw_suffixes:
+        suffix = str(value or "").strip().lower()
+        if not suffix:
+            continue
+        if not suffix.startswith("."):
+            raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must start with '.'")
+        if " " in suffix:
+            raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must not contain spaces")
+        if suffix not in normalized:
+            normalized.append(suffix)
+    if not normalized:
+        raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must contain at least one suffix")
+    return normalized
+
+
 def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
 
@@ -314,6 +351,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
     history_source = source.get(KEY_HISTORY_SETTINGS, {})
     description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
+    source_document_source = source.get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
     llm_source = source.get(KEY_LLM_SETTINGS, {})
     playwright_source = source.get("playwright_settings", {})
@@ -332,6 +370,8 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         raise ValueError(f"advance_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}")
     if not isinstance(description_trust_source, dict):
         raise ValueError(f"advance_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}")
+    if not isinstance(source_document_source, dict):
+        raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS} must be a dict, got {type(source_document_source).__name__!r}")
     if not isinstance(playwright_source, dict):
         raise ValueError(f"advance_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}")
     if not isinstance(onboarding_source, dict):
@@ -422,6 +462,19 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             100_000,
         ),
     }
+    normalized_source_document_settings = {
+        KEY_SOURCE_DOCUMENT_SUFFIXES: _normalize_source_document_suffixes(
+            source_document_source,
+            DEFAULT_SOURCE_DOCUMENT_SETTINGS[KEY_SOURCE_DOCUMENT_SUFFIXES],
+        ),
+    }
+
+    browser_mode = str(
+        playwright_source.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE)
+        or DEFAULT_PLAYWRIGHT_BROWSER_MODE
+    ).strip().lower()
+    if browser_mode not in {"ephemeral", "persistent"}:
+        raise ValueError("advance_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'")
 
     return {
         KEY_FIT_HIGHLIGHTS: {
@@ -502,6 +555,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
         KEY_HISTORY_SETTINGS: normalized_history_settings,
         KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
+        KEY_SOURCE_DOCUMENT_SETTINGS: normalized_source_document_settings,
         KEY_ONBOARDING_SETTINGS: {
             **{
                 key: _require_int(merged_onboarding, key, DEFAULT_ONBOARDING_SETTINGS[key], minimum, maximum)
@@ -539,6 +593,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
                 1000,
                 60000,
             ),
+            KEY_PLAYWRIGHT_BROWSER_MODE: browser_mode,
         },
     }
 
@@ -561,6 +616,25 @@ def get_hidden_review_days() -> int:
 
 def get_min_trusted_description_length() -> int:
     return int(load_advance_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
+
+
+def get_playwright_browser_mode() -> str:
+    settings = load_advance_settings().get("playwright_settings", {})
+    return str(settings.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE)).strip().lower()
+
+
+def get_allowed_source_document_suffixes() -> frozenset[str]:
+    settings = load_advance_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
+    suffixes = settings.get(KEY_SOURCE_DOCUMENT_SUFFIXES, []) if isinstance(settings, dict) else []
+    return frozenset(
+        str(value).strip().lower()
+        for value in suffixes
+        if str(value).strip()
+    )
+
+
+def get_allowed_source_document_suffixes_label() -> str:
+    return ", ".join(sorted(get_allowed_source_document_suffixes()))
 
 @lru_cache(maxsize=1)
 def load_advance_settings() -> dict[str, Any]:

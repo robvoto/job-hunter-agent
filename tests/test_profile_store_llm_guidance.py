@@ -6,8 +6,7 @@ from job_hunter_agent import profile_store
 
 def test_save_profile_normalizes_llm_fit_review_guidance(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     saved = profile_store.save_profile({
         **profile_store.DEFAULT_PROFILE,
@@ -19,8 +18,7 @@ def test_save_profile_normalizes_llm_fit_review_guidance(tmp_path, monkeypatch):
 
 def test_load_profile_defaults_llm_fit_review_guidance(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     loaded = profile_store.load_profile()
 
@@ -29,8 +27,7 @@ def test_load_profile_defaults_llm_fit_review_guidance(tmp_path, monkeypatch):
 
 def test_save_profile_normalizes_llm_capability_naming_guidance(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     saved = profile_store.save_profile({
         **profile_store.DEFAULT_PROFILE,
@@ -42,8 +39,7 @@ def test_save_profile_normalizes_llm_capability_naming_guidance(tmp_path, monkey
 
 def test_save_profile_does_not_persist_scoring_rules(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     profile_store.save_profile({**profile_store.DEFAULT_PROFILE})
 
@@ -53,8 +49,7 @@ def test_save_profile_does_not_persist_scoring_rules(tmp_path, monkeypatch):
 
 def test_load_profile_defaults_llm_capability_naming_guidance(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     loaded = profile_store.load_profile()
 
@@ -64,8 +59,7 @@ def test_load_profile_defaults_llm_capability_naming_guidance(tmp_path, monkeypa
 def test_load_profile_raises_for_invalid_json_and_backs_up_file(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
     profile_path.write_text("{not valid json", encoding="utf-8")
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     with pytest.raises(profile_store.ProfileLoadError):
         profile_store.load_profile()
@@ -79,8 +73,7 @@ def test_load_profile_raises_for_invalid_json_and_backs_up_file(tmp_path, monkey
 def test_load_profile_raises_for_non_object_json_and_backs_up_file(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
     profile_path.write_text("[1, 2, 3]", encoding="utf-8")
-    monkeypatch.setattr(profile_store, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(profile_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     with pytest.raises(profile_store.ProfileLoadError):
         profile_store.load_profile()

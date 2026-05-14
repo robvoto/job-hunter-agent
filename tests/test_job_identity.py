@@ -1,30 +1,32 @@
 from job_hunter_agent.job_identity import (
-    are_jobs_semantically_similar,
+    are_jobs_confirmed_duplicates,
+    annotate_potential_duplicate_links,
     deduplicate_across_sources,
-    find_similar_job,
+    find_confirmed_duplicate,
 )
+from job_hunter_agent.company_rules import company_names_weakly_match, normalize_company_name
+from job_hunter_agent.record_schema import RECORD_DUPLICATE_LINKS_KEY, RECORD_POTENTIAL_DUPLICATE_LINKS_KEY
 
 
-def test_are_jobs_semantically_similar_requires_same_job_key_or_url():
-    # are_jobs_semantically_similar now delegates to are_jobs_confirmed_duplicates.
-    # Only exact job_key or URL matches are considered duplicates.
-    assert are_jobs_semantically_similar(
+def test_are_jobs_confirmed_duplicates_requires_same_job_key_or_url():
+    # Only exact job_key, URL, or canonical source identity matches are duplicates.
+    assert are_jobs_confirmed_duplicates(
         {"job_key": "seek:123", "company": "Acme", "title": "Senior Business Analyst"},
         {"job_key": "seek:123", "company": "Acme", "title": "Business Analyst Senior"},
     )
-    assert not are_jobs_semantically_similar(
+    assert not are_jobs_confirmed_duplicates(
         {"job_key": "seek:1", "company": "Acme", "title": "Senior Business Analyst"},
         {"job_key": "seek:2", "company": "Acme", "title": "Senior Business Analyst"},
     )
 
 
-def test_find_similar_job_returns_first_matching_applied_record():
-    # find_similar_job only matches confirmed duplicates (same job_key or URL).
+def test_find_confirmed_duplicate_returns_first_matching_applied_record():
+    # find_confirmed_duplicate only matches confirmed duplicates.
     pool = [
         {"job_key": "seek:1", "company": "Acme", "title": "Senior Business Analyst", "source": "seek"},
         {"job_key": "linkedin:2", "company": "Acme", "title": "Project Manager", "source": "linkedin"},
     ]
-    match = find_similar_job(
+    match = find_confirmed_duplicate(
         {"job_key": "seek:1", "company": "Acme", "title": "Business Analyst Senior"},
         pool,
     )
@@ -32,7 +34,7 @@ def test_find_similar_job_returns_first_matching_applied_record():
 
 
 def test_deduplicate_across_sources_prefers_seek_when_duplicate_appears_later():
-    # Confirmed deduplication requires same job_key or URL.
+    # Confirmed deduplication requires same deterministic identity.
     records = [
         {"job_key": "seek:99", "company": "Acme", "title": "Senior Business Analyst", "source": "linkedin"},
         {"job_key": "seek:99", "company": "Acme", "title": "Business Analyst Senior", "source": "seek"},
@@ -40,3 +42,33 @@ def test_deduplicate_across_sources_prefers_seek_when_duplicate_appears_later():
     deduped = deduplicate_across_sources(records)
     assert len(deduped) == 1
     assert deduped[0]["job_key"] == "seek:99"
+    assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
+
+
+def test_company_rules_strips_only_safe_legal_suffixes():
+    assert normalize_company_name("Acme Pty Ltd") == "acme"
+    assert normalize_company_name("Acme Holdings Australia") == "acme holdings australia"
+    assert company_names_weakly_match("Acme Pty Ltd", "Acme")
+
+
+def test_potential_duplicate_links_are_visible_without_merging():
+    records = [
+        {"job_key": "seek:1", "company": "Acme Pty Ltd", "title": "Senior Business Analyst", "source": "seek", "url": "https://seek.com.au/job/1"},
+        {"job_key": "linkedin:2", "company": "Acme Ltd", "title": "Business Analyst", "source": "linkedin", "url": "https://linkedin.com/jobs/view/2"},
+    ]
+
+    annotated = annotate_potential_duplicate_links(records)
+
+    assert len(annotated) == 2
+    assert annotated[0][RECORD_POTENTIAL_DUPLICATE_LINKS_KEY][0]["related_job_key"] == "linkedin:2"
+    assert annotated[0][RECORD_POTENTIAL_DUPLICATE_LINKS_KEY][0]["related_source"] == "linkedin"
+    assert annotated[1][RECORD_POTENTIAL_DUPLICATE_LINKS_KEY][0]["related_job_key"] == "seek:1"
+    assert RECORD_DUPLICATE_LINKS_KEY not in annotated[0]
+
+
+def test_potential_duplicate_links_are_omitted_when_none():
+    annotated = annotate_potential_duplicate_links([
+        {"job_key": "seek:1", "company": "Acme", "title": "Data Engineer", "source": "seek"},
+    ])
+
+    assert RECORD_POTENTIAL_DUPLICATE_LINKS_KEY not in annotated[0]

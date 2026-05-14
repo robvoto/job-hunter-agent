@@ -31,6 +31,12 @@ const CHECK_STEP = 4;
 const locationUi = window.JobHunterLocationUi || {};
 const COMMON_LOCATION_OPTIONS = Array.isArray(locationUi.options) ? locationUi.options : [];
 const DEFAULT_LOCATION = String(locationUi.defaultLocation || '').trim();
+const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
+const PRIMARY_CV_COPY = {
+  emptyTitle: 'Drop your CV here or click to browse',
+  emptyHint: 'Formats: .docx, .pdf, .md, .txt',
+  loadedHint: 'Drop another file or click to replace',
+};
 const WIZARD_STATE_KEY = 'jobHunter.onboardingWizard';
 const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
 const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
@@ -300,8 +306,8 @@ function updatePrimaryCvStatus(file) {
     dropZoneContent.innerHTML = `
       <div class="drop-zone-content-shell">
         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon" style="margin-bottom: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-        <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">Drag & drop your CV here, or click to browse</p>
-        <p class="drop-zone-hint" style="margin-top: 8px;">Supported formats: .docx, .pdf, .md, .txt</p>
+        <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">${PRIMARY_CV_COPY.emptyTitle}</p>
+        <p class="drop-zone-hint" style="margin-top: 8px;">${PRIMARY_CV_COPY.emptyHint}</p>
       </div>
     `;
     resetPrimaryCvDropZoneAppearance();
@@ -316,7 +322,7 @@ function updatePrimaryCvStatus(file) {
   dropZoneContent.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
     <p class="file-loaded-label">File Loaded: ${file.name}</p>
-    <p class="drop-zone-hint">Click or drag another file to replace</p>
+    <p class="drop-zone-hint">${PRIMARY_CV_COPY.loadedHint}</p>
   `;
 }
 
@@ -353,6 +359,9 @@ function setStep(stepNumber, options = {}) {
   const meta = stepMeta[stepNumber];
   heroTitleEl.textContent = meta.heroTitle();
   heroCopyEl.textContent = meta.heroCopy();
+  if (heroTitleEl) {
+    heroTitleEl.classList.toggle('is-review-draft', stepNumber === 2 && meta.heroTitle() === 'Review Your Draft Profile');
+  }
 
   const isDetailStep = stepNumber > 1;
   if (heroSectionEl) heroSectionEl.classList.toggle('is-compact', isDetailStep);
@@ -542,8 +551,11 @@ function assignPrimaryCvFile(file) {
   refreshStepNavigation();
 }
 
+window.JobHunterOnboardingSelectCv = assignPrimaryCvFile;
+
 function handlePrimaryCvDrop(event) {
   event.preventDefault();
+  event.stopPropagation();
   if (!primaryCvDropZone) return;
   primaryCvDropZone.classList.remove('is-dragover');
   const file = event.dataTransfer?.files?.[0];
@@ -561,9 +573,9 @@ function handlePrimaryCvDrop(event) {
 
 function applyProfileDefaults(profile) {
   const onboarding = profile?.onboarding_settings || {};
-  const lookback = onboarding.extraction_lookback_years ?? 8;
-  const minMonths = onboarding.title_extraction_min_months ?? 6;
-  const preset = onboarding.capability_strength_preset || 'balanced';
+  const lookback = onboarding.extraction_lookback_years ?? ONBOARDING_DEFAULTS.extraction_lookback_years;
+  const minMonths = onboarding.title_extraction_min_months ?? ONBOARDING_DEFAULTS.title_extraction_min_months;
+  const preset = onboarding.capability_strength_preset || ONBOARDING_DEFAULTS.capability_strength_preset;
 
   document.getElementById('os_lookback_years').value = String(lookback);
   document.getElementById('os_min_months').value = String(minMonths);

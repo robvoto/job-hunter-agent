@@ -23,6 +23,7 @@ from job_hunter_agent.description_trust import (
     full_description_confidence,
     get_trusted_full_description,
 )
+from job_hunter_agent.company_rules import normalize_company_name
 from job_hunter_agent.filters import suggest_title_block_phrases
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
@@ -34,7 +35,7 @@ from job_hunter_agent.history import (
     assess_history_warning_signals,
     viewed_by_user,
 )
-from job_hunter_agent.job_identity import find_similar_job
+from job_hunter_agent.job_identity import find_confirmed_duplicate
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH
 from job_hunter_agent.posting_utils import (
@@ -60,6 +61,8 @@ from job_hunter_agent.signal_detection import (
     hard_block_reasons,
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
+from job_hunter_agent.record_schema import RECORD_DUPLICATE_LINKS_KEY, RECORD_POTENTIAL_DUPLICATE_LINKS_KEY
+from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.text_processing import (
     build_role_summary,
     compact_whitespace,
@@ -75,6 +78,9 @@ DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
 ARCHIVE_LABEL = "Saved From Earlier Searches"
 ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your dashboard."
 ARCHIVE_CONTEXT_PREFIX = "Saved From Earlier Searches"
+POTENTIAL_DUPLICATE_LABEL = "Potential duplicate"
+POTENTIAL_DUPLICATE_HELP_TEXT = "Informational only. No merge, hide, or review action is taken from this signal."
+POTENTIAL_DUPLICATE_LINK_TEXT = "Similar to"
 
 
 def visible_fit_reasons(
@@ -297,7 +303,8 @@ def render_job_card(
         display_record["location"] = loc[:-(len(default_country_suffix) + 2)].strip()
 
     title = safe_html(record.get("title", "Untitled"))
-    company = safe_html(record.get("company", "N/A"))
+    company_display = normalize_company_name(str(record.get("company") or "")) or compact_whitespace(str(record.get("company") or "N/A"))
+    company = safe_html(company_display or "N/A")
     url = safe_html(record.get("url", "#"))
     job_key = safe_html(str(record.get("job_key") or ""))
     title_reason = record.get("title_reason")
@@ -347,7 +354,7 @@ def render_job_card(
     similar_applied_record = None
     is_possible_repost = False
     if not applied_record and applied_pool:
-        similar_applied_record = find_similar_job(record, applied_pool)
+        similar_applied_record = find_confirmed_duplicate(record, applied_pool)
         is_possible_repost = similar_applied_record is not None
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
@@ -366,23 +373,25 @@ def render_job_card(
     salary_value = salary_sort_value(str(display_record.get("salary") or ""))
     salary_fit_state = salary_fit_label(display_record, scoring_profile)
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
-    company_attr = safe_html(compact_whitespace(str(record.get("company") or "")))
+    company_attr = safe_html(company_display)
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
     sector_signal = infer_role_sector(display_record, trusted_desc if trusted_desc else stored_snapshot)
     channel_signal = display_record.get("posting_channel_evidence")
     if not isinstance(channel_signal, dict):
         channel_signal = {}
+    duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
+    if not isinstance(duplicate_links, list):
+        duplicate_links = []
+    potential_duplicate_links = record.get(RECORD_POTENTIAL_DUPLICATE_LINKS_KEY)
+    if not isinstance(potential_duplicate_links, list):
+        potential_duplicate_links = []
     _block_phrases_list = suggest_title_block_phrases(str(record.get("title") or ""))
     block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
     block_phrases_json = safe_html(json.dumps(_block_phrases_list))
     similar_applied_title = safe_html(str((similar_applied_record or {}).get("title") or ""))
-    similar_applied_company = safe_html(str((similar_applied_record or {}).get("company") or ""))
+    similar_applied_company = safe_html(normalize_company_name(str((similar_applied_record or {}).get("company") or "")) or str((similar_applied_record or {}).get("company") or ""))
     similar_applied_source = str((similar_applied_record or {}).get("source") or "").lower().strip()
-    similar_applied_source_label = safe_html(
-        {"linkedin": "LinkedIn", "seek": "SEEK"}.get(similar_applied_source, similar_applied_source.upper())
-        if similar_applied_source
-        else ""
-    )
+    similar_applied_source_label = safe_html(get_source_display_label(similar_applied_source) if similar_applied_source else "")
     similar_applied_job_key = safe_html(str((similar_applied_record or {}).get("job_key") or ""))
     button_data_attrs = (
         f'data-job-key="{job_key}" '
@@ -398,7 +407,7 @@ def render_job_card(
         f'data-similar-applied-source="{similar_applied_source_label}"'
     )
     source = str(record.get("source") or "unknown").lower().strip()
-    source_label = {"linkedin": "LinkedIn", "seek": "SEEK"}.get(source, source.upper())
+    source_label = get_source_display_label(source)
 
     badges = []
     if applied_record:
@@ -443,6 +452,58 @@ def render_job_card(
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if history_warning_signals:
         badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))
+    if duplicate_links:
+        duplicate_sources = ", ".join(
+            str(item.get("source") or "").strip().title()
+            for item in duplicate_links[:3]
+            if str(item.get("source") or "").strip()
+        )
+        duplicate_tooltip = "Confirmed duplicate links"
+        if duplicate_sources:
+            duplicate_tooltip = f"{duplicate_tooltip}: {duplicate_sources}."
+        badges.append(
+            render_badge(
+                f"Confirmed Duplicate{'s' if len(duplicate_links) != 1 else ''}",
+                "badge-source-neutral",
+                duplicate_tooltip,
+            )
+        )
+    if potential_duplicate_links:
+        potential_sources = ", ".join(
+            str(item.get("related_source") or "").strip().title()
+            for item in potential_duplicate_links
+            if str(item.get("related_source") or "").strip()
+        )
+        potential_tooltip = "Potential duplicate links"
+        if potential_sources:
+            potential_tooltip = f"{potential_tooltip}: {potential_sources}."
+        badges.append(
+            render_badge(
+                f"Potential Duplicate{'s' if len(potential_duplicate_links) != 1 else ''}",
+                "badge-warning",
+                potential_tooltip,
+            )
+        )
+    potential_duplicate_callout = ""
+    if potential_duplicate_links:
+        related = potential_duplicate_links[0]
+        related_title = str(related.get("related_title") or "").strip()
+        related_company = normalize_company_name(str(related.get("related_company") or "")) or str(related.get("related_company") or "").strip()
+        related_url = str(related.get("related_url") or "").strip()
+        related_label_parts = [part for part in [related_title, f"@ {related_company}" if related_company else ""] if part]
+        related_label = " ".join(related_label_parts).strip()
+        if related_label and related_url:
+            related_label_html = f'<a href="{safe_html(related_url)}" target="_blank" rel="noopener noreferrer">{safe_html(related_label)}</a>'
+        else:
+            related_label_html = safe_html(related_label)
+        if related_label_html:
+            potential_duplicate_callout = (
+                '<div class="job-duplicate-callout">'
+                f'<strong>{POTENTIAL_DUPLICATE_LABEL}</strong> '
+                f'{safe_html(POTENTIAL_DUPLICATE_LINK_TEXT)} {related_label_html}. '
+                f'<span class="duplicate-help-text">{safe_html(POTENTIAL_DUPLICATE_HELP_TEXT)}</span>'
+                '</div>'
+            )
     job_quality_signals = [s for s in (record.get("job_quality_signals") or []) if isinstance(s, dict)]
     for _sig in job_quality_signals:
         badges.append(render_badge(_sig.get("label", "Quality Concern"), "badge-warning", _sig.get("evidence", "")))
@@ -550,6 +611,52 @@ def render_job_card(
             '<div class="job-insight-group is-secondary">'
             '<strong>Ignored</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["ignored"])}</ul>'
+            '</div>'
+        )
+    if duplicate_links:
+        linked_items = []
+        for item in duplicate_links:
+            matched_on = str(item.get("matched_on") or "").replace("_", " ")
+            bits = [
+                str(item.get("source") or "").strip().title(),
+                str(item.get("title") or "").strip(),
+                normalize_company_name(str(item.get("company") or "")) or str(item.get("company") or "").strip(),
+                f"matched on {matched_on}" if matched_on else "",
+            ]
+            linked_items.append(" | ".join(bit for bit in bits if bit))
+        insight_sections.append(
+            '<div class="job-insight-group is-secondary">'
+            '<strong>Linked duplicates</strong>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in linked_items)}</ul>'
+            '</div>'
+        )
+    if potential_duplicate_links:
+        linked_items = []
+        for item in potential_duplicate_links:
+            matched_on = ", ".join(
+                str(value).replace("_", " ")
+                for value in (item.get("matched_on") or [])
+                if str(value).strip()
+            )
+            related_title = str(item.get("related_title") or "").strip()
+            related_company = normalize_company_name(str(item.get("related_company") or "")) or str(item.get("related_company") or "").strip()
+            related_source = str(item.get("related_source") or "").strip().title()
+            related_url = str(item.get("related_url") or "").strip()
+            parts = [
+                related_source,
+                related_company,
+                f"matched on {matched_on}" if matched_on else "",
+            ]
+            item_text = " | ".join(bit for bit in parts if bit)
+            if related_title and related_url:
+                item_text = f'{item_text} | <a href="{safe_html(related_url)}" target="_blank" rel="noopener noreferrer">{safe_html(related_title)}</a>'
+            elif related_title:
+                item_text = f"{item_text} | {safe_html(related_title)}"
+            linked_items.append(item_text)
+        insight_sections.append(
+            '<div class="job-insight-group is-secondary">'
+            '<strong>Potential duplicates</strong>'
+            f'<ul>{"".join(f"<li>{item}</li>" for item in linked_items)}</ul>'
             '</div>'
         )
     visible_penalties = negative_score_reasons(score_breakdown, include_values=DASHBOARD_DEBUG_MODE)
@@ -681,7 +788,7 @@ def render_job_card(
     card_classes = f'job-card {fit_tone_class}' + (" is-description-issue" if description_issue else "")
 
     return (
-        f'<article class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html((record.get("company") or "").lower())}" data-source="{safe_html(source)}">'
+        f'<article class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         '<div class="job-header-row">'
         '<div class="job-header-copy">'
@@ -712,11 +819,12 @@ def render_job_card(
             '<span class="block-status" aria-live="polite"></span>'
             if (not applied_record and not hidden_record and _block_phrases_list) else ""
         )
-        + f'<div class="job-company">{company}</div>'
+        + f'<div class="job-company">{safe_html(company_display)}</div>'
         '</div>'
         f"{score_html}"
         '</div>'
         f"{summary_html}"
+        f"{potential_duplicate_callout}"
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{note_html}"
         f"{insight_html}"

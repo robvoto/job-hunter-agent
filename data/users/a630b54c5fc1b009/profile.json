@@ -1,0 +1,1852 @@
+{
+  "enabled_sources": [
+    "seek",
+    "linkedin"
+  ],
+  "search_settings": {
+    "keywords": "senior business analyst, senior business analyst and scrum master, scrum master business analyst, business analyst",
+    "locations": [],
+    "classification_ids": [],
+    "date_range_days": 3,
+    "seek_max_pages": 10,
+    "enforce_posted_age_limit": true,
+    "sort_newest_first": true,
+    "linkedin_hours_old": 24,
+    "linkedin_results_per_search": 50,
+    "linkedin_easy_apply_only": null
+  },
+  "review_controls": {
+    "applied_job_keys": [],
+    "hidden_job_keys": []
+  },
+  "salary_preferences": {
+    "minimum_salary_yearly": 0,
+    "minimum_daily_rate": 0
+  },
+  "preference_weights": {
+    "fit": 1.0,
+    "salary": 1.0,
+    "location": 1.0,
+    "work_mode": 1.0,
+    "contract": 1.0,
+    "government": 1.0,
+    "freshness": 1.0
+  },
+  "match_levels": [
+    {
+      "minimum_score": 85,
+      "label": "Strong match",
+      "description": "strongest fit signals"
+    },
+    {
+      "minimum_score": 70,
+      "label": "Good match",
+      "description": "clear fit with fewer caveats"
+    },
+    {
+      "minimum_score": 55,
+      "label": "Possible fit",
+      "description": "plausible fit worth reviewing"
+    },
+    {
+      "minimum_score": 0,
+      "label": "Stretch",
+      "description": "lower-confidence or borderline fit"
+    }
+  ],
+  "match_preferences": {
+    "home_location": "Sydney, NSW",
+    "secondary_location": "",
+    "prefer_government": false,
+    "prefer_permanent": false,
+    "engagement_type": "both",
+    "preferred_contract_months": 12,
+    "short_contract_months": 6
+  },
+  "llm_profile_brief_mode": "auto",
+  "llm_profile_brief": "Capability profile: business analysis (strong); agile delivery (strong); stakeholder engagement (strong); bpmn process modelling (strong); requirements gathering (strong); sql data analysis (strong); ai tooling integration (strong); user story development (strong); system design (working); validation logic design (working); test automation (working); workflow optimization (working); integration analysis (basic)",
+  "llm_fit_review_guidance": "",
+  "llm_capability_naming_guidance": "",
+  "star_candidate_profile_text": "",
+  "cv_text": "## Primary CV\nROB VOTO\n[TITLE - TAILOR TO JD]\nSydney, NSW | Baseline Security Clearance\nrob.voto.au@gmail.com | 0491 982 547\nlinkedin.com/in/robertohernanvoto\nPROFILE\nI build AI tools, not just work adjacent to them, and apply that directly to enterprise delivery: discovery, requirements, workflows, stakeholder alignment, system design.\nMost BA roles sit on one side of the AI divide. I've built enough to work across both.\n[1-2 lines: sector/domain credibility relevant to THIS JD. No years, no clearance. Depth of enterprise context, industry verticals, scale of programs. Tailor per role, never use a fixed line here.]\nAI & INNOVATION\nknowMe - Live LLM-powered platform built to let recruiters interrogate experience dynamically. FastAPI backend, RAG architecture, structured STAR-based knowledge base. Live now: https://knowme-reeo.onrender.com/\nJob Intelligence Tool - Python + Playwright + LLM pipeline for automated job discovery, role matching against profile, and decision filtering across multiple job boards. Cuts hours of manual searching to minutes: https://github.com/robvoto/job-hunter-agent (Prototype working)\nWorkflow Automation Prototype: End-to-end ticket creation and resolution system built from scratch. Automated routing, ownership assignment, SLA tracking, and escalation logic. AI-driven automation rules reduce manual intervention and improve resolution time.\nKEY SKILLS\n• LLM Applications (OpenAI / Claude / Codex)\n• Agentic AI / Workflow Orchestration\n• Prompt Engineering & RAG\n• Requirements for AI Systems\n• Business Rules and Validation\n• Solution Design and Gap Analysis\n• REST API / Integration Analysis\n• BPMN 2.0 Process Modelling\n• User Stories and Acceptance Criteria\n• Stakeholder Engagement\n• Agile / Scrum Delivery\n• SQL, ETL and Data Analysis\nEXPERIENCE\nDepartment of Employment and Workplace Relations (DEWR)\nSenior Business Analyst\n2025 to Present | Contract\nPayment system transformation for two national employment programs. Defined business rules, system logic, and delivery artefacts for a fixed go-live deadline.\nTaking complex policy docs and legacy system behaviour, turning them into payment rules, validation logic, and field-level data mappings\nTranslated ambiguous stakeholder inputs into clear, agreed requirements and artefacts\nProducing BPMN models, user stories, and Gherkin acceptance criteria to support both policy sign-off and engineering delivery\nWorking directly with SQL against core data structures in the absence of an admin interface\nUsing AI tooling (Copilot) to accelerate artefact creation, validate rules, and resolve edge cases\nLed the workstream end-to-end from initiation through delivery\nKey Achievement: Brought structure to a complex payment program, aligned stakeholders across policy and engineering, delivered on time. Then owned the second program end-to-end.\nAustralian Bureau of Statistics (ABS)\nSenior Business Analyst\n2024 | Contract\nDefined financial data capture and processing logic for a cloud-hosted platform supporting national statistical reporting.\nOwned and prioritised delivery backlog in Azure DevOps\nDefined data rules and edge cases for financial data collection\nSupported REST API testing and data validation using Postman across integrated systems\nFacilitated backlog refinement (Miro), aligning policy intent with engineering execution\nKey Achievement: Turned complex reporting policy into structured system rules\nNSW eHealth / Department of Health\nSenior Business Analyst\n2021 to 2023 | Contract\nFive concurrent government programs: $50M SSE network transformation (15 LHDs), $33M NSW Ambulance relocation, digital health mobile platform, aged care financial management solution.\nProduced BPMN 2.0 process models, RTMs, BRDs, and functional specifications across infrastructure and application programs\nRedesigned P1/P2 incident workflows for NSW Ambulance. Documentation adopted as permanent team onboarding reference material\nCoordinated $50M SSE transformation across 5 vendors, 15 LHD directors, 10 internal stakeholders\nKey Achievement: Operated as lead BA across 5 concurrent government programs simultaneously.\nPhoenix DX\nSenior Business Analyst and Scrum Master\n2020 to 2021 | Permanent\nEnd-to-end Agile delivery on OutSystems low-code platform across multiple concurrent client engagements.\nLed BA and delivery for Serco Group recruitment and employee management platform - workflow configuration, messaging, and legacy system integration\nManaged Agile delivery for GPT Group rent relief system including Salesforce integration\nConfigured and executed automated test suites using Selenium and Cucumber; managed test lifecycle in OpenText ALM\nKey Achievement: Mastered OutSystems from scratch; delivered multiple end-to-end solutions across government, FMCG, and non-profit in a single engagement.\nRockstar Coders\nScrum Master / Business Analyst\n2016 to 2020 | Contract (United States)\nConsulting BA and delivery lead across 15+ client accounts spanning web, mobile, SaaS, and process improvement.\nLed delivery of the Tony Robbins Breakthrough mobile app across BA, Scrum Master, and Product Owner roles\nTranslated business requirements into workflows, user stories, and system behaviour across multiple concurrent client projects\nProduced BPMN 2.0 models to define and optimise complex processes, including 10+ models for a US university scholarship foundation\nOperated across BA, Scrum Master, and Product Owner roles depending on client and delivery needs\nKey Achievement: Improved Breakthrough app rating from 2.9 to 4.9 while coordinating delivery across distributed teams\nEARLIER CAREER\nMastercard | NSW Dept. of Education | Adaptra / Guidewire | Frucor Suntory\nBuilt client-facing platforms and J2EE middleware at Mastercard. Led data migration, ETL, and SQL analysis for the $160M NSW Education LMBR transformation across 2,200 schools. Delivered Guidewire PolicyCenter/ClaimCenter at Adaptra. Led SAP/EDI order-to-cash integration at Frucor Suntory. Developer-to-BA progression across all roles.\nEDUCATION AND CERTIFICATIONS\nBachelor's Degree in Information Technology - CAECE University, Argentina\nCertified Associate in Project Management (CAPM) - PMI\nCertified Scrum Master (CSM)\nCertified Expert in Project Management - UTN Postgraduate Course\nBPMN 2.0 Business Process Modelling Certificate\nAssociate Reactive Developer - OutSystems (2021)\nGuidewire Policy and Claim Centre Certified (2010)",
+  "candidate_profile_tiers": {
+    "primary_candidate_profile_context": "ROB VOTO\n[TITLE - TAILOR TO JD]\nSydney, NSW | Baseline Security Clearance\nrob.voto.au@gmail.com | 0491 982 547\nlinkedin.com/in/robertohernanvoto\nPROFILE\nI build AI tools, not just work adjacent to them, and apply that directly to enterprise delivery: discovery, requirements, workflows, stakeholder alignment, system design.\nMost BA roles sit on one side of the AI divide. I've built enough to work across both.\n[1-2 lines: sector/domain credibility relevant to THIS JD. No years, no clearance. Depth of enterprise context, industry verticals, scale of programs. Tailor per role, never use a fixed line here.]\nAI & INNOVATION\nknowMe - Live LLM-powered platform built to let recruiters interrogate experience dynamically. FastAPI backend, RAG architecture, structured STAR-based knowledge base. Live now: https://knowme-reeo.onrender.com/\nJob Intelligence Tool - Python + Playwright + LLM pipeline for automated job discovery, role matching against profile, and decision filtering across multiple job boards. Cuts hours of manual searching to minutes: https://github.com/robvoto/job-hunter-agent (Prototype working)\nWorkflow Automation Prototype: End-to-end ticket creation and resolution system built from scratch. Automated routing, ownership assignment, SLA tracking, and escalation logic. AI-driven automation rules reduce manual intervention and improve resolution time.\nKEY SKILLS\n• LLM Applications (OpenAI / Claude / Codex)\n• Agentic AI / Workflow Orchestration\n• Prompt Engineering & RAG\n• Requirements for AI Systems\n• Business Rules and Validation\n• Solution Design and Gap Analysis\n• REST API / Integration Analysis\n• BPMN 2.0 Process Modelling\n• User Stories and Acceptance Criteria\n• Stakeholder Engagement\n• Agile / Scrum Delivery\n• SQL, ETL and Data Analysis\nEXPERIENCE\nDepartment of Employment and Workplace Relations (DEWR)\nSenior Business Analyst\n2025 to Present | Contract\nPayment system transformation for two national employment programs. Defined business rules, system logic, and delivery artefacts for a fixed go-live deadline.\nTaking complex policy docs and legacy system behaviour, turning them into payment rules, validation logic, and field-level data mappings\nTranslated ambiguous stakeholder inputs into clear, agreed requirements and artefacts\nProducing BPMN models, user stories, and Gherkin acceptance criteria to support both policy sign-off and engineering delivery\nWorking directly with SQL against core data structures in the absence of an admin interface\nUsing AI tooling (Copilot) to accelerate artefact creation, validate rules, and resolve edge cases\nLed the workstream end-to-end from initiation through delivery\nKey Achievement: Brought structure to a complex payment program, aligned stakeholders across policy and engineering, delivered on time. Then owned the second program end-to-end.\nAustralian Bureau of Statistics (ABS)\nSenior Business Analyst\n2024 | Contract\nDefined financial data capture and processing logic for a cloud-hosted platform supporting national statistical reporting.\nOwned and prioritised delivery backlog in Azure DevOps\nDefined data rules and edge cases for financial data collection\nSupported REST API testing and data validation using Postman across integrated systems\nFacilitated backlog refinement (Miro), aligning policy intent with engineering execution\nKey Achievement: Turned complex reporting policy into structured system rules\nNSW eHealth / Department of Health\nSenior Business Analyst\n2021 to 2023 | Contract\nFive concurrent government programs: $50M SSE network transformation (15 LHDs), $33M NSW Ambulance relocation, digital health mobile platform, aged care financial management solution.\nProduced BPMN 2.0 process models, RTMs, BRDs, and functional specifications across infrastructure and application programs\nRedesigned P1/P2 incident workflows for NSW Ambulance. Documentation adopted as permanent team onboarding reference material\nCoordinated $50M SSE transformation across 5 vendors, 15 LHD directors, 10 internal stakeholders\nKey Achievement: Operated as lead BA across 5 concurrent government programs simultaneously.\nPhoenix DX\nSenior Business Analyst and Scrum Master\n2020 to 2021 | Permanent\nEnd-to-end Agile delivery on OutSystems low-code platform across multiple concurrent client engagements.\nLed BA and delivery for Serco Group recruitment and employee management platform - workflow configuration, messaging, and legacy system integration\nManaged Agile delivery for GPT Group rent relief system including Salesforce integration\nConfigured and executed automated test suites using Selenium and Cucumber; managed test lifecycle in OpenText ALM\nKey Achievement: Mastered OutSystems from scratch; delivered multiple end-to-end solutions across government, FMCG, and non-profit in a single engagement.\nRockstar Coders\nScrum Master / Business Analyst\n2016 to 2020 | Contract (United States)\nConsulting BA and delivery lead across 15+ client accounts spanning web, mobile, SaaS, and process improvement.\nLed delivery of the Tony Robbins Breakthrough mobile app across BA, Scrum Master, and Product Owner roles\nTranslated business requirements into workflows, user stories, and system behaviour across multiple concurrent client projects\nProduced BPMN 2.0 models to define and optimise complex processes, including 10+ models for a US university scholarship foundation\nOperated across BA, Scrum Master, and Product Owner roles depending on client and delivery needs\nKey Achievement: Improved Breakthrough app rating from 2.9 to 4.9 while coordinating delivery across distributed teams\nEARLIER CAREER\nMastercard | NSW Dept. of Education | Adaptra / Guidewire | Frucor Suntory\nBuilt client-facing platforms and J2EE middleware at Mastercard. Led data migration, ETL, and SQL analysis for the $160M NSW Education LMBR transformation across 2,200 schools. Delivered Guidewire PolicyCenter/ClaimCenter at Adaptra. Led SAP/EDI order-to-cash integration at Frucor Suntory. Developer-to-BA progression across all roles.\nEDUCATION AND CERTIFICATIONS\nBachelor's Degree in Information Technology - CAECE University, Argentina\nCertified Associate in Project Management (CAPM) - PMI\nCertified Scrum Master (CSM)\nCertified Expert in Project Management - UTN Postgraduate Course\nBPMN 2.0 Business Process Modelling Certificate\nAssociate Reactive Developer - OutSystems (2021)\nGuidewire Policy and Claim Centre Certified (2010)",
+    "secondary_candidate_profile_context": "",
+    "supplementary_candidate_profile_context": ""
+  },
+  "candidate_profile_tier_weights": {
+    "primary_candidate_profile_context": 1.0,
+    "secondary_candidate_profile_context": 0.55,
+    "supplementary_candidate_profile_context": 0.25
+  },
+  "capability_profile_rules": [
+    {
+      "name": "business analysis",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "agile delivery",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "stakeholder engagement",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "bpmn process modelling",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "requirements gathering",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "sql data analysis",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "ai tooling integration",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "user story development",
+      "level": "strong",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "system design",
+      "level": "working",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "validation logic design",
+      "level": "working",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "test automation",
+      "level": "working",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "workflow optimization",
+      "level": "working",
+      "aliases": [],
+      "needs_review": false
+    },
+    {
+      "name": "integration analysis",
+      "level": "basic",
+      "aliases": [],
+      "needs_review": false
+    }
+  ],
+  "dominant_signal_clusters": [
+    {
+      "name": "delivery leadership",
+      "aliases": [
+        "ba delivery",
+        "ba delivery lead",
+        "ba delivery serco",
+        "delivery lead",
+        "delivery lead across",
+        "delivery serco",
+        "lead across"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "scrum methodology",
+      "aliases": [
+        "across ba",
+        "across ba scrum",
+        "ba scrum",
+        "ba scrum master",
+        "scrum master"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "multitasking",
+      "aliases": [
+        "across multiple",
+        "across multiple concurrent",
+        "multiple concurrent",
+        "platform across multiple"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "process modeling",
+      "aliases": [
+        "bpmn model",
+        "bpmn model define",
+        "bpmn model user",
+        "model define",
+        "model user"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "system analysis",
+      "aliases": [
+        "system behaviour",
+        "legacy system behaviour",
+        "messaging legacy system"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "product ownership",
+      "aliases": [
+        "master product",
+        "master product owner",
+        "product owner",
+        "scrum master product"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "requirements gathering",
+      "aliases": [
+        "user story",
+        "model user story",
+        "user story gherkin",
+        "workflow user story"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "client management",
+      "aliases": [
+        "concurrent client",
+        "multiple concurrent client"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "network transformation",
+      "aliases": [
+        "m sse",
+        "coordinated m sse",
+        "m sse network",
+        "m sse transformation",
+        "sse network",
+        "sse network transformation",
+        "sse transformation"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "account management",
+      "aliases": [
+        "account spanning",
+        "account spanning web",
+        "client account spanning",
+        "spanning web",
+        "spanning web mobile",
+        "web mobile"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "role definition",
+      "aliases": [
+        "owner role",
+        "product owner role",
+        "owner role depending",
+        "role depending"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "project leadership",
+      "aliases": [
+        "led ba",
+        "led ba delivery",
+        "led delivery"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "business analysis",
+      "aliases": [
+        "business requirement",
+        "business requirement workflow",
+        "requirement workflow",
+        "requirement workflow user",
+        "workflow user"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "process optimization",
+      "aliases": [
+        "complex processe",
+        "complex processe including",
+        "optimise complex processe",
+        "processe including",
+        "processe including model"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "modeling",
+      "aliases": [
+        "including model",
+        "including model us",
+        "model us",
+        "model us university",
+        "us university"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "system integration",
+      "aliases": [
+        "legacy system",
+        "docs legacy system",
+        "legacy system integration"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "financial management",
+      "aliases": [
+        "aged care",
+        "aged care financial",
+        "care financial",
+        "care financial management",
+        "financial management solution",
+        "management solution"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "healthcare management",
+      "aliases": [
+        "digital health",
+        "digital health mobile",
+        "health mobile",
+        "health mobile platform",
+        "mobile platform",
+        "mobile platform aged",
+        "platform aged"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "agile methodology",
+      "aliases": [
+        "agile delivery",
+        "agile delivery gpt",
+        "agile delivery outsystem",
+        "delivery gpt",
+        "delivery gpt group",
+        "delivery outsystem",
+        "gpt group"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "across client",
+      "aliases": [
+        "across client account",
+        "client account",
+        "lead across client"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "define optimise",
+      "aliases": [
+        "define optimise complex",
+        "model define optimise",
+        "optimise complex"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "delivery tony",
+      "aliases": [
+        "delivery tony robbin",
+        "led delivery tony",
+        "tony robbin"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "mobile saas",
+      "aliases": [
+        "mobile saas process",
+        "saas process",
+        "web mobile saas"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "adopted permanent",
+      "aliases": [
+        "adopted permanent team",
+        "documentation adopted permanent",
+        "permanent team",
+        "permanent team onboarding",
+        "team onboarding"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "concurrent government",
+      "aliases": [
+        "concurrent government program",
+        "government program",
+        "government program m",
+        "program m",
+        "program m sse"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "employee management",
+      "aliases": [
+        "employee management platform",
+        "management platform",
+        "management platform workflow",
+        "platform workflow",
+        "platform workflow configuration",
+        "workflow configuration"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "accelerate artefact",
+      "aliases": [
+        "accelerate artefact creation",
+        "artefact creation",
+        "artefact creation validate",
+        "creation validate",
+        "creation validate rule",
+        "validate rule"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "against core",
+      "aliases": [
+        "against core data",
+        "core data",
+        "core data structure",
+        "data structure",
+        "data structure absence",
+        "structure absence"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "app across",
+      "aliases": [
+        "app across ba",
+        "mobile app across"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "behaviour across",
+      "aliases": [
+        "behaviour across multiple",
+        "system behaviour across"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "breakthrough mobile",
+      "aliases": [
+        "breakthrough mobile app",
+        "mobile app"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "client delivery",
+      "aliases": [
+        "client delivery need",
+        "delivery need"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "depending client",
+      "aliases": [
+        "depending client delivery",
+        "role depending client"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "payment system",
+      "aliases": [
+        "payment system transformation",
+        "system transformation",
+        "system transformation two",
+        "transformation two",
+        "transformation two national",
+        "two national"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 5,
+      "needs_review": true
+    },
+    {
+      "name": "robbin breakthrough",
+      "aliases": [
+        "robbin breakthrough mobile",
+        "tony robbin breakthrough"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "story system",
+      "aliases": [
+        "story system behaviour",
+        "user story system"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "ambulance relocation",
+      "aliases": [
+        "ambulance relocation digital",
+        "nsw ambulance relocation",
+        "relocation digital",
+        "relocation digital health"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "brds functional",
+      "aliases": [
+        "brds functional specification",
+        "functional specification",
+        "functional specification across",
+        "specification across"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "acceptance criteria",
+      "aliases": [
+        "acceptance criteria support",
+        "criteria support",
+        "criteria support both",
+        "support both",
+        "support both policy"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "client project",
+      "aliases": [
+        "client project",
+        "concurrent client project"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "consulting ba",
+      "aliases": [
+        "consulting ba",
+        "consulting ba delivery"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "operated across",
+      "aliases": [
+        "operated across",
+        "operated across ba"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "process improvement",
+      "aliases": [
+        "process improvement",
+        "saas process improvement"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "scholarship foundation",
+      "aliases": [
+        "scholarship foundation",
+        "university scholarship foundation"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "translated business",
+      "aliases": [
+        "translated business",
+        "translated business requirement"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "university scholarship",
+      "aliases": [
+        "university scholarship",
+        "us university scholarship"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "across infrastructure",
+      "aliases": [
+        "across infrastructure application",
+        "infrastructure application",
+        "specification across infrastructure"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "across vendor",
+      "aliases": [
+        "across vendor lhd",
+        "transformation across vendor",
+        "vendor lhd"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "bpmn process",
+      "aliases": [
+        "bpmn process model",
+        "process model",
+        "process model rtms"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "incident workflow",
+      "aliases": [
+        "incident workflow nsw",
+        "workflow nsw",
+        "workflow nsw ambulance"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "lhds m",
+      "aliases": [
+        "lhds m nsw",
+        "m nsw",
+        "transformation lhds m"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "model rtms",
+      "aliases": [
+        "model rtms brds",
+        "rtms brds",
+        "rtms brds functional"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "nsw ambulance",
+      "aliases": [
+        "m nsw ambulance",
+        "nsw ambulance documentation"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "onboarding reference",
+      "aliases": [
+        "onboarding reference material",
+        "reference material",
+        "team onboarding reference"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "cucumber managed",
+      "aliases": [
+        "cucumber managed test",
+        "managed test",
+        "managed test lifecycle",
+        "test lifecycle"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "artefact fixed",
+      "aliases": [
+        "artefact fixed go-live",
+        "fixed go-live",
+        "fixed go-live deadline",
+        "go-live deadline"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "both policy",
+      "aliases": [
+        "both policy sign-off",
+        "policy sign-off",
+        "policy sign-off engineering",
+        "sign-off engineering"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "business rule",
+      "aliases": [
+        "business rule system",
+        "rule system",
+        "rule system logic",
+        "system logic"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "payment rule",
+      "aliases": [
+        "payment rule validation",
+        "rule validation",
+        "rule validation logic",
+        "validation logic"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "ambulance documentation",
+      "aliases": [
+        "ambulance documentation adopted",
+        "documentation adopted"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "director internal",
+      "aliases": [
+        "director internal stakeholder",
+        "internal stakeholder"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "lhd director",
+      "aliases": [
+        "lhd director internal",
+        "vendor lhd director"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "automated test",
+      "aliases": [
+        "automated test suite",
+        "executed automated test",
+        "test suite"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "configuration messaging",
+      "aliases": [
+        "configuration messaging legacy",
+        "messaging legacy",
+        "workflow configuration messaging"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "gpt group rent",
+      "aliases": [
+        "group rent",
+        "group rent relief",
+        "rent relief"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "group recruitment",
+      "aliases": [
+        "group recruitment employee",
+        "recruitment employee",
+        "recruitment employee management"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "including salesforce",
+      "aliases": [
+        "including salesforce integration",
+        "salesforce integration",
+        "system including salesforce"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "lifecycle opentext",
+      "aliases": [
+        "lifecycle opentext alm",
+        "opentext alm",
+        "test lifecycle opentext"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "relief system",
+      "aliases": [
+        "relief system including",
+        "rent relief system",
+        "system including"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "absence admin",
+      "aliases": [
+        "absence admin interface",
+        "admin interface",
+        "structure absence admin"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "ai tooling",
+      "aliases": [
+        "ai tooling copilot",
+        "tooling copilot",
+        "tooling copilot accelerate"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "ambiguou stakeholder",
+      "aliases": [
+        "ambiguou stakeholder input",
+        "stakeholder input",
+        "stakeholder input clear"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "behaviour turning",
+      "aliases": [
+        "behaviour turning them",
+        "system behaviour turning",
+        "turning them"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "directly sql",
+      "aliases": [
+        "directly sql against",
+        "sql against",
+        "sql against core"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "end-to-end initiation",
+      "aliases": [
+        "end-to-end initiation",
+        "initiation delivery"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "application program",
+      "aliases": [
+        "application program",
+        "infrastructure application program"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "five concurrent",
+      "aliases": [
+        "five concurrent",
+        "five concurrent government"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "network transformation lhds",
+      "aliases": [
+        "network transformation lhds",
+        "transformation lhds"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "p1/p2 incident",
+      "aliases": [
+        "p1/p2 incident",
+        "p1/p2 incident workflow"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "redesigned p1/p2",
+      "aliases": [
+        "redesigned p1/p2",
+        "redesigned p1/p2 incident"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "sse transformation across",
+      "aliases": [
+        "sse transformation across",
+        "transformation across"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "configured executed",
+      "aliases": [
+        "configured executed automated",
+        "executed automated"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "delivery outsystem low-code",
+      "aliases": [
+        "outsystem low-code",
+        "outsystem low-code platform"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "delivery serco group",
+      "aliases": [
+        "serco group",
+        "serco group recruitment"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "low-code platform",
+      "aliases": [
+        "low-code platform across",
+        "platform across"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "suite selenium",
+      "aliases": [
+        "suite selenium cucumber",
+        "test suite selenium"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "agreed requirement",
+      "aliases": [
+        "agreed requirement artefact",
+        "requirement artefact"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "complex policy",
+      "aliases": [
+        "complex policy docs",
+        "policy docs"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "defined business",
+      "aliases": [
+        "defined business rule",
+        "program defined business"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "employment program",
+      "aliases": [
+        "employment program defined",
+        "program defined"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "led workstream",
+      "aliases": [
+        "led workstream"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 1,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "logic delivery",
+      "aliases": [
+        "logic delivery artefact",
+        "system logic delivery"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "national employment",
+      "aliases": [
+        "national employment program",
+        "two national employment"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "them payment",
+      "aliases": [
+        "them payment rule",
+        "turning them payment"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "coordinated m",
+      "aliases": [
+        "coordinated m"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 1,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "platform aged care",
+      "aliases": [
+        "platform aged care"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 1,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "client engagement",
+      "aliases": [
+        "client engagement",
+        "concurrent client engagement"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "end-to-end agile",
+      "aliases": [
+        "end-to-end agile"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 1,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "managed agile",
+      "aliases": [
+        "managed agile",
+        "managed agile delivery"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "selenium cucumber",
+      "aliases": [
+        "selenium cucumber",
+        "selenium cucumber managed"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "clear agreed",
+      "aliases": [
+        "clear agreed",
+        "clear agreed requirement"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "copilot accelerate",
+      "aliases": [
+        "copilot accelerate",
+        "copilot accelerate artefact"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "data mapping",
+      "aliases": [
+        "data mapping",
+        "field-level data mapping"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "delivery artefact",
+      "aliases": [
+        "delivery artefact",
+        "delivery artefact fixed"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "docs legacy",
+      "aliases": [
+        "docs legacy",
+        "policy docs legacy"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "edge case",
+      "aliases": [
+        "edge case",
+        "resolve edge case"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "engineering delivery",
+      "aliases": [
+        "engineering delivery",
+        "sign-off engineering delivery"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "field-level data",
+      "aliases": [
+        "field-level data",
+        "logic field-level data"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "gherkin acceptance",
+      "aliases": [
+        "gherkin acceptance",
+        "gherkin acceptance criteria"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "input clear",
+      "aliases": [
+        "input clear",
+        "input clear agreed"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "logic field-level",
+      "aliases": [
+        "logic field-level",
+        "validation logic field-level"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "producing bpmn",
+      "aliases": [
+        "producing bpmn",
+        "producing bpmn model"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "resolve edge",
+      "aliases": [
+        "resolve edge",
+        "rule resolve edge"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "rule resolve",
+      "aliases": [
+        "rule resolve",
+        "validate rule resolve"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "story gherkin",
+      "aliases": [
+        "story gherkin",
+        "story gherkin acceptance"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "taking complex",
+      "aliases": [
+        "taking complex",
+        "taking complex policy"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "translated ambiguou",
+      "aliases": [
+        "translated ambiguou",
+        "translated ambiguou stakeholder"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    },
+    {
+      "name": "working directly",
+      "aliases": [
+        "working directly",
+        "working directly sql"
+      ],
+      "fit_label": "",
+      "watchout_label": "",
+      "min_alias_hits": 2,
+      "min_snippet_hits": 2,
+      "dense_snippet_alias_hits": 4,
+      "needs_review": true
+    }
+  ],
+  "primary_job_title_pattern": [
+    "senior business analyst",
+    "senior business analyst and scrum master"
+  ],
+  "secondary_title_patterns": [
+    "scrum master business analyst",
+    "business analyst"
+  ],
+  "must_not_require_skills": [],
+  "onboarding_settings": {
+    "capability_strength_preset": "balanced",
+    "extraction_lookback_years": 8,
+    "title_extraction_min_months": 6,
+    "max_target_patterns": 8,
+    "max_secondary_patterns": 6,
+    "capability_recent_years": 4,
+    "capability_strong_max_years_since_use": 4,
+    "capability_strong_min_months": 36,
+    "capability_strong_min_roles": 2,
+    "capability_working_max_years_since_use": 8,
+    "capability_working_min_months": 18,
+    "capability_working_long_history_max_years_since_use": 12,
+    "capability_working_long_history_min_months": 48,
+    "capability_single_role_old_max_years_since_use": 8,
+    "capability_drop_to_basic_after_years": 12,
+    "capability_max_items": 20
+  },
+  "star_evidence_text": "",
+  "evidence_tiers": {
+    "primary_current_evidence": "",
+    "secondary_older_evidence": "",
+    "background_optional_evidence": ""
+  },
+  "evidence_tier_weights": {
+    "primary_current_evidence": 1.0,
+    "secondary_older_evidence": 0.55,
+    "background_optional_evidence": 0.25
+  },
+  "cheap_keep_counter_patterns": [],
+  "cheap_reject_metadata_rules": [],
+  "reject_title_rules": [],
+  "reject_description_phrase_rules": []
+}

@@ -33,7 +33,6 @@ from job_hunter_agent.notifiers.email_notifier import send_email_notification
 from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.source_connector import (
-    RUN_STATS_PATH,
     build_dashboard_record_sets,
     fit_score,
     get_manual_skip_sets,
@@ -47,7 +46,7 @@ from job_hunter_agent.source_connector import (
     viewed_by_user,
     configure_console_output,
 )
-from job_hunter_agent.job_identity import normalize_job_key, find_similar_job
+from job_hunter_agent.job_identity import normalize_job_key, find_confirmed_duplicate
 from job_hunter_agent.record_schema import (
     RECORD_JOB_KEY,
     RECORD_SOURCE_KEY,
@@ -59,7 +58,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
 )
-from job_hunter_agent.paths import DASHBOARD_PATH, OUTPUT_DIR
+from job_hunter_agent.paths import OUTPUT_DIR, get_dashboard_path, get_run_stats_path
 
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
 
@@ -101,11 +100,11 @@ def build_dashboard_reference(settings: dict[str, Any]) -> str:
     dashboard_url = str(settings.get("dashboard_url") or "").strip()
     if dashboard_url:
         return dashboard_url
-    return f"{DEFAULT_DASHBOARD_URL} ({DASHBOARD_PATH})"
+    return f"{DEFAULT_DASHBOARD_URL} ({get_dashboard_path()})"
 
 
 def load_latest_run_stats() -> dict[str, Any]:
-    payload = load_json_dict(RUN_STATS_PATH)
+    payload = load_json_dict(get_run_stats_path())
     return payload if isinstance(payload, dict) else {}
 
 
@@ -139,8 +138,8 @@ def build_digest_payload(
     
     new_records = [r for r in current_records if (k := _safe_job_key(r)) and k not in previous_keys]
 
-    # Deduplication safety net: skip notifying for roles that are semantically identical to
-    # something already known (previous run, archive, applied) or repeated in this batch.
+    # Deduplication safety net: skip notifying for confirmed duplicates already known
+    # (previous run, archive, applied) or repeated in this batch.
     existing_pool = (
         previous_records +
         dashboard_records.get(KEY_DS_APPLIED, []) +
@@ -149,7 +148,7 @@ def build_digest_payload(
     )
     unique_new = []
     for record in new_records:
-        if not find_similar_job(record, existing_pool) and not find_similar_job(record, unique_new):
+        if not find_confirmed_duplicate(record, existing_pool) and not find_confirmed_duplicate(record, unique_new):
             unique_new.append(record)
     new_records = unique_new
 
@@ -410,7 +409,17 @@ def run_agent_loop() -> None:
         time.sleep(sleep_seconds)
 
 
+def _set_admin_user_context() -> None:
+    import os
+    admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
+    if admin_email:
+        from job_hunter_agent.auth import user_id_from_email
+        from job_hunter_agent.user_context import set_user_id
+        set_user_id(user_id_from_email(admin_email))
+
+
 def main() -> None:
+    _set_admin_user_context()
     configure_console_output()
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")
     parser.add_argument("--loop", action="store_true", help="Keep running and trigger once per day at the configured local time.")

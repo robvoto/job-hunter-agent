@@ -1,0 +1,15 @@
+{
+  "kind": "system_config",
+  "name": "company_rules",
+  "version": 1,
+  "company_suffixes": [
+    "pty",
+    "ltd",
+    "pty ltd",
+    "inc",
+    "corp",
+    "corporation",
+    "limited",
+    "llc"
+  ]
+}

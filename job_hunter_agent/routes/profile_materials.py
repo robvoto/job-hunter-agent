@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Body, Request
 
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.auth import auth_required_response, is_authenticated
+from job_hunter_agent.auth import auth_required_response, is_admin
 
 from job_hunter_agent.routes.responses import json_response
 
@@ -51,7 +51,7 @@ def api_source_materials_put(body: dict = Body(...)):  # type: ignore[no-untyped
 
 @router.get("/api/advance-settings")
 def api_advance_settings_get(request: Request):  # type: ignore[no-untyped-def]
-    if not is_authenticated(request):
+    if not is_admin(request):
         return auth_required_response("/admin", False)
     return json_response(srv.load_advance_settings())
 
@@ -59,7 +59,7 @@ def api_advance_settings_get(request: Request):  # type: ignore[no-untyped-def]
 @router.patch("/api/advance-settings")
 def api_advance_settings_patch(request: Request, body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:
-        if not is_authenticated(request):
+        if not is_admin(request):
             return auth_required_response("/admin", False)
         updated = srv.save_advance_settings(body)
     except Exception as exc:

@@ -57,6 +57,21 @@
   "description_trust_settings": {
     "min_trusted_description_length": 600
   },
+  "source_document_settings": {
+    "allowed_suffixes": [
+      ".docx",
+      ".md",
+      ".txt",
+      ".csv",
+      ".json",
+      ".yaml",
+      ".yml",
+      ".xml",
+      ".html",
+      ".htm",
+      ".rst"
+    ]
+  },
   "onboarding_settings": {
     "extraction_lookback_years": 8,
     "title_extraction_min_months": 6,
@@ -182,6 +197,7 @@
   "playwright_settings": {
     "playwright_viewport_width": 1400,
     "playwright_viewport_height": 900,
-    "playwright_selector_timeout": 8000
+    "playwright_selector_timeout": 8000,
+    "playwright_browser_mode": "ephemeral"
   }
 }

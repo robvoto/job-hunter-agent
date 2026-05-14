@@ -37,6 +37,7 @@ from job_hunter_agent.advance_settings import (
 from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
 from job_hunter_agent.utils import extract_salary
 from job_hunter_agent.work_mode_extraction import (
@@ -85,7 +86,7 @@ def _fetch_job_html(record: dict) -> str:
 class LinkedInScraper(BaseJobScraper):
     """Scrape LinkedIn job listings using python-jobspy."""
 
-    source_name = "linkedin"
+    source_name = SOURCE_LINKEDIN
 
     # -----------------------------------------------------------------------
     # Public interface

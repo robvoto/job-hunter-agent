@@ -22,18 +22,19 @@ from job_hunter_agent.agent_settings import (
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.paths import (
-    AUDIT_RECORDS_PATH,
-    DASHBOARD_PATH,
     DATA_DIR,
-    JOB_HISTORY_PATH,
     REPO_ROOT as ROOT_DIR,
-    REVIEW_DATA_PATH,
-    RUN_STATS_PATH,
     SETTINGS_HTML_PATH,
     SHOWCASE_PATH,
     STATIC_DIR,
     WORKSPACE_HTML_PATH,
     ONBOARDING_HTML_PATH,
+    get_audit_records_path,
+    get_dashboard_path,
+    get_job_history_path,
+    get_review_data_path,
+    get_run_stats_path,
+    get_source_pack_dir,
 )
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
@@ -92,7 +93,6 @@ from job_hunter_agent.server_review import (
 from job_hunter_agent.source_connector import rebuild_html_dashboard, scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
-    SOURCE_PACK_DIR,
     build_llm_profile_brief,
     load_source_materials,
     persist_uploaded_source_pack,
@@ -157,9 +157,10 @@ def _normalize_suggestion_phrase(value: Any) -> str:
 
 
 def _render_template(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore").replace(
-        "__JOB_HUNTER_DEBUG_MODE__",
-        "true" if DEBUG_MODE else "false",
+    return (
+        path.read_text(encoding="utf-8", errors="ignore")
+        .replace("__JOB_HUNTER_DEBUG_MODE_VALUE__", "true" if DEBUG_MODE else "false")
+        .replace("__JOB_HUNTER_ONBOARDING_DEFAULTS_JSON__", json.dumps(DEFAULT_ONBOARDING_SETTINGS, ensure_ascii=True))
     )
 
 
@@ -268,8 +269,9 @@ def _validate_required_onboarding_inputs(
 
 def _read_last_run_timestamp() -> str | None:
     try:
-        if RUN_STATS_PATH.exists():
-            payload = json.loads(RUN_STATS_PATH.read_text(encoding="utf-8"))
+        run_stats_path = get_run_stats_path()
+        if run_stats_path.exists():
+            payload = json.loads(run_stats_path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
                 timestamp = str(
                     payload.get("last_run_attempt_at")
@@ -353,7 +355,7 @@ def _run_scrape_job() -> None:
 
 
 def _rebuild_dashboard_on_startup() -> None:
-    if not DASHBOARD_PATH.exists() and not RUN_STATS_PATH.exists() and not AUDIT_RECORDS_PATH.exists():
+    if not get_dashboard_path().exists() and not get_run_stats_path().exists() and not get_audit_records_path().exists():
         return
     try:
         rebuild_html_dashboard(reason="server startup rebuild")
@@ -421,16 +423,17 @@ class SettingsHandler:
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
-        if SOURCE_PACK_DIR.exists():
-            shutil.rmtree(SOURCE_PACK_DIR)
+        source_pack_dir = get_source_pack_dir()
+        if source_pack_dir.exists():
+            shutil.rmtree(source_pack_dir)
 
-        cls._write_json_file(JOB_HISTORY_PATH, {})
-        cls._write_json_file(REVIEW_DATA_PATH, {})
-        cls._write_json_file(RUN_STATS_PATH, {})
-        cls._write_json_file(AUDIT_RECORDS_PATH, [])
+        cls._write_json_file(get_job_history_path(), {})
+        cls._write_json_file(get_review_data_path(), {})
+        cls._write_json_file(get_run_stats_path(), {})
+        cls._write_json_file(get_audit_records_path(), [])
 
         try:
-            DASHBOARD_PATH.unlink(missing_ok=True)
+            get_dashboard_path().unlink(missing_ok=True)
         except Exception:
             pass
 
@@ -541,7 +544,7 @@ class SettingsHandler:
 
     @staticmethod
     def _issue_rejection_suggestion_approval_tokens(job_id: str, suggestions: list[str]) -> dict[str, str]:
-        normalized_job_id = str(job_id or "").strip()
+        normalized_job_id = normalize_job_key(job_id) or str(job_id or "").strip()
         tokens: dict[str, str] = {}
         for suggestion in suggestions:
             phrase = _normalize_suggestion_phrase(suggestion)
@@ -557,7 +560,7 @@ class SettingsHandler:
         blockers: list[str],
         approved_suggestion_tokens: dict[str, str] | None = None,
     ) -> None:
-        normalized_job_id = str(job_id or "").strip()
+        normalized_job_id = normalize_job_key(job_id) or str(job_id or "").strip()
         cached = _rejection_suggestions_cache.get(normalized_job_id)
         if not isinstance(cached, dict):
             return

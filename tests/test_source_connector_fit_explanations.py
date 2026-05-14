@@ -1114,6 +1114,45 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
     assert "Alert: This looks like a role you already marked as applied at this company." in html
 
 
+def test_potential_duplicate_card_shows_visible_callout_and_help_text():
+    html = source_connector.render_job_card(
+        {
+            "job_key": "seek:new-role",
+            "title": "Senior Business Analyst",
+            "company": "Acme Pty Ltd",
+            "url": "https://example.com/new-role",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "potential_duplicate_links": [
+                {
+                    "kind": "potential_duplicate",
+                    "matched_on": ["base_role", "company_name"],
+                    "related_job_key": "linkedin:2",
+                    "related_title": "Senior Business Analyst",
+                    "related_company": "Acme Pty Ltd",
+                    "related_source": "linkedin",
+                    "related_url": "https://example.com/related-role",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "Potential duplicate" in html
+    assert "Similar to" in html
+    assert "Informational only. No merge, hide, or review action is taken from this signal." in html
+    assert 'href="https://example.com/related-role"' in html
+    assert "senior business analyst @ acme" in html.lower()
+
+
 def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
     profile = {
         **_test_profile(),

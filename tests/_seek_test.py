@@ -1,10 +1,16 @@
 from playwright.sync_api import sync_playwright
 from job_hunter_agent.scrapers.seek import SELECTOR_CARDS
+from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
 
 url = 'https://www.seek.com.au/jobs?keywords=senior+business+analyst&where=Sydney&daterange=3&sortMode=ListedDate'
+PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page(viewport={'width': 1400, 'height': 900})
+    context = p.chromium.launch_persistent_context(
+        user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+        headless=True,
+        viewport={'width': 1400, 'height': 900},
+    )
+    page = context.new_page()
     try:
         page.goto(url, wait_until='domcontentloaded')
         page.wait_for_selector(SELECTOR_CARDS, timeout=10000)
@@ -17,4 +23,4 @@ with sync_playwright() as p:
         print(f'ERROR: {type(exc).__name__}: {exc}')
         body = page.text_content('body') or ''
         print('Body snippet:', body[:500])
-    browser.close()
+    context.close()

@@ -34,7 +34,7 @@ def _csrf_request(app, cookie_header: str, scheme: str = "http") -> Request:
 def _session_cookie_and_token(app, scheme: str = "http") -> tuple[str, str, str]:
     request = _csrf_request(app, "", scheme=scheme)
     response = Response()
-    set_session_cookie(response, request, app.state.auth_config, "alice")
+    set_session_cookie(response, request, app.state.auth_config, {"user_id": "alice", "email": "alice@example.com", "role": "candidate"})
     cookie = SimpleCookie()
     cookie.load(response.headers["set-cookie"])
     session_cookie_name, _ = _get_session_cookie_params(request)

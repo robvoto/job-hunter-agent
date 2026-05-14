@@ -6,11 +6,11 @@ from typing import Any
 
 from job_hunter_agent.filters import build_title_block_rule, normalize_title_block_phrase, suggest_title_block_phrase
 from job_hunter_agent.paths import (
-    AUDIT_RECORDS_PATH,
-    DASHBOARD_PATH,
-    JOB_HISTORY_PATH,
     OUTPUT_DIR,
-    RUN_STATS_PATH,
+    get_audit_records_path,
+    get_dashboard_path,
+    get_job_history_path,
+    get_run_stats_path,
 )
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.profile_store import load_profile, save_profile
@@ -44,7 +44,7 @@ from job_hunter_agent.record_schema import (
 
 
 def rebuild_dashboard_after_rule_change(reason: str = "matching rule change") -> None:
-    if not DASHBOARD_PATH.exists() and not RUN_STATS_PATH.exists() and not AUDIT_RECORDS_PATH.exists():
+    if not get_dashboard_path().exists() and not get_run_stats_path().exists() and not get_audit_records_path().exists():
         return
 
     def _rebuild() -> None:
@@ -61,10 +61,11 @@ def rebuild_dashboard_after_rule_change(reason: str = "matching rule change") ->
 
 
 def load_job_history() -> dict:
-    if not JOB_HISTORY_PATH.exists():
+    job_history_path = get_job_history_path()
+    if not job_history_path.exists():
         return {}
     try:
-        payload = json.loads(JOB_HISTORY_PATH.read_text(encoding="utf-8"))
+        payload = json.loads(job_history_path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
     except Exception:
@@ -73,18 +74,20 @@ def load_job_history() -> dict:
 
 
 def save_job_history(history: dict) -> None:
-    JOB_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    JOB_HISTORY_PATH.write_text(
+    job_history_path = get_job_history_path()
+    job_history_path.parent.mkdir(parents=True, exist_ok=True)
+    job_history_path.write_text(
         json.dumps(history, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
 
 def _load_audit_rows() -> list[dict[str, Any]]:
-    if not AUDIT_RECORDS_PATH.exists():
+    audit_records_path = get_audit_records_path()
+    if not audit_records_path.exists():
         return []
     try:
-        data = json.loads(AUDIT_RECORDS_PATH.read_text(encoding="utf-8"))
+        data = json.loads(audit_records_path.read_text(encoding="utf-8"))
         return data if isinstance(data, list) else []
     except Exception:
         return []

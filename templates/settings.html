@@ -6,10 +6,10 @@
   <title>__JOB_HUNTER_PAGE_TITLE__</title>
   <link rel="stylesheet" href="/static/themes.css">
   <link rel="stylesheet" href="/static/settings-page.css">
-  <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
-  <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN__";</script>
-  <script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = __JOB_HUNTER_LOCATION_OPTIONS__;</script>
-  <script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = "__JOB_HUNTER_DEFAULT_LOCATION__";</script>
+  <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE_VALUE__;</script>
+  <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN_VALUE__";</script>
+  <script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = __JOB_HUNTER_LOCATION_OPTIONS_JSON__;</script>
+  <script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = "__JOB_HUNTER_DEFAULT_LOCATION_VALUE__";</script>
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
@@ -52,7 +52,7 @@
     }
   </style>
 </head>
-  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
+  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_VALUE__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Page sections">
       <div class="sidebar-brand">
@@ -695,6 +695,17 @@
             <label for="description_trust_min_trusted_description_length">Minimum trusted description length</label>
             <input id="description_trust_min_trusted_description_length" type="number" min="1" max="100000" step="1">
             <div class="field-help">If the fallback text is shorter than this, the system will not treat it as a trusted full description.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Source Documents</h2>
+            <p class="panel-copy">These file types are accepted during onboarding and source import. Keep them here so the app stays centrally managed.</p>
+
+            <label for="source_document_allowed_suffixes">Allowed file suffixes</label>
+            <textarea id="source_document_allowed_suffixes" rows="6" readonly aria-readonly="true" placeholder=".docx
+.md
+.txt"></textarea>
+            <div class="field-help">Read-only. One suffix per line, including the leading dot. Update this in the managed advance settings source, not from the UI.</div>
           </section>
 
           <section class="panel">

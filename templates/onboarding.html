@@ -6,10 +6,7 @@
   <title>Set Up Job Hunter | Job Hunter</title>
   <link rel="stylesheet" href="/static/themes.css">
   <link rel="stylesheet" href="/static/onboarding-page.css">
-  <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
-  <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN__";</script>
-  <script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = __JOB_HUNTER_LOCATION_OPTIONS__;</script>
-  <script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = "__JOB_HUNTER_DEFAULT_LOCATION__";</script>
+  __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
   <script src="/static/theme-switcher.js"></script>
@@ -372,7 +369,7 @@
     }
   </style>
 </head>
-<body data-test-mode="__JOB_HUNTER_DEBUG_MODE__">
+<body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__">
   <main class="page">
     <section class="hero">
       <div class="hero-shell">
@@ -514,7 +511,7 @@
             </div>
 
             <details class="guidance-accordion test-only" data-test-only>
-              <summary>Advanced rebuild options (usually leave these alone)</summary>
+              <summary>Advanced options (usually leave these alone)</summary>
               <div class="setting-row">
                 <div class="setting-copy">
                   <label for="os_lookback_years">CV lookback window</label>

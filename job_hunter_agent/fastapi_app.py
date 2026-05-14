@@ -19,12 +19,22 @@ import logging
 import logging.config
 import sys
 
+from urllib.parse import quote
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from job_hunter_agent.auth import configure_auth, read_session_username, verify_csrf_token
+from job_hunter_agent.auth import (
+    OPEN_PATHS,
+    configure_auth,
+    read_session_user,
+    read_session_username,
+    verify_csrf_token,
+)
+from job_hunter_agent.config import LOGIN_PATH
 from job_hunter_agent.routes import register_routes
+from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 
@@ -112,6 +122,9 @@ def _configure_server_logging() -> None:
 
 
 def create_app() -> FastAPI:
+    from job_hunter_agent.migration import run_migration
+    run_migration()
+
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
     app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc")
     configure_auth(app)
@@ -152,6 +165,12 @@ def create_app() -> FastAPI:
         return response
 
     @app.middleware("http")
+    async def user_context_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        user = read_session_user(request)
+        set_user_id(user["user_id"] if user else None)
+        return await call_next(request)
+
+    @app.middleware("http")
     async def csrf_protection(request: Request, call_next):  # type: ignore[no-untyped-def]
         if request.method in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
@@ -161,6 +180,24 @@ def create_app() -> FastAPI:
             return await call_next(request)
         if not verify_csrf_token(request, request.headers.get("x-csrf-token")):
             return json_response({"error": "CSRF token missing or invalid"}, 403)
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def auth_enforcement(request: Request, call_next):  # type: ignore[no-untyped-def]
+        path = request.url.path
+        if path in OPEN_PATHS or path.startswith("/static/"):
+            return await call_next(request)
+        if read_session_user(request) is None:
+            if path.startswith("/api/"):
+                return JSONResponse(
+                    {"ok": False, "error": "Authentication required"},
+                    status_code=401,
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+                )
+            return RedirectResponse(
+                f"{LOGIN_PATH}?next={quote(path, safe='')}",
+                status_code=302,
+            )
         return await call_next(request)
 
     register_routes(app)

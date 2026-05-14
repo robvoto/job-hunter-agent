@@ -18,6 +18,7 @@ ms-playwright/
 
 # ---- Generated output / local state ----
 output/
+data/playwright_user_data/
 data/profile.json
 data/llm_cache.json
 data/job_history.json
@@ -64,3 +65,6 @@ docs/backlog/openclaw.md
 GEMINI.md
 CLAUDE.md
 Programming - Shortcut.lnk
+job_hunter_agent/routes/__init__.py
+data/users/a630b54c5fc1b009/source_pack/primary_cv.docx
+job_hunter_agent/routes/__init__.py

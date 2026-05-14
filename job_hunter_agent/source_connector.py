@@ -1,4 +1,4 @@
-﻿"""
+"""
 Main job-source connector and dashboard builder.
 
 Main goals:
@@ -34,9 +34,7 @@ from job_hunter_agent.filters import (
     passes_title_filters, 
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches, generalize_hard_block_pattern
-from job_hunter_agent.job_identity import (
-    deduplicate_across_sources, 
-)
+from job_hunter_agent.job_identity import deduplicate_across_sources
 from job_hunter_agent.llm_gate import (
     build_llm_cache_key,
     llm_is_enabled,
@@ -56,6 +54,7 @@ from job_hunter_agent.advance_settings import (
     get_archive_stale_after_days,
     get_hidden_review_days,
     get_llm_max_chars,
+    get_playwright_browser_mode,
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
@@ -74,6 +73,7 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.review_insights import build_review_data
+from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
 from job_hunter_agent.record_schema import (
     RECORD_CARD_SALARY_KEY,
     RECORD_COMPANY_KEY,
@@ -102,6 +102,8 @@ from job_hunter_agent.record_schema import (
     RECORD_SEARCH_CLASSIFICATIONS_KEY,
     RECORD_SEARCH_KEYWORDS_KEY,
     RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOFT_RISK_REASONS_KEY,
     RECORD_SOURCE_KEY,
@@ -136,19 +138,20 @@ from job_hunter_agent.scrapers.seek import (
     build_full_seek_url,
 )
 from job_hunter_agent.paths import (
-    AUDIT_RECORDS_PATH as DEBUG_JSON_PATH,
-    DASHBOARD_PATH,
     DATA_DIR,
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
     GOVERNMENT_CONTEXT_RULES_PATH,
-    JOB_HISTORY_PATH,
     LLM_CACHE_PATH,
+    PLAYWRIGHT_USER_DATA_DIR,
     OUTPUT_DIR,
     REPO_ROOT as ROOT_DIR,
     RESULTS_TEMPLATE_PATH,
-    REVIEW_DATA_PATH,
-    RUN_STATS_PATH,
     TEMPLATES_DIR,
+    get_audit_records_path,
+    get_dashboard_path,
+    get_job_history_path,
+    get_review_data_path,
+    get_run_stats_path,
 )
 from job_hunter_agent.utils import (
     extract_salary,
@@ -970,7 +973,7 @@ def _seek_source_metadata(detail_page, details_payload: dict) -> tuple[dict, obj
         if value not in (None, "", [], {}):
             raw_source_fields[key] = _seek_json_safe_value(value)
 
-    metadata = blank_source_metadata("seek")
+    metadata = blank_source_metadata(SOURCE_SEEK)
     metadata.update(
         {
             "apply_url": apply_url,
@@ -980,6 +983,8 @@ def _seek_source_metadata(detail_page, details_payload: dict) -> tuple[dict, obj
             "poster_company": poster_company,
             "hiring_company": hiring_company,
             "ats_source": "",
+            RECORD_SOURCE_ATS_REQUISITION_ID_KEY: str(_seek_string_value(combined_payload, ("seekHirerJobReference",)) or "").strip(),
+            RECORD_SOURCE_PLATFORM_JOB_ID_KEY: str(_seek_string_value(combined_payload, ("seekPostingSourceCode",)) or "").strip(),
             "raw_source_fields": raw_source_fields,
         }
     )
@@ -1010,7 +1015,7 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str, filter_stat
         RECORD_SEARCH_KEYWORDS_KEY: search_target["keywords"],
         RECORD_SEARCH_CLASSIFICATIONS_KEY: ",".join(search_target.get("classification_ids", [])),
         RECORD_PAGE_KEY: 1,
-        RECORD_SOURCE_KEY: "seek",
+        RECORD_SOURCE_KEY: SOURCE_SEEK,
         RECORD_JOB_KEY: stable_job_key(full_url) if full_url else None,
         RECORD_TITLE_KEY: title,
         RECORD_COMPANY_KEY: company,
@@ -1040,7 +1045,7 @@ def _extract_seek_card_data(card, search_target: dict, run_iso: str, filter_stat
         RECORD_MISSING_EVIDENCE_KEY: [],
         RECORD_COMPETITIVE_SIGNALS_KEY: [],
         RECORD_REVIEWED_SIGNAL_MATCHES_KEY: {"matched": [], "evidence_only": [], "ignored": [], "unresolved": []},
-        RECORD_SOURCE_METADATA_KEY: blank_source_metadata("seek"),
+        RECORD_SOURCE_METADATA_KEY: blank_source_metadata(SOURCE_SEEK),
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: blank_posting_channel_evidence(),
     }
 
@@ -1136,7 +1141,7 @@ def _process_seek_job_details(
         record[RECORD_WORK_MODE_SOURCE_KEY] = detail_extraction["work_mode_source"]
         record[RECORD_WORK_MODE_EVIDENCE_KEY] = detail_extraction["work_mode_evidence"]
         record[RECORD_WORK_MODE_NEEDS_REVIEW_KEY] = detail_extraction["work_mode_needs_review"]
-    log_work_mode_result(str(record.get(RECORD_JOB_KEY) or ""), "seek", record)
+        log_work_mode_result(str(record.get(RECORD_JOB_KEY) or ""), SOURCE_SEEK, record)
 
     record[RECORD_ROLE_SNAPSHOT_KEY] = build_role_summary(record, details_text, profile)
     record[RECORD_FIT_HIGHLIGHTS_KEY] = build_fit_highlights(record, details_text, profile)
@@ -1221,10 +1226,24 @@ def _seek_scrape_to_records(
     kept_records: List[dict] = []
     skill_observations: List[dict] = []
 
+    browser_mode = get_playwright_browser_mode()
+    use_persistent_browser = browser_mode == "persistent"
+
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=headless) # type: ignore
-        list_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}) # type: ignore
-        detail_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}) # type: ignore
+        if use_persistent_browser:
+            PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            context = playwright.chromium.launch_persistent_context(  # type: ignore
+                user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+                headless=headless,
+                viewport={"width": playwright_viewport_width, "height": playwright_viewport_height},
+            )
+            list_page = context.new_page() # type: ignore
+            detail_page = context.new_page() # type: ignore
+        else:
+            browser = playwright.chromium.launch(headless=headless) # type: ignore
+            context = browser
+            list_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}) # type: ignore
+            detail_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}) # type: ignore
 
         try:
             seen_urls: Set[str] = set()
@@ -1391,7 +1410,7 @@ def _seek_scrape_to_records(
                     current_page_num += 1
 
         finally:
-            browser.close()
+            context.close()
 
     return kept_records, audit_rows, skill_observations
 
@@ -1417,8 +1436,8 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     print("=" * 60)
 
     profile = load_profile()
-    previous_audit_rows = load_json_list(DEBUG_JSON_PATH)
-    previous_run_stats = load_json_dict(RUN_STATS_PATH)
+    previous_audit_rows = load_json_list(get_audit_records_path())
+    previous_run_stats = load_json_dict(get_run_stats_path())
     search_settings = get_search_settings(profile)
     configured_seek_max_pages = int(search_settings.get(KEY_SEEK_MAX_PAGES, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]) or DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES])
     configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
@@ -1442,7 +1461,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     skill_observations: List[dict] = []
 
     # --- SEEK ---
-    if "seek" in enabled_sources:
+    if SOURCE_SEEK in enabled_sources:
         search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
         s_kept, s_audit, s_skills = _seek_scrape_to_records(
             profile=profile,
@@ -1465,7 +1484,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
         skill_observations.extend(s_skills)
 
     # --- LinkedIn ---
-    if "linkedin" in enabled_sources:
+    if SOURCE_LINKEDIN in enabled_sources:
         from job_hunter_agent.scrapers.linkedin import LinkedInScraper  # noqa: PLC0415
         try:
             li = LinkedInScraper(
@@ -1484,12 +1503,12 @@ def scrape_jobs_direct(headless: bool = False) -> str:
             print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
 
     # --- Finalize ---
-    # Final semantic deduplication pass to collapse reposts and cross-source duplicates
+    # Final deterministic deduplication pass to collapse confirmed duplicates.
     kept_records = deduplicate_across_sources(kept_records)
 
     if not audit_rows and previous_audit_rows:
         render_html(
-            DASHBOARD_PATH,
+            get_dashboard_path(),
             load_last_kept_records(),
             parse_timestamp(previous_run_stats.get("run_started_at")) or run_started_at,
             configured_date_range,
@@ -1502,9 +1521,10 @@ def scrape_jobs_direct(headless: bool = False) -> str:
         )
         save_llm_cache(llm_cache)
         save_job_history(job_history)
+        dashboard_path = get_dashboard_path()
         print("\nNo fresh cards were captured in this run, so the previous dashboard state was preserved.")
-        print(f"Dashboard preserved at {DASHBOARD_PATH}")
-        return str(DASHBOARD_PATH)
+        print(f"Dashboard preserved at {dashboard_path}")
+        return str(dashboard_path)
 
     run_finished_at = datetime.now().astimezone()
     run_stats = build_run_stats(
@@ -1518,8 +1538,9 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     )
     run_stats["last_run_attempt_at"] = run_iso
 
+    dashboard_path = get_dashboard_path()
     render_html(
-        DASHBOARD_PATH,
+        dashboard_path,
         kept_records,
         run_started_at,
         configured_date_range,
@@ -1535,12 +1556,12 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     write_debug_json(audit_rows)
     write_run_stats(run_stats)
     write_review_data(build_review_data(audit_rows, skill_observations, profile))
-    print(f"\nSaved {len(kept_records)} jobs to {DASHBOARD_PATH}")
-    print(f"Saved {len(audit_rows)} audit rows to {DEBUG_JSON_PATH}")
-    print(f"Saved run stats to {RUN_STATS_PATH}")
-    print(f"Saved review data to {REVIEW_DATA_PATH}")
-    print(f"Saved history for {len(job_history)} jobs to {JOB_HISTORY_PATH}")
-    return str(DASHBOARD_PATH)
+    print(f"\nSaved {len(kept_records)} jobs to {dashboard_path}")
+    print(f"Saved {len(audit_rows)} audit rows to {get_audit_records_path()}")
+    print(f"Saved run stats to {get_run_stats_path()}")
+    print(f"Saved review data to {get_review_data_path()}")
+    print(f"Saved history for {len(job_history)} jobs to {get_job_history_path()}")
+    return str(dashboard_path)
 
 
 def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -> str:
@@ -1559,7 +1580,7 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
     search_settings = get_search_settings(profile)
     configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
     sort_newest_first = bool(search_settings.get("sort_newest_first", DEFAULT_SEARCH_SETTINGS["sort_newest_first"]))
-    run_stats = load_json_dict(RUN_STATS_PATH)
+    run_stats = load_json_dict(get_run_stats_path())
     run_started_at = parse_timestamp(run_stats.get("run_started_at")) or datetime.now().astimezone()
     reference_time = datetime.now().astimezone()
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
@@ -1571,9 +1592,10 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
     print(f"  Hidden keys        : {len(hidden_job_keys)}")
     print("=" * 60)
 
+    dashboard_path = get_dashboard_path()
     render_html(
-        DASHBOARD_PATH,
-        kept_records, 
+        dashboard_path,
+        kept_records,
         run_started_at,
         configured_date_range,
         sort_newest_first,
@@ -1583,8 +1605,15 @@ def rebuild_html_dashboard(reason: str = "Manual --rebuild-dashboard command") -
         hidden_job_keys,
         reference_time,
     )
-    print(f"Dashboard rebuilt at {DASHBOARD_PATH}")
-    return str(DASHBOARD_PATH)
+    print(f"Dashboard rebuilt at {dashboard_path}")
+    return str(dashboard_path)
+
+
+if __name__ == "__main__":
+    if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_DASHBOARD):
+        rebuild_html_dashboard()
+    else:
+        scrape_jobs_direct()
 
 
 if __name__ == "__main__":

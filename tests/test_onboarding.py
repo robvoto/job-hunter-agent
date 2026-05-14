@@ -1,9 +1,13 @@
+import base64
+import json
+
 import pytest
 
 from job_hunter_agent import server_helpers
 from job_hunter_agent import server_review
 from job_hunter_agent import source_documents
 from job_hunter_agent import profile_store
+from job_hunter_agent.routes import onboarding_api
 
 
 def test_normalize_onboarding_search_preferences_trims_and_normalizes():
@@ -20,6 +24,27 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
         "locations": ["Sydney NSW", "Melbourne VIC"],
         "engagement_type": "permanent",
     }
+
+
+def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
+    monkeypatch.setattr(onboarding_api.srv, "persist_uploaded_source_pack", lambda files: {"profile_sources": [], "cv_variants": []})
+    monkeypatch.setattr(onboarding_api.srv, "run_onboarding", lambda materials, search_preferences=None, onboarding_settings=None: {"ok": True, "materials": materials})
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
+
+    response = onboarding_api.api_onboarding_import(
+        {
+            "files": [
+                {
+                    "filename": "cv.csv",
+                    "content_base64": base64.b64encode(b"header,value\n").decode("ascii"),
+                }
+            ]
+        }
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["ok"] is True
 
 
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
@@ -330,9 +355,9 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
             if self.target:
                 self.target()
 
-    monkeypatch.setattr(server_review, "DASHBOARD_PATH", tmp_path / "dashboard.html")
-    monkeypatch.setattr(server_review, "RUN_STATS_PATH", tmp_path / "run_stats.json")
-    monkeypatch.setattr(server_review, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
+    monkeypatch.setattr(server_review, "get_dashboard_path", lambda: tmp_path / "dashboard.html")
+    monkeypatch.setattr(server_review, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
+    monkeypatch.setattr(server_review, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
     (tmp_path / "dashboard.html").write_text("ok", encoding="utf-8")
     monkeypatch.setattr(server_review.threading, "Thread", FakeThread)
     monkeypatch.setattr(server_review, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
@@ -346,10 +371,10 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
 def test_rebuild_dashboard_on_startup_runs_when_data_exists(monkeypatch, tmp_path):
     rebuilds = []
 
-    monkeypatch.setattr(server_helpers, "DASHBOARD_PATH", tmp_path / "dashboard.html")
-    monkeypatch.setattr(server_helpers, "RUN_STATS_PATH", tmp_path / "run_stats.json")
-    monkeypatch.setattr(server_helpers, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
-    server_helpers.RUN_STATS_PATH.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(server_helpers, "get_dashboard_path", lambda: tmp_path / "dashboard.html")
+    monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
+    monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
+    (tmp_path / "run_stats.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(server_helpers, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
 
     server_helpers._rebuild_dashboard_on_startup()
@@ -361,18 +386,25 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     saved_profiles = []
     saved_materials = []
 
+    job_history_path = tmp_path / "job_history.json"
+    review_data_path = tmp_path / "review_data.json"
+    run_stats_path = tmp_path / "run_stats.json"
+    audit_records_path = tmp_path / "audit_records.json"
+    dashboard_path = tmp_path / "dashboard.html"
+    source_pack_dir = tmp_path / "source_pack"
+
     monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
     monkeypatch.setattr(server_helpers, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
-    monkeypatch.setattr(server_helpers, "JOB_HISTORY_PATH", tmp_path / "job_history.json")
-    monkeypatch.setattr(server_helpers, "REVIEW_DATA_PATH", tmp_path / "review_data.json")
-    monkeypatch.setattr(server_helpers, "RUN_STATS_PATH", tmp_path / "run_stats.json")
-    monkeypatch.setattr(server_helpers, "AUDIT_RECORDS_PATH", tmp_path / "audit_records.json")
-    monkeypatch.setattr(server_helpers, "DASHBOARD_PATH", tmp_path / "dashboard.html")
-    monkeypatch.setattr(server_helpers, "SOURCE_PACK_DIR", tmp_path / "source_pack")
+    monkeypatch.setattr(server_helpers, "get_job_history_path", lambda: job_history_path)
+    monkeypatch.setattr(server_helpers, "get_review_data_path", lambda: review_data_path)
+    monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: run_stats_path)
+    monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: audit_records_path)
+    monkeypatch.setattr(server_helpers, "get_dashboard_path", lambda: dashboard_path)
+    monkeypatch.setattr(server_helpers, "get_source_pack_dir", lambda: source_pack_dir)
 
-    server_helpers.SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
-    (server_helpers.SOURCE_PACK_DIR / "primary_cv.txt").write_text("cv", encoding="utf-8")
-    server_helpers.DASHBOARD_PATH.write_text("old dashboard", encoding="utf-8")
+    source_pack_dir.mkdir(parents=True, exist_ok=True)
+    (source_pack_dir / "primary_cv.txt").write_text("cv", encoding="utf-8")
+    dashboard_path.write_text("old dashboard", encoding="utf-8")
 
     result = server_helpers.SettingsHandler._reset_current_user_state()
 
@@ -380,12 +412,12 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert result["redirect_to"] == "/start"
     assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
-    assert not server_helpers.SOURCE_PACK_DIR.exists()
-    assert not server_helpers.DASHBOARD_PATH.exists()
-    assert server_helpers.JOB_HISTORY_PATH.read_text(encoding="utf-8").strip() == "{}"
-    assert server_helpers.REVIEW_DATA_PATH.read_text(encoding="utf-8").strip() == "{}"
-    assert server_helpers.RUN_STATS_PATH.read_text(encoding="utf-8").strip() == "{}"
-    assert server_helpers.AUDIT_RECORDS_PATH.read_text(encoding="utf-8").strip() == "[]"
+    assert not source_pack_dir.exists()
+    assert not dashboard_path.exists()
+    assert job_history_path.read_text(encoding="utf-8").strip() == "{}"
+    assert review_data_path.read_text(encoding="utf-8").strip() == "{}"
+    assert run_stats_path.read_text(encoding="utf-8").strip() == "{}"
+    assert audit_records_path.read_text(encoding="utf-8").strip() == "[]"
 
 
 def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):

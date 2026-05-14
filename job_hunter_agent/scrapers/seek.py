@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.source_registry import SOURCE_SEEK
 from job_hunter_agent.scrapers.base import keywords_to_search_string
 from job_hunter_agent.record_schema import RECORD_LOCATION_KEY, RECORD_WORK_TYPE_KEY, RECORD_WORK_MODE_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY, RECORD_WORK_MODE_NEEDS_REVIEW_KEY, RECORD_CARD_SALARY_KEY, RECORD_TEASER_KEY
 from job_hunter_agent.utils import set_query_param
@@ -241,7 +242,7 @@ def stable_job_key(full_url: Optional[str]) -> Optional[str]:
     if not full_url:
         return None
     # Standardize to 'seek:id' via centralized normalization
-    return normalize_job_key(full_url, source="seek")
+    return normalize_job_key(full_url, source=SOURCE_SEEK)
 
 
 def build_full_seek_url(relative_or_full_url: Optional[str]) -> Optional[str]:

@@ -45,10 +45,10 @@ from job_hunter_agent.parsing_schema import (
     PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SUPPLEMENTARY_KEY,
 )
 from job_hunter_agent.paths import (
-    DATA_DIR, 
-    PROFILE_PATH,
+    DATA_DIR,
     REPO_ROOT,
     SCORING_RULES_PATH,
+    get_profile_path,
 )
 
 
@@ -264,18 +264,20 @@ def normalize_title_pattern_lists(
 
 
 def ensure_profile_exists() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if PROFILE_PATH.exists():
+    profile_path = get_profile_path()
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    if profile_path.exists():
         return
     save_profile(DEFAULT_PROFILE)
 
 
 def _backup_invalid_profile() -> None:
-    if not PROFILE_PATH.exists():
+    profile_path = get_profile_path()
+    if not profile_path.exists():
         return
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    backup_path = PROFILE_PATH.with_name(f"profile.invalid.{timestamp}.json")
-    shutil.copy2(PROFILE_PATH, backup_path)
+    backup_path = profile_path.with_name(f"profile.invalid.{timestamp}.json")
+    shutil.copy2(profile_path, backup_path)
 
 
 def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
@@ -456,8 +458,9 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
 
 def load_profile() -> dict[str, Any]:
     ensure_profile_exists()
+    profile_path = get_profile_path()
     try:
-        data = json.loads(PROFILE_PATH.read_text(encoding="utf-8-sig"))
+        data = json.loads(profile_path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         _backup_invalid_profile()
         raise ProfileLoadError(f"Failed to parse profile.json: {exc}") from exc
@@ -471,7 +474,9 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_full_profile(profile)
     persisted = dict(normalized)
     persisted.pop("scoring_rules", None)
-    PROFILE_PATH.write_text(
+    profile_path = get_profile_path()
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    profile_path.write_text(
         json.dumps(persisted, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )

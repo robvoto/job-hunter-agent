@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body
 
 from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.advance_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -28,8 +29,6 @@ REQUEST_SEARCH_KEYWORD_KEY = "search_keyword"
 REQUEST_SEARCH_LOCATIONS_KEY = "search_locations"
 PROFILE_SEARCH_SETTINGS_KEY = "search_settings"
 PROFILE_SALARY_PREFS_KEY = "salary_preferences"
-#hardcoded
-ALLOWED_IMPORT_SUFFIXES = frozenset({".docx", ".md", ".txt"})
 
 
 @router.post("/api/onboarding/import")
@@ -49,8 +48,8 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
             if not filename:
                 raise ValueError("Each uploaded file needs a filename.")
             suffix = Path(filename).suffix.lower()
-            if suffix not in ALLOWED_IMPORT_SUFFIXES:
-                raise ValueError("Please upload CV files as .docx, .md, or .txt.")
+            if suffix not in get_allowed_source_document_suffixes():
+                raise ValueError(f"Please upload CV files as {get_allowed_source_document_suffixes_label()}.")
         materials = srv.persist_uploaded_source_pack(files) if files else srv.load_source_materials(create_if_missing=True)
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
         result = srv.run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)

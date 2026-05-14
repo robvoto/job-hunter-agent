@@ -74,6 +74,10 @@ function normalizeReviewTitleLists(primaryValues, secondaryValues) {
   return { primary, secondary };
 }
 
+function preventFileNavigation(event) {
+  event.preventDefault();
+}
+
 function moveReviewTitle(sourceList, sourceIndex, targetList) {
   const source = sourceList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
   const target = targetList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
@@ -768,6 +772,8 @@ updateCompensationVisibility();
 
 if (primaryCvDropZone && primaryCvInput) {
   resetPrimaryCvDropZoneAppearance();
+  document.addEventListener('dragover', preventFileNavigation, true);
+  document.addEventListener('drop', preventFileNavigation, true);
   primaryCvDropZone.addEventListener('click', () => primaryCvInput.click());
   primaryCvDropZone.addEventListener('dragenter', (event) => {
     event.preventDefault();
@@ -777,6 +783,7 @@ if (primaryCvDropZone && primaryCvInput) {
   });
   primaryCvDropZone.addEventListener('dragover', (event) => {
     event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
     primaryCvDropZone.classList.add('is-dragover');
     primaryCvDropZone.style.borderColor = 'var(--accent)';
     primaryCvDropZone.style.boxShadow = '0 0 12px color-mix(in srgb, var(--accent) 20%, transparent)';
@@ -799,8 +806,6 @@ if (primaryCvDropZone && primaryCvInput) {
       updateCreateProfileAvailability();
       return;
     }
-    preservedPrimaryCvFile = selectedFile;
-    updatePrimaryCvStatus(selectedFile);
-    updateCreateProfileAvailability();
+    window.JobHunterOnboardingSelectCv?.(selectedFile);
   });
 }

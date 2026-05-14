@@ -6,16 +6,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.paths import (
-    AUDIT_RECORDS_PATH as DEBUG_JSON_PATH,
     DEBUG_SOURCE_PAYLOADS_DIR,
-    JOB_HISTORY_PATH,
     LLM_CACHE_PATH,
     PARSING_RULES_PATH,
-    REVIEW_DATA_PATH,
-    RUN_STATS_PATH,
     SIGNAL_DEFAULTS_PATH,
     UI_LABELS_PATH,
     WORK_MODE_RULES_PATH,
+    get_audit_records_path,
+    get_job_history_path,
+    get_review_data_path,
+    get_run_stats_path,
 )
 from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS, DEBUG_MODE
 
@@ -120,15 +120,15 @@ def load_signal_defaults() -> Dict[str, Any]:
 
 
 def load_job_history() -> Dict[str, dict]:
-    return load_json_dict(JOB_HISTORY_PATH)
+    return load_json_dict(get_job_history_path())
 
 
 def save_job_history(history: Dict[str, dict]) -> None:
-    save_json(JOB_HISTORY_PATH, history)
+    save_json(get_job_history_path(), history)
 
 
 def write_debug_json(records: List[dict]) -> None:
-    save_json(DEBUG_JSON_PATH, records)
+    save_json(get_audit_records_path(), records)
 
 
 def write_source_payload_debug(
@@ -146,14 +146,14 @@ def write_source_payload_debug(
 
 
 def write_run_stats(payload: dict) -> None:
-    save_json(RUN_STATS_PATH, payload)
+    save_json(get_run_stats_path(), payload)
 
 
 def write_run_attempt(run_started_at: datetime) -> None:
-    run_stats = load_json_dict(RUN_STATS_PATH)
+    run_stats = load_json_dict(get_run_stats_path())
     run_stats["last_run_attempt_at"] = run_started_at.isoformat(timespec="seconds")
-    save_json(RUN_STATS_PATH, run_stats)
+    save_json(get_run_stats_path(), run_stats)
 
 
 def write_review_data(payload: dict) -> None:
-    save_json(REVIEW_DATA_PATH, payload)
+    save_json(get_review_data_path(), payload)

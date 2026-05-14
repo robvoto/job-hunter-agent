@@ -85,7 +85,37 @@ def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
     assert saved["llm_settings"]["llm_prompt_settings"]["learning_candidates_max_items"] == 6
     assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_items"] == 6
     assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_words"] == 6
+    assert saved["source_document_settings"]["allowed_suffixes"] == [
+        ".docx",
+        ".md",
+        ".txt",
+        ".csv",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".xml",
+        ".html",
+        ".htm",
+        ".rst",
+    ]
     assert settings_path.exists()
+
+
+def test_save_advance_settings_normalizes_source_document_suffixes(tmp_path, monkeypatch):
+    settings_path = tmp_path / "advance_settings.json"
+    monkeypatch.setattr(advance_settings, "ADVANCE_SETTINGS_PATH", settings_path)
+    monkeypatch.setattr(advance_settings, "DATA_DIR", tmp_path)
+    advance_settings.load_advance_settings.cache_clear()
+
+    saved = advance_settings.save_advance_settings({
+        "source_document_settings": {
+            "allowed_suffixes": [".CSV", ".txt", ".csv", ".md"],
+        },
+    })
+
+    assert saved["source_document_settings"]["allowed_suffixes"] == [".csv", ".txt", ".md"]
+    assert advance_settings.get_allowed_source_document_suffixes() == frozenset({".csv", ".txt", ".md"})
+    assert advance_settings.get_allowed_source_document_suffixes_label() == ".csv, .md, .txt"
 
 
 def test_load_advance_settings_backs_up_invalid_json(tmp_path, monkeypatch):

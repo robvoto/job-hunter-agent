@@ -502,6 +502,7 @@
       const preferenceWeights = loadedAdvanceSettings.preference_weights || {};
       const historySettings = loadedAdvanceSettings.history_settings || {};
       const descriptionTrustSettings = loadedAdvanceSettings.description_trust_settings || {};
+      const sourceDocumentSettings = loadedAdvanceSettings.source_document_settings || {};
       const onboarding = loadedAdvanceSettings.onboarding_settings || {};
       const llmSettings = loadedAdvanceSettings.llm_settings || {};
       const setBounds = (id, bounds) => {
@@ -565,6 +566,8 @@
       document.getElementById('history_archive_stale_after_days').value = String(historySettings.archive_stale_after_days ?? '');
       document.getElementById('history_hidden_review_days').value = String(historySettings.hidden_review_days ?? '');
       document.getElementById('description_trust_min_trusted_description_length').value = String(descriptionTrustSettings.min_trusted_description_length ?? '');
+      document.getElementById('source_document_allowed_suffixes').value = (sourceDocumentSettings.allowed_suffixes || []).join('\n');
+      document.getElementById('source_document_allowed_suffixes').setAttribute('readonly', 'readonly');
 
       // Keep the shared search guardrails editable from the same global settings source.
       document.getElementById('search_limit_date_range_days_min').value = String(searchLimits.date_range_days?.min ?? '');
@@ -610,6 +613,7 @@
       const currentLimits = current.search_limits || {};
       const currentHistory = current.history_settings || {};
       const currentDescriptionTrust = current.description_trust_settings || {};
+      const currentSourceDocuments = current.source_document_settings || {};
       const currentOnboarding = current.onboarding_settings || {};
       const readNumber = (id, fallback) => {
         const raw = Number(document.getElementById(id).value);
@@ -681,6 +685,11 @@
         },
         description_trust_settings: {
           min_trusted_description_length: readNumber('description_trust_min_trusted_description_length', currentDescriptionTrust.min_trusted_description_length),
+        },
+        source_document_settings: {
+          allowed_suffixes: Array.isArray(currentSourceDocuments.allowed_suffixes)
+            ? [...currentSourceDocuments.allowed_suffixes]
+            : toLines(document.getElementById('source_document_allowed_suffixes').value),
         },
         onboarding_settings: {
           ...currentOnboarding,

@@ -85,6 +85,10 @@ body {
   line-height: 1.6;
 }
 
+#hero_title.is-review-draft {
+  color: red;
+}
+
 .grid {
   display: grid;
   gap: 18px;
@@ -127,8 +131,8 @@ body {
 .section-copy {
   margin: 0 0 16px;
   color: var(--muted);
-  font-size: 0.96rem;
-  line-height: 1.55;
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
 }
 
 .drop-zone.has-file {
@@ -151,6 +155,8 @@ body {
 
 .drop-zone-content-shell .drop-zone-hint {
   color: var(--muted);
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
 }
 
 .support-note {
@@ -211,7 +217,8 @@ body {
 .workflow-card p {
   margin: 0;
   color: var(--muted);
-  line-height: 1.5;
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
 }
 
 .workflow-steps {
@@ -292,7 +299,8 @@ body {
   margin: 0;
   padding-left: 18px;
   color: var(--muted);
-  line-height: 1.55;
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
 }
 
 .guidance-note {

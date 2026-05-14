@@ -1,0 +1,9 @@
+{
+  "kind": "system_config",
+  "name": "duplicate_rules",
+  "version": 1,
+  "source_priority": {
+    "seek": 0,
+    "linkedin": 1
+  }
+}

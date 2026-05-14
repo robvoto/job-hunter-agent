@@ -5,12 +5,25 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from job_hunter_agent.auth import (
-    AuthConfig,
+    GoogleOAuthConfig,
     _get_session_cookie_params,
     issue_csrf_token,
     set_session_cookie,
     verify_csrf_token,
 )
+
+_TEST_USER = {"user_id": "abc123", "email": "test@example.com", "role": "candidate"}
+
+
+def _make_config(secret: str = "secret") -> GoogleOAuthConfig:
+    return GoogleOAuthConfig(
+        client_id="cid",
+        client_secret="csecret",
+        admin_email="admin@example.com",
+        base_url="http://localhost:8765",
+        session_secret=secret,
+        missing_fields=(),
+    )
 
 
 def _build_request(app: FastAPI, cookie_header: str | None = None, scheme: str = "http") -> Request:
@@ -40,16 +53,12 @@ def _build_request(app: FastAPI, cookie_header: str | None = None, scheme: str =
 
 def test_issue_csrf_token_derives_from_session_cookie():
     app = FastAPI()
-    app.state.auth_config = AuthConfig(
-        username="alice",
-        password_hash="hash",
-        session_secret="secret",
-        missing_fields=(),
-    )
+    config = _make_config()
+    app.state.auth_config = config
 
     request = _build_request(app, scheme="http")
     response = Response()
-    set_session_cookie(response, request, app.state.auth_config, "alice")
+    set_session_cookie(response, request, config, _TEST_USER)
 
     cookie = SimpleCookie()
     cookie.load(response.headers["set-cookie"])
@@ -66,21 +75,17 @@ def test_issue_csrf_token_derives_from_session_cookie():
 
 def test_session_cookie_secure_flag_tracks_request_scheme():
     app = FastAPI()
-    app.state.auth_config = AuthConfig(
-        username="alice",
-        password_hash="hash",
-        session_secret="secret",
-        missing_fields=(),
-    )
+    config = _make_config()
+    app.state.auth_config = config
 
     http_request = _build_request(app, scheme="http")
     http_response = Response()
-    set_session_cookie(http_response, http_request, app.state.auth_config, "alice")
+    set_session_cookie(http_response, http_request, config, _TEST_USER)
     http_cookie = http_response.headers["set-cookie"]
 
     https_request = _build_request(app, scheme="https")
     https_response = Response()
-    set_session_cookie(https_response, https_request, app.state.auth_config, "alice")
+    set_session_cookie(https_response, https_request, config, _TEST_USER)
     https_cookie = https_response.headers["set-cookie"]
 
     assert "Secure" not in http_cookie

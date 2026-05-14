@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 from job_hunter_agent import dashboard_data
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
+from job_hunter_agent.company_rules import normalize_company_name
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
@@ -198,7 +199,7 @@ def viewed_by_user(record: dict) -> bool:
 
 def history_cluster_key_from_parts(source: Optional[str], company: Optional[str], title: Optional[str]) -> str:
     source_key = compact_whitespace(source or "").lower()
-    company_key = re.sub(r"[^a-z0-9]+", " ", compact_whitespace(company or "").lower()).strip()
+    company_key = re.sub(r"[^a-z0-9]+", " ", normalize_company_name(company or "")).strip()
     title_key = re.sub(r"[^a-z0-9]+", " ", compact_whitespace(title or "").lower()).strip()
     if not source_key or not company_key or not title_key:
         return ""

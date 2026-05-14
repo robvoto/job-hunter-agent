@@ -20,6 +20,15 @@ def test_build_llm_profile_brief_handles_non_list_input():
     assert source_documents.build_llm_profile_brief(capability_rules=None) == ""
 
 
+def test_read_source_document_supports_plain_text_formats(tmp_path):
+    csv_path = tmp_path / "cv.csv"
+    csv_path.write_text("header,value\nskills,delivery\n", encoding="utf-8")
+
+    text = source_documents.read_source_document(str(csv_path))
+
+    assert "skills,delivery" in text
+
+
 def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_path):
     captured: dict[str, object] = {}
 

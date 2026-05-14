@@ -37,6 +37,8 @@
   --state-neutral-bg: #f8fafc;
   --state-neutral-border: #cbd5e1;
   --state-neutral-text: #475569;
+  --help-copy-font-size: 0.8rem;
+  --help-copy-line-height: 1.32;
   --tone-strong:   var(--state-success-text);
   --tone-good:     var(--state-info-text);
   --tone-possible: var(--state-warning-text);

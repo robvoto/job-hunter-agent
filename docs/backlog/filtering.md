@@ -136,19 +136,7 @@
   - Needs clear rule:
     - when to show
     - when to hide
-
----
-
-### Capability system design
-
-- [ ] Define and implement “Background capabilities”
-
-  Context:
-  - Concept unclear:
-    - what are they?
-    - how they affect scoring?
-
----
+ 
 
 ### Salary logic (critical)
 
@@ -162,20 +150,7 @@
   - Must investigate before implementing
 
 ---
-
-- [ ] Adapt salary filters dynamically
-
-  Context:
-  - Use:
-    - minimum annual salary
-    - minimum daily rate
-  - Choose based on job type
-  - If salary is missing:
-    - DO NOT filter job out
-
----
-
-### Contract filtering
+ing
 
 - [ ] Add contract duration filter
 
@@ -186,6 +161,8 @@
     - if duration unclear → still show job
 
 ---
+
+### Contract filter
 
 ### Certifications handling
 
@@ -212,20 +189,6 @@
 
 ---
 
-### Job quality detection
-
-- [ ] Detect ghost / dodgy / reposted jobs
-
-  Context:
-  - Jobs:
-    - reposted
-    - older than 1 month
-    - CV farming
-  - LinkedIn is especially unreliable
-  - Real post date often only in description
-  - Critical for product quality
-
----
 
 ### Job parsing edge cases
 

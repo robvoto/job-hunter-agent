@@ -8,8 +8,17 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from job_hunter_agent.cv_pipeline import run_cv_pipeline
+from job_hunter_agent.advance_settings import get_allowed_source_document_suffixes
 from job_hunter_agent.llm_gate import client as llm_client
-from job_hunter_agent.paths import DATA_DIR, OUTPUT_DIR, REPO_ROOT
+from job_hunter_agent.paths import (
+    DATA_DIR,
+    OUTPUT_DIR,
+    REPO_ROOT,
+    get_review_data_path,
+    get_run_stats_path,
+    get_source_materials_path,
+    get_source_pack_dir,
+)
 from job_hunter_agent.profile_learning import (
     build_learning_patch,
     build_role_title_review_signals,
@@ -32,29 +41,19 @@ from job_hunter_agent.signal_registry import register_signals
 
 
 ROOT_DIR = REPO_ROOT
-REVIEW_DATA_PATH = OUTPUT_DIR / "review_data.json"
-RUN_STATS_PATH = OUTPUT_DIR / "run_stats.json"
-APPLICATION_INPUTS_DIR = DATA_DIR / "application_inputs"
-SOURCE_PACK_DIR = APPLICATION_INPUTS_DIR / "source_pack"
-SOURCE_MATERIALS_PATH = DATA_DIR / "application_materials.json"
 SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json"
 
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
     "primary_job_title_pattern",
-    "secondary_title_patterns", 
+    "secondary_title_patterns",
     KEY_CAPABILITY_PROFILE_RULES,
     "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
     "dominant_signal_clusters",
-    "must_not_require_skills", 
-)
-
-ONBOARDING_RESET_OUTPUTS = (
-    (REVIEW_DATA_PATH, "review_data.json"),
-    (RUN_STATS_PATH, "run_stats.json"),
+    "must_not_require_skills",
 )
 
 DEFAULT_SOURCE_MATERIALS = {
@@ -117,9 +116,10 @@ def normalize_source_materials(payload: Any) -> dict[str, Any]:
 
 
 def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
-    if SOURCE_MATERIALS_PATH.exists():
+    source_materials_path = get_source_materials_path()
+    if source_materials_path.exists():
         try:
-            payload = json.loads(SOURCE_MATERIALS_PATH.read_text(encoding="utf-8"))
+            payload = json.loads(source_materials_path.read_text(encoding="utf-8"))
             return normalize_source_materials(payload)
         except Exception:
             return dict(DEFAULT_SOURCE_MATERIALS)
@@ -137,8 +137,9 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
 
 def save_source_materials(payload: Any) -> dict[str, Any]:
     normalized = normalize_source_materials(payload)
-    SOURCE_MATERIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SOURCE_MATERIALS_PATH.write_text(
+    source_materials_path = get_source_materials_path()
+    source_materials_path.parent.mkdir(parents=True, exist_ok=True)
+    source_materials_path.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -172,7 +173,7 @@ def read_source_document(path_value: str) -> str:
     suffix = path.suffix.lower()
     if suffix == ".docx":
         return repair_text(_read_docx_text(path))
-    if suffix in {".txt", ".md"}:
+    if suffix in get_allowed_source_document_suffixes():
         return repair_text(path.read_text(encoding="utf-8", errors="ignore"))
     raise ValueError(f"Unsupported source document type: {path.suffix}")
 
@@ -183,6 +184,7 @@ def _slugify_filename(value: str) -> str:
 
 
 def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:
+    SOURCE_PACK_DIR = get_source_pack_dir()
     SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
     profile_sources: list[dict[str, str]] = []
 
@@ -232,9 +234,13 @@ def build_onboarding_reset_patch(onboarding_settings: dict[str, Any] | None = No
 
 
 def clear_onboarding_runtime_outputs() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    for reset_path, label in ONBOARDING_RESET_OUTPUTS:
+    reset_items = [
+        (get_review_data_path(), "review_data.json"),
+        (get_run_stats_path(), "run_stats.json"),
+    ]
+    for reset_path, label in reset_items:
         try:
+            reset_path.parent.mkdir(parents=True, exist_ok=True)
             reset_path.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
             print(f"[ONBOARDING] {label} reset")
         except Exception as exc:

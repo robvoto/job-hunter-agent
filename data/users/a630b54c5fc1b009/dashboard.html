@@ -1,0 +1,273 @@
+<link rel="stylesheet" href="/static/results-page.css">
+
+  <main class="page">
+    <div class="dashboard-layout">
+      <div class="dashboard-main">
+        <section class="hero">
+          <h1>Potential Jobs Found</h1>
+        </section>
+        <section class="section filter-panel">
+          <div class="scope-tabs" aria-label="Top-level dashboard views">
+            <button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs (0)</button>
+            <button class="scope-tab" type="button" data-workspace-target="applied">Applied (0)</button>
+            <button class="scope-tab" type="button" data-workspace-target="hidden">Hidden (0)</button>
+          </div>
+        </section>
+        <div class="workspace-panel" data-workspace-panel="potential">
+          <section class="section filter-panel">
+            <div class="section-head">
+              <h2>Match Controls</h2>
+              <button class="mini-button" type="button" id="reset_dashboard_filters">Reset All Filters</button>
+            </div>
+            <div class="filter-grid">
+              <label class="filter-field">
+                <span>Sort</span>
+                <select id="sort_select">
+                  <option value="fit">Best match first</option>
+                  <option value="newest">Newest posted first</option>
+                  <option value="salary">Highest salary first</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Jobs Per page</span>
+                <select id="page_size_select">
+                  <option value="12">12</option>
+                  <option value="24">24</option>
+                  <option value="48">48</option>
+                  <option value="96">96</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Show</span>
+                <select id="scope_filter">
+                  <option value="all" selected>All potential jobs</option>
+                  <option value="current">Matches this run</option>
+                  <option value="saved">Saved From Earlier Searches</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Posted</span>
+                <select id="posted_filter">
+                  <option value="all">Any posted date (0)</option><option selected value="1">Posted today (0)</option><option  value="3">Last 3 days (0)</option><option  value="7">Last 7 days (0)</option><option  value="14">Last 14 days (0)</option><option  value="30">Last 30 days (0)</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Work mode</span>
+                <select id="work_mode_filter">
+                  <option value="all">Any</option>
+                  <option value="remote">Remote</option>
+                  <option value="hybrid">Hybrid</option>
+                  <option value="on-site">On-site</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Match level</span>
+                <select id="score_filter">
+                  <option value="all">All match levels</option><option value="85">Strong match only</option><option value="70">Good match or better</option><option value="55" selected>Possible fit or better</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Salary</span>
+                <select id="salary_filter">
+                  <option value="all">Any</option>
+                  <option value="listed">Any salary shown</option>
+                  <option value="meets">Meets my target</option>
+                  <option value="below">Below my target</option>
+                  <option value="missing">No salary shown</option>
+                </select>
+              </label>
+            </div>
+          </section>
+          <div class="results-helper" id="results_helper" hidden>
+            <p class="results-helper-copy">Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar titles directly from the title. This helps remove repeated noise from future results.</p>
+            <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">Dismiss</button>
+          </div>
+          <section class="section"><h2>Best Matches</h2><p class="empty-state">No shortlist matches are available right now.</p></section>
+        </div>
+        <div class="workspace-panel" data-workspace-panel="applied" hidden>
+          <section class="section filter-panel">
+            <div class="section-head">
+              <h2>Applied Jobs</h2>
+            </div>
+            <p class="section-copy">This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.</p>
+          </section>
+          <section class="section"><h2>Applied Jobs</h2><p class="empty-state">No applied jobs saved yet.</p></section>
+        </div>
+        <div class="workspace-panel" data-workspace-panel="hidden" hidden>
+          <section class="section filter-panel">
+            <div class="section-head">
+              <h2>Hidden Jobs</h2>
+            </div>
+            <p class="section-copy">This area keeps roles you have intentionally pushed out of sight for now.</p>
+          </section>
+          <section class="section"><h2>Hidden Jobs</h2><p class="empty-state">No hidden jobs right now.</p></section>
+        </div>
+      </div>
+      <aside class="dashboard-sidebar">
+        <section class="snapshot-rail">
+          <section class="snapshot-section">
+            <div class="search-settings-group" style="margin-bottom: 16px;">
+              <h3 class="snapshot-subheading">Common Settings</h3>
+              <div class="snapshot-meta">
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value" id="search_keywords_current">senior business analyst, senior business analyst and scrum master, scrum master business analyst, business analyst</span></div>
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value" id="search_locations_current">Not set</span></div>
+              </div>
+            </div>
+
+            <div class="search-settings-group" style="margin-bottom: 16px;">
+              <h3 class="snapshot-subheading">SEEK Settings</h3>
+              <div class="snapshot-meta">
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date window</span><span class="snapshot-meta-value" id="search_date_range_current">3 days</span></div>
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">SEEK pages</span><span class="snapshot-meta-value" id="search_seek_pages_current">10</span></div>
+              </div>
+            </div>
+
+            <div class="search-settings-group" style="margin-bottom: 16px;">
+              <h3 class="snapshot-subheading">LinkedIn Settings</h3>
+              <div class="snapshot-meta">
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Max age</span><span class="snapshot-meta-value" id="search_li_hours_current">24 hours</span></div>
+                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Results cap</span><span class="snapshot-meta-value" id="search_li_results_current">50</span></div>
+              </div>
+            </div>
+
+            <div class="search-settings-actions" style="margin-top: 14px;">
+              <button class="btn btn-secondary" type="button" id="search_settings_toggle">Edit Configuration</button>
+            </div>
+
+            <div class="search-settings-edit" id="search_settings_edit" hidden>
+              <div class="search-settings-group" style="margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px;">
+                <h3 class="snapshot-subheading">Common</h3>
+                <label class="search-settings-field">
+                  <span>Keywords</span>
+                  <input type="text" id="search_keywords_input" value="senior business analyst, senior business analyst and scrum master, scrum master business analyst, business analyst" placeholder="Optional keywords">
+                </label>
+                <label class="search-settings-field">
+                  <span>Locations</span>
+                  <textarea id="search_locations_input" placeholder="One location per line"></textarea>
+                </label>
+              </div>
+
+              <div class="search-settings-group">
+                <h3 class="snapshot-subheading">SEEK</h3>
+                <div class="search-settings-grid">
+                  <label class="search-settings-field">
+                    <span>Date window</span>
+                    <input type="number" id="search_date_range_input" min="1" max="30" value="3">
+                  </label>
+                  <label class="search-settings-field">
+                    <span>Pages cap</span>
+                    <input type="number" id="search_seek_pages_input" min="1" max="10" value="10">
+                  </label>
+                </div>
+              </div>
+
+              <div class="search-settings-group">
+                <h3 class="snapshot-subheading">LinkedIn</h3>
+                <div class="search-settings-grid">
+                  <label class="search-settings-field">
+                    <span>Hours old</span>
+                    <input type="number" id="search_li_hours_input" min="1" max="168" value="24">
+                  </label>
+                  <label class="search-settings-field">
+                    <span>Results cap</span>
+                    <input type="number" id="search_li_results_input" min="1" max="100" value="50">
+                  </label>
+                </div>
+              </div>
+
+              <p class="snapshot-helper" style="margin: 0;">Changes here are saved only when you click Save Configuration.</p>
+              <div class="search-settings-edit-actions">
+                <button class="btn btn-primary" type="button" id="search_settings_save">Save Configuration</button>
+                <button class="btn btn-secondary" type="button" id="search_settings_cancel">Cancel</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="snapshot-section">
+            <button class="btn btn-primary" style="width: 100%;" type="button" id="run_now_button">Run Search Now</button>
+            <p class="search-operations-meta" id="search_last_run_label" hidden></p>
+            <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
+            <p class="snapshot-helper" style="margin-top: 6px;">Daily automation schedule and notification targets are configured in the <a href="/settings" target="_blank">Settings Console</a>.</p>
+          </section>
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">This Run</h2>
+            <div class="summary-grid">
+              <div class="summary-card"><strong>0</strong><span>Matches</span></div><div class="summary-card"><strong>0</strong><span>New to you</span></div><div class="summary-card"><strong>0</strong><span>Opened by you</span></div><div class="summary-card"><strong>0</strong><span>Saved From Earlier Searches</span></div>
+            </div>
+          </section>
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">Crawler Stats</h2>
+            <div class="summary-grid">
+              <div class="summary-card"><strong>0</strong><span>Cards seen</span></div><div class="summary-card"><strong>0</strong><span>Ads reviewed</span></div><div class="summary-card"><strong>0</strong><span>Pages crawled</span></div><div class="summary-card"><strong>0.0%</strong><span>Keep rate</span></div>
+            </div>
+          </section>
+          <section class="snapshot-section">
+            <h2 class="snapshot-heading">Applications</h2>
+            <div class="summary-grid">
+              <div class="summary-card"><strong>0</strong><span>Applied</span></div><div class="summary-card"><strong>0</strong><span>Hidden</span></div>
+            </div>
+          </section>
+        </section>
+        <details class="side-panel">
+          <summary>
+            <span>Run Efficiency</span>
+            <span class="side-toggle-hint">Show / hide</span>
+          </summary>
+          <div class="side-panel-body">
+            <p class="side-panel-copy">Search targets this run: None. Shortlist currently keeps roles at Possible fit or better and preserves your viewed history.</p>
+            <div class="job-meta">
+              
+            </div>
+          </div>
+        </details>
+        <details class="side-panel">
+          <summary>
+            <span>How Match Levels Work</span>
+            <span class="side-toggle-hint">Show / hide</span>
+          </summary>
+          <div class="side-panel-body">
+            <p class="side-panel-copy">Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the dashboard does not pretend to be more precise than it really is.</p>
+            <div class="job-meta">
+              <span class="chip"><strong>Strong match:</strong> strongest fit signals</span><span class="chip"><strong>Good match:</strong> clear fit with fewer caveats</span><span class="chip"><strong>Possible fit:</strong> plausible fit worth reviewing</span><span class="chip"><strong>Stretch:</strong> lower-confidence or borderline fit</span><span class="chip"><strong>Title match:</strong> direct titles are favored over secondary titles</span><span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span><span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span><span class="chip"><strong>Freshness:</strong> newer roles are favored</span><span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can be dialed up or down</span><span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span><span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>
+            </div>
+          </div>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <div class="rejection-overlay" id="rejection-overlay" hidden></div>
+  <div class="rejection-panel" id="rejection-panel" hidden>
+    <div class="rejection-panel-header">
+      <h3 id="rejection-panel-title">Why isn&#39;t this a fit for you?</h3>
+      <p>Choose required terms you do not want the app to accept again.</p>
+    </div>
+    <details class="rejection-first-use" id="rejection-first-use" hidden>
+      <summary>How this works</summary>
+      <div class="rejection-first-use-body" id="rejection-first-use-body">If you save a term here, future jobs are filtered only when it looks required. To block any mention, use advanced description blockers in Settings.</div>
+    </details>
+    <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
+    <div class="rejection-other">
+      <div class="rejection-other-label">Add your own required term</div>
+      <div class="rejection-other-row">
+        <input type="text" id="rejection-other-input" placeholder="e.g. SAP, payroll, NV1 clearance" maxlength="80" />
+        <button type="button" id="rejection-other-add">Add</button>
+      </div>
+      <div class="rejection-custom-list" id="rejection-custom-list"></div>
+    </div>
+    <div class="rejection-panel-footer">
+      <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
+      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button" hidden>Continue Without Extra Blocks</button>
+      <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
+      <p class="block-admin-tip">View and edit saved rules in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>
+    </div>
+  </div>
+  <script>
+    window.__JOB_HUNTER_DASHBOARD__ = {
+      runId: "2026-05-11T23:04:04+10:00",
+      searchSettings: {"keywords": "senior business analyst, senior business analyst and scrum master, scrum master business analyst, business analyst", "locations": [], "date_range_days": 3, "seek_max_pages": 10, "linkedin_hours_old": 24, "linkedin_results_per_search": 50},
+      defaultScoreFilterValue: "55",
+      viewedBadgeHtml: "<span class=\"badge badge-viewed\" title=\"You have already opened this role from the dashboard.\" aria-label=\"You have already opened this role from the dashboard.\">Viewed</span>"
+    };
+  </script>
+    <script src="/static/results-page.js" defer></script>

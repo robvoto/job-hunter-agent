@@ -31,6 +31,8 @@ from job_hunter_agent.record_schema import (
     RECORD_SEARCH_KEYWORDS_KEY,
     RECORD_SEARCH_CLASSIFICATIONS_KEY,
     RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOFT_RISK_REASONS_KEY,
     RECORD_SOURCE_KEY,
@@ -102,6 +104,8 @@ def blank_source_metadata(source: str) -> dict:
         "poster_company": "",
         "hiring_company": "",
         "ats_source": "",
+        RECORD_SOURCE_ATS_REQUISITION_ID_KEY: "",
+        RECORD_SOURCE_PLATFORM_JOB_ID_KEY: "",
         "raw_source_fields": {},
     }
 
@@ -290,6 +294,7 @@ def normalize_jobspy_record(
             "poster_company": company_profile_name,
             "hiring_company": company_profile_name,
             "ats_source": _url_domain(apply_url),
+            RECORD_SOURCE_PLATFORM_JOB_ID_KEY: raw_id,
             "raw_source_fields": _json_safe_value(_safe_row_dict(row)),
         }
     )

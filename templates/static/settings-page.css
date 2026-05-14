@@ -183,7 +183,8 @@
     .help {
       margin-top: 6px;
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: var(--help-copy-font-size);
+      line-height: var(--help-copy-line-height);
     }
     .actions {
       display: flex;
@@ -278,7 +279,7 @@
     .inline-status.loading { color: var(--muted); }
     .inline-status.ok { color: var(--state-success-text); }
     .inline-status.error { color: var(--state-error-text); }
-    .panel-copy { margin: 4px 0 0; color: var(--muted); font-size: 0.95rem; line-height: 1.45; }
+    .panel-copy { margin: 4px 0 0; color: var(--muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
     .help-box {
       margin-top: 10px;
       padding: 16px;
@@ -333,7 +334,7 @@
     }
     .profile-group:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
     .profile-group h3 { margin: 0; font-size: 1rem; }
-    .profile-group-copy { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+    .profile-group-copy { margin: 4px 0 0; color: var(--muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
     .profile-fields-grid, .field-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -343,8 +344,8 @@
     .field-block { min-width: 0; }
     .field-block.field-span-2 { grid-column: 1 / -1; }
     .field-block label:first-child { margin-top: 14px; }
-    .field-help { margin-top: 6px; color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
-    .field-help code { font-size: 0.82rem; }
+    .field-help { margin-top: 6px; color: var(--muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
+    .field-help code { font-size: calc(var(--help-copy-font-size) * 0.95); }
     .help-drawer {
       margin-top: 12px;
       border: 1px solid var(--border-subtle);
@@ -360,7 +361,7 @@
       color: var(--accent-2);
     }
     .help-drawer summary::-webkit-details-marker { display: none; }
-    .help-drawer p { margin: 0; padding: 0 14px 14px; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .help-drawer p { margin: 0; padding: 0 14px 14px; color: var(--muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
     .side-panel { padding: 18px; }
     textarea.is-readonly { background: var(--bg-muted); color: var(--text-muted); }
     #llm_profile_brief { min-height: 170px; }

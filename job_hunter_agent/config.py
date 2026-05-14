@@ -19,9 +19,10 @@ DEBUG_MODE = _resolve_debug_mode()
 LOGIN_PATH = "/login"
 LOGOUT_PATH = "/logout"
 HEALTH_CHECK_PATH = "/api/health"
+GOOGLE_AUTH_PATH = "/login/google"
+GOOGLE_AUTH_CALLBACK_PATH = "/api/auth/google/callback"
 
 # Security and encoding constants
-AUTH_ALGO_PBKDF2 = "pbkdf2_sha256"
 AUTH_ALGO_SHA256 = "sha256"
 AUTH_ENCODING = "utf-8"
 DEFAULT_ERRORS = "replace"

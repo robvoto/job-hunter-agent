@@ -1,6 +1,17 @@
 import pytest
-from job_hunter_agent.job_identity import normalize_job_key, _normalized_job_key
-from job_hunter_agent.record_schema import RECORD_JOB_KEY, RECORD_SOURCE_KEY, RECORD_URL_KEY
+from job_hunter_agent.job_identity import (
+    are_jobs_confirmed_duplicates,
+    deduplicate_across_sources,
+    find_confirmed_duplicate,
+    normalize_job_key,
+    _normalized_job_key,
+)
+from job_hunter_agent.record_schema import (
+    RECORD_DUPLICATE_LINKS_KEY,
+    RECORD_JOB_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_URL_KEY,
+)
 
 def test_normalize_job_key_canonical():
     """Verify that already canonical keys are returned as-is."""
@@ -69,3 +80,13 @@ def test_record_helper_normalization():
     record_no_key = {RECORD_URL_KEY: "https://linkedin.com/jobs/view/999"}
     # This currently requires RECORD_JOB_KEY or source metadata; verification of fallback logic
     assert _normalized_job_key(record_no_key) == ""
+
+
+def test_confirmed_duplicate_metadata_is_linked():
+    first = {"job_key": "seek:99", "company": "Acme", "title": "Senior Business Analyst", "source": "linkedin"}
+    second = {"job_key": "seek:99", "company": "Acme", "title": "Business Analyst Senior", "source": "seek"}
+    assert are_jobs_confirmed_duplicates(first, second)
+    assert find_confirmed_duplicate(first, [second]) == second
+    deduped = deduplicate_across_sources([first, second])
+    assert len(deduped) == 1
+    assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"

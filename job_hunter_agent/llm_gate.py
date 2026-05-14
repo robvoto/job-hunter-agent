@@ -85,7 +85,7 @@ from job_hunter_agent.paths import (
     FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
     LLM_CAPABILITY_NAMING_DEFAULTS_PATH as _CAPABILITY_NAMING_DEFAULTS_PATH,
     LLM_COSTS_PATH as _LLM_COSTS_PATH,
-    PROFILE_PATH as _PROFILE_PATH,
+    get_profile_path as _get_profile_path,
 )
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_NO_LLM,
@@ -168,7 +168,7 @@ def _profile_fingerprint() -> str:
     if _profile_fingerprint_cache is not None:
         return _profile_fingerprint_cache
     try:
-        st = _PROFILE_PATH.stat()
+        st = _get_profile_path().stat()
         raw = f"{st.st_mtime_ns}:{st.st_size}"
     except OSError:
         raw = "no-profile"
