@@ -12,44 +12,44 @@ from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
 import job_hunter_agent.record_schema
-from job_hunter_agent.advance_settings import (
-    get_archive_stale_after_days as get_advance_archive_stale_after_days,
-    get_hidden_review_days as get_advance_hidden_review_days,
-    get_max_history_sightings as get_advance_max_history_sightings,
-    get_multi_listing_red_flag_min_listings as get_advance_multi_listing_red_flag_min_listings,
-    get_multi_listing_red_flag_min_span_days as get_advance_multi_listing_red_flag_min_span_days,
-    get_repeated_listing_min_span_days as get_advance_repeated_listing_min_span_days,
-    get_repeated_listing_min_times_seen as get_advance_repeated_listing_min_times_seen,
+from job_hunter_agent.global_settings import (
+    get_archive_stale_after_days as get_global_archive_stale_after_days,
+    get_hidden_review_days as get_global_hidden_review_days,
+    get_max_history_sightings as get_global_max_history_sightings,
+    get_multi_listing_red_flag_min_listings as get_global_multi_listing_red_flag_min_listings,
+    get_multi_listing_red_flag_min_span_days as get_global_multi_listing_red_flag_min_span_days,
+    get_repeated_listing_min_span_days as get_global_repeated_listing_min_span_days,
+    get_repeated_listing_min_times_seen as get_global_repeated_listing_min_times_seen,
 )
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = CLI_FLAG_RESET_NEW_TO_YOU in set(sys.argv[1:])
 
 
 def get_archive_stale_after_days() -> int:
-    return get_advance_archive_stale_after_days()
+    return get_global_archive_stale_after_days()
 
 
 def get_hidden_review_days() -> int:
-    return get_advance_hidden_review_days()
+    return get_global_hidden_review_days()
 
 
 def get_max_history_sightings() -> int:
-    return get_advance_max_history_sightings()
+    return get_global_max_history_sightings()
 
 
 def get_repeated_listing_min_times_seen() -> int:
-    return get_advance_repeated_listing_min_times_seen()
+    return get_global_repeated_listing_min_times_seen()
 
 
 def get_repeated_listing_min_span_days() -> int:
-    return get_advance_repeated_listing_min_span_days()
+    return get_global_repeated_listing_min_span_days()
 
 
 def get_multi_listing_red_flag_min_listings() -> int:
-    return get_advance_multi_listing_red_flag_min_listings()
+    return get_global_multi_listing_red_flag_min_listings()
 
 
 def get_multi_listing_red_flag_min_span_days() -> int:
-    return get_advance_multi_listing_red_flag_min_span_days()
+    return get_global_multi_listing_red_flag_min_span_days()
 
 KEEP_SNAPSHOT_FIELDS = (
     job_hunter_agent.record_schema.RECORD_TITLE_KEY,
@@ -312,3 +312,4 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
 def finalize_record(history: Dict[str, dict], audit_rows: List[dict], record: dict, run_iso: str) -> None:
     update_job_history(history, record, run_iso)
     audit_rows.append(record)
+

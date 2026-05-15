@@ -7,6 +7,8 @@ from job_hunter_agent import server_helpers
 from job_hunter_agent import server_review
 from job_hunter_agent import source_documents
 from job_hunter_agent import profile_store
+from job_hunter_agent import review_history_service
+from job_hunter_agent import workspace_refresh_service
 from job_hunter_agent.routes import onboarding_api
 
 
@@ -86,7 +88,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
             "search_keyword": "business analyst",
             "search_locations": ["Sydney NSW"],
             "engagement_type": "both",
-            "work_mode_preference": "hybrid",
+            "work_mode_preference": ["remote", "hybrid"],
             "prefer_government": "",
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
@@ -97,7 +99,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
     assert response.status_code == 200
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
-    assert captured["patch"]["match_preferences"]["work_mode_preference"] == "hybrid"
+    assert captured["patch"]["match_preferences"]["work_mode_preference"] == ["remote", "hybrid"]
 
 
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
@@ -224,8 +226,6 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
         },
     )
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
-    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
@@ -280,7 +280,7 @@ def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
 def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
     sanitized = server_helpers.SettingsHandler._sanitize_agent_settings_payload(
         {
-            "dashboard": {
+            "workspace": {
                 "minimum_score": 150,
             },
             "schedule": {
@@ -290,7 +290,7 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         }
     )
 
-    assert sanitized["dashboard"] == {
+    assert sanitized["workspace"] == {
         "minimum_score": 100,
     }
     assert sanitized["schedule"] == {
@@ -300,7 +300,7 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
 
     public_payload = server_helpers.SettingsHandler._public_agent_settings_payload(
         {
-            "dashboard": {
+            "workspace": {
                 "minimum_score": 61,
             },
             "schedule": {
@@ -310,7 +310,7 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         }
     )
 
-    assert public_payload["dashboard"] == {
+    assert public_payload["workspace"] == {
         "minimum_score": 61,
     }
     assert public_payload["schedule"] == {
@@ -374,15 +374,15 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     }
     events = []
 
-    monkeypatch.setattr(server_review, "load_profile", lambda: saved_profile)
-    monkeypatch.setattr(server_review, "save_profile", lambda profile: profile)
-    monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: events.append((args, kwargs)))
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": events.append(((f"rebuild:{reason}",), {})))
+    monkeypatch.setattr(review_history_service, "load_profile", lambda: saved_profile)
+    monkeypatch.setattr(review_history_service, "save_profile", lambda profile: profile)
+    monkeypatch.setattr(review_history_service, "persist_review_event", lambda *args, **kwargs: events.append((args, kwargs)))
+    monkeypatch.setattr(review_history_service, "rebuild_workspace_after_rule_change", lambda reason="": events.append(((f"rebuild:{reason}",), {})))
 
-    result = server_review.remove_review_key("unapply", "job-1")
+    result = review_history_service.remove_review_key("unapply", "job-1")
 
     assert result["ok"] is True
-    assert result["reload_dashboard"] is True
+    assert result["reload_workspace"] is True
     assert saved_profile["review_controls"]["applied_job_keys"] == ["job-2"]
     assert saved_profile["review_controls"]["hidden_job_keys"] == ["job-3"]
     assert events[0][0][0] == "unapply"
@@ -393,7 +393,7 @@ def test_patch_affects_matching_rules_includes_capability_matrix():
     assert server_helpers.SettingsHandler._patch_affects_matching_rules({"capability_profile_rules": []}) is True
 
 
-def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp_path):
+def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp_path):
     started = []
     rebuilds = []
 
@@ -408,29 +408,29 @@ def test_rebuild_dashboard_after_rule_change_runs_in_background(monkeypatch, tmp
             if self.target:
                 self.target()
 
-    monkeypatch.setattr(server_review, "get_dashboard_path", lambda: tmp_path / "dashboard.html")
-    monkeypatch.setattr(server_review, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
-    monkeypatch.setattr(server_review, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
-    (tmp_path / "dashboard.html").write_text("ok", encoding="utf-8")
-    monkeypatch.setattr(server_review.threading, "Thread", FakeThread)
-    monkeypatch.setattr(server_review, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(workspace_refresh_service, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
+    monkeypatch.setattr(workspace_refresh_service, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
+    monkeypatch.setattr(workspace_refresh_service, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
+    (tmp_path / "workspace.html").write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(workspace_refresh_service.threading, "Thread", FakeThread)
+    monkeypatch.setattr(workspace_refresh_service, "rebuild_workspace_results", lambda reason="": rebuilds.append(reason))
 
-    server_review.rebuild_dashboard_after_rule_change("profile matching rules saved")
+    workspace_refresh_service.rebuild_workspace_after_rule_change("profile matching rules saved")
 
-    assert started == [{"daemon": True, "name": "job-hunter-dashboard-rebuild"}]
-    assert rebuilds == ["profile matching rules saved; applying saved filters to current dashboard"]
+    assert started == [{"daemon": True, "name": "job-hunter-workspace-rebuild"}]
+    assert rebuilds == ["profile matching rules saved; applying saved filters to current results"]
 
 
-def test_rebuild_dashboard_on_startup_runs_when_data_exists(monkeypatch, tmp_path):
+def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_path):
     rebuilds = []
 
-    monkeypatch.setattr(server_helpers, "get_dashboard_path", lambda: tmp_path / "dashboard.html")
+    monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
     monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
     monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
     (tmp_path / "run_stats.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(server_helpers, "rebuild_html_dashboard", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_helpers, "rebuild_workspace_results", lambda reason="": rebuilds.append(reason))
 
-    server_helpers._rebuild_dashboard_on_startup()
+    server_helpers._rebuild_workspace_on_startup()
 
     assert rebuilds == ["server startup rebuild"]
 
@@ -443,7 +443,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     review_data_path = tmp_path / "review_data.json"
     run_stats_path = tmp_path / "run_stats.json"
     audit_records_path = tmp_path / "audit_records.json"
-    dashboard_path = tmp_path / "dashboard.html"
+    workspace_path = tmp_path / "workspace.html"
     source_pack_dir = tmp_path / "source_pack"
 
     monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
@@ -452,12 +452,12 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     monkeypatch.setattr(server_helpers, "get_review_data_path", lambda: review_data_path)
     monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: run_stats_path)
     monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: audit_records_path)
-    monkeypatch.setattr(server_helpers, "get_dashboard_path", lambda: dashboard_path)
+    monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: workspace_path)
     monkeypatch.setattr(server_helpers, "get_source_pack_dir", lambda: source_pack_dir)
 
     source_pack_dir.mkdir(parents=True, exist_ok=True)
     (source_pack_dir / "primary_cv.txt").write_text("cv", encoding="utf-8")
-    dashboard_path.write_text("old dashboard", encoding="utf-8")
+    workspace_path.write_text("old workspace", encoding="utf-8")
 
     result = server_helpers.SettingsHandler._reset_current_user_state()
 
@@ -466,7 +466,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
     assert not source_pack_dir.exists()
-    assert not dashboard_path.exists()
+    assert not workspace_path.exists()
     assert job_history_path.read_text(encoding="utf-8").strip() == "{}"
     assert review_data_path.read_text(encoding="utf-8").strip() == "{}"
     assert run_stats_path.read_text(encoding="utf-8").strip() == "{}"

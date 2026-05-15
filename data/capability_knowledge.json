@@ -1,8 +1,0 @@
-{
-  "kind": "managed_knowledge",
-  "name": "capability_knowledge",
-  "version": 1,
-  "updated_at": "2026-05-01",
-  "description": "Approved global capability concepts used to improve CV parsing. Does not define candidate profiles.",
-  "entries": []
-}

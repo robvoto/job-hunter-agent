@@ -58,9 +58,17 @@ def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
             "signal_cluster_dense_snippet_alias_hits": "5",
             "capability_strength_preset": "recent_focus",
         },
+        "history_settings": {
+            "max_history_sightings": "48",
+            "repeated_listing_min_times_seen": "5",
+            "repeated_listing_min_span_days": "14",
+            "multi_listing_red_flag_min_listings": "4",
+            "multi_listing_red_flag_min_span_days": "45",
+        },
         "llm_settings": {
             "model_options": [
                 "gpt-4o-mini",
+                "gpt-4.1-mini",
                 "gpt-4o",
                 "gpt-4o-mini",
             ],
@@ -79,8 +87,14 @@ def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
     assert saved["onboarding_settings"]["signal_cluster_min_alias_hits"] == 3
     assert saved["onboarding_settings"]["signal_cluster_min_snippet_hits"] == 4
     assert saved["onboarding_settings"]["signal_cluster_dense_snippet_alias_hits"] == 5
+    assert saved["history_settings"]["max_history_sightings"] == 48
+    assert saved["history_settings"]["repeated_listing_min_times_seen"] == 5
+    assert saved["history_settings"]["repeated_listing_min_span_days"] == 14
+    assert saved["history_settings"]["multi_listing_red_flag_min_listings"] == 4
+    assert saved["history_settings"]["multi_listing_red_flag_min_span_days"] == 45
     assert "capability_strength_presets" in saved["onboarding_settings"]
-    assert saved["llm_settings"]["model_options"] == ["gpt-4o-mini", "gpt-4o"]
+    assert saved["llm_settings"]["model_options"] == ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4o"]
+    assert saved["llm_settings"]["max_llm_chars_limits"] == {"min": 1, "max": 20000}
     assert saved["llm_settings"]["pricing_per_1m"]["gpt-4o"]["output"] == 10.0
     assert saved["llm_settings"]["llm_prompt_settings"]["learning_candidates_max_items"] == 6
     assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_items"] == 6

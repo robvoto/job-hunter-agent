@@ -37,8 +37,6 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
-    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
@@ -68,8 +66,6 @@ def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch, tmp_path)
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
-    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
@@ -98,8 +94,6 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
-    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
@@ -124,8 +118,6 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
-    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
@@ -158,8 +150,6 @@ def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch, tmp
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(source_documents, "extract_location_hint", lambda text: "")
-    monkeypatch.setattr(source_documents, "_extract_match_preferences", lambda text: {})
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",

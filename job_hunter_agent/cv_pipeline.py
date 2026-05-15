@@ -32,7 +32,7 @@ from job_hunter_agent.profile_store import (
     KEY_REQUIRED_SKILLS,
     normalize_onboarding_settings,
 )
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
@@ -484,3 +484,4 @@ def run_cv_pipeline(
     if dominant:
         _cap_log(f"[CV_PIPELINE] dominant signal names: {[r['name'] for r in dominant]}")
     return _strip_internal_keys(output)
+

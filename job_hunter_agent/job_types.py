@@ -2,9 +2,9 @@ import json
 import re
 from typing import Dict, List, Optional
 
-from job_hunter_agent.paths import DATA_DIR
+from job_hunter_agent.paths import KNOWLEDGE_DIR
 
-JOB_TYPE_STORE_PATH = DATA_DIR / "job_type.json"
+JOB_TYPE_STORE_PATH = KNOWLEDGE_DIR / "job_type.json"
 
 _cached_mapping: Optional[Dict[str, str]] = None
 _cached_filter_groups: Optional[List[dict]] = None

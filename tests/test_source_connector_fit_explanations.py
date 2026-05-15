@@ -1,10 +1,12 @@
 from datetime import datetime
 import json
 import pytest
+from urllib.parse import parse_qs, urlparse
 
 from job_hunter_agent import fit_scoring
-from job_hunter_agent import capability_matching, dashboard_renderer, signal_detection, source_connector
+from job_hunter_agent import capability_matching, workspace_renderer, signal_detection, source_connector
 from job_hunter_agent import role_analysis
+from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.record_schema import (
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
@@ -114,7 +116,7 @@ def test_infer_posting_channel_returns_fallback_text_evidence():
 
 
 def test_infer_role_sector_only_claims_government_when_explicit():
-    assert source_connector.infer_role_sector(
+    assert role_analysis.infer_role_sector(
         {"company": "Standards Australia Ltd"},
         "Project coordination role supporting internal standards delivery.",
     ) == {
@@ -125,10 +127,11 @@ def test_infer_role_sector_only_claims_government_when_explicit():
 
 
 def test_score_to_match_label_uses_central_match_band_mapping():
-    assert source_connector.score_to_match_label(92) == "Strong match"
-    assert source_connector.score_to_match_label(74) == "Good match"
-    assert source_connector.score_to_match_label(61) == "Possible fit"
-    assert source_connector.score_to_match_label(40) == "Stretch"
+    from job_hunter_agent.match_labels import score_to_match_label
+    assert score_to_match_label(92) == "Strong match"
+    assert score_to_match_label(74) == "Good match"
+    assert score_to_match_label(61) == "Possible fit"
+    assert score_to_match_label(40) == "Stretch"
 
 
 def test_score_labels_and_tones_can_use_profile_match_levels():
@@ -142,26 +145,29 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
         ],
     }
 
-    assert source_connector.score_filter_option_label(90, profile) == "Top tier only"
-    assert source_connector.score_filter_option_label(65, profile) == "Review next or better"
-    assert source_connector.score_to_match_label(67, profile["match_levels"]) == "Review next"
-    assert source_connector.score_to_tone_class(67, profile) == "tone-good"
+    assert workspace_renderer.score_filter_option_label(90, profile) == "Top tier only"
+    assert workspace_renderer.score_filter_option_label(65, profile) == "Review next or better"
+    from job_hunter_agent.match_labels import score_to_match_label
+    assert score_to_match_label(67, profile["match_levels"]) == "Review next"
+    from job_hunter_agent.score_labels import score_to_tone_class
+    assert score_to_tone_class(67, profile) == "tone-good"
 
 
 def test_has_government_context_detects_real_public_sector_language():
-    assert source_connector.has_government_context(
+    assert role_analysis.has_government_context(
         "Federal government department delivering a public sector program."
     )
 
 
 def test_has_government_context_ignores_privacy_notice_government_id_phrase():
-    assert not source_connector.has_government_context(
+    assert not role_analysis.has_government_context(
         "Please do not submit sensitive personal data such as government ID numbers."
     )
 
 
 def test_government_context_rules_file_contains_pattern_lists():
-    payload = json.loads(source_connector.GOVERNMENT_CONTEXT_RULES_PATH.read_text(encoding="utf-8"))
+    from job_hunter_agent.paths import GOVERNMENT_CONTEXT_RULES_PATH
+    payload = json.loads(GOVERNMENT_CONTEXT_RULES_PATH.read_text(encoding="utf-8"))
 
     assert payload["kind"] == "managed_knowledge"
     positives = [entry for entry in payload["entries"] if entry.get("kind") == "positive"]
@@ -201,10 +207,10 @@ def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(source_connector, "GOVERNMENT_CONTEXT_RULES_PATH", rules_path)
-    monkeypatch.setattr(source_connector, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(role_analysis, "GOVERNMENT_CONTEXT_RULES_PATH", rules_path)
+    monkeypatch.setattr(role_analysis, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", knowledge_path)
 
-    assert source_connector.has_government_context("Role in NSW Health digital delivery program")
+    assert role_analysis.has_government_context("Role in NSW Health digital delivery program")
 
 
 def test_build_ad_learning_signals_registers_pending_capability_and_title_tokens(monkeypatch):
@@ -267,6 +273,22 @@ def test_build_ad_learning_signals_registers_capability_from_structured_observat
             "original_texts": ["process mapping"],
         }
     ]
+
+
+def test_seek_search_targets_use_seek_location_code():
+    profile = {
+        "search_settings": {
+            "keywords": "Business Analyst",
+            "locations": ["New South Wales"],
+            "classification_ids": [],
+        }
+    }
+
+    targets = build_seek_search_targets(profile, configured_date_range=3, sort_newest_first=True)
+
+    assert len(targets) == 1
+    assert targets[0]["location"] == "NSW"
+    assert parse_qs(urlparse(targets[0]["url"]).query)["where"] == ["NSW"]
 
 
 def test_build_ad_learning_signals_registers_government_context_from_job_description(monkeypatch):
@@ -373,7 +395,7 @@ def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_m
 
 
 def test_build_role_summary_prefers_description_snippet_over_generic_sector_stub():
-    summary = source_connector.build_role_summary(
+    summary = workspace_renderer.build_role_summary(
         {
             "title": "Project Coordinator",
             "company": "Standards Australia Ltd",
@@ -389,7 +411,7 @@ def test_build_role_summary_prefers_description_snippet_over_generic_sector_stub
 
 
 def test_render_job_card_does_not_claim_private_sector_by_default():
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-sector-unknown",
             "title": "Project Coordinator",
@@ -417,7 +439,7 @@ def test_render_job_card_does_not_claim_private_sector_by_default():
 
 
 def test_visible_fit_reasons_backfills_from_positive_score_drivers():
-    reasons = source_connector.visible_fit_reasons(
+    reasons = workspace_renderer.visible_fit_reasons(
         ["Strong capability match: Delivery teams"],
         [
             {"label": "Primary role-family match", "value": 14},
@@ -457,7 +479,7 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
         },
     )
 
-    highlights = source_connector.build_fit_highlights(
+    highlights = fit_scoring.build_fit_highlights(
         {
             "title": "Lead Business Analyst",
             "company": "Preacta Recruitment",
@@ -531,7 +553,7 @@ def test_fit_score_breakdown_does_not_score_reviewed_signal_matches(monkeypatch)
 
 
 def test_fit_score_evidence_ignores_display_only_fit_highlights():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
@@ -557,7 +579,7 @@ def test_fit_score_evidence_ignores_display_only_fit_highlights():
 
 
 def test_fit_score_evidence_uses_full_capability_match_set():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
@@ -580,7 +602,7 @@ def test_fit_score_evidence_uses_full_capability_match_set():
 
 
 def test_fit_score_evidence_does_not_count_alias_only_mentions():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
@@ -603,7 +625,7 @@ def test_fit_score_evidence_does_not_count_alias_only_mentions():
 
 
 def test_fit_score_evidence_can_still_count_canonical_capability_mentions():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
@@ -646,10 +668,10 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
         "soft_risk_reasons": [],
     }
 
-    breakdown = source_connector.fit_score_breakdown(record, profile)
+    breakdown = fit_scoring.fit_score_breakdown(record, profile)
 
     assert _breakdown_value(breakdown, "Multiple strong signals align") == 5
-    assert source_connector.fit_score(record, profile) >= 70
+    assert fit_scoring.fit_score(record, profile) >= 70
 
 
 def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypatch):
@@ -688,7 +710,7 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
 
 
 def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
-    watchouts = source_connector.description_watchout_reasons(
+    watchouts = capability_matching.description_watchout_reasons(
         "ERP experience is desirable for this business analyst role.",
         {
             "must_not_require_skills": ["ERP"],
@@ -696,7 +718,7 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
             "reject_title_rules": [],
         },
     )
-    risks, missing = source_connector.build_risk_and_missing_evidence(
+    risks, missing = capability_matching.build_risk_and_missing_evidence(
         "ERP experience is desirable for this business analyst role.",
         "OK",
         {
@@ -716,7 +738,7 @@ def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
     registrations = []
 
     monkeypatch.setattr(
-        source_connector,
+        source_connector, # this is likely still the correct place if it proxies for seeks
         "fetch_job_details_payload",
         lambda detail_page, url: {"text": "Hands-on coding required for this role.", "status": "ok", "source": "jobAdDetails"},
     )
@@ -736,13 +758,11 @@ def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr(
-        source_connector,
-        "register_signals",
-        lambda items, category="": registrations.append((items, category)),
-    )
+    from job_hunter_agent import signal_registry
+    monkeypatch.setattr(signal_registry, "register_signals", lambda items, category="": registrations.append((items, category)))
 
-    ok, reason = source_connector._process_seek_job_details(
+    from job_hunter_agent.scrapers import seek_runner
+    ok, reason = seek_runner._process_seek_job_details(
         {
             "title": "Business Analyst",
             "company": "Acme",
@@ -771,7 +791,7 @@ def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
 
 
 def test_on_site_role_gets_visible_score_penalty():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Business Analyst",
             "title_reason": "OK",
@@ -804,7 +824,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
         },
     }
 
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Business Analyst",
             "title_reason": "OK",
@@ -832,7 +852,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
 
 
 def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_primary_matches():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Senior Business Analyst",
             "title_reason": "OK",
@@ -860,7 +880,7 @@ def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_prima
 
 
 def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_matches():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Junior Business Analyst",
             "title_reason": "OK",
@@ -888,7 +908,7 @@ def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_
 
 
 def test_fit_score_breakdown_keeps_secondary_role_family_clean():
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Project Coordinator",
             "title_reason": "TITLE_POTENTIAL_MATCH",
@@ -916,7 +936,7 @@ def test_fit_score_breakdown_keeps_secondary_role_family_clean():
 
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-visible-negative",
             "title": "Business Analyst",
@@ -984,7 +1004,7 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
 
 
 def test_job_card_uses_score_tone_as_card_accent_class():
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-card-tone",
             "title": "Business Analyst",
@@ -1010,10 +1030,10 @@ def test_job_card_uses_score_tone_as_card_accent_class():
 
 
 def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
-    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: 0)
-    monkeypatch.setattr(dashboard_renderer, "fit_score_breakdown", lambda record, profile=None: [])
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: 0)
+    monkeypatch.setattr(workspace_renderer, "fit_score_breakdown", lambda record, profile=None: [])
 
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-posting-channel-badge",
             "title": "Business Analyst",
@@ -1044,9 +1064,10 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
 
 
 def test_score_to_tone_class_uses_same_bands_as_match_labels():
-    assert source_connector.score_to_tone_class(84) == "tone-good"
-    assert source_connector.score_to_tone_class(69) == "tone-borderline"
-    assert source_connector.score_to_tone_class(54) == "tone-low"
+    from job_hunter_agent.score_labels import score_to_tone_class
+    assert score_to_tone_class(84) == "tone-good"
+    assert score_to_tone_class(69) == "tone-borderline"
+    assert score_to_tone_class(54) == "tone-low"
 
 
 def test_applied_and_hidden_cards_render_undo_actions():
@@ -1067,8 +1088,8 @@ def test_applied_and_hidden_cards_render_undo_actions():
         "source": "seek",
     }
 
-    applied_html = source_connector.render_job_card({**base_record, "applied": True}, _test_profile())
-    hidden_html = source_connector.render_job_card({**base_record, "hidden": True}, _test_profile())
+    applied_html = workspace_renderer.render_job_card({**base_record, "applied": True}, _test_profile())
+    hidden_html = workspace_renderer.render_job_card({**base_record, "hidden": True}, _test_profile())
 
     assert 'data-review-action="unapply"' in applied_html
     assert "Undo Applied" in applied_html
@@ -1077,9 +1098,9 @@ def test_applied_and_hidden_cards_render_undo_actions():
 
 
 def test_possible_repost_card_carries_duplicate_apply_warning_details():
-    # find_similar_job only matches confirmed duplicates (same job_key or URL).
+    # find_confirmed_duplicate only matches confirmed duplicates (same job_key or URL).
     # Use the same job_key in the applied pool to trigger the "Possible Repost" badge.
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "seek:repost",
             "title": "Senior Business Analyst",
@@ -1115,7 +1136,7 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
 
 
 def test_potential_duplicate_card_shows_visible_callout_and_help_text():
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "seek:new-role",
             "title": "Senior Business Analyst",
@@ -1165,7 +1186,7 @@ def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
             }
         ],
     }
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-repetition",
             "title": "Business Analyst",
@@ -1190,7 +1211,7 @@ def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
 
 
 def test_low_confidence_card_shows_single_description_issue_section():
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-low-description",
             "title": "Business Analyst",
@@ -1217,8 +1238,10 @@ def test_low_confidence_card_shows_single_description_issue_section():
 
 
 def test_deterministic_review_counts_only_capability_highlights():
-    assert source_connector.deterministic_review_outcome(
+    from job_hunter_agent.source_learning import deterministic_review_outcome
+    assert deterministic_review_outcome(
         {"title_reason": "OK"},
+        {},
         [
             "Government context",
             "12+ month contract",
@@ -1228,8 +1251,9 @@ def test_deterministic_review_counts_only_capability_highlights():
         [],
     ) is None
 
-    assert source_connector.deterministic_review_outcome(
+    assert deterministic_review_outcome(
         {"title_reason": "OK"},
+        {},
         [
             "Strong capability match: Delivery teams",
             "Strong capability match: Process improvement",
@@ -1254,10 +1278,11 @@ def test_salary_fit_label_marks_scores_above_target_as_meets():
         },
     }
 
-    assert source_connector.salary_fit_label({"salary": "$130k-$145k p.a."}, profile) == "meets"
-    assert source_connector.salary_fit_label({"salary": "$750 per day"}, profile) == "meets"
-    assert source_connector.salary_fit_label({"salary": "$100k p.a."}, profile) == "below"
-    assert source_connector.salary_fit_label({"salary": "$650 per day"}, profile) == "below"
+    from job_hunter_agent.score_labels import salary_fit_label
+    assert salary_fit_label({"salary": "$130k-$145k p.a."}, profile) == "meets"
+    assert salary_fit_label({"salary": "$750 per day"}, profile) == "meets"
+    assert salary_fit_label({"salary": "$100k p.a."}, profile) == "below"
+    assert salary_fit_label({"salary": "$650 per day"}, profile) == "below"
 
 
 def test_salary_fit_ignores_non_comparable_hourly_and_monthly_rates():
@@ -1269,9 +1294,10 @@ def test_salary_fit_ignores_non_comparable_hourly_and_monthly_rates():
         },
     }
 
-    assert source_connector.salary_fit_adjustment({"salary": "$90/hr"}, profile) == 0
-    assert source_connector.salary_fit_adjustment({"salary": "$8,000 per month"}, profile) == 0
-    assert source_connector.salary_fit_adjustment({"salary": "$650 p/d"}, profile) < 0
+    from job_hunter_agent.preferences import salary_fit_adjustment
+    assert salary_fit_adjustment({"salary": "$90/hr"}, profile) == 0
+    assert salary_fit_adjustment({"salary": "$8,000 per month"}, profile) == 0
+    assert salary_fit_adjustment({"salary": "$650 p/d"}, profile) < 0
 
 
 def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
@@ -1283,9 +1309,11 @@ def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
         },
     }
 
-    assert source_connector.salary_fit_adjustment({"salary": "$130k package"}, profile) == 0
-    assert source_connector.salary_fit_adjustment({"salary": "$130k incl super"}, profile) == 0
-    assert source_connector.salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
+    from job_hunter_agent.preferences import salary_fit_adjustment
+    assert salary_fit_adjustment({"salary": "$130k package"}, profile) == 0
+    assert salary_fit_adjustment({"salary": "$130k incl super"}, profile) == 0
+    from job_hunter_agent.score_labels import salary_fit_label
+    assert salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
 
 
 def test_salary_fit_adjustment_can_use_profile_scoring_rule_overrides():
@@ -1304,12 +1332,14 @@ def test_salary_fit_adjustment_can_use_profile_scoring_rule_overrides():
         },
     }
 
-    assert source_connector.salary_fit_adjustment({"salary": "$130k-$145k p.a."}, profile) == 11
-    assert source_connector.salary_fit_adjustment({"salary": "$110k p.a."}, profile) == -2
+    from job_hunter_agent.preferences import salary_fit_adjustment
+    assert salary_fit_adjustment({"salary": "$130k-$145k p.a."}, profile) == 11
+    assert salary_fit_adjustment({"salary": "$110k p.a."}, profile) == -2
 
 
 def test_contract_preference_treats_hyphenated_full_time_as_permanent():
-    assert source_connector.assess_contract_preference(
+    from job_hunter_agent.preferences import assess_contract_preference
+    assert assess_contract_preference(
         {"work_type": "Full-time", "salary": "N/A"},
         _test_profile(),
     ) == {"label": "Permanent role", "value": 10}
@@ -1337,8 +1367,9 @@ def test_scoring_helpers_ignore_display_only_fit_highlights():
         ],
     }
 
-    assert source_connector.assess_government_preference(record, profile) is None
-    assert source_connector.assess_contract_preference(record, profile) is None
+    from job_hunter_agent.preferences import assess_government_preference, assess_contract_preference
+    assert assess_government_preference(record, profile) is None
+    assert assess_contract_preference(record, profile) is None
 
 
 def test_scoring_helpers_still_use_real_source_text():
@@ -1359,11 +1390,12 @@ def test_scoring_helpers_still_use_real_source_text():
         "fit_highlights": [],
     }
 
-    assert source_connector.assess_government_preference(record, profile) == {
+    from job_hunter_agent.preferences import assess_government_preference, assess_contract_preference
+    assert assess_government_preference(record, profile) == {
         "label": "Government context",
         "value": 4,
     }
-    assert source_connector.assess_contract_preference(record, profile) == {
+    assert assess_contract_preference(record, profile) == {
         "label": "12+ month contract with extension potential",
         "value": 9,
     }
@@ -1380,16 +1412,18 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
         },
     }
 
-    assert source_connector.find_profile_experience_year_in_text(
+    from job_hunter_agent.scoring_utils import find_profile_experience_year_in_text, profile_recency_multiplier
+    assert find_profile_experience_year_in_text(
         profile[KEY_EVIDENCE_TIERS][KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT],
         ["delivery leadership"],
     ) == current_year
-    assert source_connector.profile_recency_multiplier(profile, ["delivery leadership"]) == 1.0
+    assert profile_recency_multiplier(profile, ["delivery leadership"]) == 1.0
 
 
-def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypatch):
-    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(source_connector, "is_dashboard_eligible", lambda record, profile=None: True)
+def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypatch):
+    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
+    from job_hunter_agent import source_connector as sc
+    monkeypatch.setattr(sc, "is_workspace_eligible", lambda record, profile=None: True)
 
     records = [
         {"job_key": "fresh-low", "score": 55, "posted_age_days": 0.1, "times_viewed": 0},
@@ -1397,7 +1431,7 @@ def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypa
         {"job_key": "fresh-mid", "score": 70, "posted_age_days": 0.2, "times_viewed": 0},
     ]
 
-    dashboard_records = source_connector.build_dashboard_record_sets(
+    workspace_records = workspace_data.build_workspace_record_sets(
         records,
         job_history={},
         applied_job_keys=set(),
@@ -1406,27 +1440,30 @@ def test_dashboard_record_sets_rank_current_records_by_score_before_age(monkeypa
         scoring_profile={},
     )
 
-    assert [record["job_key"] for record in dashboard_records["current_records"]] == [
+    assert [record["job_key"] for record in workspace_records["current_records"]] == [
         "older-high",
         "fresh-mid",
         "fresh-low",
     ]
 
 
-def test_is_dashboard_eligible_uses_saved_dashboard_minimum_score(monkeypatch):
-    monkeypatch.setattr(source_connector, "passes_title_filters", lambda title: (True, "OK"))
-    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(source_connector, "get_dashboard_minimum_score", lambda: 60)
+def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
+    from job_hunter_agent.filters import passes_title_filters
+    monkeypatch.setattr(passes_title_filters, "passes_title_filters", lambda title: (True, "OK"))
+    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
+    from job_hunter_agent.agent_settings import get_workspace_minimum_score
+    monkeypatch.setattr(get_workspace_minimum_score, "get_workspace_minimum_score", lambda: 60)
 
-    assert source_connector.is_dashboard_eligible({"title": "Business Analyst", "score": 60}) is True
-    assert source_connector.is_dashboard_eligible({"title": "Business Analyst", "score": 59}) is False
+    from job_hunter_agent.source_connector import is_workspace_eligible
+    assert is_workspace_eligible({"title": "Business Analyst", "score": 60}) is True
+    assert is_workspace_eligible({"title": "Business Analyst", "score": 59}) is False
 
 
 def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monkeypatch):
-    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
-    thresholds = source_connector.score_filter_thresholds(
+    thresholds = workspace_renderer.score_filter_thresholds(
         [{"score": 85}, {"score": 70}, {"score": 55}],
         scoring_profile={},
         include_borderline=False,
@@ -1436,10 +1473,10 @@ def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monke
 
 
 def test_score_filter_thresholds_show_lowest_band_when_borderline_roles_are_present(monkeypatch):
-    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
-    thresholds = source_connector.score_filter_thresholds(
+    thresholds = workspace_renderer.score_filter_thresholds(
         [{"score": 58}, {"score": 43}],
         scoring_profile={},
         include_borderline=False,
@@ -1449,10 +1486,10 @@ def test_score_filter_thresholds_show_lowest_band_when_borderline_roles_are_pres
 
 
 def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
-    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
-    options_html = source_connector.render_score_filter_options(
+    options_html = workspace_renderer.render_score_filter_options(
         [{"score": 85}, {"score": 70}, {"score": 55}],
         scoring_profile={},
         include_borderline=False,
@@ -1466,10 +1503,10 @@ def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
 
 
 def test_score_filter_options_include_lowest_match_band_when_lower_scores_exist(monkeypatch):
-    monkeypatch.setattr(source_connector, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(dashboard_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
 
-    options_html = source_connector.render_score_filter_options(
+    options_html = workspace_renderer.render_score_filter_options(
         [{"score": 58}, {"score": 43}],
         scoring_profile={},
         include_borderline=False,
@@ -1479,7 +1516,7 @@ def test_score_filter_options_include_lowest_match_band_when_lower_scores_exist(
 
 
 def test_posted_filter_options_show_explicit_day_windows():
-    options_html = source_connector.render_posted_filter_options(
+    options_html = workspace_renderer.render_posted_filter_options(
         [
             {"posted_age_days": 0.25},
             {"posted_age_days": 2},
@@ -1507,7 +1544,7 @@ def test_freshness_breakdown_uses_managed_bucket_cutoffs():
 
 
 def test_repeated_listing_history_adds_candidate_warning():
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "seek:repeat-1",
             "title": "Business Analyst",
@@ -1535,7 +1572,8 @@ def test_repeated_listing_history_adds_candidate_warning():
 
 
 def test_posted_display_anchors_relative_text_to_retrieval_date():
-    label = source_connector.posted_display_label(
+    from job_hunter_agent.posting_utils import posted_display_label
+    label = posted_display_label(
         {
             "posted": "2d ago",
             "posted_age_days": 2,
@@ -1548,7 +1586,8 @@ def test_posted_display_anchors_relative_text_to_retrieval_date():
 
 
 def test_posted_display_converts_today_to_retrieved_date():
-    label = source_connector.posted_display_label(
+    from job_hunter_agent.posting_utils import posted_display_label
+    label = posted_display_label(
         {
             "posted": "today",
             "posted_age_days": 0,
@@ -1561,13 +1600,22 @@ def test_posted_display_converts_today_to_retrieved_date():
 
 
 def test_posted_display_shows_today_against_current_render_date():
-    label = source_connector.posted_display_label(
+    from job_hunter_agent.posting_utils import posted_display_label
+    label = posted_display_label(
         {
             "posted": "3h ago",
             "posted_age_days": 0.125,
             "run_started_at": "2026-04-22T09:00:00+10:00",
         },
         now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
+        is_workspace_eligible_fn=lambda record, profile=None: True,
+        fit_score_fn=lambda record, profile=None: int(record["score"]),
+        viewed_by_user_fn=lambda record: False,
+        normalize_job_key_fn=lambda key: key,
+        parse_timestamp_fn=lambda ts: None,
+        build_archive_records_fn=lambda *args: [],
+        build_applied_records_fn=lambda *args: [],
+        build_hidden_records_fn=lambda *args: [],
     )
 
     assert label == "22 Apr 2026 (today)"
@@ -1589,7 +1637,7 @@ def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
         "hard_block_reasons": ["requires SAP experience"],
     }
 
-    breakdown = source_connector.fit_score_breakdown(record, _test_profile())
+    breakdown = fit_scoring.fit_score_breakdown(record, _test_profile())
     labels = [item["label"] for item in breakdown]
 
     assert any("Hard blocker" in label for label in labels)
@@ -1613,8 +1661,8 @@ def test_score_equivalent_where_no_hard_blockers(monkeypatch):
     }
     profile = _test_profile()
 
-    breakdown = source_connector.fit_score_breakdown(record, profile)
-    score = source_connector.fit_score(record, profile)
+    breakdown = fit_scoring.fit_score_breakdown(record, profile)
+    score = fit_scoring.fit_score(record, profile)
 
     assert score == max(min(sum(item["value"] for item in breakdown), 100), 0)
     assert not any("Hard blocker" in item["label"] for item in breakdown)

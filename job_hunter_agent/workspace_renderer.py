@@ -13,7 +13,7 @@ from datetime import datetime
 from string import Template
 from typing import Dict, List, Optional
 
-from job_hunter_agent.agent_settings import get_workspace_minimum_score
+from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.capability_matching import (
     build_risk_and_missing_evidence,
     capability_fit_highlights,

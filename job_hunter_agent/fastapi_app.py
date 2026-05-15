@@ -127,9 +127,6 @@ def _configure_server_logging() -> None:
 def create_app() -> FastAPI:
     from job_hunter_agent.routes import register_routes
     from job_hunter_agent.routes.responses import json_response
-    from job_hunter_agent.migration import run_migration
-
-    run_migration()
 
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
     app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc")

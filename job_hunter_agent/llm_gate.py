@@ -1,4 +1,4 @@
-"""LLM fit-decision gateway.
+﻿"""LLM fit-decision gateway.
 
 Main goals:
 - build the compact candidate context sent to the LLM
@@ -20,7 +20,7 @@ from typing import Any, Dict
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from job_hunter_agent.agent_settings import load_agent_settings, DEFAULT_AGENT_SETTINGS
+from job_hunter_agent.user_settings import load_user_settings, DEFAULT_USER_SETTINGS
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
@@ -70,7 +70,7 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.hard_blocker_rules import normalize_rejection_blocker_suggestions as _normalize_rejection_blocker_suggestions
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_SETTINGS,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
@@ -79,7 +79,7 @@ from job_hunter_agent.advance_settings import (
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
     KEY_LLM_PROMPT_SETTINGS,
     KEY_LLM_PROMPT_TEMPLATES,
-    load_advance_settings,
+    load_global_settings,
 )
 from job_hunter_agent.paths import (
     FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
@@ -105,7 +105,7 @@ load_dotenv()
 
 _NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 
-MODEL_FALLBACK = DEFAULT_AGENT_SETTINGS["llm"]["model"]
+MODEL_FALLBACK = DEFAULT_USER_SETTINGS["llm"]["model"]
 
 
 _profile_fingerprint_cache: str | None = None
@@ -115,14 +115,14 @@ _session_cost_usd: float = 0.0
 
 
 def _get_llm_pricing_per_1m() -> dict[str, dict[str, float]]:
-    pricing = load_advance_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PRICING_PER_1M, {})
+    pricing = load_global_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PRICING_PER_1M, {})
     if not isinstance(pricing, dict) or not pricing:
         raise ValueError("No LLM pricing is configured in Admin.")
     return pricing  # type: ignore[return-value]
 
 
 def _get_llm_prompt_settings() -> dict[str, Any]:
-    prompt_settings = load_advance_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
+    prompt_settings = load_global_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
     if not isinstance(prompt_settings, dict) or not prompt_settings:
         raise ValueError("No LLM prompt settings are configured in Admin.")
     return prompt_settings
@@ -133,7 +133,7 @@ def _get_llm_prompt_int(key: str) -> int:
     try:
         return int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.llm_settings.llm_prompt_settings.{key} must be an integer") from exc
+        raise ValueError(f"global_settings.llm_settings.llm_prompt_settings.{key} must be an integer") from exc
 
 
 def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
@@ -176,9 +176,9 @@ def _profile_fingerprint() -> str:
     return _profile_fingerprint_cache
 
 
-def _get_llm_model() -> str:
+def get_llm_model() -> str:
     """Return the configured model, falling back to MODEL_FALLBACK."""
-    return load_agent_settings().get("llm", {}).get("model", MODEL_FALLBACK)
+    return load_user_settings(None).get("llm", {}).get("model", MODEL_FALLBACK)
 
 
 _llm_model_logged = False
@@ -187,9 +187,9 @@ _llm_model_logged = False
 def _log_llm_model_once() -> str:
     """Print the active model to the terminal on first use. Returns the model string."""
     global _llm_model_logged
-    model = _get_llm_model()
+    model = get_llm_model()
     if not _llm_model_logged:
-        print(f"[LLM] Model: {model}  (source: agent_settings.json)")
+        print(f"[LLM] Model: {model}  (source: user settings)")
         _llm_model_logged = True
     return model
 
@@ -564,7 +564,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
     prompt = build_capability_naming_guidance()
 
     try:
-        _model = _get_llm_model()
+        _model = get_llm_model()
         resp = active_client.responses.create(
             model=_model,
             input=[{"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}],
@@ -660,3 +660,5 @@ def get_cost_summary() -> dict[str, Any]:
         pass
     grand = sum(v["cost_usd"] for v in totals.values())
     return {"by_purpose": totals, "grand_total_usd": round(grand, 6)}
+
+

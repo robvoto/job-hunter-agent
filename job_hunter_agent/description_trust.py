@@ -8,15 +8,15 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
 )
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     KEY_DESCRIPTION_TRUST_SETTINGS,
     KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
-    load_advance_settings,
+    load_global_settings,
 )
 
 
 def get_min_trusted_description_length() -> int:
-    return int(load_advance_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
+    return int(load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
 
 def _trusted_sources():
     return set(load_parsing_rules().get(PARSING_TRUSTED_DESCRIPTION_SOURCES_KEY, []))
@@ -57,3 +57,4 @@ def full_description_confidence(record: dict) -> str:
 def is_description_trusted(record: dict) -> bool:
     """Return True when a trusted full description is available for this record."""
     return bool(get_trusted_full_description(record))
+

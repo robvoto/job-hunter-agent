@@ -82,3 +82,23 @@ def test_csrf_middleware_allows_valid_token(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"ok": True, "patched": {}}
+
+
+def test_debug_auth_bypass_skips_csrf(monkeypatch):
+    monkeypatch.setenv("JOB_HUNTER_DISABLE_AUTH", "true")
+
+    import job_hunter_agent.config as config
+    import job_hunter_agent.fastapi_app as fastapi_app
+
+    monkeypatch.setattr(config, "AUTH_DISABLED", True)
+    monkeypatch.setattr(fastapi_app, "is_auth_disabled", lambda: True)
+    monkeypatch.setattr(profile_materials.srv, "load_profile", lambda: {})
+    monkeypatch.setattr(profile_materials.srv, "patch_profile", lambda patch: {"ok": True, "patched": patch})
+    monkeypatch.setattr(profile_materials.srv.SettingsHandler, "_normalize_profile_patch_for_save", staticmethod(lambda current, body: {}))
+    monkeypatch.setattr(profile_materials.srv.SettingsHandler, "_patch_affects_matching_rules", staticmethod(lambda patch: False))
+
+    client = TestClient(create_app())
+    response = client.patch("/api/profile", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "patched": {}}

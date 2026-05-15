@@ -6,10 +6,14 @@ from pathlib import Path
 PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
+CONFIG_DIR = DATA_DIR / "config"
+DEFAULTS_DIR = DATA_DIR / "defaults"
 OUTPUT_DIR = REPO_ROOT / "output"
 TEMPLATES_DIR = REPO_ROOT / "templates"
 DOCS_DIR = REPO_ROOT / "docs"
 WORKSPACE_RESULTS_FILENAME = "workspace_results.html"
+USER_SETTINGS_FILENAME = "settings.json"
+LOCAL_USER_ID = "_local"
 
 # Per-user data lives under this directory.
 USERS_DIR = DATA_DIR / "users"
@@ -65,6 +69,16 @@ def get_audit_records_path() -> Path:
     return (d / "audit_records.json") if d else OUTPUT_DIR / "audit_records.json"
 
 
+def get_user_settings_path(user_id: str | None = None) -> Path:
+    if user_id is None:
+        d = _active_user_dir()
+    else:
+        d = USERS_DIR / user_id if user_id else None
+    if d is None:
+        d = USERS_DIR / LOCAL_USER_ID
+    return d / USER_SETTINGS_FILENAME
+
+
 def get_source_materials_path() -> Path:
     d = _active_user_dir()
     return (d / "application_materials.json") if d else DATA_DIR / "application_materials.json"
@@ -73,7 +87,8 @@ def get_source_materials_path() -> Path:
 def get_source_pack_dir() -> Path:
     d = _active_user_dir()
     return (d / "source_pack") if d else DATA_DIR / "application_inputs" / "source_pack"
-ADVANCE_SETTINGS_PATH = DATA_DIR / "advance_settings.json"
+ADVANCED_SETTINGS_PATH = CONFIG_DIR / "advanced_settings.json"
+DEFAULT_USER_SETTINGS_PATH = DEFAULTS_DIR / "user_settings.json"
 SCORING_RULES_PATH = DATA_DIR / "scoring_rules.json" 
 MATCH_LEVEL_DEFAULTS_PATH = DATA_DIR / "match_level_defaults.json"
 FIT_REVIEW_DEFAULTS_PATH = DATA_DIR / "llm_fit_review_defaults.json" 

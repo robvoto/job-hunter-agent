@@ -1,7 +1,9 @@
 import json
 import pytest
 
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent import profile_store
+from job_hunter_agent import review_insights
 
 
 def test_save_profile_normalizes_llm_fit_review_guidance(tmp_path, monkeypatch):
@@ -106,6 +108,28 @@ def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():
 
     assert rules[0]["aliases"] == ["scrum"]
     assert rules[0]["needs_review"] is True
+
+
+def test_capability_level_tokens_and_display_labels_are_standardized():
+    labels = load_ui_labels()["level_labels"]
+
+    assert profile_store.LEVEL_STRONG == "strong"
+    assert profile_store.LEVEL_WORKING == "working"
+    assert profile_store.LEVEL_BASIC == "basic"
+    assert labels["strong"] == "Strong"
+    assert labels["working"] == "Working"
+    assert labels["basic"] == "Basic"
+
+
+def test_apply_capability_tuning_decisions_uses_internal_level_tokens():
+    profile = {"capability_profile_rules": []}
+
+    updated = review_insights.apply_capability_tuning_decisions(
+        profile,
+        [{"skill": "Process mapping", "choice": "working"}],
+    )
+
+    assert updated["capability_profile_rules"][0]["level"] == "working"
 
 
 def test_classify_candidate_profile_section_label_uses_parsing_rules(monkeypatch):

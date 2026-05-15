@@ -1,9 +1,9 @@
 import json
 from typing import Dict, Optional
 
-from job_hunter_agent.paths import DATA_DIR
+from job_hunter_agent.paths import KNOWLEDGE_DIR
 
-_LOCATIONS_AU_PATH = DATA_DIR / "locations_au.json"
+_LOCATIONS_AU_PATH = KNOWLEDGE_DIR / "locations_au.json"
 LOCATION_GROUP_LABELS = {
     "state": "States",
     "city": "Capital cities",
@@ -84,3 +84,55 @@ def resolve_location(raw: str) -> dict:
             return loc
 
     raise ValueError(f"Unsupported location: {raw}")
+
+
+def find_nearest_location(latitude: float, longitude: float) -> str:
+    """
+    Find the nearest Australian city given latitude and longitude.
+    
+    Uses haversine distance calculation to find the closest capital city.
+    Returns the city name or falls back to Sydney if calculation fails.
+    
+    Args:
+        latitude: User's latitude
+        longitude: User's longitude
+    
+    Returns:
+        Nearest city name (e.g., "Sydney", "Melbourne"), or "Sydney" as fallback
+    """
+    import math
+    
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate distance between two coordinates in kilometers."""
+        R = 6371  # Earth's radius in km
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+        
+        a = (math.sin(delta_phi / 2) ** 2 +
+             math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+    
+    try:
+        locations = load_locations_au()
+        # Filter to only cities for more precise location detection
+        cities = [
+            (entry.get("name", ""), entry.get("lat"), entry.get("lon"))
+            for entry in locations.values()
+            if entry.get("kind") == "city" and entry.get("lat") is not None and entry.get("lon") is not None
+        ]
+        
+        if not cities:
+            return default_location_value()
+        
+        # Find nearest city
+        nearest_city = min(
+            cities,
+            key=lambda city: haversine_distance(latitude, longitude, city[1], city[2])
+        )
+        return str(nearest_city[0]).strip()
+    except Exception:
+        # Fall back to Sydney if any error occurs
+        return default_location_value()

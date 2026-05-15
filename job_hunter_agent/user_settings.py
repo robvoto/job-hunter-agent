@@ -1,23 +1,16 @@
-"""Local agent settings and state helpers.
+"""Per-user settings and agent state helpers."""
 
-Main goals:
-- load a repo-safe agent settings template
-- support a local ignored override file for real credentials and delivery targets
-- persist lightweight agent state between scheduled runs
-"""
+from __future__ import annotations
 
 import copy
 import json
 from typing import Any
 
-from job_hunter_agent.paths import DATA_DIR, REPO_ROOT
 from job_hunter_agent.match_labels import MATCH_LEVELS
+from job_hunter_agent.paths import DEFAULT_USER_SETTINGS_PATH, get_user_settings_path
 
 
-ROOT_DIR = REPO_ROOT
-AGENT_SETTINGS_PATH = DATA_DIR / "agent_settings.json"
-AGENT_SETTINGS_TEMPLATE_PATH = DATA_DIR / "agent_settings.template.json"
-AGENT_STATE_PATH = DATA_DIR / "agent_state.json"
+USER_STATE_FILENAME = "agent_state.json"
 
 # Settings keys
 KEY_WORKSPACE = "workspace"
@@ -30,7 +23,6 @@ KEY_ONLY_IF_NEW_MATCHES = "only_if_new_matches"
 
 
 def _possible_fit_threshold() -> int:
-    """Derive the workspace minimum score default from the 'Possible fit' match level."""
     for level in MATCH_LEVELS:
         if str(level.get("label", "")).strip().lower() == "possible fit":
             return int(level["minimum_score"])
@@ -40,67 +32,37 @@ def _possible_fit_threshold() -> int:
     return int(sorted_levels[0]["minimum_score"]) if sorted_levels else 0
 
 
-# Validation limits and defaults
-DEFAULT_WORKSPACE_URL = "http://127.0.0.1:8765/workspace"
 DEFAULT_WORKSPACE_MIN_SCORE = _possible_fit_threshold()
 MIN_SCORE = 0
 MAX_SCORE = 100
 
-DEFAULT_DAILY_TIME_LOCAL = "08:30"
-DEFAULT_LOOP_SLEEP_SECONDS = 300
 MIN_LOOP_SLEEP_SECONDS = 60
 MAX_LOOP_SLEEP_SECONDS = 86400
 
-DEFAULT_MAX_JOBS_IN_DIGEST = 5
 MIN_MAX_JOBS_IN_DIGEST = 1
 MAX_MAX_JOBS_IN_DIGEST = 20
-DEFAULT_MINIMUM_FIT_SCORE = 52
-DEFAULT_ONLY_IF_NEW_MATCHES = True
-
-DEFAULT_SMTP_PORT = 587
-DEFAULT_SUBJECT_PREFIX = "[Job Hunter]"
 
 MAX_TELEGRAM_UPDATE_ID = 2147483647
-DEFAULT_LLM_MODEL = "gpt-4o-mini"
 
-DEFAULT_AGENT_SETTINGS = {
-    "workspace_url": DEFAULT_WORKSPACE_URL,
-    KEY_WORKSPACE: {
-        "minimum_score": DEFAULT_WORKSPACE_MIN_SCORE,
-    },
-    KEY_SCHEDULE: {
-        "daily_time_local": DEFAULT_DAILY_TIME_LOCAL,
-        "loop_sleep_seconds": DEFAULT_LOOP_SLEEP_SECONDS,
-    },
-    KEY_NOTIFICATION_RULES: {
-        "max_jobs_in_digest": DEFAULT_MAX_JOBS_IN_DIGEST,
-        "minimum_fit_score": DEFAULT_MINIMUM_FIT_SCORE,
-        KEY_ONLY_IF_NEW_MATCHES: DEFAULT_ONLY_IF_NEW_MATCHES,
-    },
-    KEY_EMAIL: {
-        "enabled": False,
-        "smtp_host": "",
-        "smtp_port": DEFAULT_SMTP_PORT,
-        "smtp_username": "",
-        "smtp_password": "",
-        "use_tls": True,
-        "from_address": "",
-        "to_addresses": [],
-        "subject_prefix": DEFAULT_SUBJECT_PREFIX,
-    },
-    KEY_TELEGRAM: {
-        "enabled": False,
-        "bot_token": "",
-        "bot_username": "",
-        "chat_id": "",
-        "disable_link_preview": False,
-        "last_update_id": 0,
-        "subscribers": [],
-    },
-    KEY_LLM: {
-        "model": DEFAULT_LLM_MODEL,
-    },
-}
+def _load_default_user_settings_seed() -> dict[str, Any]:
+    payload = json.loads(DEFAULT_USER_SETTINGS_PATH.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("user_settings.json must contain a JSON object")
+    return payload
+
+
+DEFAULT_USER_SETTINGS = _load_default_user_settings_seed()
+
+DEFAULT_WORKSPACE_URL = str(DEFAULT_USER_SETTINGS.get("workspace_url") or "").strip()
+DEFAULT_WORKSPACE_MIN_SCORE = int(DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"])
+DEFAULT_DAILY_TIME_LOCAL = str(DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip()
+DEFAULT_LOOP_SLEEP_SECONDS = int(DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"])
+DEFAULT_MAX_JOBS_IN_DIGEST = int(DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"])
+DEFAULT_MINIMUM_FIT_SCORE = int(DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES]["minimum_fit_score"])
+DEFAULT_ONLY_IF_NEW_MATCHES = bool(DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES][KEY_ONLY_IF_NEW_MATCHES])
+DEFAULT_SMTP_PORT = int(DEFAULT_USER_SETTINGS[KEY_EMAIL]["smtp_port"])
+DEFAULT_SUBJECT_PREFIX = str(DEFAULT_USER_SETTINGS[KEY_EMAIL]["subject_prefix"]).strip()
+DEFAULT_LLM_MODEL = str(DEFAULT_USER_SETTINGS[KEY_LLM]["model"]).strip()
 
 
 def _deep_merge(base: Any, patch: Any) -> Any:
@@ -120,8 +82,8 @@ def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, resolved))
 
 
-def normalize_agent_settings(payload: Any) -> dict[str, Any]:
-    defaults = DEFAULT_AGENT_SETTINGS
+def normalize_user_settings(payload: Any) -> dict[str, Any]:
+    defaults = DEFAULT_USER_SETTINGS
     settings = _deep_merge(copy.deepcopy(defaults), payload if isinstance(payload, dict) else {})
 
     settings["workspace_url"] = str(settings.get("workspace_url") or "").strip()
@@ -131,7 +93,8 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
         "minimum_score": _coerce_int(
             workspace.get("minimum_score"),
             defaults[KEY_WORKSPACE]["minimum_score"],
-            MIN_SCORE, MAX_SCORE
+            MIN_SCORE,
+            MAX_SCORE,
         ),
     }
 
@@ -141,14 +104,25 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
         "loop_sleep_seconds": _coerce_int(
             schedule.get("loop_sleep_seconds"),
             defaults[KEY_SCHEDULE]["loop_sleep_seconds"],
-            MIN_LOOP_SLEEP_SECONDS, MAX_LOOP_SLEEP_SECONDS
+            MIN_LOOP_SLEEP_SECONDS,
+            MAX_LOOP_SLEEP_SECONDS,
         ),
     }
 
     notification_rules = settings.get(KEY_NOTIFICATION_RULES, {})
     settings[KEY_NOTIFICATION_RULES] = {
-        "max_jobs_in_digest": _coerce_int(notification_rules.get("max_jobs_in_digest"), defaults[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"], MIN_MAX_JOBS_IN_DIGEST, MAX_MAX_JOBS_IN_DIGEST),
-        "minimum_fit_score": _coerce_int(notification_rules.get("minimum_fit_score"), defaults[KEY_NOTIFICATION_RULES]["minimum_fit_score"], MIN_SCORE, MAX_SCORE),
+        "max_jobs_in_digest": _coerce_int(
+            notification_rules.get("max_jobs_in_digest"),
+            defaults[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"],
+            MIN_MAX_JOBS_IN_DIGEST,
+            MAX_MAX_JOBS_IN_DIGEST,
+        ),
+        "minimum_fit_score": _coerce_int(
+            notification_rules.get("minimum_fit_score"),
+            defaults[KEY_NOTIFICATION_RULES]["minimum_fit_score"],
+            MIN_SCORE,
+            MAX_SCORE,
+        ),
         KEY_ONLY_IF_NEW_MATCHES: bool(notification_rules.get(KEY_ONLY_IF_NEW_MATCHES, defaults[KEY_NOTIFICATION_RULES][KEY_ONLY_IF_NEW_MATCHES])),
     }
 
@@ -189,58 +163,54 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
         "bot_username": str(telegram.get("bot_username") or defaults[KEY_TELEGRAM]["bot_username"]).strip().lstrip("@"),
         "chat_id": str(telegram.get("chat_id") or defaults[KEY_TELEGRAM]["chat_id"]).strip(),
         "disable_link_preview": bool(telegram.get("disable_link_preview", defaults[KEY_TELEGRAM]["disable_link_preview"])),
-        "last_update_id": _coerce_int(telegram.get("last_update_id"), defaults[KEY_TELEGRAM]["last_update_id"], 0, MAX_TELEGRAM_UPDATE_ID),
+        "last_update_id": _coerce_int(
+            telegram.get("last_update_id"),
+            defaults[KEY_TELEGRAM]["last_update_id"],
+            0,
+            MAX_TELEGRAM_UPDATE_ID,
+        ),
         "subscribers": normalized_subscribers,
     }
 
     return settings
 
 
-def load_agent_settings(create_if_missing: bool = False) -> dict[str, Any]:
-    if AGENT_SETTINGS_PATH.exists():
-        try:
-            return normalize_agent_settings(json.loads(AGENT_SETTINGS_PATH.read_text(encoding="utf-8")))
-        except Exception:
-            return copy.deepcopy(DEFAULT_AGENT_SETTINGS)
+def load_user_settings(user_id: str | None, create_if_missing: bool = False) -> dict[str, Any]:
+    settings_path = get_user_settings_path(user_id)
+    if settings_path.exists():
+        return normalize_user_settings(json.loads(settings_path.read_text(encoding="utf-8")))
 
-    if AGENT_SETTINGS_TEMPLATE_PATH.exists():
-        try:
-            settings = normalize_agent_settings(json.loads(AGENT_SETTINGS_TEMPLATE_PATH.read_text(encoding="utf-8")))
-        except Exception:
-            settings = copy.deepcopy(DEFAULT_AGENT_SETTINGS)
-        if create_if_missing:
-            save_agent_settings(settings)
-        return settings
-
-    settings = copy.deepcopy(DEFAULT_AGENT_SETTINGS)
+    settings = copy.deepcopy(DEFAULT_USER_SETTINGS)
     if create_if_missing:
-        save_agent_settings(settings)
+        save_user_settings(user_id, settings)
     return settings
 
 
-def save_agent_settings(payload: Any) -> dict[str, Any]:
-    normalized = normalize_agent_settings(payload)
-    AGENT_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    AGENT_SETTINGS_PATH.write_text(
+def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
+    normalized = normalize_user_settings(payload)
+    settings_path = get_user_settings_path(user_id)
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return normalized
 
 
-def get_workspace_minimum_score(settings: Any | None = None) -> int:
+def get_workspace_minimum_score(settings: Any | None = None, *, user_id: str | None = None) -> int:
     if isinstance(settings, dict):
-        active_settings = normalize_agent_settings(settings)
+        active_settings = normalize_user_settings(settings)
     else:
-        active_settings = load_agent_settings(create_if_missing=True)
+        active_settings = load_user_settings(user_id, create_if_missing=True)
     return int(active_settings[KEY_WORKSPACE]["minimum_score"])
 
 
-def load_agent_state() -> dict[str, Any]:
-    if not AGENT_STATE_PATH.exists():
+def load_agent_state(user_id: str | None = None) -> dict[str, Any]:
+    state_path = get_user_settings_path(user_id).parent / USER_STATE_FILENAME
+    if not state_path.exists():
         return {}
     try:
-        payload = json.loads(AGENT_STATE_PATH.read_text(encoding="utf-8"))
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
     except Exception:
@@ -248,9 +218,10 @@ def load_agent_state() -> dict[str, Any]:
     return {}
 
 
-def save_agent_state(payload: dict[str, Any]) -> dict[str, Any]:
-    AGENT_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    AGENT_STATE_PATH.write_text(
+def save_agent_state(payload: dict[str, Any], user_id: str | None = None) -> dict[str, Any]:
+    state_path = get_user_settings_path(user_id).parent / USER_STATE_FILENAME
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         json.dumps(payload or {}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )

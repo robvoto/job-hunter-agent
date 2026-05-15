@@ -1,4 +1,7 @@
 import json
+from pathlib import Path
+
+from pytest import MonkeyPatch
 
 from job_hunter_agent import server_helpers
 from job_hunter_agent import server_review
@@ -32,7 +35,7 @@ def test_validate_llm_suggestion_approvals_accepts_matching_token():
     server_helpers.SettingsHandler._validate_llm_suggestion_approvals("job-1", ["sap"], tokens)
 
 
-def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(tmp_path, monkeypatch):
+def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(tmp_path: Path, monkeypatch: MonkeyPatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -53,7 +56,7 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
     )
     monkeypatch.setattr(server_review, "load_job_history", lambda: {})
     monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: events.append((args, kwargs)))
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_review, "rebuild_workspace_after_rule_change", lambda reason="": rebuilds.append(reason))
     result = server_review.save_requirement_blockers_feedback(
         "job-1",
         title="Business Analyst - SAP",
@@ -80,7 +83,7 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
     assert signal_registry.load_registry() == {}
 
 
-def test_save_requirement_blockers_feedback_skips_title_followup_when_kept_history_matches(monkeypatch):
+def test_save_requirement_blockers_feedback_skips_title_followup_when_kept_history_matches(monkeypatch: MonkeyPatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -108,7 +111,7 @@ def test_save_requirement_blockers_feedback_skips_title_followup_when_kept_histo
         },
     )
     monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: None)
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": None)
+    monkeypatch.setattr(server_review, "rebuild_workspace_after_rule_change", lambda reason="": None)
 
     result = server_review.save_requirement_blockers_feedback(
         "job-1",
@@ -120,7 +123,7 @@ def test_save_requirement_blockers_feedback_skips_title_followup_when_kept_histo
     assert result["title_block_suggestions"] == []
 
 
-def test_save_requirement_blockers_feedback_can_apply_title_block_in_same_flow(monkeypatch):
+def test_save_requirement_blockers_feedback_can_apply_title_block_in_same_flow(monkeypatch: MonkeyPatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -132,7 +135,7 @@ def test_save_requirement_blockers_feedback_can_apply_title_block_in_same_flow(m
     monkeypatch.setattr(server_review, "_load_audit_rows", lambda: [])
     monkeypatch.setattr(server_review, "load_job_history", lambda: {})
     monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: None)
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_review, "rebuild_workspace_after_rule_change", lambda reason="": rebuilds.append(reason))
 
     result = server_review.save_requirement_blockers_feedback(
         "job-1",
@@ -154,7 +157,7 @@ def test_save_requirement_blockers_feedback_can_apply_title_block_in_same_flow(m
     assert "title block added for sap" in rebuilds[0]
 
 
-def test_save_requirement_blockers_feedback_suggests_description_block_when_only_rejected_descriptions_match(monkeypatch):
+def test_save_requirement_blockers_feedback_suggests_description_block_when_only_rejected_descriptions_match(monkeypatch: MonkeyPatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -185,7 +188,7 @@ def test_save_requirement_blockers_feedback_suggests_description_block_when_only
     )
     monkeypatch.setattr(server_review, "load_job_history", lambda: {})
     monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: None)
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": None)
+    monkeypatch.setattr(server_review, "rebuild_workspace_after_rule_change", lambda reason="": None)
 
     result = server_review.save_requirement_blockers_feedback(
         "job-1",
@@ -209,7 +212,7 @@ def test_save_requirement_blockers_feedback_suggests_description_block_when_only
     ]
 
 
-def test_save_requirement_blockers_feedback_can_apply_description_block_in_same_flow(monkeypatch):
+def test_save_requirement_blockers_feedback_can_apply_description_block_in_same_flow(monkeypatch: MonkeyPatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -222,7 +225,7 @@ def test_save_requirement_blockers_feedback_can_apply_description_block_in_same_
     monkeypatch.setattr(server_review, "_load_audit_rows", lambda: [])
     monkeypatch.setattr(server_review, "load_job_history", lambda: {})
     monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: None)
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_review, "rebuild_workspace_after_rule_change", lambda reason="": rebuilds.append(reason))
 
     result = server_review.save_requirement_blockers_feedback(
         "job-1",
@@ -244,7 +247,7 @@ def test_save_requirement_blockers_feedback_can_apply_description_block_in_same_
     assert "description phrase rule added for sap" in rebuilds[0]
 
 
-def test_save_requirement_blockers_feedback_applies_both_title_and_description_blocks_in_same_flow(tmp_path, monkeypatch):
+def test_save_requirement_blockers_feedback_applies_both_title_and_description_blocks_in_same_flow(tmp_path: Path, monkeypatch: MonkeyPatch):
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -285,7 +288,7 @@ def test_save_requirement_blockers_feedback_applies_both_title_and_description_b
     )
     monkeypatch.setattr(server_review, "load_job_history", lambda: {})
     monkeypatch.setattr(server_review, "persist_review_event", lambda *args, **kwargs: events.append((args, kwargs)))
-    monkeypatch.setattr(server_review, "rebuild_dashboard_after_rule_change", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(server_review, "rebuild_workspace_after_rule_change", lambda reason="": rebuilds.append(reason))
 
     result = server_review.save_requirement_blockers_feedback(
         "job-1",

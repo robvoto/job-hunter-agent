@@ -15,7 +15,7 @@ from pathlib import Path
 def run_migration() -> None:
     from job_hunter_agent.paths import (
         DATA_DIR,
-        DASHBOARD_FILENAME,
+        WORKSPACE_RESULTS_FILENAME,
         OUTPUT_DIR,
         USERS_DIR,
     )
@@ -41,7 +41,7 @@ def run_migration() -> None:
         (OUTPUT_DIR / "review_data.json",        user_dir / "review_data.json"),
         (OUTPUT_DIR / "run_stats.json",          user_dir / "run_stats.json"),
         (OUTPUT_DIR / "audit_records.json",      user_dir / "audit_records.json"),
-        (OUTPUT_DIR / DASHBOARD_FILENAME,        user_dir / DASHBOARD_FILENAME),
+        (OUTPUT_DIR / WORKSPACE_RESULTS_FILENAME, user_dir / WORKSPACE_RESULTS_FILENAME),
     ]
 
     for src, dst in moves:

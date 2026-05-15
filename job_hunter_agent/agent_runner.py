@@ -15,10 +15,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from job_hunter_agent.agent_settings import (
-    load_agent_settings,
+from job_hunter_agent.user_settings import (
+    load_user_settings,
     load_agent_state,
-    save_agent_settings,
+    save_user_settings,
     save_agent_state,
     DEFAULT_WORKSPACE_URL,
     DEFAULT_DAILY_TIME_LOCAL,
@@ -39,7 +39,7 @@ from job_hunter_agent.source_connector import (
     load_json_dict,
     load_job_history,
     parse_timestamp,
-    rebuild_html_workspace,
+    rebuild_workspace_results,
     scrape_jobs_direct,
     score_to_match_label,
     viewed_by_user,
@@ -57,7 +57,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
 )
-from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_path, get_run_stats_path
+from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path, get_run_stats_path
 
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
 
@@ -99,7 +99,7 @@ def build_workspace_reference(settings: dict[str, Any]) -> str:
     workspace_url = str(settings.get("workspace_url") or "").strip()
     if workspace_url:
         return workspace_url
-    return f"{DEFAULT_WORKSPACE_URL} ({get_workspace_path()})"
+    return f"{DEFAULT_WORKSPACE_URL} ({get_workspace_results_path()})"
 
 
 def load_latest_run_stats() -> dict[str, Any]:
@@ -310,13 +310,13 @@ def should_send_digest(payload: dict[str, Any], settings: dict[str, Any]) -> boo
 
 
 def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, Any]:
-    settings = load_agent_settings(create_if_missing=True)
+    settings = load_user_settings(None, create_if_missing=True)
     state = load_agent_state()
     previous_records = load_last_kept_records()
 
     if no_scrape:
         print("Rebuilding workspace from current local state...")
-        rebuild_html_workspace(reason="agent runner --send-notification-no-scrape")
+        rebuild_workspace_results(reason="agent runner --send-notification-no-scrape")
     else:
         print("Starting job collection...")
         scrape_jobs_direct()
@@ -347,7 +347,7 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
         if settings[KEY_TELEGRAM].get("enabled") and settings[KEY_TELEGRAM].get("bot_token"):
             try:
                 sync_result = sync_telegram_subscribers(settings[KEY_TELEGRAM])
-                save_agent_settings(settings)
+                save_user_settings(None, settings)
                 print(f"Telegram subscribers synced: {sync_result['total_subscribers']}")
             except Exception as exc:
                 print(f"Telegram subscriber sync skipped: {exc}")
@@ -395,7 +395,7 @@ def should_run_now(state: dict[str, Any], daily_time_local: str, now: datetime) 
 def run_agent_loop() -> None:
     print("Daily agent loop started.")
     while True:
-        settings = load_agent_settings(create_if_missing=True)
+        settings = load_user_settings(None, create_if_missing=True)
         sleep_seconds = int(settings["schedule"]["loop_sleep_seconds"])
         daily_time_local = str(settings["schedule"]["daily_time_local"] or DEFAULT_DAILY_TIME_LOCAL).strip()
 

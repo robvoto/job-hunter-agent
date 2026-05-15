@@ -1,4 +1,4 @@
-"""Global advance settings.
+﻿"""Global settings.
 
 These settings are system-wide, not candidate-specific. They control workspace
 presentation and other optimiser-style behaviour shared across profiles.
@@ -10,17 +10,17 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
 
-from job_hunter_agent.paths import ADVANCE_SETTINGS_PATH, DATA_DIR
+from job_hunter_agent.paths import CONFIG_DIR, GLOBAL_SETTINGS_PATH
 
 
-def _load_managed_advance_settings_seed() -> dict[str, Any]:
-    payload = json.loads(ADVANCE_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
+def _load_managed_global_settings_seed() -> dict[str, Any]:
+    payload = json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
-        raise ValueError("advance_settings.json must contain a JSON object")
+        raise ValueError("global_settings.json must contain a JSON object")
     return payload
 
 
-_MANAGED_ADVANCE_SETTINGS_SEED = _load_managed_advance_settings_seed()
+_MANAGED_GLOBAL_SETTINGS_SEED = _load_managed_global_settings_seed()
 
 
 KEY_FIT_HIGHLIGHTS = "fit_highlights"
@@ -49,6 +49,7 @@ KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS = "signal_cluster_min_alias_hits"
 KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS = "signal_cluster_min_snippet_hits"
 KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS = "signal_cluster_dense_snippet_alias_hits"
 KEY_MODEL_OPTIONS = "model_options"
+KEY_LLM_MAX_CHARS_LIMITS = "max_llm_chars_limits"
 KEY_LLM_PRICING_PER_1M = "pricing_per_1m"
 KEY_LLM_PROMPT_TEMPLATES = "match_preference_templates"
 KEY_LLM_PROMPT_EVIDENCE_TIERS = "evidence_tiers"
@@ -87,21 +88,21 @@ KEY_HIDDEN_REVIEW_DAYS = "hidden_review_days"
 KEY_MIN_TRUSTED_DESCRIPTION_LENGTH = "min_trusted_description_length"
 
 # Global card highlight controls are shared workspace presentation settings.
-DEFAULT_FIT_HIGHLIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_FIT_HIGHLIGHTS])
+DEFAULT_FIT_HIGHLIGHTS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_FIT_HIGHLIGHTS])
 
 # Global search defaults are shared across every profile and keep runtime code data-driven.
-DEFAULT_SEARCH_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SEARCH_SETTINGS])
+DEFAULT_SEARCH_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_SEARCH_SETTINGS])
 
 # Validation bounds live beside the defaults so profile code does not own hidden limits.
-SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SEARCH_LIMITS])
+SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_SEARCH_LIMITS])
 
-DEFAULT_SALARY_LIMITS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_SALARY_LIMITS])
+DEFAULT_SALARY_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_SALARY_LIMITS])
 
-DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_PREFERENCE_WEIGHTS])
+DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_PREFERENCE_WEIGHTS])
 
-DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
+DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
 
-DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_HISTORY_SETTINGS, {}))
+DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED.get(KEY_HISTORY_SETTINGS, {}))
 
 HISTORY_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     KEY_MAX_HISTORY_SIGHTINGS: (1, 100),
@@ -111,37 +112,39 @@ HISTORY_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS: (1, 365),
 }
 
-DEFAULT_DESCRIPTION_TRUST_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DESCRIPTION_TRUST_SETTINGS, {}))
+DEFAULT_DESCRIPTION_TRUST_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED.get(KEY_DESCRIPTION_TRUST_SETTINGS, {}))
 
 DEFAULT_SOURCE_DOCUMENT_SETTINGS = {
     KEY_SOURCE_DOCUMENT_SUFFIXES: [
         str(value).strip().lower()
-        for value in _MANAGED_ADVANCE_SETTINGS_SEED[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_SOURCE_DOCUMENT_SUFFIXES]
+        for value in _MANAGED_GLOBAL_SETTINGS_SEED[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_SOURCE_DOCUMENT_SUFFIXES]
         if str(value).strip()
     ],
 }
 
 DEFAULT_ONBOARDING_SETTINGS = {
     k: copy.deepcopy(v)
-    for k, v in _MANAGED_ADVANCE_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS].items()
+    for k, v in _MANAGED_GLOBAL_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS].items()
     if k != KEY_CAPABILITY_STRENGTH_PRESETS
 }
 
-DEFAULT_LLM_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_LLM_SETTINGS])
+DEFAULT_LLM_SETTINGS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_LLM_SETTINGS])
 
-DEFAULT_REVIEW_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_REVIEW_SETTINGS])
+DEFAULT_REVIEW_SETTINGS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_REVIEW_SETTINGS])
 
 DEFAULT_LLM_PROMPT_SETTINGS = dict(DEFAULT_LLM_SETTINGS[KEY_LLM_PROMPT_SETTINGS])
 
-DEFAULT_PLAYWRIGHT_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get("playwright_settings", {}))
+DEFAULT_PLAYWRIGHT_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED.get("playwright_settings", {}))
 DEFAULT_PLAYWRIGHT_BROWSER_MODE = str(
     DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_BROWSER_MODE, "ephemeral")
 ).strip().lower()
 
-DEFAULT_COUNTRY_SUFFIX = str(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DEFAULT_COUNTRY_SUFFIX, "Australia")).strip()
+DEFAULT_COUNTRY_SUFFIX = str(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_DEFAULT_COUNTRY_SUFFIX]).strip()
+if not DEFAULT_COUNTRY_SUFFIX:
+    raise ValueError("global_settings.default_country_suffix must not be empty")
 
 # Validation bounds for every onboarding setting. Centralised here so profile_store
-# and normalize_advance_settings both use the same limits without duplication.
+# and normalize_global_settings both use the same limits without duplication.
 ONBOARDING_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     "extraction_lookback_years":                           (1, 20),
     "title_extraction_min_months":                         (1, 24),
@@ -162,10 +165,10 @@ ONBOARDING_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     "signal_cluster_dense_snippet_alias_hits":             (1, 20),
 }
 
-CAPABILITY_STRENGTH_PRESETS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS][KEY_CAPABILITY_STRENGTH_PRESETS])
+CAPABILITY_STRENGTH_PRESETS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_ONBOARDING_SETTINGS][KEY_CAPABILITY_STRENGTH_PRESETS])
 
-# Default advance settings are persisted globally and shared across profiles.
-DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
+# Default global settings are persisted globally and shared across profiles.
+DEFAULT_GLOBAL_SETTINGS: dict[str, Any] = {
     KEY_FIT_HIGHLIGHTS: copy.deepcopy(DEFAULT_FIT_HIGHLIGHTS),
     KEY_SEARCH_SETTINGS: copy.deepcopy(DEFAULT_SEARCH_SETTINGS),
     KEY_SEARCH_LIMITS: copy.deepcopy(SEARCH_SETTING_LIMITS),
@@ -175,6 +178,7 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
     KEY_HISTORY_SETTINGS: copy.deepcopy(DEFAULT_HISTORY_SETTINGS),
     KEY_DESCRIPTION_TRUST_SETTINGS: copy.deepcopy(DEFAULT_DESCRIPTION_TRUST_SETTINGS),
     KEY_SOURCE_DOCUMENT_SETTINGS: copy.deepcopy(DEFAULT_SOURCE_DOCUMENT_SETTINGS),
+    KEY_DEFAULT_COUNTRY_SUFFIX: DEFAULT_COUNTRY_SUFFIX,
     KEY_ONBOARDING_SETTINGS: {
         **copy.deepcopy(DEFAULT_ONBOARDING_SETTINGS),
         KEY_CAPABILITY_STRENGTH_PRESETS: copy.deepcopy(CAPABILITY_STRENGTH_PRESETS),
@@ -190,23 +194,23 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
 }
 
 
-class AdvanceSettingsLoadError(RuntimeError):
+class GlobalSettingsLoadError(RuntimeError):
     pass
 
 
-def ensure_advance_settings_exists() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if ADVANCE_SETTINGS_PATH.exists():
+def ensure_global_settings_exists() -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if GLOBAL_SETTINGS_PATH.exists():
         return
-    save_advance_settings(DEFAULT_ADVANCE_SETTINGS)
+    save_global_settings(DEFAULT_GLOBAL_SETTINGS)
 
 
-def _backup_invalid_advance_settings() -> None:
-    if not ADVANCE_SETTINGS_PATH.exists():
+def _backup_invalid_global_settings() -> None:
+    if not GLOBAL_SETTINGS_PATH.exists():
         return
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    backup_path = ADVANCE_SETTINGS_PATH.with_name(f"advance_settings.invalid.{timestamp}.json")
-    backup_path.write_bytes(ADVANCE_SETTINGS_PATH.read_bytes())
+    backup_path = GLOBAL_SETTINGS_PATH.with_name(f"global_settings.invalid.{timestamp}.json")
+    backup_path.write_bytes(GLOBAL_SETTINGS_PATH.read_bytes())
 
 
 def _require_int(source: dict[str, Any], key: str, default: int, minimum: int, maximum: int) -> int:
@@ -214,9 +218,9 @@ def _require_int(source: dict[str, Any], key: str, default: int, minimum: int, m
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.{key} must be an integer, got {raw!r}") from exc
+        raise ValueError(f"global_settings.{key} must be an integer, got {raw!r}") from exc
     if value < minimum or value > maximum:
-        raise ValueError(f"advance_settings.{key} must be between {minimum} and {maximum}, got {value}")
+        raise ValueError(f"global_settings.{key} must be between {minimum} and {maximum}, got {value}")
     return value
 
 
@@ -225,9 +229,9 @@ def _require_float(source: dict[str, Any], key: str, default: float, minimum: fl
     try:
         value = float(raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.{key} must be a number, got {raw!r}") from exc
+        raise ValueError(f"global_settings.{key} must be a number, got {raw!r}") from exc
     if value < minimum or value > maximum:
-        raise ValueError(f"advance_settings.{key} must be between {minimum} and {maximum}, got {value}")
+        raise ValueError(f"global_settings.{key} must be between {minimum} and {maximum}, got {value}")
     return value
 
 
@@ -251,11 +255,17 @@ def _normalize_float_map(
     return normalized
 
 
+def _normalize_int_bounds(source: dict[str, Any], defaults: dict[str, int]) -> dict[str, int]:
+    min_value = _require_int(source, "min", int(defaults["min"]), 1, 10_000_000)
+    max_value = _require_int(source, "max", int(defaults["max"]), min_value, 10_000_000)
+    return {"min": min_value, "max": max_value}
+
+
 def _normalize_llm_pricing_map(source: dict[str, Any], defaults: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
     normalized: dict[str, dict[str, float]] = {}
     for model, raw_prices in source.items():
         if not isinstance(raw_prices, dict):
-            raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M}.{model} must be a dict")
+            raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M}.{model} must be a dict")
         default_prices = defaults.get(model, {"input": 0.0, "output": 0.0})
         normalized[model] = {
             "input": _require_float(raw_prices, "input", float(default_prices["input"]), 0.0, 10_000.0),
@@ -269,10 +279,10 @@ def _normalize_llm_pricing_map(source: dict[str, Any], defaults: dict[str, dict[
 def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
     templates_source = source.get(KEY_LLM_PROMPT_TEMPLATES, {})
     if not isinstance(templates_source, dict):
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_TEMPLATES} must be a dict")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_TEMPLATES} must be a dict")
     evidence_tiers_source = source.get(KEY_LLM_PROMPT_EVIDENCE_TIERS, [])
     if not isinstance(evidence_tiers_source, list):
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS} must be a list")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS} must be a list")
 
     templates = {
         name: str(templates_source.get(name) or default).strip()
@@ -286,7 +296,7 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
             tier_source = {}
         profile_key = str(tier_source.get("profile_key") or default_tier["profile_key"]).strip()
         if not profile_key:
-            raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS}[{index}].profile_key is required")
+            raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS}[{index}].profile_key is required")
         evidence_tiers.append(
             {
                 "profile_key": profile_key,
@@ -312,21 +322,21 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
     try:
         learning_max_items = int(source.get(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS]) or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS])
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be an integer") from exc
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be an integer") from exc
     if learning_max_items < 1 or learning_max_items > 20:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be between 1 and 20")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be between 1 and 20")
     try:
         rejection_blocker_max_items = int(source.get(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS]) or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS])
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be an integer") from exc
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be an integer") from exc
     if rejection_blocker_max_items < 1 or rejection_blocker_max_items > 20:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be between 1 and 20")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be between 1 and 20")
     try:
         rejection_blocker_max_words = int(source.get(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS]) or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS])
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be an integer") from exc
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be an integer") from exc
     if rejection_blocker_max_words < 1 or rejection_blocker_max_words > 20:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be between 1 and 20")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be between 1 and 20")
 
     return {
         KEY_LLM_PROMPT_TEMPLATES: templates,
@@ -351,7 +361,7 @@ def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
 def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[str]) -> list[str]:
     raw_suffixes = source.get(KEY_SOURCE_DOCUMENT_SUFFIXES, defaults)
     if not isinstance(raw_suffixes, list):
-        raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must be a list")
+        raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must be a list")
 
     normalized: list[str] = []
     for value in raw_suffixes:
@@ -359,13 +369,13 @@ def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[s
         if not suffix:
             continue
         if not suffix.startswith("."):
-            raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must start with '.'")
+            raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must start with '.'")
         if " " in suffix:
-            raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must not contain spaces")
+            raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must not contain spaces")
         if suffix not in normalized:
             normalized.append(suffix)
     if not normalized:
-        raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must contain at least one suffix")
+        raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must contain at least one suffix")
     return normalized
 
 
@@ -386,11 +396,11 @@ def _normalize_limit_map(
             "max": _require_int(raw_bounds, "max", int(default.get("max", maximum)), minimum, maximum),
         }
         if normalized[key]["min"] > normalized[key]["max"]:
-            raise ValueError(f"advance_settings.{key}.min must be <= max")
+            raise ValueError(f"global_settings.{key}.min must be <= max")
     return normalized
 
 
-def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
+def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
@@ -402,37 +412,40 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
     history_source = source.get(KEY_HISTORY_SETTINGS, {})
     description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
     source_document_source = source.get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
+    default_country_suffix = str(source.get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)).strip()
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
     llm_source = source.get(KEY_LLM_SETTINGS, {})
     playwright_source = source.get("playwright_settings", {})
     review_source = source.get(KEY_REVIEW_SETTINGS, {})
 
     if not isinstance(fit_source, dict):
-        raise ValueError(f"advance_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
     if not isinstance(search_source, dict):
-        raise ValueError(f"advance_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}")
     if not isinstance(search_limits_source, dict):
-        raise ValueError(f"advance_settings.{KEY_SEARCH_LIMITS} must be a dict, got {type(search_limits_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_SEARCH_LIMITS} must be a dict, got {type(search_limits_source).__name__!r}")
     if not isinstance(salary_limits_source, dict):
-        raise ValueError(f"advance_settings.{KEY_SALARY_LIMITS} must be a dict, got {type(salary_limits_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_SALARY_LIMITS} must be a dict, got {type(salary_limits_source).__name__!r}")
     if not isinstance(preference_source, dict):
-        raise ValueError(f"advance_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
     if not isinstance(evidence_source, dict):
-        raise ValueError(f"advance_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}")
     if not isinstance(history_source, dict):
-        raise ValueError(f"advance_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}")
     if not isinstance(description_trust_source, dict):
-        raise ValueError(f"advance_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}")
     if not isinstance(source_document_source, dict):
-        raise ValueError(f"advance_settings.{KEY_SOURCE_DOCUMENT_SETTINGS} must be a dict, got {type(source_document_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS} must be a dict, got {type(source_document_source).__name__!r}")
+    if not default_country_suffix:
+        raise ValueError("global_settings.default_country_suffix must not be empty")
     if not isinstance(playwright_source, dict):
-        raise ValueError(f"advance_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}")
+        raise ValueError(f"global_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}")
     if not isinstance(onboarding_source, dict):
-        raise ValueError(f"advance_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
     if not isinstance(llm_source, dict):
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}")
     if not isinstance(review_source, dict):
-        raise ValueError(f"advance_settings.{KEY_REVIEW_SETTINGS} must be a dict, got {type(review_source).__name__!r}")
+        raise ValueError(f"global_settings.{KEY_REVIEW_SETTINGS} must be a dict, got {type(review_source).__name__!r}")
 
     preset_name = str(onboarding_source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]).strip().lower()
     preset_name = preset_name if preset_name in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
@@ -441,29 +454,42 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
 
     model_options_source = llm_source.get(KEY_MODEL_OPTIONS, DEFAULT_LLM_SETTINGS[KEY_MODEL_OPTIONS])
     if not isinstance(model_options_source, list):
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must be a list")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must be a list")
     normalized_model_options: list[str] = []
     for value in model_options_source:
         model = str(value or "").strip()
         if model and model not in normalized_model_options:
             normalized_model_options.append(model)
     if not normalized_model_options:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must contain at least one model")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must contain at least one model")
     pricing_source = llm_source.get(KEY_LLM_PRICING_PER_1M, {})
     if not isinstance(pricing_source, dict):
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict")
     normalized_llm_pricing = _normalize_llm_pricing_map(pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M])
+    max_chars_limits_source = llm_source.get(KEY_LLM_MAX_CHARS_LIMITS, {})
+    if not isinstance(max_chars_limits_source, dict):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS_LIMITS} must be a dict")
+    normalized_max_chars_limits = _normalize_int_bounds(
+        max_chars_limits_source,
+        DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS_LIMITS],
+    )
     prompt_source = llm_source.get(KEY_LLM_PROMPT_SETTINGS, {})
     if not isinstance(prompt_source, dict):
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
     normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source)
 
     try:
-        max_llm_chars = int(llm_source.get(KEY_LLM_MAX_CHARS, DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS]) or DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS])
+        max_llm_chars = int(
+            llm_source.get(KEY_LLM_MAX_CHARS, DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS])
+            or DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS]
+        )
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be an integer") from exc
-    if max_llm_chars < 1 or max_llm_chars > 20_000:
-        raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be between 1 and 20000")
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be an integer") from exc
+    if max_llm_chars < normalized_max_chars_limits["min"] or max_llm_chars > normalized_max_chars_limits["max"]:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be between "
+            f"{normalized_max_chars_limits['min']} and {normalized_max_chars_limits['max']}"
+        )
 
     # Keep the configured preset table in the persisted settings file, not in feature code.
     preset_table_source = onboarding_source.get(KEY_CAPABILITY_STRENGTH_PRESETS, {})
@@ -488,7 +514,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         min_value = _require_int(bounds_source, "min", int(default_bounds["min"]), 0, 10_000)
         max_value = _require_int(bounds_source, "max", int(default_bounds["max"]), 1, 10_000)
         if min_value > max_value:
-            raise ValueError(f"advance_settings.search_limits.{limit_key}.min must be <= max")
+            raise ValueError(f"global_settings.search_limits.{limit_key}.min must be <= max")
         normalized_search_limits[limit_key] = {"min": min_value, "max": max_value}
 
     normalized_salary_limits = _normalize_limit_map(salary_limits_source, DEFAULT_SALARY_LIMITS, maximum=10_000_000)
@@ -561,7 +587,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         or DEFAULT_PLAYWRIGHT_BROWSER_MODE
     ).strip().lower()
     if browser_mode not in {"ephemeral", "persistent"}:
-        raise ValueError("advance_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'")
+        raise ValueError("global_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'")
 
     return {
         KEY_FIT_HIGHLIGHTS: {
@@ -644,6 +670,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         KEY_HISTORY_SETTINGS: normalized_history_settings,
         KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
         KEY_SOURCE_DOCUMENT_SETTINGS: normalized_source_document_settings,
+        KEY_DEFAULT_COUNTRY_SUFFIX: default_country_suffix,
         KEY_ONBOARDING_SETTINGS: {
             **{
                 key: _require_int(merged_onboarding, key, DEFAULT_ONBOARDING_SETTINGS[key], minimum, maximum)
@@ -656,6 +683,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             "model": str(llm_source.get("model") or DEFAULT_LLM_SETTINGS.get("model")).strip(),
             KEY_MODEL_OPTIONS: normalized_model_options,
             KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
+            KEY_LLM_MAX_CHARS_LIMITS: normalized_max_chars_limits,
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
             KEY_LLM_MAX_CHARS: max_llm_chars,
         },
@@ -707,57 +735,57 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
 
 
 def get_default_country_suffix() -> str:
-    return load_advance_settings().get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)
+    return str(load_global_settings()[KEY_DEFAULT_COUNTRY_SUFFIX]).strip()
 
 
 def get_llm_max_chars() -> int:
-    return int(load_advance_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_CHARS])
+    return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_CHARS])
 
 
 def get_archive_stale_after_days() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
 
 
 def get_hidden_review_days() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
 
 
 def get_max_history_sightings() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_MAX_HISTORY_SIGHTINGS])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MAX_HISTORY_SIGHTINGS])
 
 
 def get_repeated_listing_min_times_seen() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_TIMES_SEEN])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_TIMES_SEEN])
 
 
 def get_repeated_listing_min_span_days() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_SPAN_DAYS])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_SPAN_DAYS])
 
 
 def get_multi_listing_red_flag_min_listings() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS])
 
 
 def get_multi_listing_red_flag_min_span_days() -> int:
-    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS])
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS])
 
 
 def get_min_trusted_description_length() -> int:
-    return int(load_advance_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
+    return int(load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
 
 
 def get_playwright_browser_mode() -> str:
-    settings = load_advance_settings().get("playwright_settings", {})
+    settings = load_global_settings().get("playwright_settings", {})
     return str(settings.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE)).strip().lower()
 
 
 def get_salary_limits() -> dict[str, dict[str, int]]:
-    settings = load_advance_settings().get(KEY_SALARY_LIMITS, {})
+    settings = load_global_settings().get(KEY_SALARY_LIMITS, {})
     return settings if isinstance(settings, dict) else copy.deepcopy(DEFAULT_SALARY_LIMITS)
 
 
 def get_allowed_source_document_suffixes() -> frozenset[str]:
-    settings = load_advance_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
+    settings = load_global_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
     suffixes = settings.get(KEY_SOURCE_DOCUMENT_SUFFIXES, []) if isinstance(settings, dict) else []
     return frozenset(
         str(value).strip().lower()
@@ -770,28 +798,30 @@ def get_allowed_source_document_suffixes_label() -> str:
     return ", ".join(sorted(get_allowed_source_document_suffixes()))
 
 @lru_cache(maxsize=1)
-def load_advance_settings() -> dict[str, Any]:
-    ensure_advance_settings_exists()
+def load_global_settings() -> dict[str, Any]:
+    ensure_global_settings_exists()
     try:
-        data = json.loads(ADVANCE_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
+        data = json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        _backup_invalid_advance_settings()
-        raise AdvanceSettingsLoadError(f"Failed to parse advance_settings.json: {exc}") from exc
+        _backup_invalid_global_settings()
+        raise GlobalSettingsLoadError(f"Failed to parse global_settings.json: {exc}") from exc
     if not isinstance(data, dict):
-        _backup_invalid_advance_settings()
-        raise AdvanceSettingsLoadError("advance_settings.json must contain a JSON object")
-    return normalize_advance_settings(data)
+        _backup_invalid_global_settings()
+        raise GlobalSettingsLoadError("global_settings.json must contain a JSON object")
+    return normalize_global_settings(data)
 
 
 def get_review_settings() -> dict[str, Any]:
-    return load_advance_settings()[KEY_REVIEW_SETTINGS]
+    return load_global_settings()[KEY_REVIEW_SETTINGS]
 
 
-def save_advance_settings(settings: dict[str, Any]) -> dict[str, Any]:
-    normalized = normalize_advance_settings(settings)
-    ADVANCE_SETTINGS_PATH.write_text(
+def save_global_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_global_settings(settings)
+    GLOBAL_SETTINGS_PATH.write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    load_advance_settings.cache_clear()
+    load_global_settings.cache_clear()
     return normalized
+
+

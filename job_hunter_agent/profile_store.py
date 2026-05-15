@@ -37,7 +37,7 @@ from job_hunter_agent.advance_settings import (
     KEY_SORT_NEWEST_FIRST,
     ONBOARDING_SETTING_LIMITS,
     get_salary_limits,
-    load_advance_settings,
+    load_advanced_settings,
 )
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.parsing_schema import (
@@ -336,7 +336,7 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     # Global policy baseline: user-configured values from advance_settings.json.
     # Falls back to code defaults if advance_settings is not yet initialised.
     try:
-        global_onboarding = load_advance_settings()[ADVANCE_KEY_ONBOARDING_SETTINGS]
+        global_onboarding = load_advanced_settings()[ADVANCE_KEY_ONBOARDING_SETTINGS]
     except Exception:
         global_onboarding = {}
     global_presets = global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
@@ -585,7 +585,7 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     merged = _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
-    search_limits = load_advance_settings()[KEY_SEARCH_LIMITS]
+    search_limits = load_advanced_settings()[KEY_SEARCH_LIMITS]
 
     try:
         merged[KEY_DATE_RANGE_DAYS] = max(

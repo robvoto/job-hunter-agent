@@ -87,6 +87,7 @@
       ".rst"
     ]
   },
+  "default_country_suffix": "Australia",
   "onboarding_settings": {
     "extraction_lookback_years": 8,
     "title_extraction_min_months": 6,
@@ -149,6 +150,10 @@
       "gpt-4o"
     ],
     "max_llm_chars": 3000,
+    "max_llm_chars_limits": {
+      "min": 1,
+      "max": 20000
+    },
     "pricing_per_1m": {
       "gpt-4o-mini": {
         "input": 0.15,

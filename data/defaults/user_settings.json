@@ -1,7 +1,6 @@
 {
-  "_help": "Template file with default values for agent settings and dashboard display controls. Used for initialization only.",
-  "dashboard_url": "http://127.0.0.1:8765/dashboard",
-  "dashboard": {
+  "workspace_url": "http://127.0.0.1:8765/workspace",
+  "workspace": {
     "minimum_score": 55
   },
   "schedule": {
@@ -32,5 +31,8 @@
     "disable_link_preview": false,
     "last_update_id": 0,
     "subscribers": []
+  },
+  "llm": {
+    "model": "gpt-4o-mini"
   }
 }

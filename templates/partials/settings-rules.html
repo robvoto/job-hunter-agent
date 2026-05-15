@@ -1,0 +1,65 @@
+        <section id="section-rules" class="settings-group" data-screen="settings">
+          <h2 class="section-title">Rules</h2>
+          <div class="advanced-grid">
+            <section class="subpanel">
+              <h3>Role Matching</h3>
+              <label for="primary_job_title_pattern_add">Primary job titles</label>
+              <div class="badge-editor" data-chip-editor="primary_job_title_pattern">
+                <div id="primary_job_title_pattern_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="primary_job_title_pattern_add" type="text" data-chip-input="primary_job_title_pattern" placeholder="e.g. Business Analyst">
+                  <button class="secondary" type="button" data-add-chip="primary_job_title_pattern">Add</button>
+                </div>
+              </div>
+              <textarea id="primary_job_title_pattern" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Jobs with these titles are treated as strong matches.</div>
+
+              <label for="adjacent_title_patterns_add">Secondary job titles</label>
+              <div class="badge-editor" data-chip-editor="adjacent_title_patterns">
+                <div id="adjacent_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="e.g. Product Owner">
+                  <button class="secondary" type="button" data-add-chip="adjacent_title_patterns">Add</button>
+                </div>
+              </div>
+              <textarea id="adjacent_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Jobs with these titles can still match when other evidence is strong.</div>
+
+              <label for="reject_title_rules_add">Blocked job titles</label>
+              <div class="badge-editor" data-chip-editor="reject_title_rules">
+                <div id="reject_title_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="reject_title_rules_add" type="text" data-chip-input="reject_title_rules" placeholder="e.g. Sales Representative">
+                  <button class="secondary" type="button" data-add-chip="reject_title_rules">Add</button>
+                </div>
+              </div>
+              <textarea id="reject_title_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Jobs containing these titles or keywords are automatically rejected.</div>
+            </section>
+
+            <section class="subpanel">
+              <h3>Requirement Exclusions</h3>
+              <label for="must_not_require_skills_add">Mandatory skills to reject</label>
+              <div class="badge-editor" data-chip-editor="must_not_require_skills">
+                <div id="must_not_require_skills_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="must_not_require_skills_add" type="text" data-chip-input="must_not_require_skills" placeholder="e.g. SAP, NV1, Baseline Clearance">
+                  <button class="secondary" type="button" data-add-chip="must_not_require_skills">Add</button>
+                </div>
+              </div>
+              <textarea id="must_not_require_skills" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Reject jobs that explicitly require skills or tools you do not have.</div>
+
+              <label for="reject_description_phrase_rules_add">Excluded keywords or phrases</label>
+              <div class="badge-editor" data-chip-editor="reject_description_phrase_rules">
+                <div id="reject_description_phrase_rules_chips" class="badge-editor-list" aria-live="polite"></div>
+                <div class="badge-editor-form">
+                  <input id="reject_description_phrase_rules_add" type="text" data-chip-input="reject_description_phrase_rules" placeholder="e.g. call centre, aged care">
+                  <button class="secondary" type="button" data-add-chip="reject_description_phrase_rules">Add</button>
+                </div>
+              </div>
+              <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Reject jobs containing these keywords or phrases anywhere in the ad.</div>
+            </section>
+          </div>
+        </section>

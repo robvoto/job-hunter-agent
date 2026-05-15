@@ -245,8 +245,8 @@
             <div class="field-help">Keep one model id per line. The runtime selector uses this list directly.</div>
 
             <label for="llm_max_llm_chars">Maximum LLM characters</label>
-            <input id="llm_max_llm_chars" type="number" min="1" max="20000" step="1">
-            <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts.</div>
+            <input id="llm_max_llm_chars" type="number" step="1">
+            <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts. The allowed range comes from advanced settings.</div>
 
             <label for="llm_pricing_per_1m">Model pricing per 1M tokens</label>
             <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"model-id": {"input": 0, "output": 0}}'></textarea>

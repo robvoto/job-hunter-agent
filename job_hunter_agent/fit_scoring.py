@@ -17,7 +17,7 @@ from job_hunter_agent.preferences import (
     assess_location_preference,
     salary_fit_adjustment,
 )
-from job_hunter_agent.advance_settings import KEY_FIT_HIGHLIGHTS, load_advance_settings
+from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_EVIDENCE,
     KEY_CAPABILITY_LEVEL_WEIGHTS,
@@ -163,7 +163,7 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     active_profile = profile or load_profile()
     highlight_labels = load_ui_labels()["fit_highlight_labels"]
     # Workspace card highlight counts are global optimiser settings.
-    hl_config = load_advance_settings()[KEY_FIT_HIGHLIGHTS]
+    hl_config = load_global_settings()[KEY_FIT_HIGHLIGHTS]
     role_bundle = role_text_bundle(record, details_text)
     capability_matches = find_profile_capability_matches(role_bundle, active_profile)
 
@@ -371,3 +371,4 @@ def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
 def fit_score(record: dict, profile: Optional[dict] = None) -> int:
     score = sum(item["value"] for item in fit_score_breakdown(record, profile))
     return max(min(score, 100), 0)
+

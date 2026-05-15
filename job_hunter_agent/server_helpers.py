@@ -11,9 +11,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE, ALLOWED_DOC_REL_PATHS
-from job_hunter_agent.agent_settings import (
-    DEFAULT_AGENT_SETTINGS, 
-    load_agent_state, 
+from job_hunter_agent.user_settings import (
+    DEFAULT_USER_SETTINGS,
+    load_agent_state,
     KEY_WORKSPACE,
     KEY_EMAIL,
     KEY_TELEGRAM,
@@ -128,9 +128,9 @@ from job_hunter_agent.advance_settings import (
     KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
     KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
-    load_advance_settings,
+    load_advanced_settings,
     get_salary_limits,
-    save_advance_settings,
+    save_advanced_settings,
 )
 _STATIC_MIME_OVERRIDES = {
     ".css": "text/css",
@@ -663,7 +663,7 @@ class SettingsHandler:
         }
 
     @staticmethod
-    def _sanitize_agent_settings_payload(payload: dict) -> dict:
+    def _sanitize_user_settings_payload(payload: dict) -> dict:
         workspace = payload.get(KEY_WORKSPACE, {}) if isinstance(payload, dict) else {}
         telegram = payload.get(KEY_TELEGRAM, {}) if isinstance(payload, dict) else {}
         llm = payload.get(KEY_LLM, {}) if isinstance(payload, dict) else {}
@@ -684,7 +684,7 @@ class SettingsHandler:
             allowed_models = [
                 str(value).strip()
                 for value in (
-                    load_advance_settings()
+                    load_advanced_settings()
                     .get(KEY_LLM_SETTINGS, {})
                     .get(KEY_MODEL_OPTIONS, [])
                 )
@@ -702,7 +702,7 @@ class SettingsHandler:
         if isinstance(schedule_payload, dict):
             daily_time_local = str(
                 schedule_payload.get("daily_time_local")
-                or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["daily_time_local"]
+                or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]
             ).strip()
             if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", daily_time_local):
                 raise ValueError("Schedule time must be in HH:MM 24-hour format.")
@@ -710,9 +710,9 @@ class SettingsHandler:
                 loop_sleep_seconds = int(
                     schedule_payload.get(
                         "loop_sleep_seconds",
-                        DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"],
+                        DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"],
                     )
-                    or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]
+                    or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]
                 )
             except (TypeError, ValueError) as exc:
                 raise ValueError("Schedule polling interval must be a whole number of seconds.") from exc
@@ -723,7 +723,7 @@ class SettingsHandler:
         return sanitized
 
     @staticmethod
-    def _public_agent_settings_payload(settings: dict) -> dict:
+    def _public_user_settings_payload(settings: dict) -> dict:
         workspace = settings.get(KEY_WORKSPACE, {}) if isinstance(settings, dict) else {}
         telegram = settings.get(KEY_TELEGRAM, {}) if isinstance(settings, dict) else {}
         llm_settings = settings.get(KEY_LLM, {}) if isinstance(settings, dict) else {}
@@ -731,11 +731,11 @@ class SettingsHandler:
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
             KEY_WORKSPACE: {
-                "minimum_score": max(0, min(int(workspace.get("minimum_score", DEFAULT_AGENT_SETTINGS[KEY_WORKSPACE]["minimum_score"]) or DEFAULT_AGENT_SETTINGS[KEY_WORKSPACE]["minimum_score"]), 100)),
+                "minimum_score": max(0, min(int(workspace.get("minimum_score", DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"]) or DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"]), 100)),
             },
             KEY_SCHEDULE: {
-                "daily_time_local": str(schedule.get("daily_time_local") or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip(),
-                "loop_sleep_seconds": max(60, int(schedule.get("loop_sleep_seconds", DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]) or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"])),
+                "daily_time_local": str(schedule.get("daily_time_local") or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip(),
+                "loop_sleep_seconds": max(60, int(schedule.get("loop_sleep_seconds", DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]) or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"])),
             },
             KEY_TELEGRAM: {
                 "enabled": bool(telegram.get("enabled", False)),

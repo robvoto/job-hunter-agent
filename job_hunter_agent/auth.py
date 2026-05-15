@@ -31,7 +31,7 @@ from job_hunter_agent.config import (
     SESSION_COOKIE_PATH,
     SESSION_COOKIE_DEFAULT_NAME,
 )
-from job_hunter_agent.paths import DATA_DIR
+from job_hunter_agent.paths import AUTH_DIR
 
 OPEN_PATHS = {
     LOGIN_PATH,
@@ -41,7 +41,7 @@ OPEN_PATHS = {
     GOOGLE_AUTH_CALLBACK_PATH,
 }
 
-USERS_PATH = DATA_DIR / "users.json"
+USERS_PATH = AUTH_DIR / "users.json"
 _users_lock = threading.Lock()
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
