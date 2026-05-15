@@ -8,7 +8,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from job_hunter_agent.cv_pipeline import run_cv_pipeline
-from job_hunter_agent.advance_settings import get_allowed_source_document_suffixes
+from job_hunter_agent.global_settings import get_allowed_source_document_suffixes
 from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -420,3 +420,4 @@ def build_llm_profile_brief(
 
     return "\n".join(lines).strip()[:3000]
  
+

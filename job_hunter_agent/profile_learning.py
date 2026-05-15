@@ -62,7 +62,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_MAX_CV_FALLBACK_CHARS,
     LLM_MAX_TOKENS_PROFILE_EXTRACTION,
 )
-from job_hunter_agent.advance_settings import KEY_CAPABILITY_ALIAS_LIMIT
+from job_hunter_agent.global_settings import KEY_CAPABILITY_ALIAS_LIMIT
 
 from job_hunter_agent.parsing_schema import (
     PARSING_TITLE_CANDIDATE_LINE_RULES_KEY,
@@ -1195,3 +1195,4 @@ def extract_title_pattern_suggestions(
         KEY_SECONDARY_PATTERNS: list(dict.fromkeys(secondary_patterns)),
         KEY_SUGGESTED_KEYWORDS: list(dict.fromkeys(suggested_search_keywords))[:4],
     }
+

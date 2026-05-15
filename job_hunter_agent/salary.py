@@ -1,9 +1,9 @@
 import json
 from typing import Dict, Optional
 
-from job_hunter_agent.paths import DATA_DIR
+from job_hunter_agent.paths import KNOWLEDGE_DIR
 
-_SALARY_PATH = DATA_DIR / "salary.json"
+_SALARY_PATH = KNOWLEDGE_DIR / "salary.json"
 
 KEY_INTERVAL_SUFFIX = "interval_suffix"
 KEY_INTERVAL_DIVISOR = "interval_divisor"

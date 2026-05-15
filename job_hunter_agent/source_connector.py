@@ -1,4 +1,4 @@
-﻿"""
+"""
 Main job-source connector and workspace builder.
 
 Main goals:
@@ -38,7 +38,7 @@ from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_REBUILD_WORKSPACE,
     has_cli_flag,
 )
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     DEFAULT_PLAYWRIGHT_SETTINGS,
     KEY_DATE_RANGE_DAYS,
@@ -481,3 +481,4 @@ if __name__ == "__main__":
         rebuild_workspace_results()
     else:
         scrape_jobs_direct()
+

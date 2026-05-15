@@ -2,7 +2,7 @@ import re
 from typing import Any
 
 
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     get_review_settings,
     KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
     KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
@@ -442,3 +442,4 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
 
     profile[KEY_CAPABILITY_PROFILE_RULES] = capability_rules
     return profile
+

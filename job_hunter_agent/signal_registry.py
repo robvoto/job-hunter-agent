@@ -77,6 +77,57 @@ CATEGORY_LABELS = {
     CATEGORY_TITLE_PARSE_BLOCKER: "Title parse blocker",
 }
 
+CATEGORY_METADATA = {
+    CATEGORY_CAPABILITY_CONCEPT: {
+        "label": "Capability",
+        "description": "Skills, tools, methods, or domain concepts that are used for fit scoring. Approved capabilities help match job requirements to candidate profiles.",
+        "examples": ["BPMN", "Jira", "SQL", "Azure", "Power BI", "SAP", "ServiceNow"],
+        "warning": None,
+    },
+    CATEGORY_CV_FARMING_PATTERN: {
+        "label": "CV farming pattern",
+        "description": "Wording that suggests recruiter spam, resume harvesting, fake jobs, or low-trust ads. These phrases indicate the job may not be genuine or authentic.",
+        "examples": ["expression of interest", "talent pool", "future opportunities", "register your details", "upload CV", "keep your profile active"],
+        "warning": "Approving CV farming patterns will cause matching jobs to be rejected.",
+    },
+    CATEGORY_GOVERNMENT_CONTEXT: {
+        "label": "Government context",
+        "description": "Terms showing public sector, clearance requirements, agency context, or regulated/sensitive work environment. Helps identify government and public sector roles.",
+        "examples": ["APS", "department", "ministry", "Baseline", "NV1", "NV2", "Top Secret", "public servant", "federal", "state government"],
+        "warning": None,
+    },
+    CATEGORY_HARD_BLOCKER_PATTERN: {
+        "label": "Hard blocker pattern",
+        "description": "Strong rejection patterns that disqualify a job. Hard blockers prevent the job from passing through the pipeline.",
+        "examples": ["must hold CPA", "active NV2 required", "on-site 5 days mandatory", "requires current driving licence", "willing to work weekends"],
+        "warning": "⚠️ DANGER: Wrong approvals here can permanently reject valid jobs. Ensure the pattern is an absolute dealbreaker before approving.",
+    },
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: {
+        "label": "Job type",
+        "description": "Employment structure and engagement terms. Helps standardize and recognize contract, permanent, casual, and other work arrangement types.",
+        "examples": ["contract", "permanent", "casual", "part-time", "full-time", "fixed-term", "temporary"],
+        "warning": None,
+    },
+    CATEGORY_ROLE_TITLE_TOKEN: {
+        "label": "Role title",
+        "description": "Recognized job titles or role families that help classify positions. These are exact or near-exact job titles from official role taxonomies.",
+        "examples": ["Business Analyst", "Technical BA", "Delivery Manager", "Project Manager", "Systems Administrator", "QA Engineer"],
+        "warning": None,
+    },
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: {
+        "label": "Title abbreviation",
+        "description": "Short title forms and abbreviations that normalize to standard titles. Helps recognize common abbreviations like 'BA' for Business Analyst.",
+        "examples": ["BA = Business Analyst", "PM = Project Manager", "QA = Quality Assurance", "SME = Subject Matter Expert", "P&L = P&L Manager"],
+        "warning": "⚠️ NOTE: Abbreviations can be ambiguous (e.g., BA = Business Analyst OR Business Analyst).",
+    },
+    CATEGORY_TITLE_PARSE_BLOCKER: {
+        "label": "Title parse blocker",
+        "description": "Words or patterns that prevent false title matches. These block incorrect role classifications and improve accuracy.",
+        "examples": ["BAU", "lead generation", "sales consultant", "operations support", "business support"],
+        "warning": "⚠️ DANGER: Wrong blockers can hide valid jobs by incorrectly filtering titles. Test carefully before approving.",
+    },
+}
+
 _CATEGORY_KNOWLEDGE_PATHS = {
     CATEGORY_CAPABILITY_CONCEPT: CAPABILITY_KNOWLEDGE_PATH,
     CATEGORY_CV_FARMING_PATTERN: CV_FARMING_RULES_PATH,

@@ -45,7 +45,7 @@ from job_hunter_agent.signal_schema import (
 )
 from job_hunter_agent.title_normalization_rules import classify_title_normalization_candidate
 from job_hunter_agent.text_processing import compact_whitespace
-from job_hunter_agent.advance_settings import get_llm_max_chars
+from job_hunter_agent.global_settings import get_llm_max_chars
 
 
 def deterministic_review_outcome(
@@ -270,3 +270,4 @@ def resolve_llm_review_payload(
 
     payload["payload_source"] = "llm"
     return payload
+

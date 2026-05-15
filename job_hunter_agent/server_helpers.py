@@ -116,7 +116,7 @@ from job_hunter_agent.source_documents import (
     run_onboarding,
     save_source_materials,
 )
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_DATE_RANGE_DAYS,
@@ -128,9 +128,9 @@ from job_hunter_agent.advance_settings import (
     KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
     KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
-    load_advanced_settings,
+    load_global_settings,
     get_salary_limits,
-    save_advanced_settings,
+    save_global_settings,
 )
 _STATIC_MIME_OVERRIDES = {
     ".css": "text/css",
@@ -215,7 +215,7 @@ def build_bootstrap_script(
     location_options: list[dict[str, Any]] | None = None,
     default_location: str | None = None,
     onboarding_defaults: dict[str, Any] | None = None,
-    advance_settings: dict[str, Any] | None = None,
+    global_settings: dict[str, Any] | None = None,
     resume_step: int | None = None,
 ) -> str:
     parts = [f'<script>window.__JOB_HUNTER_DEBUG_MODE__ = {"true" if DEBUG_MODE else "false"};</script>']
@@ -239,9 +239,9 @@ def build_bootstrap_script(
         parts.append(
             f'<script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = {json.dumps(default_location, ensure_ascii=True)};</script>'
         )
-    if advance_settings is not None:
+    if global_settings is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_ADVANCE_SETTINGS__ = {json.dumps(advance_settings, ensure_ascii=True)};</script>'
+            f'<script>window.__JOB_HUNTER_GLOBAL_SETTINGS__ = {json.dumps(global_settings, ensure_ascii=True)};</script>'
         )
     parts.append(
         f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'
@@ -684,7 +684,7 @@ class SettingsHandler:
             allowed_models = [
                 str(value).strip()
                 for value in (
-                    load_advanced_settings()
+                    load_global_settings()
                     .get(KEY_LLM_SETTINGS, {})
                     .get(KEY_MODEL_OPTIONS, [])
                 )
@@ -695,7 +695,7 @@ class SettingsHandler:
             if not model:
                 raise ValueError("Please choose an LLM model.")
             if model not in allowed_models:
-                raise ValueError("Please choose a model configured in Advanced Settings.")
+                raise ValueError("Please choose a model configured in Global Settings.")
             sanitized[KEY_LLM] = {
                 "model": model,
             }
@@ -794,3 +794,4 @@ class SettingsHandler:
             expected = expected_tokens.get(phrase, "")
             if not expected or str(provided.get(phrase) or "").strip() != expected:
                 raise ValueError(f"Missing explicit approval for suggested blocker: {phrase}")
+

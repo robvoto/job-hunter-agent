@@ -1,4 +1,4 @@
-"""Profile persistence and defaults.
+﻿"""Profile persistence and defaults.
 
 Main goals:
 - define the runtime profile structure used by matching and review flows
@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     DEFAULT_EVIDENCE_TIER_WEIGHTS,
     DEFAULT_ONBOARDING_SETTINGS,
@@ -31,13 +31,13 @@ from job_hunter_agent.advance_settings import (
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
-    KEY_ONBOARDING_SETTINGS as ADVANCE_KEY_ONBOARDING_SETTINGS,
+    KEY_ONBOARDING_SETTINGS as GLOBAL_KEY_ONBOARDING_SETTINGS,
     KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
     ONBOARDING_SETTING_LIMITS,
     get_salary_limits,
-    load_advanced_settings,
+    load_global_settings,
 )
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.parsing_schema import (
@@ -333,10 +333,10 @@ def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
 def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     source = settings if isinstance(settings, dict) else {}
 
-    # Global policy baseline: user-configured values from advance_settings.json.
-    # Falls back to code defaults if advance_settings is not yet initialised.
+    # Global policy baseline: user-configured values from global_settings.json.
+    # Falls back to code defaults if global settings are not yet initialised.
     try:
-        global_onboarding = load_advanced_settings()[ADVANCE_KEY_ONBOARDING_SETTINGS]
+        global_onboarding = load_global_settings()[GLOBAL_KEY_ONBOARDING_SETTINGS]
     except Exception:
         global_onboarding = {}
     global_presets = global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
@@ -350,7 +350,7 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     preset_name = raw_preset if raw_preset in global_presets else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
     preset_values = global_presets[preset_name]
 
-    # Merge layer: code defaults → global settings → chosen preset → all explicit source overrides.
+    # Merge layer: code defaults â†’ global settings â†’ chosen preset â†’ all explicit source overrides.
     merged: dict[str, Any] = {**DEFAULT_ONBOARDING_SETTINGS}
     merged.update({k: v for k, v in global_onboarding.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS})
     merged.update(preset_values)
@@ -585,7 +585,7 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     merged = _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
-    search_limits = load_advanced_settings()[KEY_SEARCH_LIMITS]
+    search_limits = load_global_settings()[KEY_SEARCH_LIMITS]
 
     try:
         merged[KEY_DATE_RANGE_DAYS] = max(
@@ -878,3 +878,5 @@ def get_scoring_rules(profile: dict[str, Any]) -> dict[str, Any]:
 
 def get_match_levels(profile: dict[str, Any]) -> list[dict[str, object]]:
     return normalize_profile_match_levels(profile.get("match_levels", []))
+
+
