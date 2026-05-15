@@ -19,15 +19,11 @@ ms-playwright/
 # ---- Generated output / local state ----
 output/
 data/playwright_user_data/
-data/profile.json
-data/llm_cache.json
-data/job_history.json
+data/auth/
+data/runtime/
+data/users/
 data/capability_profile.txt
 data/application_inputs/
-data/application_materials.json
-data/agent_settings.json
-data/agent_state.json
-data/llm_costs.jsonl
 TODO.txt
 appData-dontupload.txt
 # ---- OS / IDE ----
@@ -50,7 +46,6 @@ pytest.ini
 docs/RUN_COMMANDS.txt 
 CLAUDE.md
 .gitignore
-data/signal_registry.json
 NEXT_RUN.md
 CLAUDE.md
 AGENTS - OLD.md
@@ -60,7 +55,7 @@ docs/LOCAL_MCP_SETUP.md
 GEMINI.md
 CLAUDE.md
 Programming - Shortcut.lnk
-data/users/
-data/playwright_user_data/
 docs/backlog/
+debug/
 .skills/
+docs/signals/

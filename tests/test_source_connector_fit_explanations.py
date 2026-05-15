@@ -1451,8 +1451,8 @@ def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
     from job_hunter_agent.filters import passes_title_filters
     monkeypatch.setattr(passes_title_filters, "passes_title_filters", lambda title: (True, "OK"))
     monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    from job_hunter_agent.agent_settings import get_workspace_minimum_score
-    monkeypatch.setattr(get_workspace_minimum_score, "get_workspace_minimum_score", lambda: 60)
+    from job_hunter_agent import user_settings
+    monkeypatch.setattr(user_settings, "get_workspace_minimum_score", lambda: 60)
 
     from job_hunter_agent.source_connector import is_workspace_eligible
     assert is_workspace_eligible({"title": "Business Analyst", "score": 60}) is True
