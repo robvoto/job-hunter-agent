@@ -1,4 +1,4 @@
-﻿"""Global settings.
+﻿﻿"""Global settings.
 
 These settings are system-wide, not candidate-specific. They control workspace
 presentation and other optimiser-style behaviour shared across profiles.
@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
+import copy
 
 from job_hunter_agent.paths import CONFIG_DIR, GLOBAL_SETTINGS_PATH
 
@@ -143,6 +144,10 @@ DEFAULT_COUNTRY_SUFFIX = str(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_DEFAULT_COUNTRY_S
 if not DEFAULT_COUNTRY_SUFFIX:
     raise ValueError("global_settings.default_country_suffix must not be empty")
 
+def _to_min_max_dict(limits: dict[str, tuple[int, int]]) -> dict[str, dict[str, int]]:
+    """Helper to convert (min, max) tuples to the standard bounds dict format."""
+    return {k: {"min": v[0], "max": v[1]} for k, v in limits.items()}
+
 # Validation bounds for every onboarding setting. Centralised here so profile_store
 # and normalize_global_settings both use the same limits without duplication.
 ONBOARDING_SETTING_LIMITS: dict[str, tuple[int, int]] = {
@@ -171,8 +176,12 @@ CAPABILITY_STRENGTH_PRESETS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_ON
 DEFAULT_GLOBAL_SETTINGS: dict[str, Any] = {
     KEY_FIT_HIGHLIGHTS: copy.deepcopy(DEFAULT_FIT_HIGHLIGHTS),
     KEY_SEARCH_SETTINGS: copy.deepcopy(DEFAULT_SEARCH_SETTINGS),
-    KEY_SEARCH_LIMITS: copy.deepcopy(SEARCH_SETTING_LIMITS),
-    KEY_SALARY_LIMITS: copy.deepcopy(DEFAULT_SALARY_LIMITS),
+    KEY_LIMITS: {
+        "search": copy.deepcopy(SEARCH_SETTING_LIMITS),
+        "salary": copy.deepcopy(DEFAULT_SALARY_LIMITS),
+        "onboarding": _to_min_max_dict(ONBOARDING_SETTING_LIMITS),
+        "history": _to_min_max_dict(HISTORY_SETTING_LIMITS),
+    },
     KEY_PREFERENCE_WEIGHTS: copy.deepcopy(DEFAULT_PREFERENCE_WEIGHTS),
     KEY_EVIDENCE_TIER_WEIGHTS: copy.deepcopy(DEFAULT_EVIDENCE_TIER_WEIGHTS),
     KEY_HISTORY_SETTINGS: copy.deepcopy(DEFAULT_HISTORY_SETTINGS),
@@ -405,8 +414,14 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
     search_source = source.get(KEY_SEARCH_SETTINGS, {})
-    search_limits_source = source.get(KEY_SEARCH_LIMITS, {})
-    salary_limits_source = source.get(KEY_SALARY_LIMITS, {})
+    
+    # Grouped limits migration and access
+    limits_source = source.get(KEY_LIMITS, {})
+    search_limits_source = limits_source.get("search") or source.get(KEY_SEARCH_LIMITS, {})
+    salary_limits_source = limits_source.get("salary") or source.get(KEY_SALARY_LIMITS, {})
+    onboarding_limits_source = limits_source.get("onboarding", {})
+    history_limits_source = limits_source.get("history", {})
+
     preference_source = source.get(KEY_PREFERENCE_WEIGHTS, {})
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
     history_source = source.get(KEY_HISTORY_SETTINGS, {})
@@ -422,10 +437,8 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
         raise ValueError(f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
     if not isinstance(search_source, dict):
         raise ValueError(f"global_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}")
-    if not isinstance(search_limits_source, dict):
-        raise ValueError(f"global_settings.{KEY_SEARCH_LIMITS} must be a dict, got {type(search_limits_source).__name__!r}")
-    if not isinstance(salary_limits_source, dict):
-        raise ValueError(f"global_settings.{KEY_SALARY_LIMITS} must be a dict, got {type(salary_limits_source).__name__!r}")
+    if not isinstance(limits_source, dict):
+        raise ValueError(f"global_settings.{KEY_LIMITS} must be a dict, got {type(limits_source).__name__!r}")
     if not isinstance(preference_source, dict):
         raise ValueError(f"global_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
     if not isinstance(evidence_source, dict):
@@ -519,6 +532,13 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
 
     normalized_salary_limits = _normalize_limit_map(salary_limits_source, DEFAULT_SALARY_LIMITS, maximum=10_000_000)
 
+    normalized_onboarding_limits = _normalize_limit_map(
+        onboarding_limits_source, _to_min_max_dict(ONBOARDING_SETTING_LIMITS), minimum=1, maximum=1000
+    )
+    normalized_history_limits = _normalize_limit_map(
+        history_limits_source, _to_min_max_dict(HISTORY_SETTING_LIMITS), minimum=1, maximum=1000
+    )
+
     normalized_history_settings = {
         KEY_ARCHIVE_STALE_AFTER_DAYS: _require_int(
             history_source,
@@ -538,31 +558,36 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
             history_source,
             KEY_MAX_HISTORY_SIGHTINGS,
             DEFAULT_HISTORY_SETTINGS[KEY_MAX_HISTORY_SIGHTINGS],
-            *HISTORY_SETTING_LIMITS[KEY_MAX_HISTORY_SIGHTINGS],
+            normalized_history_limits[KEY_MAX_HISTORY_SIGHTINGS]["min"],
+            normalized_history_limits[KEY_MAX_HISTORY_SIGHTINGS]["max"],
         ),
         KEY_REPEATED_LISTING_MIN_TIMES_SEEN: _require_int(
             history_source,
             KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
             DEFAULT_HISTORY_SETTINGS[KEY_REPEATED_LISTING_MIN_TIMES_SEEN],
-            *HISTORY_SETTING_LIMITS[KEY_REPEATED_LISTING_MIN_TIMES_SEEN],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_TIMES_SEEN]["min"],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_TIMES_SEEN]["max"],
         ),
         KEY_REPEATED_LISTING_MIN_SPAN_DAYS: _require_int(
             history_source,
             KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
             DEFAULT_HISTORY_SETTINGS[KEY_REPEATED_LISTING_MIN_SPAN_DAYS],
-            *HISTORY_SETTING_LIMITS[KEY_REPEATED_LISTING_MIN_SPAN_DAYS],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_SPAN_DAYS]["min"],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_SPAN_DAYS]["max"],
         ),
         KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS: _require_int(
             history_source,
             KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
             DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS],
-            *HISTORY_SETTING_LIMITS[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS]["min"],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS]["max"],
         ),
         KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS: _require_int(
             history_source,
             KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
             DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS],
-            *HISTORY_SETTING_LIMITS[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]["min"],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]["max"],
         ),
     }
 
@@ -661,10 +686,12 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
                 1000, 60000
             ),
         },
-        KEY_SEARCH_LIMITS: {
-            **normalized_search_limits,
+        KEY_LIMITS: {
+            "search": normalized_search_limits,
+            "salary": normalized_salary_limits,
+            "onboarding": normalized_onboarding_limits,
+            "history": normalized_history_limits,
         },
-        KEY_SALARY_LIMITS: normalized_salary_limits,
         KEY_PREFERENCE_WEIGHTS: _normalize_float_map(preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0),
         KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
         KEY_HISTORY_SETTINGS: normalized_history_settings,
@@ -673,8 +700,14 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
         KEY_DEFAULT_COUNTRY_SUFFIX: default_country_suffix,
         KEY_ONBOARDING_SETTINGS: {
             **{
-                key: _require_int(merged_onboarding, key, DEFAULT_ONBOARDING_SETTINGS[key], minimum, maximum)
-                for key, (minimum, maximum) in ONBOARDING_SETTING_LIMITS.items()
+                key: _require_int(
+                    merged_onboarding,
+                    key,
+                    DEFAULT_ONBOARDING_SETTINGS[key],
+                    normalized_onboarding_limits[key]["min"],
+                    normalized_onboarding_limits[key]["max"],
+                )
+                for key in ONBOARDING_SETTING_LIMITS
             },
             "capability_strength_preset": preset_name,
             KEY_CAPABILITY_STRENGTH_PRESETS: normalized_preset_table,
@@ -780,7 +813,7 @@ def get_playwright_browser_mode() -> str:
 
 
 def get_salary_limits() -> dict[str, dict[str, int]]:
-    settings = load_global_settings().get(KEY_SALARY_LIMITS, {})
+    settings = load_global_settings().get(KEY_LIMITS, {}).get("salary", {})
     return settings if isinstance(settings, dict) else copy.deepcopy(DEFAULT_SALARY_LIMITS)
 
 
@@ -823,5 +856,3 @@ def save_global_settings(settings: dict[str, Any]) -> dict[str, Any]:
     )
     load_global_settings.cache_clear()
     return normalized
-
-

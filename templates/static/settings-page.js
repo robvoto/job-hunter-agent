@@ -1,13 +1,12 @@
-﻿
-    var LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
+﻿var LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
 window.LINKEDIN_EASY_APPLY_ONLY = LINKEDIN_EASY_APPLY_ONLY;
 
-    const statusEl = document.getElementById('status');
-    const isTestMode = document.body?.dataset.testMode === 'true';
-    const runNowButton = document.getElementById('run_now');
-    const rebuildProfileButton = document.getElementById('rebuild_profile');
-    const capabilityUi = window.JobHunterCapabilityUi || {};
-    const settingsCurrencyUi = window.JobHunterCurrencyUi || {};
+const statusEl = document.getElementById('status');
+const isTestMode = document.body?.dataset.testMode === 'true';
+const runNowButton = document.getElementById('run_now');
+const rebuildProfileButton = document.getElementById('rebuild_profile');
+const capabilityUi = window.JobHunterCapabilityUi || {};
+const settingsCurrencyUi = window.JobHunterCurrencyUi || {};
 const locationUi = window.JobHunterLocationUi || {};
 const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
@@ -627,13 +626,13 @@ function readOnboardingWelcomeSearchKeywords() {
         locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
       }
       document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
-      document.getElementById('seek_max_pages').value = String(profile.search_settings?.seek_max_pages ?? 10);
+      document.getElementById('seek_max_pages').value = String(profile.search_settings?.seek_max_pages);
       document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
-      document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
-      document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search ?? 25);
+      document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first));
+      document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search );
       const _dateWindowEl = document.getElementById('search_date_window');
       if (_dateWindowEl) {
-        const _savedDays = profile.search_settings?.date_range_days ?? 3;
+        const _savedDays = profile.search_settings?.date_range_days;
         const _windowValues = [1, 3, 7, 15, 30];
         const _closest = _windowValues.includes(_savedDays) ? _savedDays
           : _windowValues.reduce((p, c) => Math.abs(c - _savedDays) < Math.abs(p - _savedDays) ? c : p);
@@ -658,13 +657,13 @@ function readOnboardingWelcomeSearchKeywords() {
       document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
       setCurrencyFieldValue('minimum_salary_yearly', profile.salary_preferences?.minimum_salary_yearly ?? 0);
       setCurrencyFieldValue('minimum_daily_rate', profile.salary_preferences?.minimum_daily_rate ?? 0);
-      document.getElementById('fit_weight').value = String(profile.preference_weights?.fit ?? 1);
-      document.getElementById('salary_weight').value = String(profile.preference_weights?.salary ?? 1);
-      document.getElementById('location_weight').value = String(profile.preference_weights?.location ?? 1);
-      document.getElementById('work_mode_weight').value = String(profile.preference_weights?.work_mode ?? 1);
-      document.getElementById('contract_weight').value = String(profile.preference_weights?.contract ?? 1);
-      document.getElementById('government_weight').value = String(profile.preference_weights?.government ?? 1);
-      document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness ?? 1);
+      document.getElementById('fit_weight').value = String(profile.preference_weights?.fit);
+      document.getElementById('salary_weight').value = String(profile.preference_weights?.salary);
+      document.getElementById('location_weight').value = String(profile.preference_weights?.location);
+      document.getElementById('work_mode_weight').value = String(profile.preference_weights?.work_mode);
+      document.getElementById('contract_weight').value = String(profile.preference_weights?.contract);
+      document.getElementById('government_weight').value = String(profile.preference_weights?.government);
+      document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness);
       setCapabilityRuleState(profile.capability_profile_rules || []);
       document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
       for (const id of ['primary_job_title_pattern', 'secondary_title_patterns', 'must_not_require_skills']) {
@@ -676,19 +675,20 @@ function readOnboardingWelcomeSearchKeywords() {
       renderGlobaldChipEditors();
     }
 
-    // Populate the global admin form from the server payload.
+    // Populate the global settings form from the server payload.
     function fillGlobalForm(settings) {
       loadedGlobalSettings = settings || {};
       const fitHl = loadedGlobalSettings.fit_highlights || {};
       const searchDefaults = loadedGlobalSettings.search_settings || {};
-      const searchLimits = loadedGlobalSettings.search_limits || {};
+      const limits = loadedGlobalSettings.limits || {};
+      const searchLimits = limits.search || {};
       const evidenceWeights = loadedGlobalSettings.candidate_profile_tier_weights || {};
       const preferenceWeights = loadedGlobalSettings.preference_weights || {};
       const historySettings = loadedGlobalSettings.history_settings || {};
       const descriptionTrustSettings = loadedGlobalSettings.description_trust_settings || {};
       const sourceDocumentSettings = loadedGlobalSettings.source_document_settings || {};
       const defaultCountrySuffix = loadedGlobalSettings.default_country_suffix || '';
-      const salaryLimits = loadedGlobalSettings.salary_limits || {};
+      const salaryLimits = limits.salary || {};
       const onboarding = loadedGlobalSettings.onboarding_settings || {};
       const llmSettings = loadedGlobalSettings.llm_settings || {};
       const playwrightSettings = loadedGlobalSettings.playwright_settings || {};
@@ -805,16 +805,19 @@ function readOnboardingWelcomeSearchKeywords() {
       renderLlmModelOptions();
     }
 
-    // Build the payload that saves only the global admin settings.
+    // Build the payload that saves only the global settings.
     function collectGlobalSettings() {
       const current = loadedGlobalSettings || {};
       const currentSearch = current.search_settings || {};
-      const currentLimits = current.search_limits || {};
+      const currentLimitsGroup = current.limits || {};
+      const currentSearchLimits = currentLimitsGroup.search || {};
+      const currentSalaryLimits = currentLimitsGroup.salary || {};
       const currentHistory = current.history_settings || {};
       const currentDescriptionTrust = current.description_trust_settings || {};
       const currentSourceDocuments = current.source_document_settings || {};
+      const currentEvidenceWeights = current.candidate_profile_tier_weights || {};
+      const currentReviewSettings = current.review_settings || {};
       const currentPlaywright = current.playwright_settings || {};
-      const currentSalaryLimits = current.salary_limits || {};
       const currentOnboarding = current.onboarding_settings || {};
       const readNumber = (id, fallback) => {
         const raw = Number(document.getElementById(id).value);
@@ -849,88 +852,91 @@ function readOnboardingWelcomeSearchKeywords() {
           })(),
         },
         default_country_suffix: document.getElementById('default_country_suffix').value.trim(),
-        search_limits: {
-          date_range_days: {
-            min: readNumber('search_limit_date_range_days_min', currentLimits.date_range_days?.min),
-            max: readNumber('search_limit_date_range_days_max', currentLimits.date_range_days?.max),
+        limits: {
+          search: {
+            ...currentSearchLimits,
+            date_range_days: {
+              min: readNumber('search_limit_date_range_days_min', currentSearchLimits.date_range_days?.min),
+              max: readNumber('search_limit_date_range_days_max', currentSearchLimits.date_range_days?.max),
+            },
+            seek_max_pages: {
+              min: readNumber('search_limit_seek_max_pages_min', currentSearchLimits.seek_max_pages?.min),
+              max: readNumber('search_limit_seek_max_pages_max', currentSearchLimits.seek_max_pages?.max),
+            },
+            linkedin_hours_old: {
+              min: readNumber('search_limit_linkedin_hours_old_min', currentSearchLimits.linkedin_hours_old?.min),
+              max: readNumber('search_limit_linkedin_hours_old_max', currentSearchLimits.linkedin_hours_old?.max),
+            },
+            linkedin_results_per_search: {
+              min: readNumber('search_limit_linkedin_results_per_search_min', currentSearchLimits.linkedin_results_per_search?.min),
+              max: readNumber('search_limit_linkedin_results_per_search_max', currentSearchLimits.linkedin_results_per_search?.max),
+            },
           },
-          seek_max_pages: {
-            min: readNumber('search_limit_seek_max_pages_min', currentLimits.seek_max_pages?.min),
-            max: readNumber('search_limit_seek_max_pages_max', currentLimits.seek_max_pages?.max),
+          salary: {
+            ...currentSalaryLimits,
+            minimum_salary_yearly: {
+              min: currentSalaryLimits.minimum_salary_yearly?.min ?? 0,
+              max: readCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', currentSalaryLimits.minimum_salary_yearly?.max),
+            },
+            minimum_daily_rate: {
+              min: currentSalaryLimits.minimum_daily_rate?.min ?? 0,
+              max: readCurrencyFieldValue('salary_limit_minimum_daily_rate_max', currentSalaryLimits.minimum_daily_rate?.max),
+            },
           },
-          linkedin_hours_old: {
-            min: readNumber('search_limit_linkedin_hours_old_min', currentLimits.linkedin_hours_old?.min),
-            max: readNumber('search_limit_linkedin_hours_old_max', currentLimits.linkedin_hours_old?.max),
+          candidate_profile_tier_weights: {
+            ...currentEvidenceWeights,
+            primary_candidate_profile_context: readNumber('evidence_primary_weight', currentEvidenceWeights.primary_candidate_profile_context),
+            secondary_candidate_profile_context: readNumber('evidence_secondary_weight', currentEvidenceWeights.secondary_candidate_profile_context),
+            supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', currentEvidenceWeights.supplementary_candidate_profile_context),
           },
-          linkedin_results_per_search: {
-            min: readNumber('search_limit_linkedin_results_per_search_min', currentLimits.linkedin_results_per_search?.min),
-            max: readNumber('search_limit_linkedin_results_per_search_max', currentLimits.linkedin_results_per_search?.max),
+          history_settings: {
+            ...currentHistory,
+            archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
+            hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
+            max_history_sightings: readNumber('history_max_history_sightings', currentHistory.max_history_sightings),
+            repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
+            repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
+            multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),
+            multi_listing_red_flag_min_span_days: readNumber('history_multi_listing_red_flag_min_span_days', currentHistory.multi_listing_red_flag_min_span_days),
           },
-        },
-        salary_limits: {
-          minimum_salary_yearly: {
-            min: currentSalaryLimits.minimum_salary_yearly?.min ?? 0,
-            max: readCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', currentSalaryLimits.minimum_salary_yearly?.max),
+          description_trust_settings: {
+            ...currentDescriptionTrust,
+            min_trusted_description_length: readNumber(
+              'description_trust_min_trusted_description_length',
+              currentDescriptionTrust.min_trusted_description_length,
+            ),
           },
-          minimum_daily_rate: {
-            min: currentSalaryLimits.minimum_daily_rate?.min ?? 0,
-            max: readCurrencyFieldValue('salary_limit_minimum_daily_rate_max', currentSalaryLimits.minimum_daily_rate?.max),
+          source_document_settings: {
+            ...currentSourceDocuments,
           },
-        },
-        preference_weights: {
-          fit: readNumber('preference_fit_weight', current.preference_weights?.fit),
-          salary: readNumber('preference_salary_weight', current.preference_weights?.salary),
-          location: readNumber('preference_location_weight', current.preference_weights?.location),
-          work_mode: readNumber('preference_work_mode_weight', current.preference_weights?.work_mode),
-          contract: readNumber('preference_contract_weight', current.preference_weights?.contract),
-          government: readNumber('preference_government_weight', current.preference_weights?.government),
-          freshness: readNumber('preference_freshness_weight', current.preference_weights?.freshness),
-        },
-        candidate_profile_tier_weights: {
-          primary_candidate_profile_context: readNumber('evidence_primary_weight', current.candidate_profile_tier_weights?.primary_candidate_profile_context),
-          secondary_candidate_profile_context: readNumber('evidence_secondary_weight', current.candidate_profile_tier_weights?.secondary_candidate_profile_context),
-          supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', current.candidate_profile_tier_weights?.supplementary_candidate_profile_context),
-        },
-        history_settings: {
-          max_history_sightings: readNumber('history_max_history_sightings', currentHistory.max_history_sightings),
-          repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
-          repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
-          multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),
-          multi_listing_red_flag_min_span_days: readNumber('history_multi_listing_red_flag_min_span_days', currentHistory.multi_listing_red_flag_min_span_days),
-          archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
-          hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
-        },
-        description_trust_settings: {
-          min_trusted_description_length: readNumber('description_trust_min_trusted_description_length', currentDescriptionTrust.min_trusted_description_length),
-        },
-        source_document_settings: {
-          allowed_suffixes: Array.isArray(currentSourceDocuments.allowed_suffixes)
-            ? [...currentSourceDocuments.allowed_suffixes]
-            : toLines(document.getElementById('source_document_allowed_suffixes').value),
-        },
-        playwright_settings: {
-          ...currentPlaywright,
-          playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
-          playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
-          playwright_selector_timeout: readNumber('playwright_selector_timeout', currentPlaywright.playwright_selector_timeout),
-        },
-        onboarding_settings: {
-          ...currentOnboarding,
-          extraction_lookback_years: readNumber('onboarding_extraction_lookback_years', currentOnboarding.extraction_lookback_years),
-          title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
-          max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
-          max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
-          capability_alias_limit: readNumber('onboarding_capability_alias_limit', currentOnboarding.capability_alias_limit),
-          signal_cluster_min_alias_hits: readNumber('onboarding_signal_cluster_min_alias_hits', currentOnboarding.signal_cluster_min_alias_hits),
-          signal_cluster_min_snippet_hits: readNumber('onboarding_signal_cluster_min_snippet_hits', currentOnboarding.signal_cluster_min_snippet_hits),
-          signal_cluster_dense_snippet_alias_hits: readNumber('onboarding_signal_cluster_dense_snippet_alias_hits', currentOnboarding.signal_cluster_dense_snippet_alias_hits),
-          capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
-        },
-        llm_settings: {
-          model_options: toLines(document.getElementById('llm_model_options').value),
-          max_llm_chars: readNumber('llm_max_llm_chars', current.llm_settings?.max_llm_chars),
-          pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
-          llm_prompt_settings: JSON.parse(document.getElementById('llm_prompt_settings').value.trim() || '{}'),
+          onboarding_settings: {
+            ...currentOnboarding,
+            extraction_lookback_years: readNumber('onboarding_extraction_lookback_years', currentOnboarding.extraction_lookback_years),
+            title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
+            max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
+            max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
+            capability_alias_limit: readNumber('onboarding_capability_alias_limit', currentOnboarding.capability_alias_limit),
+            signal_cluster_min_alias_hits: readNumber('onboarding_signal_cluster_min_alias_hits', currentOnboarding.signal_cluster_min_alias_hits),
+            signal_cluster_min_snippet_hits: readNumber('onboarding_signal_cluster_min_snippet_hits', currentOnboarding.signal_cluster_min_snippet_hits),
+            signal_cluster_dense_snippet_alias_hits: readNumber('onboarding_signal_cluster_dense_snippet_alias_hits', currentOnboarding.signal_cluster_dense_snippet_alias_hits),
+            capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
+          },
+          llm_settings: {
+            ...current.llm_settings,
+            model_options: toLines(document.getElementById('llm_model_options').value),
+            max_llm_chars: readNumber('llm_max_llm_chars', current.llm_settings?.max_llm_chars),
+            pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
+            llm_prompt_settings: JSON.parse(document.getElementById('llm_prompt_settings').value.trim() || '{}'),
+          },
+          review_settings: {
+            ...currentReviewSettings,
+          },
+          playwright_settings: {
+            ...currentPlaywright,
+            playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
+            playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
+            playwright_selector_timeout: readNumber('playwright_selector_timeout', currentPlaywright.playwright_selector_timeout),
+          },
         },
       };
     }
@@ -1061,7 +1067,7 @@ function readOnboardingWelcomeSearchKeywords() {
 
     async function loadGlobalSettings() {
       const response = await jobHunterFetch('/api/global-settings');
-      if (!response.ok) throw new Error('Could not load admin settings');
+      if (!response.ok) throw new Error('Could not load global settings');
       const settings = await response.json();
       loadedGlobalSettings = settings;
       fillGlobalForm(settings);
@@ -1407,7 +1413,7 @@ function readOnboardingWelcomeSearchKeywords() {
       activeSaveButton.classList.add('is-working');
       activeSaveButton.disabled = true;
       activeSaveButton.textContent = 'Saving...';
-      showInlineStatus(globalStatus, isAdminPage ? 'Saving admin changes...' : 'Saving settings...', 'loading');
+      showInlineStatus(globalStatus, isAdminPage ? 'Saving global settings...' : 'Saving settings...', 'loading');
       try {
         if (isAdminPage) {
           const globalSettings = collectGlobalSettings();
@@ -1418,11 +1424,11 @@ function readOnboardingWelcomeSearchKeywords() {
           });
           const globalPayload = await globalResponse.json().catch(() => ({}));
           if (!globalResponse.ok) {
-            throw new Error(globalPayload.error || 'Could not save admin settings.');
+            throw new Error(globalPayload.error || 'Could not save global settings.');
           }
           fillGlobalForm(globalPayload);
-          showInlineStatus(globalStatus, 'Admin settings saved.', 'ok');
-          showStatus('Admin settings saved successfully.', 'ok');
+          showInlineStatus(globalStatus, 'Global settings saved.', 'ok');
+          showStatus('Global settings saved successfully.', 'ok');
         } else {
           const profile = collectProfile();
       const agentSettings = collectUserSettings();
@@ -1464,7 +1470,11 @@ function readOnboardingWelcomeSearchKeywords() {
       }
     }
 
-    activeSaveButton?.addEventListener('click', saveActivePage);
+    activeSaveButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      saveActivePage();
+    });
     const pageLoads = isAdminPage
       ? [loadGlobalSettings()]
       : [loadProfile(), loadUserSettings()];
@@ -1476,5 +1486,3 @@ function readOnboardingWelcomeSearchKeywords() {
         suppressDirtyTracking = false;
         clearDirty();
     }).catch(error => showStatus(error.message, 'error'));
-
-

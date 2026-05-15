@@ -50,7 +50,7 @@
 
 ---
 
-### Run stats and dashboard status
+### Run stats and workspace status
 
 - [ ] Fix Last Run & Review / Latest Run Stats empty state
 
@@ -267,7 +267,7 @@
 
   Context:
   - Currently hidden in admin
-  - But dashboard has “run search” without params
+  - But workspace has “run search” without params
   - Needs consistent product logic
 
 ---
@@ -358,7 +358,7 @@
 
 ---
 
-### Dashboard Terminology
+### Workspace Terminology
 
 - [ ] Rename “Conditional Fit”
 
@@ -418,7 +418,7 @@
 
 ## Additional Feature Backlog (From Source)
 
-### Dashboard clarity issues
+### Workspace clarity issues
 
 - [ ] Clarify “130 Cards Seen”
 
@@ -523,7 +523,7 @@
 
 ---
 
-### Dashboard refresh behaviour
+### Workspace refresh behaviour
 
 - [ ] Improve auto-refresh logic
 
@@ -551,7 +551,7 @@
 
 ---
 
-### Dashboard terminology
+### Workspace terminology
 
 - [ ] Clarify “Saved Earlier” vs “Older Saved”
 

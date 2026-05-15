@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from job_hunter_agent.auth import (
@@ -49,11 +49,7 @@ def page_login(request: Request, error: str | None = None):  # type: ignore[no-u
 def login_google(request: Request):  # type: ignore[no-untyped-def]
     cfg = _get_config(request)
     if not cfg or not cfg.configured:
-        missing = ", ".join(cfg.missing_fields) if cfg else "auth_config not loaded"
-        return HTMLResponse(
-            f"<h1>Auth not configured</h1><p>Missing env vars: {missing}</p>",
-            status_code=503,
-        )
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
     state = secrets.token_hex(16)
     auth_url = build_google_auth_url(cfg, state)
     response = RedirectResponse(auth_url, status_code=302)
@@ -80,7 +76,7 @@ def google_callback(  # type: ignore[no-untyped-def]
 
     cfg = _get_config(request)
     if not cfg or not cfg.configured:
-        return RedirectResponse(f"{LOGIN_PATH}?error=auth_not_configured", status_code=302)
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
 
     expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
     if not state or not expected_state or not secrets.compare_digest(state, expected_state):

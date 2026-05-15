@@ -121,15 +121,19 @@ def get_or_create_user(email: str, admin_email: str | None) -> dict:
             except Exception:
                 pass
         if user_id not in store:
-            store[user_id] = {
-                "user_id": user_id,
-                "email": email,
-                "role": role,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
+            store[user_id] = build_user_record(user_id, email, role)
             _save_user_store_locked(store)
     # Always re-derive role from env — admin_email may change without a store update.
     return {"user_id": user_id, "email": email, "role": role}
+
+
+def build_user_record(user_id: str, email: str, role: str) -> dict:
+    return {
+        "user_id": user_id,
+        "email": email,
+        "role": role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def build_google_auth_url(config: GoogleOAuthConfig, state: str) -> str:

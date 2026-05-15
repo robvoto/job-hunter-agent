@@ -5,8 +5,9 @@ from fastapi.responses import RedirectResponse
 
 from job_hunter_agent.auth import auth_required_response, is_admin, issue_csrf_token
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.config import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.locations import default_location_value, load_location_options
-from job_hunter_agent.paths import SETTINGS_PARTIALS_DIR
+from job_hunter_agent.paths import GLOBAL_SETTINGS_HTML_PATH, SETTINGS_HTML_PATH, SETTINGS_PARTIALS_DIR
 
 from job_hunter_agent.routes.responses import html_response
 
@@ -35,13 +36,33 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         resume_step=resume_step,
     )
     html = srv._render_template(template_path)
-    if template_path == srv.SETTINGS_HTML_PATH:
+    if template_path == SETTINGS_HTML_PATH:
         for token, partial_path in SETTINGS_PARTIALS.items():
-            html = html.replace(token, srv._render_template(partial_path))
+            if token in {"__JOB_HUNTER_SETTINGS_SECTION_ADMIN__", "__JOB_HUNTER_SETTINGS_SECTION_LEARNING__"}:
+                html = html.replace(token, "")
+            else:
+                html = html.replace(token, srv._render_template(partial_path))
+        html = html.replace(
+            "__JOB_HUNTER_ADMIN_BADGE__",
+            '<span class="sidebar-admin-badge">Admin</span>' if is_admin(request) else "",
+        )
+        html = html.replace(
+            "__JOB_HUNTER_ADMIN_NAV_LINK__",
+            (
+                f'<a href="{GLOBAL_SETTINGS_PATH}" class="nav-item nav-item-admin" data-admin-only="true">Global settings</a>'
+                if is_admin(request)
+                else ""
+            ),
+        )
+    if template_path == GLOBAL_SETTINGS_HTML_PATH:
+        for token, partial_path in SETTINGS_PARTIALS.items():
+            if token in {"__JOB_HUNTER_SETTINGS_SECTION_ADMIN__", "__JOB_HUNTER_SETTINGS_SECTION_LEARNING__"}:
+                html = html.replace(token, srv._render_template(partial_path))
+            else:
+                html = html.replace(token, "")
     return (
         html
         .replace("__JOB_HUNTER_DEBUG_MODE_BOOL__", "true" if srv.DEBUG_MODE else "false")
-        .replace("__JOB_HUNTER_BOOTSTRAP_SCRIPTS__", bootstrap_script)
         .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__", srv.render_engagement_type_radio_group(name="engagement_pref", selected_value=srv.ENGAGEMENT_TYPE_BOTH))
         .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__", srv.render_engagement_type_select_options(selected_value=srv.ENGAGEMENT_TYPE_BOTH))
         .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__", srv.render_work_mode_preference_choices(selected_values=srv.WORK_MODE_PREFERENCE_NONE))
@@ -58,6 +79,7 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         .replace("__JOB_HUNTER_PAGE_TITLE__", page_title)
         .replace("__JOB_HUNTER_PAGE_HEADING__", page_heading)
         .replace("__JOB_HUNTER_PAGE_COPY__", page_copy)
+        .replace("__JOB_HUNTER_BOOTSTRAP_SCRIPTS__", bootstrap_script)
     )
 
 
@@ -75,24 +97,24 @@ def page_workspace(request: Request):  # type: ignore[no-untyped-def]
     return html_response("<h1>Template missing</h1><p>Missing templates/workspace.html</p>")
 
 
-@router.get("/admin")
+@router.get(GLOBAL_SETTINGS_PATH)
 def page_admin_profile(request: Request):  # type: ignore[no-untyped-def]
     if not srv._onboarding_complete():
         return RedirectResponse("/start", status_code=302)
     if not is_admin(request):
-        return auth_required_response("/admin", True)
-    if srv.SETTINGS_HTML_PATH.exists():
+        return auth_required_response(GLOBAL_SETTINGS_PATH, True)
+    if GLOBAL_SETTINGS_HTML_PATH.exists():
         html = _render_template_with_locations(
             request,
-            srv.SETTINGS_HTML_PATH,
+            GLOBAL_SETTINGS_HTML_PATH,
             page_mode="admin",
-            page_title="Admin - Job Hunter",
-            page_heading="Admin",
-            page_copy="Owner-only global controls and shared learning live here.",
+            page_title="Global settings - Job Hunter",
+            page_heading="Global settings",
+            page_copy="Shared controls and learning live here.",
             global_settings=srv.load_global_settings(),
         )
         return html_response(html)
-    return html_response("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
+    return html_response("<h1>Template missing</h1><p>Missing templates/global-settings.html</p>")
 
 
 @router.get("/profile")
@@ -104,16 +126,16 @@ def page_profile():  # type: ignore[no-untyped-def]
 
 @router.get("/settings")
 def page_settings(request: Request):  # type: ignore[no-untyped-def]
-    if not srv.DEBUG_MODE and not srv._onboarding_complete():
+    if not srv._onboarding_complete():
         return RedirectResponse("/start", status_code=302)
-    if srv.SETTINGS_HTML_PATH.exists():
+    if SETTINGS_HTML_PATH.exists():
         html = _render_template_with_locations(
             request,
-            srv.SETTINGS_HTML_PATH,
+            SETTINGS_HTML_PATH,
             page_mode="settings",
             page_title="Settings - Job Hunter",
             page_heading="Settings",
-            page_copy="Configure your candidate search and profile settings here. Owner-only admin controls live on the Admin screen.",
+            page_copy="Configure your candidate search and profile settings here. Shared global settings live on the Global settings screen.",
         )
         return html_response(html)
     return html_response("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
@@ -139,4 +161,3 @@ def page_demo():  # type: ignore[no-untyped-def]
     if srv.SHOWCASE_PATH.exists():
         return html_response(srv.SHOWCASE_PATH.read_text(encoding="utf-8", errors="ignore"))
     return html_response("<h1>Demo page not found</h1>")
-

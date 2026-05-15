@@ -1,4 +1,4 @@
-﻿"""Profile persistence and defaults.
+﻿﻿"""Profile persistence and defaults.
 
 Main goals:
 - define the runtime profile structure used by matching and review flows
@@ -32,6 +32,7 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_ONBOARDING_SETTINGS as GLOBAL_KEY_ONBOARDING_SETTINGS,
+    KEY_LIMITS,
     KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
@@ -360,8 +361,9 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     })
 
     result: dict[str, Any] = {"capability_strength_preset": preset_name}
-    for key, (minimum, maximum) in ONBOARDING_SETTING_LIMITS.items():
-        result[key] = _coerce_int(merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], minimum, maximum)
+    onboarding_limits = load_global_settings()[KEY_LIMITS]["onboarding"]
+    for key, bounds in onboarding_limits.items():
+        result[key] = _coerce_int(merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], bounds["min"], bounds["max"])
     return result
 
 
@@ -585,7 +587,7 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     merged = _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
-    search_limits = load_global_settings()[KEY_SEARCH_LIMITS]
+    search_limits = load_global_settings()[KEY_LIMITS]["search"]
 
     try:
         merged[KEY_DATE_RANGE_DAYS] = max(
@@ -878,5 +880,3 @@ def get_scoring_rules(profile: dict[str, Any]) -> dict[str, Any]:
 
 def get_match_levels(profile: dict[str, Any]) -> list[dict[str, object]]:
     return normalize_profile_match_levels(profile.get("match_levels", []))
-
-

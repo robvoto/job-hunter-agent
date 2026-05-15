@@ -13,8 +13,8 @@ Flags:
                 Can be combined with --debug.
 
 Debug-only local bypass:
-    Set JOB_HUNTER_DISABLE_AUTH=true with --debug to bypass login and CSRF
-    checks during manual local testing.
+    Debug mode bypasses login and CSRF checks during manual local testing.
+    Set JOB_HUNTER_DISABLE_AUTH=true if you want to force that bypass outside debug.
 """
 
 from __future__ import annotations

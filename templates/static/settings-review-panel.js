@@ -18,6 +18,7 @@
     const WORKSPACE_PATH = runUi.workspacePath || '/workspace';
     const SEARCH_WAIT_COPY = runUi.searchWaitCopy || 'This search can take a while because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.';
     const RUN_COMPLETE_REDIRECT_DELAY_MS = runUi.redirectDelayMs || 600;
+    const tuningPanel = document.getElementById('tuning_suggestions_panel');
     let runStatusPollHandle = null;
     let runStatusWasRunning = false;
 
@@ -71,12 +72,12 @@
     }
 
     function renderSuggestedTuning(suggestions) {
-      const panel = document.getElementById('tuning_suggestions_panel');
+      if (!tuningPanel) return;
       const capabilitySuggestions = suggestions.capability_suggestions || [];
       const ruleSuggestions = suggestions.rule_suggestions || [];
       const summary = suggestions.summary || {};
       if (!capabilitySuggestions.length && !ruleSuggestions.length) {
-        panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capabilities and repeated exclusion patterns will show up here for confirmation.</p>';
+        tuningPanel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capabilities and repeated exclusion patterns will show up here for confirmation.</p>';
         return;
       }
       const capabilityHtml = capabilitySuggestions.length ? `
@@ -158,6 +159,7 @@
     }
 
     async function loadReviewData() {
+      if (!tuningPanel) return;
       const response = await jobHunterFetch('/api/review-data');
       if (!response.ok) { renderSuggestedTuning({ capability_suggestions: [], rule_suggestions: [], summary: {} }); return; }
       const payload = await response.json();
@@ -378,7 +380,6 @@
       }
     });
 
-    const tuningPanel = document.getElementById('tuning_suggestions_panel');
     tuningPanel?.addEventListener('change', (e) => {
       const select = e.target.closest('.skill-choice');
       if (!select) return;

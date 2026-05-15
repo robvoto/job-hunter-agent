@@ -3,7 +3,7 @@
 ### Critical Security and Stability Hardening
 
 - [ ] **Fix JSON Concurrency (Race Conditions)**
-  - Context: Background dashboard rebuilds and API requests can write to `profile.json` and `job_history.json` simultaneously.
+  - Context: Background workspace rebuilds and API requests can write to `profile.json` and `job_history.json` simultaneously.
   - Risk: Data corruption or truncated files.
   - Plan: Implement a file-locking mechanism or migrate local state to a SQLite database.
 
@@ -19,8 +19,8 @@
 
 - [ ] **Optimise Rendering Performance**
   - Context: Fit scores and capability matches are recalculated for every job during HTML rendering.
-  - Risk: Dashboard will become unusable as history grows to thousands of records.
-  - Plan: Calculate and persist scores during the "Scrape" phase; treat dashboard rendering as a pure display of saved state.
+  - Risk: Workspace will become unusable as history grows to thousands of records.
+  - Plan: Calculate and persist scores during the "Scrape" phase; treat workspace rendering as a pure display of saved state.
 
 - [ ] **Refine Date Parsing Heuristics**
   - Context: `_extract_year_range` defaults missing months to Jan (start) and Dec (end).

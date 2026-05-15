@@ -12,13 +12,6 @@
   <script src="/static/theme-switcher.js"></script>
   <script src="/static/wait-state.js"></script>
   <style>
-    /* Hide aliases when not in test mode */
-    [data-test-mode="false"] .test-only,
-    [data-test-mode="false"] .capability-aliases,
-    [data-test-mode="false"] .alias-tag {
-      display: none !important;
-    }
-
     .sidebar-brand-title {
       display: flex;
       align-items: center;
@@ -31,10 +24,9 @@
       object-fit: contain;
       flex-shrink: 0;
     }
-
   </style>
 </head>
-  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
+  <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="admin">
   <div class="job-hunter-wait-mount" id="job_hunter_wait_mount" hidden></div>
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Page sections">
@@ -44,19 +36,14 @@
           <span>Job Hunter</span>
         </h1>
         <div class="sidebar-brand-actions">
-          __JOB_HUNTER_ADMIN_BADGE__
           <a href="/logout" class="nav-item nav-item-logout">Log out</a>
-          __JOB_HUNTER_ADMIN_NAV_LINK__
         </div>
         <a href="/" class="nav-item nav-item-workspace">← Workspace</a>
       </div>
       <div class="sidebar-nav">
-        <button class="nav-item is-active" type="button" data-section="section-search" data-screen="settings">Search</button>
-        <button class="nav-item" type="button" data-section="section-profile" data-screen="settings">Profile</button>
-        <button class="nav-item" type="button" data-section="section-matrix" data-screen="settings">Capability Matrix</button>
-        <button class="nav-item" type="button" data-section="section-rules" data-screen="settings">Rules</button>
-        <button class="nav-item" type="button" data-section="section-alerts" data-screen="settings">Alerts &amp; AI</button>
-        <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise" data-screen="settings">Optimise</button>
+        <div class="sidebar-group-label sidebar-group-label-global">Global settings</div>
+        <button class="nav-item is-active" type="button" data-section="section-admin" data-screen="admin">Global settings</button>
+        <button class="nav-item" type="button" data-section="section-learning" data-screen="admin">Learning</button>
       </div>
     </nav>
 
@@ -67,30 +54,13 @@
             <h1>__JOB_HUNTER_PAGE_HEADING__</h1>
             <p>__JOB_HUNTER_PAGE_COPY__</p>
           </div>
-          <div class="theme-switcher-widget" style="margin-left:auto;flex-shrink:0;">
-            <span>Theme test:</span>
-            <select id="theme_picker" aria-label="Select theme">
-              <option value="soft-professional">Soft Professional</option>
-              <option value="bold-aggressive">Bold Aggressive</option>
-              <option value="dark-professional">Dark Professional</option>
-            </select>
-          </div>
         </section>
 
         <div class="status" id="status"></div>
 
-        __JOB_HUNTER_SETTINGS_SECTION_SEARCH__
+        __JOB_HUNTER_SETTINGS_SECTION_ADMIN__
 
-        __JOB_HUNTER_SETTINGS_SECTION_PROFILE__
-
-        __JOB_HUNTER_SETTINGS_SECTION_MATRIX__
-
-        __JOB_HUNTER_SETTINGS_SECTION_RULES__
-
-        __JOB_HUNTER_SETTINGS_SECTION_ALERTS__
-
-        __JOB_HUNTER_SETTINGS_SECTION_OPTIMISE__
-
+        __JOB_HUNTER_SETTINGS_SECTION_LEARNING__
       </div>
     </main>
 
@@ -100,8 +70,8 @@
         <span class="inline-status" id="global_save_status"></span>
       </div>
       <div class="save-footer-actions">
-        <button class="secondary" id="discard_changes_btn" type="button" data-screen="settings">Discard</button>
-        <button class="primary" id="save_settings_btn" type="button" data-screen="settings" disabled>Save Settings</button>
+        <button class="secondary" id="discard_admin_changes_btn" type="button" data-screen="admin">Discard Global Changes</button>
+        <button class="primary" id="save_admin_btn" type="button" data-screen="admin" disabled>Save Global Settings</button>
       </div>
     </footer>
   </div>

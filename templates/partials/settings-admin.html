@@ -1,6 +1,6 @@
 ﻿        <section id="section-admin" class="settings-group" data-screen="admin">
-          <h2 class="section-title">Admin</h2>
-          <p class="panel-copy">These controls stay global and centrally managed. They cover card highlight display, search defaults, search guardrails, evidence tier weights, preference weights, onboarding defaults, and capability presets. Candidate profile fields stay elsewhere.</p>
+          <h2 class="section-title">Global settings</h2>
+          <p class="panel-copy">These controls are separate from your normal settings. They are shared, centrally managed values that shape search defaults, limits, scoring, onboarding, and workspace behaviour.</p>
           <div class="grid admin-settings-grid">
           <section class="panel">
             <h2>Card Highlight Display</h2>
@@ -28,8 +28,8 @@
           </section>
 
           <section class="panel">
-            <h2>Search Defaults</h2>
-            <p class="panel-copy">These defaults seed search behaviour for the whole app. They do not replace the live search fields in Profile.</p>
+            <h2>Search defaults</h2>
+            <p class="panel-copy">These settings seed search behaviour for the whole app. They do not replace the live search fields in Search.</p>
 
             <label for="search_default_date_range_days">Default search window (days)</label>
             <input id="search_default_date_range_days" type="number" min="1" max="30" step="1">
@@ -71,7 +71,7 @@
           </section>
 
           <section class="panel">
-            <h2>Global Defaults</h2>
+            <h2>Runtime defaults</h2>
             <p class="panel-copy">These shared defaults apply outside the candidate profile. They stay centrally managed for workspace rendering and scraper runtime settings.</p>
 
             <label for="default_country_suffix">Default country suffix</label>
@@ -92,7 +92,7 @@
           </section>
 
           <section class="panel">
-            <h2>Search Guardrails</h2>
+            <h2>Search limits</h2>
             <p class="panel-copy">These bounds control what the search defaults can be set to. They are global, shared limits.</p>
 
             <label for="search_limit_date_range_days_min">Search window minimum (days)</label>
@@ -190,6 +190,26 @@
             <label for="history_hidden_review_days">Hidden review days</label>
             <input id="history_hidden_review_days" type="number" min="1" max="365" step="1">
             <div class="field-help">How long a hidden job stays hidden before it is eligible for another review.</div>
+
+            <label for="history_max_history_sightings">Max history sightings</label>
+            <input id="history_max_history_sightings" type="number" min="1" max="100" step="1">
+            <div class="field-help">How many sighting snapshots are kept per job listing before older ones are dropped.</div>
+
+            <label for="history_repeated_listing_min_times_seen">Repeated listing minimum times seen</label>
+            <input id="history_repeated_listing_min_times_seen" type="number" min="1" max="100" step="1">
+            <div class="field-help">How many times the same listing must be seen before the repeated-listing red flag triggers.</div>
+
+            <label for="history_repeated_listing_min_span_days">Repeated listing minimum span days</label>
+            <input id="history_repeated_listing_min_span_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">Minimum number of days between first and last sighting before the repeated-listing red flag triggers.</div>
+
+            <label for="history_multi_listing_red_flag_min_listings">Multi-listing red flag minimum listings</label>
+            <input id="history_multi_listing_red_flag_min_listings" type="number" min="1" max="100" step="1">
+            <div class="field-help">How many separate listings from the same poster and title cluster are needed to trigger the multi-listing red flag.</div>
+
+            <label for="history_multi_listing_red_flag_min_span_days">Multi-listing red flag minimum span days</label>
+            <input id="history_multi_listing_red_flag_min_span_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">Minimum day span across that cluster before the multi-listing red flag triggers.</div>
           </section>
 
           <section class="panel">
@@ -282,7 +302,7 @@
             <h2>Capability Presets</h2>
             <p class="panel-copy">These preset tables are global. The selector above chooses which one onboarding uses.</p>
             <div id="capability_strength_presets_panel">
-              <p class="help">Load Admin to view the preset tables.</p>
+              <p class="help">Load Global settings to view the preset tables.</p>
             </div>
           </section>
           </div>

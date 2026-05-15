@@ -19,7 +19,7 @@ Use this order:
 - `openclaw.md` — OpenClaw runtime, scheduling, auth, operations, local-first agent concerns.
 - `learning.md` — outcome learning, feedback loops, memory, profile evolution.
 - `filtering.md` — filtering, scoring, parsing, blockers, salary, location, capability rules.
-- `ui.md` — dashboard, settings, onboarding, terminology, UX, user-facing product work.
+- `ui.md` — workspace, settings, onboarding, terminology, UX, user-facing product work.
 
 ## Item handling
 

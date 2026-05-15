@@ -565,3 +565,15 @@ def test_learn_title_normalization_candidates_stores_suggested_values(tmp_path, 
     assert record is not None
     assert record["suggested_values"] == ["senior"]
     assert record["suggested_category"] == "title_normalization_candidate"
+
+
+def test_signal_category_metadata_is_complete_and_user_facing():
+    from job_hunter_agent.signal_registry import CATEGORY_METADATA, VALID_SIGNAL_CATEGORIES
+
+    assert set(CATEGORY_METADATA) == set(VALID_SIGNAL_CATEGORIES)
+    for category, meta in CATEGORY_METADATA.items():
+        assert meta.get("label"), f"Missing label for {category}"
+        assert meta.get("description"), f"Missing description for {category}"
+        assert isinstance(meta.get("examples"), list), f"Examples must be a list for {category}"
+        assert all(isinstance(example, str) and example for example in meta["examples"])
+        assert meta.get("warning") is None or isinstance(meta.get("warning"), str)

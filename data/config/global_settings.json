@@ -4,7 +4,7 @@
     "working_capability_count": 2,
     "basic_capability_count": 1,
     "reviewed_signal_count": 3,
-    "max_highlights": 4
+    "max_highlights": 8
   },
   "search_settings": {
     "keywords": "",
@@ -16,7 +16,10 @@
     "sort_newest_first": true,
     "linkedin_hours_old": 24,
     "linkedin_results_per_search": 50,
-    "linkedin_easy_apply_only": null
+    "linkedin_easy_apply_only": null,
+    "playwright_viewport_width": 1400,
+    "playwright_viewport_height": 900,
+    "playwright_selector_timeout": 8000
   },
   "search_limits": {
     "date_range_days": {
@@ -47,27 +50,27 @@
     }
   },
   "preference_weights": {
-    "fit": 1,
-    "salary": 1,
-    "location": 1,
-    "work_mode": 1,
-    "contract": 1,
-    "government": 1,
-    "freshness": 1
+    "fit": 1.0,
+    "salary": 1.0,
+    "location": 1.0,
+    "work_mode": 1.0,
+    "contract": 1.0,
+    "government": 1.0,
+    "freshness": 1.0
   },
   "candidate_profile_tier_weights": {
-    "primary_candidate_profile_context": 1,
+    "primary_candidate_profile_context": 1.0,
     "secondary_candidate_profile_context": 0.55,
     "supplementary_candidate_profile_context": 0.25
   },
   "history_settings": {
+    "archive_stale_after_days": 15,
+    "hidden_review_days": 30,
     "max_history_sightings": 24,
     "repeated_listing_min_times_seen": 4,
     "repeated_listing_min_span_days": 21,
     "multi_listing_red_flag_min_listings": 3,
-    "multi_listing_red_flag_min_span_days": 30,
-    "archive_stale_after_days": 15,
-    "hidden_review_days": 30
+    "multi_listing_red_flag_min_span_days": 30
   },
   "description_trust_settings": {
     "min_trusted_description_length": 600
@@ -93,11 +96,6 @@
     "title_extraction_min_months": 6,
     "max_target_patterns": 8,
     "max_secondary_patterns": 6,
-    "capability_alias_limit": 8,
-    "signal_cluster_min_alias_hits": 2,
-    "signal_cluster_min_snippet_hits": 2,
-    "signal_cluster_dense_snippet_alias_hits": 4,
-    "capability_strength_preset": "balanced",
     "capability_recent_years": 4,
     "capability_strong_max_years_since_use": 4,
     "capability_strong_min_months": 36,
@@ -107,6 +105,11 @@
     "capability_working_long_history_min_months": 48,
     "capability_drop_to_basic_after_years": 12,
     "capability_max_items": 20,
+    "capability_alias_limit": 8,
+    "signal_cluster_min_alias_hits": 2,
+    "signal_cluster_min_snippet_hits": 2,
+    "signal_cluster_dense_snippet_alias_hits": 4,
+    "capability_strength_preset": "balanced",
     "capability_strength_presets": {
       "recent_focus": {
         "capability_recent_years": 3,
@@ -144,16 +147,12 @@
     }
   },
   "llm_settings": {
+    "model": "None",
     "model_options": [
       "gpt-4o-mini",
       "gpt-4.1-mini",
       "gpt-4o"
     ],
-    "max_llm_chars": 3000,
-    "max_llm_chars_limits": {
-      "min": 1,
-      "max": 20000
-    },
     "pricing_per_1m": {
       "gpt-4o-mini": {
         "input": 0.15,
@@ -176,6 +175,10 @@
         "output": 10
       }
     },
+    "max_llm_chars_limits": {
+      "min": 1,
+      "max": 20000
+    },
     "llm_prompt_settings": {
       "match_preference_templates": {
         "compensation_target_yearly": "Compensation target: permanent roles around {value} yearly.",
@@ -188,7 +191,7 @@
           "profile_key": "primary_candidate_profile_context",
           "label": "Primary candidate profile context",
           "weight_label": "strongest",
-          "default_weight": 1,
+          "default_weight": 1.0,
           "limit": 1600
         },
         {
@@ -209,7 +212,8 @@
       "learning_candidates_max_items": 6,
       "rejection_blocker_suggestions_max_items": 6,
       "rejection_blocker_suggestions_max_words": 6
-    }
+    },
+    "max_llm_chars": 3000
   },
   "review_settings": {
     "max_examples_per_skill": 3,

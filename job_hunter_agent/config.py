@@ -21,12 +21,13 @@ def _resolve_disable_auth() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-# Debug-only local bypass for auth and CSRF during manual testing.
-AUTH_DISABLED = DEBUG_MODE and _resolve_disable_auth()
+# Local debug mode bypasses auth and CSRF; the env var can still force it on explicitly.
+AUTH_DISABLED = DEBUG_MODE or _resolve_disable_auth()
 
 # Shared URL paths
 LOGIN_PATH = "/login"
 LOGOUT_PATH = "/logout"
+GLOBAL_SETTINGS_PATH = "/global-settings"
 HEALTH_CHECK_PATH = "/api/health"
 GOOGLE_AUTH_PATH = "/login/google"
 GOOGLE_AUTH_CALLBACK_PATH = "/api/auth/google/callback"

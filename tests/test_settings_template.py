@@ -9,7 +9,6 @@ from job_hunter_agent.fastapi_app import create_app
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SETTINGS_ADMIN_PARTIAL_PATH = ROOT_DIR / "templates" / "partials" / "settings-admin.html"
-_FAKE_USER = {"user_id": "test", "email": "test@example.com", "role": "admin"}
 
 
 def test_source_document_suffixes_are_rendered_read_only():
@@ -20,15 +19,35 @@ def test_source_document_suffixes_are_rendered_read_only():
     assert "Read-only. One suffix per line" in html
 
 
-def test_settings_page_renders_admin_partial(monkeypatch):
-    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
-    monkeypatch.setattr(_fa, "read_session_username", lambda request: _FAKE_USER["email"])
+def test_global_settings_page_renders_admin_partial(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(_fa, "read_session_username", lambda request: "test@example.com")
     monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "is_admin", lambda request: True)
 
     client = TestClient(create_app())
-    html = client.get("/settings").text
+    html = client.get("/global-settings").text
 
-    assert "Capability Matrix" in html
+    assert "Global settings" in html
     assert 'id="source_document_allowed_suffixes"' in html
     assert "__JOB_HUNTER_SETTINGS_SECTION_" not in html
+
+
+def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(_fa, "read_session_username", lambda request: "test@example.com")
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
+
+    client = TestClient(create_app())
+
+    monkeypatch.setattr(_pages, "is_admin", lambda request: True)
+    admin_html = client.get("/settings").text
+    assert 'class="sidebar-admin-badge"' in admin_html
+    assert 'href="/global-settings"' in admin_html
+
+    monkeypatch.setattr(_pages, "is_admin", lambda request: False)
+    candidate_html = client.get("/settings").text
+    assert 'class="sidebar-admin-badge"' not in candidate_html
+    assert 'href="/global-settings"' not in candidate_html

@@ -59,3 +59,10 @@ docs/backlog/
 debug/
 .skills/
 docs/signals/
+docs/backlog/learning.md
+data/signals/ignored_signal.json
+data/signals/signal_defaults.json
+data/signals/signal_registry.json
+docs/backlog/ui.md
+docs/backlog/README.md
+docs/job_hunter_learning_architecture_plan.txt
