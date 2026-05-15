@@ -15,6 +15,15 @@ def _resolve_debug_mode() -> bool:
 
 DEBUG_MODE = _resolve_debug_mode()
 
+
+def _resolve_disable_auth() -> bool:
+    value = os.getenv("JOB_HUNTER_DISABLE_AUTH", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+# Debug-only local bypass for auth and CSRF during manual testing.
+AUTH_DISABLED = DEBUG_MODE and _resolve_disable_auth()
+
 # Shared URL paths
 LOGIN_PATH = "/login"
 LOGOUT_PATH = "/logout"

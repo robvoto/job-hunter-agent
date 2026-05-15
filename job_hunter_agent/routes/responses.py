@@ -1,4 +1,4 @@
-"""Shared HTTP helpers for FastAPI dashboard routes."""
+"""Shared HTTP helpers for FastAPI workspace routes."""
 
 from __future__ import annotations
 

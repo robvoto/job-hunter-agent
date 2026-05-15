@@ -44,7 +44,7 @@ Standard format: `source:platform_id` (e.g., `seek:7945621` or `linkedin:3984551
 | Learning          | Capture candidate-approved learned signals       |
 | Review            | Surface uncertain or pending decisions           |
 | Security          | Transport-aware session hardening and CSRF       |
-| Dashboard         | Present explainable ranked jobs                  |
+| Workspace         | Present explainable ranked jobs                  |
 | Settings          | Runtime control surface                          |
 
 ---
@@ -230,15 +230,15 @@ LLM boundaries:
 
 ---
 
-# Dashboard Architecture
+# Workspace Architecture
 
 Primary modules:
 
-* `dashboard_renderer.py`
-* `dashboard_data.py`
+* `workspace_renderer.py`
+* `workspace_data.py`
 * `workspace.html`
 
-Dashboard responsibilities:
+Workspace responsibilities:
 
 * ranked shortlist presentation
 * explainable decisions
@@ -247,7 +247,7 @@ Dashboard responsibilities:
 * filtering visibility
 * diagnostics visibility
 
-The dashboard is a persistent operational workspace.
+The workspace is a persistent operational workspace.
 
 ---
 
@@ -293,7 +293,7 @@ It is not intended for normal end-user preferences.
 | Knowledge JSON files          | Approved runtime business knowledge |
 | Signal registry pending items | Review-only                         |
 | `output/` files               | Disposable runtime output           |
-| Dashboard state/history       | Persistent operational state        |
+| Workspace state/history       | Persistent operational state        |
 
 ---
 
@@ -330,7 +330,7 @@ The system must not:
 | python-jobspy      | LinkedIn ingestion              |
 | OpenAI API         | Optional constrained LLM review |
 | JSON runtime files | State and knowledge persistence |
-| HTML/CSS/JS        | Dashboard and settings UI       |
+| HTML/CSS/JS        | Workspace and settings UI       |
 
 ---
 

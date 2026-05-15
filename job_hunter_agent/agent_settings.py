@@ -20,7 +20,7 @@ AGENT_SETTINGS_TEMPLATE_PATH = DATA_DIR / "agent_settings.template.json"
 AGENT_STATE_PATH = DATA_DIR / "agent_state.json"
 
 # Settings keys
-KEY_DASHBOARD = "dashboard"
+KEY_WORKSPACE = "workspace"
 KEY_SCHEDULE = "schedule"
 KEY_NOTIFICATION_RULES = "notification_rules"
 KEY_EMAIL = "email"
@@ -30,7 +30,7 @@ KEY_ONLY_IF_NEW_MATCHES = "only_if_new_matches"
 
 
 def _possible_fit_threshold() -> int:
-    """Derive the dashboard minimum score default from the 'Possible fit' match level."""
+    """Derive the workspace minimum score default from the 'Possible fit' match level."""
     for level in MATCH_LEVELS:
         if str(level.get("label", "")).strip().lower() == "possible fit":
             return int(level["minimum_score"])
@@ -41,8 +41,8 @@ def _possible_fit_threshold() -> int:
 
 
 # Validation limits and defaults
-DEFAULT_DASHBOARD_URL = "http://127.0.0.1:8765/dashboard"
-DEFAULT_DASHBOARD_MIN_SCORE = _possible_fit_threshold()
+DEFAULT_WORKSPACE_URL = "http://127.0.0.1:8765/workspace"
+DEFAULT_WORKSPACE_MIN_SCORE = _possible_fit_threshold()
 MIN_SCORE = 0
 MAX_SCORE = 100
 
@@ -64,9 +64,9 @@ MAX_TELEGRAM_UPDATE_ID = 2147483647
 DEFAULT_LLM_MODEL = "gpt-4o-mini"
 
 DEFAULT_AGENT_SETTINGS = {
-    "dashboard_url": DEFAULT_DASHBOARD_URL,
-    KEY_DASHBOARD: {
-        "minimum_score": DEFAULT_DASHBOARD_MIN_SCORE,
+    "workspace_url": DEFAULT_WORKSPACE_URL,
+    KEY_WORKSPACE: {
+        "minimum_score": DEFAULT_WORKSPACE_MIN_SCORE,
     },
     KEY_SCHEDULE: {
         "daily_time_local": DEFAULT_DAILY_TIME_LOCAL,
@@ -124,13 +124,13 @@ def normalize_agent_settings(payload: Any) -> dict[str, Any]:
     defaults = DEFAULT_AGENT_SETTINGS
     settings = _deep_merge(copy.deepcopy(defaults), payload if isinstance(payload, dict) else {})
 
-    settings["dashboard_url"] = str(settings.get("dashboard_url") or "").strip()
+    settings["workspace_url"] = str(settings.get("workspace_url") or "").strip()
 
-    dashboard = settings.get(KEY_DASHBOARD, {})
-    settings[KEY_DASHBOARD] = {
+    workspace = settings.get(KEY_WORKSPACE, {})
+    settings[KEY_WORKSPACE] = {
         "minimum_score": _coerce_int(
-            dashboard.get("minimum_score"),
-            defaults[KEY_DASHBOARD]["minimum_score"],
+            workspace.get("minimum_score"),
+            defaults[KEY_WORKSPACE]["minimum_score"],
             MIN_SCORE, MAX_SCORE
         ),
     }
@@ -228,12 +228,12 @@ def save_agent_settings(payload: Any) -> dict[str, Any]:
     return normalized
 
 
-def get_dashboard_minimum_score(settings: Any | None = None) -> int:
+def get_workspace_minimum_score(settings: Any | None = None) -> int:
     if isinstance(settings, dict):
         active_settings = normalize_agent_settings(settings)
     else:
         active_settings = load_agent_settings(create_if_missing=True)
-    return int(active_settings[KEY_DASHBOARD]["minimum_score"])
+    return int(active_settings[KEY_WORKSPACE]["minimum_score"])
 
 
 def load_agent_state() -> dict[str, Any]:

@@ -18,7 +18,7 @@ Use before editing SEEK/LinkedIn scrapers or scraped job data shape.
 - Preserve work mode provenance so later review can distinguish trusted board metadata from inferred text.
 
 ## Work type normalization
-Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(raw, load_job_type())` from `scrapers/base.py` and `job_types.py`. The normalization mapping lives in `data/job_type.json` under the `"mapping"` key — no source-specific logic or hardcoded labels in scraper code. Unknown values are passed through and registered via the signal registry. The `"filter_groups"` key in the same file defines how canonical values map to dashboard filter options; scrapers do not use filter_groups.
+Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(raw, load_job_type())` from `scrapers/base.py` and `job_types.py`. The normalization mapping lives in `data/job_type.json` under the `"mapping"` key — no source-specific logic or hardcoded labels in scraper code. Unknown values are passed through and registered via the signal registry. The `"filter_groups"` key in the same file defines how canonical values map to workspace filter options; scrapers do not use filter_groups.
 
 ## Owners
 - `scrapers/seek.py`: SEEK scraping.
@@ -89,6 +89,13 @@ Add structured debug logs when work mode is extracted:
 
 These logs exist to support later review and learning. They must not promote new rules automatically.
 
+## Search parameter guards
+
+- `build_seek_search_targets` raises `ValueError` if keywords are empty — never send a blank keyword search to SEEK.
+- `/api/run` checks `_onboarding_complete()` before starting a scrape job — returns HTTP 400 if onboarding is not done.
+- Onboarding is complete when `primary_job_title_pattern`, `search_settings.keywords`, and `search_settings.locations` are all non-empty.
+- These guards are application-level validation, not scraper filtering logic.
+
 ## Checklist
 - Is this collection logic, not judgement?
 - Is full-description confidence preserved?
@@ -97,4 +104,5 @@ These logs exist to support later review and learning. They must not promote new
 - Is work mode extracted from board metadata before fallback text inference?
 - Is work mode provenance preserved for review/debugging?
 - Are search keywords avoided as job-level work mode proof?
+- Are search parameters validated before the scraper fires (non-empty keywords, location, completed onboarding)?
 - Did you run the smallest relevant scraper/data-shape check?

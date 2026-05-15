@@ -17,6 +17,8 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.record_schema import RECORD_LOCATION_KEY, RECORD_WORK_TYPE_KEY, RECORD_WORK_MODE_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY, RECORD_WORK_MODE_NEEDS_REVIEW_KEY, RECORD_CARD_SALARY_KEY, RECORD_TEASER_KEY
 from job_hunter_agent.utils import set_query_param
 from job_hunter_agent.work_mode_extraction import extract_from_seek_card
+from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.scrapers.location_adapters import to_seek
 
 # ---------------------------------------------------------------------------
 # Playwright CSS selectors (SEEK-specific DOM)
@@ -124,6 +126,10 @@ def extract_card_metadata(card, filter_state=None) -> dict:
 def build_seek_search_targets(profile: dict, configured_date_range: int, sort_newest_first: bool) -> List[dict]:
     search_settings = get_search_settings(profile)
     keywords = keywords_to_search_string(search_settings.get("keywords") or "")
+    if not keywords:
+        raise ValueError(
+            "Search keywords are not configured. Please complete onboarding and set a search keyword before running."
+        )
     locations = _dedupe_preserve_order(
         [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     ) or [""]
@@ -136,7 +142,8 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
         search_url = SEEK_JOBS_BASE_URL
         search_url = set_query_param(search_url, "keywords", keywords)
         if location:
-            search_url = set_query_param(search_url, "where", location)
+            search_location = to_seek(resolve_location(location))
+            search_url = set_query_param(search_url, "where", search_location)
         if classification_ids:
             search_url = set_query_param(search_url, "classification", ",".join(classification_ids))
         search_url = set_query_param(search_url, "daterange", configured_date_range)
@@ -145,7 +152,7 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
         targets.append(
             {
                 "keywords": keywords,
-                "location": location,
+                "location": search_location if location else "",
                 "classification_ids": classification_ids,
                 "url": search_url,
             }

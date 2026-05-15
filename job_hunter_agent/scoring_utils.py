@@ -139,15 +139,21 @@ def profile_recency_multiplier(profile: dict, aliases: List[str]) -> float:
 
 
 def get_deterministic_review_thresholds(scoring_rules: dict) -> dict:
-    """
-    Retrieve deterministic review thresholds from scoring rules.
-    """
     thresholds = scoring_rules.get("deterministic_review_thresholds")
     if not isinstance(thresholds, dict):
         raise ValueError("scoring_rules.json must define 'deterministic_review_thresholds'")
+
+    def _req(key: str) -> int:
+        if key not in thresholds:
+            raise ValueError(f"scoring_rules.json deterministic_review_thresholds must define '{key}'")
+        return int(thresholds[key])
+
     return {
-        "min_high_risks_for_mismatch": int(thresholds.get("min_high_risks_for_mismatch", 2)),
-        "min_strong_signals_for_mismatch": int(thresholds.get("min_strong_signals_for_mismatch", 1)),
-        "min_strong_signals_for_strong_keep": int(thresholds.get("min_strong_signals_for_strong_keep", 4)),
-        "min_strong_signals_for_solid_keep": int(thresholds.get("min_strong_signals_for_solid_keep", 3)),
+        "min_high_risks_for_mismatch": _req("min_high_risks_for_mismatch"),
+        "max_strong_signals_for_mismatch": _req("max_strong_signals_for_mismatch"),
+        "min_high_risks_for_poor": _req("min_high_risks_for_poor"),
+        "max_strong_signals_for_poor": _req("max_strong_signals_for_poor"),
+        "min_strong_signals_for_strong_keep": _req("min_strong_signals_for_strong_keep"),
+        "min_strong_signals_for_solid_keep": _req("min_strong_signals_for_solid_keep"),
+        "max_medium_risks_for_solid_keep": _req("max_medium_risks_for_solid_keep"),
     }

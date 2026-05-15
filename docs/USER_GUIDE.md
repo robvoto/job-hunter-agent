@@ -120,8 +120,8 @@ Changes here affect the app globally, but users do not edit them from their own 
 `Minimum annual salary` / `Minimum daily rate`
 
 - optional salary targets used as light fit signals
-- if a role lists pay, the dashboard can show whether it meets your target
-- these targets also power the salary filter in the dashboard
+- if a role lists pay, the workspace can show whether it meets your target
+- these targets also power the salary filter in the workspace
 
 ## Running A Job Review
 
@@ -131,26 +131,26 @@ Run the current source connector:
 python -m job_hunter_agent.source_connector
 ```
 
-Then open the dashboard at:
+Then open the workspace at:
 
-- `http://127.0.0.1:8765/dashboard`
+- `http://127.0.0.1:8765/workspace`
 
 ## Match Score Bands
 
-The dashboard groups jobs by their calculated fit score:
+The workspace groups jobs by their calculated fit score:
 
 - **Strong match** (85-100): High alignment with core capabilities and experience.
 - **Good match** (70-84): Solid alignment, perhaps missing secondary criteria.
 - **Possible fit** (55-69): Plausible fit worth reviewing.
 - **Stretch** (0-54): Low alignment or significant requirement gaps.
 
-The dashboard groups jobs into:
+The workspace groups jobs into:
 
 - `Potential Jobs`
 - `Applied`
 - `Hidden`
 
-The dashboard can filter by:
+The workspace can filter by:
 
 - match score
 - posted age

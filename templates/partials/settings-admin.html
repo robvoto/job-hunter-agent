@@ -1,0 +1,268 @@
+        <section id="section-admin" class="settings-group" data-screen="admin">
+          <h2 class="section-title">Admin</h2>
+          <p class="panel-copy">These controls stay global and centrally managed. They cover card highlight display, search defaults, search guardrails, evidence tier weights, preference weights, onboarding defaults, and capability presets. Candidate profile fields stay elsewhere.</p>
+          <div class="grid admin-settings-grid">
+          <section class="panel">
+            <h2>Card Highlight Display</h2>
+            <p class="panel-copy">These are global workspace rendering controls. They change what appears on every card, not the candidate profile or scoring rules.</p>
+
+            <label for="highlight_strong_capability_count">Strong capability matches shown</label>
+            <input id="highlight_strong_capability_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on workspace job cards only. Controls how many strong capability matches appear before the card runs out of space.</div>
+
+            <label for="highlight_working_capability_count">Intermediate capability matches shown</label>
+            <input id="highlight_working_capability_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on workspace job cards only. Controls how many intermediate capability matches appear per card.</div>
+
+            <label for="highlight_basic_capability_count">Historical capability matches shown</label>
+            <input id="highlight_basic_capability_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on workspace job cards only. Controls how many historical capability matches appear per card.</div>
+
+            <label for="highlight_reviewed_signal_count">Reviewed capability matches shown</label>
+            <input id="highlight_reviewed_signal_count" type="number" min="0" max="10" step="1">
+            <div class="field-help">Shown on workspace job cards only. Controls how many approved learning capabilities are displayed per card.</div>
+
+            <label for="highlight_max_highlights">Maximum highlights per card</label>
+            <input id="highlight_max_highlights" type="number" min="1" max="20" step="1">
+            <div class="field-help">Shown on workspace job cards only. This is the total cap across all highlight categories on one card.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Search Defaults</h2>
+            <p class="panel-copy">These defaults seed search behaviour for the whole app. They do not replace the live search fields in Profile.</p>
+
+            <label for="search_default_date_range_days">Default search window (days)</label>
+            <input id="search_default_date_range_days" type="number" min="1" max="30" step="1">
+            <div class="field-help">How many days back each run looks for new listings by default. Profile search settings override this per run. Valid range: <span id="search_default_date_range_days_bounds"></span>.</div>
+
+            <label for="search_default_seek_max_pages">Default SEEK pages</label>
+            <input id="search_default_seek_max_pages" type="number" min="1" max="10" step="1">
+            <div class="field-help">Default SEEK crawl cap. Valid range: <span id="search_default_seek_max_pages_bounds"></span>.</div>
+
+            <label for="search_default_linkedin_hours_old">Default LinkedIn age window</label>
+            <input id="search_default_linkedin_hours_old" type="number" min="1" max="168" step="1">
+            <div class="field-help">Default LinkedIn freshness window in hours. Valid range: <span id="search_default_linkedin_hours_old_bounds"></span>.</div>
+
+            <label for="search_default_linkedin_results_per_search">Default LinkedIn results per search</label>
+            <input id="search_default_linkedin_results_per_search" type="number" min="5" max="100" step="1">
+            <div class="field-help">Default result budget for each LinkedIn search. Valid range: <span id="search_default_linkedin_results_per_search_bounds"></span>.</div>
+
+            <label for="search_default_enforce_posted_age_limit">Enforce posted-age limit</label>
+            <select id="search_default_enforce_posted_age_limit">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <div class="field-help">When enabled, the scraper skips jobs that are older than the configured search window.</div>
+
+            <label for="search_default_sort_newest_first">Sort newest first</label>
+            <select id="search_default_sort_newest_first">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <div class="field-help">When enabled, the workspace prefers fresher jobs in search results.</div>
+
+            <label for="search_default_linkedin_easy_apply_only">LinkedIn Easy Apply only</label>
+            <select id="search_default_linkedin_easy_apply_only">
+              <option value="">Unset</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <div class="field-help">Leave unset unless you want the LinkedIn default to force Easy Apply filtering.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Search Guardrails</h2>
+            <p class="panel-copy">These bounds control what the search defaults can be set to. They are global, shared limits.</p>
+
+            <label for="search_limit_date_range_days_min">Search window minimum (days)</label>
+            <input id="search_limit_date_range_days_min" type="number" min="1" max="365" step="1">
+            <label for="search_limit_date_range_days_max">Search window maximum (days)</label>
+            <input id="search_limit_date_range_days_max" type="number" min="1" max="365" step="1">
+            <div class="field-help">Lowest and highest number of days the search window default can be set to. Prevents defaults being set outside a sensible range.</div>
+
+            <label for="search_limit_seek_max_pages_min">SEEK pages minimum</label>
+            <input id="search_limit_seek_max_pages_min" type="number" min="1" max="100" step="1">
+            <label for="search_limit_seek_max_pages_max">SEEK pages maximum</label>
+            <input id="search_limit_seek_max_pages_max" type="number" min="1" max="100" step="1">
+            <div class="field-help">Allowed range for the SEEK page crawl cap default.</div>
+
+            <label for="search_limit_linkedin_hours_old_min">LinkedIn age window minimum (hours)</label>
+            <input id="search_limit_linkedin_hours_old_min" type="number" min="1" max="720" step="1">
+            <label for="search_limit_linkedin_hours_old_max">LinkedIn age window maximum (hours)</label>
+            <input id="search_limit_linkedin_hours_old_max" type="number" min="1" max="720" step="1">
+            <div class="field-help">Allowed range for how fresh LinkedIn listings must be (in hours).</div>
+
+            <label for="search_limit_linkedin_results_per_search_min">LinkedIn results minimum</label>
+            <input id="search_limit_linkedin_results_per_search_min" type="number" min="1" max="1000" step="1">
+            <label for="search_limit_linkedin_results_per_search_max">LinkedIn results maximum</label>
+            <input id="search_limit_linkedin_results_per_search_max" type="number" min="1" max="1000" step="1">
+            <div class="field-help">Allowed range for the LinkedIn result budget per search term.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Salary Limits</h2>
+            <p class="panel-copy">These caps control the largest salary values users can save in Search and Onboarding. They are managed globally so the UI and API stay aligned.</p>
+
+            <label for="salary_limit_minimum_salary_yearly_max">Maximum permanent salary</label>
+            <div class="currency-input-wrap">
+              <span class="currency-prefix">$</span>
+              <input id="salary_limit_minimum_salary_yearly_max" type="text" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field-help">Upper cap for annual salary inputs. Leave it high enough to cover any realistic target.</div>
+
+            <label for="salary_limit_minimum_daily_rate_max">Maximum contract daily rate</label>
+            <div class="currency-input-wrap">
+              <span class="currency-prefix">$</span>
+              <input id="salary_limit_minimum_daily_rate_max" type="text" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field-help">Upper cap for daily rate inputs. Leave it high enough to cover any realistic target.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Evidence Tier Weights</h2>
+            <p class="panel-copy">These global weights control how much each profile tier contributes when evidence is scored.</p>
+
+            <label for="evidence_primary_weight">Primary profile context weight</label>
+            <input id="evidence_primary_weight" type="number" min="0" max="1" step="0.05">
+
+            <label for="evidence_secondary_weight">Secondary profile context weight</label>
+            <input id="evidence_secondary_weight" type="number" min="0" max="1" step="0.05">
+
+            <label for="evidence_supplementary_weight">Supplementary profile context weight</label>
+            <input id="evidence_supplementary_weight" type="number" min="0" max="1" step="0.05">
+          </section>
+
+          <section class="panel">
+            <h2>Preference Weights</h2>
+            <p class="panel-copy">These weights shape the global fit score. They stay shared across profiles so scoring stays consistent.</p>
+
+            <label for="preference_fit_weight">Fit</label>
+            <input id="preference_fit_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_salary_weight">Salary</label>
+            <input id="preference_salary_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_location_weight">Location</label>
+            <input id="preference_location_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_work_mode_weight">Work mode</label>
+            <input id="preference_work_mode_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_contract_weight">Contract</label>
+            <input id="preference_contract_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_government_weight">Government</label>
+            <input id="preference_government_weight" type="number" min="0" max="2" step="0.1">
+
+            <label for="preference_freshness_weight">Freshness</label>
+            <input id="preference_freshness_weight" type="number" min="0" max="2" step="0.1">
+          </section>
+
+          <section class="panel">
+            <h2>History Retention</h2>
+            <p class="panel-copy">These shared retention limits control when archive and hidden jobs are re-reviewed.</p>
+
+            <label for="history_archive_stale_after_days">Archive stale after days</label>
+            <input id="history_archive_stale_after_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How long an archived job stays fresh before the workspace treats it as stale.</div>
+
+            <label for="history_hidden_review_days">Hidden review days</label>
+            <input id="history_hidden_review_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How long a hidden job stays hidden before it is eligible for another review.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Description Trust</h2>
+            <p class="panel-copy">This controls when a description fallback is trusted enough to use as full text.</p>
+
+            <label for="description_trust_min_trusted_description_length">Minimum trusted description length</label>
+            <input id="description_trust_min_trusted_description_length" type="number" min="1" max="100000" step="1">
+            <div class="field-help">If the fallback text is shorter than this, the system will not treat it as a trusted full description.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Source Documents</h2>
+            <p class="panel-copy">These file types are accepted during onboarding and source import. Keep them here so the app stays centrally managed.</p>
+
+            <label for="source_document_allowed_suffixes">Allowed file suffixes</label>
+            <textarea id="source_document_allowed_suffixes" rows="6" readonly aria-readonly="true" placeholder=".docx
+.md
+.txt"></textarea>
+            <div class="field-help">Read-only. One suffix per line, including the leading dot. Update this in the managed advance settings source, not from the UI.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Onboarding Defaults</h2>
+            <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
+            <div class="field-help">These controls also shape how the learning pass keeps aliases and capability clusters when the system extracts your CV.</div>
+
+            <label for="onboarding_extraction_lookback_years">Extraction lookback years</label>
+            <input id="onboarding_extraction_lookback_years" type="number" min="1" max="20" step="1">
+            <div class="field-help">How far back the CV parser looks for role history when it decides what is recent enough to matter.</div>
+
+            <label for="onboarding_title_extraction_min_months">Title extraction minimum months</label>
+            <input id="onboarding_title_extraction_min_months" type="number" min="1" max="24" step="1">
+            <div class="field-help">Roles shorter than this are treated as too brief to count as a main title signal.</div>
+
+            <label for="onboarding_max_target_patterns">Max target patterns</label>
+            <input id="onboarding_max_target_patterns" type="number" min="1" max="20" step="1">
+            <div class="field-help">How many primary job-title patterns the onboarding extractor keeps.</div>
+
+            <label for="onboarding_max_secondary_patterns">Max secondary patterns</label>
+            <input id="onboarding_max_secondary_patterns" type="number" min="1" max="20" step="1">
+            <div class="field-help">How many fallback job-title patterns the onboarding extractor keeps.</div>
+
+            <label for="onboarding_capability_alias_limit">Capability alias limit</label>
+            <input id="onboarding_capability_alias_limit" type="number" min="1" max="20" step="1">
+            <div class="field-help">Controls two things: how many aliases the LLM is asked to generate per capability during CV extraction, and the maximum kept per capability rule. Raise this if capabilities are matching too few job-description variants.</div>
+
+            <label for="onboarding_signal_cluster_min_alias_hits">Signal cluster minimum alias hits</label>
+            <input id="onboarding_signal_cluster_min_alias_hits" type="number" min="1" max="10" step="1">
+            <div class="field-help">The minimum number of alias matches a learned signal cluster must collect before it is kept.</div>
+
+            <label for="onboarding_signal_cluster_min_snippet_hits">Signal cluster minimum snippet hits</label>
+            <input id="onboarding_signal_cluster_min_snippet_hits" type="number" min="1" max="10" step="1">
+            <div class="field-help">The minimum number of separate snippets that need to mention the signal before it is kept.</div>
+
+            <label for="onboarding_signal_cluster_dense_snippet_alias_hits">Signal cluster dense alias hits</label>
+            <input id="onboarding_signal_cluster_dense_snippet_alias_hits" type="number" min="1" max="20" step="1">
+            <div class="field-help">A dense mention threshold that can keep a signal even when the snippet count is lower.</div>
+
+            <label for="onboarding_capability_strength_preset">Capability strength preset</label>
+            <select id="onboarding_capability_strength_preset">
+              <option value="recent_focus">Recent focus</option>
+              <option value="balanced">Balanced</option>
+              <option value="include_older_experience">Include older experience</option>
+            </select>
+          </section>
+
+          <section class="panel">
+            <h2>LLM Models</h2>
+            <p class="panel-copy">These models are the only ones shown in the AI / LLM selector above.</p>
+
+            <label for="llm_model_options">Allowed models</label>
+            <textarea id="llm_model_options" rows="4" placeholder="One model id per line"></textarea>
+            <div class="field-help">Keep one model id per line. The runtime selector uses this list directly.</div>
+
+            <label for="llm_max_llm_chars">Maximum LLM characters</label>
+            <input id="llm_max_llm_chars" type="number" min="1" max="20000" step="1">
+            <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts.</div>
+
+            <label for="llm_pricing_per_1m">Model pricing per 1M tokens</label>
+            <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"model-id": {"input": 0, "output": 0}}'></textarea>
+            <div class="field-help">Managed pricing used for cost logging. Keep it as JSON keyed by model id with `input` and `output` rates.</div>
+
+            <label for="llm_prompt_settings">Prompt settings</label>
+            <textarea id="llm_prompt_settings" rows="14" placeholder='{"match_preference_templates": {...}}'></textarea>
+            <div class="field-help">Managed prompt policy for LLM fit review context and normalization caps. Keep it as JSON.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Capability Presets</h2>
+            <p class="panel-copy">These preset tables are global. The selector above chooses which one onboarding uses.</p>
+            <div id="capability_strength_presets_panel">
+              <p class="help">Load Admin to view the preset tables.</p>
+            </div>
+          </section>
+          </div>
+        </section>

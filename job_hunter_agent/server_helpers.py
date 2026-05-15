@@ -14,7 +14,7 @@ from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DE
 from job_hunter_agent.agent_settings import (
     DEFAULT_AGENT_SETTINGS, 
     load_agent_state, 
-    KEY_DASHBOARD,
+    KEY_WORKSPACE,
     KEY_EMAIL,
     KEY_TELEGRAM,
     KEY_SCHEDULE,
@@ -25,7 +25,6 @@ from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_
 from job_hunter_agent.paths import (
     DATA_DIR,
     USERS_DIR,
-    DASHBOARD_FILENAME,
     REPO_ROOT as ROOT_DIR,
     SETTINGS_HTML_PATH,
     SHOWCASE_PATH,
@@ -33,10 +32,10 @@ from job_hunter_agent.paths import (
     WORKSPACE_HTML_PATH,
     ONBOARDING_HTML_PATH,
     get_audit_records_path,
-    get_dashboard_path,
     get_job_history_path,
     get_review_data_path,
     get_run_stats_path,
+    get_workspace_results_path,
     get_source_pack_dir,
 )
 from job_hunter_agent.profile_store import (
@@ -53,6 +52,7 @@ from job_hunter_agent.profile_store import (
     GOVERNMENT_PREFERENCE_HELP_TEXT,
     WORK_MODE_PREFERENCE_HELP_TEXT,
     WORK_MODE_PREFERENCE_NONE,
+    WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
     SALARY_MIN_ANNUAL_LABEL,
     SALARY_MIN_DAILY_LABEL,
@@ -64,6 +64,7 @@ from job_hunter_agent.profile_store import (
     load_profile, 
     normalize_onboarding_settings,
     normalize_search_settings, 
+    normalize_work_mode_preferences,
     save_profile,
     KEY_KEYWORDS,
     KEY_LOCATIONS,
@@ -90,23 +91,23 @@ from job_hunter_agent.profile_store import (
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
-from job_hunter_agent.server_review import (
+from job_hunter_agent.review_history_service import (
     append_review_key,
-    build_description_block_followups,
-    build_title_block_followups,
     get_job_description,
-    load_job_history,
     persist_review_event,
-    rebuild_dashboard_after_rule_change,
     record_job_view,
     remove_review_key,
     save_block_similar_feedback,
     save_description_block_feedback,
-    save_job_history,
     save_not_for_me_feedback,
+)
+from job_hunter_agent.server_review import (
+    build_description_block_followups,
+    build_title_block_followups,
     save_requirement_blockers_feedback,
 )
-from job_hunter_agent.source_connector import rebuild_html_dashboard, scrape_jobs_direct
+from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
+from job_hunter_agent.source_connector import rebuild_workspace_results, scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
     build_llm_profile_brief,
@@ -136,6 +137,10 @@ _STATIC_MIME_OVERRIDES = {
     ".js": "text/javascript",
     ".png": "image/png",
 }
+GOVERNMENT_PREFERENCE_DEFAULT_LABEL = next(
+    (item["label"] for item in GOVERNMENT_PREFERENCE_OPTIONS if item["value"] == GOVERNMENT_PREFERENCE_ANY),
+    "",
+)
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -210,11 +215,17 @@ def build_bootstrap_script(
     location_options: list[dict[str, Any]] | None = None,
     default_location: str | None = None,
     onboarding_defaults: dict[str, Any] | None = None,
+    advance_settings: dict[str, Any] | None = None,
+    resume_step: int | None = None,
 ) -> str:
     parts = [f'<script>window.__JOB_HUNTER_DEBUG_MODE__ = {"true" if DEBUG_MODE else "false"};</script>']
     if onboarding_defaults is not None:
         parts.append(
             f'<script>window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ = {json.dumps(onboarding_defaults, ensure_ascii=True)};</script>'
+        )
+    if resume_step is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_ONBOARDING_RESUME_STEP__ = {json.dumps(resume_step, ensure_ascii=True)};</script>'
         )
     if csrf_token is not None:
         parts.append(
@@ -227,6 +238,10 @@ def build_bootstrap_script(
     if default_location is not None:
         parts.append(
             f'<script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = {json.dumps(default_location, ensure_ascii=True)};</script>'
+        )
+    if advance_settings is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_ADVANCE_SETTINGS__ = {json.dumps(advance_settings, ensure_ascii=True)};</script>'
         )
     parts.append(
         f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'
@@ -247,10 +262,16 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(WORK_MODE_PREFERENCE_NONE, ensure_ascii=True)};</script>'
     )
     parts.append(
+        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__ = {json.dumps(WORK_MODE_PREFERENCE_NONE_LABEL, ensure_ascii=True)};</script>'
+    )
+    parts.append(
         f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__ = {json.dumps(GOVERNMENT_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__ = {json.dumps(GOVERNMENT_PREFERENCE_ANY, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT_LABEL__ = {json.dumps(GOVERNMENT_PREFERENCE_DEFAULT_LABEL, ensure_ascii=True)};</script>'
     )
     return "\n  ".join(parts)
 
@@ -309,13 +330,14 @@ def render_government_preference_select_options(*, selected_value: str) -> str:
     return "".join(options)
 
 
-def render_work_mode_preference_select_options(*, selected_value: str) -> str:
-    selected = str(selected_value or WORK_MODE_PREFERENCE_NONE).strip().lower()
+def render_work_mode_preference_choices(*, selected_values: object) -> str:
+    selected = set(normalize_work_mode_preferences(selected_values))
     options = []
     for item in WORK_MODE_PREFERENCE_OPTIONS:
-        selected_attr = " selected" if item["value"] == selected else ""
+        value = str(item["value"]).strip().lower()
+        checked_attr = " checked" if value in selected else ""
         options.append(
-            f'<option value="{escape(item["value"])}"{selected_attr}>{escape(item["label"])}</option>'
+            f'<label class="choice-card choice-card--work-mode"><input type="checkbox" name="work_mode_preference" value="{escape(value)}"{checked_attr}><span>{escape(item["label"])}</span></label>'
         )
     return "".join(options)
 
@@ -421,9 +443,13 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
 
     overrides: dict[str, Any] = {}
     if KEY_KEYWORDS in source:
-        overrides[KEY_KEYWORDS] = str(source.get(KEY_KEYWORDS) or "").strip()
+        value = str(source.get(KEY_KEYWORDS) or "").strip()
+        if value:
+            overrides[KEY_KEYWORDS] = value
     if KEY_LOCATIONS in source:
-        overrides[KEY_LOCATIONS] = _parse_locations_override(source.get(KEY_LOCATIONS))
+        parsed = _parse_locations_override(source.get(KEY_LOCATIONS))
+        if parsed:
+            overrides[KEY_LOCATIONS] = parsed
     if KEY_DATE_RANGE_DAYS in source:
         overrides[KEY_DATE_RANGE_DAYS] = source.get(KEY_DATE_RANGE_DAYS)
     if KEY_SEEK_MAX_PAGES in source:
@@ -486,22 +512,53 @@ def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
     return bool(target_titles and locations[:1] and keywords)
 
 
+def _onboarding_resume_step(profile: dict[str, Any] | None = None) -> int:
+    """Returns the wizard step to resume at (1 = upload, 2 = review draft)."""
+    current = profile if isinstance(profile, dict) else load_profile()
+    capability_rules = [r for r in current.get("capability_profile_rules", []) if r]
+    if capability_rules:
+        return 2
+    return 1
+
+
+def _write_run_stats_field(key: str, value: object) -> None:
+    try:
+        path = get_run_stats_path()
+        payload: dict = {}
+        if path.exists():
+            import json as _json
+            try:
+                payload = _json.loads(path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        payload[key] = value
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as write_exc:
+        print(f"[RUN][WARN] Could not write run_stats.{key}: {write_exc}")
+
+
 def _run_scrape_job() -> None:
     try:
         scrape_jobs_direct()
+        _write_run_stats_field("last_run_error", None)
     except Exception as exc:
-        print(f"[RUN][ERROR] {type(exc).__name__}: {exc}")
+        msg = f"{type(exc).__name__}: {exc}"
+        print(f"[RUN][ERROR] {msg}")
+        _write_run_stats_field("last_run_error", msg)
     finally:
         _set_run_in_progress(False)
 
 
-def _rebuild_dashboard_on_startup() -> None:
-    if not get_dashboard_path().exists() and not get_run_stats_path().exists() and not get_audit_records_path().exists():
+def _rebuild_workspace_on_startup() -> None:
+    if not get_workspace_results_path().exists() and not get_run_stats_path().exists() and not get_audit_records_path().exists():
         return
     try:
-        rebuild_html_dashboard(reason="server startup rebuild")
+        rebuild_workspace_results(reason="server startup rebuild")
     except Exception as exc:
-        print(f"[DASHBOARD][WARN] Could not rebuild on startup: {type(exc).__name__}: {exc}")
+        print(f"[WORKSPACE][WARN] Could not rebuild on startup: {type(exc).__name__}: {exc}")
 
 
 class SettingsHandler:
@@ -571,22 +628,19 @@ class SettingsHandler:
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
-        root_source_pack = DATA_DIR / "application_inputs" / "source_pack"
-        if root_source_pack.exists():
-            shutil.rmtree(root_source_pack)
+        source_pack_dir = get_source_pack_dir()
+        if source_pack_dir.exists():
+            shutil.rmtree(source_pack_dir)
 
         for path, default in [
-            (DATA_DIR / "job_history.json", {}),
-            (DATA_DIR / "review_data.json", {}),
-            (DATA_DIR / "run_stats.json", {}),
-            (DATA_DIR / "audit_records.json", []),
+            (get_job_history_path(), {}),
+            (get_review_data_path(), {}),
+            (get_run_stats_path(), {}),
+            (get_audit_records_path(), []),
         ]:
             cls._write_json_file(path, default)
 
-        for output_path in [
-            DATA_DIR / DASHBOARD_FILENAME,
-            DATA_DIR.parent / "output" / DASHBOARD_FILENAME,
-        ]:
+        for output_path in [get_workspace_results_path()]:
             try:
                 output_path.unlink(missing_ok=True)
             except Exception:
@@ -610,13 +664,13 @@ class SettingsHandler:
 
     @staticmethod
     def _sanitize_agent_settings_payload(payload: dict) -> dict:
-        dashboard = payload.get(KEY_DASHBOARD, {}) if isinstance(payload, dict) else {}
+        workspace = payload.get(KEY_WORKSPACE, {}) if isinstance(payload, dict) else {}
         telegram = payload.get(KEY_TELEGRAM, {}) if isinstance(payload, dict) else {}
         llm = payload.get(KEY_LLM, {}) if isinstance(payload, dict) else {}
         schedule_payload = payload.get(KEY_SCHEDULE) if isinstance(payload, dict) else None
         sanitized = {
-            KEY_DASHBOARD: {
-                "minimum_score": max(0, min(int(dashboard.get("minimum_score", 55) or 55), 100)),
+            KEY_WORKSPACE: {
+                "minimum_score": max(0, min(int(workspace.get("minimum_score", 55) or 55), 100)),
             },
             KEY_TELEGRAM: {
                 "enabled": bool(telegram.get("enabled", False)),
@@ -670,14 +724,14 @@ class SettingsHandler:
 
     @staticmethod
     def _public_agent_settings_payload(settings: dict) -> dict:
-        dashboard = settings.get(KEY_DASHBOARD, {}) if isinstance(settings, dict) else {}
+        workspace = settings.get(KEY_WORKSPACE, {}) if isinstance(settings, dict) else {}
         telegram = settings.get(KEY_TELEGRAM, {}) if isinstance(settings, dict) else {}
         llm_settings = settings.get(KEY_LLM, {}) if isinstance(settings, dict) else {}
         schedule = settings.get(KEY_SCHEDULE, {}) if isinstance(settings, dict) else {}
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
-            KEY_DASHBOARD: {
-                "minimum_score": max(0, min(int(dashboard.get("minimum_score", DEFAULT_AGENT_SETTINGS[KEY_DASHBOARD]["minimum_score"]) or DEFAULT_AGENT_SETTINGS[KEY_DASHBOARD]["minimum_score"]), 100)),
+            KEY_WORKSPACE: {
+                "minimum_score": max(0, min(int(workspace.get("minimum_score", DEFAULT_AGENT_SETTINGS[KEY_WORKSPACE]["minimum_score"]) or DEFAULT_AGENT_SETTINGS[KEY_WORKSPACE]["minimum_score"]), 100)),
             },
             KEY_SCHEDULE: {
                 "daily_time_local": str(schedule.get("daily_time_local") or DEFAULT_AGENT_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip(),
@@ -740,6 +794,3 @@ class SettingsHandler:
             expected = expected_tokens.get(phrase, "")
             if not expected or str(provided.get(phrase) or "").strip() != expected:
                 raise ValueError(f"Missing explicit approval for suggested blocker: {phrase}")
-
-
-AdminHandler = SettingsHandler

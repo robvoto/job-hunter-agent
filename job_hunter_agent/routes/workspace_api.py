@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from starlette.responses import Response
 
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.paths import get_workspace_results_path, get_run_stats_path, get_review_data_path
 
 from job_hunter_agent.routes.responses import json_response
 
@@ -13,13 +14,14 @@ router = APIRouter()
 
 @router.get("/api/results-html")
 def api_results_html():  # type: ignore[no-untyped-def]
-    if not srv.DASHBOARD_PATH.exists():
+    results_path = get_workspace_results_path()
+    if not results_path.exists():
         return HTMLResponse(
             content='<div style="padding:64px 24px;color:var(--text-muted);text-align:center;font-family:var(--sans);">No results yet - run a search first.</div>',
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
     try:
-        body = srv.DASHBOARD_PATH.read_bytes()
+        body = results_path.read_bytes()
     except Exception as exc:
         return json_response({"error": str(exc)}, 500)
     return Response(
@@ -36,9 +38,10 @@ def api_health():  # type: ignore[no-untyped-def]
 
 @router.get("/api/run-stats")
 def api_run_stats():  # type: ignore[no-untyped-def]
-    if srv.RUN_STATS_PATH.exists():
+    stats_path = get_run_stats_path()
+    if stats_path.exists():
         try:
-            payload = json.loads(srv.RUN_STATS_PATH.read_text(encoding="utf-8"))
+            payload = json.loads(stats_path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
                 return json_response(payload)
         except Exception:
@@ -61,9 +64,10 @@ def api_run_status():  # type: ignore[no-untyped-def]
 
 @router.get("/api/review-data")
 def api_review_data():  # type: ignore[no-untyped-def]
-    if srv.REVIEW_DATA_PATH.exists():
+    review_data_path = get_review_data_path()
+    if review_data_path.exists():
         try:
-            payload = json.loads(srv.REVIEW_DATA_PATH.read_text(encoding="utf-8"))
+            payload = json.loads(review_data_path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
                 payload["suggested_tuning"] = srv.build_suggested_tuning_from_saved_review(
                     payload,

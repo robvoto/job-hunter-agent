@@ -67,4 +67,4 @@ def render_badge(label: str, class_name: str, explanation: str) -> str:
 
 
 def viewed_badge_html() -> str:
-    return render_badge("Viewed", "badge-viewed", "You have already opened this role from the dashboard.")
+    return render_badge("Viewed", "badge-viewed", "You have already opened this role from the workspace.")

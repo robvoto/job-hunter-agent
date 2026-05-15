@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from job_hunter_agent.paths import OUTPUT_DIR, REPO_ROOT, PARSING_RULES_PATH
+from job_hunter_agent.paths import OUTPUT_DIR, PARSING_RULES_PATH
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     KEY_CV_TEXT,
@@ -24,13 +24,14 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_LOOKBACK_YEARS,
-    KEY_MIN_MONTHS,
     KEY_MAX_TARGET,
     KEY_MAX_SECONDARY,
     KEY_NAME,
     KEY_LEVEL,
     KEY_ALIASES,
     KEY_NEEDS_REVIEW,
+    WORK_MODE_PREFERENCE_REMOTE,
+    WORK_MODE_PREFERENCE_HYBRID,
     LEVEL_STRONG,
     LEVEL_WORKING,
     LEVEL_BASIC,
@@ -70,7 +71,6 @@ from job_hunter_agent.parsing_schema import (
     PARSING_TITLE_CANDIDATE_PUNCTUATION_BLOCKERS_KEY,
 )
 
-ROOT_DIR = REPO_ROOT
 CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
 
 # Internal result keys
@@ -213,7 +213,7 @@ class _CapabilityExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    level: Literal[LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC]
+    level: Literal["strong", "working", "basic"]
     aliases: list[str] = Field(default_factory=list)
     needs_review: bool = False
 
@@ -688,7 +688,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         return _cv_extraction_cache[cache_key]
 
     try:
-        from job_hunter_agent.llm_gate import client, _get_llm_model, _log_llm_call
+        from job_hunter_agent.llm_gate import client, get_llm_model, _log_llm_call
     except Exception:
         return {}
 
@@ -709,8 +709,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "Not company names, employer names, job titles, or raw phrase fragments. "
         "Each capability must be a named skill or practice area grounded in the CV bullets or role headers. "
         "Use explicit role titles when present, plus header_lines and bullets, as evidence. "
-        "Set level=strong only for current or recent strengths that are repeated and clearly senior. "
-        "Older evidence should usually be intermediate or historical unless the CV still shows current depth. "
+        "Set level='strong' only for current or recent strengths that are repeated and clearly senior. "
+        "Older evidence should usually be 'working' or 'basic' unless the CV still shows current depth. "
         "Set needs_review=true when the capability is plausible but you are not confident it belongs in the final profile. "
         f"For each capability include up to {alias_limit} aliases: known abbreviations, acronyms, and recruiter synonyms "
         "that refer to the same skill (e.g. for 'business process modeling': ['bpmn', 'process mapping', 'workflow design']). "
@@ -723,7 +723,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
     )
 
     try:
-        model = _get_llm_model()
+        model = get_llm_model()
         resp = client.responses.parse(
             model=model,
             input=[{"role": "user", "content": prompt}],
@@ -872,7 +872,7 @@ def build_role_title_review_signals(
 
     for title in titles or []:
         cleaned_title = _clean_line(title)
-        review_token = _role_title_review_token(cleaned_title)
+        review_token = build_role_title_review_token(cleaned_title)
         if not review_token or review_token in seen:
             continue
         seen.add(review_token)
@@ -938,7 +938,7 @@ def _normalize_role_title_value(value: str) -> str:
     return normalize_title_text(_clean_line(value))
 
 
-def _role_title_review_token(title: str) -> str:
+def build_role_title_review_token(title: str) -> str:
     normalized = _normalize_role_title_value(title)
     if not normalized:
         return ""
@@ -1100,40 +1100,6 @@ def _classify_titles_from_evidence(
     }
 
 
-# ── Match preference extraction ────────────────────────────────────────────────
-
-def _extract_match_preferences(text: str) -> dict[str, Any]:
-    prefs = {}
-    lowered = text.lower()
-
-    if re.search(r"\b(permanent only|no contracts|prefer permanent|seeking permanent)\b", lowered):
-        prefs["prefer_permanent"] = True
-    elif re.search(r"\b(contract only|prefer contracts|freelance|interim)\b", lowered):
-        prefs["prefer_permanent"] = False
-
-    if re.search(r"\b(remote only|100% remote|work from home only)\b", lowered):
-        prefs["work_mode_preference"] = "remote"
-    elif re.search(r"\b(hybrid|flexible working|mix of office and home)\b", lowered):
-        prefs["work_mode_preference"] = "hybrid"
-
-    loc = extract_location_hint(text)
-    if loc:
-        prefs["home_location"] = loc
-
-    return prefs
-
-
-def extract_location_hint(text: str) -> str:
-    match = re.search(
-        r"(?i)\b(?:based in|location|reside in|lives in|home base|resident of):\s*([A-Za-z\s,]+?)(?=\n|[,.]?\s+and\b|[,.]?\s+with\b|[.!?]|\s{2,}|\Z)",
-        text,
-    )
-    if match:
-        loc = match.group(1).strip()
-        loc = re.sub(r"(?i)[,\s]+\w{2,3}$", "", loc).strip()
-        if 2 < len(loc) < 60:
-            return loc
-    return ""
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────

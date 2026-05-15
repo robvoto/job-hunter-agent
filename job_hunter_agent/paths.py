@@ -9,7 +9,7 @@ DATA_DIR = REPO_ROOT / "data"
 OUTPUT_DIR = REPO_ROOT / "output"
 TEMPLATES_DIR = REPO_ROOT / "templates"
 DOCS_DIR = REPO_ROOT / "docs"
-DASHBOARD_FILENAME = "dashboard.html"
+WORKSPACE_RESULTS_FILENAME = "workspace_results.html"
 
 # Per-user data lives under this directory.
 USERS_DIR = DATA_DIR / "users"
@@ -24,6 +24,7 @@ PLAYWRIGHT_USER_DATA_DIR = DATA_DIR / "playwright_user_data"
 STATIC_DIR = TEMPLATES_DIR / "static"
 WORKSPACE_HTML_PATH = TEMPLATES_DIR / "workspace.html"
 SETTINGS_HTML_PATH = TEMPLATES_DIR / "settings.html"
+SETTINGS_PARTIALS_DIR = TEMPLATES_DIR / "partials"
 ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
 SHOWCASE_PATH = DOCS_DIR / "SHOWCASE.html"
 
@@ -54,9 +55,9 @@ def get_run_stats_path() -> Path:
     return (d / "run_stats.json") if d else OUTPUT_DIR / "run_stats.json"
 
 
-def get_dashboard_path() -> Path:
+def get_workspace_results_path() -> Path:
     d = _active_user_dir()
-    return (d / DASHBOARD_FILENAME) if d else OUTPUT_DIR / DASHBOARD_FILENAME
+    return (d / WORKSPACE_RESULTS_FILENAME) if d else OUTPUT_DIR / WORKSPACE_RESULTS_FILENAME
 
 
 def get_audit_records_path() -> Path:

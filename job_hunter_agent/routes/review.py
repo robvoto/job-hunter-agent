@@ -79,7 +79,7 @@ def api_rule_phrase(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             existing.append({"phrase": phrase, "reason": reason or f"DESC_REJECT:{phrase}"})
             profile["reject_description_phrase_rules"] = existing
             updated = srv.save_profile(profile)
-            srv.rebuild_dashboard_after_rule_change(f"description phrase rule added for {phrase}")
+            srv.rebuild_workspace_after_rule_change(f"description phrase rule added for {phrase}")
         else:
             updated = profile
     except Exception as exc:
@@ -214,7 +214,7 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
             return json_response({"error": "Rule not found"}, 404)
         profile["reject_title_rules"] = updated_rules
         saved = srv.save_profile(profile)
-        srv.rebuild_dashboard_after_rule_change(f"title block rule removed: {pattern}")
+        srv.rebuild_workspace_after_rule_change(f"title block rule removed: {pattern}")
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response({"ok": True, "reject_title_rules": saved.get("reject_title_rules", [])})

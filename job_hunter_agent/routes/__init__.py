@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from job_hunter_agent.routes import (
     agent_telegram,
     auth_google,
-    dashboard_api,
     onboarding_api,
     pages,
     profile_materials,
@@ -15,6 +14,7 @@ from job_hunter_agent.routes import (
     scrape_debug,
     signals,
     static_docs,
+    workspace_api,
 )
 
 
@@ -24,7 +24,7 @@ def register_routes(app: FastAPI) -> None:
         auth_google,
         static_docs,
         pages,
-        dashboard_api,
+        workspace_api,
         profile_materials,
         agent_telegram,
         signals,

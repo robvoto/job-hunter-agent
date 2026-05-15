@@ -27,12 +27,14 @@ from job_hunter_agent.advance_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_DATE_RANGE_DAYS,
+    KEY_ENFORCE_POSTED_AGE_LIMIT,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_ONBOARDING_SETTINGS as ADVANCE_KEY_ONBOARDING_SETTINGS,
     KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
+    KEY_SORT_NEWEST_FIRST,
     ONBOARDING_SETTING_LIMITS,
     get_salary_limits,
     load_advance_settings,
@@ -77,13 +79,13 @@ WORK_MODE_PREFERENCE_REMOTE = "remote"
 WORK_MODE_PREFERENCE_HYBRID = "hybrid"
 WORK_MODE_PREFERENCE_ONSITE = "onsite"
 WORK_MODE_PREFERENCE_OPTIONS = (
-    {"value": WORK_MODE_PREFERENCE_NONE, "label": "No preference"},
-    {"value": WORK_MODE_PREFERENCE_REMOTE, "label": "Remote only"},
-    {"value": WORK_MODE_PREFERENCE_HYBRID, "label": "Hybrid only"},
-    {"value": WORK_MODE_PREFERENCE_ONSITE, "label": "On-site only"},
+    {"value": WORK_MODE_PREFERENCE_REMOTE, "label": "Remote"},
+    {"value": WORK_MODE_PREFERENCE_HYBRID, "label": "Hybrid"},
+    {"value": WORK_MODE_PREFERENCE_ONSITE, "label": "On-site"},
 )
 _VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
-WORK_MODE_PREFERENCE_HELP_TEXT = "Optional. Choose remote only, hybrid only, or on-site only."
+WORK_MODE_PREFERENCE_NONE_LABEL = "No preference"
+WORK_MODE_PREFERENCE_HELP_TEXT = "Optional. Choose the work arrangements you want to include in search. Leave all unselected to keep every mode."
 
 GOVERNMENT_PREFERENCE_ANY = "any"
 GOVERNMENT_PREFERENCE_GOVERNMENT = "government"
@@ -189,6 +191,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),
+        "deterministic_review_thresholds": dict(payload.get("deterministic_review_thresholds") or {}),
         "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
         "salary": dict(payload.get("salary") or {}),
@@ -221,7 +224,7 @@ DEFAULT_PROFILE = {
     "match_preferences": {
         "home_location": "",
         "secondary_location": "",
-        KEY_WORK_MODE_PREFERENCE: WORK_MODE_PREFERENCE_NONE,
+        KEY_WORK_MODE_PREFERENCE: [],
         KEY_PREFER_GOVERNMENT: False,
         "prefer_permanent": False,
         "engagement_type": ENGAGEMENT_TYPE_BOTH,
@@ -376,16 +379,30 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
             normalized_government = GOVERNMENT_PREFERENCE_ANY
         merged[KEY_PREFER_GOVERNMENT] = normalized_government
 
-    normalized_work_mode = str(merged.get(KEY_WORK_MODE_PREFERENCE) or "").strip().lower()
-    if normalized_work_mode not in _VALID_WORK_MODE_PREFERENCES:
-        normalized_work_mode = WORK_MODE_PREFERENCE_NONE
-    merged[KEY_WORK_MODE_PREFERENCE] = normalized_work_mode
+    merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(merged.get(KEY_WORK_MODE_PREFERENCE))
 
     merged["prefer_permanent"] = bool(merged.get("prefer_permanent", False))
     merged["engagement_type"] = str(merged.get("engagement_type") or ENGAGEMENT_TYPE_BOTH).strip().lower()
     merged["preferred_contract_months"] = int(merged.get("preferred_contract_months") or 12)
     merged["short_contract_months"] = int(merged.get("short_contract_months") or 6)
     return merged
+
+
+def normalize_work_mode_preferences(values: Any) -> list[str]:
+    if isinstance(values, str):
+        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+    elif isinstance(values, (list, tuple, set)):
+        source_values = [str(value).strip().lower() for value in values if str(value).strip()]
+    else:
+        source_values = []
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in WORK_MODE_PREFERENCE_OPTIONS:
+        value = str(item["value"]).strip().lower()
+        if value in source_values and value not in seen:
+            seen.add(value)
+            selected.append(value)
+    return selected
 
 
 def normalize_capability_rules(
@@ -425,7 +442,7 @@ def normalize_capability_rules(
         if level == "none":
             continue
         if level not in VALID_CAPABILITY_RULE_LEVELS:
-            level = "basic"
+            level = LEVEL_BASIC
 
         raw_aliases = rule.get("aliases")
         if isinstance(raw_aliases, str):
@@ -619,8 +636,8 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
     except Exception:
         merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
 
-    merged["enforce_posted_age_limit"] = bool(merged.get("enforce_posted_age_limit", True))
-    merged["sort_newest_first"] = bool(merged.get("sort_newest_first", True))
+    merged[KEY_ENFORCE_POSTED_AGE_LIMIT] = bool(merged.get(KEY_ENFORCE_POSTED_AGE_LIMIT, True))
+    merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()
     merged["locations"] = [str(value).strip() for value in merged.get("locations", []) if str(value).strip()]
     merged["classification_ids"] = [

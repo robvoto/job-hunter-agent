@@ -16,7 +16,7 @@ def salary_sort_value(value: str) -> float:
     return 0.0
 
 
-def _salary_max_value(value: str) -> float:
+def salary_max_value(value: str) -> float:
     """Return the upper bound of a salary range for minimum-target comparisons.
 
     For '$450 - $700 per day' returns 700; for '$130k-$145k p.a.' returns 145000.
@@ -34,7 +34,7 @@ def _salary_max_value(value: str) -> float:
     return 0.0
 
 
-def _salary_includes_super_or_package(value: str) -> bool:
+def salary_includes_super_or_package(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text or text == "n/a":
         return False

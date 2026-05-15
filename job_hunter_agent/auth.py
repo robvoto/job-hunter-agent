@@ -1,4 +1,4 @@
-"""Authentication helpers for the dashboard server (Google OAuth)."""
+"""Authentication helpers for the workspace server (Google OAuth)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ import requests as http_client
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from job_hunter_agent import config as app_config
 from job_hunter_agent.config import (
     LOGIN_PATH,
     LOGOUT_PATH,
@@ -202,9 +203,10 @@ def read_session_user(request: Request) -> dict | None:
         return None
     user_id = str(payload.get("user_id") or "").strip()
     email = str(payload.get("email") or "").strip()
-    role = str(payload.get("role") or "").strip()
-    if not user_id or not email or not role:
+    if not user_id or not email:
         return None
+    # Always re-derive role from env so admin_email changes take effect without re-login.
+    role = "admin" if config.admin_email and email.lower() == config.admin_email.strip().lower() else "candidate"
     return {"user_id": user_id, "email": email, "role": role}
 
 
@@ -214,11 +216,19 @@ def read_session_username(request: Request) -> str | None:
     return user["email"] if user else None
 
 
+def is_auth_disabled() -> bool:
+    return bool(app_config.AUTH_DISABLED)
+
+
 def is_authenticated(request: Request) -> bool:
+    if is_auth_disabled():
+        return True
     return read_session_user(request) is not None
 
 
 def is_admin(request: Request) -> bool:
+    if is_auth_disabled():
+        return True
     user = read_session_user(request)
     return user is not None and user.get("role") == "admin"
 

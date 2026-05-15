@@ -29,7 +29,7 @@
     },
     "linkedin_hours_old": {
       "min": 1,
-      "max": 168
+      "max": 720
     },
     "linkedin_results_per_search": {
       "min": 5,
@@ -61,6 +61,11 @@
     "supplementary_candidate_profile_context": 0.25
   },
   "history_settings": {
+    "max_history_sightings": 24,
+    "repeated_listing_min_times_seen": 4,
+    "repeated_listing_min_span_days": 21,
+    "multi_listing_red_flag_min_listings": 3,
+    "multi_listing_red_flag_min_span_days": 30,
     "archive_stale_after_days": 15,
     "hidden_review_days": 30
   },
@@ -140,6 +145,7 @@
   "llm_settings": {
     "model_options": [
       "gpt-4o-mini",
+      "gpt-4.1-mini",
       "gpt-4o"
     ],
     "max_llm_chars": 3000,
@@ -147,6 +153,10 @@
       "gpt-4o-mini": {
         "input": 0.15,
         "output": 0.6
+      },
+      "gpt-4.1-mini": {
+        "input": 0.4,
+        "output": 1.6
       },
       "gpt-4o-mini-2024-07-18": {
         "input": 0.15,
@@ -195,6 +205,14 @@
       "rejection_blocker_suggestions_max_items": 6,
       "rejection_blocker_suggestions_max_words": 6
     }
+  },
+  "review_settings": {
+    "max_examples_per_skill": 3,
+    "max_samples_per_rejection": 4,
+    "capability_suggestion_min_count": 2,
+    "capability_intermediate_min_count": 5,
+    "title_not_target_min_count": 20,
+    "rule_suggestion_min_count": 2
   },
   "playwright_settings": {
     "playwright_viewport_width": 1400,

@@ -1,13 +1,13 @@
 <link rel="stylesheet" href="/static/results-page.css">
 
   <main class="page">
-    <div class="dashboard-layout">
-      <div class="dashboard-main">
+    <div class="workspace-layout">
+      <div class="workspace-main">
         <section class="hero">
           <h1>Potential Jobs Found</h1>
         </section>
         <section class="section filter-panel">
-          <div class="scope-tabs" aria-label="Top-level dashboard views">
+          <div class="scope-tabs" aria-label="Top-level workspace views">
             <button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs ($SHORTLIST_COUNT)</button>
             <button class="scope-tab" type="button" data-workspace-target="applied">Applied ($APPLIED_COUNT)</button>
             <button class="scope-tab" type="button" data-workspace-target="hidden">Hidden ($HIDDEN_COUNT)</button>
@@ -17,7 +17,7 @@
           <section class="section filter-panel">
             <div class="section-head">
               <h2>Match Controls</h2>
-              <button class="mini-button" type="button" id="reset_dashboard_filters">Reset All Filters</button>
+              <button class="mini-button" type="button" id="reset_workspace_filters">Reset All Filters</button>
             </div>
             <div class="filter-grid">
               <label class="filter-field">
@@ -109,91 +109,41 @@
           $HIDDEN_SECTION_HTML
         </div>
       </div>
-      <aside class="dashboard-sidebar">
+      <aside class="workspace-sidebar">
         <section class="snapshot-rail">
           <section class="snapshot-section">
-            <div class="search-settings-group" style="margin-bottom: 16px;">
-              <h3 class="snapshot-subheading">Common Settings</h3>
-              <div class="snapshot-meta">
-                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value" id="search_keywords_current">$SEARCH_KEYWORDS_LABEL</span></div>
-                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value" id="search_locations_current">$SEARCH_LOCATIONS_LABEL</span></div>
+            <div class="search-summary-head">
+              <div>
+                <h3 class="snapshot-subheading">Common Search</h3>
+                <p class="snapshot-helper">Shared search preferences used across sources.</p>
               </div>
+              <a class="settings-cog-link" href="/settings#section-search" aria-label="Open search settings" title="Open search settings">
+                <span aria-hidden="true">⚙</span>
+              </a>
             </div>
-
-            <div class="search-settings-group" style="margin-bottom: 16px;">
-              <h3 class="snapshot-subheading">SEEK Settings</h3>
-              <div class="snapshot-meta">
-                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date window</span><span class="snapshot-meta-value" id="search_date_range_current">$SEARCH_DATE_RANGE_DAYS day$SEARCH_DATE_RANGE_SUFFIX</span></div>
-                <div class="snapshot-meta-row"><span class="snapshot-meta-label">SEEK pages</span><span class="snapshot-meta-value" id="search_seek_pages_current">$SEARCH_SEEK_MAX_PAGES</span></div>
-              </div>
+            <div class="snapshot-meta snapshot-meta--common-search">
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value">$SEARCH_KEYWORDS_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value">$SEARCH_LOCATIONS_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">$WORK_TYPE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Work mode</span><span class="snapshot-meta-value">$WORK_MODE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Government preference</span><span class="snapshot-meta-value">$GOVERNMENT_PREFERENCE_LABEL</span></div>
             </div>
-
-            <div class="search-settings-group" style="margin-bottom: 16px;">
-              <h3 class="snapshot-subheading">LinkedIn Settings</h3>
-              <div class="snapshot-meta">
-                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Max age</span><span class="snapshot-meta-value" id="search_li_hours_current">$LINKEDIN_HOURS hours</span></div>
-                <div class="snapshot-meta-row"><span class="snapshot-meta-label">Results cap</span><span class="snapshot-meta-value" id="search_li_results_current">$LINKEDIN_RESULTS</span></div>
-              </div>
-            </div>
-
-            <div class="search-settings-actions" style="margin-top: 14px;">
-              <button class="btn btn-secondary" type="button" id="search_settings_toggle">Edit Configuration</button>
-            </div>
-
-            <div class="search-settings-edit" id="search_settings_edit" hidden>
-              <div class="search-settings-group" style="margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px;">
-                <h3 class="snapshot-subheading">Common</h3>
-                <label class="search-settings-field">
-                  <span>Keywords</span>
-                  <input type="text" id="search_keywords_input" value="$SEARCH_KEYWORDS_INPUT" placeholder="Optional keywords">
-                </label>
-                <label class="search-settings-field">
-                  <span>Locations</span>
-                  <textarea id="search_locations_input" placeholder="One location per line">$SEARCH_LOCATIONS_TEXT</textarea>
-                </label>
-              </div>
-
-              <div class="search-settings-group">
-                <h3 class="snapshot-subheading">SEEK</h3>
-                <div class="search-settings-grid">
-                  <label class="search-settings-field">
-                    <span>Date window</span>
-                    <input type="number" id="search_date_range_input" min="1" max="30" value="$SEARCH_DATE_RANGE_DAYS">
-                  </label>
-                  <label class="search-settings-field">
-                    <span>Pages cap</span>
-                    <input type="number" id="search_seek_pages_input" min="1" max="10" value="$SEARCH_SEEK_MAX_PAGES">
-                  </label>
-                </div>
-              </div>
-
-              <div class="search-settings-group">
-                <h3 class="snapshot-subheading">LinkedIn</h3>
-                <div class="search-settings-grid">
-                  <label class="search-settings-field">
-                    <span>Hours old</span>
-                    <input type="number" id="search_li_hours_input" min="1" max="168" value="$LINKEDIN_HOURS">
-                  </label>
-                  <label class="search-settings-field">
-                    <span>Results cap</span>
-                    <input type="number" id="search_li_results_input" min="1" max="100" value="$LINKEDIN_RESULTS">
-                  </label>
-                </div>
-              </div>
-
-              <p class="snapshot-helper" style="margin: 0;">Changes here are saved only when you click Save Configuration.</p>
-              <div class="search-settings-edit-actions">
-                <button class="btn btn-primary" type="button" id="search_settings_save">Save Configuration</button>
-                <button class="btn btn-secondary" type="button" id="search_settings_cancel">Cancel</button>
-              </div>
+            <div class="search-settings-actions">
+              <a class="btn btn-secondary search-settings-edit-link" href="/settings#section-search">Edit</a>
             </div>
           </section>
 
           <section class="snapshot-section">
-            <button class="btn btn-primary" style="width: 100%;" type="button" id="run_now_button">Run Search Now</button>
-            <p class="search-operations-meta" id="search_last_run_label" hidden></p>
-            <div class="search-settings-message" id="search_settings_message" aria-live="polite"></div>
-            <p class="snapshot-helper" style="margin-top: 6px;">Daily automation schedule and notification targets are configured in the <a href="/settings" target="_blank">Settings Console</a>.</p>
+            <details class="side-panel">
+              <summary>
+                <span>What this means</span>
+                <span class="side-toggle-hint">Show / hide</span>
+              </summary>
+              <div class="side-panel-body">
+                <p class="side-panel-copy">This search can take a few minutes because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.</p>
+                <p class="side-panel-copy">Daily automation schedule and notification targets are configured in the Settings screen.</p>
+              </div>
+            </details>
           </section>
           <section class="snapshot-section">
             <h2 class="snapshot-heading">This Run</h2>
@@ -232,7 +182,7 @@
             <span class="side-toggle-hint">Show / hide</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the dashboard does not pretend to be more precise than it really is.</p>
+            <p class="side-panel-copy">Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the workspace does not pretend to be more precise than it really is.</p>
             <div class="job-meta">
               $MATCH_LEVEL_GUIDE_HTML
             </div>
@@ -269,9 +219,8 @@
     </div>
   </div>
   <script>
-    window.__JOB_HUNTER_DASHBOARD__ = {
-      runId: $DASHBOARD_RUN_ID_JSON,
-      searchSettings: $SEARCH_SETTINGS_JSON,
+    window.__JOB_HUNTER_WORKSPACE__ = {
+      runId: $WORKSPACE_RUN_ID_JSON,
       defaultScoreFilterValue: $DEFAULT_SCORE_FILTER_MIN_JSON,
       viewedBadgeHtml: $VIEWED_BADGE_HTML_JSON
     };

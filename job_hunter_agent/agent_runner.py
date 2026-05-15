@@ -20,7 +20,7 @@ from job_hunter_agent.agent_settings import (
     load_agent_state,
     save_agent_settings,
     save_agent_state,
-    DEFAULT_DASHBOARD_URL,
+    DEFAULT_WORKSPACE_URL,
     DEFAULT_DAILY_TIME_LOCAL,
     DEFAULT_SUBJECT_PREFIX,
     KEY_EMAIL,
@@ -32,15 +32,14 @@ from job_hunter_agent.agent_settings import (
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
 from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.profile_store import load_profile
+from job_hunter_agent.workspace_service import build_workspace_record_sets, load_last_kept_records
 from job_hunter_agent.source_connector import (
-    build_dashboard_record_sets,
     fit_score,
     get_manual_skip_sets,
     load_json_dict,
     load_job_history,
-    load_last_kept_records,
     parse_timestamp,
-    rebuild_html_dashboard,
+    rebuild_html_workspace,
     scrape_jobs_direct,
     score_to_match_label,
     viewed_by_user,
@@ -58,7 +57,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
 )
-from job_hunter_agent.paths import OUTPUT_DIR, get_dashboard_path, get_run_stats_path
+from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_path, get_run_stats_path
 
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
 
@@ -71,11 +70,11 @@ KEY_DIGEST_STATUS_MESSAGE = "status_message"
 KEY_DIGEST_NEW_COUNT = "new_count"
 KEY_DIGEST_CURRENT_COUNT = "current_count"
 KEY_DIGEST_SAVED_COUNT = "saved_count"
-KEY_DIGEST_DASHBOARD_COUNT = "dashboard_count"
-KEY_DIGEST_UNOPENED_COUNT = "dashboard_unopened_count"
-KEY_DIGEST_DASHBOARD_REF = "dashboard_reference"
+KEY_DIGEST_WORKSPACE_COUNT = "workspace_count"
+KEY_DIGEST_UNOPENED_COUNT = "workspace_unopened_count"
+KEY_DIGEST_WORKSPACE_REF = "workspace_reference"
 
-# Dashboard record set keys (from build_dashboard_record_sets)
+# Workspace record set keys (from build_workspace_record_sets)
 KEY_DS_CURRENT = "current_records"
 KEY_DS_APPLIED = "applied_records"
 KEY_DS_RECENT_ARCHIVE = "recent_archive_records"
@@ -84,7 +83,7 @@ KEY_DS_STALE_ARCHIVE = "stale_archive_records"
 # Summary labels
 LABEL_NEW_MATCHES = "New matches"
 LABEL_TOP_MATCHES = "Top current matches"
-MSG_NO_NEW_MATCHES = "No new strong matches found this run. Your dashboard was refreshed and kept current."
+MSG_NO_NEW_MATCHES = "No new strong matches found this run. Your workspace was refreshed and kept current."
 
 def _job_key(record: dict) -> str:
     val = record.get(RECORD_JOB_KEY) or record.get(RECORD_URL_KEY)
@@ -96,11 +95,11 @@ def _safe_job_key(record: dict) -> str | None:
     return key if key else None
 
 
-def build_dashboard_reference(settings: dict[str, Any]) -> str:
-    dashboard_url = str(settings.get("dashboard_url") or "").strip()
-    if dashboard_url:
-        return dashboard_url
-    return f"{DEFAULT_DASHBOARD_URL} ({get_dashboard_path()})"
+def build_workspace_reference(settings: dict[str, Any]) -> str:
+    workspace_url = str(settings.get("workspace_url") or "").strip()
+    if workspace_url:
+        return workspace_url
+    return f"{DEFAULT_WORKSPACE_URL} ({get_workspace_path()})"
 
 
 def load_latest_run_stats() -> dict[str, Any]:
@@ -128,7 +127,7 @@ def _format_summary_timestamp(value: str) -> str:
 def build_digest_payload(
     previous_records: list[dict],
     current_records: list[dict],
-    dashboard_records: dict[str, list[dict]],
+    workspace_records: dict[str, list[dict]],
     settings: dict[str, Any],
     run_stats: dict[str, Any],
 ) -> dict[str, Any]:
@@ -142,9 +141,9 @@ def build_digest_payload(
     # (previous run, archive, applied) or repeated in this batch.
     existing_pool = (
         previous_records +
-        dashboard_records.get(KEY_DS_APPLIED, []) +
-        dashboard_records.get(KEY_DS_RECENT_ARCHIVE, []) +
-        dashboard_records.get(KEY_DS_STALE_ARCHIVE, [])
+        workspace_records.get(KEY_DS_APPLIED, []) +
+        workspace_records.get(KEY_DS_RECENT_ARCHIVE, []) +
+        workspace_records.get(KEY_DS_STALE_ARCHIVE, [])
     )
     unique_new = []
     for record in new_records:
@@ -152,9 +151,9 @@ def build_digest_payload(
             unique_new.append(record)
     new_records = unique_new
 
-    saved_records = dashboard_records.get(KEY_DS_RECENT_ARCHIVE, []) + dashboard_records.get(KEY_DS_STALE_ARCHIVE, [])
-    visible_dashboard_records = dashboard_records.get(KEY_DS_CURRENT, []) + saved_records
-    dashboard_unopened_records = [record for record in visible_dashboard_records if not viewed_by_user(record)]
+    saved_records = workspace_records.get(KEY_DS_RECENT_ARCHIVE, []) + workspace_records.get(KEY_DS_STALE_ARCHIVE, [])
+    visible_workspace_records = workspace_records.get(KEY_DS_CURRENT, []) + saved_records
+    workspace_unopened_records = [record for record in visible_workspace_records if not viewed_by_user(record)]
     minimum_fit_score = int(settings[KEY_NOTIFICATION_RULES]["minimum_fit_score"])
     max_jobs = int(settings[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"])
     run_started_at, run_finished_at = _resolve_collection_timestamps(run_stats)
@@ -172,9 +171,9 @@ def build_digest_payload(
         "digest_created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         KEY_DIGEST_CURRENT_COUNT: len(current_records),
         KEY_DIGEST_SAVED_COUNT: len(saved_records),
-        KEY_DIGEST_DASHBOARD_COUNT: len(visible_dashboard_records),
+        KEY_DIGEST_WORKSPACE_COUNT: len(visible_workspace_records),
         KEY_DIGEST_NEW_COUNT: len(new_records),
-        KEY_DIGEST_UNOPENED_COUNT: len(dashboard_unopened_records),
+        KEY_DIGEST_UNOPENED_COUNT: len(workspace_unopened_records),
         KEY_DIGEST_NEW_RECORDS: new_records[:max_jobs],
         KEY_DIGEST_STRONGEST_RECORDS: strongest_records,
         KEY_DIGEST_FEATURED_RECORDS: featured_records,
@@ -182,7 +181,7 @@ def build_digest_payload(
         KEY_DIGEST_STATUS_MESSAGE: (
             MSG_NO_NEW_MATCHES if not new_records else ""
         ),
-        KEY_DIGEST_DASHBOARD_REF: build_dashboard_reference(settings),
+        KEY_DIGEST_WORKSPACE_REF: build_workspace_reference(settings),
         "current_keys": sorted(current_keys),
     }
 
@@ -229,7 +228,7 @@ def format_daily_summary(payload: dict[str, Any]) -> str:
         f"Collection started: {_format_summary_timestamp(run_started_at)}",
         f"Collection finished: {_format_summary_timestamp(run_finished_at)}",
         f"Matches this run: {payload.get(KEY_DIGEST_CURRENT_COUNT, 0)} | New this run: {payload.get(KEY_DIGEST_NEW_COUNT, 0)}",
-        f"Saved from earlier: {payload.get(KEY_DIGEST_SAVED_COUNT, 0)} | Unopened on dashboard: {payload.get(KEY_DIGEST_UNOPENED_COUNT, 0)}",
+        f"Saved from earlier: {payload.get(KEY_DIGEST_SAVED_COUNT, 0)} | Unopened on workspace: {payload.get(KEY_DIGEST_UNOPENED_COUNT, 0)}",
         "",
     ]
 
@@ -242,7 +241,7 @@ def format_daily_summary(payload: dict[str, Any]) -> str:
         lines.append(str(payload.get(KEY_DIGEST_STATUS_MESSAGE)))
         lines.append("")
 
-    lines.append(f"Dashboard: {payload.get(KEY_DIGEST_DASHBOARD_REF, '')}")
+    lines.append(f"Workspace: {payload.get(KEY_DIGEST_WORKSPACE_REF, '')}")
     return "\n".join(lines).strip()
 
 
@@ -255,16 +254,16 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
         f"Matches this run: <b>{payload.get(KEY_DIGEST_CURRENT_COUNT, 0)}</b> | "
         f"New this run: <b>{payload.get(KEY_DIGEST_NEW_COUNT, 0)}</b>"
     )
-    dashboard_line = (
+    workspace_line = (
         f"Saved from earlier: <b>{payload.get(KEY_DIGEST_SAVED_COUNT, 0)}</b> | "
-        f"Unopened on dashboard: <b>{payload.get(KEY_DIGEST_UNOPENED_COUNT, 0)}</b>"
+        f"Unopened on workspace: <b>{payload.get(KEY_DIGEST_UNOPENED_COUNT, 0)}</b>"
     )
     parts = [
         "<b>Daily Job Summary</b>",
         f"Collection started: {run_started_at}",
         f"Collection finished: {run_finished_at}",
         summary_line,
-        dashboard_line,
+        workspace_line,
     ]
 
     featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
@@ -276,14 +275,14 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
         parts.append("")
         parts.append(html.escape(str(payload.get(KEY_DIGEST_STATUS_MESSAGE) or "")))
 
-    dashboard_reference = str(payload.get(KEY_DIGEST_DASHBOARD_REF, "")).strip()
-    if dashboard_reference:
-        if dashboard_reference.startswith("http://") or dashboard_reference.startswith("https://"):
+    workspace_reference = str(payload.get(KEY_DIGEST_WORKSPACE_REF, "")).strip()
+    if workspace_reference:
+        if workspace_reference.startswith("http://") or workspace_reference.startswith("https://"):
             parts.append("")
-            parts.append(f'<a href="{html.escape(dashboard_reference)}">Open dashboard</a>')
+            parts.append(f'<a href="{html.escape(workspace_reference)}">Open workspace</a>')
         else:
             parts.append("")
-            parts.append(f"Dashboard: {html.escape(dashboard_reference)}")
+            parts.append(f"Workspace: {html.escape(workspace_reference)}")
     return "\n".join(part for part in parts if part is not None)
 
 
@@ -316,8 +315,8 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
     previous_records = load_last_kept_records()
 
     if no_scrape:
-        print("Rebuilding dashboard from current local state...")
-        rebuild_html_dashboard(reason="agent runner --send-notification-no-scrape")
+        print("Rebuilding workspace from current local state...")
+        rebuild_html_workspace(reason="agent runner --send-notification-no-scrape")
     else:
         print("Starting job collection...")
         scrape_jobs_direct()
@@ -327,7 +326,7 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
     run_stats = load_latest_run_stats()
     profile = load_profile()
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
-    dashboard_records = build_dashboard_record_sets(
+    workspace_records = build_workspace_record_sets(
         current_records,
         load_job_history(),
         applied_job_keys,
@@ -336,7 +335,7 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
         profile,
     )
     print("Building daily digest...")
-    payload = build_digest_payload(previous_records, current_records, dashboard_records, settings, run_stats)
+    payload = build_digest_payload(previous_records, current_records, workspace_records, settings, run_stats)
     summary_text = format_daily_summary(payload)
     summary_html = format_daily_summary_html(payload)
     write_last_summary(summary_text)
@@ -363,7 +362,7 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
         "last_notified_run_at": payload["run_finished_at"] if notification_results else state.get("last_notified_run_at"),
         "last_current_keys": payload["current_keys"],
         "last_summary_path": str(AGENT_SUMMARY_PATH),
-        "last_dashboard_reference": payload[KEY_DIGEST_DASHBOARD_REF],
+        "last_workspace_reference": payload[KEY_DIGEST_WORKSPACE_REF],
     })
     save_agent_state(state)
 
@@ -423,7 +422,7 @@ def main() -> None:
     configure_console_output()
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")
     parser.add_argument("--loop", action="store_true", help="Keep running and trigger once per day at the configured local time.")
-    parser.add_argument("--send-notification-no-scrape", action="store_true", help="Do not fetch new jobs; just rebuild the dashboard and send a digest from current local state.")
+    parser.add_argument("--send-notification-no-scrape", action="store_true", help="Do not fetch new jobs; just rebuild the workspace and send a digest from current local state.")
     parser.add_argument("--no-notify", action="store_true", help="Build the digest without sending email or Telegram notifications.")
     args = parser.parse_args()
 

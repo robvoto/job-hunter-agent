@@ -13,9 +13,15 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
     RECORD_DECISION_KEY,
+    RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_LENGTH_KEY,
     RECORD_DETAILS_TEXT_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_FIT_HIGHLIGHTS_KEY,
+    RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
@@ -115,6 +121,191 @@ def blank_posting_channel_evidence() -> dict:
         "trusted_metadata": [],
         "weak_text_matches": [],
         "needs_review": False,
+    }
+
+
+def _build_initial_source_metadata(
+    source: str,
+    raw_source_fields: dict,
+    apply_url: str = "",
+    company_profile_url: str = "",
+    company_profile_name: str = "",
+    poster_company: str = "",
+    hiring_company: str = "",
+    platform_job_id: str = "",
+    ats_requisition_id: str = "",
+    ats_source: str | None = None,
+) -> dict:
+    metadata = blank_source_metadata(source)
+    metadata.update(
+        {
+            "apply_url": apply_url,
+            "apply_domain": _url_domain(apply_url),
+            "company_profile_url": company_profile_url,
+            "company_profile_name": company_profile_name,
+            "poster_company": poster_company or company_profile_name,
+            "hiring_company": hiring_company or company_profile_name,
+            "ats_source": _url_domain(apply_url) if ats_source is None else ats_source,
+            RECORD_SOURCE_PLATFORM_JOB_ID_KEY: platform_job_id,
+            "raw_source_fields": raw_source_fields,
+        }
+    )
+    if ats_requisition_id:
+        metadata[RECORD_SOURCE_ATS_REQUISITION_ID_KEY] = ats_requisition_id
+    else:
+        metadata.pop(RECORD_SOURCE_ATS_REQUISITION_ID_KEY, None)
+    return metadata
+
+
+def _build_initial_review_state() -> dict:
+    return {
+        RECORD_REVIEWED_SIGNAL_MATCHES_KEY: {
+            "matched": [],
+            "evidence_only": [],
+            "ignored": [],
+            "unresolved": [],
+        },
+        RECORD_POSTING_CHANNEL_EVIDENCE_KEY: blank_posting_channel_evidence(),
+    }
+
+
+def _build_initial_scoring_state() -> dict:
+    return {
+        RECORD_DETAILS_STATUS_KEY: "",
+        RECORD_DESCRIPTION_SOURCE_KEY: "",
+        RECORD_FIT_CONFIDENCE_KEY: "",
+        RECORD_FIT_SOURCE_TEXT_KEY: "",
+        RECORD_FULL_DESCRIPTION_KEY: "",
+        RECORD_HARD_BLOCK_REASONS_KEY: [],
+    }
+
+
+def _build_initial_llm_state() -> dict:
+    return {
+        RECORD_LLM_DECISION_KEY: None,
+        RECORD_LLM_FIT_GRADE_KEY: None,
+        RECORD_ROLE_SNAPSHOT_KEY: "",
+        RECORD_FIT_HIGHLIGHTS_KEY: [],
+        RECORD_COMPETITIVE_SIGNALS_KEY: [],
+        RECORD_SOFT_RISK_REASONS_KEY: [],
+        RECORD_MISSING_EVIDENCE_KEY: [],
+    }
+
+
+def _build_initial_decision_state() -> dict:
+    return {
+        RECORD_DECISION_KEY: None,
+        RECORD_REJECT_REASON_KEY: None,
+        RECORD_TITLE_REASON_KEY: None,
+        RECORD_TITLE_MATCH_METADATA_KEY: {},
+        RECORD_CONTENT_REASON_KEY: None,
+    }
+
+
+def build_initial_flat_record(
+    *,
+    run_iso: str,
+    search_location: str,
+    search_keywords: str,
+    source: str,
+    job_key: str | None,
+    title: str,
+    company: str,
+    location: str,
+    posted_text: str,
+    posted_age_days: Optional[float],
+    work_mode: str,
+    work_mode_source: str,
+    work_mode_evidence: list,
+    work_mode_needs_review: bool,
+    work_type: str,
+    salary_str: str,
+    url: str,
+    teaser: str,
+    details_text: str,
+    details_length: int,
+    source_metadata: dict | None = None,
+) -> dict:
+    # Transitional flat schema: these grouped defaults will later become nested state.
+    record = _build_ingestion_record(
+        run_iso=run_iso,
+        search_location=search_location,
+        search_keywords=search_keywords,
+        source=source,
+        job_key=job_key,
+        title=title,
+        company=company,
+        location=location,
+        posted_text=posted_text,
+        posted_age_days=posted_age_days,
+        work_mode=work_mode,
+        work_mode_source=work_mode_source,
+        work_mode_evidence=work_mode_evidence,
+        work_mode_needs_review=work_mode_needs_review,
+        work_type=work_type,
+        salary_str=salary_str,
+        url=url,
+        teaser=teaser,
+        details_text=details_text,
+        details_length=details_length,
+    )
+    record.update(_build_initial_decision_state())
+    record.update(_build_initial_llm_state())
+    record.update(_build_initial_review_state())
+    record.update(_build_initial_scoring_state())
+    record[RECORD_SOURCE_METADATA_KEY] = source_metadata if source_metadata is not None else blank_source_metadata(source)
+    return record
+
+
+def _build_ingestion_record(
+    *,
+    run_iso: str,
+    search_location: str,
+    search_keywords: str,
+    source: str,
+    job_key: str | None,
+    title: str,
+    company: str,
+    location: str,
+    posted_text: str,
+    posted_age_days: Optional[float],
+    work_mode: str,
+    work_mode_source: str,
+    work_mode_evidence: list,
+    work_mode_needs_review: bool,
+    work_type: str,
+    salary_str: str,
+    url: str,
+    teaser: str,
+    details_text: str,
+    details_length: int,
+) -> dict:
+    # Transitional flat schema: these fields are grouped by concern here for readability.
+    # The final record stays flat until consumers are migrated to nested decision_state,
+    # llm_state, and review_state blocks.
+    return {
+        RECORD_RUN_STARTED_AT_KEY: run_iso,
+        RECORD_SEARCH_LOCATION_KEY: search_location,
+        RECORD_SEARCH_KEYWORDS_KEY: search_keywords,
+        RECORD_SEARCH_CLASSIFICATIONS_KEY: "",
+        RECORD_PAGE_KEY: 1,
+        RECORD_SOURCE_KEY: source,
+        RECORD_JOB_KEY: job_key,
+        RECORD_TITLE_KEY: title,
+        RECORD_COMPANY_KEY: company,
+        RECORD_LOCATION_KEY: location,
+        RECORD_POSTED_KEY: posted_text,
+        RECORD_POSTED_AGE_DAYS_KEY: posted_age_days,
+        RECORD_WORK_MODE_KEY: work_mode,
+        RECORD_WORK_MODE_SOURCE_KEY: work_mode_source,
+        RECORD_WORK_MODE_EVIDENCE_KEY: work_mode_evidence,
+        RECORD_WORK_MODE_NEEDS_REVIEW_KEY: work_mode_needs_review,
+        RECORD_WORK_TYPE_KEY: work_type,
+        RECORD_SALARY_KEY: salary_str,
+        RECORD_URL_KEY: url,
+        RECORD_TEASER_KEY: teaser,
+        RECORD_DETAILS_TEXT_KEY: details_text,
+        RECORD_DETAILS_LENGTH_KEY: details_length,
     }
 
 
@@ -284,67 +475,41 @@ def normalize_jobspy_record(
     apply_url = _first_non_empty(_get("job_url_direct"), _get(JOBSPY_JOB_URL_KEY))
     company_profile_url = _first_non_empty(_get("company_url_direct"), _get("company_url"))
     company_profile_name = _first_non_empty(_get("company_name"), _get(JOBSPY_COMPANY_KEY))
-    source_metadata = blank_source_metadata(source)
-    source_metadata.update(
-        {
-            "apply_url": apply_url,
-            "apply_domain": _url_domain(apply_url),
-            "company_profile_url": company_profile_url,
-            "company_profile_name": company_profile_name,
-            "poster_company": company_profile_name,
-            "hiring_company": company_profile_name,
-            "ats_source": _url_domain(apply_url),
-            RECORD_SOURCE_PLATFORM_JOB_ID_KEY: raw_id,
-            "raw_source_fields": _json_safe_value(_safe_row_dict(row)),
-        }
+    raw_source_fields = _json_safe_value(_safe_row_dict(row))
+    source_metadata = _build_initial_source_metadata(
+        source=source,
+        raw_source_fields=raw_source_fields,
+        apply_url=apply_url,
+        company_profile_url=company_profile_url,
+        company_profile_name=company_profile_name,
+        poster_company=company_profile_name,
+        hiring_company=company_profile_name,
+        platform_job_id=raw_id,
+        ats_requisition_id=_safe_str(_get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY), ""),
     )
-    if not source_metadata.get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY):
-        source_metadata.pop(RECORD_SOURCE_ATS_REQUISITION_ID_KEY, None)
-    source_metadata.pop(RECORD_SOURCE_PLATFORM_JOB_ID_KEY, None)
-    return {
-        RECORD_RUN_STARTED_AT_KEY: run_iso,
-        RECORD_SEARCH_LOCATION_KEY: search_location,
-        RECORD_SEARCH_KEYWORDS_KEY: search_keywords,
-        RECORD_SEARCH_CLASSIFICATIONS_KEY: "",
-        RECORD_PAGE_KEY: 1,
-        RECORD_SOURCE_KEY: source,
-        RECORD_JOB_KEY: job_key,
-        RECORD_TITLE_KEY: _safe_str(_get(JOBSPY_TITLE_KEY)),
-        RECORD_COMPANY_KEY: _safe_str(_get(JOBSPY_COMPANY_KEY)),
-        RECORD_LOCATION_KEY: _safe_str(_get(JOBSPY_LOCATION_KEY)),
-        RECORD_POSTED_KEY: posted_text,
-        RECORD_POSTED_AGE_DAYS_KEY: posted_age_days,
-        RECORD_WORK_MODE_KEY: wm["work_mode"],
-        RECORD_WORK_MODE_SOURCE_KEY: wm["work_mode_source"],
-        RECORD_WORK_MODE_EVIDENCE_KEY: wm["work_mode_evidence"],
-        RECORD_WORK_MODE_NEEDS_REVIEW_KEY: wm["work_mode_needs_review"],
-        RECORD_WORK_TYPE_KEY: work_type,
-        RECORD_SALARY_KEY: salary_str,
-        RECORD_URL_KEY: _safe_str(_get(JOBSPY_JOB_URL_KEY)),
-        RECORD_TEASER_KEY: description[:240].strip(),
-        RECORD_DETAILS_TEXT_KEY: description,
-        RECORD_DETAILS_LENGTH_KEY: len(description),
-        RECORD_DECISION_KEY: None,
-        RECORD_REJECT_REASON_KEY: None,
-        RECORD_TITLE_REASON_KEY: None,
-        RECORD_TITLE_MATCH_METADATA_KEY: {},
-        RECORD_CONTENT_REASON_KEY: None,
-        RECORD_LLM_DECISION_KEY: None,
-        RECORD_LLM_FIT_GRADE_KEY: None,
-        RECORD_ROLE_SNAPSHOT_KEY: "",
-        RECORD_FIT_HIGHLIGHTS_KEY: [],
-        RECORD_COMPETITIVE_SIGNALS_KEY: [],
-        RECORD_SOFT_RISK_REASONS_KEY: [],
-        RECORD_MISSING_EVIDENCE_KEY: [],
-        RECORD_REVIEWED_SIGNAL_MATCHES_KEY: {
-            "matched": [],
-            "evidence_only": [],
-            "ignored": [],
-            "unresolved": [],
-        },
-        RECORD_SOURCE_METADATA_KEY: source_metadata,
-        RECORD_POSTING_CHANNEL_EVIDENCE_KEY: blank_posting_channel_evidence(),
-    }
+    return build_initial_flat_record(
+        run_iso=run_iso,
+        search_location=search_location,
+        search_keywords=search_keywords,
+        source=source,
+        job_key=job_key,
+        title=_safe_str(_get(JOBSPY_TITLE_KEY)),
+        company=_safe_str(_get(JOBSPY_COMPANY_KEY)),
+        location=_safe_str(_get(JOBSPY_LOCATION_KEY)),
+        posted_text=posted_text,
+        posted_age_days=posted_age_days,
+        work_mode=wm["work_mode"],
+        work_mode_source=wm["work_mode_source"],
+        work_mode_evidence=wm["work_mode_evidence"],
+        work_mode_needs_review=wm["work_mode_needs_review"],
+        work_type=work_type,
+        salary_str=salary_str,
+        url=_safe_str(_get(JOBSPY_JOB_URL_KEY)),
+        teaser=description[:240].strip(),
+        details_text=description,
+        details_length=len(description),
+        source_metadata=source_metadata,
+    )
 
 
 def _build_salary_string(

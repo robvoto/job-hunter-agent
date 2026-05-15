@@ -1,3 +1,4 @@
+import contextvars
 import threading
 
 from fastapi import APIRouter, Body
@@ -92,6 +93,12 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
 
+    if not srv._onboarding_complete():
+        return json_response(
+            {"error": "Onboarding is not complete. Please finish setup before running a search."},
+            400,
+        )
+
     if not srv._try_mark_run_started():
         last_run = srv._read_last_run_timestamp()
         return json_response(
@@ -106,7 +113,8 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
     try:
         if search_settings:
             srv.patch_profile({"search_settings": search_settings})
-        threading.Thread(target=srv._run_scrape_job, daemon=True).start()
+        ctx = contextvars.copy_context()
+        threading.Thread(target=ctx.run, args=(srv._run_scrape_job,), daemon=True).start()
     except Exception as exc:
         srv._set_run_in_progress(False)
         return json_response({"error": str(exc)}, 400)

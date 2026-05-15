@@ -7,7 +7,7 @@ from typing import Any
 
 CLI_FLAG_NO_LLM = "--no-llm"
 CLI_FLAG_DEBUG = "--debug"
-CLI_FLAG_REBUILD_DASHBOARD = "--rebuild-dashboard"
+CLI_FLAG_REBUILD_WORKSPACE = "--rebuild-workspace"
 CLI_FLAG_RESET_NEW_TO_YOU = "--reset-new-to-you"
 
 

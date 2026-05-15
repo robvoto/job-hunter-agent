@@ -22,7 +22,7 @@ Primary modules:
   Shared UI logic (`SettingsHandler`), onboarding helpers, run state, scrape thread helpers.
 
 - `job_hunter_agent/fastapi_app.py` / `job_hunter_agent/routes/`
-  FastAPI application, route modules for the settings console, dashboard, onboarding pages, and JSON APIs.
+  FastAPI application, route modules for the settings console, workspace, onboarding pages, and JSON APIs.
   Entry point: `python -m job_hunter_agent.fastapi_app`.
 
   All routers are registered centrally in `routes/__init__.py` → `register_routes()`.
@@ -33,8 +33,8 @@ Primary modules:
 
   | Module               | Routes                                                                                                      |
   | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-  | `pages.py`           | `/` `/workspace` `/dashboard` `/admin` `/profile` `/settings` `/start` `/onboarding` `/demo`               |
-  | `dashboard_api.py`   | `GET /api/results-html` `/api/health` `/api/run-stats` `/api/run-status` `/api/review-data` `/api/job-history` |
+  | `pages.py`           | `/` `/workspace` `/workspace` `/admin` `/profile` `/settings` `/start` `/onboarding` (redirects) `/demo`               |
+  | `workspace_api.py`   | `GET /api/results-html` `/api/health` `/api/run-stats` `/api/run-status` `/api/review-data` `/api/job-history` |
   | `profile_materials.py` | `GET/PATCH/PUT /api/profile` · `GET/PUT /api/source-materials` · `GET/PATCH /api/advance-settings`        |
   | `agent_telegram.py`  | `GET /api/llm-costs` · `GET/PATCH /api/agent-settings` · `GET /api/telegram/connect-link` · `POST /api/telegram/sync` `/api/telegram/test-message` |
   | `signals.py`         | `GET/PATCH /api/signal-registry`                                                                            |
@@ -77,7 +77,7 @@ Server logging:
   Orchestration for daily scheduled runs and notification state.
 
 - `job_hunter_agent/source_connector.py`
-  Current source connector and dashboard renderer for SEEK and LinkedIn.
+  Current source connector and workspace renderer for SEEK and LinkedIn.
 
 - `job_hunter_agent/scrapers/seek.py` / `job_hunter_agent/scrapers/linkedin.py`
   Source-specific extraction logic.
@@ -104,7 +104,7 @@ For product-level docs and future architecture, prefer:
 
 - source connector
 - job-source connector
-- dashboard
+- workspace
 - runtime profile
 
 Do not rename major files casually unless there is time to clean the whole project consistently.
@@ -127,13 +127,13 @@ All job records MUST include a `job_key` in the `source:id` format.
 - Always use `job_hunter_agent.job_identity.normalize_job_key(raw_value, source=...)` when creating records.
 - Use `RECORD_JOB_KEY` from `record_schema.py` instead of the string literal `"job_key"`.
 
-The dashboard now treats scoring as two separate layers:
+The workspace now treats scoring as two separate layers:
 
 - internal numeric score
   Used for ranking, shortlist thresholds, filters, and debug output.
 
 - visible match band
-  The normal dashboard shows four human-facing labels instead of a raw `/100`:
+  The normal workspace shows four human-facing labels instead of a raw `/100`:
   `Strong match`, `Good match`, `Possible fit`, and `Stretch`.
 
 Design intent:
@@ -151,7 +151,7 @@ Hard blockers:
 Detail-page safety:
 
 - invalid detail fetches such as challenge pages are treated as unusable input, not as job descriptions
-- successful full-detail fetches now persist `fit_source_text` into saved snapshots so later dashboard rebuilds and history reuse do not lose specialist gap evidence
+- successful full-detail fetches now persist `fit_source_text` into saved snapshots so later workspace rebuilds and history reuse do not lose specialist gap evidence
 
 ## Current Product Boundary
 
@@ -162,7 +162,7 @@ Current implemented sources:
 
 Design assumption:
 
-- new sources should normalize into the same record shape used by the dashboard, review flow, history, and fit logic
+- new sources should normalize into the same record shape used by the workspace, review flow, history, and fit logic
 
 ## Safe Local State
 

@@ -2,6 +2,15 @@ import re
 from typing import Any
 
 
+from job_hunter_agent.advance_settings import (
+    get_review_settings,
+    KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
+    KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
+    KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
+    KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
+    KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+    KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
+)
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -34,6 +43,8 @@ def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
 
 
 def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str, Any]) -> list[dict]:
+    settings = get_review_settings()
+    max_examples = settings[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL]
     known_terms = _collect_known_terms(profile)
     grouped: dict[str, dict[str, Any]] = {}
 
@@ -50,9 +61,8 @@ def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str
                 "examples": [],
             },
         )
-        #HARCODED
         entry["count"] += 1
-        if len(entry["examples"]) < 3:
+        if len(entry["examples"]) < max_examples:
             entry["examples"].append(
                 {
                     "title": observation.get("title"),
@@ -66,6 +76,8 @@ def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str
 
 
 def build_rejection_review(audit_rows: list[dict]) -> list[dict]:
+    settings = get_review_settings()
+    max_samples = settings[KEY_REVIEW_MAX_SAMPLES_PER_REJECTION]
     grouped: dict[str, dict[str, Any]] = {}
     for row in audit_rows:
         decision = row.get("decision")
@@ -80,9 +92,8 @@ def build_rejection_review(audit_rows: list[dict]) -> list[dict]:
                 "samples": [],
             },
         )
-        #HARCODED
         entry["count"] += 1
-        if len(entry["samples"]) < 4:
+        if len(entry["samples"]) < max_samples:
             entry["samples"].append(
                 {
                     "title": row.get("title"),
@@ -132,13 +143,13 @@ def _choice_label(choice: str) -> str:
     labels = rules.get("level_labels", {})
     return labels.get(choice, choice.replace("_", " ").strip().title())
 
-#HARCODED
+
 def _current_rule_label(rule: dict[str, Any] | None) -> str:
     if not isinstance(rule, dict):
-        return "Unclassified"
+        return _choice_label("unclassified")
     level = str(rule.get(KEY_LEVEL) or "").strip().lower()
     if not level:
-        return "Unclassified"
+        return _choice_label("unclassified")
     return _choice_label(level)
 
 
@@ -147,6 +158,11 @@ def build_capability_tuning_suggestions(
     audit_rows: list[dict],
     profile: dict[str, Any],
 ) -> list[dict]:
+    settings = get_review_settings()
+    min_count = settings[KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT]
+    intermediate_min_count = settings[KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT]
+    max_examples = settings[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL]
+
     row_by_url = {
         str(row.get("url") or "").strip(): row
         for row in audit_rows
@@ -165,7 +181,6 @@ def build_capability_tuning_suggestions(
         normalized = _normalize_term(skill)
         if not normalized:
             continue
-        #HARCODED      
         entry = grouped.setdefault(
             normalized,
             {
@@ -175,9 +190,9 @@ def build_capability_tuning_suggestions(
             },
         )
         entry["count"] += 1
-        if len(entry["examples"]) < 3:
+        if len(entry["examples"]) < max_examples:
             entry["examples"].append(
-                {#HARCODED
+                {
                     "title": observation.get("title"),
                     "company": observation.get("company"),
                     "url": observation.get("url"),
@@ -188,22 +203,22 @@ def build_capability_tuning_suggestions(
     suggestions: list[dict[str, Any]] = []
     for normalized, entry in grouped.items():
         count = int(entry["count"] or 0)
-        if count < 2:
+        if count < min_count:
             continue
 
         current_rule = rule_lookup.get(normalized)
         skill = str(entry["skill"] or normalized).strip()
-#HARCODED
+
         if current_rule:
             # Already classified - skip regardless of stored strength.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
-        recommended_choice = "working" if count >= 5 else "basic"
+        recommended_choice = "working" if count >= intermediate_min_count else "basic"
         headline = f"Classify {skill} as a known capability signal"
         detail = f"Seen in {count} kept role(s) and still unclassified."
 
         suggestions.append(
-            {#HARCODED
+            {
                 "kind": "capability",
                 "skill": skill,
                 "count": count,
@@ -224,16 +239,20 @@ def build_capability_tuning_suggestions(
 
 
 def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any]]) -> list[dict]:
+    settings = get_review_settings()
+    title_not_target_min = settings[KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT]
+    rule_min = settings[KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT]
+
     suggestions: list[dict[str, Any]] = []
     for item in review_items:
         reason = str(item.get("reason") or "").strip()
         count = int(item.get("count") or 0)
         samples = item.get("samples") or []
         if reason == "TITLE_NOT_TARGET":
-            if count < 20:
+            if count < title_not_target_min:
                 continue
             suggestions.append(
-                {#HARCODED
+                {
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -247,10 +266,10 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
             continue
 
         prefix, _, suffix = reason.partition(":")
-        if prefix == "CARD_SPECIALIST" and count >= 2:
+        if prefix == "CARD_SPECIALIST" and count >= rule_min:
             domain = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {#HARCODED
+                {
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -261,10 +280,10 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
                     "samples": samples,
                 }
             )
-        elif prefix == "DESC_CAPABILITY_LOW" and count >= 2:
+        elif prefix == "DESC_CAPABILITY_LOW" and count >= rule_min:
             area = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {#HARCODED
+                {
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -275,10 +294,10 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
                     "samples": samples,
                 }
             )
-        elif prefix == "TITLE_BAD_KEYWORD" and count >= 2:
+        elif prefix == "TITLE_BAD_KEYWORD" and count >= rule_min:
             keyword = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {#HARCODED
+                {
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -289,10 +308,10 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
                     "samples": samples,
                 }
             )
-        elif prefix == "DESC_MANDATORY_SKILL" and count >= 2:
+        elif prefix == "DESC_MANDATORY_SKILL" and count >= rule_min:
             skill = _friendly_reason_suffix(suffix)
             suggestions.append(
-                {#HARCODED
+                {
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
@@ -318,7 +337,7 @@ def build_suggested_tuning(
 ) -> dict[str, Any]:
     capability_suggestions = build_capability_tuning_suggestions(skill_observations, audit_rows, profile)
     rule_suggestions = build_rule_tuning_suggestions(audit_rows)
-    return {#HARCODED
+    return {
         "summary": {
             "capability_count": len(capability_suggestions),
             "rule_count": len(rule_suggestions),
@@ -333,7 +352,7 @@ def build_suggested_tuning_from_saved_review(payload: dict[str, Any], profile: d
         str(value).strip()
         for value in payload.get("kept_job_urls", [])
         if str(value).strip()
-    }#HARCODED
+    }
     audit_rows = [{"url": url, "decision": "KEEP"} for url in sorted(kept_job_urls)]
     skill_observations = [
         item for item in payload.get("skill_observations", [])
@@ -345,7 +364,7 @@ def build_suggested_tuning_from_saved_review(payload: dict[str, Any], profile: d
         if isinstance(item, dict)
     ]
     rule_suggestions = _build_rule_tuning_suggestions_from_reviews(rule_reviews)
-    return {#HARCODED
+    return {
         "summary": {
             "capability_count": len(capability_suggestions),
             "rule_count": len(rule_suggestions),
@@ -363,7 +382,7 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
             if row.get("decision") == "KEEP" and str(row.get("url") or "").strip()
         }
     )
-    return {#HARCODED
+    return {
         "suggested_tuning": build_suggested_tuning(audit_rows, skill_observations, profile),
         "kept_job_urls": kept_job_urls,
         "skill_observations": skill_observations,

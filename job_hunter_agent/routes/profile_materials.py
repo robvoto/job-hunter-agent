@@ -20,7 +20,7 @@ def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         patch = srv.SettingsHandler._normalize_profile_patch_for_save(current, body)
         updated = srv.patch_profile(patch)
         if srv.SettingsHandler._patch_affects_matching_rules(patch):
-            srv.rebuild_dashboard_after_rule_change("profile matching rules saved")
+            srv.rebuild_workspace_after_rule_change("profile matching rules saved")
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(updated)

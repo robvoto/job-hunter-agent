@@ -15,7 +15,7 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 
 - guided onboarding at `http://127.0.0.1:8765/start` (supports `.docx` and plain text)
 - local settings console at `http://127.0.0.1:8765/settings`
-- local dashboard at `http://127.0.0.1:8765/dashboard`
+- local workspace at `http://127.0.0.1:8765/workspace`
 
 ## Quick Start
 Detailed instructions are in the User Guide and Operations.
@@ -27,7 +27,7 @@ python -m pip install -r requirements-dev.txt
 python -m playwright install chromium
 ```
 
-Run a fresh job collection and rebuild the dashboard:
+Run a fresh job collection and rebuild the workspace:
 
 ```powershell
 python -m job_hunter_agent.source_connector
@@ -36,17 +36,17 @@ python -m job_hunter_agent.source_connector
 Useful flags:
 
 - `--no-llm` to stay deterministic and avoid live LLM review
-- `--debug` to show extra dashboard scoring detail
+- `--debug` to show extra workspace scoring detail
 
 Search design note:
 
 - keep search keywords broad enough to capture relevant roles
 - use title rules, metadata gates, content filters, capability logic, and optional AI review to tighten fit afterward
 
-Rebuild the dashboard from saved local state only:
+Rebuild the workspace from saved local state only:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-dashboard
+python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 Useful flags:
@@ -69,7 +69,7 @@ Run the daily local agent once:
 python -m job_hunter_agent.agent_runner
 ```
 
-This is the orchestration layer. It can run the connector, rebuild the dashboard, create a digest, and send notifications.
+This is the orchestration layer. It can run the connector, rebuild the workspace, create a digest, and send notifications.
 
 Most users should think of it like this:
 
@@ -103,7 +103,7 @@ Then open:
 
 - onboarding: `http://127.0.0.1:8765/start`
 - settings: `http://127.0.0.1:8765/settings`
-- dashboard: `http://127.0.0.1:8765/dashboard`
+- workspace: `http://127.0.0.1:8765/workspace`
 - demo/showcase: `http://127.0.0.1:8765/demo`
 
 ## Tech Stack
@@ -126,8 +126,8 @@ Logic and core modules reside in the `job_hunter_agent/` package.
 - `data/agent_settings.template.json`
   Starter template for daily-agent scheduling and notification delivery.
 
-- `output/dashboard.html`
-  Persistent shortlist dashboard from the latest run plus local history.
+- `output/workspace.html`
+  Persistent shortlist workspace from the latest run plus local history.
 
 - `output/audit_records.json`
 - `output/run_stats.json`
@@ -151,7 +151,7 @@ These are intended to stay local and ignored:
 
 ## Security
 
-By default, the application is configured for local use on `localhost`. If you access the dashboard over a network (e.g., binding to `0.0.0.0`), the system enforces `Secure` and `__Host-` prefixed session cookies. **This requires an HTTPS connection** (usually handled via a reverse proxy like Caddy or Nginx) for the session management to function.
+By default, the application is configured for local use on `localhost`. If you access the workspace over a network (e.g., binding to `0.0.0.0`), the system enforces `Secure` and `__Host-` prefixed session cookies. **This requires an HTTPS connection** (usually handled via a reverse proxy like Caddy or Nginx) for the session management to function.
 
 ## LLM Notes
 
@@ -167,7 +167,7 @@ If the key is not set, the app still works, but the live LLM review step is effe
 
 The first daily agent layer is now local-first:
 
-- `job_hunter_agent.agent_runner` runs the current connector, rebuilds the dashboard, and creates a compact digest
+- `job_hunter_agent.agent_runner` runs the current connector, rebuilds the workspace, and creates a compact digest
 - email delivery uses SMTP settings from local `data/agent_settings.json`
 - Telegram delivery uses a bot token plus chat id from local `data/agent_settings.json`
 - Telegram messages arrive in the user's private chat with their bot, not from their personal Telegram identity

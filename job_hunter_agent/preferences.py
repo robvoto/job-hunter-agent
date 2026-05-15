@@ -15,9 +15,10 @@ from job_hunter_agent.profile_store import (
     get_scoring_rules,
     load_profile,
     normalize_match_preferences,
+    normalize_work_mode_preferences,
 )
 from job_hunter_agent.role_analysis import has_government_context
-from job_hunter_agent.salary_utils import _salary_includes_super_or_package, _salary_max_value
+from job_hunter_agent.salary_utils import salary_includes_super_or_package, salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
 
@@ -36,10 +37,10 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
         if not is_perm and is_contract and eng_pref == "permanent":
             return False, "PREF_CONTRACT_TYPE"
 
-    work_mode_pref = str(preferences.get(KEY_WORK_MODE_PREFERENCE) or "").strip().lower()
-    if work_mode_pref:
+    work_mode_prefs = normalize_work_mode_preferences(preferences.get(KEY_WORK_MODE_PREFERENCE))
+    if work_mode_prefs:
         work_mode = _normalize_work_mode(record.get("work_mode") or "")
-        if work_mode and work_mode != work_mode_pref:
+        if work_mode and work_mode not in work_mode_prefs:
             return False, "PREF_WORK_MODE"
 
     # Sector — exclude only when government context is explicitly detected and user wants private only.
@@ -245,7 +246,7 @@ def _resolve_salary_comparison(record: dict, profile: Optional[dict] = None) -> 
     salary_text = str(record.get("salary") or "").strip()
     if not salary_text or salary_text == "N/A":
         return None
-    if _salary_includes_super_or_package(salary_text):
+    if salary_includes_super_or_package(salary_text):
         return None
     salary_period = _salary_period_hint(salary_text)
     if not salary_period and _salary_has_non_comparable_period(salary_text):
@@ -263,7 +264,7 @@ def _resolve_salary_comparison(record: dict, profile: Optional[dict] = None) -> 
     salary_preferences = active_profile.get("salary_preferences", {})
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
-    parsed_value = _salary_max_value(salary_text)
+    parsed_value = salary_max_value(salary_text)
     minimum_target = minimum_daily_rate if target_period == "daily" else minimum_salary_yearly
     if minimum_target <= 0 or parsed_value <= 0:
         return None

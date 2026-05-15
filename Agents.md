@@ -1,13 +1,13 @@
 # Job Hunter Agent — AI Context
-
-> Generic AI context for Claude Code, Codex, Cursor, and similar tools.
-> Keep this file short. Deep context lives in `docs/` and `.skills/`.
+ 
+## Local Environment url
+http://localhost:8765/
 
 ## Project
 
 Local-first job discovery system:
 
-scrape → deterministic filters → optional LLM → fit score → dashboard
+scrape → deterministic filters → optional LLM → fit score → workspace
 
 Runtime source of truth:
 - `data/profile.json`
@@ -27,8 +27,8 @@ Main entry point:
 
 | Task | Command |
 |---|---|
-| Scrape + build dashboard | `python -m job_hunter_agent.source_connector` |
-| Rebuild dashboard only | `python -m job_hunter_agent.source_connector --rebuild-dashboard` |
+| Scrape + build workspace | `python -m job_hunter_agent.source_connector` |
+| Rebuild workspace only | `python -m job_hunter_agent.source_connector --rebuild-workspace` |
 | Local web UI | `python -m job_hunter_agent.fastapi_app` |
 | Daily agent | `python -m job_hunter_agent.agent_runner` |
 | Tests | `python -m pytest` |
@@ -48,7 +48,7 @@ Load the relevant skill before editing that area.
 | `.skills/profile-extraction/SKILL.md` | CV/profile extraction |
 | `.skills/signal-registry/SKILL.md` | Learning and approval flow |
 | `.skills/preferences/SKILL.md` | Location/contract/government/salary |
-| `.skills/dashboard-ui/SKILL.md` | Dashboard and FastAPI UI |
+| `.skills/dashboard-ui/SKILL.md` | Workspace and FastAPI UI |
 | `.skills/scraping/SKILL.md` | SEEK/LinkedIn scraping |
 
 ## Context hygiene
@@ -66,7 +66,7 @@ scrape
 → content filter
 → optional LLM
 → fit_score()
-→ dashboard
+→ workspace
 ```
 
 System design:
@@ -85,6 +85,9 @@ Product and decision philosophy:
 6. Weak/uncertain signals are preserved for review — not silently deleted.
 7. Learning flows through the signal registry before becoming runtime knowledge.
 8. Touch only files required for the task. Avoid unrelated refactors.
+9. We dont want legacy coding... this is not a production application. Remove Unused Remove Legacy
+10. You code like PRO and don't use bad heuristics and silent fallbacks
+11. UI UX updates must respect themes implementation?
 
 ## Failure handling rule
 

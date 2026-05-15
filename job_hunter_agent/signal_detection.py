@@ -7,7 +7,7 @@ from job_hunter_agent.capability_matching import (
     evidence_tier_alignment_score,
 )
 
-from job_hunter_agent.profile_learning import _role_title_review_token
+from job_hunter_agent.profile_learning import build_role_title_review_token
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_COMPETITIVE_SIGNAL_ALIGNMENT,
@@ -19,6 +19,27 @@ from job_hunter_agent.profile_store import (
 from job_hunter_agent.role_analysis import text_contains_term
 from job_hunter_agent.role_analysis import _load_government_context_rules
 from job_hunter_agent.scoring_utils import build_scoring_source_text, profile_recency_multiplier
+from job_hunter_agent.parsing_schema import (
+    PARSING_APS_PATTERN_KEY,
+    PARSING_CLEARANCE_PATTERN_KEY,
+    PARSING_DEFAULT_KEY,
+    PARSING_DEPARTMENT_PATTERN_KEY,
+    PARSING_EL_PATTERN_KEY,
+    PARSING_JUNK_KEYWORDS_KEY,
+    PARSING_MAX_DISCOVERY_TERMS_KEY,
+    PARSING_MIN_TERM_LENGTH_KEY,
+    PARSING_SKILL_DISCOVERY_CONFIG_KEY,
+    PARSING_STRENGTH_COEFFICIENTS_KEY,
+    PARSING_STOPWORDS_KEY,
+)
+from job_hunter_agent.record_schema import (
+    RECORD_COMPANY_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+)
 from job_hunter_agent.signal_schema import (
     ALIGNMENT_PARTIAL,
     ALIGNMENT_STRONG,
@@ -54,23 +75,6 @@ from job_hunter_agent.signal_schema import (
     TITLE_REASON_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
     OBSERVATION_SKILL_KEY,
-    PARSING_APS_PATTERN_KEY,
-    PARSING_CLEARANCE_PATTERN_KEY,
-    PARSING_DEPARTMENT_PATTERN_KEY,
-    PARSING_DEFAULT_KEY,
-    PARSING_EL_PATTERN_KEY,
-    PARSING_JUNK_KEYWORDS_KEY,
-    PARSING_MAX_DISCOVERY_TERMS_KEY,
-    PARSING_MIN_TERM_LENGTH_KEY,
-    PARSING_SKILL_DISCOVERY_CONFIG_KEY,
-    PARSING_STRENGTH_COEFFICIENTS_KEY,
-    PARSING_STOPWORDS_KEY,
-    RECORD_COMPANY_KEY,
-    RECORD_FIT_SOURCE_TEXT_KEY,
-    RECORD_FULL_DESCRIPTION_KEY,
-    RECORD_SEARCH_LOCATION_KEY,
-    RECORD_TITLE_KEY,
-    RECORD_URL_KEY,
 )
 from job_hunter_agent.parsing_schema import (
     PARSING_CLEARANCE_NORMALIZATION_KEY,
@@ -414,7 +418,7 @@ def build_job_learning_signals(
     title_reason = compact_whitespace(record.get(TITLE_REASON_KEY) or "").upper()
     if title_reason == TITLE_REASON_POTENTIAL_MATCH:
         title = compact_whitespace(record.get(RECORD_TITLE_KEY) or "")
-        review_token = _role_title_review_token(title)
+        review_token = build_role_title_review_token(title)
         if review_token:
             _add_to_pending(review_token, CATEGORY_ROLE_TITLE_TOKEN, record, pending, seen, context=[title])
 

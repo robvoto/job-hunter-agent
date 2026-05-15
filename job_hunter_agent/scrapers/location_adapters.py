@@ -1,10 +1,10 @@
-def to_jobspy(location: dict) -> str:
-    """
-    Convert canonical location → jobspy-compatible string.
+def to_seek(location: dict) -> str:
+    """Convert canonical location to the SEEK query token."""
+    return str(location.get("code") or "").strip()
 
-    City-level inputs (resolved by city alias) return "{city}, Australia".
-    State/territory inputs return "{state name}, Australia".
-    """
+
+def to_jobspy(location: dict) -> str:
+    """Convert canonical location to the jobspy location string."""
     kind = str(location.get("kind") or "").strip().lower()
     if kind in {"state", "territory"}:
         return f"{location['name']}, Australia"

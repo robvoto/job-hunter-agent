@@ -348,7 +348,7 @@ def save_title_normalization_review(entries: list[dict[str, Any]]) -> dict[str, 
     ]
     return _save_review_payload(payload)
 
-def _classify_title_normalization_candidate(title: Any, source_text: Any = "") -> dict[str, Any] | None:
+def classify_title_normalization_candidate(title: Any, source_text: Any = "") -> dict[str, Any] | None:
     raw_title = _clean_text(title)
     if not raw_title:
         return None
@@ -406,7 +406,7 @@ def learn_title_normalization_candidates(titles: list[str], source: str = "", so
     signals = []
     seen_tokens = set()
     for raw_title in titles:
-        candidate = _classify_title_normalization_candidate(raw_title, source_text)
+        candidate = classify_title_normalization_candidate(raw_title, source_text)
         if not candidate:
             continue
 

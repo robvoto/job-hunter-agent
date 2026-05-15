@@ -84,14 +84,14 @@ Total = sum of contributions, capped at 20.
 
 Rationale: 20 pts = 20% of total. The `max()` rule means the stronger of the two signals wins — self-assessed proficiency or demonstrated evidence. The cap at 20 matches the budget.
 
-Internal levels are `strong`, `working`, and `basic`, displayed in the UI as Expert, Intermediate, and Historical.
+Internal levels are `strong`, `working`, and `basic`, displayed in the UI as Strong, Working, and Basic.
 
 
 | Setting | Value | Rationale |
 |---------|-------|-----------|
 | `strong_min_months` | 36 | **Duration:** You need 3+ years (36 months) of total experience to be automatically labeled "Strong". |
 | `strong_max_years_since_use` | 4 | **Freshness:** If the capability has not been used recently, it should not stay "Strong". One long current role can still be strong if it is recent enough. |
-| `working_min_months` | 18 | **Floor:** You need at least 1.5 years (18 months) for "Intermediate" level. Anything less becomes "Historical". |
+| `working_min_months` | 18 | **Floor:** You need at least 1.5 years (18 months) for "Working" level. Anything less becomes "Basic". |
 
 ## Logistics budget (30 pts total)
 

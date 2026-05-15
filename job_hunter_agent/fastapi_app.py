@@ -1,4 +1,4 @@
-"""FastAPI ASGI application for the local dashboard and settings server.
+"""FastAPI ASGI application for the local workspace and settings server.
 
 Route handlers live under ``job_hunter_agent.routes``; this module wires the app,
 exception handlers, and CORS-style middleware.
@@ -8,9 +8,13 @@ Entry point:
 
 Flags:
     --debug     Enable debug mode: verbose logging, exposes test-only endpoints,
-                injects debug banner into dashboard templates.
-    --rebuild   Rebuild the dashboard HTML from last saved run on startup.
+                injects debug banner into workspace templates.
+    --rebuild   Rebuild the workspace HTML from last saved run on startup.
                 Can be combined with --debug.
+
+Debug-only local bypass:
+    Set JOB_HUNTER_DISABLE_AUTH=true with --debug to bypass login and CSRF
+    checks during manual local testing.
 """
 
 from __future__ import annotations
@@ -28,14 +32,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from job_hunter_agent.auth import (
     OPEN_PATHS,
     configure_auth,
+    is_auth_disabled,
     read_session_user,
     read_session_username,
     verify_csrf_token,
 )
 from job_hunter_agent.config import LOGIN_PATH
-from job_hunter_agent.routes import register_routes
 from job_hunter_agent.user_context import set_user_id
-from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 
 
@@ -122,7 +125,10 @@ def _configure_server_logging() -> None:
 
 
 def create_app() -> FastAPI:
+    from job_hunter_agent.routes import register_routes
+    from job_hunter_agent.routes.responses import json_response
     from job_hunter_agent.migration import run_migration
+
     run_migration()
 
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
@@ -176,6 +182,8 @@ def create_app() -> FastAPI:
             return await call_next(request)
         if request.url.path == "/api/debug/browser-log":
             return await call_next(request)
+        if is_auth_disabled():
+            return await call_next(request)
         if read_session_username(request) is None:
             return await call_next(request)
         if not verify_csrf_token(request, request.headers.get("x-csrf-token")):
@@ -186,6 +194,8 @@ def create_app() -> FastAPI:
     async def auth_enforcement(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
         if path in OPEN_PATHS or path.startswith("/static/"):
+            return await call_next(request)
+        if is_auth_disabled():
             return await call_next(request)
         if read_session_user(request) is None:
             if path.startswith("/api/"):
@@ -222,14 +232,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--rebuild",
         action="store_true",
-        help="Rebuild the dashboard from the last saved run before starting.",
+        help="Rebuild the workspace from the last saved run before starting.",
     )
     args = parser.parse_args()
 
     _configure_server_logging()
 
     if args.rebuild or args.debug:
-        srv._rebuild_dashboard_on_startup()
+        srv._rebuild_workspace_on_startup()
 
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")

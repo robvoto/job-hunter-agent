@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body
 
-from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.locations import resolve_location, find_nearest_location
 from job_hunter_agent.advance_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.profile_store import (
@@ -21,6 +21,7 @@ from job_hunter_agent.profile_store import (
     KEY_SECONDARY_PATTERNS,
     WORK_MODE_PREFERENCE_OPTIONS,
     normalize_capability_rules,
+    normalize_work_mode_preferences,
 )
 from job_hunter_agent.advance_settings import get_salary_limits
 from job_hunter_agent.routes.responses import json_response
@@ -34,6 +35,20 @@ REQUEST_SEARCH_KEYWORD_KEY = "search_keyword"
 REQUEST_SEARCH_LOCATIONS_KEY = "search_locations"
 PROFILE_SEARCH_SETTINGS_KEY = "search_settings"
 PROFILE_SALARY_PREFS_KEY = "salary_preferences"
+
+
+@router.post("/api/onboarding/lookup-location-by-geolocation")
+def api_lookup_location_by_geolocation(body: dict = Body(...)):  # type: ignore[no-untyped-def]
+    """Find nearest location given browser geolocation coordinates."""
+    try:
+        latitude = float(body.get("latitude"))
+        longitude = float(body.get("longitude"))
+        if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+            raise ValueError("Invalid coordinates")
+        nearest_location = find_nearest_location(latitude, longitude)
+        return json_response({"location": nearest_location, "ok": True})
+    except Exception as exc:
+        return json_response({"error": str(exc), "ok": False}, 400)
 
 
 @router.post("/api/onboarding/import")
@@ -78,7 +93,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         keyword = str(body.get(REQUEST_SEARCH_KEYWORD_KEY) or "").strip()
         locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
         engagement_type = str(body.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
-        work_mode_preference = str(body.get(KEY_WORK_MODE_PREFERENCE) or "").strip().lower()
+        work_mode_preference = normalize_work_mode_preferences(body.get(KEY_WORK_MODE_PREFERENCE))
         prefer_government = str(body.get(KEY_PREFER_GOVERNMENT) or "").strip().lower()
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
@@ -100,8 +115,8 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         if engagement_type not in srv._VALID_ENGAGEMENT_TYPES:
             raise ValueError("Please choose what type of work you are open to.")
         valid_work_modes = {str(item["value"]).strip().lower() for item in WORK_MODE_PREFERENCE_OPTIONS}
-        if work_mode_preference not in valid_work_modes:
-            raise ValueError("Please choose a work mode.")
+        if any(value not in valid_work_modes for value in work_mode_preference):
+            raise ValueError("Please choose only remote, hybrid, or on-site.")
         if prefer_government not in srv._VALID_GOVERNMENT_PREFERENCES:
             prefer_government = srv.GOVERNMENT_PREFERENCE_ANY
         try:

@@ -2,12 +2,11 @@
 
 Scrapes LinkedIn public job listings (no login required) via the jobspy library.
 Returns normalized records in the same shape as the SEEK connector so the shared
-filtering, enrichment, LLM gate, and dashboard rendering pipeline works unchanged.
+filtering, enrichment, LLM gate, and workspace rendering pipeline works unchanged.
 """
 
 import re
-import sys
-from typing import List, Set
+from typing import List
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -19,13 +18,10 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_TYPE_KEY, RECORD_SALARY_KEY, RECORD_TEASER_KEY, RECORD_DETAILS_TEXT_KEY,
     RECORD_DETAILS_STATUS_KEY, RECORD_DESCRIPTION_SOURCE_KEY, RECORD_FIT_CONFIDENCE_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY, RECORD_FULL_DESCRIPTION_KEY, RECORD_HARD_BLOCK_REASONS_KEY,
-    RECORD_LLM_DECISION_KEY, RECORD_LLM_FIT_GRADE_KEY, RECORD_ROLE_SNAPSHOT_KEY,
-    RECORD_FIT_HIGHLIGHTS_KEY, RECORD_COMPETITIVE_SIGNALS_KEY, RECORD_SOFT_RISK_REASONS_KEY,
-    RECORD_MISSING_EVIDENCE_KEY, RECORD_REVIEWED_SIGNAL_MATCHES_KEY, RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
-    RECORD_SOURCE_METADATA_KEY, RECORD_SEARCH_LOCATION_KEY, RECORD_SEARCH_KEYWORDS_KEY,
-    RECORD_POSTED_AGE_DAYS_KEY, RECORD_POSTED_KEY, DETAILS_STATUS_OK, CONFIDENCE_HIGH,
-    CONFIDENCE_LOW, RECORD_RUN_STARTED_AT_KEY, RECORD_SOURCE_KEY,
-    RECORD_JOB_QUALITY_SIGNALS_KEY,
+    RECORD_CONTENT_REASON_KEY, RECORD_COMPETITIVE_SIGNALS_KEY, RECORD_SOURCE_METADATA_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY,
+    RECORD_WORK_MODE_NEEDS_REVIEW_KEY, DETAILS_STATUS_OK, CONFIDENCE_HIGH,
+    CONFIDENCE_LOW, RECORD_JOB_QUALITY_SIGNALS_KEY,
 )
 from job_hunter_agent.advance_settings import (
     DEFAULT_SEARCH_SETTINGS,
@@ -33,6 +29,7 @@ from job_hunter_agent.advance_settings import (
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_SORT_NEWEST_FIRST,
 )
 from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
@@ -98,31 +95,28 @@ class LinkedInScraper(BaseJobScraper):
         Returns:
             (kept_records, audit_rows, skill_observations)
         """
-        # Lazy import to avoid circular dependency with source_connector.py
-        # (source_connector imports LinkedInScraper; scraper_linkedin needs
-        # enrichment functions defined in source_connector)
-        from job_hunter_agent.source_connector import (  # noqa: PLC0415
-            build_fit_highlights,
-            build_ad_learning_signals,
-            build_risk_and_missing_evidence,
-            build_role_summary,
-            can_reuse_kept_job,
-            apply_kept_job_reuse,
-            compact_whitespace,
+        # Lazy imports keep the scraper decoupled from heavier review helpers.
+        from job_hunter_agent.capability_matching import build_risk_and_missing_evidence  # noqa: PLC0415
+        from job_hunter_agent.fit_scoring import build_fit_highlights  # noqa: PLC0415
+        from job_hunter_agent.hard_blocker_rules import find_hard_block_matches  # noqa: PLC0415
+        from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record  # noqa: PLC0415
+        from job_hunter_agent.signal_detection import (  # noqa: PLC0415
             detect_competitive_signals,
-            deterministic_review_outcome,
             evaluate_competitive_signal_alignment,
             extract_skill_observations,
-            finalize_record,
             hard_block_entries,
             hard_block_reasons,
-            find_hard_block_matches,
-            _has_high_value_ambiguous_learning_candidate,
-            _resolve_llm_review_payload,
-            _merge_pending_learning_signals,
-            _register_pending_learning_signals,
+        )
+        from job_hunter_agent.source_learning import (  # noqa: PLC0415
+            has_high_value_ambiguous_learning_candidate,
+            merge_pending_learning_signals,
+            register_pending_learning_signals,
+            resolve_llm_review_payload,
+            build_ad_learning_signals,
+            deterministic_review_outcome,
             register_hard_blocker_learning_from_rejection,
         )
+        from job_hunter_agent.text_processing import build_role_summary, compact_whitespace  # noqa: PLC0415
         min_trusted_description_length = get_min_trusted_description_length()
 
         kept_records: List[dict] = []
@@ -145,6 +139,16 @@ class LinkedInScraper(BaseJobScraper):
             if rows is None or len(rows) == 0:
                 print(f"[LinkedIn] No results for {target['location']}")
                 continue
+
+            if target.get("sort_newest_first"):
+                try:
+                    rows = rows.sort_values(
+                        by="date_posted",
+                        ascending=False,
+                        na_position="last",
+                    )
+                except Exception:
+                    pass
 
             print(f"[LinkedIn] Fetched {len(rows)} raw listings. Starting filter and score pipeline...")
 
@@ -384,15 +388,15 @@ class LinkedInScraper(BaseJobScraper):
                 if deterministic_review is not None:
                     llm_review = deterministic_review
                     print(f"[LinkedIn][LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
-                    if _has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
-                        payload = _resolve_llm_review_payload(
+                    if has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
+                        payload = resolve_llm_review_payload(
                             record,
                             self.llm_cache,
                             learning_only=True,
                         )
                         record["llm_learning_candidates"] = payload.get("learning_candidates") or []
                 else:
-                    payload = _resolve_llm_review_payload(
+                    payload = resolve_llm_review_payload(
                         record,
                         self.llm_cache,
                     )
@@ -409,11 +413,11 @@ class LinkedInScraper(BaseJobScraper):
                     continue
 
                 record["decision"] = "KEEP"
-                pending_signals = _merge_pending_learning_signals(
+                pending_signals = merge_pending_learning_signals(
                     record.get("ad_learning_signals") or [],
                     record.get("llm_learning_candidates") or [],
                 )
-                _register_pending_learning_signals(pending_signals)
+                register_pending_learning_signals(pending_signals)
                 record.pop("skill_observations", None)
                 record.pop("ad_learning_signals", None)
                 record.pop("llm_learning_candidates", None)
@@ -444,6 +448,7 @@ class LinkedInScraper(BaseJobScraper):
         date_range_days = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
         hours_old = int(search_settings.get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]) or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD])
         results_wanted = int(search_settings.get(KEY_LINKEDIN_RESULTS_PER_SEARCH, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]) or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH])
+        sort_newest_first = bool(search_settings.get(KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]))
         easy_apply = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)  # None / True / False
 
         targets = []
@@ -456,6 +461,7 @@ class LinkedInScraper(BaseJobScraper):
                 "location": jobspy_location,
                 "hours_old": hours_old,
                 "results_wanted": results_wanted,
+                "sort_newest_first": sort_newest_first,
                 "easy_apply": easy_apply,
             })
         return targets

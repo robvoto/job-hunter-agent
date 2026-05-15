@@ -47,8 +47,7 @@ docs/RUN_COMMANDS.txt
 ALIAS_LOGIC_RATIONALE.md
 CAPABILITY_AGING_RATIONALE.md 
 pytest.ini
-docs/RUN_COMMANDS.txt
-.gitignore
+docs/RUN_COMMANDS.txt 
 CLAUDE.md
 .gitignore
 data/signal_registry.json
@@ -58,13 +57,10 @@ AGENTS - OLD.md
 docs/ARCHITECTURE - OLD.md
 docs/OPERATIONS - OLD.md
 docs/LOCAL_MCP_SETUP.md
-docs/backlog/DONE.md
-docs/backlog/general.md
-docs/backlog/filtering.md
-docs/backlog/openclaw.md
 GEMINI.md
 CLAUDE.md
 Programming - Shortcut.lnk
-job_hunter_agent/routes/__init__.py
-data/users/a630b54c5fc1b009/source_pack/primary_cv.docx
-job_hunter_agent/routes/__init__.py
+data/users/
+data/playwright_user_data/
+docs/backlog/
+.skills/

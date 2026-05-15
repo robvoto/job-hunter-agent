@@ -162,15 +162,15 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     highlights: List[str] = []
     active_profile = profile or load_profile()
     highlight_labels = load_ui_labels()["fit_highlight_labels"]
-    # Dashboard card highlight counts are global optimiser settings.
+    # Workspace card highlight counts are global optimiser settings.
     hl_config = load_advance_settings()[KEY_FIT_HIGHLIGHTS]
     role_bundle = role_text_bundle(record, details_text)
     capability_matches = find_profile_capability_matches(role_bundle, active_profile)
 
     matched_profile_areas = (
-        [(highlight_labels["strong_capability_match"], area) for area in capability_matches["strong"][:hl_config["strong_capability_count"]]]
-        + [(highlight_labels["capability_match"], area) for area in capability_matches["working"][:hl_config["working_capability_count"]]]
-        + [(highlight_labels["capability_match"], area) for area in capability_matches["basic"][:hl_config["basic_capability_count"]]]
+        [(highlight_labels["strong_capability_match"], area) for area in capability_matches[LEVEL_STRONG][:hl_config["strong_capability_count"]]]
+        + [(highlight_labels["capability_match"], area) for area in capability_matches[LEVEL_WORKING][:hl_config["working_capability_count"]]]
+        + [(highlight_labels["capability_match"], area) for area in capability_matches[LEVEL_BASIC][:hl_config["basic_capability_count"]]]
     )
     for prefix, area in matched_profile_areas:
         label = friendly_capability_label(area)

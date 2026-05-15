@@ -117,72 +117,88 @@
     .ws-test-action:hover {
       background: var(--bg-muted);
     }
-.ws-flash-mount {
-      padding: 16px 22px 0;
+    .ws-flash-mount {
+      position: fixed;
+      inset: 54px 0 0;
+      z-index: 240;
+      padding: 20px;
+    }
+    .ws-flash-backdrop {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-page) 18%, transparent), color-mix(in srgb, var(--scrim) 90%, transparent)),
+        color-mix(in srgb, var(--bg-page) 14%, transparent);
+      backdrop-filter: blur(14px) saturate(0.9);
+      -webkit-backdrop-filter: blur(14px) saturate(0.9);
+    }
+    .ws-flash-shell {
+      position: relative;
+      display: grid;
+      place-items: start center;
+      min-height: calc(100vh - 54px);
+      padding-top: clamp(8px, 3.6vh, 32px);
     }
     .ws-flash-card {
       display: none;
-      max-width: 1200px;
+      width: min(100%, 980px);
       margin: 0 auto;
-      background: 
-        radial-gradient(circle at top left, var(--state-success-bg), transparent 32%),
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, transparent), color-mix(in srgb, var(--bg-muted) 82%, transparent)),
         var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 26px;
-    box-shadow: var(--shadow-soft);
+      border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+      border-radius: 24px;
+      box-shadow: 0 26px 60px color-mix(in srgb, var(--text-primary) 16%, transparent);
       overflow: hidden;
     }
     .ws-flash-card.is-visible {
       display: block;
-      animation: wsFlashCardIn 480ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation: wsFlashCardIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .ws-flash-body {
       display: grid;
-      gap: 22px;
-      grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.95fr);
-      padding: 26px;
+      gap: 18px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.78fr);
+      padding: clamp(20px, 2.4vw, 28px);
     }
-    .ws-flash-eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      font-size: 0.78rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--state-success-text);
+    .ws-flash-main {
+      min-width: 0;
     }
     .ws-flash-title {
-      margin: 0 0 12px;
-      font-size: clamp(1.8rem, 3vw, 2.5rem);
-      line-height: 1;
+      margin: 0;
+      font-size: clamp(2rem, 3vw, 2.6rem);
+      line-height: 1.02;
       letter-spacing: -0.04em;
       color: var(--text-primary);
     }
-    .ws-flash-copy {
+    .ws-flash-subtitle {
+      margin: 10px 0 0;
       color: var(--text-muted);
-      line-height: 1.65;
-      font-size: 1rem;
+      font-size: 0.98rem;
+      line-height: 1.45;
+      max-width: 44ch;
     }
-    .ws-flash-subcopy {
-      margin-top: 10px;
+    .ws-flash-helper {
+      margin: 12px 0 0;
       color: var(--text-muted);
-      line-height: 1.6;
-      font-size: 0.94rem;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      max-width: 52ch;
     }
     .ws-flash-steps {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
+      gap: 10px;
       margin-top: 18px;
     }
     .ws-flash-step {
       opacity: 0;
+      display: grid;
+      gap: 6px;
       padding: 14px 14px 15px;
       border-radius: 18px;
-      background: var(--bg-muted);
-      border: 1px solid var(--border-subtle);
+      background: color-mix(in srgb, var(--bg-muted) 78%, transparent);
+      border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
       transform: translateY(10px);
       animation: wsFlashItemIn 520ms ease forwards;
     }
@@ -193,54 +209,62 @@
       animation-delay: 140ms;
     }
     .ws-flash-step-title {
-      margin: 0 0 6px;
-      font-size: 0.88rem;
+      margin: 0;
+      font-size: 0.92rem;
       font-weight: 800;
       color: var(--text-primary);
     }
     .ws-flash-step-copy {
-      font-size: 0.9rem;
-      line-height: 1.5;
+      margin: 0;
+      font-size: 0.88rem;
+      line-height: 1.45;
       color: var(--text-muted);
     }
-    .ws-flash-note {
-      margin-top: 16px;
-      padding: 12px 14px;
+    .ws-flash-footer {
+      margin-top: 18px;
+      padding: 11px 13px;
       border-radius: 16px;
-      background: var(--state-info-bg);
-      border: 1px solid var(--state-info-border);
+      background: color-mix(in srgb, var(--state-info-bg) 70%, transparent);
+      border: 1px solid color-mix(in srgb, var(--state-info-border) 76%, transparent);
       color: var(--state-info-text);
-      font-size: 0.9rem;
-      line-height: 1.55;
+      font-size: 0.88rem;
+      line-height: 1.45;
     }
     .ws-flash-side {
-      padding: 20px;
-      border-radius: 22px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
+      padding: 18px;
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+      border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+      display: grid;
+      gap: 12px;
+      align-content: start;
     }
     .ws-flash-side h2 {
-      margin: 0 0 10px;
+      margin: 0;
       font-size: 1.02rem;
       color: var(--text-primary);
     }
-    .ws-flash-side p {
-      margin: 0 0 12px;
-      color: var(--text-muted);
-      line-height: 1.6;
-      font-size: 0.93rem;
+    .ws-flash-action-list {
+      display: grid;
+      gap: 10px;
     }
     .ws-flash-actions {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
       gap: 10px;
-      margin-top: 16px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .ws-flash-actions .btn {
+      min-height: 42px;
+      padding-inline: 14px;
+      font-size: 0.9rem;
+    }
+    .ws-flash-actions .ws-flash-primary {
+      grid-column: 1 / -1;
     }
     .ws-flash-optout {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      margin-top: 16px;
       color: var(--text-muted);
       font-size: 0.9rem;
       cursor: pointer;
@@ -248,6 +272,12 @@
     .ws-flash-optout input {
       margin: 0;
       accent-color: var(--accent);
+    }
+    body.ws-onboarding-active {
+      overflow: hidden;
+    }
+    body.ws-wait-active {
+      overflow: hidden;
     }
     @keyframes wsFlashCardIn {
       from {
@@ -273,20 +303,60 @@
     /* Results mount */
     #results-mount { min-height: calc(100vh - 54px); }
     #results-loading {
-      padding: 64px 24px;
+      min-height: calc(100vh - 54px);
+      display: grid;
+      place-items: center;
+      padding: 24px;
       color: var(--text-muted);
-      text-align: center;
-      font-size: 0.95rem;
+    }
+    #results-loading .wait-state {
+      width: min(100%, 560px);
+    }
+    .ws-wait-mount {
+      position: fixed;
+      inset: 54px 0 0;
+      z-index: 230;
+      padding: 20px;
+      display: grid;
+      place-items: center;
+    }
+    .ws-wait-mount[hidden] {
+      display: none;
+    }
+    .ws-wait-backdrop {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-page) 18%, transparent), color-mix(in srgb, var(--scrim) 92%, transparent)),
+        color-mix(in srgb, var(--bg-page) 14%, transparent);
+      backdrop-filter: blur(14px) saturate(0.9);
+      -webkit-backdrop-filter: blur(14px) saturate(0.9);
+    }
+    .ws-wait-shell {
+      position: relative;
+      width: min(100%, 620px);
+    }
+    .ws-wait-shell .wait-state {
+      min-width: 0;
     }
 
     #results-mount .page { max-width: none !important; padding: 16px 22px 56px !important; }
-    #results-mount .dashboard-layout { display: grid !important; }
+    #results-mount .workspace-layout { display: grid !important; }
     @media (max-width: 900px) {
+      .ws-flash-mount {
+        padding: 14px;
+      }
       .ws-flash-body {
         grid-template-columns: minmax(0, 1fr);
       }
       .ws-flash-steps {
         grid-template-columns: minmax(0, 1fr);
+      }
+      .ws-flash-actions {
+        grid-template-columns: 1fr;
+      }
+      .ws-flash-actions .ws-flash-primary {
+        grid-column: auto;
       }
     }
   </style>
@@ -315,16 +385,25 @@
           <button class="ws-test-action" id="ws_reset_learning_btn" type="button" role="menuitem" style="color: var(--state-error-text);">Reset Learning (&#9888;)</button>
         </div>
       </div>
+      <button class="btn btn-primary" id="ws_header_run_btn" type="button" style="font-size: 0.86rem; padding: 8px 16px;">&#9654; Run search</button>
       <a href="/settings" class="btn btn-secondary" style="font-size: 0.86rem; padding: 8px 16px;">&#9881; Settings</a>
     </div>
   </header>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
+  <div class="ws-wait-mount" id="ws_wait_mount" hidden></div>
   <div id="results-mount">
-    <div id="results-loading">Loading results...</div>
+    <div id="results-loading">
+      <div class="wait-state" role="status" aria-live="polite">
+        <span class="wait-state__spinner" aria-hidden="true"></span>
+        <p class="wait-state__title">Loading workspace</p>
+        <p class="wait-state__copy">Fetching the latest search results.</p>
+      </div>
+    </div>
   </div>
 
   <script>
     const wsFlashMount = document.getElementById('ws_flash_mount');
+    const wsWaitMount = document.getElementById('ws_wait_mount');
     const resultsMount = document.getElementById('results-mount');
     const wsTestPanel = document.getElementById('ws_test_panel');
     const wsTestTrigger = document.getElementById('ws_test_trigger');
@@ -334,7 +413,12 @@
     const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
     const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
     const ONBOARDING_WIZARD_KEY = 'jobHunter.onboardingWizard';
+    const ONBOARDING_KEYWORD_SPLIT_RE = /[,\n|/]+/;
+    const RUN_STATUS_POLL_INTERVAL_MS = 1000;
+    const RUN_STATUS_MAX_ATTEMPTS = 60;
     const isTestMode = document.body.dataset.testMode === 'true';
+    let runStatusPollHandle = null;
+    let workspaceWaitState = null;
 
     function setTestMenuOpen(open) {
       if (!wsTestMenu || !wsTestTrigger) {
@@ -365,6 +449,19 @@
         throw new Error(payload.error || 'Request failed');
       }
       return payload;
+    }
+
+    function peekOnboardingWelcomeState() {
+      try {
+        const raw = window.sessionStorage.getItem(ONBOARDING_WELCOME_KEY);
+        if (!raw) {
+          return null;
+        }
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
     }
 
     function consumeOnboardingWelcomeState() {
@@ -411,81 +508,278 @@
         .replace(/'/g, '&#39;');
     }
 
+    function renderWorkspaceWait(state) {
+      if (!wsWaitMount) {
+        return;
+      }
+      if (!state) {
+        wsWaitMount.innerHTML = '';
+        wsWaitMount.hidden = true;
+        document.body.classList.remove('ws-wait-active');
+        return;
+      }
+      const nextState = {
+        title: String(state.title || 'Working').trim() || 'Working',
+        copy: String(state.copy || '').trim(),
+        subcopy: String(state.subcopy || '').trim(),
+      };
+      if (
+        workspaceWaitState
+        && workspaceWaitState.title === nextState.title
+        && workspaceWaitState.copy === nextState.copy
+        && workspaceWaitState.subcopy === nextState.subcopy
+      ) {
+        return;
+      }
+      workspaceWaitState = { ...nextState };
+      const title = escapeHtml(nextState.title);
+      const copy = escapeHtml(nextState.copy);
+      const subcopy = nextState.subcopy;
+      wsWaitMount.hidden = false;
+      document.body.classList.add('ws-wait-active');
+      wsWaitMount.innerHTML = `
+        <div class="ws-wait-backdrop" aria-hidden="true"></div>
+        <div class="ws-wait-shell">
+          <div class="wait-state" role="status" aria-live="polite">
+            <span class="wait-state__spinner" aria-hidden="true"></span>
+            <p class="wait-state__title">${title}</p>
+            ${copy ? `<p class="wait-state__copy">${copy}</p>` : ''}
+            ${subcopy ? `<p class="wait-state__subcopy">${escapeHtml(subcopy)}</p>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function showWorkspaceWait(state) {
+      if (!state || typeof state !== 'object') {
+        workspaceWaitState = null;
+        renderWorkspaceWait(null);
+        return;
+      }
+      renderWorkspaceWait(state);
+    }
+
+    function updateWorkspaceWait(patch) {
+      if (!workspaceWaitState) {
+        return;
+      }
+      renderWorkspaceWait({ ...workspaceWaitState, ...patch });
+    }
+
+    function hideWorkspaceWait() {
+      workspaceWaitState = null;
+      renderWorkspaceWait(null);
+    }
+
+    function setOnboardingOverlayVisible(visible) {
+      document.body.classList.toggle('ws-onboarding-active', Boolean(visible));
+    }
+
+    function splitOnboardingSummary(value) {
+      return String(value || '')
+        .split(ONBOARDING_KEYWORD_SPLIT_RE)
+        .map((part) => String(part || '').trim())
+        .filter(Boolean);
+    }
+
+    function buildOnboardingFooterSummary(state) {
+      const titles = splitOnboardingSummary(state?.search_keywords).slice(0, 3);
+      const locations = Array.isArray(state?.search_locations)
+        ? state.search_locations.map((value) => String(value || '').trim()).filter(Boolean)
+        : [];
+      const parts = [...titles, ...locations.slice(0, 1)];
+      return parts.length ? parts.join(' · ') : 'Your saved search is ready.';
+    }
+
+    function dismissOnboardingOverlay() {
+      if (!wsFlashMount) {
+        return;
+      }
+      wsFlashMount.innerHTML = '';
+      setOnboardingOverlayVisible(false);
+    }
+
+    function updateResultsLoadingMessage(message) {
+      const loading = document.getElementById('results-loading');
+      if (loading) {
+        const text = escapeHtml(String(message || 'Loading workspace'));
+        loading.innerHTML = `
+          <div class="wait-state" role="status" aria-live="polite">
+            <span class="wait-state__spinner" aria-hidden="true"></span>
+            <p class="wait-state__title">Loading workspace</p>
+            <p class="wait-state__copy">${text}</p>
+          </div>
+        `;
+      }
+    }
+
+    function stopRunStatusPolling() {
+      if (runStatusPollHandle) {
+        window.clearInterval(runStatusPollHandle);
+        runStatusPollHandle = null;
+      }
+    }
+
+    function startRunStatusPolling() {
+      if (runStatusPollHandle) {
+        return;
+      }
+      runStatusPollHandle = window.setInterval(syncWorkspaceRunStatus, RUN_STATUS_POLL_INTERVAL_MS);
+    }
+
+    async function syncWorkspaceRunStatus() {
+      try {
+        const response = await jobHunterFetch('/api/run-status', { method: 'GET' });
+        if (!response.ok) {
+          throw new Error('Could not check run status.');
+        }
+        const payload = await response.json().catch(() => ({}));
+        if (payload?.status === 'running') {
+          showWorkspaceWait({
+            title: 'Search in progress',
+            copy: 'Job Hunter is checking sources and ranking matches.',
+            subcopy: 'Keep this tab open. The workspace will refresh when the run finishes.',
+          });
+          startRunStatusPolling();
+          return true;
+        }
+        stopRunStatusPolling();
+        if (workspaceWaitState) {
+          hideWorkspaceWait();
+          await loadResults();
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    }
+
+    async function startWorkspaceRunFromOverlay() {
+      showWorkspaceWait({
+        title: 'Starting search',
+        copy: 'Saving your settings and beginning the scrape.',
+        subcopy: 'The workspace will refresh automatically while the search runs.',
+      });
+      try {
+        const response = await jobHunterFetch('/api/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || 'Could not start search.');
+        }
+        showWorkspaceWait({
+          title: 'Search in progress',
+          copy: 'Job Hunter is checking sources and ranking matches.',
+          subcopy: 'Keep this tab open. The workspace will refresh when the run finishes.',
+        });
+        startRunStatusPolling();
+        pollRunStatusAfterOverlayStart();
+      } catch (error) {
+        hideWorkspaceWait();
+        updateResultsLoadingMessage('Could not start search. Refresh the page and try again.');
+        window.alert(error.message || 'Could not start search.');
+      }
+    }
+
+    async function pollRunStatusAfterOverlayStart(attempt = 0) {
+      try {
+        const response = await jobHunterFetch('/api/run-status', { method: 'GET' });
+        if (!response.ok) {
+          throw new Error('Could not check run status.');
+        }
+        const payload = await response.json().catch(() => ({}));
+        if (payload?.status === 'running' && attempt < RUN_STATUS_MAX_ATTEMPTS) {
+          updateWorkspaceWait({
+            title: 'Search in progress',
+            copy: 'Job Hunter is still working.',
+            subcopy: 'The workspace will refresh when the run is finished.',
+          });
+          window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
+          return;
+        }
+        updateWorkspaceWait({
+          title: 'Refreshing results',
+          copy: 'Loading the latest workspace now.',
+        });
+        await loadResults();
+        hideWorkspaceWait();
+      } catch (error) {
+        if (attempt < RUN_STATUS_MAX_ATTEMPTS) {
+          window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
+          return;
+        }
+        hideWorkspaceWait();
+        updateResultsLoadingMessage('Could not refresh results. Refresh the page if needed.');
+      }
+    }
+
     function renderOnboardingWelcome() {
       if (!wsFlashMount) {
         return;
       }
-      const state = consumeOnboardingWelcomeState();
+      const state = peekOnboardingWelcomeState();
       if (!state || onboardingWelcomeOptedOut()) {
-        wsFlashMount.innerHTML = '';
+        dismissOnboardingOverlay();
         return;
       }
 
-      const keyword = String(state.search_keywords || '').trim();
-      const locations = Array.isArray(state.search_locations)
-        ? state.search_locations.map((value) => String(value || '').trim()).filter(Boolean)
-        : [];
-      const searchSummary = [];
-      if (keyword) {
-        searchSummary.push(`keyword "${escapeHtml(keyword)}"`);
-      }
-      if (locations.length) {
-        searchSummary.push(`locations ${escapeHtml(locations.join(', '))}`);
-      }
-      const title = state.kind === 'profile-refresh'
-        ? 'Profile refreshed. This is your dashboard.'
-        : 'Welcome. This is your dashboard.';
-      const introCopy = state.kind === 'profile-refresh'
-        ? 'We refreshed your profile from your latest CV. Your shortlist lives here, and the next search will use the updated profile automatically.'
-        : 'We built your starting profile from your CV. This is where your shortlist appears and where new matches land after each search.';
-      const subCopy = 'You should not need to know anything about internal files or extraction rules here. The important part is simple: review roles below, run another search when you want fresh results, and open Settings if you want to tune how matching works.';
-      const searchNote = searchSummary.length
-        ? `<div class="ws-flash-note">Your next search will use ${searchSummary.join(' and ')}.</div>`
-        : '';
+      setOnboardingOverlayVisible(true);
+      const nextSearchSummary = escapeHtml(buildOnboardingFooterSummary(state));
+      const profileSourceCopy = state.kind === 'profile-refresh'
+        ? 'We rebuilt this from your latest CV.'
+        : 'We built this from your CV.';
 
       wsFlashMount.innerHTML = `
-        <section class="ws-flash-card is-visible" aria-label="Onboarding summary">
-          <div class="ws-flash-body">
-            <div>
-              <div class="ws-flash-eyebrow">Welcome to Job Hunter</div>
-              <h1 class="ws-flash-title">${title}</h1>
-              <p class="ws-flash-copy">${introCopy}</p>
-              <p class="ws-flash-subcopy">${subCopy}</p>
-              <div class="ws-flash-steps">
-                <div class="ws-flash-step">
-                  <p class="ws-flash-step-title">1. Review the shortlist</p>
-                  <p class="ws-flash-step-copy">The roles below are your current shortlist. Open any card to inspect it and decide what is worth your time.</p>
+        <div class="ws-flash-backdrop" data-onboarding-backdrop></div>
+        <div class="ws-flash-shell">
+          <section class="ws-flash-card is-visible" role="dialog" aria-modal="true" aria-label="Onboarding summary">
+            <div class="ws-flash-body">
+              <div class="ws-flash-main">
+                <h1 class="ws-flash-title">Welcome back</h1>
+                <p class="ws-flash-subtitle">Your AI job search workspace is ready.</p>
+                <p class="ws-flash-helper">${profileSourceCopy} We prepared your first search settings so you can start from here.</p>
+                <div class="ws-flash-steps">
+                  <article class="ws-flash-step">
+                    <h3 class="ws-flash-step-title">1. Review matches</h3>
+                    <p class="ws-flash-step-copy">Open jobs and decide what is worth your time.</p>
+                  </article>
+                  <article class="ws-flash-step">
+                    <h3 class="ws-flash-step-title">2. Run a search</h3>
+                    <p class="ws-flash-step-copy">Fetch fresh jobs anytime.</p>
+                  </article>
+                  <article class="ws-flash-step">
+                    <h3 class="ws-flash-step-title">3. Settings</h3>
+                    <p class="ws-flash-step-copy">Adjust titles, salary, location, and filters.</p>
+                  </article>
                 </div>
-                <div class="ws-flash-step">
-                  <p class="ws-flash-step-title">2. Run a search when ready</p>
-                  <p class="ws-flash-step-copy">Use <strong>Run Search Now</strong> in the Search Operations panel to fetch fresh roles. It can take a few minutes, and this dashboard will refresh when the run finishes.</p>
-                </div>
-                <div class="ws-flash-step">
-                  <p class="ws-flash-step-title">3. Schedule or tune things in Settings</p>
-                  <p class="ws-flash-step-copy">If you want hands-off searching, set a daily schedule there. You can also adjust titles, locations, salary, and other matching preferences.</p>
-                </div>
+                <div class="ws-flash-footer">Next search: ${nextSearchSummary}</div>
               </div>
-              ${searchNote}
+              <aside class="ws-flash-side">
+                <h2>Quick start</h2>
+                <div class="ws-flash-action-list">
+                  <button class="btn btn-primary ws-flash-primary" id="ws_flash_run_search" type="button">Run search</button>
+                  <div class="ws-flash-actions">
+                    <a href="/settings" class="btn btn-secondary">Open settings</a>
+                    <button class="btn btn-secondary" id="ws_flash_dismiss" type="button">Dismiss</button>
+                  </div>
+                </div>
+                <label class="ws-flash-optout" for="ws_flash_opt_out">
+                  <input type="checkbox" id="ws_flash_opt_out">
+                  <span>Do not show again</span>
+                </label>
+              </aside>
             </div>
-            <aside class="ws-flash-side">
-              <h2>Quick start</h2>
-              <p>This intro is just a handoff so you know where you are. Once dismissed, the dashboard below becomes the main thing you work from.</p>
-              <p>If you already have saved roles, browse them now. If not, use Run Search Now in the Search Operations panel and wait here while the dashboard refreshes with fresh matches. If you prefer, you can set a daily schedule instead.</p>
-              <div class="ws-flash-actions">
-                  <a href="/settings#schedule-panel" class="btn btn-secondary" style="font-size: 0.84rem; padding: 8px 14px;">Set Daily Schedule</a>
-                  <a href="/settings" class="btn btn-secondary" style="font-size: 0.84rem; padding: 8px 14px;">Open Settings</a>
-                  <button class="btn btn-secondary" id="ws_flash_dismiss" type="button" style="font-size: 0.84rem; padding: 8px 14px;">Got it</button>
-              </div>
-              <label class="ws-flash-optout" for="ws_flash_opt_out">
-                <input type="checkbox" id="ws_flash_opt_out">
-                <span>Do not show this intro again</span>
-              </label>
-            </aside>
-          </div>
-        </section>
+          </section>
+        </div>
       `;
 
+      const backdrop = wsFlashMount.querySelector('[data-onboarding-backdrop]');
       const dismissButton = document.getElementById('ws_flash_dismiss');
+      const runSearchButton = document.getElementById('ws_flash_run_search');
+      const settingsButton = wsFlashMount.querySelector('a[href="/settings"]');
       const optOut = document.getElementById('ws_flash_opt_out');
       if (optOut) {
         optOut.checked = onboardingWelcomeOptedOut();
@@ -494,10 +788,24 @@
         if (optOut) {
           setOnboardingWelcomeOptOut(optOut.checked);
         }
-        wsFlashMount.innerHTML = '';
+        consumeOnboardingWelcomeState();
+        dismissOnboardingOverlay();
       };
+      const closeAndRunSearch = () => {
+        closeFlash();
+        startWorkspaceRunFromOverlay();
+      };
+      if (backdrop) {
+        backdrop.addEventListener('click', closeFlash);
+      }
       if (dismissButton) {
         dismissButton.addEventListener('click', closeFlash);
+      }
+      if (runSearchButton) {
+        runSearchButton.addEventListener('click', closeAndRunSearch);
+      }
+      if (settingsButton) {
+        settingsButton.addEventListener('click', closeFlash);
       }
     }
 
@@ -518,6 +826,10 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
         if (event.key === 'Escape') {
           setTestMenuOpen(false);
         }
+      });
+
+      document.getElementById('ws_header_run_btn')?.addEventListener('click', () => {
+        startWorkspaceRunFromOverlay();
       });
 
       wsResetUserBtn?.addEventListener('click', async () => {
@@ -562,7 +874,19 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
       try {
         const resp = await jobHunterFetch('/api/results-html');
         if (!resp.ok) {
-          resultsMount.innerHTML = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;">Run a search first to see results.</div>';
+          const runStats = await jobHunterFetch('/api/run-stats').then(r => r.ok ? r.json() : {}).catch(() => ({}));
+          const lastError = runStats.last_run_error;
+          if (lastError) {
+            resultsMount.innerHTML = `<div style="padding:40px 24px;text-align:center;">
+              <div style="display:inline-block;max-width:600px;background:var(--state-error-bg,#3a1a1a);border:1px solid var(--state-error-border,#a33);border-radius:8px;padding:24px 28px;color:var(--state-error-text,#f88);text-align:left;">
+                <strong style="display:block;margin-bottom:8px;">Last search failed</strong>
+                <code style="font-size:0.82em;word-break:break-all;">${lastError.replace(/</g,'&lt;')}</code>
+              </div>
+              <div style="margin-top:20px;color:var(--text-muted);">Fix the issue above and run the search again.</div>
+            </div>`;
+          } else {
+            resultsMount.innerHTML = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;">No results yet — run a search first.</div>';
+          }
           return;
         }
         const html = await resp.text();
@@ -577,6 +901,7 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
 
     (async () => {
       renderOnboardingWelcome();
+      await syncWorkspaceRunStatus();
       await loadResults();
     })();
   </script>

@@ -35,7 +35,7 @@ Responsibilities:
 * apply deterministic filtering
 * optionally run constrained LLM review
 * generate scoring
-* update dashboard outputs
+* update workspace outputs
 * persist runtime artifacts
 
 ---
@@ -91,6 +91,7 @@ Session cookie behavior:
 - `Secure` is enabled when the request is HTTPS
 - `http://127.0.0.1:8765` and LAN HTTP access stay usable without a reverse proxy
 - set `JOB_HUNTER_SESSION_COOKIE_SECURE=true` or `false` to force a mode explicitly
+- for local debug-only testing, set `JOB_HUNTER_DISABLE_AUTH=true` together with `--debug` to bypass login and CSRF checks
 
 Primary routes:
 
@@ -98,7 +99,7 @@ Primary routes:
 | ------------- | --------------------- |
 | `/start`      | onboarding            |
 | `/settings`   | runtime configuration |
-| `/dashboard`  | operational workspace |
+| `/workspace`  | operational workspace |
 | `/swagger-ui` | API diagnostics       |
 | `/docs`       | markdown document API |
 
@@ -123,18 +124,18 @@ Purpose:
 
 ---
 
-## Dashboard Rebuild Runtime
+## Workspace Rebuild Runtime
 
-Rebuild dashboard only:
+Rebuild workspace only:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-dashboard
+python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 Purpose:
 
 * rebuild UI outputs
-* validate dashboard rendering
+* validate workspace rendering
 * avoid unnecessary scraping
 * avoid unnecessary LLM review
 
@@ -164,7 +165,7 @@ Rebuildable outputs:
 
 | File                        | Purpose             |
 | --------------------------- | ------------------- |
-| `output/dashboard.html`     | rendered dashboard  |
+| `output/workspace.html`     | rendered workspace  |
 | `output/run_stats.json`     | runtime diagnostics |
 | `output/review_data.json`   | review summaries    |
 | `output/audit_records.json` | audit output        |
@@ -192,7 +193,7 @@ Operational sequence:
 7. optionally run constrained LLM review
 8. generate fit scores
 9. persist outputs
-10. rebuild dashboard
+10. rebuild workspace
 
 ---
 
@@ -213,15 +214,15 @@ Operational sequence:
 
 ---
 
-## Dashboard-Only Workflow
+## Workspace-Only Workflow
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-dashboard
+python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 Purpose:
 
-* validate dashboard changes
+* validate workspace changes
 * validate rendering changes
 * inspect current saved state
 * avoid scrape overhead
@@ -344,7 +345,7 @@ Use focused tests when validating:
 * filtering
 * onboarding
 * scoring
-* dashboard rendering
+* workspace rendering
 * learning logic
 
 Avoid unnecessary full-suite execution during targeted changes.
@@ -382,12 +383,12 @@ The runtime must not:
 
 # Recovery Operations
 
-## Dashboard Recovery
+## Workspace Recovery
 
-Rebuild dashboard from saved runtime state:
+Rebuild workspace from saved runtime state:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-dashboard
+python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 ---
@@ -397,7 +398,7 @@ python -m job_hunter_agent.source_connector --rebuild-dashboard
 Reset "new-to-you" visibility:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-dashboard --reset-new-to-you
+python -m job_hunter_agent.source_connector --rebuild-workspace --reset-new-to-you
 ```
 
 ---
@@ -427,7 +428,7 @@ Learning layer:
 * inspectable
 * non-silent
 
-Dashboard layer:
+Workspace layer:
 
 * operational workspace
 * not temporary reporting

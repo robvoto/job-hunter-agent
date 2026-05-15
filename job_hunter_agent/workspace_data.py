@@ -15,7 +15,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LAST_VIEWED_AT_KEY, RECORD_SIGHTINGS_KEY, RECORD_SEEN_BEFORE_KEY
 )
 
-def build_history_dashboard_record(
+def build_history_workspace_record(
     job_key: str,
     entry: dict,
     run_started_at: datetime,
@@ -88,7 +88,7 @@ def build_archive_records(
     *,
     normalize_job_key_fn: Callable[[str], str],
     parse_timestamp_fn: Callable[[Optional[str]], Optional[datetime]],
-    build_history_dashboard_record_fn: Callable[[str, dict, datetime], Optional[dict]],
+    build_history_workspace_record_fn: Callable[[str, dict, datetime], Optional[dict]],
 ) -> list[dict]:
     records: list[dict] = []
     blocked_keys = applied_job_keys | hidden_job_keys
@@ -97,7 +97,7 @@ def build_archive_records(
         normalized_key = normalize_job_key_fn(str(job_key))
         if not normalized_key or normalized_key in current_run_keys or normalized_key in blocked_keys:
             continue
-        record = build_history_dashboard_record_fn(normalized_key, entry, run_started_at)
+        record = build_history_workspace_record_fn(normalized_key, entry, run_started_at)
         if record:
             records.append(record)
 
@@ -108,7 +108,7 @@ def build_archive_records(
     return records
 
 
-def build_hidden_dashboard_record(
+def build_hidden_workspace_record(
     job_key: str,
     entry: dict,
     run_started_at: datetime,
@@ -172,7 +172,7 @@ def build_hidden_records(
     parse_timestamp_fn: Callable[[Optional[str]], Optional[datetime]],
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
     hidden_review_days: int,
-    build_hidden_dashboard_record_fn: Callable[[str, dict, datetime], dict],
+    build_hidden_workspace_record_fn: Callable[[str, dict, datetime], dict],
 ) -> list[dict]:
     records: list[dict] = []
     for job_key in hidden_job_keys:
@@ -181,7 +181,7 @@ def build_hidden_records(
         hidden_age_days = days_since_fn(hidden_at, run_started_at) if hidden_at else None
         if hidden_age_days is not None and hidden_age_days > hidden_review_days:
             continue
-        records.append(build_hidden_dashboard_record_fn(job_key, entry, run_started_at))
+        records.append(build_hidden_workspace_record_fn(job_key, entry, run_started_at))
 
     records.sort(
         key=lambda item: (
@@ -193,7 +193,7 @@ def build_hidden_records(
     return records
 
 
-def build_applied_dashboard_record(
+def build_applied_workspace_record(
     job_key: str,
     entry: dict,
     run_started_at: datetime,
@@ -253,10 +253,10 @@ def build_applied_records(
     run_started_at: datetime,
     *,
     parse_timestamp_fn: Callable[[Optional[str]], Optional[datetime]],
-    build_applied_dashboard_record_fn: Callable[[str, dict, datetime], dict],
+    build_applied_workspace_record_fn: Callable[[str, dict, datetime], dict],
 ) -> list[dict]:
     records = [
-        build_applied_dashboard_record_fn(job_key, history.get(job_key, {}), run_started_at)
+        build_applied_workspace_record_fn(job_key, history.get(job_key, {}), run_started_at)
         for job_key in applied_job_keys
     ]
     records.sort(
@@ -269,7 +269,7 @@ def build_applied_records(
     return records
 
 
-def build_dashboard_record_sets(
+def build_workspace_record_sets(
     kept_records: list[dict],
     job_history: dict[str, dict],
     applied_job_keys: set[str],
@@ -277,7 +277,7 @@ def build_dashboard_record_sets(
     reference_time: datetime,
     *,
     profile: dict,
-    is_dashboard_eligible_fn: Callable[[dict, Optional[dict]], bool],
+    is_workspace_eligible_fn: Callable[[dict, Optional[dict]], bool],
     fit_score_fn: Callable[[dict, Optional[dict]], int],
     viewed_by_user_fn: Callable[[dict], bool],
     normalize_job_key_fn: Callable[[str], str],
@@ -286,7 +286,7 @@ def build_dashboard_record_sets(
     build_applied_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
     build_hidden_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
 ) -> dict[str, list[dict]]:
-    curated_kept_records = [record for record in kept_records if is_dashboard_eligible_fn(record, profile)]
+    curated_kept_records = [record for record in kept_records if is_workspace_eligible_fn(record, profile)]
 
     def _rank_by_fit(record: dict) -> tuple:
         timestamp = parse_timestamp_fn(record.get("last_kept_at") or record.get("last_seen_at"))
@@ -321,11 +321,11 @@ def build_dashboard_record_sets(
     applied_records = build_applied_records_fn(applied_job_keys, job_history, reference_time)
     hidden_records = build_hidden_records_fn(hidden_job_keys, job_history, reference_time)
     recent_archive_records = sorted(
-        [record for record in archive_records if not record.get("is_stale") and is_dashboard_eligible_fn(record, profile)],
+        [record for record in archive_records if not record.get("is_stale") and is_workspace_eligible_fn(record, profile)],
         key=_rank_archive_by_fit,
     )
     stale_archive_records = sorted(
-        [record for record in archive_records if record.get("is_stale") and is_dashboard_eligible_fn(record, profile)],
+        [record for record in archive_records if record.get("is_stale") and is_workspace_eligible_fn(record, profile)],
         key=_rank_archive_by_fit,
     )
     shortlist_records = sorted(

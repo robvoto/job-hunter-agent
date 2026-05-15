@@ -1,6 +1,6 @@
 """Global advance settings.
 
-These settings are system-wide, not candidate-specific. They control dashboard
+These settings are system-wide, not candidate-specific. They control workspace
 presentation and other optimiser-style behaviour shared across profiles.
 """
 
@@ -30,6 +30,11 @@ KEY_SALARY_LIMITS = "salary_limits"
 KEY_PREFERENCE_WEIGHTS = "preference_weights"
 KEY_EVIDENCE_TIER_WEIGHTS = "candidate_profile_tier_weights"
 KEY_HISTORY_SETTINGS = "history_settings"
+KEY_MAX_HISTORY_SIGHTINGS = "max_history_sightings"
+KEY_REPEATED_LISTING_MIN_TIMES_SEEN = "repeated_listing_min_times_seen"
+KEY_REPEATED_LISTING_MIN_SPAN_DAYS = "repeated_listing_min_span_days"
+KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS = "multi_listing_red_flag_min_listings"
+KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS = "multi_listing_red_flag_min_span_days"
 KEY_DESCRIPTION_TRUST_SETTINGS = "description_trust_settings"
 KEY_SOURCE_DOCUMENT_SETTINGS = "source_document_settings"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
@@ -51,6 +56,14 @@ KEY_LLM_PROMPT_LEARNING_MAX_ITEMS = "learning_candidates_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS = "rejection_blocker_suggestions_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS = "rejection_blocker_suggestions_max_words"
 
+KEY_REVIEW_SETTINGS = "review_settings"
+KEY_REVIEW_MAX_EXAMPLES_PER_SKILL = "max_examples_per_skill"
+KEY_REVIEW_MAX_SAMPLES_PER_REJECTION = "max_samples_per_rejection"
+KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT = "capability_suggestion_min_count"
+KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT = "capability_intermediate_min_count"
+KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT = "title_not_target_min_count"
+KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT = "rule_suggestion_min_count"
+
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
@@ -62,6 +75,8 @@ KEY_DATE_RANGE_DAYS = "date_range_days"
 KEY_SEEK_MAX_PAGES = "seek_max_pages"
 KEY_LINKEDIN_HOURS_OLD = "linkedin_hours_old"
 KEY_LINKEDIN_RESULTS_PER_SEARCH = "linkedin_results_per_search"
+KEY_ENFORCE_POSTED_AGE_LIMIT = "enforce_posted_age_limit"
+KEY_SORT_NEWEST_FIRST = "sort_newest_first"
 KEY_PLAYWRIGHT_VIEWPORT_WIDTH = "playwright_viewport_width"
 KEY_PLAYWRIGHT_VIEWPORT_HEIGHT = "playwright_viewport_height"
 KEY_PLAYWRIGHT_SELECTOR_TIMEOUT = "playwright_selector_timeout"
@@ -71,7 +86,7 @@ KEY_ARCHIVE_STALE_AFTER_DAYS = "archive_stale_after_days"
 KEY_HIDDEN_REVIEW_DAYS = "hidden_review_days"
 KEY_MIN_TRUSTED_DESCRIPTION_LENGTH = "min_trusted_description_length"
 
-# Global card highlight controls are shared dashboard presentation settings.
+# Global card highlight controls are shared workspace presentation settings.
 DEFAULT_FIT_HIGHLIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_FIT_HIGHLIGHTS])
 
 # Global search defaults are shared across every profile and keep runtime code data-driven.
@@ -87,6 +102,14 @@ DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_PREFERENCE_
 DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
 
 DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_HISTORY_SETTINGS, {}))
+
+HISTORY_SETTING_LIMITS: dict[str, tuple[int, int]] = {
+    KEY_MAX_HISTORY_SIGHTINGS: (1, 100),
+    KEY_REPEATED_LISTING_MIN_TIMES_SEEN: (1, 100),
+    KEY_REPEATED_LISTING_MIN_SPAN_DAYS: (1, 365),
+    KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS: (1, 100),
+    KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS: (1, 365),
+}
 
 DEFAULT_DESCRIPTION_TRUST_SETTINGS = dict(_MANAGED_ADVANCE_SETTINGS_SEED.get(KEY_DESCRIPTION_TRUST_SETTINGS, {}))
 
@@ -105,6 +128,8 @@ DEFAULT_ONBOARDING_SETTINGS = {
 }
 
 DEFAULT_LLM_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_LLM_SETTINGS])
+
+DEFAULT_REVIEW_SETTINGS = copy.deepcopy(_MANAGED_ADVANCE_SETTINGS_SEED[KEY_REVIEW_SETTINGS])
 
 DEFAULT_LLM_PROMPT_SETTINGS = dict(DEFAULT_LLM_SETTINGS[KEY_LLM_PROMPT_SETTINGS])
 
@@ -155,6 +180,7 @@ DEFAULT_ADVANCE_SETTINGS: dict[str, Any] = {
         KEY_CAPABILITY_STRENGTH_PRESETS: copy.deepcopy(CAPABILITY_STRENGTH_PRESETS),
     },
     KEY_LLM_SETTINGS: copy.deepcopy(DEFAULT_LLM_SETTINGS),
+    KEY_REVIEW_SETTINGS: copy.deepcopy(DEFAULT_REVIEW_SETTINGS),
     "playwright_settings": {
         KEY_PLAYWRIGHT_VIEWPORT_WIDTH: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_VIEWPORT_WIDTH, 1400),
         KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_PLAYWRIGHT_VIEWPORT_HEIGHT, 900),
@@ -379,6 +405,7 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
     llm_source = source.get(KEY_LLM_SETTINGS, {})
     playwright_source = source.get("playwright_settings", {})
+    review_source = source.get(KEY_REVIEW_SETTINGS, {})
 
     if not isinstance(fit_source, dict):
         raise ValueError(f"advance_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
@@ -404,6 +431,8 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
         raise ValueError(f"advance_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
     if not isinstance(llm_source, dict):
         raise ValueError(f"advance_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}")
+    if not isinstance(review_source, dict):
+        raise ValueError(f"advance_settings.{KEY_REVIEW_SETTINGS} must be a dict, got {type(review_source).__name__!r}")
 
     preset_name = str(onboarding_source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]).strip().lower()
     preset_name = preset_name if preset_name in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
@@ -478,6 +507,36 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             DEFAULT_HISTORY_SETTINGS[KEY_HIDDEN_REVIEW_DAYS],
             1,
             365,
+        ),
+        KEY_MAX_HISTORY_SIGHTINGS: _require_int(
+            history_source,
+            KEY_MAX_HISTORY_SIGHTINGS,
+            DEFAULT_HISTORY_SETTINGS[KEY_MAX_HISTORY_SIGHTINGS],
+            *HISTORY_SETTING_LIMITS[KEY_MAX_HISTORY_SIGHTINGS],
+        ),
+        KEY_REPEATED_LISTING_MIN_TIMES_SEEN: _require_int(
+            history_source,
+            KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
+            DEFAULT_HISTORY_SETTINGS[KEY_REPEATED_LISTING_MIN_TIMES_SEEN],
+            *HISTORY_SETTING_LIMITS[KEY_REPEATED_LISTING_MIN_TIMES_SEEN],
+        ),
+        KEY_REPEATED_LISTING_MIN_SPAN_DAYS: _require_int(
+            history_source,
+            KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_REPEATED_LISTING_MIN_SPAN_DAYS],
+            *HISTORY_SETTING_LIMITS[KEY_REPEATED_LISTING_MIN_SPAN_DAYS],
+        ),
+        KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS: _require_int(
+            history_source,
+            KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
+            DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS],
+            *HISTORY_SETTING_LIMITS[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS],
+        ),
+        KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS: _require_int(
+            history_source,
+            KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS],
+            *HISTORY_SETTING_LIMITS[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS],
         ),
     }
 
@@ -600,6 +659,26 @@ def normalize_advance_settings(payload: dict[str, Any] | None) -> dict[str, Any]
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
             KEY_LLM_MAX_CHARS: max_llm_chars,
         },
+        KEY_REVIEW_SETTINGS: {
+            KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: _require_int(
+                review_source, KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL], 1, 50),
+            KEY_REVIEW_MAX_SAMPLES_PER_REJECTION: _require_int(
+                review_source, KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_MAX_SAMPLES_PER_REJECTION], 1, 50),
+            KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT: _require_int(
+                review_source, KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT], 1, 100),
+            KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT: _require_int(
+                review_source, KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT], 1, 100),
+            KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT: _require_int(
+                review_source, KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT], 1, 1000),
+            KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT: _require_int(
+                review_source, KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT], 1, 100),
+        },
         "playwright_settings": {
             KEY_PLAYWRIGHT_VIEWPORT_WIDTH: _require_int(
                 playwright_source,
@@ -643,6 +722,26 @@ def get_hidden_review_days() -> int:
     return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
 
 
+def get_max_history_sightings() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_MAX_HISTORY_SIGHTINGS])
+
+
+def get_repeated_listing_min_times_seen() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_TIMES_SEEN])
+
+
+def get_repeated_listing_min_span_days() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_SPAN_DAYS])
+
+
+def get_multi_listing_red_flag_min_listings() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS])
+
+
+def get_multi_listing_red_flag_min_span_days() -> int:
+    return int(load_advance_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS])
+
+
 def get_min_trusted_description_length() -> int:
     return int(load_advance_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
 
@@ -682,6 +781,10 @@ def load_advance_settings() -> dict[str, Any]:
         _backup_invalid_advance_settings()
         raise AdvanceSettingsLoadError("advance_settings.json must contain a JSON object")
     return normalize_advance_settings(data)
+
+
+def get_review_settings() -> dict[str, Any]:
+    return load_advance_settings()[KEY_REVIEW_SETTINGS]
 
 
 def save_advance_settings(settings: dict[str, Any]) -> dict[str, Any]:

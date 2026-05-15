@@ -14,12 +14,12 @@ Use before editing job history, viewed/applied/hidden state, posting timestamps,
 - `history.py`: review state.
 - `job_identity.py`: stable job keys and cross-source dedup.
 - `posting_utils.py`: posting dates and age.
-- `dashboard_data.py`: historical dashboard records.
+- `workspace_data.py`: historical workspace records.
 - `data/job_history.json`: local review history.
 
 ## Checklist
 - Does this preserve applied/hidden/viewed state?
-- Does dashboard rebuild keep history?
+- Does workspace rebuild keep history?
 - Is the job key stable across sources and runs?
 - Are timestamps normalised before use?
 - Did you run the smallest relevant history/dedup check?

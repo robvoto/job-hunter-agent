@@ -1,5 +1,5 @@
 """
-Dashboard HTML rendering functions.
+Workspace HTML rendering functions.
 
 Produces job card HTML, section HTML,
 filter option HTML, and the full results fragment. No scraping or pipeline
@@ -13,7 +13,7 @@ from datetime import datetime
 from string import Template
 from typing import Dict, List, Optional
 
-from job_hunter_agent.agent_settings import get_dashboard_minimum_score
+from job_hunter_agent.agent_settings import get_workspace_minimum_score
 from job_hunter_agent.capability_matching import (
     build_risk_and_missing_evidence,
     capability_fit_highlights,
@@ -73,11 +73,11 @@ from job_hunter_agent.text_processing import (
 from job_hunter_agent.utils import safe_html
 from job_hunter_agent.work_mode_extraction import extract_from_text, WORK_MODE_UNKNOWN
 
-DASHBOARD_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
+WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
 ARCHIVE_LABEL = "Saved From Earlier Searches"
-ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your dashboard."
+ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your workspace."
 ARCHIVE_CONTEXT_PREFIX = "Saved From Earlier Searches"
 POTENTIAL_DUPLICATE_LABEL = "Potential duplicate"
 POTENTIAL_DUPLICATE_HELP_TEXT = "Informational only. No merge, hide, or review action is taken from this signal."
@@ -194,7 +194,7 @@ def score_filter_thresholds(
     include_borderline: Optional[bool] = None,
 ) -> List[int]:
     active_profile = scoring_profile or load_profile()
-    show_borderline = DASHBOARD_DEBUG_MODE if include_borderline is None else bool(include_borderline)
+    show_borderline = WORKSPACE_DEBUG_MODE if include_borderline is None else bool(include_borderline)
     scores = [fit_score(record, active_profile) for record in records]
     match_levels = get_match_levels(active_profile)
     thresholds = [int(level.get("minimum_score", 0) or 0) for level in match_levels if int(level.get("minimum_score", 0) or 0) > 0]
@@ -207,18 +207,18 @@ def score_filter_thresholds(
 def render_score_filter_options(
     records: List[dict],
     scoring_profile: Optional[dict] = None,
-    dashboard_min_score: Optional[int] = None,
+    workspace_min_score: Optional[int] = None,
     include_borderline: Optional[bool] = None,
 ) -> str:
     active_profile = scoring_profile or load_profile()
-    active_dashboard_min_score = (
-        int(dashboard_min_score)
-        if dashboard_min_score is not None
-        else get_dashboard_minimum_score()
+    active_workspace_min_score = (
+        int(workspace_min_score)
+        if workspace_min_score is not None
+        else get_workspace_minimum_score()
     )
     options = ['<option value="all">All match levels</option>']
     for threshold in score_filter_thresholds(records, active_profile, include_borderline=include_borderline):
-        selected_attr = " selected" if active_dashboard_min_score == threshold else ""
+        selected_attr = " selected" if active_workspace_min_score == threshold else ""
         options.append(
             f'<option value="{threshold}"{selected_attr}>'
             f'{safe_html(score_filter_option_label(threshold, active_profile))}</option>'
@@ -379,7 +379,7 @@ def render_job_card(
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
-    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=DASHBOARD_DEBUG_MODE)
+    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=WORKSPACE_DEBUG_MODE)
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
     posted_age_days = current_posted_age_days(record)
@@ -432,7 +432,7 @@ def render_job_card(
     elif archived:
         badges.append(render_badge(ARCHIVE_LABEL, "badge-archive", ARCHIVE_BADGE_TOOLTIP))
     if not applied_record and not seen_by_you:
-        badges.append(render_badge("New To You", "badge-new", "You have not opened this role from the dashboard yet."))
+        badges.append(render_badge("New To You", "badge-new", "You have not opened this role from the workspace yet."))
     if is_stale:
         badges.append(render_badge("15+ Days Old", "badge-stale", "This role is older, but still saved for reference."))
     elif seen_by_you:
@@ -525,7 +525,7 @@ def render_job_card(
         f'<div class="match-tile {fit_tone_class}" style="--match-score: {score_percent}%;">'
         + (
             f'<span class="match-tile-number">{fit_points}</span>'
-            if DASHBOARD_DEBUG_MODE
+            if WORKSPACE_DEBUG_MODE
             else ""
         )
         + f'<span class="match-tile-label">{safe_html(fit_label)}</span>'
@@ -672,7 +672,7 @@ def render_job_card(
             f'<ul>{"".join(f"<li>{item}</li>" for item in linked_items)}</ul>'
             '</div>'
         )
-    visible_penalties = negative_score_reasons(score_breakdown, include_values=DASHBOARD_DEBUG_MODE)
+    visible_penalties = negative_score_reasons(score_breakdown, include_values=WORKSPACE_DEBUG_MODE)
     if description_issue:
         visible_penalties = [
             item for item in visible_penalties
@@ -685,7 +685,7 @@ def render_job_card(
     ])[:6]
     if description_issue:
         description_issue_items = [DESCRIPTION_CAPTURE_ISSUE]
-        if DASHBOARD_DEBUG_MODE:
+        if WORKSPACE_DEBUG_MODE:
             capture_facts = []
             status = compact_whitespace(record.get("details_status") or "")
             source_name = compact_whitespace(record.get("description_source") or "")
@@ -728,14 +728,14 @@ def render_job_card(
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_items)}</ul>'
             '</div>'
         )
-    elif DASHBOARD_DEBUG_MODE:
+    elif WORKSPACE_DEBUG_MODE:
         insight_sections.append(
             '<div class="job-insight-group job-insight-muted">'
             '<strong>Watchouts</strong>'
             '<p class="insight-unavailable-note">No explicit risks detected from the captured description.</p>'
             '</div>'
         )
-    if DASHBOARD_DEBUG_MODE:
+    if WORKSPACE_DEBUG_MODE:
         negative_reasons = negative_score_reasons(score_breakdown)
         if negative_reasons:
             insight_sections.append(
@@ -752,7 +752,7 @@ def render_job_card(
                 f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in gap_reasons)}</ul>'
                 '</div>'
             )
-    if DASHBOARD_DEBUG_MODE and score_breakdown:
+    if WORKSPACE_DEBUG_MODE and score_breakdown:
         score_breakdown_html = "".join(
             f"<li>{safe_html(str(item['label']))}: {int(item['value']):+d}</li>"
             for item in score_breakdown
@@ -885,14 +885,14 @@ def render_section(
     )
 
 
-def _render_results_fragment(context: dict) -> str:
+def render_results_fragment(context: dict) -> str:
     if not RESULTS_TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Missing template: {RESULTS_TEMPLATE_PATH}")
     template = Template(RESULTS_TEMPLATE_PATH.read_text(encoding="utf-8"))
     return template.safe_substitute(context)
 
 
-def _render_match_level_guide_html(profile: Optional[dict] = None) -> str:
+def render_match_level_guide_html(profile: Optional[dict] = None) -> str:
     active_profile = profile or load_profile()
     match_levels = get_match_levels(active_profile)
     guide_bits = [

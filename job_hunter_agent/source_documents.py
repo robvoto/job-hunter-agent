@@ -23,7 +23,7 @@ from job_hunter_agent.profile_learning import (
     build_learning_patch,
     build_role_title_review_signals,
     clear_capability_debug_log,
-    extract_title_pattern_suggestions, extract_location_hint, _extract_match_preferences,
+    extract_title_pattern_suggestions,
     repair_text,
 )
 from job_hunter_agent.profile_store import (
@@ -339,22 +339,13 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     if manual_locations:
         search_settings["locations"] = manual_locations
     else:
-        # Try to default location from CV if not provided manually
-        hint = extract_location_hint(combined_text)
-        if hint and not search_settings.get("locations"):
-            search_settings["locations"] = [hint]
-            match_preferences["home_location"] = hint
+        llm_location = match_preferences.get("home_location", "").strip()
+        if llm_location and not search_settings.get("locations"):
+            search_settings["locations"] = [llm_location]
 
     # 3. Engagement
     eng_type = str(prefs.get("engagement_type") or ENGAGEMENT_TYPE_BOTH).lower()
     match_preferences["engagement_type"] = eng_type
-
-    # 4. Merge text-extracted preferences ("Warnings")
-    text_prefs = _extract_match_preferences(combined_text)
-    if text_prefs:
-        match_preferences.update(text_prefs)
-        if text_prefs.get("home_location") and not search_settings.get("locations"):
-            search_settings["locations"] = [text_prefs["home_location"]]
 
     search_settings["locations"] = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()][:1]
 
