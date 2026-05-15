@@ -1,4 +1,4 @@
-﻿﻿"""Profile persistence and defaults.
+"""Profile persistence and defaults.
 
 Main goals:
 - define the runtime profile structure used by matching and review flows
@@ -9,6 +9,8 @@ Notes:
 - profile.json is the runtime source of truth
 - onboarding and imports may generate it, and admin refines it over time
 """
+
+from __future__ import annotations
 
 import copy
 import json
@@ -351,7 +353,7 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     preset_name = raw_preset if raw_preset in global_presets else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
     preset_values = global_presets[preset_name]
 
-    # Merge layer: code defaults â†’ global settings â†’ chosen preset â†’ all explicit source overrides.
+    # Merge layer: code defaults -> global settings -> chosen preset -> all explicit source overrides.
     merged: dict[str, Any] = {**DEFAULT_ONBOARDING_SETTINGS}
     merged.update({k: v for k, v in global_onboarding.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS})
     merged.update(preset_values)

@@ -185,41 +185,6 @@
       line-height: 1.5;
       max-width: 52ch;
     }
-    .ws-flash-steps {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 18px;
-    }
-    .ws-flash-step {
-      opacity: 0;
-      display: grid;
-      gap: 6px;
-      padding: 14px 14px 15px;
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-muted) 78%, transparent);
-      border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
-      transform: translateY(10px);
-      animation: wsFlashItemIn 520ms ease forwards;
-    }
-    .ws-flash-step:nth-child(2) {
-      animation-delay: 70ms;
-    }
-    .ws-flash-step:nth-child(3) {
-      animation-delay: 140ms;
-    }
-    .ws-flash-step-title {
-      margin: 0;
-      font-size: 0.92rem;
-      font-weight: 800;
-      color: var(--text-primary);
-    }
-    .ws-flash-step-copy {
-      margin: 0;
-      font-size: 0.88rem;
-      line-height: 1.45;
-      color: var(--text-muted);
-    }
     .ws-flash-footer {
       margin-top: 18px;
       padding: 11px 13px;
@@ -289,17 +254,6 @@
         transform: translateY(0) scale(1);
       }
     }
-    @keyframes wsFlashItemIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
     /* Results mount */
     #results-mount { min-height: calc(100vh - 54px); }
     #results-loading {
@@ -347,9 +301,6 @@
         padding: 14px;
       }
       .ws-flash-body {
-        grid-template-columns: minmax(0, 1fr);
-      }
-      .ws-flash-steps {
         grid-template-columns: minmax(0, 1fr);
       }
       .ws-flash-actions {
@@ -741,20 +692,6 @@
                 <h1 class="ws-flash-title">Welcome back</h1>
                 <p class="ws-flash-subtitle">Your AI job search workspace is ready.</p>
                 <p class="ws-flash-helper">${profileSourceCopy} We prepared your first search settings so you can start from here.</p>
-                <div class="ws-flash-steps">
-                  <article class="ws-flash-step">
-                    <h3 class="ws-flash-step-title">1. Review matches</h3>
-                    <p class="ws-flash-step-copy">Open jobs and decide what is worth your time.</p>
-                  </article>
-                  <article class="ws-flash-step">
-                    <h3 class="ws-flash-step-title">2. Run a search</h3>
-                    <p class="ws-flash-step-copy">Fetch fresh jobs anytime.</p>
-                  </article>
-                  <article class="ws-flash-step">
-                    <h3 class="ws-flash-step-title">3. Settings</h3>
-                    <p class="ws-flash-step-copy">Adjust titles, salary, location, and filters.</p>
-                  </article>
-                </div>
                 <div class="ws-flash-footer">Next search: ${nextSearchSummary}</div>
               </div>
               <aside class="ws-flash-side">
@@ -762,8 +699,8 @@
                 <div class="ws-flash-action-list">
                   <button class="btn btn-primary ws-flash-primary" id="ws_flash_run_search" type="button">Run search</button>
                   <div class="ws-flash-actions">
-                    <a href="/settings" class="btn btn-secondary">Open settings</a>
                     <button class="btn btn-secondary" id="ws_flash_dismiss" type="button">Dismiss</button>
+                    <a href="/settings" class="btn btn-secondary">Open settings</a>
                   </div>
                 </div>
                 <label class="ws-flash-optout" for="ws_flash_opt_out">

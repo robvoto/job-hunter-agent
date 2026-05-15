@@ -1,4 +1,4 @@
-﻿"""LLM fit-decision gateway.
+"""LLM fit-decision gateway.
 
 Main goals:
 - build the compact candidate context sent to the LLM
@@ -10,6 +10,8 @@ Notes:
 - the AI fit brief is preferred over raw background text to reduce noise and cost
 """
 
+from __future__ import annotations
+
 import hashlib
 import json as _json_mod
 import os
@@ -19,6 +21,7 @@ from typing import Any, Dict
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 from job_hunter_agent.user_settings import load_user_settings, DEFAULT_USER_SETTINGS
 from job_hunter_agent.llm_protocol import (
@@ -58,16 +61,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_REVIEW_GRADE_GUIDANCE,
     LLM_REVIEW_PROMPT_SHAPE,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
-)
-from job_hunter_agent.profile_store import (
-    get_candidate_profile_tier_weights,
-    get_candidate_profile_tiers,
-    DATA_DIR,
-    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
-    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
-    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
-    KEY_CAPABILITY_PROFILE_RULES,
-    load_profile,
 )
 from job_hunter_agent.hard_blocker_rules import normalize_rejection_blocker_suggestions as _normalize_rejection_blocker_suggestions
 from job_hunter_agent.global_settings import (
@@ -194,6 +187,22 @@ def _log_llm_model_once() -> str:
     return model
 
 
+class _LLMLearningCandidate(BaseModel):
+    signal: str
+    suggested_category: str
+    original_texts: list[str] = Field(default_factory=list)
+
+
+class _LLMReviewDecision(BaseModel):
+    decision: str
+    grade: str
+
+
+class _LLMReviewPayload(BaseModel):
+    fit_review: _LLMReviewDecision | None = None
+    learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
+
+
 _api_key = os.environ.get("OPENAI_API_KEY")
 client = OpenAI(api_key=_api_key) if (_api_key and not _NO_LLM_MODE) else None
 ALLOWED_LEARNING_CATEGORIES = frozenset(VALID_SIGNAL_CATEGORIES - {CATEGORY_HARD_BLOCKER_PATTERN})
@@ -219,6 +228,15 @@ def llm_is_enabled() -> bool:
 
 
 def build_profile_prompt_context() -> str:
+    from job_hunter_agent.profile_store import (
+        get_candidate_profile_tier_weights,
+        get_candidate_profile_tiers,
+        KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_CAPABILITY_PROFILE_RULES,
+        load_profile,
+    )
     profile = load_profile()
     llm_profile_brief = str(profile.get("llm_profile_brief") or "").strip()
     star_evidence_text = str(profile.get("star_evidence_text") or "").strip()
@@ -301,6 +319,7 @@ def build_profile_prompt_context() -> str:
 
 
 def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
+    from job_hunter_agent.profile_store import load_profile
     active_profile = profile if isinstance(profile, dict) else load_profile()
     parts = [LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER]
     parts.extend(f"- {line}" for line in FIT_REVIEW_DEFAULT_LINES)
@@ -312,6 +331,7 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 
 
 def build_capability_naming_guidance(profile: dict[str, Any] | None = None) -> str:
+    from job_hunter_agent.profile_store import load_profile
     active_profile = profile if isinstance(profile, dict) else load_profile()
     parts = [
         LLM_PROMPT_CAPABILITY_NAMING_INTRO,
@@ -326,6 +346,7 @@ def build_capability_naming_guidance(profile: dict[str, Any] | None = None) -> s
     return "\n".join(parts)
 
 def build_system_prompt() -> str:
+    from job_hunter_agent.profile_store import load_profile
     profile = load_profile()
     parts = [
         LLM_PROMPT_SYSTEM_REVIEW_INTRO,
@@ -435,9 +456,9 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
 
 def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        has_explicit_fit_review = "fit_review" in value or "decision" in value or "grade" in value
+        fit_review = value.get("fit_review")
+        has_explicit_fit_review = isinstance(fit_review, dict) or "decision" in value or "grade" in value
         if has_explicit_fit_review:
-            fit_review = value.get("fit_review")
             if fit_review is None:
                 fit_review = {
                     "decision": value.get("decision"),
@@ -448,7 +469,7 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
             }
 
-        if "learning_candidates" in value or value.get("learning_only"):
+        if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
             return {
                 "fit_review": None,
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
@@ -615,19 +636,24 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
 
     try:
         model = _log_llm_model_once()
-        resp = client.responses.create(
+        resp = client.responses.parse(
             model=model,
             input=[
                 {"role": "system", "content": _build_learning_prompt(job_description_text, fit_review=fit_review)},
                 {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + job_description_text},
             ],
             max_output_tokens=LLM_MAX_TOKENS_FIT_DECISION if fit_review else LLM_MAX_TOKENS_CV_EXTRACTION,
+            text_format=_LLMReviewPayload,
         )
         _log_llm_call(resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model)
     except Exception as exc:
         raise RuntimeError(f"LLM review request failed: {exc}") from exc
 
-    payload = normalize_llm_review_payload(resp.output_text)
+    parsed = getattr(resp, "output_parsed", None)
+    if parsed is None:
+        raise ValueError("LLM review payload is missing parsed output")
+
+    payload = normalize_llm_review_payload(parsed.model_dump())
     if fit_review:
         if payload.get("fit_review") is None:
             raise ValueError("LLM fit review payload is missing fit_review")
@@ -660,5 +686,3 @@ def get_cost_summary() -> dict[str, Any]:
         pass
     grand = sum(v["cost_usd"] for v in totals.values())
     return {"by_purpose": totals, "grand_total_usd": round(grand, 6)}
-
-

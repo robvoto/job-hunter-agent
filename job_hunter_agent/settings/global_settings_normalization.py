@@ -1,0 +1,700 @@
+"""Normalization logic for global settings."""
+
+from __future__ import annotations
+
+import copy
+from typing import Any
+
+from job_hunter_agent.settings.global_settings_defaults import (
+    CAPABILITY_STRENGTH_PRESETS,
+    DEFAULT_COUNTRY_SUFFIX,
+    DEFAULT_DESCRIPTION_TRUST_SETTINGS,
+    DEFAULT_EVIDENCE_TIER_WEIGHTS,
+    DEFAULT_FIT_HIGHLIGHTS,
+    DEFAULT_HISTORY_SETTINGS,
+    DEFAULT_LLM_PROMPT_SETTINGS,
+    DEFAULT_LLM_SETTINGS,
+    DEFAULT_ONBOARDING_SETTINGS,
+    DEFAULT_PLAYWRIGHT_BROWSER_MODE,
+    DEFAULT_PLAYWRIGHT_SETTINGS,
+    DEFAULT_PREFERENCE_WEIGHTS,
+    DEFAULT_REVIEW_SETTINGS,
+    DEFAULT_SALARY_LIMITS,
+    DEFAULT_SEARCH_SETTINGS,
+    DEFAULT_SOURCE_DOCUMENT_SETTINGS,
+    HISTORY_SETTING_LIMITS,
+    KEY_ARCHIVE_STALE_AFTER_DAYS,
+    KEY_CAPABILITY_STRENGTH_PRESETS,
+    KEY_DATE_RANGE_DAYS,
+    KEY_DEFAULT_COUNTRY_SUFFIX,
+    KEY_DESCRIPTION_TRUST_SETTINGS,
+    KEY_ENFORCE_POSTED_AGE_LIMIT,
+    KEY_EVIDENCE_TIER_WEIGHTS,
+    KEY_FIT_HIGHLIGHTS,
+    KEY_HISTORY_SETTINGS,
+    KEY_HIDDEN_REVIEW_DAYS,
+    KEY_LIMITS,
+    KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_LLM_MAX_CHARS,
+    KEY_LLM_MAX_CHARS_LIMITS,
+    KEY_LLM_PROMPT_EVIDENCE_TIERS,
+    KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
+    KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
+    KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
+    KEY_LLM_PROMPT_SETTINGS,
+    KEY_LLM_PROMPT_TEMPLATES,
+    KEY_LLM_PRICING_PER_1M,
+    KEY_LLM_SETTINGS,
+    KEY_MAX_HISTORY_SIGHTINGS,
+    KEY_MODEL_OPTIONS,
+    KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
+    KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
+    KEY_ONBOARDING_SETTINGS,
+    KEY_PLAYWRIGHT_BROWSER_MODE,
+    KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+    KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
+    KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+    KEY_PREFERENCE_WEIGHTS,
+    KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
+    KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
+    KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
+    KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
+    KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
+    KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
+    KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
+    KEY_REVIEW_SETTINGS,
+    KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+    KEY_SALARY_LIMITS,
+    KEY_SEARCH_LIMITS,
+    KEY_SEARCH_SETTINGS,
+    KEY_SORT_NEWEST_FIRST,
+    KEY_SOURCE_DOCUMENT_SETTINGS,
+    KEY_SOURCE_DOCUMENT_SUFFIXES,
+    KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
+    ONBOARDING_SETTING_LIMITS,
+    SEARCH_SETTING_LIMITS,
+    KEY_SEEK_MAX_PAGES,
+)
+
+
+def _require_int(source: dict[str, Any], key: str, default: int, minimum: int, maximum: int) -> int:
+    raw = source.get(key, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"global_settings.{key} must be an integer, got {raw!r}") from exc
+    if value < minimum or value > maximum:
+        raise ValueError(f"global_settings.{key} must be between {minimum} and {maximum}, got {value}")
+    return value
+
+
+def _require_float(source: dict[str, Any], key: str, default: float, minimum: float, maximum: float) -> float:
+    raw = source.get(key, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"global_settings.{key} must be a number, got {raw!r}") from exc
+    if value < minimum or value > maximum:
+        raise ValueError(f"global_settings.{key} must be between {minimum} and {maximum}, got {value}")
+    return value
+
+
+def _normalize_float_map(
+    source: dict[str, Any],
+    defaults: dict[str, float],
+    *,
+    minimum: float = 0.0,
+    maximum: float = 1.0,
+) -> dict[str, float]:
+    normalized: dict[str, float] = {}
+    for key, default in defaults.items():
+        normalized[key] = _require_float(source, key, float(default), minimum, maximum)
+    return normalized
+
+
+def _normalize_int_bounds(source: dict[str, Any], defaults: dict[str, int]) -> dict[str, int]:
+    min_value = _require_int(source, "min", int(defaults["min"]), 1, 10_000_000)
+    max_value = _require_int(source, "max", int(defaults["max"]), min_value, 10_000_000)
+    return {"min": min_value, "max": max_value}
+
+
+def _normalize_llm_pricing_map(source: dict[str, Any], defaults: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
+    normalized: dict[str, dict[str, float]] = {}
+    for model, raw_prices in source.items():
+        if not isinstance(raw_prices, dict):
+            raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M}.{model} must be a dict")
+        default_prices = defaults.get(model, {"input": 0.0, "output": 0.0})
+        normalized[model] = {
+            "input": _require_float(raw_prices, "input", float(default_prices["input"]), 0.0, 10_000.0),
+            "output": _require_float(raw_prices, "output", float(default_prices["output"]), 0.0, 10_000.0),
+        }
+    if not normalized:
+        normalized = copy.deepcopy(defaults)
+    return normalized
+
+
+def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
+    templates_source = source.get(KEY_LLM_PROMPT_TEMPLATES, {})
+    if not isinstance(templates_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_TEMPLATES} must be a dict"
+        )
+    evidence_tiers_source = source.get(KEY_LLM_PROMPT_EVIDENCE_TIERS, [])
+    if not isinstance(evidence_tiers_source, list):
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS} must be a list"
+        )
+
+    templates = {
+        name: str(templates_source.get(name) or default).strip()
+        for name, default in DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_TEMPLATES].items()
+    }
+    evidence_tiers: list[dict[str, Any]] = []
+    default_tiers = DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_EVIDENCE_TIERS]
+    for index, default_tier in enumerate(default_tiers):
+        tier_source = evidence_tiers_source[index] if index < len(evidence_tiers_source) else {}
+        if not isinstance(tier_source, dict):
+            tier_source = {}
+        profile_key = str(tier_source.get("profile_key") or default_tier["profile_key"]).strip()
+        if not profile_key:
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_EVIDENCE_TIERS}[{index}].profile_key is required"
+            )
+        evidence_tiers.append(
+            {
+                "profile_key": profile_key,
+                "label": str(tier_source.get("label") or default_tier["label"]).strip(),
+                "weight_label": str(tier_source.get("weight_label") or default_tier["weight_label"]).strip(),
+                "default_weight": _require_float(
+                    tier_source,
+                    "default_weight",
+                    float(default_tier["default_weight"]),
+                    0.0,
+                    10.0,
+                ),
+                "limit": _require_int(
+                    tier_source,
+                    "limit",
+                    int(default_tier["limit"]),
+                    1,
+                    10_000,
+                ),
+            }
+        )
+
+    try:
+        learning_max_items = int(
+            source.get(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS])
+            or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS]
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be an integer"
+        ) from exc
+    if learning_max_items < 1 or learning_max_items > 20:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_LEARNING_MAX_ITEMS} must be between 1 and 20"
+        )
+    try:
+        rejection_blocker_max_items = int(
+            source.get(
+                KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
+                DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS],
+            )
+            or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS]
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be an integer"
+        ) from exc
+    if rejection_blocker_max_items < 1 or rejection_blocker_max_items > 20:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS} must be between 1 and 20"
+        )
+    try:
+        rejection_blocker_max_words = int(
+            source.get(
+                KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
+                DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS],
+            )
+            or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS]
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be an integer"
+        ) from exc
+    if rejection_blocker_max_words < 1 or rejection_blocker_max_words > 20:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS} must be between 1 and 20"
+        )
+
+    return {
+        KEY_LLM_PROMPT_TEMPLATES: templates,
+        KEY_LLM_PROMPT_EVIDENCE_TIERS: evidence_tiers,
+        KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS: rejection_blocker_max_words,
+    }
+
+
+def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
+    raw = source.get(key, default)
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    return bool(raw)
+
+
+def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[str]) -> list[str]:
+    raw_suffixes = source.get(KEY_SOURCE_DOCUMENT_SUFFIXES, defaults)
+    if not isinstance(raw_suffixes, list):
+        raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must be a list")
+
+    normalized: list[str] = []
+    for value in raw_suffixes:
+        suffix = str(value or "").strip().lower()
+        if not suffix:
+            continue
+        if not suffix.startswith("."):
+            raise ValueError(
+                f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must start with '.'"
+            )
+        if " " in suffix:
+            raise ValueError(
+                f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} entries must not contain spaces"
+            )
+        if suffix not in normalized:
+            normalized.append(suffix)
+    if not normalized:
+        raise ValueError(
+            f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must contain at least one suffix"
+        )
+    return normalized
+
+
+def _normalize_limit_map(
+    source: dict[str, Any],
+    defaults: dict[str, dict[str, int]],
+    *,
+    minimum: int = 0,
+    maximum: int = 10_000_000,
+) -> dict[str, dict[str, int]]:
+    normalized: dict[str, dict[str, int]] = {}
+    for key, default in defaults.items():
+        raw_bounds = source.get(key, {})
+        if not isinstance(raw_bounds, dict):
+            raw_bounds = {}
+        normalized[key] = {
+            "min": _require_int(raw_bounds, "min", int(default.get("min", minimum)), minimum, maximum),
+            "max": _require_int(raw_bounds, "max", int(default.get("max", maximum)), minimum, maximum),
+        }
+        if normalized[key]["min"] > normalized[key]["max"]:
+            raise ValueError(f"global_settings.{key}.min must be <= max")
+    return normalized
+
+
+def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
+    source = payload if isinstance(payload, dict) else {}
+
+    fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
+    search_source = source.get(KEY_SEARCH_SETTINGS, {})
+
+    limits_source = source.get(KEY_LIMITS, {})
+    search_limits_source = limits_source.get("search") or source.get(KEY_SEARCH_LIMITS, {})
+    salary_limits_source = limits_source.get("salary") or source.get(KEY_SALARY_LIMITS, {})
+    onboarding_limits_source = limits_source.get("onboarding", {})
+    history_limits_source = limits_source.get("history", {})
+
+    preference_source = source.get(KEY_PREFERENCE_WEIGHTS, {})
+    evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
+    history_source = source.get(KEY_HISTORY_SETTINGS, {})
+    description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
+    source_document_source = source.get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
+    default_country_suffix = str(source.get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)).strip()
+    onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
+    llm_source = source.get(KEY_LLM_SETTINGS, {})
+    playwright_source = source.get("playwright_settings", {})
+    review_source = source.get(KEY_REVIEW_SETTINGS, {})
+
+    if not isinstance(fit_source, dict):
+        raise ValueError(f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
+    if not isinstance(search_source, dict):
+        raise ValueError(f"global_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}")
+    if not isinstance(limits_source, dict):
+        raise ValueError(f"global_settings.{KEY_LIMITS} must be a dict, got {type(limits_source).__name__!r}")
+    if not isinstance(preference_source, dict):
+        raise ValueError(f"global_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
+    if not isinstance(evidence_source, dict):
+        raise ValueError(f"global_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}")
+    if not isinstance(history_source, dict):
+        raise ValueError(f"global_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}")
+    if not isinstance(description_trust_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}"
+        )
+    if not isinstance(source_document_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS} must be a dict, got {type(source_document_source).__name__!r}"
+        )
+    if not default_country_suffix:
+        raise ValueError("global_settings.default_country_suffix must not be empty")
+    if not isinstance(playwright_source, dict):
+        raise ValueError(f"global_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}")
+    if not isinstance(onboarding_source, dict):
+        raise ValueError(f"global_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
+    if not isinstance(llm_source, dict):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}")
+    if not isinstance(review_source, dict):
+        raise ValueError(f"global_settings.{KEY_REVIEW_SETTINGS} must be a dict, got {type(review_source).__name__!r}")
+
+    preset_name = str(
+        onboarding_source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    ).strip().lower()
+    preset_name = preset_name if preset_name in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    preset_defaults = CAPABILITY_STRENGTH_PRESETS[preset_name]
+    merged_onboarding = {
+        **DEFAULT_ONBOARDING_SETTINGS,
+        **preset_defaults,
+        **{k: v for k, v in onboarding_source.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS},
+    }
+
+    model_options_source = llm_source.get(KEY_MODEL_OPTIONS, DEFAULT_LLM_SETTINGS[KEY_MODEL_OPTIONS])
+    if not isinstance(model_options_source, list):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must be a list")
+    normalized_model_options: list[str] = []
+    for value in model_options_source:
+        model = str(value or "").strip()
+        if model and model not in normalized_model_options:
+            normalized_model_options.append(model)
+    if not normalized_model_options:
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must contain at least one model")
+    pricing_source = llm_source.get(KEY_LLM_PRICING_PER_1M, {})
+    if not isinstance(pricing_source, dict):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict")
+    normalized_llm_pricing = _normalize_llm_pricing_map(pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M])
+    max_chars_limits_source = llm_source.get(KEY_LLM_MAX_CHARS_LIMITS, {})
+    if not isinstance(max_chars_limits_source, dict):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS_LIMITS} must be a dict")
+    normalized_max_chars_limits = _normalize_int_bounds(
+        max_chars_limits_source,
+        DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS_LIMITS],
+    )
+    prompt_source = llm_source.get(KEY_LLM_PROMPT_SETTINGS, {})
+    if not isinstance(prompt_source, dict):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
+    normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source)
+
+    try:
+        max_llm_chars = int(
+            llm_source.get(KEY_LLM_MAX_CHARS, DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS])
+            or DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS]
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be an integer") from exc
+    if max_llm_chars < normalized_max_chars_limits["min"] or max_llm_chars > normalized_max_chars_limits["max"]:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be between "
+            f"{normalized_max_chars_limits['min']} and {normalized_max_chars_limits['max']}"
+        )
+
+    preset_table_source = onboarding_source.get(KEY_CAPABILITY_STRENGTH_PRESETS, {})
+    if not isinstance(preset_table_source, dict):
+        preset_table_source = {}
+    normalized_preset_table: dict[str, dict[str, int]] = {}
+    for preset_key, preset_defaults_source in CAPABILITY_STRENGTH_PRESETS.items():
+        preset_payload = preset_table_source.get(preset_key, {})
+        if not isinstance(preset_payload, dict):
+            preset_payload = {}
+        normalized_preset_table[preset_key] = {
+            field: _require_int(preset_payload, field, int(default_value), 1, 360)
+            for field, default_value in preset_defaults_source.items()
+        }
+
+    normalized_search_limits: dict[str, dict[str, int]] = {}
+    for limit_key, default_bounds in SEARCH_SETTING_LIMITS.items():
+        bounds_source = search_limits_source.get(limit_key, {})
+        if not isinstance(bounds_source, dict):
+            bounds_source = {}
+        min_value = _require_int(bounds_source, "min", int(default_bounds["min"]), 0, 10_000)
+        max_value = _require_int(bounds_source, "max", int(default_bounds["max"]), 1, 10_000)
+        if min_value > max_value:
+            raise ValueError(f"global_settings.search_limits.{limit_key}.min must be <= max")
+        normalized_search_limits[limit_key] = {"min": min_value, "max": max_value}
+
+    normalized_salary_limits = _normalize_limit_map(salary_limits_source, DEFAULT_SALARY_LIMITS, maximum=10_000_000)
+    normalized_onboarding_limits = _normalize_limit_map(
+        onboarding_limits_source, {k: {"min": v[0], "max": v[1]} for k, v in ONBOARDING_SETTING_LIMITS.items()}, minimum=1, maximum=1000
+    )
+    normalized_history_limits = _normalize_limit_map(
+        history_limits_source, {k: {"min": v[0], "max": v[1]} for k, v in HISTORY_SETTING_LIMITS.items()}, minimum=1, maximum=1000
+    )
+
+    normalized_history_settings = {
+        KEY_ARCHIVE_STALE_AFTER_DAYS: _require_int(
+            history_source,
+            KEY_ARCHIVE_STALE_AFTER_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_ARCHIVE_STALE_AFTER_DAYS],
+            1,
+            365,
+        ),
+        KEY_HIDDEN_REVIEW_DAYS: _require_int(
+            history_source,
+            KEY_HIDDEN_REVIEW_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_HIDDEN_REVIEW_DAYS],
+            1,
+            365,
+        ),
+        KEY_MAX_HISTORY_SIGHTINGS: _require_int(
+            history_source,
+            KEY_MAX_HISTORY_SIGHTINGS,
+            DEFAULT_HISTORY_SETTINGS[KEY_MAX_HISTORY_SIGHTINGS],
+            normalized_history_limits[KEY_MAX_HISTORY_SIGHTINGS]["min"],
+            normalized_history_limits[KEY_MAX_HISTORY_SIGHTINGS]["max"],
+        ),
+        KEY_REPEATED_LISTING_MIN_TIMES_SEEN: _require_int(
+            history_source,
+            KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
+            DEFAULT_HISTORY_SETTINGS[KEY_REPEATED_LISTING_MIN_TIMES_SEEN],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_TIMES_SEEN]["min"],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_TIMES_SEEN]["max"],
+        ),
+        KEY_REPEATED_LISTING_MIN_SPAN_DAYS: _require_int(
+            history_source,
+            KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_REPEATED_LISTING_MIN_SPAN_DAYS],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_SPAN_DAYS]["min"],
+            normalized_history_limits[KEY_REPEATED_LISTING_MIN_SPAN_DAYS]["max"],
+        ),
+        KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS: _require_int(
+            history_source,
+            KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
+            DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS]["min"],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS]["max"],
+        ),
+        KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS: _require_int(
+            history_source,
+            KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]["min"],
+            normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]["max"],
+        ),
+    }
+
+    normalized_description_trust_settings = {
+        KEY_MIN_TRUSTED_DESCRIPTION_LENGTH: _require_int(
+            description_trust_source,
+            KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
+            DEFAULT_DESCRIPTION_TRUST_SETTINGS[KEY_MIN_TRUSTED_DESCRIPTION_LENGTH],
+            1,
+            100_000,
+        ),
+    }
+    normalized_source_document_settings = {
+        KEY_SOURCE_DOCUMENT_SUFFIXES: _normalize_source_document_suffixes(
+            source_document_source,
+            DEFAULT_SOURCE_DOCUMENT_SETTINGS[KEY_SOURCE_DOCUMENT_SUFFIXES],
+        ),
+    }
+
+    browser_mode = str(
+        playwright_source.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE) or DEFAULT_PLAYWRIGHT_BROWSER_MODE
+    ).strip().lower()
+    if browser_mode not in {"ephemeral", "persistent"}:
+        raise ValueError("global_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'")
+
+    return {
+        KEY_FIT_HIGHLIGHTS: {
+            "strong_capability_count": _require_int(
+                fit_source, "strong_capability_count", DEFAULT_FIT_HIGHLIGHTS["strong_capability_count"], 0, 10
+            ),
+            "working_capability_count": _require_int(
+                fit_source, "working_capability_count", DEFAULT_FIT_HIGHLIGHTS["working_capability_count"], 0, 10
+            ),
+            "basic_capability_count": _require_int(
+                fit_source, "basic_capability_count", DEFAULT_FIT_HIGHLIGHTS["basic_capability_count"], 0, 10
+            ),
+            "reviewed_signal_count": _require_int(
+                fit_source, "reviewed_signal_count", DEFAULT_FIT_HIGHLIGHTS["reviewed_signal_count"], 0, 10
+            ),
+            "max_highlights": _require_int(fit_source, "max_highlights", DEFAULT_FIT_HIGHLIGHTS["max_highlights"], 1, 20),
+        },
+        KEY_SEARCH_SETTINGS: {
+            "keywords": str(search_source.get("keywords") or "").strip(),
+            "locations": [str(value).strip() for value in search_source.get("locations", []) if str(value).strip()],
+            "classification_ids": [str(value).strip() for value in search_source.get("classification_ids", []) if str(value).strip()],
+            KEY_DATE_RANGE_DAYS: _require_int(
+                search_source,
+                KEY_DATE_RANGE_DAYS,
+                DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS],
+                normalized_search_limits[KEY_DATE_RANGE_DAYS]["min"],
+                normalized_search_limits[KEY_DATE_RANGE_DAYS]["max"],
+            ),
+            KEY_SEEK_MAX_PAGES: _require_int(
+                search_source,
+                KEY_SEEK_MAX_PAGES,
+                normalized_search_limits[KEY_SEEK_MAX_PAGES]["max"],
+                normalized_search_limits[KEY_SEEK_MAX_PAGES]["min"],
+                normalized_search_limits[KEY_SEEK_MAX_PAGES]["max"],
+            ),
+            KEY_ENFORCE_POSTED_AGE_LIMIT: _normalize_bool(
+                search_source, KEY_ENFORCE_POSTED_AGE_LIMIT, DEFAULT_SEARCH_SETTINGS[KEY_ENFORCE_POSTED_AGE_LIMIT]
+            ),
+            KEY_SORT_NEWEST_FIRST: _normalize_bool(
+                search_source, KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]
+            ),
+            KEY_LINKEDIN_HOURS_OLD: _require_int(
+                search_source,
+                KEY_LINKEDIN_HOURS_OLD,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD],
+                normalized_search_limits[KEY_LINKEDIN_HOURS_OLD]["min"],
+                normalized_search_limits[KEY_LINKEDIN_HOURS_OLD]["max"],
+            ),
+            KEY_LINKEDIN_RESULTS_PER_SEARCH: _require_int(
+                search_source,
+                KEY_LINKEDIN_RESULTS_PER_SEARCH,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
+                normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["min"],
+                normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["max"],
+            ),
+            KEY_LINKEDIN_EASY_APPLY_ONLY: (
+                None
+                if search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY) in (None, "")
+                else (
+                    True
+                    if str(search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY)).strip().lower() == "true"
+                    else False
+                    if str(search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY)).strip().lower() == "false"
+                    else None
+                )
+            ),
+            KEY_PLAYWRIGHT_VIEWPORT_WIDTH: _require_int(
+                search_source,
+                KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_WIDTH],
+                100,
+                4000,
+            ),
+            KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: _require_int(
+                search_source,
+                KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_HEIGHT],
+                100,
+                4000,
+            ),
+            KEY_PLAYWRIGHT_SELECTOR_TIMEOUT: _require_int(
+                search_source,
+                KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT],
+                1000,
+                60000,
+            ),
+        },
+        KEY_LIMITS: {
+            "search": normalized_search_limits,
+            "salary": normalized_salary_limits,
+            "onboarding": normalized_onboarding_limits,
+            "history": normalized_history_limits,
+        },
+        KEY_PREFERENCE_WEIGHTS: _normalize_float_map(preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0),
+        KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
+        KEY_HISTORY_SETTINGS: normalized_history_settings,
+        KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
+        KEY_SOURCE_DOCUMENT_SETTINGS: normalized_source_document_settings,
+        KEY_DEFAULT_COUNTRY_SUFFIX: default_country_suffix,
+        KEY_ONBOARDING_SETTINGS: {
+            **{
+                key: _require_int(
+                    merged_onboarding,
+                    key,
+                    DEFAULT_ONBOARDING_SETTINGS[key],
+                    normalized_onboarding_limits[key]["min"],
+                    normalized_onboarding_limits[key]["max"],
+                )
+                for key in ONBOARDING_SETTING_LIMITS
+            },
+            "capability_strength_preset": preset_name,
+            KEY_CAPABILITY_STRENGTH_PRESETS: normalized_preset_table,
+        },
+        KEY_LLM_SETTINGS: {
+            "model": str(llm_source.get("model") or DEFAULT_LLM_SETTINGS.get("model")).strip(),
+            KEY_MODEL_OPTIONS: normalized_model_options,
+            KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
+            KEY_LLM_MAX_CHARS_LIMITS: normalized_max_chars_limits,
+            KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
+            KEY_LLM_MAX_CHARS: max_llm_chars,
+        },
+        KEY_REVIEW_SETTINGS: {
+            KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: _require_int(
+                review_source,
+                KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL],
+                1,
+                50,
+            ),
+            KEY_REVIEW_MAX_SAMPLES_PER_REJECTION: _require_int(
+                review_source,
+                KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_MAX_SAMPLES_PER_REJECTION],
+                1,
+                50,
+            ),
+            KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT: _require_int(
+                review_source,
+                KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT],
+                1,
+                100,
+            ),
+            KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT: _require_int(
+                review_source,
+                KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT],
+                1,
+                100,
+            ),
+            KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT: _require_int(
+                review_source,
+                KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT],
+                1,
+                1000,
+            ),
+            KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT: _require_int(
+                review_source,
+                KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT],
+                1,
+                100,
+            ),
+        },
+        "playwright_settings": {
+            KEY_PLAYWRIGHT_VIEWPORT_WIDTH: _require_int(
+                playwright_source,
+                KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_WIDTH],
+                100,
+                4000,
+            ),
+            KEY_PLAYWRIGHT_VIEWPORT_HEIGHT: _require_int(
+                playwright_source,
+                KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_HEIGHT],
+                100,
+                4000,
+            ),
+            KEY_PLAYWRIGHT_SELECTOR_TIMEOUT: _require_int(
+                playwright_source,
+                KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT],
+                1000,
+                60000,
+            ),
+            KEY_PLAYWRIGHT_BROWSER_MODE: browser_mode,
+        },
+    }

@@ -78,7 +78,7 @@ def test_save_global_settings_normalizes_values(tmp_path, monkeypatch):
     assert saved["search_settings"]["date_range_days"] == 5
     assert saved["search_settings"]["seek_max_pages"] == 12
     assert saved["search_settings"][KEY_LINKEDIN_EASY_APPLY_ONLY] is True
-    assert saved["search_limits"]["seek_max_pages"]["max"] == 12
+    assert saved["limits"]["search"]["seek_max_pages"]["max"] == 12
     assert saved["preference_weights"]["salary"] == 1.25
     assert saved["candidate_profile_tier_weights"]["secondary_candidate_profile_context"] == 0.5
     assert saved["onboarding_settings"]["capability_strength_preset"] == "recent_focus"

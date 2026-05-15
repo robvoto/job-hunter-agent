@@ -71,11 +71,6 @@
       return Array.isArray(_srCategories) ? _srCategories : [];
     }
 
-    function srCategoryLabel(category) {
-      const entry = srCategoryOptions().find(item => item.key === category);
-      return entry?.label || category.replace(/_/g, ' ');
-    }
-
     function srCategoryMetadata(category) {
       return srCategoryOptions().find(item => item.key === category) || null;
     }
@@ -429,8 +424,17 @@
       _srLoaded = true;
       loadSignalRegistry();
     }
-    document.querySelector('.nav-item[data-section="section-learning"]')?.addEventListener('click', maybeLoadSignalRegistry);
-    if (document.querySelector('.nav-item[data-section="section-learning"]')?.classList.contains('is-active')) {
-      maybeLoadSignalRegistry();
+
+    let _srInitialized = false;
+
+    export function initSignalRegistry() {
+      if (_srInitialized) return;
+      _srInitialized = true;
+      const learningNav = document.querySelector('.nav-item[data-section="section-learning"]');
+      learningNav?.addEventListener('click', maybeLoadSignalRegistry);
+      if (learningNav?.classList.contains('is-active')) {
+        maybeLoadSignalRegistry();
+      }
     }
 
+    initSignalRegistry();
