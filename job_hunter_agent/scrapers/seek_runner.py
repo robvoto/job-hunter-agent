@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 import sys
@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Set
 
 from playwright.sync_api import sync_playwright
 
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     get_playwright_browser_mode,
 )
 from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
@@ -595,3 +595,4 @@ def seek_scrape_to_records(
             context.close()
 
     return kept_records, audit_rows, skill_observations
+

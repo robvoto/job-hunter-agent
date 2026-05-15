@@ -36,7 +36,7 @@ def test_llm_cost_logging_uses_managed_pricing(tmp_path, monkeypatch):
     monkeypatch.setattr(llm_gate, "_session_cost_usd", 0.0)
     monkeypatch.setattr(
         llm_gate,
-        "load_advance_settings",
+        "load_global_settings",
         lambda: {
             "llm_settings": {
                 "pricing_per_1m": {
@@ -129,7 +129,7 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
     )
     monkeypatch.setattr(
         llm_gate,
-        "load_advance_settings",
+        "load_global_settings",
         lambda: {
             "llm_settings": {
                 "llm_prompt_settings": {
@@ -176,7 +176,7 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
 def test_normalize_llm_learning_candidates_uses_managed_max_items(monkeypatch):
     monkeypatch.setattr(
         llm_gate,
-        "load_advance_settings",
+        "load_global_settings",
         lambda: {
             "llm_settings": {
                 "llm_prompt_settings": {
@@ -203,7 +203,7 @@ def test_normalize_llm_learning_candidates_uses_managed_max_items(monkeypatch):
 def test_normalize_rejection_blocker_suggestions_uses_managed_max_items(monkeypatch):
     monkeypatch.setattr(
         llm_gate,
-        "load_advance_settings",
+        "load_global_settings",
         lambda: {
             "llm_settings": {
                 "llm_prompt_settings": {
@@ -269,3 +269,4 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
 def test_normalize_llm_review_payload_rejects_missing_grade():
     with pytest.raises(ValueError, match="missing grade"):
         llm_gate.normalize_llm_review_payload({"decision": "KEEP"})
+

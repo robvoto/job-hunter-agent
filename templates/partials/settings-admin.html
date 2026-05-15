@@ -1,4 +1,4 @@
-        <section id="section-admin" class="settings-group" data-screen="admin">
+﻿        <section id="section-admin" class="settings-group" data-screen="admin">
           <h2 class="section-title">Admin</h2>
           <p class="panel-copy">These controls stay global and centrally managed. They cover card highlight display, search defaults, search guardrails, evidence tier weights, preference weights, onboarding defaults, and capability presets. Candidate profile fields stay elsewhere.</p>
           <div class="grid admin-settings-grid">
@@ -68,6 +68,27 @@
               <option value="false">No</option>
             </select>
             <div class="field-help">Leave unset unless you want the LinkedIn default to force Easy Apply filtering.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Global Defaults</h2>
+            <p class="panel-copy">These shared defaults apply outside the candidate profile. They stay centrally managed for workspace rendering and scraper runtime settings.</p>
+
+            <label for="default_country_suffix">Default country suffix</label>
+            <input id="default_country_suffix" type="text" maxlength="64" autocomplete="off">
+            <div class="field-help">Used when the workspace trims repeated location suffixes from display text.</div>
+
+            <label for="playwright_viewport_width">Playwright viewport width</label>
+            <input id="playwright_viewport_width" type="number" min="100" max="4000" step="1">
+            <div class="field-help">Shared browser viewport width used by the source connector runtime.</div>
+
+            <label for="playwright_viewport_height">Playwright viewport height</label>
+            <input id="playwright_viewport_height" type="number" min="100" max="4000" step="1">
+            <div class="field-help">Shared browser viewport height used by the source connector runtime.</div>
+
+            <label for="playwright_selector_timeout">Playwright selector timeout</label>
+            <input id="playwright_selector_timeout" type="number" min="1000" max="60000" step="1">
+            <div class="field-help">How long the scraper waits for selectors before failing a browser interaction.</div>
           </section>
 
           <section class="panel">
@@ -246,7 +267,7 @@
 
             <label for="llm_max_llm_chars">Maximum LLM characters</label>
             <input id="llm_max_llm_chars" type="number" step="1">
-            <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts. The allowed range comes from advanced settings.</div>
+            <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts. The allowed range comes from global settings.</div>
 
             <label for="llm_pricing_per_1m">Model pricing per 1M tokens</label>
             <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"model-id": {"input": 0, "output": 0}}'></textarea>
@@ -266,3 +287,5 @@
           </section>
           </div>
         </section>
+
+

@@ -23,7 +23,7 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY, DETAILS_STATUS_OK, CONFIDENCE_HIGH,
     CONFIDENCE_LOW, RECORD_JOB_QUALITY_SIGNALS_KEY,
 )
-from job_hunter_agent.advance_settings import (
+from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
@@ -483,3 +483,4 @@ class LinkedInScraper(BaseJobScraper):
         if target.get("easy_apply") is not None:
             kwargs["easy_apply"] = target["easy_apply"]
         return scrape_jobs(**kwargs)
+

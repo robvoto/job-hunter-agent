@@ -1,16 +1,15 @@
 import pytest
 
-from job_hunter_agent import advance_settings
-from job_hunter_agent.advance_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
+from job_hunter_agent import global_settings
+from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 
 
-def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
-    settings_path = tmp_path / "advance_settings.json"
-    monkeypatch.setattr(advance_settings, "ADVANCE_SETTINGS_PATH", settings_path)
-    monkeypatch.setattr(advance_settings, "DATA_DIR", tmp_path)
-    advance_settings.load_advance_settings.cache_clear()
+def test_save_global_settings_normalizes_values(tmp_path, monkeypatch):
+    settings_path = tmp_path / "global_settings.json"
+    monkeypatch.setattr(global_settings, "GLOBAL_SETTINGS_PATH", settings_path)
+    global_settings.load_global_settings.cache_clear()
 
-    saved = advance_settings.save_advance_settings({
+    saved = global_settings.save_global_settings({
         "fit_highlights": {
             "strong_capability_count": "4",
             "working_capability_count": "3",
@@ -115,33 +114,32 @@ def test_save_advance_settings_normalizes_values(tmp_path, monkeypatch):
     assert settings_path.exists()
 
 
-def test_save_advance_settings_normalizes_source_document_suffixes(tmp_path, monkeypatch):
-    settings_path = tmp_path / "advance_settings.json"
-    monkeypatch.setattr(advance_settings, "ADVANCE_SETTINGS_PATH", settings_path)
-    monkeypatch.setattr(advance_settings, "DATA_DIR", tmp_path)
-    advance_settings.load_advance_settings.cache_clear()
+def test_save_global_settings_normalizes_source_document_suffixes(tmp_path, monkeypatch):
+    settings_path = tmp_path / "global_settings.json"
+    monkeypatch.setattr(global_settings, "GLOBAL_SETTINGS_PATH", settings_path)
+    global_settings.load_global_settings.cache_clear()
 
-    saved = advance_settings.save_advance_settings({
+    saved = global_settings.save_global_settings({
         "source_document_settings": {
             "allowed_suffixes": [".CSV", ".txt", ".csv", ".md"],
         },
     })
 
     assert saved["source_document_settings"]["allowed_suffixes"] == [".csv", ".txt", ".md"]
-    assert advance_settings.get_allowed_source_document_suffixes() == frozenset({".csv", ".txt", ".md"})
-    assert advance_settings.get_allowed_source_document_suffixes_label() == ".csv, .md, .txt"
+    assert global_settings.get_allowed_source_document_suffixes() == frozenset({".csv", ".txt", ".md"})
+    assert global_settings.get_allowed_source_document_suffixes_label() == ".csv, .md, .txt"
 
 
-def test_load_advance_settings_backs_up_invalid_json(tmp_path, monkeypatch):
-    settings_path = tmp_path / "advance_settings.json"
+def test_load_global_settings_backs_up_invalid_json(tmp_path, monkeypatch):
+    settings_path = tmp_path / "global_settings.json"
     settings_path.write_text("{bad json", encoding="utf-8")
-    monkeypatch.setattr(advance_settings, "ADVANCE_SETTINGS_PATH", settings_path)
-    monkeypatch.setattr(advance_settings, "DATA_DIR", tmp_path)
-    advance_settings.load_advance_settings.cache_clear()
+    monkeypatch.setattr(global_settings, "GLOBAL_SETTINGS_PATH", settings_path)
+    global_settings.load_global_settings.cache_clear()
 
-    with pytest.raises(advance_settings.AdvanceSettingsLoadError):
-        advance_settings.load_advance_settings()
+    with pytest.raises(global_settings.GlobalSettingsLoadError):
+        global_settings.load_global_settings()
 
-    backups = sorted(tmp_path.glob("advance_settings.invalid.*.json"))
+    backups = sorted(tmp_path.glob("global_settings.invalid.*.json"))
     assert len(backups) == 1
     assert backups[0].read_text(encoding="utf-8") == "{bad json"
+

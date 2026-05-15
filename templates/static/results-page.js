@@ -1,14 +1,11 @@
-const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+﻿const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
     const REVIEW_API_URL = `${API_BASE_URL}/api/review`;
     const JOB_HISTORY_API_URL = `${API_BASE_URL}/api/job-history`;
-    const RUN_API_URL = `${API_BASE_URL}/api/run`;
-    const RUN_STATUS_API_URL = `${API_BASE_URL}/api/run-status`;
-    const DASHBOARD_CONTEXT = window.__JOB_HUNTER_DASHBOARD__ || {};
-    const DASHBOARD_RUN_ID = String(DASHBOARD_CONTEXT.runId || '').trim() || 'dashboard';
-    const DASHBOARD_FILTERS_KEY = `jobHunter.dashboard.filters.${DASHBOARD_RUN_ID}`;
-    const INITIAL_SEARCH_SETTINGS = DASHBOARD_CONTEXT.searchSettings || {};
-    const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.dashboard.resultsHelperDismissed';
-    const REJECTION_FIRST_USE_KEY = 'jobHunter.dashboard.rejectionFirstUseSeen';
+    const WORKSPACE_CONTEXT = window.__JOB_HUNTER_WORKSPACE__ || {};
+    const WORKSPACE_RUN_ID = String(WORKSPACE_CONTEXT.runId || '').trim() || 'workspace';
+    const WORKSPACE_FILTERS_KEY = `jobHunter.workspace.filters.${WORKSPACE_RUN_ID}`;
+    const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.workspace.resultsHelperDismissed';
+    const REJECTION_FIRST_USE_KEY = 'jobHunter.workspace.rejectionFirstUseSeen';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
     const scopeFilter = document.getElementById('scope_filter');
@@ -17,304 +14,13 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
     const salaryFilter = document.getElementById('salary_filter');
-    const DEFAULT_SCORE_FILTER_VALUE = DASHBOARD_CONTEXT.defaultScoreFilterValue || 55;
-    const resetFiltersButton = document.getElementById('reset_dashboard_filters');
+    const DEFAULT_SCORE_FILTER_VALUE = WORKSPACE_CONTEXT.defaultScoreFilterValue || 55;
+    const resetFiltersButton = document.getElementById('reset_workspace_filters');
     const resultsHelper = document.getElementById('results_helper');
     const dismissResultsHelperButton = document.getElementById('dismiss_results_helper');
     const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
     const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
-    const searchSettingsToggleButton = document.getElementById('search_settings_toggle');
-    const searchSettingsEdit = document.getElementById('search_settings_edit');
-    const searchSettingsMessage = document.getElementById('search_settings_message');
-    const runNowButton = document.getElementById('run_now_button');
-    const searchLastRunLabel = document.getElementById('search_last_run_label');
-    const searchSettingsSaveButton = document.getElementById('search_settings_save');
-    const searchSettingsCancelButton = document.getElementById('search_settings_cancel');
-    const searchKeywordsInput = document.getElementById('search_keywords_input');
-    const searchLocationsInput = document.getElementById('search_locations_input');
-    const searchDateRangeInput = document.getElementById('search_date_range_input');
-    const searchSeekPagesInput = document.getElementById('search_seek_pages_input');
-    const searchLiHoursInput = document.getElementById('search_li_hours_input');
-    const searchLiResultsInput = document.getElementById('search_li_results_input');
-    const searchKeywordsCurrent = document.getElementById('search_keywords_current');
-    const searchLocationsCurrent = document.getElementById('search_locations_current');
-    const searchDateRangeCurrent = document.getElementById('search_date_range_current');
-    const searchSeekPagesCurrent = document.getElementById('search_seek_pages_current');
-    const searchLiHoursCurrent = document.getElementById('search_li_hours_current');
-    const searchLiResultsCurrent = document.getElementById('search_li_results_current');
     const paginationState = {};
-    let runStatusPollHandle = null;
-    let runStatusWasRunning = false;
-
-    function normalizeSearchSettingsInput(settings) {
-      const source = settings && typeof settings === 'object' ? settings : {};
-      const locations = Array.isArray(source.locations)
-        ? source.locations.map(value => String(value || '').trim()).filter(Boolean)
-        : [];
-      return {
-        keywords: String(source.keywords || '').trim(),
-        locations,
-        date_range_days: Math.max(1, Math.min(30, Number(source.date_range_days || 3) || 3)),
-        seek_max_pages: Math.max(1, Math.min(10, Number(source.seek_max_pages || 10) || 10)),
-        linkedin_hours_old: Math.max(1, Math.min(168, Number(source.linkedin_hours_old || 24) || 24)),
-        linkedin_results_per_search: Math.max(5, Math.min(100, Number(source.linkedin_results_per_search || 25) || 25)),
-      };
-    }
-
-    function setSearchSettingsMessage(message, isError = false) {
-      if (!searchSettingsMessage) {
-        return;
-      }
-      searchSettingsMessage.textContent = message || '';
-      searchSettingsMessage.classList.toggle('is-error', Boolean(isError && message));
-    }
-
-    function formatLastRun(isoStr) {
-      if (!isoStr) {
-        return '';
-      }
-      try {
-        const date = new Date(isoStr);
-        return 'Last search attempt: ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          + ' \u00b7 ' + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      } catch (error) {
-        return 'Last search attempt: ' + isoStr;
-      }
-    }
-
-    function renderLastRun(isoStr) {
-      if (!searchLastRunLabel) {
-        return;
-      }
-      const label = isoStr ? formatLastRun(isoStr) : '';
-      searchLastRunLabel.textContent = label;
-      searchLastRunLabel.hidden = !label;
-    }
-
-    async function loadLastRunLabel() {
-      try {
-        const response = await jobHunterFetch(RUN_STATUS_API_URL, { method: 'GET' });
-        if (!response.ok) {
-          return;
-        }
-        const payload = await response.json().catch(() => ({}));
-        renderLastRun(payload?.last_run_at || '');
-      } catch (error) {
-      }
-    }
-
-    function renderSearchSettingsReadonly(settings) {
-      const normalized = normalizeSearchSettingsInput(settings);
-      if (searchKeywordsCurrent) {
-        searchKeywordsCurrent.textContent = normalized.keywords || 'Not set';
-      }
-      if (searchLocationsCurrent) {
-        searchLocationsCurrent.textContent = normalized.locations.length ? normalized.locations.join(' | ') : 'Not set';
-      }
-      if (searchDateRangeCurrent) {
-        searchDateRangeCurrent.textContent = `${normalized.date_range_days} day${normalized.date_range_days === 1 ? '' : 's'}`;
-      }
-      if (searchSeekPagesCurrent) {
-        searchSeekPagesCurrent.textContent = String(normalized.seek_max_pages);
-      }
-      if (searchLiHoursCurrent) {
-        searchLiHoursCurrent.textContent = `${normalized.linkedin_hours_old} hours`;
-      }
-      if (searchLiResultsCurrent) {
-        searchLiResultsCurrent.textContent = String(normalized.linkedin_results_per_search);
-      }
-    }
-
-    function renderSearchSettingsForm(settings) {
-      const normalized = normalizeSearchSettingsInput(settings);
-      if (searchKeywordsInput) {
-        searchKeywordsInput.value = normalized.keywords;
-      }
-      if (searchLocationsInput) {
-        searchLocationsInput.value = normalized.locations.join('\\n');
-      }
-      if (searchDateRangeInput) {
-        searchDateRangeInput.value = String(normalized.date_range_days);
-      }
-      if (searchSeekPagesInput) {
-        searchSeekPagesInput.value = String(normalized.seek_max_pages);
-      }
-      if (searchLiHoursInput) {
-        searchLiHoursInput.value = String(normalized.linkedin_hours_old);
-      }
-      if (searchLiResultsInput) {
-        searchLiResultsInput.value = String(normalized.linkedin_results_per_search);
-      }
-    }
-
-    function collectSearchSettingsFromForm() {
-      return normalizeSearchSettingsInput({
-        keywords: searchKeywordsInput?.value || '',
-        locations: String(searchLocationsInput?.value || '')
-          .split(/[\\r\\n]+/)
-          .map(value => value.trim())
-          .filter(Boolean),
-        date_range_days: Number(searchDateRangeInput?.value || 3),
-        seek_max_pages: Number(searchSeekPagesInput?.value || 10),
-        linkedin_hours_old: Number(searchLiHoursInput?.value || 24),
-        linkedin_results_per_search: Number(searchLiResultsInput?.value || 25),
-      });
-    }
-
-    function closeSearchSettingsEditor() {
-      if (searchSettingsEdit) {
-        searchSettingsEdit.setAttribute('hidden', '');
-      }
-      if (searchSettingsToggleButton) {
-        searchSettingsToggleButton.textContent = 'Edit Configuration';
-      }
-    }
-
-    function openSearchSettingsEditor() {
-      if (searchSettingsEdit) {
-        searchSettingsEdit.removeAttribute('hidden');
-      }
-      if (searchSettingsToggleButton) {
-        searchSettingsToggleButton.textContent = 'Close';
-      }
-    }
-
-    async function saveSearchSettings() {
-      const searchSettings = collectSearchSettingsFromForm();
-      if (searchSettingsSaveButton) {
-        searchSettingsSaveButton.classList.add('is-working');
-        searchSettingsSaveButton.disabled = true;
-      }
-      if (searchSettingsCancelButton) {
-        searchSettingsCancelButton.disabled = true;
-      }
-      if (searchSettingsToggleButton) {
-        searchSettingsToggleButton.disabled = true;
-      }
-      setSearchSettingsMessage('Saving search settings...');
-
-      try {
-        const response = await jobHunterFetch(`${API_BASE_URL}/api/profile`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ search_settings: searchSettings }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(payload.error || 'Could not save search settings.');
-        }
-
-        const savedSearchSettings = normalizeSearchSettingsInput(payload?.search_settings || searchSettings);
-        Object.assign(INITIAL_SEARCH_SETTINGS, savedSearchSettings);
-        renderSearchSettingsReadonly(savedSearchSettings);
-        renderSearchSettingsForm(savedSearchSettings);
-        closeSearchSettingsEditor();
-        setSearchSettingsMessage('Search settings saved.');
-      } catch (error) {
-        setSearchSettingsMessage(error.message || 'Could not save search settings.', true);
-      } finally {
-        if (searchSettingsSaveButton) {
-          searchSettingsSaveButton.classList.remove('is-working');
-          searchSettingsSaveButton.disabled = false;
-        }
-        if (searchSettingsCancelButton) {
-          searchSettingsCancelButton.disabled = false;
-        }
-        if (searchSettingsToggleButton) {
-          searchSettingsToggleButton.disabled = false;
-        }
-      }
-    }
-
-    function stopRunStatusPolling() {
-      if (runStatusPollHandle) {
-        window.clearInterval(runStatusPollHandle);
-        runStatusPollHandle = null;
-      }
-    }
-
-    function startRunStatusPolling() {
-      if (runStatusPollHandle) {
-        return;
-      }
-      runStatusPollHandle = window.setInterval(syncRunStatus, 10000);
-    }
-
-    async function syncRunStatus() {
-      try {
-        const response = await jobHunterFetch(RUN_STATUS_API_URL, { method: 'GET' });
-        if (!response.ok) {
-          throw new Error('Could not check run status.');
-        }
-        const payload = await response.json().catch(() => ({}));
-        const isRunning = payload?.status === 'running';
-        if (payload?.last_run_at) {
-          renderLastRun(payload.last_run_at);
-        }
-        
-        if (runNowButton) {
-          runNowButton.disabled = isRunning;
-        }
-        if (isRunning) {
-          runStatusWasRunning = true;
-          startRunStatusPolling();
-          if (!searchSettingsMessage?.textContent) {
-            setSearchSettingsMessage('Scrape in progress. The dashboard will refresh when it finishes.');
-          }
-          return;
-        }
-        stopRunStatusPolling();
-        if (runStatusWasRunning) {
-          runStatusWasRunning = false;
-          setSearchSettingsMessage('Scrape finished. Reloading dashboard...');
-          window.setTimeout(() => window.location.reload(), 700);
-        }
-      } catch (error) {
-      }
-    }
-
-    async function runSearchNow() {
-      const searchSettings = collectSearchSettingsFromForm();
-      if (runNowButton) {
-        runNowButton.classList.add('is-working');
-        runNowButton.disabled = true;
-      }
-      if (searchSettingsToggleButton) {
-        searchSettingsToggleButton.disabled = true;
-      }
-      setSearchSettingsMessage('Saving search settings and starting scrape...');
-
-      try {
-        const response = await jobHunterFetch(RUN_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(searchSettings),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(payload.error || 'Could not start scrape.');
-        }
-
-        renderSearchSettingsReadonly(searchSettings);
-        runStatusWasRunning = true;
-        startRunStatusPolling();
-        if (payload?.status === 'running') {
-          setSearchSettingsMessage('A scrape is already running. The dashboard will reload when it finishes.');
-        } else {
-          setSearchSettingsMessage('Search started. The dashboard will reload when it finishes.');
-        }
-      } catch (error) {
-        setSearchSettingsMessage(error.message || 'Could not start scrape.', true);
-      } finally {
-        if (searchSettingsToggleButton) {
-          searchSettingsToggleButton.disabled = false;
-        }
-        if (runNowButton && !runStatusWasRunning) {
-          runNowButton.classList.remove('is-working');
-          runNowButton.disabled = false;
-        }
-      }
-    }
 
     function showResultsHelperIfNeeded() {
       if (!resultsHelper) {
@@ -346,7 +52,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
         return;
       }
       const example = String(exampleTerm || '').trim() || 'payroll';
-      body.textContent = `Example: if you save "${example}", future jobs are filtered only when ${example} looks required, not when it is just preferred. To block any mention, use advanced description blockers in Settings.`;
+      body.textContent = `Example: if you save "${example}", future jobs are filtered only when ${example} looks required, not when it is just preferred. To block any mention, use global description blockers in Settings.`;
       note.hidden = false;
       note.open = true;
       try {
@@ -387,10 +93,10 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       }
 
       resetPagination();
-      applyDashboardControls();
+      applyWorkspaceControls();
     }
 
-    function saveDashboardFilters() {
+    function saveWorkspaceFilters() {
       const filters = {
         sort: sortSelect?.value,
         pageSize: pageSizeSelect?.value,
@@ -402,7 +108,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
         salary: salaryFilter?.value,
       };
       try {
-        window.localStorage.setItem(DASHBOARD_FILTERS_KEY, JSON.stringify(filters));
+        window.localStorage.setItem(WORKSPACE_FILTERS_KEY, JSON.stringify(filters));
       } catch (e) {}
     }
 
@@ -416,9 +122,9 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       }
     }
 
-    function loadDashboardFilters() {
+    function loadWorkspaceFilters() {
       try {
-        const saved = window.localStorage.getItem(DASHBOARD_FILTERS_KEY);
+        const saved = window.localStorage.getItem(WORKSPACE_FILTERS_KEY);
         if (!saved) return;
         const filters = JSON.parse(saved);
         
@@ -433,7 +139,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       } catch (e) {}
     }
 
-    function resetDashboardFiltersToDefaults() {
+    function resetWorkspaceFiltersToDefaults() {
       if (sortSelect) sortSelect.value = 'fit';
       if (pageSizeSelect) pageSizeSelect.value = '12';
       if (scopeFilter) scopeFilter.value = 'all';
@@ -445,10 +151,10 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       }
       if (salaryFilter) salaryFilter.value = 'all';
       try {
-        window.localStorage.removeItem(DASHBOARD_FILTERS_KEY);
+        window.localStorage.removeItem(WORKSPACE_FILTERS_KEY);
       } catch (e) {}
       resetPagination();
-      applyDashboardControls();
+      applyWorkspaceControls();
     }
 
     function getVisibleCards() {
@@ -502,7 +208,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       if (nextButton) nextButton.disabled = currentPage >= totalPages || matchingCards.length === 0;
     }
 
-    function applyDashboardControls() {
+    function applyWorkspaceControls() {
       const sortMode = sortSelect?.value || 'fit';
       const scopeMode = scopeFilter?.value || 'all';
       const postedLimit = postedFilter?.value || 'all';
@@ -598,10 +304,10 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       }
       if (!card.querySelector('.badge-viewed')) {
         if (badges) {
-          badges.insertAdjacentHTML('beforeend', DASHBOARD_CONTEXT.viewedBadgeHtml || '');
+          badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
         }
       }
-      applyDashboardControls();
+      applyWorkspaceControls();
     }
 
     async function hydrateViewedState() {
@@ -625,10 +331,10 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
             newBadge.remove();
           }
           if (!card.querySelector('.badge-viewed') && badges) {
-            badges.insertAdjacentHTML('beforeend', DASHBOARD_CONTEXT.viewedBadgeHtml || '');
+            badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
           }
         }
-        applyDashboardControls();
+        applyWorkspaceControls();
       } catch (error) {
       }
     }
@@ -679,7 +385,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
           card.classList.add('is-reviewed');
         }
       }
-      applyDashboardControls();
+      applyWorkspaceControls();
     }
 
     function openBlockConfirm(button) {
@@ -848,12 +554,12 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
         card.classList.add('is-reviewed');
         status.textContent = options.successMessage || reviewSuccessMessage(action, payload);
         window.setTimeout(() => {
-          if (payload?.reload_dashboard || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
+          if (payload?.reload_workspace || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
             window.location.reload();
             return;
           }
           card.dataset.reviewDismissed = '1';
-          applyDashboardControls();
+          applyWorkspaceControls();
           if (action === 'block_similar') {
             const phrasesToDismiss = payload.block_phrases || (requestPayload.block_phrases) ||
               [(payload.block_phrase || requestPayload.block_phrase || '')];
@@ -867,43 +573,9 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
     }
 
     document.addEventListener('click', async event => {
-      const resetFilters = event.target.closest('#reset_dashboard_filters');
+      const resetFilters = event.target.closest('#reset_workspace_filters');
       if (resetFilters) {
-        resetDashboardFiltersToDefaults();
-        return;
-      }
-
-      const searchToggle = event.target.closest('#search_settings_toggle');
-      if (searchToggle) {
-        if (!searchSettingsEdit) {
-          return;
-        }
-        const isHidden = searchSettingsEdit.hasAttribute('hidden');
-        if (isHidden) {
-          openSearchSettingsEditor();
-        } else {
-          closeSearchSettingsEditor();
-        }
-        return;
-      }
-
-      const searchSave = event.target.closest('#search_settings_save');
-      if (searchSave) {
-        await saveSearchSettings();
-        return;
-      }
-
-      const searchCancel = event.target.closest('#search_settings_cancel');
-      if (searchCancel) {
-        renderSearchSettingsForm(INITIAL_SEARCH_SETTINGS);
-        closeSearchSettingsEditor();
-        setSearchSettingsMessage('');
-        return;
-      }
-
-      const runNowTrigger = event.target.closest('#run_now_button');
-      if (runNowTrigger) {
-        await runSearchNow();
+        resetWorkspaceFiltersToDefaults();
         return;
       }
 
@@ -1011,16 +683,12 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
     for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, scoreFilter, salaryFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
-        saveDashboardFilters();
-        applyDashboardControls();
+        saveWorkspaceFilters();
+        applyWorkspaceControls();
       });
     }
 
-    renderSearchSettingsReadonly(INITIAL_SEARCH_SETTINGS);
-    renderSearchSettingsForm(INITIAL_SEARCH_SETTINGS);
-    loadDashboardFilters();
-    loadLastRunLabel();
-    syncRunStatus();
+    loadWorkspaceFilters();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
     showResultsHelperIfNeeded();
     hydrateViewedState();
@@ -1444,3 +1112,4 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:87
       document.getElementById('rejection-btn-cancel').click();
     });
     // end rejection-learning panel
+

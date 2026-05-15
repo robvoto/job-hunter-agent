@@ -24,14 +24,14 @@ SETTINGS_PARTIALS = {
 }
 
 
-def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, advance_settings: dict | None = None, resume_step: int | None = None) -> str:
+def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, global_settings: dict | None = None, resume_step: int | None = None) -> str:
     csrf_token = issue_csrf_token(request) or ""
     bootstrap_script = srv.build_bootstrap_script(
         csrf_token=csrf_token,
         location_options=load_location_options(),
         default_location=default_location_value(),
         onboarding_defaults=onboarding_defaults,
-        advance_settings=advance_settings,
+        global_settings=global_settings,
         resume_step=resume_step,
     )
     html = srv._render_template(template_path)
@@ -89,7 +89,7 @@ def page_admin_profile(request: Request):  # type: ignore[no-untyped-def]
             page_title="Admin - Job Hunter",
             page_heading="Admin",
             page_copy="Owner-only global controls and shared learning live here.",
-            advance_settings=srv.load_advance_settings(),
+            global_settings=srv.load_global_settings(),
         )
         return html_response(html)
     return html_response("<h1>Template missing</h1><p>Missing templates/settings.html</p>")
@@ -139,3 +139,4 @@ def page_demo():  # type: ignore[no-untyped-def]
     if srv.SHOWCASE_PATH.exists():
         return html_response(srv.SHOWCASE_PATH.read_text(encoding="utf-8", errors="ignore"))
     return html_response("<h1>Demo page not found</h1>")
+

@@ -1,12 +1,13 @@
 ﻿
-    const LINKEDIN_EASY_APPLY_ONLY = 'linkedin_easy_apply_only';
+    var LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
+window.LINKEDIN_EASY_APPLY_ONLY = LINKEDIN_EASY_APPLY_ONLY;
 
     const statusEl = document.getElementById('status');
     const isTestMode = document.body?.dataset.testMode === 'true';
     const runNowButton = document.getElementById('run_now');
     const rebuildProfileButton = document.getElementById('rebuild_profile');
     const capabilityUi = window.JobHunterCapabilityUi || {};
-    const currencyUi = window.JobHunterCurrencyUi || {};
+    const settingsCurrencyUi = window.JobHunterCurrencyUi || {};
 const locationUi = window.JobHunterLocationUi || {};
 const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
@@ -16,16 +17,61 @@ const governmentPreferenceDefault = String(
   || governmentPreferenceOptions?.[0]?.value
   || 'any'
 ).trim().toLowerCase();
+const workModePreferenceOptions = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
+  : [];
+
+function normalizeWorkModePreferences(value) {
+  const values = Array.isArray(value)
+    ? value
+    : String(value || '').split(/[,\n|/]+/);
+  const selected = [];
+  const seen = new Set();
+  for (const option of workModePreferenceOptions) {
+    const key = String(option.value || '').trim().toLowerCase();
+    if (!key) continue;
+    if (values.some((item) => String(item || '').trim().toLowerCase() === key) && !seen.has(key)) {
+      seen.add(key);
+      selected.push(key);
+    }
+  }
+  return selected;
+}
+
+function getWorkModePreferenceValues() {
+  return normalizeWorkModePreferences(
+    Array.from(document.querySelectorAll('input[name="work_mode_preference"]:checked')).map((input) => input.value)
+  );
+}
+
+function setWorkModePreferenceValues(values) {
+  const selected = new Set(normalizeWorkModePreferences(values));
+  document.querySelectorAll('input[name="work_mode_preference"]').forEach((input) => {
+    input.checked = selected.size === 0 || selected.has(String(input.value || '').trim().toLowerCase());
+  });
+}
+
+function readOnboardingWelcomeSearchKeywords() {
+  try {
+    const raw = window.sessionStorage.getItem('jobHunter.onboardingWelcome');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return String(parsed?.search_keywords || '').trim();
+  } catch {
+    return '';
+  }
+}
     let telegramConnectLink = '';
-    let loadedAgentSettings = null;
+    let loadedUserSettings = null;
     let loadedProfile = null;
-    let loadedAdvanceSettings = null;
+    let loadedGlobalSettings = null;
     let capabilityRuleState = [];
     let expandedCapabilityRows = new Set();
     let suppressDirtyTracking = true;
     let statusHideTimer = null;
     const pageMode = document.body?.dataset.pageMode === 'admin' ? 'admin' : 'settings';
     const isAdminPage = pageMode === 'admin';
+    const bootstrapGlobalSettings = window.__JOB_HUNTER_GLOBAL_SETTINGS__ || null;
     document.querySelectorAll('[data-test-only]').forEach((element) => {
       element.hidden = !isTestMode;
     });
@@ -35,6 +81,9 @@ const governmentPreferenceDefault = String(
     document.querySelectorAll('[data-screen]').forEach((element) => {
       element.hidden = element.dataset.screen !== pageMode;
     });
+    if (isAdminPage && bootstrapGlobalSettings) {
+      fillGlobalForm(bootstrapGlobalSettings);
+    }
     const listTextAreas = [
       'primary_job_title_pattern',
       'secondary_title_patterns',
@@ -58,15 +107,15 @@ const governmentPreferenceDefault = String(
 
     function bindCurrencyFields() {
       ['minimum_salary_yearly', 'minimum_daily_rate', 'salary_limit_minimum_salary_yearly_max', 'salary_limit_minimum_daily_rate_max'].forEach((id) => {
-        currencyUi.bindCurrencyInput?.(document.getElementById(id));
+        settingsCurrencyUi.bindCurrencyInput?.(document.getElementById(id));
       });
     }
 
     function setCurrencyFieldValue(id, value) {
       const input = document.getElementById(id);
       if (!input) return;
-      if (currencyUi.setCurrencyInputValue) {
-        currencyUi.setCurrencyInputValue(input, value);
+      if (settingsCurrencyUi.setCurrencyInputValue) {
+        settingsCurrencyUi.setCurrencyInputValue(input, value);
       } else {
         input.value = String(value ?? '');
       }
@@ -75,7 +124,7 @@ const governmentPreferenceDefault = String(
     function readCurrencyFieldValue(id, fallback = 0) {
       const input = document.getElementById(id);
       if (!input) return fallback;
-      const parsed = currencyUi.parseCurrencyValue ? currencyUi.parseCurrencyValue(input.value) : Number(String(input.value || '').replace(/,/g, ''));
+      const parsed = settingsCurrencyUi.parseCurrencyValue ? settingsCurrencyUi.parseCurrencyValue(input.value) : Number(String(input.value || '').replace(/,/g, ''));
       return Number.isFinite(parsed) && parsed !== '' ? parsed : fallback;
     }
 
@@ -158,9 +207,9 @@ const governmentPreferenceDefault = String(
 
     function normalizeCapabilityRule(rule) {
       const name = String(rule?.name || '').replace(/\s+/g, ' ').trim();
-      const rawLevel = String(rule?.level || 'basic').trim().toLowerCase();
-      const validLevels = new Set(['strong', 'working', 'basic']);
-      const level = validLevels.has(rawLevel) ? rawLevel : 'basic';
+      const rawLevel = String(rule?.level || 'historical').trim().toLowerCase();
+      const validLevels = new Set(['strong', 'intermediate', 'historical']);
+      const level = validLevels.has(rawLevel) ? rawLevel : 'historical';
 
       const rawFit = String(rule?.fit || 'supporting').trim().toLowerCase();
       const validFits = new Set(['core', 'supporting']);
@@ -187,7 +236,7 @@ const governmentPreferenceDefault = String(
     function capabilityStrengthMeta(level) {
       const key = String(level || '').trim().toLowerCase();
       if (!key) return null;
-      return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Historical' };
+      return capabilityLevelMeta[key] || capabilityLevelMeta.historical || { label: 'Historical' };
     }
 
     function setCapabilityRuleState(rules) {
@@ -209,8 +258,60 @@ const governmentPreferenceDefault = String(
       settingsField('capability_profile_rules').value = capabilityRulesToText(cleaned);
       return cleaned;
     }
+
+    function collectProfile() {
+      flushChipEditorInputs();
+      const locationSelect = document.getElementById('locations');
+      const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
+      const hoursMap = { 0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720 };
+      const linkedinEasyApplyRaw = document.getElementById(LINKEDIN_EASY_APPLY_ONLY)?.value;
+      return {
+        search_settings: {
+          keywords: toLines(settingsField('keywords').value).join(', '),
+          locations: locationSelect && locationSelect.value.trim() ? [locationSelect.value.trim()] : [],
+          classification_ids: toLines(document.getElementById('classification_ids').value),
+          date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
+          linkedin_hours_old: hoursMap[searchDateWindow] ?? 72,
+          seek_max_pages: Number(document.getElementById('seek_max_pages').value),
+          enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
+          sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
+          linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
+          [LINKEDIN_EASY_APPLY_ONLY]: linkedinEasyApplyRaw === '' ? null : linkedinEasyApplyRaw === 'true',
+        },
+        salary_preferences: {
+          minimum_salary_yearly: settingsCurrencyUi.parseCurrencyValue
+            ? settingsCurrencyUi.parseCurrencyValue(document.getElementById('minimum_salary_yearly')?.value)
+            : Number(String(document.getElementById('minimum_salary_yearly')?.value || '').replace(/,/g, '')) || 0,
+          minimum_daily_rate: settingsCurrencyUi.parseCurrencyValue
+            ? settingsCurrencyUi.parseCurrencyValue(document.getElementById('minimum_daily_rate')?.value)
+            : Number(String(document.getElementById('minimum_daily_rate')?.value || '').replace(/,/g, '')) || 0,
+        },
+        match_preferences: {
+          engagement_type: document.getElementById('engagement_type').value,
+          work_mode_preference: getWorkModePreferenceValues(),
+          prefer_government: String(document.getElementById('prefer_government').value || governmentPreferenceDefault).trim().toLowerCase(),
+        },
+        preference_weights: {
+          fit: Number(document.getElementById('fit_weight').value || 1),
+          salary: Number(document.getElementById('salary_weight').value || 1),
+          location: Number(document.getElementById('location_weight').value || 1),
+          work_mode: Number(document.getElementById('work_mode_weight').value || 1),
+          contract: Number(document.getElementById('contract_weight').value || 1),
+          government: Number(document.getElementById('government_weight').value || 1),
+          freshness: Number(document.getElementById('freshness_weight').value || 1),
+        },
+        llm_profile_brief_mode: 'auto',
+        llm_profile_brief: '',
+        capability_profile_rules: collectCapabilityRuleState(),
+        primary_job_title_pattern: toLines(settingsField('primary_job_title_pattern').value),
+        secondary_title_patterns: toLines(settingsField('secondary_title_patterns').value),
+        must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
+        reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
+        reject_description_phrase_rules: textToRules(settingsField('reject_description_phrase_rules').value, 'phrase'),
+      };
+    }
  
-        function renderCapabilityRuleEditor() {
+    function renderCapabilityRuleEditor() {
       const container = document.getElementById('capability_matrix_editor');
       if (!container) return;
       if (!capabilityRuleState.length) {
@@ -241,7 +342,11 @@ const governmentPreferenceDefault = String(
                          placeholder="e.g. Agile Delivery">
                   <button class="cap-remove-btn capability-remove-btn" type="button" data-remove-capability="${index}"
                           aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
-                          title="Remove capability">Remove</button>
+                          title="Remove capability">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="cap-remove-icon">
+                      <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+                    </svg>
+                  </button>
                 </div>
                 <div class="capability-card-meta">
                   <span class="cap-alias-summary">${escapeHtml(aliasCount ? `${aliasCount} alias${aliasCount === 1 ? '' : 'es'}` : 'No aliases')}</span>
@@ -254,11 +359,11 @@ const governmentPreferenceDefault = String(
                 </div>
                 <label class="cap-strength-label">
                   <span>Strength</span>
-                  <select class="cap-level-select capability-strength-select level-${escapeHtml(rule.level || 'basic')}"
+                    <select class="cap-level-select capability-strength-select level-${escapeHtml(rule.level || 'historical')}"
                           data-capability-field="level" aria-label="Capability strength">
                     <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('strong')?.label || 'Expert')}</option>
-                    <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('working')?.label || 'Intermediate')}</option>
-                    <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('basic')?.label || 'Historical')}</option>
+                      <option value="intermediate"${rule.level === 'intermediate' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('intermediate')?.label || 'Intermediate')}</option>
+                      <option value="historical"${rule.level === 'historical' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('historical')?.label || 'Historical')}</option>
                   </select>
                 </label>
               </article>
@@ -309,11 +414,11 @@ const governmentPreferenceDefault = String(
 
     const chipEditors = {
       keywords: { kind: 'list', listId: 'keywords_chips', inputId: 'keywords_add', emptyText: 'No search keywords yet.', minItems: 1 },
-      primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No job primary titles yet.' },
-      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary titles yet.' },
-      must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory-skill blocks yet.' },
-      reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked title words yet. Rules added from the dashboard appear here.' },
-      reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No blocked description phrases yet.' },
+      primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No primary job titles yet.' },
+      secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary job titles yet.' },
+      must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory skills to reject yet.' },
+      reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked job titles yet.' },
+      reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No excluded keywords or phrases yet.' },
     };
 
     function escapeRegExp(value) {
@@ -399,6 +504,7 @@ const governmentPreferenceDefault = String(
       if (suppressDirtyTracking) return;
       if (activeSaveButton) activeSaveButton.disabled = false;
       if (stickySaveBar) {
+        stickySaveBar.hidden = false;
         stickySaveBar.dataset.dirty = 'true';
       }
     }
@@ -406,6 +512,7 @@ const governmentPreferenceDefault = String(
     function clearDirty() {
       if (activeSaveButton) activeSaveButton.disabled = true;
       if (stickySaveBar) {
+        stickySaveBar.hidden = true;
         delete stickySaveBar.dataset.dirty;
       }
       showInlineStatus(globalStatus, '', '');
@@ -449,7 +556,7 @@ const governmentPreferenceDefault = String(
       }).join('');
     }
 
-    function renderAdvancedChipEditors() {
+    function renderGlobaldChipEditors() {
       Object.keys(chipEditors).forEach(renderChipEditor);
     }
 
@@ -506,7 +613,12 @@ const governmentPreferenceDefault = String(
     }
 
     function fillForm(profile) {
-      const keywordList = (profile.search_settings?.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+      const savedKeywords = String(profile.search_settings?.keywords || '').trim();
+      const onboardingKeywords = savedKeywords ? '' : readOnboardingWelcomeSearchKeywords();
+      const keywordList = (savedKeywords || onboardingKeywords || '')
+        .split(',')
+        .map(k => k.trim())
+        .filter(Boolean);
       settingsField('keywords').value = keywordList.join('\n');
       renderChipEditor('keywords');
       renderLocationOptions();
@@ -515,16 +627,30 @@ const governmentPreferenceDefault = String(
         locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
       }
       document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
-      document.getElementById('date_range_days').value = String(profile.search_settings?.date_range_days ?? '');
       document.getElementById('seek_max_pages').value = String(profile.search_settings?.seek_max_pages ?? 10);
       document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
       document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first ?? true));
-      document.getElementById('linkedin_hours_old').value = String(profile.search_settings?.linkedin_hours_old ?? 24);
       document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search ?? 25);
+      const _dateWindowEl = document.getElementById('search_date_window');
+      if (_dateWindowEl) {
+        const _savedDays = profile.search_settings?.date_range_days ?? 3;
+        const _windowValues = [1, 3, 7, 15, 30];
+        const _closest = _windowValues.includes(_savedDays) ? _savedDays
+          : _windowValues.reduce((p, c) => Math.abs(c - _savedDays) < Math.abs(p - _savedDays) ? c : p);
+        _dateWindowEl.value = String(_closest);
+      }
+      const _minScoreSelect = document.getElementById('workspace_minimum_score');
+      if (_minScoreSelect) {
+        const _levels = (profile.match_levels || []).slice().sort((a, b) => (a.minimum_score || 0) - (b.minimum_score || 0));
+        _minScoreSelect.innerHTML = '<option value="0">All roles</option>' +
+          _levels.map(l => `<option value="${l.minimum_score}">${escapeHtml(l.label)} &amp; above</option>`).join('');
+        const _savedScore = loadedUserSettings?.workspace?.minimum_score;
+        if (_savedScore !== undefined) _minScoreSelect.value = String(_savedScore);
+      }
       const _liEasyApply = profile.search_settings?.[LINKEDIN_EASY_APPLY_ONLY];
       document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
       document.getElementById('engagement_type').value = profile.match_preferences?.engagement_type || 'both';
-      document.getElementById('work_mode_preference').value = String(profile.match_preferences?.work_mode_preference || '').trim().toLowerCase();
+      setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);
       const governmentPreference = document.getElementById('prefer_government');
       if (governmentPreference) {
         governmentPreference.value = String(profile.match_preferences?.prefer_government || governmentPreferenceDefault).trim().toLowerCase();
@@ -547,23 +673,25 @@ const governmentPreferenceDefault = String(
       for (const [id, key] of ruleTextAreas) {
         settingsField(id).value = rulesToText(profile[id], key);
       }
-      renderAdvancedChipEditors();
+      renderGlobaldChipEditors();
     }
 
     // Populate the global admin form from the server payload.
-    function fillAdvanceForm(settings) {
-      loadedAdvanceSettings = settings || {};
-      const fitHl = loadedAdvanceSettings.fit_highlights || {};
-      const searchDefaults = loadedAdvanceSettings.search_settings || {};
-      const searchLimits = loadedAdvanceSettings.search_limits || {};
-      const evidenceWeights = loadedAdvanceSettings.candidate_profile_tier_weights || {};
-      const preferenceWeights = loadedAdvanceSettings.preference_weights || {};
-      const historySettings = loadedAdvanceSettings.history_settings || {};
-      const descriptionTrustSettings = loadedAdvanceSettings.description_trust_settings || {};
-      const sourceDocumentSettings = loadedAdvanceSettings.source_document_settings || {};
-      const salaryLimits = loadedAdvanceSettings.salary_limits || {};
-      const onboarding = loadedAdvanceSettings.onboarding_settings || {};
-      const llmSettings = loadedAdvanceSettings.llm_settings || {};
+    function fillGlobalForm(settings) {
+      loadedGlobalSettings = settings || {};
+      const fitHl = loadedGlobalSettings.fit_highlights || {};
+      const searchDefaults = loadedGlobalSettings.search_settings || {};
+      const searchLimits = loadedGlobalSettings.search_limits || {};
+      const evidenceWeights = loadedGlobalSettings.candidate_profile_tier_weights || {};
+      const preferenceWeights = loadedGlobalSettings.preference_weights || {};
+      const historySettings = loadedGlobalSettings.history_settings || {};
+      const descriptionTrustSettings = loadedGlobalSettings.description_trust_settings || {};
+      const sourceDocumentSettings = loadedGlobalSettings.source_document_settings || {};
+      const defaultCountrySuffix = loadedGlobalSettings.default_country_suffix || '';
+      const salaryLimits = loadedGlobalSettings.salary_limits || {};
+      const onboarding = loadedGlobalSettings.onboarding_settings || {};
+      const llmSettings = loadedGlobalSettings.llm_settings || {};
+      const playwrightSettings = loadedGlobalSettings.playwright_settings || {};
       const setBounds = (id, bounds) => {
         const input = document.getElementById(id);
         if (!input || !bounds) return;
@@ -589,6 +717,10 @@ const governmentPreferenceDefault = String(
       setBounds('search_default_seek_max_pages', searchLimits.seek_max_pages);
       setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
       setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
+      document.getElementById('default_country_suffix').value = defaultCountrySuffix;
+      document.getElementById('playwright_viewport_width').value = String(playwrightSettings.playwright_viewport_width ?? '');
+      document.getElementById('playwright_viewport_height').value = String(playwrightSettings.playwright_viewport_height ?? '');
+      document.getElementById('playwright_selector_timeout').value = String(playwrightSettings.playwright_selector_timeout ?? '');
 
       const rangeText = (value) => value?.min !== undefined && value?.max !== undefined ? `${value.min} to ${value.max}` : 'managed by the server';
       document.getElementById('search_default_date_range_days_bounds').textContent = rangeText(searchLimits.date_range_days);
@@ -608,6 +740,11 @@ const governmentPreferenceDefault = String(
       document.getElementById('preference_government_weight').value = String(preferenceWeights.government ?? '');
       document.getElementById('preference_freshness_weight').value = String(preferenceWeights.freshness ?? '');
 
+      document.getElementById('history_max_history_sightings').value = String(historySettings.max_history_sightings ?? '');
+      document.getElementById('history_repeated_listing_min_times_seen').value = String(historySettings.repeated_listing_min_times_seen ?? '');
+      document.getElementById('history_repeated_listing_min_span_days').value = String(historySettings.repeated_listing_min_span_days ?? '');
+      document.getElementById('history_multi_listing_red_flag_min_listings').value = String(historySettings.multi_listing_red_flag_min_listings ?? '');
+      document.getElementById('history_multi_listing_red_flag_min_span_days').value = String(historySettings.multi_listing_red_flag_min_span_days ?? '');
       document.getElementById('onboarding_extraction_lookback_years').value = String(onboarding.extraction_lookback_years ?? '');
       document.getElementById('onboarding_title_extraction_min_months').value = String(onboarding.title_extraction_min_months ?? '');
       document.getElementById('onboarding_max_target_patterns').value = String(onboarding.max_target_patterns ?? '');
@@ -618,6 +755,7 @@ const governmentPreferenceDefault = String(
       document.getElementById('onboarding_signal_cluster_dense_snippet_alias_hits').value = String(onboarding.signal_cluster_dense_snippet_alias_hits ?? '');
       document.getElementById('onboarding_capability_strength_preset').value = onboarding.capability_strength_preset || '';
       document.getElementById('llm_model_options').value = (llmSettings.model_options || []).join('\n');
+      setBounds('llm_max_llm_chars', llmSettings.max_llm_chars_limits);
       document.getElementById('llm_max_llm_chars').value = String(llmSettings.max_llm_chars ?? '');
       document.getElementById('llm_pricing_per_1m').value = JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2);
       document.getElementById('llm_prompt_settings').value = JSON.stringify(llmSettings.llm_prompt_settings || {}, null, 2);
@@ -668,13 +806,14 @@ const governmentPreferenceDefault = String(
     }
 
     // Build the payload that saves only the global admin settings.
-    function collectAdvanceSettings() {
-      const current = loadedAdvanceSettings || {};
+    function collectGlobalSettings() {
+      const current = loadedGlobalSettings || {};
       const currentSearch = current.search_settings || {};
       const currentLimits = current.search_limits || {};
       const currentHistory = current.history_settings || {};
       const currentDescriptionTrust = current.description_trust_settings || {};
       const currentSourceDocuments = current.source_document_settings || {};
+      const currentPlaywright = current.playwright_settings || {};
       const currentSalaryLimits = current.salary_limits || {};
       const currentOnboarding = current.onboarding_settings || {};
       const readNumber = (id, fallback) => {
@@ -709,6 +848,7 @@ const governmentPreferenceDefault = String(
             return raw === 'true';
           })(),
         },
+        default_country_suffix: document.getElementById('default_country_suffix').value.trim(),
         search_limits: {
           date_range_days: {
             min: readNumber('search_limit_date_range_days_min', currentLimits.date_range_days?.min),
@@ -752,6 +892,11 @@ const governmentPreferenceDefault = String(
           supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', current.candidate_profile_tier_weights?.supplementary_candidate_profile_context),
         },
         history_settings: {
+          max_history_sightings: readNumber('history_max_history_sightings', currentHistory.max_history_sightings),
+          repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
+          repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
+          multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),
+          multi_listing_red_flag_min_span_days: readNumber('history_multi_listing_red_flag_min_span_days', currentHistory.multi_listing_red_flag_min_span_days),
           archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
           hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
         },
@@ -762,6 +907,12 @@ const governmentPreferenceDefault = String(
           allowed_suffixes: Array.isArray(currentSourceDocuments.allowed_suffixes)
             ? [...currentSourceDocuments.allowed_suffixes]
             : toLines(document.getElementById('source_document_allowed_suffixes').value),
+        },
+        playwright_settings: {
+          ...currentPlaywright,
+          playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
+          playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
+          playwright_selector_timeout: readNumber('playwright_selector_timeout', currentPlaywright.playwright_selector_timeout),
         },
         onboarding_settings: {
           ...currentOnboarding,
@@ -827,53 +978,65 @@ const governmentPreferenceDefault = String(
 
     function renderTelegramConnectPanel(settings) {
       const panel = document.getElementById('telegram_connect_panel');
+      const renderConnectHelp = (bodyHtml) => `
+        <details class="help-drawer">
+          <summary>Connect your Telegram account</summary>
+          <div class="help-box">
+            ${bodyHtml}
+          </div>
+        </details>
+      `;
       if (!settings?.telegram?.bot_token_present) {
         telegramConnectLink = '';
-        panel.innerHTML = '<div class="help-box"><p><strong>Connect your Telegram account</strong></p><p class="field-help">Save your Bot Token and Bot Username first. After that, this area will show the Telegram link you open to connect your own account to this bot.</p></div>';
+        panel.innerHTML = renderConnectHelp(`
+          <p class="field-help">Save your Bot Token and Bot Username first. After that, this area will show the Telegram link you open to connect your own account to this bot.</p>
+        `);
         return;
       }
       if (!telegramConnectLink) {
-        panel.innerHTML = '<div class="help-box"><p><strong>Connect your Telegram account</strong></p><p class="field-help">Settings are saved. Click <strong>Open Telegram Link</strong> below to open the bot chat in Telegram, then press <strong>Start</strong>.</p></div>';
+        panel.innerHTML = renderConnectHelp(`
+          <p class="field-help">Settings are saved. Click <strong>Open Telegram Link</strong> below to open the bot chat in Telegram, then press <strong>Start</strong>.</p>
+        `);
         return;
       }
-      panel.innerHTML = `
-        <div class="help-box">
-          <p><strong>Connect your Telegram account</strong></p>
-          <p class="field-help">This step tells your personal bot which Telegram account should receive alerts.</p>
-          <p class="field-help"><strong>Telegram link:</strong> <a href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer" style="word-break: break-all;">${escapeHtml(telegramConnectLink)}</a></p>
-          <p class="field-help"><strong>What "Open Telegram Link" means:</strong> it opens this bot chat in Telegram on this device so you can press <strong>Start</strong>.</p>
-          <p class="field-help"><strong>Finish setup:</strong></p>
-          <ol style="margin: 0; padding-left: 20px; color: var(--muted); font-size: 0.9rem; line-height: 1.5;">
-            <li>Click <strong>Open Telegram Link</strong>.</li>
-            <li>Telegram opens the bot chat.</li>
-            <li>Press <strong>Start</strong> once.</li>
-            <li>Come back here and click <strong>Refresh Telegram Connection</strong>.</li>
-          </ol>
-          <p class="field-help" style="margin-top: 12px;"><em>If the link does not open, make sure Telegram is installed or open the link on your phone.</em></p>
-        </div>
-      `;
+      panel.innerHTML = renderConnectHelp(`
+        <div class="help">This step tells your personal bot which Telegram account should receive alerts.</div>
+        <div class="help">Telegram link: <a href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer" style="word-break: break-all;">${escapeHtml(telegramConnectLink)}</a></div>
+        <div class="help">What "Open Telegram Link" means: it opens this bot chat in Telegram on this device so you can press Start.</div>
+        <div class="help">Finish setup:</div>
+        <ol>
+          <li>Click <strong>Open Telegram Link</strong>.</li>
+          <li>Telegram opens the bot chat.</li>
+          <li>Press <strong>Start</strong> once.</li>
+          <li>Come back here and click <strong>Refresh Telegram Connection</strong>.</li>
+        </ol>
+        <p class="field-help" style="margin-top: 12px;"><em>If the link does not open, make sure Telegram is installed or open the link on your phone.</em></p>
+      `);
     }
 
     function renderLlmModelOptions() {
       const select = document.getElementById('llm_model');
       if (!select) return;
-      const modelOptions = loadedAdvanceSettings?.llm_settings?.model_options;
+      const modelOptions = loadedGlobalSettings?.llm_settings?.model_options;
       const options = Array.isArray(modelOptions)
         ? modelOptions.map(model => String(model || '').trim()).filter(Boolean)
         : [];
-      const currentModel = String(loadedAgentSettings?.llm?.model || '').trim();
+      const currentModel = String(loadedUserSettings?.llm?.model || '').trim();
+      const mergedOptions = currentModel && !options.includes(currentModel)
+        ? [currentModel, ...options]
+        : options;
       select.innerHTML = ['<option value="">Select a model</option>']
-        .concat(options.map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`))
+        .concat(mergedOptions.map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`))
         .join('');
-      if (currentModel && options.includes(currentModel)) {
+      if (currentModel) {
         select.value = currentModel;
       }
     }
 
-    function fillAgentSettings(settings) {
-      loadedAgentSettings = settings || {};
-      const dashboard = settings?.dashboard || {};
-      document.getElementById('dashboard_minimum_score').value = String(dashboard.minimum_score ?? '');
+    function fillUserSettings(settings) {
+      loadedUserSettings = settings || {};
+      const workspace = settings?.workspace || {};
+      document.getElementById('workspace_minimum_score').value = String(workspace.minimum_score ?? '');
       const schedule = settings?.schedule || {};
       document.getElementById('schedule_daily_time_local').value = schedule.daily_time_local || '08:30';
       const telegram = settings?.telegram || {};
@@ -896,21 +1059,26 @@ const governmentPreferenceDefault = String(
       showStatus('Profile loaded.', 'ok', { autoHideMs: 2600 });
     }
 
-    async function loadAdvanceSettings() {
-      const response = await jobHunterFetch('/api/advance-settings');
+    async function loadGlobalSettings() {
+      const response = await jobHunterFetch('/api/global-settings');
       if (!response.ok) throw new Error('Could not load admin settings');
       const settings = await response.json();
-      loadedAdvanceSettings = settings;
-      fillAdvanceForm(settings);
+      loadedGlobalSettings = settings;
+      fillGlobalForm(settings);
     }
 
-    function collectAgentSettings() {
-      const currentSchedule = loadedAgentSettings?.schedule || {};
+    function collectUserSettings() {
+      const currentSchedule = loadedUserSettings?.schedule || {};
+      const currentLlmModel = String(
+        document.getElementById('llm_model')?.value
+        || loadedUserSettings?.llm?.model
+        || ''
+      ).trim();
       return {
-        dashboard: {
+        workspace: {
           minimum_score: (() => {
-            const raw = document.getElementById('dashboard_minimum_score').value;
-            return raw !== '' ? Number(raw) : (loadedAgentSettings?.dashboard?.minimum_score ?? 0);
+            const raw = document.getElementById('workspace_minimum_score').value;
+            return raw !== '' ? Number(raw) : (loadedUserSettings?.workspace?.minimum_score ?? 0);
           })(),
         },
         schedule: {
@@ -923,17 +1091,15 @@ const governmentPreferenceDefault = String(
           bot_username: document.getElementById('telegram_bot_username').value.trim().replace(/^@+/, ''),
           disable_link_preview: document.getElementById('telegram_disable_link_preview').value === 'true',
         },
-        llm: {
-          model: document.getElementById('llm_model').value.trim(),
-        },
+        llm: currentLlmModel ? { model: currentLlmModel } : {},
       };
     }
 
-    async function loadAgentSettings() {
-      const response = await jobHunterFetch('/api/agent-settings');
+    async function loadUserSettings() {
+      const response = await jobHunterFetch('/api/user-settings');
       if (!response.ok) throw new Error('Could not load alert settings');
       const settings = await response.json();
-      fillAgentSettings(settings);
+      fillUserSettings(settings);
     }
 
     async function loadTelegramConnectLink() {
@@ -949,7 +1115,7 @@ const governmentPreferenceDefault = String(
       const response = await jobHunterFetch('/api/telegram/sync', { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not refresh the connected Telegram account');
-      fillAgentSettings(payload.settings || {});
+      fillUserSettings(payload.settings || {});
       if (payload.result?.bot_username) {
         telegramConnectLink = `https://t.me/${payload.result.bot_username}?start=connect`;
       }
@@ -1091,7 +1257,7 @@ const governmentPreferenceDefault = String(
     });
 
     document.getElementById('add_capability_rule')?.addEventListener('click', () => {
-      capabilityRuleState = [...capabilityRuleState, { name: '', level: 'working', aliases: [] }];
+      capabilityRuleState = [...capabilityRuleState, { name: '', level: 'intermediate', aliases: [] }];
       expandedCapabilityRows.add(capabilityRuleState.length - 1);
       renderCapabilityRuleEditor();
       markDirty();
@@ -1222,6 +1388,14 @@ const governmentPreferenceDefault = String(
         el.addEventListener('input', markDirty);
       }
     });
+    document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        if (!cb.checked) {
+          const anyChecked = document.querySelectorAll('input[name="work_mode_preference"]:checked').length > 0;
+          if (!anyChecked) cb.checked = true;
+        }
+      });
+    });
 
     activeDiscardButton?.addEventListener('click', () => {
       window.location.reload();
@@ -1236,22 +1410,22 @@ const governmentPreferenceDefault = String(
       showInlineStatus(globalStatus, isAdminPage ? 'Saving admin changes...' : 'Saving settings...', 'loading');
       try {
         if (isAdminPage) {
-          const advanceSettings = collectAdvanceSettings();
-          const advanceResponse = await jobHunterFetch('/api/advance-settings', {
+          const globalSettings = collectGlobalSettings();
+          const globalResponse = await jobHunterFetch('/api/global-settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(advanceSettings),
+            body: JSON.stringify(globalSettings),
           });
-          const advancePayload = await advanceResponse.json().catch(() => ({}));
-          if (!advanceResponse.ok) {
-            throw new Error(advancePayload.error || 'Could not save admin settings.');
+          const globalPayload = await globalResponse.json().catch(() => ({}));
+          if (!globalResponse.ok) {
+            throw new Error(globalPayload.error || 'Could not save admin settings.');
           }
-          fillAdvanceForm(advancePayload);
+          fillGlobalForm(globalPayload);
           showInlineStatus(globalStatus, 'Admin settings saved.', 'ok');
           showStatus('Admin settings saved successfully.', 'ok');
         } else {
           const profile = collectProfile();
-          const agentSettings = collectAgentSettings();
+      const agentSettings = collectUserSettings();
 
           const profileResponse = await jobHunterFetch('/api/profile', {
             method: 'PATCH',
@@ -1263,21 +1437,21 @@ const governmentPreferenceDefault = String(
             throw new Error(profilePayload.error || 'Could not save profile settings.');
           }
 
-          const agentResponse = await jobHunterFetch('/api/agent-settings', {
+      const userResponse = await jobHunterFetch('/api/user-settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(agentSettings),
           });
-          const agentPayload = await agentResponse.json().catch(() => ({}));
-          if (!agentResponse.ok) {
-            throw new Error(agentPayload.error || 'Could not save alert settings.');
-          }
+      const userPayload = await userResponse.json().catch(() => ({}));
+      if (!userResponse.ok) {
+        throw new Error(userPayload.error || 'Could not save user settings.');
+      }
 
           fillForm(profilePayload);
-          fillAgentSettings(agentPayload);
+        fillUserSettings(userPayload);
           initSliders();
           showInlineStatus(globalStatus, 'Settings saved.', 'ok');
-          showStatus('Settings saved successfully.', 'ok');
+          showStatus('Settings saved successfully.', 'ok', { autoHideMs: 2500 });
         }
         clearDirty();
       } catch (err) {
@@ -1292,8 +1466,8 @@ const governmentPreferenceDefault = String(
 
     activeSaveButton?.addEventListener('click', saveActivePage);
     const pageLoads = isAdminPage
-      ? [loadAdvanceSettings()]
-      : [loadProfile(), loadAgentSettings()];
+      ? [loadGlobalSettings()]
+      : [loadProfile(), loadUserSettings()];
     if (!isAdminPage) {
       pageLoads.push(loadRunStats());
     }

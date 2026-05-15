@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from job_hunter_agent import workspace_data
-from job_hunter_agent.agent_settings import get_workspace_minimum_score
-from job_hunter_agent.advance_settings import get_archive_stale_after_days, get_hidden_review_days
+from job_hunter_agent.user_settings import get_workspace_minimum_score
+from job_hunter_agent.global_settings import get_archive_stale_after_days, get_hidden_review_days
 from job_hunter_agent.workspace_renderer import (
     ARCHIVE_LABEL,
     humanize_reject_reason,
@@ -401,3 +401,4 @@ def render_html(
         output_file = REPO_ROOT / output_file
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(html, encoding="utf-8")
+

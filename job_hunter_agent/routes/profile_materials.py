@@ -49,19 +49,20 @@ def api_source_materials_put(body: dict = Body(...)):  # type: ignore[no-untyped
     return json_response(updated)
 
 
-@router.get("/api/advance-settings")
-def api_advance_settings_get(request: Request):  # type: ignore[no-untyped-def]
+@router.get("/api/global-settings")
+def api_global_settings_get(request: Request):  # type: ignore[no-untyped-def]
     if not is_admin(request):
         return auth_required_response("/admin", False)
-    return json_response(srv.load_advance_settings())
+    return json_response(srv.load_global_settings())
 
 
-@router.patch("/api/advance-settings")
-def api_advance_settings_patch(request: Request, body: dict = Body(...)):  # type: ignore[no-untyped-def]
+@router.patch("/api/global-settings")
+def api_global_settings_patch(request: Request, body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:
         if not is_admin(request):
             return auth_required_response("/admin", False)
-        updated = srv.save_advance_settings(body)
+        updated = srv.save_global_settings(body)
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(updated)
+

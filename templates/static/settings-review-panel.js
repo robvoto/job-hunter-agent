@@ -1,14 +1,25 @@
-﻿    const LINKEDIN_EASY_APPLY_ONLY = 'linkedin_easy_apply_only';
+﻿    var LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
+    window.LINKEDIN_EASY_APPLY_ONLY = LINKEDIN_EASY_APPLY_ONLY;
 
-    const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
+    const reviewGovernmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
       ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
       : [];
-    const governmentPreferenceDefault = String(
+    const reviewGovernmentPreferenceDefault = String(
       window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
-      || governmentPreferenceOptions?.[0]?.value
+      || reviewGovernmentPreferenceOptions?.[0]?.value
       || 'any'
     ).trim().toLowerCase();
-    const currencyUi = window.JobHunterCurrencyUi || {};
+    const settingsReviewCurrencyUi = window.JobHunterCurrencyUi || {};
+    const waitMount = document.getElementById('job_hunter_wait_mount');
+    const waitUi = window.JobHunterWaitUi?.createController
+      ? window.JobHunterWaitUi.createController(waitMount)
+      : null;
+    const runUi = window.JobHunterRunUi || {};
+    const WORKSPACE_PATH = runUi.workspacePath || '/workspace';
+    const SEARCH_WAIT_COPY = runUi.searchWaitCopy || 'This search can take a while because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.';
+    const RUN_COMPLETE_REDIRECT_DELAY_MS = runUi.redirectDelayMs || 600;
+    let runStatusPollHandle = null;
+    let runStatusWasRunning = false;
 
     function getReviewChoiceMeta(choice) {
       if (!choice) return { label: 'Choose a strength' };
@@ -23,12 +34,24 @@
       `;
     }
 
+    function showRunWait(title, copy, subcopy) {
+      waitUi?.show({ title, copy, subcopy });
+    }
+
+    function updateRunWait(patch) {
+      waitUi?.update(patch);
+    }
+
+    function hideRunWait() {
+      waitUi?.hide();
+    }
+
     function reviewOptionMarkup(selectedValue) {
       const options = [
         ['', 'Choose a strength'],
         ['strong', capabilityStrengthMeta('strong')?.label || 'Expert'],
-        ['working', capabilityStrengthMeta('working')?.label || 'Intermediate'],
-        ['basic', capabilityStrengthMeta('basic')?.label || 'Historical'],
+        ['intermediate', capabilityStrengthMeta('intermediate')?.label || 'Intermediate'],
+        ['historical', capabilityStrengthMeta('historical')?.label || 'Historical'],
       ];
       return options.map(([value, label]) => {
         const selected = value === selectedValue ? ' selected' : '';
@@ -53,7 +76,7 @@
       const ruleSuggestions = suggestions.rule_suggestions || [];
       const summary = suggestions.summary || {};
       if (!capabilitySuggestions.length && !ruleSuggestions.length) {
-        panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capabilities and repeat junk-role patterns will show up here for confirmation.</p>';
+        panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capabilities and repeated exclusion patterns will show up here for confirmation.</p>';
         return;
       }
       const capabilityHtml = capabilitySuggestions.length ? `
@@ -113,7 +136,7 @@
 
       const ruleHtml = (actionableRules.length || workingFilters.length) ? `
         <div class="tuning-group">
-          <h3>Repeated junk-role patterns</h3>
+          <h3>Repeated exclusion patterns</h3>
           <p class="tuning-group-copy">Patterns from rejects that are worth keeping, strengthening, or watching before you touch search keywords.</p>
           ${actionableRules.length ? `<div class="review-list">${actionableRules.map(ruleCardMarkup).join('')}</div>` : ''}
           ${workingFilters.length ? `
@@ -148,26 +171,29 @@
           keywords: toLines(settingsField('keywords').value).join(', '),
           locations: document.getElementById('locations').value.trim() ? [document.getElementById('locations').value.trim()] : [],
           classification_ids: toLines(document.getElementById('classification_ids').value),
-          date_range_days: Number(document.getElementById('date_range_days').value),
+          ...(() => {
+            const _w = Number(document.getElementById('search_date_window')?.value || '3');
+            const _hoursMap = {0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720};
+            return { date_range_days: _w === 0 ? 30 : _w, linkedin_hours_old: _hoursMap[_w] ?? 72 };
+          })(),
           seek_max_pages: Number(document.getElementById('seek_max_pages').value),
           enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
           sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
-          linkedin_hours_old: Number(document.getElementById('linkedin_hours_old').value) || 24,
           linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
           [LINKEDIN_EASY_APPLY_ONLY]: (() => { const v = document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value; return v === '' ? null : v === 'true'; })(),
         },
         salary_preferences: {
-          minimum_salary_yearly: currencyUi.parseCurrencyValue
-            ? currencyUi.parseCurrencyValue(document.getElementById('minimum_salary_yearly')?.value)
+          minimum_salary_yearly: settingsReviewCurrencyUi.parseCurrencyValue
+            ? settingsReviewCurrencyUi.parseCurrencyValue(document.getElementById('minimum_salary_yearly')?.value)
             : Number(String(document.getElementById('minimum_salary_yearly')?.value || '').replace(/,/g, '')) || 0,
-          minimum_daily_rate: currencyUi.parseCurrencyValue
-            ? currencyUi.parseCurrencyValue(document.getElementById('minimum_daily_rate')?.value)
+          minimum_daily_rate: settingsReviewCurrencyUi.parseCurrencyValue
+            ? settingsReviewCurrencyUi.parseCurrencyValue(document.getElementById('minimum_daily_rate')?.value)
             : Number(String(document.getElementById('minimum_daily_rate')?.value || '').replace(/,/g, '')) || 0,
         },
         match_preferences: {
           engagement_type: document.getElementById('engagement_type').value,
-          work_mode_preference: String(document.getElementById('work_mode_preference').value || '').trim().toLowerCase(),
-          prefer_government: String(document.getElementById('prefer_government').value || governmentPreferenceDefault).trim().toLowerCase(),
+          work_mode_preference: Array.from(document.querySelectorAll('input[name="work_mode_preference"]:checked')).map((input) => input.value),
+          prefer_government: String(document.getElementById('prefer_government').value || reviewGovernmentPreferenceDefault).trim().toLowerCase(),
         },
         preference_weights: {
           fit: Number(document.getElementById('fit_weight').value || 1),
@@ -189,7 +215,7 @@
       };
     }
 
-    function collectAdvanceSettings() {
+    function collectGlobalSettings() {
       return {
         fit_highlights: {
           strong_capability_count: Number(document.getElementById('highlight_strong_capability_count').value),
@@ -199,6 +225,54 @@
           max_highlights: Number(document.getElementById('highlight_max_highlights').value),
         },
       };
+    }
+
+    function stopRunStatusPolling() {
+      if (runStatusPollHandle) {
+        window.clearInterval(runStatusPollHandle);
+        runStatusPollHandle = null;
+      }
+    }
+
+    function startRunStatusPolling() {
+      if (runStatusPollHandle) {
+        return;
+      }
+      runStatusPollHandle = window.setInterval(syncRunStatus, 10000);
+    }
+
+    async function syncRunStatus() {
+      try {
+        const response = await jobHunterFetch('/api/run-status', { method: 'GET' });
+        if (!response.ok) {
+          throw new Error('Could not check run status.');
+        }
+        const payload = await response.json().catch(() => ({}));
+        const isRunning = payload?.status === 'running';
+        if (isRunning) {
+          runStatusWasRunning = true;
+          startRunStatusPolling();
+          showRunWait(
+            'Search in progress',
+            'Job Hunter is checking sources and ranking matches.',
+            SEARCH_WAIT_COPY
+          );
+          return;
+        }
+        stopRunStatusPolling();
+        if (runStatusWasRunning) {
+          runStatusWasRunning = false;
+          updateRunWait({
+            title: 'Refreshing workspace',
+            copy: 'Loading the latest workspace now.',
+          });
+          showStatus('Search finished. Loading the workspace now.', 'ok');
+          window.setTimeout(() => window.location.replace(WORKSPACE_PATH), RUN_COMPLETE_REDIRECT_DELAY_MS);
+          return;
+        }
+        hideRunWait();
+      } catch (error) {
+      }
     }
 
     async function patchProfile(payload, successMessage) {
@@ -219,8 +293,8 @@
 
     async function runSearchNow() {
       const profile = collectProfile();
-      const agentSettings = collectAgentSettings();
-      const agentResponse = await jobHunterFetch('/api/agent-settings', {
+      const agentSettings = collectUserSettings();
+      const agentResponse = await jobHunterFetch('/api/user-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agentSettings),
@@ -229,10 +303,15 @@
       if (!agentResponse.ok) {
         throw new Error(agentPayload.error || 'Could not save shortlist settings');
       }
-      fillAgentSettings(agentPayload);
+      fillUserSettings(agentPayload);
       await patchProfile(
         { search_settings: profile.search_settings, salary_preferences: profile.salary_preferences },
         'Search settings saved to profile.json.'
+      );
+      showRunWait(
+        'Starting search',
+        'Saving your settings and beginning the scrape.',
+        SEARCH_WAIT_COPY
       );
       const response = await jobHunterFetch('/api/run', {
         method: 'POST',
@@ -241,7 +320,15 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not start run');
-      showStatus('Background run started. Return to results when complete.', 'ok');
+      runStatusWasRunning = true;
+      startRunStatusPolling();
+      void syncRunStatus();
+      showRunWait(
+        'Search in progress',
+        'Job Hunter is checking sources and ranking matches.',
+        SEARCH_WAIT_COPY
+      );
+      showStatus('Search started. The workspace will open when it finishes.', 'ok');
       return payload;
     }
 
@@ -263,6 +350,7 @@
         try {
           await runSearchNow();
         } catch (error) {
+          hideRunWait();
           showStatus(error.message, 'error');
         }
       });
@@ -365,4 +453,3 @@
 
 
     loadReviewData();
-

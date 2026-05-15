@@ -277,8 +277,8 @@ def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
     assert normalized["secondary_title_patterns"] == ["scrum master"]
 
 
-def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
-    sanitized = server_helpers.SettingsHandler._sanitize_agent_settings_payload(
+def test_user_settings_schedule_payload_is_sanitized_and_exposed():
+    sanitized = server_helpers.SettingsHandler._sanitize_user_settings_payload(
         {
             "workspace": {
                 "minimum_score": 150,
@@ -298,7 +298,7 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
         "loop_sleep_seconds": 60,
     }
 
-    public_payload = server_helpers.SettingsHandler._public_agent_settings_payload(
+    public_payload = server_helpers.SettingsHandler._public_user_settings_payload(
         {
             "workspace": {
                 "minimum_score": 61,
@@ -319,10 +319,10 @@ def test_agent_settings_schedule_payload_is_sanitized_and_exposed():
     }
 
 
-def test_agent_settings_model_uses_advanced_setting_options(monkeypatch):
+def test_user_settings_model_uses_advanced_setting_options(monkeypatch):
     monkeypatch.setattr(
         server_helpers,
-        "load_advance_settings",
+        "load_global_settings",
         lambda: {
             "llm_settings": {
                 "model_options": ["gpt-4o-mini", "gpt-4o"],
@@ -330,7 +330,7 @@ def test_agent_settings_model_uses_advanced_setting_options(monkeypatch):
         },
     )
 
-    sanitized = server_helpers.SettingsHandler._sanitize_agent_settings_payload(
+    sanitized = server_helpers.SettingsHandler._sanitize_user_settings_payload(
         {
             "llm": {
                 "model": "gpt-4o",
@@ -340,8 +340,8 @@ def test_agent_settings_model_uses_advanced_setting_options(monkeypatch):
 
     assert sanitized["llm"] == {"model": "gpt-4o"}
 
-    with pytest.raises(ValueError, match="Advanced Settings"):
-        server_helpers.SettingsHandler._sanitize_agent_settings_payload(
+    with pytest.raises(ValueError, match="Global Settings"):
+        server_helpers.SettingsHandler._sanitize_user_settings_payload(
             {
                 "llm": {
                     "model": "gpt-4.1",
@@ -350,9 +350,9 @@ def test_agent_settings_model_uses_advanced_setting_options(monkeypatch):
         )
 
 
-def test_agent_settings_schedule_payload_rejects_bad_time_format():
+def test_user_settings_schedule_payload_rejects_bad_time_format():
     try:
-        server_helpers.SettingsHandler._sanitize_agent_settings_payload(
+        server_helpers.SettingsHandler._sanitize_user_settings_payload(
             {
                 "schedule": {
                     "daily_time_local": "9:45 am",
@@ -485,3 +485,4 @@ def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
 
     assert result["ok"] is True
     assert calls == [True]
+

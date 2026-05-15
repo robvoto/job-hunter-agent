@@ -48,7 +48,7 @@ from job_hunter_agent.profile_store import get_match_levels, load_profile
 from job_hunter_agent.role_analysis import infer_role_sector
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.job_types import load_job_type_filter_groups
-from job_hunter_agent.advance_settings import get_default_country_suffix
+from job_hunter_agent.global_settings import get_default_country_suffix
 from job_hunter_agent.salary_utils import salary_sort_value
 from job_hunter_agent.score_labels import (
     render_badge,
@@ -909,3 +909,4 @@ def render_match_level_guide_html(profile: Optional[dict] = None) -> str:
         '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
     ])
     return "".join(guide_bits)
+

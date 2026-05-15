@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body
 
 from job_hunter_agent.locations import resolve_location, find_nearest_location
-from job_hunter_agent.advance_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
+from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -23,7 +23,7 @@ from job_hunter_agent.profile_store import (
     normalize_capability_rules,
     normalize_work_mode_preferences,
 )
-from job_hunter_agent.advance_settings import get_salary_limits
+from job_hunter_agent.global_settings import get_salary_limits
 from job_hunter_agent.routes.responses import json_response
 
 router = APIRouter()
@@ -165,3 +165,4 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response({"ok": True, "message": "Onboarding profile saved.", "profile": updated})
+

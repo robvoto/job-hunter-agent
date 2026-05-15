@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/api/signal-registry")
 def api_signal_registry():  # type: ignore[no-untyped-def]
-    from job_hunter_agent.signal_registry import CATEGORY_LABELS, VALID_SIGNAL_CATEGORIES, load_registry
+    from job_hunter_agent.signal_registry import CATEGORY_LABELS, CATEGORY_METADATA, VALID_SIGNAL_CATEGORIES, load_registry
 
     registry = load_registry()
     signals = sorted(registry.values(), key=lambda r: str(r.get("signal", "")).lower())
@@ -21,6 +21,9 @@ def api_signal_registry():  # type: ignore[no-untyped-def]
                 {
                     "key": category,
                     "label": CATEGORY_LABELS.get(category, category.replace("_", " ").title()),
+                    "description": CATEGORY_METADATA.get(category, {}).get("description", ""),
+                    "examples": CATEGORY_METADATA.get(category, {}).get("examples", []),
+                    "warning": CATEGORY_METADATA.get(category, {}).get("warning"),
                 }
                 for category in sorted(VALID_SIGNAL_CATEGORIES)
             ],

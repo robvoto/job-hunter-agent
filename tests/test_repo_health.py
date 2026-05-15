@@ -1,7 +1,7 @@
 from pathlib import Path
 import importlib
 
-from job_hunter_agent.advance_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
+from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS, normalize_search_settings
 from job_hunter_agent import profile_store
 
@@ -31,7 +31,7 @@ def test_search_settings_clamp_source_fetch_limits():
     )
 
     assert normalized["seek_max_pages"] == DEFAULT_SEARCH_SETTINGS["seek_max_pages"]
-    assert normalized["linkedin_hours_old"] == 168
+    assert normalized["linkedin_hours_old"] == profile_store.load_global_settings()["search_limits"]["linkedin_hours_old"]["max"]
     assert normalized["linkedin_results_per_search"] == 5
     assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
 
@@ -39,7 +39,7 @@ def test_search_settings_clamp_source_fetch_limits():
 def test_search_settings_follow_managed_search_limits(monkeypatch):
     monkeypatch.setattr(
         profile_store,
-        "load_advance_settings",
+        "load_global_settings",
         lambda: {
             "search_limits": {
                 "date_range_days": {"min": 1, "max": 9},
@@ -77,7 +77,7 @@ def test_default_match_preferences_are_neutral():
 def test_active_modules_import():
     modules = [
         "job_hunter_agent.agent_runner",
-        "job_hunter_agent.agent_settings",
+        "job_hunter_agent.user_settings",
         "job_hunter_agent.config",
         "job_hunter_agent.cv_pipeline",
         "job_hunter_agent.filters",
@@ -96,3 +96,4 @@ def test_active_modules_import():
     ]
     for module in modules:
         importlib.import_module(module)
+

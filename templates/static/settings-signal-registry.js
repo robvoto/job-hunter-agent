@@ -76,6 +76,40 @@
       return entry?.label || category.replace(/_/g, ' ');
     }
 
+    function srCategoryMetadata(category) {
+      return srCategoryOptions().find(item => item.key === category) || null;
+    }
+
+    function srCategoryHelpHtml(categoryKey) {
+      const meta = srCategoryMetadata(categoryKey);
+      if (!meta) return '';
+      
+      const hasWarning = meta.warning && String(meta.warning).trim();
+      const examples = Array.isArray(meta.examples) ? meta.examples : [];
+      
+      let html = `<div class="sr-category-help">`;
+      
+      if (meta.description) {
+        html += `<p class="sr-help-description">${escapeHtml(meta.description)}</p>`;
+      }
+      
+      if (examples.length > 0) {
+        html += `<div class="sr-help-examples">
+          <strong>Examples:</strong>
+          <ul>
+            ${examples.map(ex => `<li>${escapeHtml(ex)}</li>`).join('')}
+          </ul>
+        </div>`;
+      }
+      
+      if (hasWarning) {
+        html += `<div class="sr-help-warning">${escapeHtml(meta.warning)}</div>`;
+      }
+      
+      html += `</div>`;
+      return html;
+    }
+
     function srTimestampValue(signal) {
       const history = Array.isArray(signal?.history) ? signal.history : [];
       const latest = history.length ? history[history.length - 1] : null;
@@ -229,10 +263,13 @@
     </details>
   </div>
   ${aliases.length ? `<div class="signal-row-meta">Seen as: ${escapeHtml(aliases.join(', '))}</div>` : '<div class="signal-row-meta signal-row-meta-empty"></div>'}
-  <select class="signal-category-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
-    <option value="">Choose category</option>
-    ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-  </select>
+  <div class="signal-category-wrapper">
+    <select class="signal-category-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
+      <option value="">Choose category</option>
+      ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+    </select>
+    ${category ? srCategoryHelpHtml(category) : ''}
+  </div>
   <div class="signal-row-actions">
     <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${isBusy || !category ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
     <button class="signal-action-btn signal-remove" type="button" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''} title="Remove" aria-label="Remove">&#215;</button>
@@ -320,7 +357,37 @@
       panel.querySelectorAll('.signal-category-select').forEach(select => {
         select.addEventListener('change', async () => {
           const key = select.dataset.srKey || '';
-          await srPatchSignal(key, { key, category: String(select.value || '').trim() }, 'Category saved');
+          const newCategory = String(select.value || '').trim();
+          const wrapper = select.closest('.signal-category-wrapper');
+          
+          // Update help panel dynamically
+          if (wrapper) {
+            const existingHelp = wrapper.querySelector('.sr-category-help');
+            if (existingHelp) {
+              existingHelp.remove();
+            }
+            if (newCategory) {
+              const helpHtml = srCategoryHelpHtml(newCategory);
+              if (helpHtml) {
+                select.insertAdjacentHTML('afterend', helpHtml);
+              }
+            }
+          }
+          
+          // Update approve button state
+          const article = select.closest('.signal-row');
+          if (article) {
+            const approveBtn = article.querySelector('.signal-approve');
+            if (approveBtn) {
+              if (newCategory) {
+                approveBtn.disabled = false;
+              } else {
+                approveBtn.disabled = true;
+              }
+            }
+          }
+          
+          await srPatchSignal(key, { key, category: newCategory }, 'Category saved');
         });
       });
 

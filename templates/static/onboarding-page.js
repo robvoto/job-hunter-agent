@@ -16,7 +16,7 @@ const refs = Object.freeze({
   cvDropZoneContent: document.getElementById('cv_drop_zone_content'),
   locationSelect: document.getElementById('location_search'),
   locationSelected: document.getElementById('location_selected'),
-  workModePreference: document.getElementById('work_mode_preference'),
+  workModePreferences: Array.from(document.querySelectorAll('input[name="work_mode_preference"]')),
   governmentPreferenceSelect: document.getElementById('government_preference'),
   reviewCapabilityCount: document.getElementById('review_capability_count'),
   salaryYearlyBlock: document.getElementById('salary_yearly_block'),
@@ -75,7 +75,7 @@ const REVIEW_STEP = 2;
 const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
 const locationUi = window.JobHunterLocationUi || {};
-const currencyUi = window.JobHunterCurrencyUi || {};
+const onboardingCurrencyUi = window.JobHunterCurrencyUi || {};
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
 const ENGAGEMENT_TYPE_OPTIONS = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
@@ -103,15 +103,6 @@ const GOVERNMENT_PREFERENCE_LABELS = Object.fromEntries(
 const WORK_MODE_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
   : [];
-const WORK_MODE_PREFERENCE_DEFAULT = String(
-  window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__
-  || WORK_MODE_PREFERENCE_OPTIONS?.[0]?.value
-  || ''
-).trim().toLowerCase();
-const WORK_MODE_PREFERENCE_LABELS = Object.fromEntries(
-  WORK_MODE_PREFERENCE_OPTIONS
-    .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
-);
 const WORK_MODE_PREFERENCE_VALUES = new Set(
   WORK_MODE_PREFERENCE_OPTIONS
     .map((option) => String(option.value || '').trim().toLowerCase())
@@ -207,42 +198,16 @@ async function postTestAction(path) {
   return payload;
 }
 
-function normalizeReviewText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
-}
 
-function normalizeReviewTitle(value) {
-  return normalizeReviewText(value);
-}
-
-function normalizeReviewTitleKey(value) {
-  return normalizeReviewTitle(value).toLowerCase();
-}
-
-function normalizeReviewTitleLists(primaryValues, secondaryValues) {
-  const primary = [];
-  const primarySeen = new Set();
-  for (const value of Array.isArray(primaryValues) ? primaryValues : []) {
-    const cleaned = normalizeReviewTitle(value);
-    const key = normalizeReviewTitleKey(cleaned);
-    if (!cleaned || primarySeen.has(key)) continue;
-    primarySeen.add(key);
-    primary.push(cleaned);
-  }
-  const secondary = [];
-  const secondarySeen = new Set();
-  for (const value of Array.isArray(secondaryValues) ? secondaryValues : []) {
-    const cleaned = normalizeReviewTitle(value);
-    const key = normalizeReviewTitleKey(cleaned);
-    if (!cleaned || primarySeen.has(key) || secondarySeen.has(key)) continue;
-    secondarySeen.add(key);
-    secondary.push(cleaned);
-  }
-  return { primary, secondary };
-}
 
 function getSelectedEngagementType() {
-  return String(refs.engagementInputs.find((input) => input.checked)?.value || ENGAGEMENT_TYPE_DEFAULT).trim().toLowerCase();
+  const value = String(refs.engagementInputs.find((input) => input.checked)?.value || ENGAGEMENT_TYPE_DEFAULT || 'both').trim().toLowerCase();
+  if (ENGAGEMENT_TYPE_VALUES.size > 0 && !ENGAGEMENT_TYPE_VALUES.has(value)) {
+    const fallback = refs.engagementInputs[0];
+    if (fallback) fallback.checked = true;
+    return String(fallback?.value || ENGAGEMENT_TYPE_DEFAULT || 'both').trim().toLowerCase();
+  }
+  return value;
 }
 
 function setSelectedEngagementType(value) {
@@ -264,23 +229,6 @@ function setGovernmentPreferenceValue(value) {
   }
 }
 
-function getWorkModePreferenceValue() {
-  return String(refs.workModePreference?.value || WORK_MODE_PREFERENCE_DEFAULT).trim().toLowerCase();
-}
-
-function setWorkModePreferenceValue(value) {
-  const selected = String(value || WORK_MODE_PREFERENCE_DEFAULT).trim().toLowerCase();
-  if (refs.workModePreference) {
-    const validValue = WORK_MODE_PREFERENCE_LABELS[selected] ? selected : WORK_MODE_PREFERENCE_DEFAULT;
-    refs.workModePreference.value = validValue;
-  }
-}
-
-function workModePreferenceLabel(value) {
-  const key = String(value || '').trim().toLowerCase();
-  return WORK_MODE_PREFERENCE_LABELS[key] || WORK_MODE_PREFERENCE_LABELS[WORK_MODE_PREFERENCE_DEFAULT] || '';
-}
-
 function getSalaryLimitMaximum(key) {
   const limit = salaryLimits?.[key] || {};
   const parsed = Number(limit.max);
@@ -289,16 +237,16 @@ function getSalaryLimitMaximum(key) {
 
 function setCurrencyFieldValue(input, value) {
   if (!input) return;
-  if (currencyUi.setCurrencyInputValue) {
-    currencyUi.setCurrencyInputValue(input, value);
+  if (onboardingCurrencyUi.setCurrencyInputValue) {
+    onboardingCurrencyUi.setCurrencyInputValue(input, value);
     return;
   }
   input.value = String(value ?? '');
 }
 
 function parseCurrencyFieldValue(value) {
-  if (currencyUi.parseCurrencyValue) {
-    return currencyUi.parseCurrencyValue(value);
+  if (onboardingCurrencyUi.parseCurrencyValue) {
+    return onboardingCurrencyUi.parseCurrencyValue(value);
   }
   const cleaned = String(value ?? '').replace(/[^\d]/g, '');
   return cleaned ? Number(cleaned) : '';
@@ -331,7 +279,7 @@ function saveWizardState() {
     reviewCapabilityRules,
     reviewCapabilityVisibleCount,
     selectedLocations,
-    workModePreference: getWorkModePreferenceValue(),
+    workModePreference: getWorkModePreferenceValues(),
     searchKeywords: reviewSearchKeywordsEl?.value || '',
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
@@ -355,7 +303,7 @@ function buildSearchBasicsProfilePatch() {
     },
     match_preferences: {
       engagement_type: engagementType,
-      work_mode_preference: getWorkModePreferenceValue(),
+      work_mode_preference: getWorkModePreferenceValues(),
       prefer_government: preferGovernment,
     },
     salary_preferences: {
@@ -426,7 +374,7 @@ function restoreWizardState() {
     const dailyEl = reviewMinimumDailyRateEl;
     if (dailyEl) setCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
     setSelectedEngagementType(state.engagementType || ENGAGEMENT_TYPE_DEFAULT);
-    setWorkModePreferenceValue(state.workModePreference || WORK_MODE_PREFERENCE_DEFAULT);
+    setWorkModePreferenceValues(state.workModePreference || []);
     setGovernmentPreferenceValue(state.preferGovernment || GOVERNMENT_PREFERENCE_DEFAULT);
     updateCompensationVisibility();
     if (state.step >= CHECK_STEP) {
@@ -572,6 +520,11 @@ function setStep(stepNumber, options = {}) {
     updatePrimaryCvStatus(preservedPrimaryCvFile);
   }
 
+  if (stepNumber === SEARCH_STEP) {
+    // Try to auto-detect location based on browser geolocation when entering search basics step
+    tryGeolocationDefault();
+  }
+
   if (formTitleEl) formTitleEl.textContent = `Step ${stepNumber}. ${meta.title()}`;
   const percent = STEP_COUNT > 1 ? Math.round(((stepNumber - 1) / (STEP_COUNT - 1)) * 100) : 100;
   if (progressFillEl) {
@@ -597,12 +550,56 @@ function normalizeLocationValue(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+async function tryGeolocationDefault() {
+  /**Request browser geolocation and set location to nearest city if user grants permission.*/
+  if (!navigator.geolocation) {
+    // Geolocation not available, skip
+    return;
+  }
+  
+  if (selectedLocations.length > 0) {
+    // Already selected, don't override
+    return;
+  }
+
+  try {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const response = await jobHunterFetch('/api/onboarding/lookup-location-by-geolocation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude, longitude }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (response.ok && data.location) {
+            setSelectedLocation(data.location);
+          }
+        } catch (error) {
+          // Silently ignore geolocation API errors; user can still manually select
+        }
+      },
+      () => {
+        // User denied geolocation or error occurred; silently continue with default
+      },
+      {
+        timeout: 5000,
+        enableHighAccuracy: false,
+        maximumAge: 600000, // Cache result for 10 minutes
+      }
+    );
+  } catch (error) {
+    // Silently ignore any geolocation errors
+  }
+}
+
 function renderLocationSelect() {
   if (!locationSelect) return;
-  if (locationUi.renderLocationOptions) {
-    locationUi.renderLocationOptions(locationSelect);
-  }
   const current = normalizeLocationValue(selectedLocations[0] || '');
+  if (locationUi.renderLocationOptions) {
+    locationUi.renderLocationOptions(locationSelect, { excludedValues: current ? [current] : [] });
+  }
   locationSelect.value = current;
   selectedLocations = current ? [current] : [];
   renderSelectedLocation();
@@ -619,10 +616,7 @@ function renderSelectedLocation() {
 function setSelectedLocation(value) {
   const normalized = normalizeLocationValue(value);
   selectedLocations = normalized ? [normalized] : [];
-  if (locationSelect) {
-    locationSelect.value = normalized;
-  }
-  renderSelectedLocation();
+  renderLocationSelect();
   saveWizardState();
 }
 
@@ -653,7 +647,7 @@ function searchPreferencesPayload() {
     keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
     engagement_type: getSelectedEngagementType(),
-    work_mode_preference: getWorkModePreferenceValue(),
+    work_mode_preference: getWorkModePreferenceValues(),
     prefer_government: getGovernmentPreferenceValue(),
     minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
     minimum_daily_rate: reviewMinimumDailyRateEl?.value.trim() || '',
@@ -687,11 +681,11 @@ function validateSearchPreferences(searchPrefs) {
   if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
     throw new Error('Location should look like a normal city, state, or region name.');
   }
-  if (!ENGAGEMENT_TYPE_VALUES.has(searchPrefs.engagement_type)) {
+  if (ENGAGEMENT_TYPE_VALUES.size > 0 && !ENGAGEMENT_TYPE_VALUES.has(searchPrefs.engagement_type)) {
     throw new Error('Please choose what type of work you are open to.');
   }
-  if (searchPrefs.work_mode_preference && !WORK_MODE_PREFERENCE_VALUES.has(searchPrefs.work_mode_preference)) {
-    throw new Error('Please choose a work mode or leave it as no preference.');
+  if ((Array.isArray(searchPrefs.work_mode_preference) ? searchPrefs.work_mode_preference : []).some((mode) => !WORK_MODE_PREFERENCE_VALUES.has(mode))) {
+    throw new Error('Please choose only remote, hybrid, or on-site.');
   }
   if (!searchPrefs.keywords) {
     throw new Error('Please confirm one primary search title.');
@@ -779,8 +773,8 @@ function applyProfileDefaults(profile) {
   if (reviewMinimumDailyRateEl && !String(reviewMinimumDailyRateEl.value || '').trim()) {
     setCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate ?? 0);
   }
-  if (!String(refs.workModePreference?.value || '').trim()) {
-    setWorkModePreferenceValue(matchPreferences.work_mode_preference || WORK_MODE_PREFERENCE_DEFAULT);
+  if (!getWorkModePreferenceValues().length) {
+    setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
   if (governmentPreferenceSelect && !String(governmentPreferenceSelect.value || '').trim()) {
     setGovernmentPreferenceValue(matchPreferences.prefer_government || GOVERNMENT_PREFERENCE_DEFAULT);
@@ -807,16 +801,16 @@ if (governmentPreferenceSelect) {
     scheduleSearchBasicsPersistence();
   });
 }
-if (refs.workModePreference) {
-  refs.workModePreference.addEventListener('change', () => {
+if (refs.workModePreferences.length) {
+  refs.workModePreferences.forEach((element) => element.addEventListener('change', () => {
     saveWizardState();
     scheduleSearchBasicsPersistence();
-  });
+  }));
 }
 [
   reviewMinimumSalaryYearlyEl,
   reviewMinimumDailyRateEl,
 ].filter(Boolean).forEach((input) => {
-  currencyUi.bindCurrencyInput?.(input);
+  onboardingCurrencyUi.bindCurrencyInput?.(input);
 });
 renderLocationSelect();
