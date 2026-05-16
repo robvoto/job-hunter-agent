@@ -334,7 +334,6 @@ def render_html(
     crawler_cards_html = _render_summary_cards_html([
         (run_stats.get("cards_seen", 0), "Cards seen"),
         (run_stats.get("detail_fetches", 0), "Ads reviewed"),
-        (run_stats.get("page_count", 0), "Pages crawled"),
         (f"{round(float(run_stats.get('keep_rate', 0.0)) * 100, 1)}%", "Keep rate"),
     ])
     application_cards_html = _render_summary_cards_html([

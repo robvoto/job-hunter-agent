@@ -10,13 +10,13 @@
             <input id="highlight_strong_capability_count" type="number" min="0" max="10" step="1">
             <div class="field-help">Shown on workspace job cards only. Controls how many strong capability matches appear before the card runs out of space.</div>
 
-            <label for="highlight_working_capability_count">Intermediate capability matches shown</label>
+            <label for="highlight_working_capability_count">Working capability matches shown</label>
             <input id="highlight_working_capability_count" type="number" min="0" max="10" step="1">
-            <div class="field-help">Shown on workspace job cards only. Controls how many intermediate capability matches appear per card.</div>
+            <div class="field-help">Shown on workspace job cards only. Controls how many working capability matches appear per card.</div>
 
-            <label for="highlight_basic_capability_count">Historical capability matches shown</label>
+            <label for="highlight_basic_capability_count">Basic capability matches shown</label>
             <input id="highlight_basic_capability_count" type="number" min="0" max="10" step="1">
-            <div class="field-help">Shown on workspace job cards only. Controls how many historical capability matches appear per card.</div>
+            <div class="field-help">Shown on workspace job cards only. Controls how many basic capability matches appear per card.</div>
 
             <label for="highlight_reviewed_signal_count">Reviewed capability matches shown</label>
             <input id="highlight_reviewed_signal_count" type="number" min="0" max="10" step="1">
@@ -252,6 +252,10 @@
             <label for="onboarding_max_secondary_patterns">Max secondary patterns</label>
             <input id="onboarding_max_secondary_patterns" type="number" min="1" max="20" step="1">
             <div class="field-help">How many fallback job-title patterns the onboarding extractor keeps.</div>
+
+            <label for="onboarding_cv_max_pages">CV page limit</label>
+            <input id="onboarding_cv_max_pages" type="number" min="1" max="100" step="1">
+            <div class="field-help">Only the first N pages of each uploaded CV are read during onboarding. Longer files are truncated and flagged in the onboarding alert.</div>
 
             <label for="onboarding_capability_alias_limit">Capability alias limit</label>
             <input id="onboarding_capability_alias_limit" type="number" min="1" max="20" step="1">

@@ -874,7 +874,7 @@
               </label>
             </div>
             <div style="margin:6px 0 0 26px;color:var(--muted);font-size:0.82rem;">
-              <strong style="color:var(--ink);font-size:0.82rem;">Examples</strong>
+              <strong style="color:var(--text-primary);font-size:0.82rem;">Examples</strong>
               ${examplesHtml}
             </div>
           </div>
@@ -899,7 +899,7 @@
               </label>
             </div>
             <div style="margin:6px 0 0 26px;color:var(--muted);font-size:0.82rem;">
-              <strong style="color:var(--ink);font-size:0.82rem;">Examples</strong>
+              <strong style="color:var(--text-primary);font-size:0.82rem;">Examples</strong>
               ${examplesHtml}
             </div>
           </div>

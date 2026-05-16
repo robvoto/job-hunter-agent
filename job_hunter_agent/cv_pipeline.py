@@ -29,7 +29,7 @@ from job_hunter_agent.profile_learning import (
 )
 from job_hunter_agent.profile_store import (
     KEY_SIGNAL_CLUSTERS,
-    KEY_REQUIRED_SKILLS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     normalize_onboarding_settings,
 )
 from job_hunter_agent.global_settings import (
@@ -443,7 +443,7 @@ def _build_output(
 
     return {
         KEY_SIGNAL_CLUSTERS: dominant_signal_clusters,
-        KEY_REQUIRED_SKILLS: [],
+        KEY_MUST_NOT_REQUIRED_SKILLS: [],
     }
 
 
@@ -484,4 +484,3 @@ def run_cv_pipeline(
     if dominant:
         _cap_log(f"[CV_PIPELINE] dominant signal names: {[r['name'] for r in dominant]}")
     return _strip_internal_keys(output)
-

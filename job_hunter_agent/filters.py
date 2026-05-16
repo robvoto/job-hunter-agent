@@ -1,6 +1,5 @@
 # filters.py
 
-import json
 import re
 from typing import Any, Tuple
 
@@ -10,19 +9,19 @@ from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, load_profile
 from job_hunter_agent.parsing_schema import (
-    PARSING_DESCRIPTION_CONFIDENCE_MIN_BULLET_POINTS_KEY,
-    PARSING_DESCRIPTION_CONFIDENCE_MIN_COORDINATION_TOKENS_KEY,
-    PARSING_DESCRIPTION_CONFIDENCE_MIN_GENERIC_PHRASES_KEY,
-    PARSING_DESCRIPTION_CONFIDENCE_MIN_SECTION_HITS_KEY,
-    PARSING_DESCRIPTION_CONFIDENCE_MIN_TEXT_LENGTH_KEY,
-    PARSING_HARD_REQUIREMENT_PREFIX_KEY,
-    PARSING_HARD_REQUIREMENT_SUFFIX_KEY,
-    PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY,
-    PARSING_MATCHING_CONTEXT_PATTERNS_KEY,
-    PARSING_NEGATION_PREFIX_WINDOW_CHARS_KEY,
-    PARSING_SOFT_REQUIREMENT_PREFIX_KEY,
-    PARSING_SOFT_REQUIREMENT_SUFFIX_KEY,
-    PARSING_SOFT_REQUIREMENT_WINDOW_CHARS_KEY,
+    KEY_P_CONF_MIN_BULLETS,
+    KEY_P_CONF_MIN_COORDINATION,
+    KEY_P_CONF_MIN_GENERIC,
+    KEY_P_CONF_MIN_SECTIONS,
+    KEY_P_CONF_MIN_LENGTH,
+    KEY_P_CTX_HARD_PREFIX,
+    KEY_P_CTX_HARD_SUFFIX,
+    KEY_P_CTX_HARD_WINDOW,
+    KEY_P_MATCHING_CONTEXT,
+    KEY_P_CTX_NEGATION_WINDOW,
+    KEY_P_CTX_SOFT_PREFIX,
+    KEY_P_CTX_SOFT_SUFFIX,
+    KEY_P_CTX_SOFT_WINDOW,
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
@@ -279,7 +278,7 @@ def _load_required_parsing_rule_terms(rule_key: str) -> list[str]:
 
 def _load_matching_context_patterns() -> dict[str, Any]:
     rules = load_parsing_rules()
-    patterns = rules.get(PARSING_MATCHING_CONTEXT_PATTERNS_KEY)
+    patterns = rules.get(KEY_P_MATCHING_CONTEXT)
     if not isinstance(patterns, dict):
         raise ValueError("parsing_rules.json must define matching_context_patterns")
     return patterns
@@ -292,13 +291,13 @@ def _matches_hard_requirement(text: str, alias: str) -> bool:
 
     context_pats = _load_matching_context_patterns()
     escaped_alias = re.escape(alias_lower)
-    prefix = str(context_pats.get(PARSING_HARD_REQUIREMENT_PREFIX_KEY) or "").strip()
-    suffix = str(context_pats.get(PARSING_HARD_REQUIREMENT_SUFFIX_KEY) or "").strip()
+    prefix = str(context_pats.get(KEY_P_CTX_HARD_PREFIX) or "").strip()
+    suffix = str(context_pats.get(KEY_P_CTX_HARD_SUFFIX) or "").strip()
     if not prefix or not suffix:
         raise ValueError("parsing_rules.json must define hard_requirement_prefix and hard_requirement_suffix")
     try:
-        window_chars = int(context_pats.get(PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY))
-        negation_window = int(context_pats.get(PARSING_NEGATION_PREFIX_WINDOW_CHARS_KEY))
+        window_chars = int(context_pats.get(KEY_P_CTX_HARD_WINDOW))
+        negation_window = int(context_pats.get(KEY_P_CTX_NEGATION_WINDOW))
     except Exception as exc:
         raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars") from exc
     if window_chars <= 0 or negation_window <= 0:
@@ -319,12 +318,12 @@ def _matches_soft_requirement(text: str, alias: str) -> bool:
 
     context_pats = _load_matching_context_patterns()
     escaped_alias = re.escape(alias_lower)
-    prefix = str(context_pats.get(PARSING_SOFT_REQUIREMENT_PREFIX_KEY) or "").strip()
-    suffix = str(context_pats.get(PARSING_SOFT_REQUIREMENT_SUFFIX_KEY) or "").strip()
+    prefix = str(context_pats.get(KEY_P_CTX_SOFT_PREFIX) or "").strip()
+    suffix = str(context_pats.get(KEY_P_CTX_SOFT_SUFFIX) or "").strip()
     if not prefix or not suffix:
         raise ValueError("parsing_rules.json must define soft_requirement_prefix and soft_requirement_suffix")
     try:
-        window_chars = int(context_pats.get(PARSING_SOFT_REQUIREMENT_WINDOW_CHARS_KEY))
+        window_chars = int(context_pats.get(KEY_P_CTX_SOFT_WINDOW))
     except Exception as exc:
         raise ValueError("parsing_rules.json must define soft_requirement_window_chars") from exc
     if window_chars <= 0:
@@ -350,7 +349,7 @@ def matches_mandatory_requirement(description_text: str, required_term: str) -> 
     mandatory_pattern = rf"\b({'|'.join(re.escape(term) for term in mandatory_indicators)})\b"
     hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
     try:
-        window_chars = int(matching_context.get(PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY))
+        window_chars = int(matching_context.get(KEY_P_CTX_HARD_WINDOW))
     except Exception as exc:
         raise ValueError("parsing_rules.json must define hard_requirement_window_chars") from exc
     if window_chars <= 0:
@@ -392,8 +391,8 @@ def matches_missing_requirement(description_text: str, required_term: str) -> bo
     strength_re = re.compile(strength_pattern, re.IGNORECASE)
     desirable_re = re.compile(desirable_pattern, re.IGNORECASE)
     try:
-        window_chars = int(matching_context.get(PARSING_HARD_REQUIREMENT_WINDOW_CHARS_KEY))
-        negation_window = int(matching_context.get(PARSING_NEGATION_PREFIX_WINDOW_CHARS_KEY))
+        window_chars = int(matching_context.get(KEY_P_CTX_HARD_WINDOW))
+        negation_window = int(matching_context.get(KEY_P_CTX_NEGATION_WINDOW))
     except Exception as exc:
         raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars") from exc
     if window_chars <= 0 or negation_window <= 0:
@@ -485,11 +484,11 @@ def _evaluate_description_confidence(details_text: str, description_lower: str, 
         raise ValueError("parsing_rules.json must define description_confidence_rules")
 
     try:
-        min_text_length = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_TEXT_LENGTH_KEY))
-        min_section_hits = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_SECTION_HITS_KEY))
-        min_bullet_points = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_BULLET_POINTS_KEY))
-        min_generic_phrases = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_GENERIC_PHRASES_KEY))
-        min_coordination_tokens = int(conf_rules.get(PARSING_DESCRIPTION_CONFIDENCE_MIN_COORDINATION_TOKENS_KEY))
+        min_text_length = int(conf_rules.get(KEY_P_CONF_MIN_LENGTH))
+        min_section_hits = int(conf_rules.get(KEY_P_CONF_MIN_SECTIONS))
+        min_bullet_points = int(conf_rules.get(KEY_P_CONF_MIN_BULLETS))
+        min_generic_phrases = int(conf_rules.get(KEY_P_CONF_MIN_GENERIC))
+        min_coordination_tokens = int(conf_rules.get(KEY_P_CONF_MIN_COORDINATION))
     except Exception as exc:
         raise ValueError("parsing_rules.json must define description confidence thresholds") from exc
 
@@ -631,4 +630,3 @@ def passes_quick_card_filters(
         return False, reason
 
     return True, "OK"
-

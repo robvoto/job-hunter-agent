@@ -106,6 +106,14 @@ Then open:
 - workspace: `http://127.0.0.1:8765/workspace`
 - demo/showcase: `http://127.0.0.1:8765/demo`
 
+## Architecture Note: Shell & Fragment
+
+The workspace UI uses a decoupled pattern for performance and maintainability:
+- **workspace.html (The Shell)**: The main entry point. It contains the navigation, branding, and JavaScript logic to poll for updates.
+- **results.html (The Fragment)**: A template used by the server to render the actual job results.
+
+When you load the workspace, the Shell is served first, and the Fragment is fetched and injected dynamically once the data is ready.
+
 ## Tech Stack
 
 - **Core**: Python 3.11+

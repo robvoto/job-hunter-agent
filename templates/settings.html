@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>__JOB_HUNTER_PAGE_TITLE__</title>
   <link rel="stylesheet" href="/static/themes.css">
-  <link rel="stylesheet" href="/static/settings-page.css">
+ <link rel="stylesheet" href="/static/settings/settings-page.css">
   __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
@@ -46,17 +46,19 @@
         <div class="sidebar-brand-actions">
           __JOB_HUNTER_ADMIN_BADGE__
           <a href="/logout" class="nav-item nav-item-logout">Log out</a>
-          __JOB_HUNTER_ADMIN_NAV_LINK__
         </div>
         <a href="/" class="nav-item nav-item-workspace">← Workspace</a>
       </div>
       <div class="sidebar-nav">
+        <div class="sidebar-group-label">Standard settings</div>
         <button class="nav-item is-active" type="button" data-section="section-search" data-screen="settings">Search</button>
         <button class="nav-item" type="button" data-section="section-profile" data-screen="settings">Profile</button>
         <button class="nav-item" type="button" data-section="section-matrix" data-screen="settings">Capability Matrix</button>
         <button class="nav-item" type="button" data-section="section-rules" data-screen="settings">Rules</button>
         <button class="nav-item" type="button" data-section="section-alerts" data-screen="settings">Alerts &amp; AI</button>
         <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise" data-screen="settings">Optimise</button>
+        <div class="sidebar-group-label sidebar-group-label-global">Admin</div>
+        <a href="/global-settings" class="nav-item nav-item-admin">Global Settings</a>
       </div>
     </nav>
 
@@ -109,8 +111,13 @@
   <script src="/static/capability-ui.js"></script>
   <script src="/static/currency-input.js"></script>
   <script src="/static/location-options.js"></script>
-  <script src="/static/settings-page.js"></script>
-  <script src="/static/settings-review-panel.js"></script>
+ <script src="/static/settings/settings-utils.js"></script>
+ <script src="/static/settings/settings-chip-editor.js"></script>
+ <script src="/static/settings/settings-capability-editor.js"></script>
+ <script src="/static/settings/settings-admin.js"></script>
+ <script src="/static/settings/settings-alerts.js"></script>
+ <script src="/static/settings/settings-page.js"></script>
+ <script src="/static/settings/settings-review-panel.js"></script>
   <script type="module" src="/static/settings/learning/signal-registry.js"></script>
 </body>
 </html>

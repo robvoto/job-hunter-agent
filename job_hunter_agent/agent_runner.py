@@ -31,19 +31,16 @@ from job_hunter_agent.user_settings import (
 )
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
 from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
+from job_hunter_agent.fit_scoring import fit_score
+from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
+from job_hunter_agent.io_utils import load_json_dict, load_job_history, configure_console_output
+from job_hunter_agent.history import viewed_by_user
+from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.workspace_service import build_workspace_record_sets, load_last_kept_records
+from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.source_connector import (
-    fit_score,
-    get_manual_skip_sets,
-    load_json_dict,
-    load_job_history,
-    parse_timestamp,
-    rebuild_workspace_results,
     scrape_jobs_direct,
-    score_to_match_label,
-    viewed_by_user,
-    configure_console_output,
 )
 from job_hunter_agent.job_identity import normalize_job_key, find_confirmed_duplicate
 from job_hunter_agent.record_schema import (

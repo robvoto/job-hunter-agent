@@ -9,6 +9,7 @@
   __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
   <script src="/static/csrf.js"></script>
   <script src="/static/console-bridge.js"></script>
+  <script src="/static/capability-ui.js"></script>
   <script src="/static/theme-switcher.js"></script>
   <script src="/static/currency-input.js"></script>
 </head>
@@ -109,6 +110,7 @@
                 </div>
               </div>
               <div class="help" id="primary_cv_status">No file selected yet.</div>
+              <div class="help" id="primary_cv_limit_help"></div>
               <div class="help">ⓘ Use your most detailed CV, not the prettiest version.</div>
               <div class="help">🔒 Privacy tip: only upload the CV content needed for matching. Remove date of birth, licence numbers, passport details, street address, and other sensitive personal identifiers.</div>
               <details class="guidance-card">
@@ -187,7 +189,7 @@
 
           <section class="review-block capability-shell">
             <h3>Capabilities</h3>
-            <p class="help">Please keep only capabilities that clearly belong to your profile.</p>
+              <p class="help" id="review_capability_help"></p>
             <div class="review-capability-topbar">
               <span id="review_capability_count" class="review-capability-count" aria-live="polite">0 shown</span>
               <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="Filter capabilities">
@@ -212,14 +214,14 @@
           </div>
 
           <div class="onb-field">
-            <label for="location_search">Select a Location</label>
+            <label for="location_search">Location</label>
             <select id="location_search"></select>
             <div class="help">Required. Choose one state or capital city.</div>
             <div class="location-selected" id="location_selected"></div>
           </div>
 
           <div class="onb-field">
-            <label id="engagement_pref_label">What type of work  you open to?</label>
+            <label id="engagement_pref_label">Work Type</label>
             __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
           </div>
 

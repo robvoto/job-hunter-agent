@@ -398,15 +398,16 @@ def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp
     rebuilds = []
 
     class FakeThread:
-        def __init__(self, target=None, daemon=None, name=None):
+        def __init__(self, target=None, args=None, daemon=None, name=None):
             self.target = target
+            self.args = args or ()
             self.daemon = daemon
             self.name = name
 
         def start(self):
             started.append({"daemon": self.daemon, "name": self.name})
             if self.target:
-                self.target()
+                self.target(*self.args)
 
     monkeypatch.setattr(workspace_refresh_service, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
     monkeypatch.setattr(workspace_refresh_service, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
@@ -439,6 +440,11 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     saved_profiles = []
     saved_materials = []
 
+    fake_users_dir = tmp_path / "users"
+    fake_local_dir = fake_users_dir / "_local"
+    fake_local_dir.mkdir(parents=True, exist_ok=True)
+    (fake_local_dir / "profile.json").write_text('{"cv_text": "old"}', encoding="utf-8")
+
     job_history_path = tmp_path / "job_history.json"
     review_data_path = tmp_path / "review_data.json"
     run_stats_path = tmp_path / "run_stats.json"
@@ -446,6 +452,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     workspace_path = tmp_path / "workspace.html"
     source_pack_dir = tmp_path / "source_pack"
 
+    monkeypatch.setattr(server_helpers, "USERS_DIR", fake_users_dir)
     monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
     monkeypatch.setattr(server_helpers, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
     monkeypatch.setattr(server_helpers, "get_job_history_path", lambda: job_history_path)
@@ -463,6 +470,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
 
     assert result["ok"] is True
     assert result["redirect_to"] == "/start"
+    assert not fake_local_dir.exists()
     assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
     assert not source_pack_dir.exists()

@@ -372,13 +372,16 @@ def build_run_stats(
     seek_max_pages: int,
 ) -> dict:
     search_targets: dict[str, set[int]] = {}
+    page_visits: set[tuple[str, str, int]] = set()
     reject_counts: dict[str, int] = {}
     skip_counts: dict[str, int] = {}
 
     for row in audit_rows:
+        source_name = str(row.get("source") or "Unknown")
         search_location = str(row.get("search_location") or "Unknown")
         page_num = row.get("page")
         if page_num is not None:
+            page_visits.add((source_name, search_location, int(page_num)))
             search_targets.setdefault(search_location, set()).add(int(page_num))
 
         reason = row.get("reject_reason") or "UNKNOWN"
@@ -407,7 +410,7 @@ def build_run_stats(
             location: sorted(pages)
             for location, pages in sorted(search_targets.items())
         },
-        "page_count": sum(len(pages) for pages in search_targets.values()),
+        "page_count": len(page_visits),
         "cards_seen": cards_seen,
         "detail_fetches": detail_fetches,
         "kept_count": kept_count,

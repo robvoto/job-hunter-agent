@@ -30,6 +30,42 @@ class _FakeClient:
         self.responses = _FakeResponses(output_text)
 
 
+class _FakeParsedPayload:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def model_dump(self):
+        return self._payload
+
+
+class _FakeParseResponse:
+    def __init__(self, payload):
+        self.output_parsed = _FakeParsedPayload(payload)
+        self.usage = None
+
+
+class _FakeParsingResponses:
+    def __init__(self):
+        self.calls = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        text_format = kwargs["text_format"]
+        if text_format.__name__ == "_LLMFitReviewPayload":
+            return _FakeParseResponse({"fit_review": {"decision": "KEEP", "grade": "SOLID"}})
+        return _FakeParseResponse(
+            {
+                "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+                "learning_candidates": [],
+            }
+        )
+
+
+class _FakeParsingClient:
+    def __init__(self):
+        self.responses = _FakeParsingResponses()
+
+
 def test_llm_cost_logging_uses_managed_pricing(tmp_path, monkeypatch):
     costs_path = tmp_path / "llm_costs.jsonl"
     monkeypatch.setattr(llm_gate, "_LLM_COSTS_PATH", costs_path)
@@ -93,8 +129,7 @@ def test_managed_llm_prompt_knowledge_files_contain_lines():
 
 def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
     monkeypatch.setattr(
-        llm_gate,
-        "load_profile",
+        "job_hunter_agent.profile_store.load_profile",
         lambda: {
             "llm_profile_brief": "",
             "star_evidence_text": "",
@@ -110,8 +145,7 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        llm_gate,
-        "get_candidate_profile_tiers",
+        "job_hunter_agent.profile_store.get_candidate_profile_tiers",
         lambda profile: {
             "primary_candidate_profile_context": "Primary evidence",
             "secondary_candidate_profile_context": "Secondary evidence",
@@ -119,8 +153,7 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        llm_gate,
-        "get_candidate_profile_tier_weights",
+        "job_hunter_agent.profile_store.get_candidate_profile_tier_weights",
         lambda profile: {
             "primary_candidate_profile_context": 0.9,
             "secondary_candidate_profile_context": 0.5,
@@ -175,8 +208,7 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
 
 def test_normalize_llm_learning_candidates_uses_managed_max_items(monkeypatch):
     monkeypatch.setattr(
-        llm_gate,
-        "load_global_settings",
+        "job_hunter_agent.global_settings.load_global_settings",
         lambda: {
             "llm_settings": {
                 "llm_prompt_settings": {
@@ -202,8 +234,7 @@ def test_normalize_llm_learning_candidates_uses_managed_max_items(monkeypatch):
 
 def test_normalize_rejection_blocker_suggestions_uses_managed_max_items(monkeypatch):
     monkeypatch.setattr(
-        llm_gate,
-        "load_global_settings",
+        "job_hunter_agent.global_settings.load_global_settings",
         lambda: {
             "llm_settings": {
                 "llm_prompt_settings": {
@@ -269,4 +300,17 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
 def test_normalize_llm_review_payload_rejects_missing_grade():
     with pytest.raises(ValueError, match="missing grade"):
         llm_gate.normalize_llm_review_payload({"decision": "KEEP"})
+
+
+def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
+    fake_client = _FakeParsingClient()
+    monkeypatch.setattr(llm_gate, "client", fake_client)
+    monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "test-model")
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
+
+    payload = llm_gate._request_learning_payload("Example role description", fit_review=True)
+
+    assert payload == {"fit_review": {"decision": "KEEP", "grade": "SOLID"}, "learning_candidates": []}
+    assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"
 

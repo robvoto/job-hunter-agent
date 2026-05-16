@@ -11,42 +11,140 @@
     "locations": [],
     "classification_ids": [],
     "date_range_days": 3,
-    "seek_max_pages": 10,
+    "seek_max_pages": 3,
     "enforce_posted_age_limit": true,
     "sort_newest_first": true,
     "linkedin_hours_old": 24,
-    "linkedin_results_per_search": 50,
+    "linkedin_results_per_search": 25,
     "linkedin_easy_apply_only": null,
     "playwright_viewport_width": 1400,
     "playwright_viewport_height": 900,
     "playwright_selector_timeout": 8000
   },
-  "search_limits": {
-    "date_range_days": {
-      "min": 1,
-      "max": 30
+  "limits": {
+    "search": {
+      "date_range_days": {
+        "min": 1,
+        "max": 30
+      },
+      "seek_max_pages": {
+        "min": 1,
+        "max": 10
+      },
+      "linkedin_hours_old": {
+        "min": 1,
+        "max": 720
+      },
+      "linkedin_results_per_search": {
+        "min": 5,
+        "max": 100
+      }
     },
-    "seek_max_pages": {
-      "min": 1,
-      "max": 10
+    "salary": {
+      "minimum_salary_yearly": {
+        "min": 0,
+        "max": 1000000
+      },
+      "minimum_daily_rate": {
+        "min": 0,
+        "max": 10000
+      }
     },
-    "linkedin_hours_old": {
-      "min": 1,
-      "max": 720
+    "onboarding": {
+      "extraction_lookback_years": {
+        "min": 1,
+        "max": 20
+      },
+      "title_extraction_min_months": {
+        "min": 1,
+        "max": 24
+      },
+      "max_target_patterns": {
+        "min": 1,
+        "max": 20
+      },
+      "max_secondary_patterns": {
+        "min": 1,
+        "max": 20
+      },
+      "capability_recent_years": {
+        "min": 1,
+        "max": 15
+      },
+      "capability_strong_max_years_since_use": {
+        "min": 1,
+        "max": 20
+      },
+      "capability_strong_min_months": {
+        "min": 1,
+        "max": 240
+      },
+      "capability_working_max_years_since_use": {
+        "min": 1,
+        "max": 25
+      },
+      "capability_working_min_months": {
+        "min": 1,
+        "max": 240
+      },
+      "capability_working_long_history_max_years_since_use": {
+        "min": 1,
+        "max": 30
+      },
+      "capability_working_long_history_min_months": {
+        "min": 1,
+        "max": 360
+      },
+      "capability_drop_to_basic_after_years": {
+        "min": 1,
+        "max": 40
+      },
+      "capability_max_items": {
+        "min": 1,
+        "max": 50
+      },
+      "capability_alias_limit": {
+        "min": 1,
+        "max": 20
+      },
+      "cv_max_pages": {
+        "min": 1,
+        "max": 100
+      },
+      "signal_cluster_min_alias_hits": {
+        "min": 1,
+        "max": 10
+      },
+      "signal_cluster_min_snippet_hits": {
+        "min": 1,
+        "max": 10
+      },
+      "signal_cluster_dense_snippet_alias_hits": {
+        "min": 1,
+        "max": 20
+      }
     },
-    "linkedin_results_per_search": {
-      "min": 5,
-      "max": 100
-    }
-  },
-  "salary_limits": {
-    "minimum_salary_yearly": {
-      "min": 0,
-      "max": 1000000
-    },
-    "minimum_daily_rate": {
-      "min": 0,
-      "max": 10000
+    "history": {
+      "max_history_sightings": {
+        "min": 1,
+        "max": 100
+      },
+      "repeated_listing_min_times_seen": {
+        "min": 1,
+        "max": 100
+      },
+      "repeated_listing_min_span_days": {
+        "min": 1,
+        "max": 365
+      },
+      "multi_listing_red_flag_min_listings": {
+        "min": 1,
+        "max": 100
+      },
+      "multi_listing_red_flag_min_span_days": {
+        "min": 1,
+        "max": 365
+      }
     }
   },
   "preference_weights": {
@@ -106,6 +204,7 @@
     "capability_drop_to_basic_after_years": 12,
     "capability_max_items": 20,
     "capability_alias_limit": 8,
+    "cv_max_pages": 5,
     "signal_cluster_min_alias_hits": 2,
     "signal_cluster_min_snippet_hits": 2,
     "signal_cluster_dense_snippet_alias_hits": 4,
@@ -162,15 +261,7 @@
         "input": 0.4,
         "output": 1.6
       },
-      "gpt-4o-mini-2024-07-18": {
-        "input": 0.15,
-        "output": 0.6
-      },
       "gpt-4o": {
-        "input": 2.5,
-        "output": 10
-      },
-      "gpt-4o-2024-08-06": {
         "input": 2.5,
         "output": 10
       }
@@ -209,6 +300,21 @@
           "limit": 600
         }
       ],
+      "fit_decision_max_output_tokens": 50,
+      "learning_candidates_max_output_tokens": 500,
+      "rejection_blocker_suggestions_max_output_tokens": 300,
+      "capability_naming_max_output_tokens": 500,
+      "profile_extraction_max_output_tokens": 2000,
+      "job_description_max_chars": 5000,
+      "cv_evidence_json_chars": 12000,
+      "cv_fallback_chars": 3000,
+      "profile_brief_max_chars": 2500,
+      "capability_rules_max_items": 20,
+      "capability_rule_aliases_max_items": 8,
+      "fit_guidance_max_chars": 1200,
+      "capability_naming_guidance_max_chars": 1200,
+      "capability_naming_aliases_max_items": 6,
+      "raw_output_log_max_chars": 1200,
       "learning_candidates_max_items": 6,
       "rejection_blocker_suggestions_max_items": 6,
       "rejection_blocker_suggestions_max_words": 6
@@ -219,7 +325,7 @@
     "max_examples_per_skill": 3,
     "max_samples_per_rejection": 4,
     "capability_suggestion_min_count": 2,
-    "capability_intermediate_min_count": 5,
+    "capability_working_min_count": 5,
     "title_not_target_min_count": 20,
     "rule_suggestion_min_count": 2
   },

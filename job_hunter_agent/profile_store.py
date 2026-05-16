@@ -44,21 +44,20 @@ from job_hunter_agent.global_settings import (
 )
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.parsing_schema import (
-    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_DEFAULT_KEY,
-    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_KEY,
-    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_PRIMARY_KEY,
-    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SECONDARY_KEY,
-    PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SUPPLEMENTARY_KEY,
+    KEY_P_ROUTING,
+    KEY_P_ROUTING_DEFAULT,
+    KEY_P_ROUTING_PRIMARY,
+    KEY_P_ROUTING_SECONDARY,
+    KEY_P_ROUTING_SUPPLEMENTARY,
 )
 from job_hunter_agent.paths import (
     DATA_DIR,
-    REPO_ROOT,
     SCORING_RULES_PATH,
     get_profile_path,
 )
+from job_hunter_agent.utils import deep_merge, coerce_int
 
 
-ROOT_DIR = REPO_ROOT 
 # Shared Profile and Settings Keys
 KEY_KEYWORDS = "keywords"
 KEY_LOCATIONS = "locations"
@@ -69,13 +68,12 @@ KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 
 ENGAGEMENT_TYPE_BOTH = "both"
-ENGAGEMENT_TYPE_PERMANENT = "permanent"
-ENGAGEMENT_TYPE_CONTRACT = "contract"
 ENGAGEMENT_TYPE_OPTIONS = (
     {"value": ENGAGEMENT_TYPE_BOTH, "label": "Both permanent and contract"},
-    {"value": ENGAGEMENT_TYPE_PERMANENT, "label": "Permanent only"},
-    {"value": ENGAGEMENT_TYPE_CONTRACT, "label": "Contract only"},
+    {"value": "permanent", "label": "Permanent only"},
+    {"value": "contract", "label": "Contract only"},
 )
+VALID_ENGAGEMENT_TYPES = frozenset({item["value"] for item in ENGAGEMENT_TYPE_OPTIONS})
 
 WORK_MODE_PREFERENCE_NONE = ""
 WORK_MODE_PREFERENCE_REMOTE = "remote"
@@ -86,9 +84,9 @@ WORK_MODE_PREFERENCE_OPTIONS = (
     {"value": WORK_MODE_PREFERENCE_HYBRID, "label": "Hybrid"},
     {"value": WORK_MODE_PREFERENCE_ONSITE, "label": "On-site"},
 )
-_VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
+VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
 WORK_MODE_PREFERENCE_NONE_LABEL = "No preference"
-WORK_MODE_PREFERENCE_HELP_TEXT = "Optional. Choose the work arrangements you want to include in search. Leave all unselected to keep every mode."
+WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to include in search. Leave all unselected to keep every mode."
 
 GOVERNMENT_PREFERENCE_ANY = "any"
 GOVERNMENT_PREFERENCE_GOVERNMENT = "government"
@@ -98,21 +96,24 @@ GOVERNMENT_PREFERENCE_OPTIONS = (
     {"value": GOVERNMENT_PREFERENCE_GOVERNMENT, "label": "Government only"},
     {"value": GOVERNMENT_PREFERENCE_PRIVATE, "label": "Private only"},
 )
-_VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
-GOVERNMENT_PREFERENCE_HELP_TEXT = "Optional. Choose government only, private only, or no preference."
+VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
+GOVERNMENT_PREFERENCE_DEFAULT_LABEL = next(
+    (item["label"] for item in GOVERNMENT_PREFERENCE_OPTIONS if item["value"] == GOVERNMENT_PREFERENCE_ANY), ""
+)
+GOVERNMENT_PREFERENCE_HELP_TEXT = "Choose government only, private only, or no preference."
 
 SALARY_MIN_ANNUAL_LABEL = "Minimum annual base"
 SALARY_MIN_DAILY_LABEL = "Minimum daily rate"
-SALARY_ANNUAL_HELP_TEXT = "Optional. Excludes super."
-SALARY_DAILY_HELP_TEXT = "Optional. Excludes super."
-SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Optional. Used when permanent roles list salary. Excludes super."
-SETTINGS_SALARY_DAILY_HELP_TEXT = "Optional. Used when contract roles list a day rate. Excludes super."
+SALARY_ANNUAL_HELP_TEXT = "Excludes super."
+SALARY_DAILY_HELP_TEXT = "Excludes super."
+SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Used when permanent roles list salary. Excludes super."
+SETTINGS_SALARY_DAILY_HELP_TEXT = "Used when contract roles list a day rate. Excludes super."
 
 KEY_LOOKBACK_YEARS = "extraction_lookback_years"
 KEY_MIN_MONTHS = "title_extraction_min_months"
 KEY_MAX_TARGET = "max_target_patterns"
 KEY_MAX_SECONDARY = "max_secondary_patterns"
-KEY_CAP_STRENGTH_PRESET = "capability_strength_preset"
+KEY_CV_MAX_PAGES = "cv_max_pages"
 
 KEY_BRIEF_MODE = "llm_profile_brief_mode"
 KEY_BRIEF = "llm_profile_brief"
@@ -120,14 +121,13 @@ KEY_FIT_GUIDANCE = "llm_fit_review_guidance"
 KEY_CAP_GUIDANCE = "llm_capability_naming_guidance"
 KEY_STAR_EVIDENCE = "star_candidate_profile_text"
 KEY_CV_TEXT = "cv_text"
-KEY_CANDIDATE_PROFILE_TIERS = "candidate_profile_tiers"
-KEY_EVIDENCE_TIERS = KEY_CANDIDATE_PROFILE_TIERS
+KEY_EVIDENCE_TIERS = "candidate_profile_tiers"
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
 KEY_CAPABILITY_PROFILE_RULES = "capability_profile_rules"
 KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
-KEY_REQUIRED_SKILLS = "must_not_require_skills"
+KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
 KEY_MATCH_PREFS = "match_preferences"
 KEY_PRIMARY_PATTERNS = "primary_job_title_pattern"
@@ -135,12 +135,11 @@ KEY_SECONDARY_PATTERNS = "secondary_title_patterns"
 KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
-KEY_MAX_SCORE = "max_score"
 MATCHING_RULE_PROFILE_KEYS = frozenset({
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
-    KEY_REQUIRED_SKILLS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     "reject_title_rules",
     "reject_description_phrase_rules",
 })
@@ -148,23 +147,13 @@ MATCHING_RULE_PROFILE_KEYS = frozenset({
 KEY_NAME = "name"
 KEY_LEVEL = "level"
 KEY_ALIASES = "aliases"
-KEY_NEEDS_REVIEW = "needs_review"
 KEY_CONVERGENCE = "convergence"
-KEY_CONVERGENCE_ELIGIBLE_GRADES = "eligible_grades"
-KEY_CONVERGENCE_MIN_POSITIVE_MATCHES = "min_positive_matches"
-KEY_CONVERGENCE_REQUIRED_TITLE_REASON = "required_title_reason"
-KEY_CONVERGENCE_REQUIRED_CONTENT_REASON = "required_content_reason"
-KEY_CONVERGENCE_REQUIRED_FIT_CONFIDENCE = "required_fit_confidence"
-KEY_CONVERGENCE_BONUS_NO_SOFT_RISKS = "bonus_no_soft_risks"
-KEY_CONVERGENCE_BONUS_WITH_SOFT_RISKS = "bonus_with_soft_risks"
-KEY_CONVERGENCE_LABEL = "label"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
 
 LEVEL_STRONG = "strong"
 LEVEL_WORKING = "working"
 LEVEL_BASIC = "basic"
-LEVEL_LOW = "low"
-VALID_CAPABILITY_RULE_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC, LEVEL_LOW})
+VALID_CAPABILITY_RULE_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC})
 VALID_CAPABILITY_MATCH_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC})
 
 DEFAULT_CANDIDATE_PROFILE_TIERS  = {
@@ -240,7 +229,7 @@ DEFAULT_PROFILE = {
     "llm_capability_naming_guidance": "",
     "star_candidate_profile_text": "",
     "cv_text": "",
-    KEY_CANDIDATE_PROFILE_TIERS : {
+    KEY_EVIDENCE_TIERS : {
         **DEFAULT_CANDIDATE_PROFILE_TIERS ,
     },
     "candidate_profile_tier_weights": {
@@ -325,14 +314,6 @@ def _backup_invalid_profile() -> None:
     shutil.copy2(profile_path, backup_path)
 
 
-def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
-    try:
-        resolved = int(value)
-    except Exception:
-        resolved = default
-    return max(minimum, min(maximum, resolved))
-
-
 def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     source = settings if isinstance(settings, dict) else {}
 
@@ -365,7 +346,7 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     result: dict[str, Any] = {"capability_strength_preset": preset_name}
     onboarding_limits = load_global_settings()[KEY_LIMITS]["onboarding"]
     for key, bounds in onboarding_limits.items():
-        result[key] = _coerce_int(merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], bounds["min"], bounds["max"])
+        result[key] = coerce_int(merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], bounds["min"], bounds["max"])
     return result
 
 
@@ -379,7 +360,7 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
         merged[KEY_PREFER_GOVERNMENT] = GOVERNMENT_PREFERENCE_GOVERNMENT if raw_government else GOVERNMENT_PREFERENCE_ANY
     else:
         normalized_government = str(raw_government or "").strip().lower()
-        if normalized_government not in _VALID_GOVERNMENT_PREFERENCES:
+        if normalized_government not in VALID_GOVERNMENT_PREFERENCES:
             normalized_government = GOVERNMENT_PREFERENCE_ANY
         merged[KEY_PREFER_GOVERNMENT] = normalized_government
 
@@ -501,7 +482,7 @@ def normalize_capability_rules(
 def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(profile, dict):
         raise TypeError("profile must be a dict")
-    merged = _deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
+    merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
     merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
     merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
@@ -516,8 +497,8 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
         merged.get("llm_capability_naming_guidance", "")
     )
-    merged[KEY_CANDIDATE_PROFILE_TIERS ] = normalize_candidate_profile_tiers(
-        merged.get(KEY_CANDIDATE_PROFILE_TIERS , {}),
+    merged[KEY_EVIDENCE_TIERS ] = normalize_candidate_profile_tiers(
+        merged.get(KEY_EVIDENCE_TIERS , {}),
         merged.get("cv_text", ""),
     )
     merged["candidate_profile_tier_weights"] = normalize_candidate_profile_tier_weights(
@@ -572,23 +553,14 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def _deep_merge(base: Any, patch: Any) -> Any:
-    if isinstance(base, dict) and isinstance(patch, dict):
-        merged = dict(base)
-        for key, value in patch.items():
-            merged[key] = _deep_merge(merged.get(key), value)
-        return merged
-    return copy.deepcopy(patch)
-
-
 def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
     current = load_profile()
-    merged = _deep_merge(current, patch)
+    merged = deep_merge(current, patch)
     return save_profile(merged)
 
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
-    merged = _deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
+    merged = deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
     search_limits = load_global_settings()[KEY_LIMITS]["search"]
 
     try:
@@ -750,17 +722,17 @@ def normalize_llm_capability_naming_guidance(value: Any) -> str:
 
 def classify_candidate_profile_section_label(label: str) -> str:
     lowered = str(label or "").strip().lower()
-    routing = load_parsing_rules().get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_KEY)
+    routing = load_parsing_rules().get(KEY_P_ROUTING)
     if not isinstance(routing, dict):
         raise ValueError("parsing_rules.json must define candidate_profile_section_routing")
-    default_bucket = str(routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_DEFAULT_KEY) or "").strip()
-    primary_labels = routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_PRIMARY_KEY)
-    secondary_labels = routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SECONDARY_KEY)
-    supplementary_labels = routing.get(PARSING_CANDIDATE_PROFILE_SECTION_ROUTING_SUPPLEMENTARY_KEY)
+    default_bucket = str(routing.get(KEY_P_ROUTING_DEFAULT) or "").strip()
+    primary_labels = routing.get(KEY_P_ROUTING_PRIMARY)
+    secondary_labels = routing.get(KEY_P_ROUTING_SECONDARY)
+    supplementary_labels = routing.get(KEY_P_ROUTING_SUPPLEMENTARY)
     if not all(isinstance(items, list) for items in (primary_labels, secondary_labels, supplementary_labels)):
         raise ValueError("candidate_profile_section_routing labels must be lists")
     if default_bucket not in DEFAULT_CANDIDATE_PROFILE_TIERS:
-        raise ValueError("candidate_profile_section_routing.default_bucket must be a known profile bucket")
+        raise ValueError(f"{KEY_P_ROUTING}.{KEY_P_ROUTING_DEFAULT} must be a known profile bucket")
     primary_tokens = [str(token).strip().lower() for token in primary_labels if str(token).strip()]
     secondary_tokens = [str(token).strip().lower() for token in secondary_labels if str(token).strip()]
     supplementary_tokens = [str(token).strip().lower() for token in supplementary_labels if str(token).strip()]
@@ -859,7 +831,7 @@ def normalize_candidate_profile_tier_weights(payload: dict[str, Any] | None) -> 
 
 def get_candidate_profile_tiers(profile: dict[str, Any]) -> dict[str, str]:
     return normalize_candidate_profile_tiers(
-        profile.get(KEY_CANDIDATE_PROFILE_TIERS , {}),
+        profile.get(KEY_EVIDENCE_TIERS , {}),
         str(profile.get("cv_text") or ""),
     )
 

@@ -9,6 +9,7 @@ const refs = Object.freeze({
   heroCopy: document.getElementById('hero_copy'),
   formTitle: document.getElementById('form_title'),
   workflowSummary: document.getElementById('workflow_summary'),
+  workflowStep2: document.getElementById('workflow_step_2'),
   progressFill: document.getElementById('wizard_progress_fill'),
   primaryCvInput: document.getElementById('primary_cv'),
   primaryCvDropZone: document.getElementById('cv_drop_zone'),
@@ -34,6 +35,8 @@ const refs = Object.freeze({
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
   reviewCapabilityFilter: document.getElementById('review_capability_filter'),
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
+  reviewCapabilityHelp: document.getElementById('review_capability_help'),
+  primaryCvLimitHelp: document.getElementById('primary_cv_limit_help'),
   engagementInputs: Array.from(document.querySelectorAll('input[name="engagement_pref"]')),
 });
 const {
@@ -45,6 +48,7 @@ const {
   heroCopy: heroCopyEl,
   formTitle: formTitleEl,
   workflowSummary: workflowSummaryEl,
+  workflowStep2: workflowStep2El,
   progressFill: progressFillEl,
   primaryCvInput,
   primaryCvDropZone,
@@ -69,6 +73,8 @@ const {
   reviewMinimumDailyRate: reviewMinimumDailyRateEl,
   reviewCapabilityFilter: reviewCapabilityFilterEl,
   reviewCapabilityCards: reviewCapabilityCardsEl,
+  reviewCapabilityHelp: reviewCapabilityHelpEl,
+  primaryCvLimitHelp: primaryCvLimitHelpEl,
 } = refs;
 const STEP_COUNT = 4;
 const REVIEW_STEP = 2;
@@ -76,7 +82,10 @@ const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
 const locationUi = window.JobHunterLocationUi || {};
 const onboardingCurrencyUi = window.JobHunterCurrencyUi || {};
+const capabilityUi = window.JobHunterCapabilityUi || {};
+const capabilityReviewCopy = capabilityUi.reviewCopy || {};
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
+const ONBOARDING_CV_PAGE_LIMIT = Number(ONBOARDING_DEFAULTS.cv_max_pages || 0);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
 const ENGAGEMENT_TYPE_OPTIONS = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
   ? window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
@@ -108,6 +117,20 @@ const WORK_MODE_PREFERENCE_VALUES = new Set(
     .map((option) => String(option.value || '').trim().toLowerCase())
     .filter((value) => Boolean(value))
 );
+
+if (reviewCapabilityHelpEl) {
+  reviewCapabilityHelpEl.textContent = capabilityReviewCopy.onboardingHelp || reviewCapabilityHelpEl.textContent;
+}
+if (primaryCvLimitHelpEl) {
+  primaryCvLimitHelpEl.textContent = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
+    ? `We read the first ${ONBOARDING_CV_PAGE_LIMIT} pages of your CV. Longer files are truncated and flagged during onboarding.`
+    : 'We read only a limited slice of your CV. Longer files are truncated and flagged during onboarding.';
+}
+if (workflowStep2El) {
+  workflowStep2El.textContent = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
+    ? `We extract likely job titles, capabilities, and a starter search direction from the first ${ONBOARDING_CV_PAGE_LIMIT} pages of your CV.`
+    : 'We extract likely job titles, capabilities, and a starter search direction from your CV.';
+}
 const PRIMARY_CV_COPY = {
   emptyTitle: 'Drop your CV here or click to browse',
   emptyHint: 'Formats: .docx, .pdf, .md, .txt',

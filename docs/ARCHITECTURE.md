@@ -74,7 +74,7 @@ The scraper layer does not make business-fit decisions.
 
 Primary files:
 
-* `data/profile.json`
+* `data/users/<user_id>/profile.json`
 * `profile_store.py`
 * `profile_learning.py`
 * `cv_pipeline.py`
@@ -189,12 +189,12 @@ Rules:
 
 Primary knowledge files:
 
-* `capability_knowledge.json`
-* `hard_blocker_rules.json`
-* `role_title_knowledge.json`
-* `signal_registry.json`
-* `scoring_rules.json`
-* `match_level_defaults.json`
+* `data/knowledge/capability_knowledge.json`
+* `data/knowledge/hard_blocker_rules.json`
+* `data/knowledge/role_title_knowledge.json`
+* `data/signals/signal_registry.json`
+* `data/knowledge/scoring_rules.json`
+* `data/knowledge/match_level_defaults.json`
 
 Rules:
 
@@ -289,7 +289,7 @@ It is not intended for normal end-user preferences.
 
 | Data Type                     | Authority Level                     |
 | ----------------------------- | ----------------------------------- |
-| `data/profile.json`           | Runtime candidate truth             |
+| `data/users/<user_id>/profile.json` | Runtime candidate truth             |
 | Knowledge JSON files          | Approved runtime business knowledge |
 | Signal registry pending items | Review-only                         |
 | `output/` files               | Disposable runtime output           |

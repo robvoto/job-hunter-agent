@@ -20,13 +20,53 @@
       : console.log.bind(console);
   }
 
+  const REJECTION_DESCRIPTIONS = {
+    'DESC_ROLE_PROOF_MISSING': 'Validation check: The job requires a seniority level or domain experience not clearly found in your profile.',
+    'DESC_CAPABILITY_LOW': 'Validation check: Job requires capabilities that are not strongly represented in your profile.',
+    'TITLE_BAD_KEYWORD': 'Title filter: The job title contains a phrase you have explicitly blocked.',
+    'TITLE_NOT_TARGET': 'Title filter: The job title does not match any of your primary or secondary target patterns.'
+  };
+
   nativeConsole.error = typeof console.error === 'function'
     ? console.error.bind(console)
     : console.log.bind(console);
 
   function truncate(value, limit = 2000) {
     const text = String(value ?? '');
+    for (const [code, desc] of Object.entries(REJECTION_DESCRIPTIONS)) {
+      const marker = `[${code}]`;
+      if (text.includes(marker)) {
+        const parts = text.split(marker);
+        const rejectedContent = parts.length > 1 ? parts[1].trim() : '';
+        const detail = rejectedContent ? ` - Found: "${rejectedContent}"` : '';
+        return `${text} (NOTE: This is a Validation Rejection, not a system error. ${desc}${detail})`;
+      }
+    }
+    if (text.includes('max_llm_chars_limits')) {
+      return `${text} (System Info: These are your configured character limits for AI prompts, not an error.)`;
+    }
     return text.length <= limit ? text : `${text.slice(0, limit)}...`;
+  }
+
+  function expandUrl(text) {
+    if (typeof text !== 'string') return text;
+    const isSeek = text.includes('seek.com.au/jobs');
+    const isLinkedIn = text.includes('linkedin.com/jobs');
+    if (!isSeek && !isLinkedIn) return text;
+
+    try {
+      const urlMatch = text.match(/https?:\/\/[^\s]+/);
+      if (!urlMatch) return text;
+      const url = new URL(urlMatch[0]);
+      const source = isSeek ? 'SEEK' : 'LinkedIn';
+      let breakdown = `\n\n[${source} URL Breakdown]\nBase: ${url.origin}${url.pathname}\nParams:\n`;
+      url.searchParams.forEach((v, k) => {
+        breakdown += `  • ${k.padEnd(16)}: ${v}\n`;
+      });
+      return text + breakdown;
+    } catch (e) {
+      return text;
+    }
   }
 
   function describeValue(value) {
@@ -34,7 +74,7 @@
       return truncate(value.stack || `${value.name}: ${value.message}`);
     }
     if (typeof value === 'string') {
-      return truncate(value);
+      return truncate(expandUrl(value));
     }
     if (typeof value === 'function') {
       return truncate(`[Function ${value.name || 'anonymous'}]`);
@@ -115,7 +155,8 @@
 
   for (const method of methods) {
     console[method] = (...args) => {
-      nativeConsole[method](...args);
+      const displayArgs = args.map(arg => (typeof arg === 'string' ? expandUrl(arg) : arg));
+      nativeConsolemethod;
       emit(method, args);
     };
   }

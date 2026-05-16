@@ -1,6 +1,6 @@
 from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases, expand_capability_terms
 from job_hunter_agent.profile_store import normalize_capability_rules
-from job_hunter_agent.source_connector import find_profile_capability_matches
+from job_hunter_agent.capability_matching import find_profile_capability_matches
 
 
 def test_expand_capability_terms_returns_name_and_aliases():

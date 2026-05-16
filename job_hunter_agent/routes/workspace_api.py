@@ -1,11 +1,11 @@
 import json
 
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
 from starlette.responses import Response
 
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.paths import get_workspace_results_path, get_run_stats_path, get_review_data_path
+from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 from job_hunter_agent.routes.responses import json_response
 
@@ -16,10 +16,10 @@ router = APIRouter()
 def api_results_html():  # type: ignore[no-untyped-def]
     results_path = get_workspace_results_path()
     if not results_path.exists():
-        return HTMLResponse(
-            content='<div style="padding:64px 24px;color:var(--text-muted);text-align:center;font-family:var(--sans);">No results yet - run a search first.</div>',
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-        )
+        try:
+            rebuild_workspace_results(reason="no results file — generating empty workspace")
+        except Exception:
+            pass
     try:
         body = results_path.read_bytes()
     except Exception as exc:

@@ -2,7 +2,7 @@ import contextvars
 import threading
 
 from job_hunter_agent.paths import get_audit_records_path, get_run_stats_path, get_workspace_results_path
-from job_hunter_agent.source_connector import rebuild_workspace_results
+from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 
 def rebuild_workspace_after_rule_change(reason: str = "matching rule change") -> None:

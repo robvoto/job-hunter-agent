@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Set
 
 from playwright.sync_api import sync_playwright
+from playwright._impl._errors import TargetClosedError
 
 from job_hunter_agent.global_settings import (
     get_playwright_browser_mode,
@@ -578,6 +579,11 @@ def seek_scrape_to_records(
                             kept_records.append(record)
                             print(f"KEPT: {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
 
+                        except TargetClosedError:
+                            print(
+                                f"Stopping SEEK scraping for {search_location} on page {current_page_num} because the browser target was closed."
+                            )
+                            break
                         except Exception as exc:
                             apply_reject_result(record, f"CARD_EXCEPTION:{type(exc).__name__}")
                             print(f"REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}\n{traceback.format_exc()}")

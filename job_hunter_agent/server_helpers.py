@@ -22,6 +22,7 @@ from job_hunter_agent.user_settings import (
 )
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
+from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.paths import (
     DATA_DIR,
     USERS_DIR,
@@ -44,12 +45,14 @@ from job_hunter_agent.profile_store import (
     LLM_PROFILE_BRIEF_MODE_AUTO,
     LLM_PROFILE_BRIEF_MODE_MANUAL,
     ENGAGEMENT_TYPE_BOTH,
-    ENGAGEMENT_TYPE_CONTRACT,
-    ENGAGEMENT_TYPE_PERMANENT,
     ENGAGEMENT_TYPE_OPTIONS,
     GOVERNMENT_PREFERENCE_ANY,
-    GOVERNMENT_PREFERENCE_OPTIONS,
+    GOVERNMENT_PREFERENCE_DEFAULT_LABEL,
     GOVERNMENT_PREFERENCE_HELP_TEXT,
+    GOVERNMENT_PREFERENCE_OPTIONS,
+    VALID_ENGAGEMENT_TYPES,
+    VALID_GOVERNMENT_PREFERENCES,
+    VALID_WORK_MODE_PREFERENCES,
     WORK_MODE_PREFERENCE_HELP_TEXT,
     WORK_MODE_PREFERENCE_NONE,
     WORK_MODE_PREFERENCE_NONE_LABEL,
@@ -76,6 +79,7 @@ from job_hunter_agent.profile_store import (
     KEY_MIN_MONTHS,
     KEY_MAX_TARGET,
     KEY_MAX_SECONDARY,
+    KEY_CV_MAX_PAGES,
     KEY_BRIEF_MODE,
     KEY_BRIEF,
     KEY_STAR_EVIDENCE,
@@ -107,7 +111,8 @@ from job_hunter_agent.server_review import (
     save_requirement_blockers_feedback,
 )
 from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
-from job_hunter_agent.source_connector import rebuild_workspace_results, scrape_jobs_direct
+from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+from job_hunter_agent.source_connector import scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
     build_llm_profile_brief,
@@ -131,15 +136,6 @@ from job_hunter_agent.global_settings import (
     load_global_settings,
     get_salary_limits,
     save_global_settings,
-)
-_STATIC_MIME_OVERRIDES = {
-    ".css": "text/css",
-    ".js": "text/javascript",
-    ".png": "image/png",
-}
-GOVERNMENT_PREFERENCE_DEFAULT_LABEL = next(
-    (item["label"] for item in GOVERNMENT_PREFERENCE_OPTIONS if item["value"] == GOVERNMENT_PREFERENCE_ANY),
-    "",
 )
 _run_in_progress = False
 _run_state_lock = threading.Lock()
@@ -250,9 +246,6 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__ = {json.dumps(ENGAGEMENT_TYPE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_LABELS__ = {json.dumps(_ENGAGEMENT_TYPE_LABELS, ensure_ascii=True)};</script>'
-    )
-    parts.append(
         f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__ = {json.dumps(ENGAGEMENT_TYPE_BOTH, ensure_ascii=True)};</script>'
     )
     parts.append(
@@ -285,16 +278,7 @@ def _parse_locations_override(value: Any) -> list[str]:
     return [part.strip() for part in re.split(r"[\r\n,]+", text) if part.strip()]
 
 
-def _parse_bool(value: Any) -> bool:
-    return str(value).strip().lower() == "true"
-
-
-_VALID_ENGAGEMENT_TYPES = frozenset(
-    {ENGAGEMENT_TYPE_BOTH, ENGAGEMENT_TYPE_PERMANENT, ENGAGEMENT_TYPE_CONTRACT}
-)
-_VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
-_ENGAGEMENT_TYPE_LABELS = {item["value"]: item["label"] for item in ENGAGEMENT_TYPE_OPTIONS}
-_LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
+LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
 
 
 def render_engagement_type_radio_group(*, name: str, selected_value: str) -> str:
@@ -374,10 +358,10 @@ def _validate_required_onboarding_inputs(
     location = locations[0]
     if len(location) < 2 or len(location) > 80:
         raise ValueError("Location should be between 2 and 80 characters.")
-    if not _LOCATION_NAME_RE.match(location):
+    if not LOCATION_NAME_RE.match(location):
         raise ValueError("Location should look like a normal city, state, or region name.")
     resolve_location(location)
-    if engagement_type not in _VALID_ENGAGEMENT_TYPES:
+    if engagement_type not in VALID_ENGAGEMENT_TYPES:
         raise ValueError("Please choose what type of work you are open to.")
 
     raw_yearly = search_preferences.get(KEY_MIN_SALARY_YEARLY)
@@ -474,6 +458,7 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
             KEY_MIN_MONTHS,
             KEY_MAX_TARGET,
             KEY_MAX_SECONDARY,
+            KEY_CV_MAX_PAGES,
             KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
             KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
             KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
@@ -618,11 +603,19 @@ class SettingsHandler:
 
     @classmethod
     def _reset_current_user_state(cls) -> dict[str, Any]:
+        import traceback as _tb
+        print("WARNING: _reset_current_user_state called — all user data will be wiped")
+        _tb.print_stack()
         # Wipe every per-user data directory under data/users/
         if USERS_DIR.exists():
             for user_dir in USERS_DIR.iterdir():
-                if user_dir.is_dir():
-                    shutil.rmtree(user_dir)
+                try:
+                    if user_dir.is_dir():
+                        shutil.rmtree(user_dir)
+                    else:
+                        user_dir.unlink(missing_ok=True)
+                except Exception:
+                    continue
 
         # Reset root-level fallback files (used when no user is authenticated)
         save_profile(DEFAULT_PROFILE)
@@ -794,4 +787,3 @@ class SettingsHandler:
             expected = expected_tokens.get(phrase, "")
             if not expected or str(provided.get(phrase) or "").strip() != expected:
                 raise ValueError(f"Missing explicit approval for suggested blocker: {phrase}")
-

@@ -3,9 +3,8 @@
           <div class="grid">
             <section class="panel">
               <h2>Telegram Alerts</h2>
-              <div class="panel-kicker" style="color: var(--state-error-text);">Personal bot only</div>
-              <div class="help">These settings should use their own Telegram bot. Do not share one bot across different people unless you want them all receiving the same alerts.</div>
-              <div class="help">New to Telegram bots? Use <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">BotFather</a> to create the bot, or read Telegram's official <a href="https://core.telegram.org/bots/tutorial" target="_blank" rel="noreferrer">bot setup guide</a>.</div>
+              <div class="panel-kicker" style="color: var(--state-error-text);">Use your own bot</div>
+              <div class="help">Create a bot with <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">BotFather</a> and keep it private to your account.</div>
               <label for="telegram_enabled">Telegram alerts enabled</label>
               <select id="telegram_enabled">
                 <option value="true">Yes</option>
@@ -14,28 +13,28 @@
 
               <label for="telegram_bot_token">Bot token</label>
               <input id="telegram_bot_token" type="password" placeholder="123456:ABC...">
-              <div class="help">Use your own Telegram bot token for these settings.</div>
+              <div class="help">Paste the bot token from BotFather.</div>
 
               <label for="telegram_bot_username">Bot username</label>
               <input id="telegram_bot_username" type="text" placeholder="JobNotifierBot">
-              <div class="help">Used to build the Telegram connect link. Leave off the @ symbol.</div>
+              <div class="help">Used to build the connect link. Leave off the @ symbol.</div>
 
               <label for="telegram_disable_link_preview">Disable workspace link preview</label>
               <select id="telegram_disable_link_preview">
                 <option value="false">No</option>
                 <option value="true">Yes</option>
               </select>
-              <div class="help">If enabled, Telegram will send the workspace link without showing a page preview card. Turn this on if you want cleaner, shorter alert messages.</div>
+              <div class="help">If enabled, Telegram sends the workspace link without a preview card.</div>
 
               <div class="telegram-connect-shell">
-                <div id="telegram_connect_panel" class="help" style="margin-top:10px;">Save your changes first, then open the Telegram connect link in your own receiving Telegram account only.</div>
+                <div id="telegram_connect_panel" class="help" style="margin-top:10px;">Save the bot token and username first. Then open the connect link in Telegram and press Start once.</div>
                 <div class="panel-actions telegram-connect-actions">
                   <button class="secondary" id="open_telegram_connect" type="button">Open Telegram Link</button>
                   <button class="secondary" id="sync_telegram_subscribers" type="button">Refresh Telegram Connection</button>
                 </div>
               </div>
-              <div id="telegram_subscribers_panel" class="help">No receiving Telegram account connected for this personal bot yet.</div>
-              <div class="help">Send Test Alert sends a fixed confirmation message to verify that Telegram is connected correctly.</div>
+              <div id="telegram_subscribers_panel" class="help">No receiving Telegram account connected yet.</div>
+              <div class="help">Send Test Alert sends a confirmation message to verify the connection.</div>
 
               <div class="panel-actions">
                 <button class="secondary" id="send_telegram_test" type="button">Send Test Alert</button>

@@ -22,6 +22,8 @@ function escapeHtml(value) {
 }
 
 const onboardingFlowCurrencyUi = window.JobHunterCurrencyUi || {};
+const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
+const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
 
 function normalizeReviewTitle(value) {
   return patternToLabel(value) || normalizeReviewText(value);
@@ -112,7 +114,14 @@ const flowRefs = Object.freeze({
   editDraftProfile: document.getElementById('edit_draft_profile'),
   editSearchBasics: document.getElementById('edit_search_basics'),
 });
-const engagementTypeLabels = window.__JOB_HUNTER_ENGAGEMENT_TYPE_LABELS__ || {};
+const engagementTypeOptions = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
+  ? window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
+  : [];
+const engagementTypeLabels = Object.fromEntries(
+  engagementTypeOptions
+    .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
+    .filter(([value]) => Boolean(value))
+);
 const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
   : [];
@@ -374,9 +383,9 @@ function renderReviewCapabilities() {
   if (!container) return;
   if (!reviewCapabilityRules.length) {
     if (reviewCapabilityCountEl) {
-      reviewCapabilityCountEl.textContent = '0 shown';
+      reviewCapabilityCountEl.textContent = '0 capability rows';
       reviewCapabilityCountEl.classList.remove('is-selected');
-      }
+    }
     container.innerHTML = '<div class="chip-empty">No capabilities found yet.</div>';
     return;
   }
@@ -393,7 +402,7 @@ function renderReviewCapabilities() {
   const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
   const selectedVisibleCount = visibleRules.filter(({ index }) => selectedReviewCapabilityIndexes.has(index)).length;
   if (reviewCapabilityCountEl) {
-    reviewCapabilityCountEl.textContent = `${visibleRules.length} shown${hiddenCount ? ` of ${orderedRules.length}` : ''}`;
+    reviewCapabilityCountEl.textContent = `${visibleRules.length} capability row${visibleRules.length === 1 ? '' : 's'}${hiddenCount ? ` of ${orderedRules.length}` : ''}`;
     reviewCapabilityCountEl.classList.toggle('is-selected', selectedReviewCapabilityIndexes.size > 0);
   }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
@@ -559,11 +568,13 @@ async function createProfile() {
   maxUnlockedStep = Math.max(maxUnlockedStep, REVIEW_STEP);
   hydrateDraftStep(payload.profile || {});
   setStep(REVIEW_STEP);
+  const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
+  const extractionMessage = payload?.fresh_onboarding_run_started
+    ? formatExtractionSummary(payload.extraction_counts || {})
+    : 'Your draft profile is ready. Review the role direction before you continue.';
   showStatus(
-    payload?.fresh_onboarding_run_started
-      ? formatExtractionSummary(payload.extraction_counts || {})
-      : 'Your draft profile is ready. Review the role direction before you continue.',
-    'ok',
+    pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage,
+    pageLimitNotice ? 'warning' : 'ok',
   );
 }
 
@@ -706,7 +717,9 @@ createProfileButton.addEventListener('click', async (event) => {
   btn.textContent = isRebuildMode ? 'Refreshing Draft...' : 'Building Draft...';
   startWorkingStatus([
     'Fresh onboarding run started.',
-    isRebuildMode ? 'Reading your updated CV...' : 'Reading your CV...',
+    Number.isFinite(onboardingCvPageLimit) && onboardingCvPageLimit > 0
+      ? `Reading the first ${onboardingCvPageLimit} pages of your CV...`
+      : (isRebuildMode ? 'Reading your updated CV...' : 'Reading your CV...'),
     'Extracting titles and capabilities...',
     'Reviewing role history and recency...',
     'Building your draft profile...',

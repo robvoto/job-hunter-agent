@@ -7,14 +7,14 @@ from job_hunter_agent.global_settings import (
     KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
     KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
-    KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
+    KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
 )
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
-    KEY_REQUIRED_SKILLS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_ALIASES,
     KEY_NAME,
     KEY_LEVEL,
@@ -26,7 +26,7 @@ def _normalize_term(value: str) -> str:
 
 def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
     known_terms = set()
-    for skill in profile.get(KEY_REQUIRED_SKILLS, []):
+    for skill in profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, []):
         normalized = _normalize_term(str(skill))
         if normalized:
             known_terms.add(normalized)
@@ -160,7 +160,7 @@ def build_capability_tuning_suggestions(
 ) -> list[dict]:
     settings = get_review_settings()
     min_count = settings[KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT]
-    intermediate_min_count = settings[KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT]
+    working_min_count = settings[KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT]
     max_examples = settings[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL]
 
     row_by_url = {
@@ -213,7 +213,7 @@ def build_capability_tuning_suggestions(
             # Already classified - skip regardless of stored strength.
             # Once a user confirms a skill, don't keep nudging them to upgrade it.
             continue
-        recommended_choice = "working" if count >= intermediate_min_count else "basic"
+        recommended_choice = "working" if count >= working_min_count else "basic"
         headline = f"Classify {skill} as a known capability signal"
         detail = f"Seen in {count} kept role(s) and still unclassified."
 

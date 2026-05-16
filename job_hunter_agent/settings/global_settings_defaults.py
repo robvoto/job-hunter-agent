@@ -40,6 +40,7 @@ KEY_LLM_PROMPT_SETTINGS = "llm_prompt_settings"
 KEY_LLM_MAX_CHARS = "max_llm_chars"
 KEY_CAPABILITY_STRENGTH_PRESETS = "capability_strength_presets"
 KEY_CAPABILITY_ALIAS_LIMIT = "capability_alias_limit"
+KEY_CV_MAX_PAGES = "cv_max_pages"
 KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS = "signal_cluster_min_alias_hits"
 KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS = "signal_cluster_min_snippet_hits"
 KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS = "signal_cluster_dense_snippet_alias_hits"
@@ -48,6 +49,21 @@ KEY_LLM_MAX_CHARS_LIMITS = "max_llm_chars_limits"
 KEY_LLM_PRICING_PER_1M = "pricing_per_1m"
 KEY_LLM_PROMPT_TEMPLATES = "match_preference_templates"
 KEY_LLM_PROMPT_EVIDENCE_TIERS = "evidence_tiers"
+KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS = "fit_decision_max_output_tokens"
+KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS = "learning_candidates_max_output_tokens"
+KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS = "rejection_blocker_suggestions_max_output_tokens"
+KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS = "capability_naming_max_output_tokens"
+KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS = "profile_extraction_max_output_tokens"
+KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS = "job_description_max_chars"
+KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS = "cv_evidence_json_chars"
+KEY_LLM_PROMPT_CV_FALLBACK_CHARS = "cv_fallback_chars"
+KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS = "profile_brief_max_chars"
+KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS = "capability_rules_max_items"
+KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS = "capability_rule_aliases_max_items"
+KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS = "fit_guidance_max_chars"
+KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS = "capability_naming_guidance_max_chars"
+KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS = "capability_naming_aliases_max_items"
+KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS = "raw_output_log_max_chars"
 KEY_LLM_PROMPT_LEARNING_MAX_ITEMS = "learning_candidates_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS = "rejection_blocker_suggestions_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS = "rejection_blocker_suggestions_max_words"
@@ -56,7 +72,7 @@ KEY_REVIEW_SETTINGS = "review_settings"
 KEY_REVIEW_MAX_EXAMPLES_PER_SKILL = "max_examples_per_skill"
 KEY_REVIEW_MAX_SAMPLES_PER_REJECTION = "max_samples_per_rejection"
 KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT = "capability_suggestion_min_count"
-KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT = "capability_intermediate_min_count"
+KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT = "capability_working_min_count"
 KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT = "title_not_target_min_count"
 KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT = "rule_suggestion_min_count"
 
@@ -85,8 +101,8 @@ KEY_MIN_TRUSTED_DESCRIPTION_LENGTH = "min_trusted_description_length"
 
 DEFAULT_FIT_HIGHLIGHTS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_FIT_HIGHLIGHTS])
 DEFAULT_SEARCH_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_SEARCH_SETTINGS])
-SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_SEARCH_LIMITS])
-DEFAULT_SALARY_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_SALARY_LIMITS])
+SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_LIMITS]["search"])
+DEFAULT_SALARY_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_LIMITS]["salary"])
 DEFAULT_PREFERENCE_WEIGHTS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_PREFERENCE_WEIGHTS])
 DEFAULT_EVIDENCE_TIER_WEIGHTS = dict(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_EVIDENCE_TIER_WEIGHTS])
 DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED.get(KEY_HISTORY_SETTINGS, {}))
@@ -143,6 +159,7 @@ ONBOARDING_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     "capability_drop_to_basic_after_years": (1, 40),
     "capability_max_items": (1, 50),
     "capability_alias_limit": (1, 20),
+    "cv_max_pages": (1, 100),
     "signal_cluster_min_alias_hits": (1, 10),
     "signal_cluster_min_snippet_hits": (1, 10),
     "signal_cluster_dense_snippet_alias_hits": (1, 20),

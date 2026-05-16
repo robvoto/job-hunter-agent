@@ -3,7 +3,7 @@ import json
 import pytest
 from urllib.parse import parse_qs, urlparse
 
-from job_hunter_agent import fit_scoring
+from job_hunter_agent import fit_scoring, workspace_service
 from job_hunter_agent import capability_matching, workspace_renderer, signal_detection, source_connector
 from job_hunter_agent import role_analysis
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
@@ -502,7 +502,7 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
         "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
         "delivery": {"signal": "delivery", "decision": "evidence_only", "original_texts": ["delivery"]},
     }
-    monkeypatch.setattr(source_connector, "load_registry", _registry)
+    monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_approved_signal_catalog", lambda: [])
 
@@ -520,7 +520,7 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
 
 def test_fit_score_breakdown_does_not_score_reviewed_signal_matches(monkeypatch):
     monkeypatch.setattr(
-        source_connector,
+        capability_matching,
         "load_registry",
         lambda: {
             "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
@@ -736,19 +736,20 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
 
 def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
     registrations = []
+    from job_hunter_agent.scrapers import seek_runner
 
     monkeypatch.setattr(
-        source_connector, # this is likely still the correct place if it proxies for seeks
+        seek_runner,
         "fetch_job_details_payload",
         lambda detail_page, url: {"text": "Hands-on coding required for this role.", "status": "ok", "source": "jobAdDetails"},
     )
     monkeypatch.setattr(
-        source_connector,
+        seek_runner,
         "passes_content_filters",
         lambda details_text, card_location="", title_reason="": (False, "DESC_HARD_BLOCK_RULE:sap"),
     )
     monkeypatch.setattr(
-        source_connector,
+        seek_runner,
         "find_hard_block_matches",
         lambda details_text, terms=None: [
             {
@@ -758,10 +759,16 @@ def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
             }
         ],
     )
-    from job_hunter_agent import signal_registry
-    monkeypatch.setattr(signal_registry, "register_signals", lambda items, category="": registrations.append((items, category)))
+    from job_hunter_agent import source_learning
+    monkeypatch.setattr(source_learning, "find_hard_block_matches", lambda details_text, terms=None: [
+        {
+            "value": "demonstrated experience in {term}",
+            "matched_term": "SAP",
+            "context": "must have SAP experience",
+        }
+    ])
+    monkeypatch.setattr(source_learning, "register_signals", lambda items, category="": registrations.append((items, category)))
 
-    from job_hunter_agent.scrapers import seek_runner
     ok, reason = seek_runner._process_seek_job_details(
         {
             "title": "Business Analyst",
@@ -968,7 +975,7 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
         "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
         "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
     }
-    monkeypatch.setattr(source_connector, "load_registry", _registry)
+    monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
 
     html = source_connector.render_job_card(
@@ -1249,7 +1256,7 @@ def test_deterministic_review_counts_only_capability_highlights():
         ],
         [],
         [],
-    ) is None
+    ) == {"decision": "KEEP", "grade": "SOLID", "det_rule": "solid"}
 
     assert deterministic_review_outcome(
         {"title_reason": "OK"},
@@ -1261,7 +1268,7 @@ def test_deterministic_review_counts_only_capability_highlights():
         ],
         [],
         [],
-    ) == {"decision": "KEEP", "grade": "SOLID"}
+    ) == {"decision": "KEEP", "grade": "SOLID", "det_rule": "solid"}
 
 
 def test_llm_description_fit_entry_requires_grade():
@@ -1421,9 +1428,8 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
 
 
 def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    from job_hunter_agent import source_connector as sc
-    monkeypatch.setattr(sc, "is_workspace_eligible", lambda record, profile=None: True)
+    monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_service, "is_workspace_eligible", lambda record, profile=None, workspace_min_score=None: True)
 
     records = [
         {"job_key": "fresh-low", "score": 55, "posted_age_days": 0.1, "times_viewed": 0},
@@ -1431,13 +1437,13 @@ def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypa
         {"job_key": "fresh-mid", "score": 70, "posted_age_days": 0.2, "times_viewed": 0},
     ]
 
-    workspace_records = workspace_data.build_workspace_record_sets(
+    workspace_records = workspace_service.build_workspace_record_sets(
         records,
         job_history={},
         applied_job_keys=set(),
         hidden_job_keys=set(),
         reference_time=datetime(2026, 4, 21),
-        scoring_profile={},
+        scoring_profile={"match_levels": []},
     )
 
     assert [record["job_key"] for record in workspace_records["current_records"]] == [
@@ -1448,13 +1454,11 @@ def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypa
 
 
 def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
-    from job_hunter_agent.filters import passes_title_filters
-    monkeypatch.setattr(passes_title_filters, "passes_title_filters", lambda title: (True, "OK"))
-    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    from job_hunter_agent import user_settings
-    monkeypatch.setattr(user_settings, "get_workspace_minimum_score", lambda: 60)
+    monkeypatch.setattr(workspace_service, "passes_title_filters", lambda title: (True, "OK"))
+    monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_service, "get_workspace_minimum_score", lambda: 60)
 
-    from job_hunter_agent.source_connector import is_workspace_eligible
+    from job_hunter_agent.workspace_service import is_workspace_eligible
     assert is_workspace_eligible({"title": "Business Analyst", "score": 60}) is True
     assert is_workspace_eligible({"title": "Business Analyst", "score": 59}) is False
 
@@ -1608,14 +1612,6 @@ def test_posted_display_shows_today_against_current_render_date():
             "run_started_at": "2026-04-22T09:00:00+10:00",
         },
         now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
-        is_workspace_eligible_fn=lambda record, profile=None: True,
-        fit_score_fn=lambda record, profile=None: int(record["score"]),
-        viewed_by_user_fn=lambda record: False,
-        normalize_job_key_fn=lambda key: key,
-        parse_timestamp_fn=lambda ts: None,
-        build_archive_records_fn=lambda *args: [],
-        build_applied_records_fn=lambda *args: [],
-        build_hidden_records_fn=lambda *args: [],
     )
 
     assert label == "22 Apr 2026 (today)"

@@ -11,6 +11,7 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
 )
@@ -134,7 +135,7 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         elif level == "low":
             matched_limited_depth.append(label)
 
-    for skill in profile.get("must_not_require_skills", []):
+    for skill in profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, []):
         cleaned_skill = str(skill).strip().lower()
         if cleaned_skill and matches_missing_requirement(lowered, cleaned_skill):
             matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
@@ -158,12 +159,12 @@ def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
     watchouts: List[str] = []
     profile_blockers = {
         compact_whitespace(str(skill)).lower()
-        for skill in profile.get("must_not_require_skills", [])
+        for skill in profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, [])
         if compact_whitespace(str(skill)).lower()
     }
     seen_terms: set[str] = set(profile_blockers)
 
-    for skill in profile.get("must_not_require_skills", []):
+    for skill in profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, []):
         cleaned_skill = compact_whitespace(str(skill)).lower()
         if not cleaned_skill or not text_contains_term(lowered, cleaned_skill):
             continue
@@ -178,7 +179,7 @@ def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
         else:
             watchouts.append(f"{label} appears in the description")
 
-    for match in find_hard_block_matches(details_text, profile.get("must_not_require_skills", [])):
+    for match in find_hard_block_matches(details_text, profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, [])):
         canonical = compact_whitespace(match.get("value") or "")
         matched_term = compact_whitespace(match.get("matched_term") or "")
         term_key = canonical.lower() or matched_term.lower()

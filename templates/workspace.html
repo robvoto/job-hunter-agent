@@ -122,6 +122,7 @@
       inset: 54px 0 0;
       z-index: 240;
       padding: 20px;
+      pointer-events: none;
     }
     .ws-flash-backdrop {
       position: absolute;
@@ -131,6 +132,7 @@
         color-mix(in srgb, var(--bg-page) 14%, transparent);
       backdrop-filter: blur(14px) saturate(0.9);
       -webkit-backdrop-filter: blur(14px) saturate(0.9);
+      pointer-events: auto;
     }
     .ws-flash-shell {
       position: relative;
@@ -138,6 +140,7 @@
       place-items: start center;
       min-height: calc(100vh - 54px);
       padding-top: clamp(8px, 3.6vh, 32px);
+      pointer-events: auto;
     }
     .ws-flash-card {
       display: none;
@@ -150,6 +153,7 @@
       border-radius: 24px;
       box-shadow: 0 26px 60px color-mix(in srgb, var(--text-primary) 16%, transparent);
       overflow: hidden;
+      pointer-events: auto;
     }
     .ws-flash-card.is-visible {
       display: block;
@@ -293,6 +297,60 @@
     .ws-wait-shell .wait-state {
       min-width: 0;
     }
+    .ws-run-info-mount {
+      position: fixed;
+      inset: 54px 0 0;
+      z-index: 235;
+      padding: 20px;
+      pointer-events: none;
+    }
+    .ws-run-info-backdrop {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-page) 14%, transparent), color-mix(in srgb, var(--scrim) 84%, transparent)),
+        color-mix(in srgb, var(--bg-page) 12%, transparent);
+      backdrop-filter: blur(12px) saturate(0.92);
+      -webkit-backdrop-filter: blur(12px) saturate(0.92);
+      pointer-events: auto;
+    }
+    .ws-run-info-shell {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: calc(100vh - 54px);
+      pointer-events: auto;
+    }
+    .ws-run-info-card {
+      width: min(100%, 640px);
+      margin: 0 auto;
+      padding: 22px 24px;
+      border-radius: 22px;
+      border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 94%, transparent), color-mix(in srgb, var(--bg-muted) 84%, transparent)),
+        var(--bg-surface);
+      box-shadow: 0 24px 56px color-mix(in srgb, var(--text-primary) 16%, transparent);
+      pointer-events: auto;
+    }
+    .ws-run-info-title {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 1.15rem;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .ws-run-info-copy {
+      margin: 12px 0 0;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+    .ws-run-info-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
 
     #results-mount .page { max-width: none !important; padding: 16px 22px 56px !important; }
     #results-mount .workspace-layout { display: grid !important; }
@@ -308,6 +366,9 @@
       }
       .ws-flash-actions .ws-flash-primary {
         grid-column: auto;
+      }
+      .ws-run-info-mount {
+        padding: 14px;
       }
     }
   </style>
@@ -336,12 +397,12 @@
           <button class="ws-test-action" id="ws_reset_learning_btn" type="button" role="menuitem" style="color: var(--state-error-text);">Reset Learning (&#9888;)</button>
         </div>
       </div>
-      <button class="btn btn-primary" id="ws_header_run_btn" type="button" style="font-size: 0.86rem; padding: 8px 16px;">&#9654; Run search</button>
       <a href="/settings" class="btn btn-secondary" aria-label="Open settings" title="Open settings" style="font-size: 1.15rem; padding: 8px 14px; line-height: 1;">&#9881;</a>
     </div>
   </header>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div class="ws-wait-mount" id="ws_wait_mount" hidden></div>
+  <div class="ws-run-info-mount" id="ws_run_info_mount"></div>
   <div id="results-mount">
     <div id="results-loading">
       <div class="wait-state" role="status" aria-live="polite">
@@ -355,6 +416,7 @@
   <script>
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const wsWaitMount = document.getElementById('ws_wait_mount');
+    const wsRunInfoMount = document.getElementById('ws_run_info_mount');
     const resultsMount = document.getElementById('results-mount');
     const wsTestPanel = document.getElementById('ws_test_panel');
     const wsTestTrigger = document.getElementById('ws_test_trigger');
@@ -365,6 +427,12 @@
     const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
     const ONBOARDING_WIZARD_KEY = 'jobHunter.onboardingWizard';
     const ONBOARDING_KEYWORD_SPLIT_RE = /[,\n|/]+/;
+    const RUN_INFO_DISMISSED_KEY = 'jobHunter.runInfoDismissed';
+    const RUN_INFO_TITLE = 'What this means';
+    const RUN_INFO_COPY = [
+      'This search can take a few minutes because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.',
+      'Daily automation schedule and notification targets are configured in the Settings screen.',
+    ];
     const RUN_STATUS_POLL_INTERVAL_MS = 1000;
     const RUN_STATUS_MAX_ATTEMPTS = 60;
     const isTestMode = document.body.dataset.testMode === 'true';
@@ -564,6 +632,72 @@
       }
     }
 
+    function runInfoDismissed() {
+      try {
+        return window.localStorage.getItem(RUN_INFO_DISMISSED_KEY) === '1';
+      } catch {
+        return false;
+      }
+    }
+
+    function setRunInfoDismissed(enabled) {
+      try {
+        if (enabled) {
+          window.localStorage.setItem(RUN_INFO_DISMISSED_KEY, '1');
+        } else {
+          window.localStorage.removeItem(RUN_INFO_DISMISSED_KEY);
+        }
+      } catch {
+        // Ignore storage errors in private mode or locked-down environments.
+      }
+    }
+
+    function hideRunInfoPopup() {
+      if (!wsRunInfoMount) {
+        return;
+      }
+      wsRunInfoMount.innerHTML = '';
+    }
+
+    function showRunInfoPopup() {
+      if (!wsRunInfoMount || runInfoDismissed()) {
+        hideRunInfoPopup();
+        return;
+      }
+      wsRunInfoMount.innerHTML = `
+        <div class="ws-run-info-backdrop" aria-hidden="true"></div>
+        <div class="ws-run-info-shell">
+          <section class="ws-run-info-card" role="dialog" aria-modal="true" aria-label="${RUN_INFO_TITLE}">
+            <h2 class="ws-run-info-title">${RUN_INFO_TITLE}</h2>
+            ${RUN_INFO_COPY.map((copy) => `<p class="ws-run-info-copy">${escapeHtml(copy)}</p>`).join('')}
+            <div class="ws-run-info-actions">
+              <button class="btn btn-primary" id="ws_run_info_ack" type="button">Got it</button>
+            </div>
+          </section>
+        </div>
+      `;
+      const ackButton = document.getElementById('ws_run_info_ack');
+      ackButton?.addEventListener('click', () => {
+        setRunInfoDismissed(true);
+        hideRunInfoPopup();
+      });
+      ackButton?.focus();
+    }
+
+    function ensureSidebarRunButton() {
+      if (!resultsMount || resultsMount.querySelector('#ws_sidebar_run_btn')) {
+        return;
+      }
+      const searchMeta = resultsMount.querySelector('.workspace-sidebar .snapshot-meta--common-search');
+      if (!searchMeta) {
+        return;
+      }
+      const actions = document.createElement('div');
+      actions.className = 'search-settings-actions';
+      actions.innerHTML = '<button class="btn btn-primary" id="ws_sidebar_run_btn" type="button">Run search</button>';
+      searchMeta.insertAdjacentElement('afterend', actions);
+    }
+
     function stopRunStatusPolling() {
       if (runStatusPollHandle) {
         window.clearInterval(runStatusPollHandle);
@@ -627,6 +761,7 @@
           subcopy: 'Keep this tab open. The workspace will refresh when the run finishes.',
         });
         startRunStatusPolling();
+        showRunInfoPopup();
         pollRunStatusAfterOverlayStart();
       } catch (error) {
         hideWorkspaceWait();
@@ -643,11 +778,6 @@
         }
         const payload = await response.json().catch(() => ({}));
         if (payload?.status === 'running' && attempt < RUN_STATUS_MAX_ATTEMPTS) {
-          updateWorkspaceWait({
-            title: 'Search in progress',
-            copy: 'Job Hunter is still working.',
-            subcopy: 'The workspace will refresh when the run is finished.',
-          });
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
           return;
         }
@@ -765,10 +895,6 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
         }
       });
 
-      document.getElementById('ws_header_run_btn')?.addEventListener('click', () => {
-        startWorkspaceRunFromOverlay();
-      });
-
       wsResetUserBtn?.addEventListener('click', async () => {
         const confirmed = window.confirm(
           'Reset current user?\n\n'
@@ -831,15 +957,22 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
         const range = document.createRange();
         const frag = range.createContextualFragment(html);
         resultsMount.appendChild(frag);
+        ensureSidebarRunButton();
       } catch {
         resultsMount.innerHTML = '<div style="padding:64px 24px;color:var(--text-muted);text-align:center;">Could not load results. Try refreshing the page.</div>';
       }
     }
 
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('#ws_sidebar_run_btn')) {
+        startWorkspaceRunFromOverlay();
+      }
+    });
+
     (async () => {
-      renderOnboardingWelcome();
       await syncWorkspaceRunStatus();
       await loadResults();
+      renderOnboardingWelcome();
     })();
   </script>
 </body>

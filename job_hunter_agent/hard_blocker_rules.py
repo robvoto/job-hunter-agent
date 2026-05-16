@@ -3,6 +3,12 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from job_hunter_agent.io_utils import load_json_dict
+from job_hunter_agent.managed_knowledge_store import (
+    clean_knowledge_aliases,
+    clean_knowledge_text,
+    merge_knowledge_entries,
+)
 
 from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH
 from job_hunter_agent.signal_schema import (
@@ -17,57 +23,21 @@ from job_hunter_agent.signal_schema import (
 
 _TERM_PLACEHOLDER = "{term}"
 REJECTION_BLOCKER_MIN_LENGTH = 2
-REJECTION_BLOCKER_MAX_LENGTH = 80
-
-
-def _clean_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
-
-
-def _clean_term(value: Any) -> str:
-    return _clean_text(value).lower()
-
-
-def _clean_aliases(values: Any, *, canonical: str = "") -> list[str]:
-    if isinstance(values, str):
-        raw_values = re.split(r"[\n,]", values)
-    elif isinstance(values, list):
-        raw_values = values
-    else:
-        raw_values = []
-
-    canonical_key = _clean_term(canonical)
-    aliases: list[str] = []
-    seen: set[str] = {canonical_key} if canonical_key else set()
-    for value in raw_values:
-        alias = _clean_text(value)
-        alias_key = alias.lower()
-        if not alias or alias_key in seen:
-            continue
-        seen.add(alias_key)
-        aliases.append(alias)
-    return aliases
-
+REJECTION_BLOCKER_MAX_LENGTH = 80 
 
 def _load_payload() -> dict[str, Any]:
-    if not HARD_BLOCKER_RULES_PATH.exists():
-        return {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
-    try:
-        payload = json.loads(HARD_BLOCKER_RULES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return load_json_dict(HARD_BLOCKER_RULES_PATH) or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
 
 
 def _normalize_entry(entry: Any) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
-    value = _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
+    value = clean_knowledge_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
     if not value:
         return None
     return {
         MANAGED_KNOWLEDGE_VALUE_KEY: value,
-        MANAGED_KNOWLEDGE_ALIASES_KEY: _clean_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=value),
+        MANAGED_KNOWLEDGE_ALIASES_KEY: clean_knowledge_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=value),
     }
 
 
@@ -119,7 +89,7 @@ def save_hard_blocker_rules(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def upsert_hard_blocker_rule(value: str, aliases: list[str] | None = None) -> dict[str, Any]:
-    cleaned_value = _clean_text(value)
+    cleaned_value = clean_knowledge_text(value)
     if not cleaned_value:
         raise ValueError("value is required")
     if _TERM_PLACEHOLDER not in cleaned_value.lower():
@@ -127,7 +97,7 @@ def upsert_hard_blocker_rule(value: str, aliases: list[str] | None = None) -> di
 
     entries = list(load_hard_blocker_rules())
     for entry in entries:
-        if _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
+        if clean_knowledge_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
             continue
         entry[MANAGED_KNOWLEDGE_VALUE_KEY] = cleaned_value
         entry[MANAGED_KNOWLEDGE_ALIASES_KEY] = []
@@ -148,7 +118,7 @@ def expand_hard_blocker_terms(entry: dict[str, Any]) -> list[str]:
 
 
 def _normalize_match_text(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", _clean_text(value).lower()).strip()
+    return re.sub(r"[^a-z0-9]+", " ", clean_knowledge_text(value).lower()).strip()
 
 
 def _normalize_pattern_text(value: Any) -> str:
@@ -209,7 +179,7 @@ def normalize_rejection_blocker_suggestions(
 
 
 def _render_rule(value: str, term: str) -> str:
-    rendered = _clean_text(value).replace(_TERM_PLACEHOLDER, _clean_text(term))
+    rendered = clean_knowledge_text(value).replace(_TERM_PLACEHOLDER, clean_knowledge_text(term))
     return _normalize_pattern_text(rendered)
 
 
@@ -218,14 +188,14 @@ def find_hard_block_matches(text: str, terms: list[str] | None = None) -> list[d
     if not normalized_text:
         return []
 
-    terms = [_clean_text(term) for term in (terms or []) if _clean_text(term)]
+    terms = [clean_knowledge_text(term) for term in (terms or []) if clean_knowledge_text(term)]
     if not terms:
         return []
 
     matches: list[tuple[int, dict[str, str]]] = []
     seen: set[tuple[str, str, int]] = set()
     for entry in load_hard_blocker_rules():
-        canonical = _clean_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
+        canonical = clean_knowledge_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY))
         if not canonical:
             continue
         for term in terms:
@@ -247,7 +217,7 @@ def find_hard_block_matches(text: str, terms: list[str] | None = None) -> list[d
                             match.start(),
                             {
                                 MANAGED_KNOWLEDGE_VALUE_KEY: canonical,
-                                "matched_term": _clean_text(term),
+                                "matched_term": clean_knowledge_text(term),
                                 "context": context,
                             },
                         )
@@ -257,8 +227,8 @@ def find_hard_block_matches(text: str, terms: list[str] | None = None) -> list[d
 
 
 def generalize_hard_block_pattern(text: str, term: str) -> str:
-    cleaned_text = _clean_text(text)
-    cleaned_term = _clean_text(term)
+    cleaned_text = clean_knowledge_text(text)
+    cleaned_term = clean_knowledge_text(term)
     if not cleaned_text or not cleaned_term:
         return ""
 

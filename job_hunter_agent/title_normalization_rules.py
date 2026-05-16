@@ -21,7 +21,7 @@ from job_hunter_agent.signal_schema import (
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.parsing_schema import (
     PARSING_STOPWORDS_KEY,
-    PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY,
+    KEY_P_TITLE_VERB_BLOCKERS,
 )
 
 
@@ -102,7 +102,7 @@ def load_title_candidate_leading_verb_blockers() -> frozenset[str]:
         payload = load_parsing_rules()
     except Exception:
         return frozenset()
-    blockers = payload.get(PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY)
+    blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS)
     if not isinstance(blockers, list):
         return frozenset()
     return frozenset(

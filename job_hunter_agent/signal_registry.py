@@ -17,7 +17,7 @@ from job_hunter_agent.paths import (
     SIGNAL_REGISTRY_PATH as _REGISTRY_PATH,
     TITLE_NORMALIZATION_RULES_PATH,
 )
-from job_hunter_agent.parsing_schema import PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY
+from job_hunter_agent.parsing_schema import KEY_P_TITLE_VERB_BLOCKERS
 from job_hunter_agent.job_types import JOB_TYPE_STORE_PATH, load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.hard_blocker_rules import (
     load_hard_blocker_rules,
@@ -439,14 +439,14 @@ def _append_title_candidate_leading_verb_blocker(path, blocker: str) -> None:
     payload.setdefault("kind", "rules")
     payload.setdefault("name", "title_normalization_rules")
     payload.setdefault("version", 1)
-    blockers = payload.get(PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY)
+    blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS)
     if not isinstance(blockers, list):
         blockers = []
     blocker_value = _clean_text(blocker)
     blocker_key = blocker_value.lower()
     if blocker_key and blocker_key not in {_clean_text(item).lower() for item in blockers}:
         blockers.append(blocker_value)
-    payload[PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY] = blockers
+    payload[KEY_P_TITLE_VERB_BLOCKERS] = blockers
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -710,7 +710,7 @@ def clear_signal_learning_state() -> None:
                 except (json.JSONDecodeError, OSError):
                     payload = {}
                 if isinstance(payload, dict):
-                    payload[PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY] = []
+                    payload[KEY_P_TITLE_VERB_BLOCKERS] = []
                     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
             continue
         _save_approved_knowledge_payload(path, {
@@ -759,7 +759,7 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                 payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
             except (json.JSONDecodeError, OSError):
                 payload = {}
-            blockers = payload.get(PARSING_TITLE_CANDIDATE_LEADING_VERB_BLOCKERS_KEY) if isinstance(payload, dict) else []
+                blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS) if isinstance(payload, dict) else []
             if isinstance(blockers, list):
                 for blocker in blockers:
                     cleaned = _clean_text(blocker)

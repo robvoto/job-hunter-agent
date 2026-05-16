@@ -149,11 +149,12 @@ Critical runtime files:
 
 | File                       | Purpose                      |
 | -------------------------- | ---------------------------- |
-| `data/profile.json`        | runtime candidate profile    |
-| `data/job_history.json`    | persistent job state         |
-| `data/agent_state.json`    | runtime orchestration state  |
-| `data/agent_settings.json` | runtime operational settings |
-| knowledge JSON files       | approved business knowledge  |
+| per-user `profile.json` | runtime candidate profile |
+| per-user `job_history.json` | persistent job state |
+| `data/runtime/` | runtime cache, costs, and orchestration state |
+| `data/config/` | global runtime settings |
+| `data/knowledge/` | approved business knowledge |
+| `data/signals/` | signal registry and learning review state |
 
 These files should be preserved.
 
@@ -165,7 +166,7 @@ Rebuildable outputs:
 
 | File                        | Purpose             |
 | --------------------------- | ------------------- |
-| `output/workspace.html`     | rendered workspace  |
+| `output/workspace_results.html` | rendered workspace |
 | `output/run_stats.json`     | runtime diagnostics |
 | `output/review_data.json`   | review summaries    |
 | `output/audit_records.json` | audit output        |

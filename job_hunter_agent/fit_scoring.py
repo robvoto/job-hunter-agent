@@ -23,16 +23,7 @@ from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_LEVEL_WEIGHTS,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_CONVERGENCE,
-    KEY_CONVERGENCE_BONUS_NO_SOFT_RISKS,
-    KEY_CONVERGENCE_BONUS_WITH_SOFT_RISKS,
-    KEY_CONVERGENCE_ELIGIBLE_GRADES,
-    KEY_CONVERGENCE_LABEL,
-    KEY_CONVERGENCE_MIN_POSITIVE_MATCHES,
-    KEY_CONVERGENCE_REQUIRED_CONTENT_REASON,
-    KEY_CONVERGENCE_REQUIRED_FIT_CONFIDENCE,
-    KEY_CONVERGENCE_REQUIRED_TITLE_REASON,
     KEY_LLM_GRADE_POINTS,
-    KEY_MAX_SCORE,
     LEVEL_BASIC,
     LEVEL_STRONG,
     LEVEL_WORKING,
@@ -41,6 +32,7 @@ from job_hunter_agent.profile_store import (
     get_scoring_rules,
     load_profile,
 )
+
 from job_hunter_agent.role_analysis import (
     friendly_capability_label,
     role_text_bundle,
@@ -112,7 +104,7 @@ def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> t
     source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
     scoring_rules = get_scoring_rules(active_profile)
     level_weights = scoring_rules[KEY_CAPABILITY_LEVEL_WEIGHTS]
-    max_score = int(scoring_rules[KEY_CAPABILITY_EVIDENCE][KEY_MAX_SCORE])
+    max_score = int(scoring_rules[KEY_CAPABILITY_EVIDENCE]["max_score"])
     scored = capability_scored_matches(source_text, active_profile)
     total = sum(
         m["combined_strength"] * int(level_weights[str(m.get("level") or "")])
@@ -145,17 +137,17 @@ def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = N
         + len(matches.get(LEVEL_BASIC, []))
     )
     if (
-        title_reason != convergence_rules[KEY_CONVERGENCE_REQUIRED_TITLE_REASON]
-        or content_reason != convergence_rules[KEY_CONVERGENCE_REQUIRED_CONTENT_REASON]
-        or fit_confidence != convergence_rules[KEY_CONVERGENCE_REQUIRED_FIT_CONFIDENCE]
+        title_reason != convergence_rules["required_title_reason"]
+        or content_reason != convergence_rules["required_content_reason"]
+        or fit_confidence != convergence_rules["required_fit_confidence"]
     ):
         return None
-    if missing_evidence or grade not in set(convergence_rules[KEY_CONVERGENCE_ELIGIBLE_GRADES]):
+    if missing_evidence or grade not in set(convergence_rules["eligible_grades"]):
         return None
-    if positive_count < int(convergence_rules[KEY_CONVERGENCE_MIN_POSITIVE_MATCHES]):
+    if positive_count < int(convergence_rules["min_positive_matches"]):
         return None
-    bonus = int(convergence_rules[KEY_CONVERGENCE_BONUS_NO_SOFT_RISKS] if not soft_risks else convergence_rules[KEY_CONVERGENCE_BONUS_WITH_SOFT_RISKS])
-    return {"label": convergence_rules[KEY_CONVERGENCE_LABEL], "value": bonus}
+    bonus = int(convergence_rules["bonus_no_soft_risks"] if not soft_risks else convergence_rules["bonus_with_soft_risks"])
+    return {"label": convergence_rules["label"], "value": bonus}
 
 
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
@@ -313,13 +305,14 @@ def build_freshness_breakdown(scoring_rules: dict, weights: dict, posted_age_day
         raise ValueError("freshness buckets are required in scoring_rules")
 
     for bucket_key in bucket_order:
-        bucket = buckets.get(bucket_key)
+        lookup_key = bucket_key.lower()
+        bucket = buckets.get(lookup_key)
         if not isinstance(bucket, dict):
             raise ValueError(f"Invalid freshness bucket: {bucket_key}")
         if posted_age_days <= float(bucket["max_days"]):
             entries.append({
                 "label": str(bucket["label"]),
-                "value": weighted_points(int(freshness_rules[bucket_key]), weights["freshness"]),
+                "value": weighted_points(int(freshness_rules[lookup_key]), weights["freshness"]),
             })
             break
     return entries
@@ -371,4 +364,3 @@ def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
 def fit_score(record: dict, profile: Optional[dict] = None) -> int:
     score = sum(item["value"] for item in fit_score_breakdown(record, profile))
     return max(min(score, 100), 0)
-

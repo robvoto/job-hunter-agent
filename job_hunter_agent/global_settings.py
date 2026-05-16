@@ -40,6 +40,100 @@ def get_llm_max_chars() -> int:
     return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_CHARS])
 
 
+def get_llm_prompt_setting_int(key: str) -> int:
+    return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_PROMPT_SETTINGS][key])
+
+
+def get_llm_fit_decision_max_output_tokens() -> int:
+    """Max tokens for the fit decision response."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS)
+
+
+def get_llm_learning_candidates_max_output_tokens() -> int:
+    """Max tokens for the learning-candidate response."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS)
+
+
+def get_llm_rejection_blocker_suggestions_max_output_tokens() -> int:
+    """Max tokens for blocker-term suggestions."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS)
+
+
+def get_llm_capability_naming_max_output_tokens() -> int:
+    """Max tokens for capability-cluster naming."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS)
+
+
+def get_llm_profile_extraction_max_output_tokens() -> int:
+    """Max tokens for CV/profile extraction."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS)
+
+
+def get_llm_job_description_max_chars() -> int:
+    """Max job-description characters sent to the LLM."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS)
+
+
+def get_llm_profile_brief_max_chars() -> int:
+    """Max profile-brief characters sent to the LLM."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS)
+
+
+def get_llm_capability_rules_max_items() -> int:
+    """Max capability rules included in the prompt."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS)
+
+
+def get_llm_capability_rule_aliases_max_items() -> int:
+    """Max aliases kept per capability rule."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS)
+
+
+def get_llm_fit_guidance_max_chars() -> int:
+    """Max fit-guidance characters included in the prompt."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS)
+
+
+def get_llm_capability_naming_guidance_max_chars() -> int:
+    """Max naming-guidance characters included in the prompt."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS)
+
+
+def get_llm_capability_naming_aliases_max_items() -> int:
+    """Max aliases used when naming capability clusters."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS)
+
+
+def get_llm_raw_output_log_max_chars() -> int:
+    """Max raw-output characters kept in logs."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS)
+
+
+def get_llm_learning_candidates_max_items() -> int:
+    """Max learning candidates returned by the LLM."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS)
+
+
+def get_llm_rejection_blocker_suggestions_max_items() -> int:
+    """Max blocker suggestions returned by the LLM."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS)
+
+
+def get_llm_rejection_blocker_suggestions_max_words() -> int:
+    """Max words allowed per blocker suggestion."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS)
+
+
+def get_llm_cv_evidence_json_chars() -> int:
+    """Max JSON evidence characters included in profile extraction."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS)
+
+
+def get_llm_cv_fallback_chars() -> int:
+    """Max fallback CV text characters included in profile extraction."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CV_FALLBACK_CHARS)
+
+
 def get_archive_stale_after_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
 

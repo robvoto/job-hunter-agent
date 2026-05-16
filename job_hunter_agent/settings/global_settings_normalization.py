@@ -39,10 +39,25 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_MAX_CHARS,
     KEY_LLM_MAX_CHARS_LIMITS,
+    KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
+    KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS,
+    KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
+    KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
+    KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
+    KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
+    KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
+    KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
+    KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
+    KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
+    KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
     KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
+    KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
+    KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
+    KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
+    KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_SETTINGS,
     KEY_LLM_PROMPT_TEMPLATES,
     KEY_LLM_PRICING_PER_1M,
@@ -59,7 +74,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_PREFERENCE_WEIGHTS,
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
     KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
-    KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
+    KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
     KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
     KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
@@ -184,6 +199,110 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    def _prompt_int(key: str, default_key: str, *, minimum: int, maximum: int) -> int:
+        try:
+            value = int(source.get(key, DEFAULT_LLM_PROMPT_SETTINGS[default_key]) or DEFAULT_LLM_PROMPT_SETTINGS[default_key])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{key} must be an integer"
+            ) from exc
+        if value < minimum or value > maximum:
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{key} must be between {minimum} and {maximum}"
+            )
+        return value
+
+    fit_decision_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
+        minimum=1,
+        maximum=2_000,
+    )
+    learning_candidates_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
+        minimum=1,
+        maximum=10_000,
+    )
+    rejection_blocker_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
+        minimum=1,
+        maximum=10_000,
+    )
+    capability_naming_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
+        minimum=1,
+        maximum=10_000,
+    )
+    profile_extraction_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
+        minimum=1,
+        maximum=10_000,
+    )
+    job_description_max_chars = _prompt_int(
+        KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
+        KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+    cv_evidence_json_chars = _prompt_int(
+        KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
+        KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+    cv_fallback_chars = _prompt_int(
+        KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
+        KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+    profile_brief_max_chars = _prompt_int(
+        KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
+        KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+    capability_rules_max_items = _prompt_int(
+        KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
+        KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
+        minimum=1,
+        maximum=100,
+    )
+    capability_rule_aliases_max_items = _prompt_int(
+        KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
+        KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
+        minimum=1,
+        maximum=100,
+    )
+    fit_guidance_max_chars = _prompt_int(
+        KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
+        KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+    capability_naming_guidance_max_chars = _prompt_int(
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS,
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+    capability_naming_aliases_max_items = _prompt_int(
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
+        minimum=1,
+        maximum=100,
+    )
+    raw_output_log_max_chars = _prompt_int(
+        KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
+        KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
+        minimum=1,
+        maximum=100_000,
+    )
+
     try:
         learning_max_items = int(
             source.get(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS])
@@ -233,6 +352,21 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
     return {
         KEY_LLM_PROMPT_TEMPLATES: templates,
         KEY_LLM_PROMPT_EVIDENCE_TIERS: evidence_tiers,
+        KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS: fit_decision_max_output_tokens,
+        KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS: learning_candidates_max_output_tokens,
+        KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS: rejection_blocker_max_output_tokens,
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS: capability_naming_max_output_tokens,
+        KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS: profile_extraction_max_output_tokens,
+        KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS: job_description_max_chars,
+        KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS: cv_evidence_json_chars,
+        KEY_LLM_PROMPT_CV_FALLBACK_CHARS: cv_fallback_chars,
+        KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS: profile_brief_max_chars,
+        KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS: capability_rules_max_items,
+        KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS: capability_rule_aliases_max_items,
+        KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS: fit_guidance_max_chars,
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS: capability_naming_guidance_max_chars,
+        KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS: capability_naming_aliases_max_items,
+        KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS: raw_output_log_max_chars,
         KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS: rejection_blocker_max_words,
@@ -651,10 +785,10 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
                 1,
                 100,
             ),
-            KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT: _require_int(
+            KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT: _require_int(
                 review_source,
-                KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT,
-                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_CAPABILITY_INTERMEDIATE_MIN_COUNT],
+                KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
+                DEFAULT_REVIEW_SETTINGS[KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT],
                 1,
                 100,
             ),

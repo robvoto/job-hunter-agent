@@ -33,6 +33,9 @@ from job_hunter_agent.profile_store import (
     build_candidate_profile_tiers_from_sections,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_EVIDENCE_TIERS,
+    KEY_PRIMARY_PATTERNS,
+    KEY_SECONDARY_PATTERNS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     load_profile,
     patch_profile,
 )
@@ -44,15 +47,15 @@ SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json
 
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
-    "primary_job_title_pattern",
-    "secondary_title_patterns",
+    KEY_PRIMARY_PATTERNS,
+    KEY_SECONDARY_PATTERNS,
     KEY_CAPABILITY_PROFILE_RULES,
     "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
     "dominant_signal_clusters",
-    "must_not_require_skills",
+    KEY_MUST_NOT_REQUIRED_SKILLS,
 )
 
 DEFAULT_SOURCE_MATERIALS = {
@@ -63,16 +66,7 @@ DEFAULT_SOURCE_MATERIALS = {
 UPLOAD_SLOT_MAP = {
     "primary cv": "primary_cv",
 }
-
-
-def _deep_merge(base: Any, patch: Any) -> Any:
-    if isinstance(base, dict) and isinstance(patch, dict):
-        merged = dict(base)
-        for key, value in patch.items():
-            merged[key] = _deep_merge(merged.get(key), value)
-        return merged
-    return patch
-
+ 
 
 def _normalize_profile_sources(items: Any) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
@@ -420,4 +414,3 @@ def build_llm_profile_brief(
 
     return "\n".join(lines).strip()[:3000]
  
-

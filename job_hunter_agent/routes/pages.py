@@ -135,7 +135,7 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
             page_mode="settings",
             page_title="Settings - Job Hunter",
             page_heading="Settings",
-            page_copy="Configure your candidate search and profile settings here. Shared global settings live on the Global settings screen.",
+            page_copy="Configure your candidate search and profile settings here.",
         )
         return html_response(html)
     return html_response("<h1>Template missing</h1><p>Missing templates/settings.html</p>")

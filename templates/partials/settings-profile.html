@@ -7,11 +7,14 @@
                   <div>
                     <div class="panel-kicker">Candidate profile</div>
                     <h2>Decision Weights</h2>
-                    <p class="panel-copy">Tell the ranking engine what matters more right now. Leave everything at Normal if you want the default balance.</p>
+                    <p class="panel-copy">Tell the ranking engine what matters more to you when searching forjobs. Leave everything at Normal if you want the default balance.</p>
+                    <div class="help-box" style="margin-top: 12px;">
+                      <p>Use the sliders to change scoring priorities. Use the AI guidance fields to influence review text and capability naming. Everything here is safe to edit later if your search priorities change.</p>
+                    </div>
                   </div>
                 </div>
 
-                <section class="profile-group">
+                <section class="profile-group" data-admin-only>
                   <details class="help-drawer">
                     <summary>AI fit brief preview</summary>
                     <p>Read-only. This is regenerated from your capability matrix and used as scoring context.</p>
@@ -27,7 +30,7 @@
                 <section class="profile-group">
                   <details class="help-drawer">
                     <summary>AI fit review guidance</summary>
-                    <p>Optional. Add your own guidance for how AI should judge fit. This affects AI review behaviour, not deterministic rules.</p>
+                    <p>Add your own guidance for how AI should judge fit. This affects AI review behaviour, not deterministic rules.</p>
                     <div class="field-grid" style="padding: 0 14px 14px;">
                       <div class="field-block field-span-2">
                         <label for="llm_fit_review_guidance">AI fit review guidance</label>
@@ -40,7 +43,7 @@
                 <section class="profile-group">
                   <details class="help-drawer">
                     <summary>AI capability naming guidance</summary>
-                    <p>Optional. Add your own guidance for how AI should label capability clusters during CV learning.</p>
+                    <p>Add your own guidance for how AI should label capability clusters during CV learning.</p>
                     <div class="field-grid" style="padding: 0 14px 14px;">
                       <div class="field-block field-span-2">
                         <label for="llm_capability_naming_guidance">AI capability naming guidance</label>
@@ -54,11 +57,17 @@
                   <div class="field-grid">
                     <div class="field-block">
                       <label for="fit_weight">Overall fit</label>
-                      <div class="slider-wrap">
-                        <input id="fit_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
-                        <span class="slider-label" id="fit_weight_label">Normal</span>
-                      </div>
-                      <div class="field-help">Scales title fit, description fit, evidence, competitive signals, hard blockers, and missing evidence.</div>
+                    <div class="slider-wrap">
+                      <input id="fit_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
+                      <span class="slider-label" id="fit_weight_label">Normal</span>
+                    </div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Scales title fit, description fit, evidence, competitive signals, hard blockers, and missing evidence.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>Use this as the broad weighting for overall job fit. Higher values make the combined fit signals move the score more strongly. Ignore removes overall fit from ranking.</p>
+                      </details>
                     </div>
                     <div class="field-block">
                       <label for="salary_weight">Salary</label>
@@ -66,7 +75,13 @@
                         <input id="salary_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
                         <span class="slider-label" id="salary_weight_label">Normal</span>
                       </div>
-                      <div class="field-help">Scales the bonus for meeting your target and the penalty for falling short.</div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Select how much weight you want the engine to give to salary when ranking jobs.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>If you choose a higher Salary weight, jobs closer to your preferred salary or daily rate will rank higher than normal, while lower-paying roles will rank lower. Selecting Ignore removes salary from ranking decisions entirely, so salary differences will not increase or reduce a job's score.</p>
+                      </details>
                     </div>
                     <div class="field-block">
                       <label for="location_weight">Location / travel</label>
@@ -74,7 +89,13 @@
                         <input id="location_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
                         <span class="slider-label" id="location_weight_label">Normal</span>
                       </div>
-                      <div class="field-help">Scales how strongly location preference changes the final score.</div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Scales how strongly location preference changes the final score.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>Higher values make preferred locations and travel limits matter more when jobs are ranked. Ignore removes location preference from the score.</p>
+                      </details>
                     </div>
                     <div class="field-block">
                       <label for="work_mode_weight">Remote / hybrid</label>
@@ -82,7 +103,13 @@
                         <input id="work_mode_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
                         <span class="slider-label" id="work_mode_weight_label">Normal</span>
                       </div>
-                      <div class="field-help">Scales the hybrid and remote bonuses.</div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Scales the hybrid and remote bonuses.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>Higher values make remote and hybrid matches contribute more to the score. Ignore removes the remote and hybrid bonus from ranking.</p>
+                      </details>
                     </div>
                     <div class="field-block">
                       <label for="contract_weight">Contract shape</label>
@@ -90,7 +117,13 @@
                         <input id="contract_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
                         <span class="slider-label" id="contract_weight_label">Normal</span>
                       </div>
-                      <div class="field-help">Scales the permanent bonus and contract-length preference.</div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Scales the permanent bonus and contract-length preference.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>Higher values make permanent roles and preferred contract length matter more. Ignore removes contract shape from ranking decisions.</p>
+                      </details>
                     </div>
                     <div class="field-block">
                       <label for="government_weight">Government context</label>
@@ -98,7 +131,13 @@
                         <input id="government_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
                         <span class="slider-label" id="government_weight_label">Normal</span>
                       </div>
-                      <div class="field-help">Scales the public sector bonus.</div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Scales the public sector bonus.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>Higher values give public-sector roles more weight in ranking. Ignore removes the government bonus from the score.</p>
+                      </details>
                     </div>
                     <div class="field-block">
                       <label for="freshness_weight">Freshness</label>
@@ -106,7 +145,13 @@
                         <input id="freshness_weight" type="range" min="0" max="2" step="0.5" data-weight-slider>
                         <span class="slider-label" id="freshness_weight_label">Normal</span>
                       </div>
-                      <div class="field-help">Scales how much newer postings get rewarded over older but still relevant roles.</div>
+                      <details class="slider-help">
+                        <summary>
+                          <span class="slider-help-copy">Scales how much newer postings get rewarded over older but still relevant roles.</span>
+                          <span class="slider-help-toggle">More</span>
+                        </summary>
+                        <p>Higher values reward newer postings more strongly while still letting older relevant roles compete. Ignore removes freshness from ranking.</p>
+                      </details>
                     </div>
                   </div>
                 </section>

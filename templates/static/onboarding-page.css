@@ -1,10 +1,12 @@
 /* Variables supplied by themes.css */
 
+/* ── Animations ─────────────────────────────────────────────────────── */
+
 @keyframes workingSpin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
+
+/* ── Page-level reset ────────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
@@ -23,21 +25,7 @@ body {
   display: none;
 }
 
-input[type="text"],
-input[type="number"],
-input[type="search"],
-select {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
-input:focus,
-select:focus {
-  outline: 2px solid var(--selection-accent);
-  outline-offset: 2px;
-}
+/* ── Page layout ─────────────────────────────────────────────────────── */
 
 .page {
   max-width: 980px;
@@ -46,6 +34,69 @@ select:focus {
   --setting-control-width: 240px;
   --setting-control-min-width: 210px;
 }
+
+.grid {
+  display: grid;
+  gap: var(--surface-gap-md);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ── Form defaults ───────────────────────────────────────────────────── */
+
+/* Generic baseline — scoped to .page so it doesn't bleed into choice-card labels */
+.page input,
+.page select,
+.page textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* Compact variant for text/number/search inputs */
+.page input[type="text"],
+.page input[type="number"],
+.page input[type="search"] {
+  border-radius: var(--radius-sm);
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.page input:focus,
+.page select:focus {
+  outline: 2px solid var(--selection-accent);
+  outline-offset: 2px;
+}
+
+.page label {
+  display: block;
+  margin: 12px 0 6px;
+  font-weight: 700;
+}
+
+.help {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
 
 .hero {
   margin-bottom: var(--surface-gap-md);
@@ -71,12 +122,6 @@ select:focus {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
-}
-
-.hero-progress {
-  margin-top: 22px;
-  display: grid;
-  gap: 8px;
 }
 
 .hero-shell {
@@ -128,6 +173,14 @@ select:focus {
   margin-left: auto;
   flex-wrap: wrap;
 }
+
+.hero-progress {
+  margin-top: 22px;
+  display: grid;
+  gap: 8px;
+}
+
+/* ── Test panel ──────────────────────────────────────────────────────── */
 
 .onb-test-panel {
   position: relative;
@@ -206,11 +259,7 @@ select:focus {
   color: var(--state-error-text);
 }
 
-.grid {
-  display: grid;
-  gap: var(--surface-gap-md);
-  grid-template-columns: minmax(0, 1fr);
-}
+/* ── Wizard progress ─────────────────────────────────────────────────── */
 
 .wizard-progress {
   margin-bottom: 18px;
@@ -304,6 +353,8 @@ select:focus {
   background: transparent;
 }
 
+/* ── Wizard steps ────────────────────────────────────────────────────── */
+
 .wizard-step[hidden] {
   display: none !important;
 }
@@ -319,6 +370,8 @@ select:focus {
   font-size: var(--help-copy-font-size);
   line-height: var(--help-copy-line-height);
 }
+
+/* ── Drop zone ───────────────────────────────────────────────────────── */
 
 .drop-zone {
   border: 2px dashed var(--border-strong);
@@ -394,6 +447,8 @@ select:focus {
   line-height: var(--help-copy-line-height);
 }
 
+/* ── Workflow card ────────────────────────────────────────────────────── */
+
 .workflow-card {
   display: grid;
   gap: var(--surface-gap-sm);
@@ -455,96 +510,38 @@ select:focus {
   font-weight: 600;
 }
 
+/* ── Field components ────────────────────────────────────────────────── */
+
 .field-stack {
   display: grid;
   gap: var(--surface-gap-sm);
   margin-top: var(--surface-gap-md);
 }
 
-.guidance-card {
-  margin-top: var(--surface-gap-sm);
-  padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
+.onb-field {
+  margin-top: 20px;
 }
 
-.guidance-card summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--selection-accent);
+.onb-field > label:first-child {
+  margin-top: 0;
 }
 
-.guidance-grid {
+.salary-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 12px;
-}
-
-.guidance-grid h3 {
-  margin: 0 0 8px;
-  font-size: 0.96rem;
-}
-
-.guidance-list {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--text-muted);
-  font-size: var(--help-copy-font-size);
-  line-height: var(--help-copy-line-height);
-}
-
-.guidance-note {
-  margin: 12px 0 0;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-label {
-  display: block;
-  margin: 12px 0 6px;
-  font-weight: 700;
-}
-
-input,
-select,
-textarea {
-  width: 100%;
+  margin-top: 10px;
+  padding: 14px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
-  font: inherit;
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  background: var(--bg-muted);
 }
 
-.help {
-  margin-top: 6px;
+.salary-pair label {
+  margin-top: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
   color: var(--text-muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-#primary_cv_status.is-selected {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--state-success-border);
-  border-radius: 999px;
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  font-weight: 700;
-}
-
-#primary_cv_status.is-selected::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: currentColor;
-  flex: 0 0 auto;
 }
 
 .setting-row {
@@ -597,31 +594,70 @@ textarea {
   text-align: left;
 }
 
-.onb-field {
-  margin-top: 20px;
+#primary_cv_status.is-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--state-success-border);
+  border-radius: 999px;
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+  font-weight: 700;
 }
 
-.onb-field > label:first-child {
-  margin-top: 0;
+#primary_cv_status.is-selected::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
 }
 
-.salary-pair {
+/* ── Guidance card ────────────────────────────────────────────────────── */
+
+.guidance-card {
+  margin-top: var(--surface-gap-sm);
+  padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.guidance-card summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--selection-accent);
+}
+
+.guidance-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 10px;
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-muted);
+  margin-top: 12px;
 }
 
-.salary-pair label {
-  margin-top: 0;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-muted);
+.guidance-grid h3 {
+  margin: 0 0 8px;
+  font-size: 0.96rem;
 }
+
+.guidance-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
+}
+
+.guidance-note {
+  margin: 12px 0 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── Actions & buttons ───────────────────────────────────────────────── */
 
 .actions {
   display: flex;
@@ -654,6 +690,8 @@ textarea {
   margin: 0 0 var(--surface-gap-sm);
 }
 
+/* ── Status ──────────────────────────────────────────────────────────── */
+
 .status {
   margin-top: var(--surface-gap-md);
   padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
@@ -666,6 +704,12 @@ textarea {
   display: block;
   background: var(--state-success-bg);
   color: var(--state-success-text);
+}
+
+.status.warning {
+  display: block;
+  background: var(--state-warning-bg);
+  color: var(--state-warning-text);
 }
 
 .status.loading {
@@ -693,6 +737,8 @@ textarea {
   color: var(--state-error-text);
 }
 
+/* ── Review / check grids ────────────────────────────────────────────── */
+
 .review-grid,
 .check-grid {
   display: grid;
@@ -704,6 +750,25 @@ textarea {
 .capability-shell {
   margin-top: 14px;
 }
+
+.check-list {
+  margin: 14px 0 0;
+}
+
+.check-list dt {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.check-list dd {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+/* ── Chip list ───────────────────────────────────────────────────────── */
 
 .chip-list {
   display: flex;
@@ -734,8 +799,8 @@ textarea {
 }
 
 .chip-item-subtle {
-  background: var(--bg-chip-subtle);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-chip-subtle));
+  color: var(--text-primary);
 }
 
 .chip-item button {
@@ -758,6 +823,161 @@ textarea {
   min-width: 0;
 }
 
+.chip-button,
+.location-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.chip-button {
+  cursor: pointer;
+}
+
+.chip-button.is-active {
+  background: var(--state-success-bg);
+  border-color: var(--state-success-border);
+  color: var(--state-success-text);
+}
+
+.location-chip {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+  font-weight: 600;
+}
+
+.location-chip button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+/* ── Location picker ─────────────────────────────────────────────────── */
+
+.location-picker {
+  margin-top: 10px;
+}
+
+.location-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.location-input-row input {
+  flex: 1 1 auto;
+}
+
+.location-add-button {
+  white-space: nowrap;
+}
+
+.location-suggestions,
+.location-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  min-height: 36px;
+  align-items: center;
+}
+
+.location-selected:empty {
+  display: none;
+}
+
+/* ── Choice cards ────────────────────────────────────────────────────── */
+
+.choice-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.choice-list--engagement {
+  display: flex;
+  gap: 0;
+  margin-top: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.choice-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.choice-card input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--selection-accent);
+}
+
+/* Engagement type — segmented button strip */
+
+.choice-card--engagement {
+  flex: 1;
+  min-height: unset;
+  padding: 9px 14px;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 120ms ease;
+}
+
+.choice-card--engagement:last-child {
+  border-right: none;
+}
+
+.choice-card--engagement input[type="radio"] {
+  display: none;
+}
+
+.choice-card--engagement:has(input:checked) {
+  background: var(--selection-accent);
+  color: var(--button-text);
+  border-color: var(--selection-accent);
+}
+
+.choice-card--engagement:has(input:checked) span {
+  color: var(--button-text);
+  font-weight: 700;
+}
+
+.choice-card--engagement:not(:has(input:checked)):hover {
+  background: var(--bg-muted);
+}
+
+/* Work mode — choice chips */
+
+/* ── Review capability ───────────────────────────────────────────────── */
+
 .review-capability-filter {
   margin-top: 0;
   max-width: 320px;
@@ -778,11 +998,10 @@ textarea {
   margin-top: 12px;
 }
 
-#review_capability_cards .review-capability-group,
 .review-capability-group {
-  display: block !important;
-  padding: 0 !important;
-  width: 100% !important;
+  display: block;
+  padding: 0;
+  width: 100%;
   background: var(--bg-panel-glass);
   border: 1px solid var(--border-panel-glass);
 }
@@ -804,7 +1023,6 @@ textarea {
   line-height: 1.5;
 }
 
-#review_capability_cards .review-capability-toolbar,
 .review-capability-toolbar {
   display: block;
   padding: 12px 14px;
@@ -843,7 +1061,6 @@ textarea {
   padding-inline: 14px;
 }
 
-#review_capability_cards .review-capability-row-list,
 .review-capability-row-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -851,7 +1068,6 @@ textarea {
   width: 100%;
 }
 
-#review_capability_cards .review-capability-row,
 .review-capability-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1003,7 +1219,6 @@ textarea {
   border-radius: 0;
   overflow: visible;
   background: var(--bg-toolbar-glass);
-  flex: 0 0 auto;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s ease;
@@ -1042,7 +1257,6 @@ textarea {
   background: color-mix(in srgb, var(--bg-muted) 72%, var(--bg-surface));
 }
 
-#review_capability_cards .review-capability-footer,
 .review-capability-footer {
   display: flex;
   justify-content: flex-start;
@@ -1078,235 +1292,8 @@ textarea {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.location-picker {
-  margin-top: 10px;
-}
 
-.location-input-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.location-input-row input {
-  flex: 1 1 auto;
-}
-
-.location-add-button {
-  white-space: nowrap;
-}
-
-.location-suggestions,
-.location-selected {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  min-height: 36px;
-  align-items: center;
-}
-
-.location-selected:empty {
-  display: none;
-}
-
-.chip-button,
-.location-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font: inherit;
-}
-
-.location-chip {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  font-weight: 600;
-}
-
-.chip-button {
-  cursor: pointer;
-}
-
-.chip-button.is-active {
-  background: var(--state-success-bg);
-  border-color: var(--state-success-border);
-  color: var(--state-success-text);
-}
-
-.location-chip button {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.choice-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.choice-list--engagement {
-  display: flex;
-  gap: 0;
-  margin-top: 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
-}
-
-.choice-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.choice-card--engagement {
-  flex: 1;
-  min-height: unset;
-  padding: 9px 14px;
-  border: none;
-  border-right: 1px solid var(--border-subtle);
-  border-radius: 0;
-  box-shadow: none;
-  justify-content: center;
-  text-align: center;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background 120ms ease;
-}
-
-.choice-card--engagement:last-child {
-  border-right: none;
-}
-
-.choice-card--engagement input[type="radio"] {
-  display: none;
-}
-
-.choice-card--engagement:has(input:checked) {
-  background: var(--selection-accent);
-  color: var(--button-text);
-  border-color: var(--selection-accent);
-}
-
-.choice-card--engagement:has(input:checked) span {
-  color: var(--button-text);
-  font-weight: 700;
-}
-
-.choice-card--engagement:not(:has(input:checked)):hover {
-  background: var(--bg-muted);
-}
-
-.choice-card input {
-  width: auto;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--selection-accent);
-}
-
-#work_mode_preference {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.choice-card--work-mode {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 9px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  font-size: 0.93rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.choice-card--work-mode input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  flex-shrink: 0;
-  accent-color: var(--selection-accent);
-}
-
-.choice-card--work-mode span {
-  line-height: 1.1;
-  word-break: normal;
-}
-
-.choice-card--work-mode:has(input:checked) {
-  border-color: var(--selection-accent);
-  background: color-mix(in srgb, var(--selection-accent) 10%, var(--bg-surface));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--selection-accent) 18%, transparent);
-}
-
-.choice-card--work-mode:has(input:checked) span {
-  color: var(--text-primary);
-  font-weight: 700;
-}
-
-.choice-card--work-mode:not(:has(input:checked)):hover {
-  background: var(--bg-muted);
-  border-color: var(--border-strong);
-  transform: translateY(-0.5px);
-}
-
-.check-list {
-  margin: 14px 0 0;
-}
-
-.check-list dt {
-  color: var(--text-muted);
-  font-size: 0.84rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.check-list dd {
-  margin: 4px 0 0;
-  line-height: 1.5;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* ── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 720px) {
   .hero-shell {
@@ -1333,9 +1320,6 @@ textarea {
   .chip-editor-row {
     flex-direction: column;
     align-items: stretch;
-  }
-  #work_mode_preference {
-    grid-template-columns: 1fr;
   }
 
   .number-input {

@@ -8,6 +8,7 @@ from typing import Any
 
 from job_hunter_agent.match_labels import MATCH_LEVELS
 from job_hunter_agent.paths import DEFAULT_USER_SETTINGS_PATH, get_user_settings_path
+from job_hunter_agent.utils import coerce_int, deep_merge
 
 
 USER_STATE_FILENAME = "agent_state.json"
@@ -32,7 +33,6 @@ def _possible_fit_threshold() -> int:
     return int(sorted_levels[0]["minimum_score"]) if sorted_levels else 0
 
 
-DEFAULT_WORKSPACE_MIN_SCORE = _possible_fit_threshold()
 MIN_SCORE = 0
 MAX_SCORE = 100
 
@@ -65,32 +65,15 @@ DEFAULT_SUBJECT_PREFIX = str(DEFAULT_USER_SETTINGS[KEY_EMAIL]["subject_prefix"])
 DEFAULT_LLM_MODEL = str(DEFAULT_USER_SETTINGS[KEY_LLM]["model"]).strip()
 
 
-def _deep_merge(base: Any, patch: Any) -> Any:
-    if isinstance(base, dict) and isinstance(patch, dict):
-        merged = dict(base)
-        for key, value in patch.items():
-            merged[key] = _deep_merge(merged.get(key), value)
-        return merged
-    return copy.deepcopy(patch)
-
-
-def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
-    try:
-        resolved = int(value)
-    except Exception:
-        resolved = default
-    return max(minimum, min(maximum, resolved))
-
-
 def normalize_user_settings(payload: Any) -> dict[str, Any]:
     defaults = DEFAULT_USER_SETTINGS
-    settings = _deep_merge(copy.deepcopy(defaults), payload if isinstance(payload, dict) else {})
+    settings = deep_merge(copy.deepcopy(defaults), payload if isinstance(payload, dict) else {})
 
     settings["workspace_url"] = str(settings.get("workspace_url") or "").strip()
 
     workspace = settings.get(KEY_WORKSPACE, {})
     settings[KEY_WORKSPACE] = {
-        "minimum_score": _coerce_int(
+        "minimum_score": coerce_int(
             workspace.get("minimum_score"),
             defaults[KEY_WORKSPACE]["minimum_score"],
             MIN_SCORE,
@@ -101,7 +84,7 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
     schedule = settings.get(KEY_SCHEDULE, {})
     settings[KEY_SCHEDULE] = {
         "daily_time_local": str(schedule.get("daily_time_local") or defaults[KEY_SCHEDULE]["daily_time_local"]).strip(),
-        "loop_sleep_seconds": _coerce_int(
+        "loop_sleep_seconds": coerce_int(
             schedule.get("loop_sleep_seconds"),
             defaults[KEY_SCHEDULE]["loop_sleep_seconds"],
             MIN_LOOP_SLEEP_SECONDS,
@@ -111,13 +94,13 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
 
     notification_rules = settings.get(KEY_NOTIFICATION_RULES, {})
     settings[KEY_NOTIFICATION_RULES] = {
-        "max_jobs_in_digest": _coerce_int(
+        "max_jobs_in_digest": coerce_int(
             notification_rules.get("max_jobs_in_digest"),
             defaults[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"],
             MIN_MAX_JOBS_IN_DIGEST,
             MAX_MAX_JOBS_IN_DIGEST,
         ),
-        "minimum_fit_score": _coerce_int(
+        "minimum_fit_score": coerce_int(
             notification_rules.get("minimum_fit_score"),
             defaults[KEY_NOTIFICATION_RULES]["minimum_fit_score"],
             MIN_SCORE,
@@ -130,7 +113,7 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
     settings[KEY_EMAIL] = {
         "enabled": bool(email.get("enabled", defaults[KEY_EMAIL]["enabled"])),
         "smtp_host": str(email.get("smtp_host") or defaults[KEY_EMAIL]["smtp_host"]).strip(),
-        "smtp_port": _coerce_int(email.get("smtp_port"), defaults[KEY_EMAIL]["smtp_port"], 1, 65535),
+        "smtp_port": coerce_int(email.get("smtp_port"), defaults[KEY_EMAIL]["smtp_port"], 1, 65535),
         "smtp_username": str(email.get("smtp_username") or defaults[KEY_EMAIL]["smtp_username"]).strip(),
         "smtp_password": str(email.get("smtp_password") or defaults[KEY_EMAIL]["smtp_password"]).strip(),
         "use_tls": bool(email.get("use_tls", defaults[KEY_EMAIL]["use_tls"])),
@@ -163,7 +146,7 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
         "bot_username": str(telegram.get("bot_username") or defaults[KEY_TELEGRAM]["bot_username"]).strip().lstrip("@"),
         "chat_id": str(telegram.get("chat_id") or defaults[KEY_TELEGRAM]["chat_id"]).strip(),
         "disable_link_preview": bool(telegram.get("disable_link_preview", defaults[KEY_TELEGRAM]["disable_link_preview"])),
-        "last_update_id": _coerce_int(
+        "last_update_id": coerce_int(
             telegram.get("last_update_id"),
             defaults[KEY_TELEGRAM]["last_update_id"],
             0,

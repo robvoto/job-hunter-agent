@@ -7,7 +7,11 @@ from typing import Any
 
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from job_hunter_agent import server_helpers as srv
+_MIME_OVERRIDES = {
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".png": "image/png",
+}
 
 
 def json_response(payload: dict[str, Any], status_code: int = 200) -> JSONResponse:
@@ -32,8 +36,7 @@ def html_response(html: str, status_code: int = 200) -> HTMLResponse:
 
 
 def guess_media_type(path: Path) -> str:
-    overrides = getattr(srv, "_STATIC_MIME_OVERRIDES", {})
-    mime_type = overrides.get(path.suffix.lower())
+    mime_type = _MIME_OVERRIDES.get(path.suffix.lower())
     if mime_type:
         return mime_type
     import mimetypes

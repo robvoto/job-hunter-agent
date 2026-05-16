@@ -34,30 +34,6 @@ def _term_tokens(value: Any) -> list[str]:
     ]
 
 
-def _is_initialism_alias(raw_alias: Any, canonical_tokens: list[str]) -> bool:
-    alias_text = str(raw_alias or "").strip()
-    letters_only = re.sub(r"[^A-Za-z]", "", alias_text)
-    if not letters_only or not letters_only.isupper():
-        return False
-    if len(letters_only) < 2 or len(letters_only) > 8:
-        return False
-    initials = "".join(token[:1] for token in canonical_tokens if token)
-    return letters_only.lower() == initials.lower()
-
-
-def _tokens_in_order(alias_tokens: list[str], canonical_tokens: list[str]) -> bool:
-    if not alias_tokens or not canonical_tokens:
-        return False
-    start_index = 0
-    for token in alias_tokens:
-        try:
-            found_index = canonical_tokens.index(token, start_index)
-        except ValueError:
-            return False
-        start_index = found_index + 1
-    return True
-
-
 def _is_structurally_valid_alias(raw_alias: Any) -> bool:
     # ── SEALED — see data/ALIAS_LOGIC_RATIONALE.md ────────────────────────────
     # Validates basic formatting only. No token-overlap check against the

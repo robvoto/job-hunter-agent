@@ -29,14 +29,14 @@ from job_hunter_agent.profile_store import (
     KEY_NAME,
     KEY_LEVEL,
     KEY_ALIASES,
-    KEY_NEEDS_REVIEW,
     WORK_MODE_PREFERENCE_REMOTE,
     WORK_MODE_PREFERENCE_HYBRID,
     LEVEL_STRONG,
     LEVEL_WORKING,
     LEVEL_BASIC,
-    LEVEL_LOW,
 )
+KEY_NEEDS_REVIEW = "needs_review"
+
 from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
 from job_hunter_agent.title_normalization_rules import (
     learn_title_normalization_candidates,
@@ -57,18 +57,18 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SOURCE_KEY,
     SOURCE_CV_PARSING,
 )
-from job_hunter_agent.llm_protocol import (
-    LLM_MAX_CV_EVIDENCE_JSON_CHARS,
-    LLM_MAX_CV_FALLBACK_CHARS,
-    LLM_MAX_TOKENS_PROFILE_EXTRACTION,
+from job_hunter_agent.global_settings import (
+    KEY_CAPABILITY_ALIAS_LIMIT,
+    get_llm_cv_evidence_json_chars,
+    get_llm_cv_fallback_chars,
+    get_llm_profile_extraction_max_output_tokens,
 )
-from job_hunter_agent.global_settings import KEY_CAPABILITY_ALIAS_LIMIT
 
 from job_hunter_agent.parsing_schema import (
-    PARSING_TITLE_CANDIDATE_LINE_RULES_KEY,
-    PARSING_TITLE_CANDIDATE_MAX_LENGTH_KEY,
-    PARSING_TITLE_CANDIDATE_MAX_TOKENS_KEY,
-    PARSING_TITLE_CANDIDATE_PUNCTUATION_BLOCKERS_KEY,
+    KEY_P_TITLE_LINE_RULES,
+    KEY_P_TITLE_MAX_CHARS,
+    KEY_P_TITLE_MAX_TOKENS,
+    KEY_P_TITLE_PUNCT_BLOCKERS,
 )
 
 CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
@@ -83,7 +83,7 @@ CAT_ROLE_TITLE = CATEGORY_ROLE_TITLE_TOKEN
 CAT_TITLE_NORM = CATEGORY_TITLE_NORMALIZATION_CANDIDATE
 KEY_TITLE_PARSE_BLOCKERS = "title_candidate_leading_verb_blockers"
 
-_VALID_LEVELS = {LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC, LEVEL_LOW}
+_VALID_LEVELS = {LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC}
 _CURRENT_YEAR = datetime.now().year
 
 
@@ -336,7 +336,7 @@ def get_parsing_rule_set(key: str) -> set[str]:
 @lru_cache(maxsize=1)
 def _load_title_candidate_line_rules() -> dict[str, Any]:
     rules = _load_parsing_rules()
-    line_rules = rules.get(PARSING_TITLE_CANDIDATE_LINE_RULES_KEY)
+    line_rules = rules.get(KEY_P_TITLE_LINE_RULES)
     if not isinstance(line_rules, dict):
         raise ValueError("parsing_rules.json must define title_candidate_line_rules")
     return line_rules
@@ -351,7 +351,7 @@ def _get_title_candidate_line_int(key: str) -> int:
 
 
 def _get_title_candidate_punctuation_blockers() -> set[str]:
-    blockers = _load_title_candidate_line_rules().get(PARSING_TITLE_CANDIDATE_PUNCTUATION_BLOCKERS_KEY)
+    blockers = _load_title_candidate_line_rules().get(KEY_P_TITLE_PUNCT_BLOCKERS)
     if not isinstance(blockers, list):
         raise ValueError("title_candidate_line_rules.punctuation_blockers must be a list")
     return {str(item) for item in blockers if str(item)}
@@ -362,13 +362,13 @@ def _looks_like_role_title_line(text: str) -> bool:
     cleaned = _clean_line(text)
     if not cleaned:
         return False
-    if len(cleaned) > _get_title_candidate_line_int(PARSING_TITLE_CANDIDATE_MAX_LENGTH_KEY):
+    if len(cleaned) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_CHARS):
         return False
     if any(blocker in cleaned for blocker in _get_title_candidate_punctuation_blockers()):
         return False
     normalized = _normalize_role_title_value(cleaned)
     tokens = _pattern_tokens(normalized)
-    if not tokens or len(tokens) > _get_title_candidate_line_int(PARSING_TITLE_CANDIDATE_MAX_TOKENS_KEY):
+    if not tokens or len(tokens) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_TOKENS):
         return False
     if tokens[0] in get_parsing_rule_set(KEY_TITLE_PARSE_BLOCKERS):
         return False
@@ -698,6 +698,9 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
     recent_from = _CURRENT_YEAR - lookback_years
     evidence_payload = _build_cv_evidence_payload(source_text, lookback_years)
     evidence_json = json.dumps(evidence_payload, ensure_ascii=True)
+    evidence_json_limit = get_llm_cv_evidence_json_chars()
+    fallback_text_limit = get_llm_cv_fallback_chars()
+    profile_extraction_max_output_tokens = get_llm_profile_extraction_max_output_tokens()
     prompt = (
         "Extract structured data from this CV evidence pack.\n\n"
         "Return data that matches the requested response schema exactly.\n\n"
@@ -718,8 +721,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
-        f"Evidence pack JSON:\n{evidence_json[:LLM_MAX_CV_EVIDENCE_JSON_CHARS]}\n\n"
-        f"Raw CV fallback:\n{source_text[:LLM_MAX_CV_FALLBACK_CHARS]}"
+        f"Evidence pack JSON:\n{evidence_json[:evidence_json_limit]}\n\n"
+        f"Raw CV fallback:\n{source_text[:fallback_text_limit]}"
     )
 
     try:
@@ -728,7 +731,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
             model=model,
             input=[{"role": "user", "content": prompt}],
             text_format=_CvExtractionResponse,
-            max_output_tokens=LLM_MAX_TOKENS_PROFILE_EXTRACTION,
+            max_output_tokens=profile_extraction_max_output_tokens,
         )
         _log_llm_call(resp, "cv_extraction", model)
         parsed = resp.output_parsed
@@ -1195,4 +1198,3 @@ def extract_title_pattern_suggestions(
         KEY_SECONDARY_PATTERNS: list(dict.fromkeys(secondary_patterns)),
         KEY_SUGGESTED_KEYWORDS: list(dict.fromkeys(suggested_search_keywords))[:4],
     }
-

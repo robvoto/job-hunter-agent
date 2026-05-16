@@ -1,110 +1,133 @@
         <section id="section-search" class="settings-group is-active" data-screen="settings">
           <h2 class="section-title">Search</h2>
           <div class="grid search-settings-grid">
-            <section class="panel">
+            <section class="panel search-common-panel">
               <h2>Common Search Settings</h2>
               <p class="panel-copy">Shared source-search inputs that apply across SEEK and LinkedIn.</p>
-              <label>Search keywords</label>
-              <div class="badge-editor" data-chip-editor="keywords">
-                <div id="keywords_chips" class="badge-editor-list" aria-live="polite"></div>
-                <div class="badge-editor-form">
-                  <input id="keywords_add" type="text" data-chip-input="keywords" placeholder="Add a search title">
-                  <button class="secondary" type="button" data-add-chip="keywords">Add</button>
+
+              <div class="common-search-grid">
+                <div class="common-search-field">
+                  <label>Search keywords</label>
+                  <div class="badge-editor" data-chip-editor="keywords">
+                    <div id="keywords_chips" class="badge-editor-list" aria-live="polite"></div>
+                    <div class="badge-editor-form">
+                      <input id="keywords_add" type="text" data-chip-input="keywords" placeholder="Add a search title">
+                      <button class="secondary" type="button" data-add-chip="keywords">Add</button>
+                    </div>
+                  </div>
+                  <textarea id="keywords" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+                  <div class="help">Each title is sent as a separate search query to job boards. At least one must remain.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="locations">Location</label>
+                  <select id="locations"></select>
+                  <div class="help">Choose one state or capital city. Job Hunter uses the same canonical location for SEEK and LinkedIn, then adapts the query format per source.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="engagement_type">Work type</label>
+                  <select id="engagement_type">
+                    __JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
+                  </select>
+                  <div class="help">Filter which engagement types are searched. Both includes permanent and contract roles.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label>Work mode</label>
+                  <div id="work_mode_preference">
+                    __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
+                  </div>
+                  <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="prefer_government">Government preference</label>
+                  <select id="prefer_government">
+                    __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+                  </select>
+                  <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__ This affects matching, not eligibility.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="search_date_window">How far back to search</label>
+                  <select id="search_date_window">
+                    <option value="0">Any time</option>
+                    <option value="1">Last 24 hours</option>
+                    <option value="3">Last 3 days</option>
+                    <option value="7">Last 7 days</option>
+                    <option value="15">Last 15 days</option>
+                    <option value="30">Last 30 days</option>
+                  </select>
+                  <div class="help">How recently listings must have been posted. Applies to all sources, including SEEK and LinkedIn.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="workspace_minimum_score">Minimum fit level to show</label>
+                  <select id="workspace_minimum_score"></select>
+                  <div class="help">Hide roles below this fit level. Options are drawn from your configured match levels.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                  <div class="currency-input-wrap">
+                    <span class="currency-prefix">$</span>
+                    <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
+                  </div>
+                  <div class="help">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                  <div class="currency-input-wrap">
+                    <span class="currency-prefix">$</span>
+                    <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
+                  </div>
+                  <div class="help">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
                 </div>
               </div>
-              <textarea id="keywords" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-              <div class="help">Each title is sent as a separate search query to job boards. At least one must remain.</div>
-
-              <label for="engagement_type">Work type</label>
-              <select id="engagement_type">
-                __JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
-              </select>
-              <div class="help">Filter which engagement types are searched. Both includes permanent and contract roles.</div>
-
-              <label>Work mode</label>
-              <div id="work_mode_preference">
-                __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
-              </div>
-              <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
-
-              <label for="prefer_government">Government preference</label>
-              <select id="prefer_government">
-                __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
-              </select>
-              <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__ This affects matching, not eligibility.</div>
-
-              <label for="search_date_window">How far back to search</label>
-              <select id="search_date_window">
-                <option value="0">Any time</option>
-                <option value="1">Last 24 hours</option>
-                <option value="3">Last 3 days</option>
-                <option value="7">Last 7 days</option>
-                <option value="15">Last 15 days</option>
-                <option value="30">Last 30 days</option>
-              </select>
-              <div class="help">How recently listings must have been posted. Applies to all sources â€” SEEK and LinkedIn.</div>
-
-              <label for="workspace_minimum_score">Minimum fit level to show</label>
-              <select id="workspace_minimum_score"></select>
-              <div class="help">Hide roles below this fit level. Options are drawn from your configured match levels.</div>
-
-              <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
-              <div class="currency-input-wrap">
-                <span class="currency-prefix">$</span>
-                <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
-              </div>
-              <div class="help">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
-
-              <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
-              <div class="currency-input-wrap">
-                <span class="currency-prefix">$</span>
-                <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
-              </div>
-              <div class="help">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
             </section>
 
-            <section class="panel">
-              <h2>SEEK</h2>
-              <label for="locations">Location</label>
-              <select id="locations"></select>
-              <div class="help">Choose one state or capital city. Job Hunter uses the same canonical location for SEEK and LinkedIn, then adapts the query format per source.</div>
+            <div class="search-source-panels">
+              <section class="panel">
+                <h2>SEEK</h2>
+                <label for="classification_ids" hidden>Classification IDs</label>
+                <textarea id="classification_ids" placeholder="One id per line" hidden></textarea>
+                <div class="help" hidden>Broad pre-filter before fit logic runs.</div>
 
-              <label for="classification_ids" hidden>Classification IDs</label>
-              <textarea id="classification_ids" placeholder="One id per line" hidden></textarea>
-              <div class="help" hidden>Broad pre-filter before fit logic runs.</div>
+                <label for="seek_max_pages">Max pages to check</label>
+                <input id="seek_max_pages" type="number" min="1" max="10">
+                <div class="help">Saved SEEK page limit used by manual and scheduled runs. Allowed range is 1 to 10.</div>
 
-              <label for="seek_max_pages">Max pages to check</label>
-              <input id="seek_max_pages" type="number" min="1" max="10">
-              <div class="help">Saved SEEK page limit used by manual and scheduled runs. Allowed range is 1 to 10.</div>
+                <label for="enforce_posted_age_limit">Strictly reject older ads</label>
+                <select id="enforce_posted_age_limit">
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+                <div class="help">When Yes, ads posted outside the search window are discarded before scoring. When No, older ads are still evaluated.</div>
 
-              <label for="enforce_posted_age_limit">Strictly reject older ads</label>
-              <select id="enforce_posted_age_limit">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-              <div class="help">When Yes, ads posted outside the search window are discarded before scoring. When No, older ads are still evaluated.</div>
+                <label for="sort_newest_first">Prefer newest jobs first</label>
+                <select id="sort_newest_first">
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+                <div class="help">When Yes, the workspace orders results with the freshest listings at the top.</div>
+              </section>
 
-              <label for="sort_newest_first">Prefer newest jobs first</label>
-              <select id="sort_newest_first">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-              <div class="help">When Yes, the workspace orders results with the freshest listings at the top.</div>
-            </section>
+              <section class="panel">
+                <h2>LinkedIn</h2>
+                <label for="linkedin_results_per_search">Results per search</label>
+                <input id="linkedin_results_per_search" type="number" min="5" max="100">
+                <div class="help">Max results per keyword and location pair.</div>
 
-            <section class="panel">
-              <h2>LinkedIn</h2>
-              <label for="linkedin_results_per_search">Results per search</label>
-              <input id="linkedin_results_per_search" type="number" min="5" max="100">
-              <div class="help">Max results per keyword and location pair.</div>
-
-              <label for="linkedin_easy_apply_only">Easy Apply filter</label>
-              <select id="linkedin_easy_apply_only">
-                <option value="">Both (no filter)</option>
-                <option value="true">Easy Apply only</option>
-                <option value="false">Non-Easy Apply only</option>
-              </select>
-            </section>
+                <label for="linkedin_easy_apply_only">Easy Apply filter</label>
+                <select id="linkedin_easy_apply_only">
+                  <option value="">Both (no filter)</option>
+                  <option value="true">Easy Apply only</option>
+                  <option value="false">Non-Easy Apply only</option>
+                </select>
+              </section>
+            </div>
 
             <section class="panel search-operations-panel" id="schedule-panel">
               <div class="search-operations-head">

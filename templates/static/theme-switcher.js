@@ -1,7 +1,7 @@
 (function () {
   var KEY = 'jha-theme';
   var THEMES = ['soft-professional', 'bold-aggressive', 'dark-professional'];
-  var DEFAULT = 'dark-professional';
+  var DEFAULT = 'soft-professional';
 
   function apply(theme) {
     if (!THEMES.includes(theme)) theme = DEFAULT;

@@ -1,14 +1,34 @@
 # utils.py
 
+import copy
 import re
 from html import escape
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from job_hunter_agent.io_utils import load_parsing_rules
 
 
 def safe_html(text: str) -> str:
     return escape(text or "", quote=True)
+
+
+def deep_merge(base: Any, patch: Any) -> Any:
+    """Recursively merge two dictionaries, deep-copying values from the patch."""
+    if isinstance(base, dict) and isinstance(patch, dict):
+        merged = dict(base)
+        for key, value in patch.items():
+            merged[key] = deep_merge(merged.get(key), value)
+        return merged
+    return copy.deepcopy(patch)
+
+
+def coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    """Safe integer coercion with clamping."""
+    try:
+        resolved = int(value)
+    except Exception:
+        resolved = default
+    return max(minimum, min(maximum, resolved))
 
 
 def set_query_param(url: str, key: str, value: str | int) -> str:

@@ -19,7 +19,9 @@ from job_hunter_agent.profile_store import (
     KEY_ONBOARDING_SETTINGS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
-    WORK_MODE_PREFERENCE_OPTIONS,
+    VALID_ENGAGEMENT_TYPES,
+    VALID_GOVERNMENT_PREFERENCES,
+    VALID_WORK_MODE_PREFERENCES,
     normalize_capability_rules,
     normalize_work_mode_preferences,
 )
@@ -109,15 +111,14 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         location = locations[0]
         if len(location) < 2 or len(location) > 80:
             raise ValueError("Location should be between 2 and 80 characters.")
-        if not srv._LOCATION_NAME_RE.fullmatch(location):
+        if not srv.LOCATION_NAME_RE.fullmatch(location):
             raise ValueError("Location should look like a normal city, state, or region name.")
         locations = [resolve_location(location)["name"]]
-        if engagement_type not in srv._VALID_ENGAGEMENT_TYPES:
+        if engagement_type not in VALID_ENGAGEMENT_TYPES:
             raise ValueError("Please choose what type of work you are open to.")
-        valid_work_modes = {str(item["value"]).strip().lower() for item in WORK_MODE_PREFERENCE_OPTIONS}
-        if any(value not in valid_work_modes for value in work_mode_preference):
+        if any(value not in VALID_WORK_MODE_PREFERENCES for value in work_mode_preference):
             raise ValueError("Please choose only remote, hybrid, or on-site.")
-        if prefer_government not in srv._VALID_GOVERNMENT_PREFERENCES:
+        if prefer_government not in VALID_GOVERNMENT_PREFERENCES:
             prefer_government = srv.GOVERNMENT_PREFERENCE_ANY
         try:
             minimum_salary_yearly = int(str(raw_minimum_salary_yearly).replace(",", "").strip() or 0)

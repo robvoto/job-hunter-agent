@@ -1,9 +1,10 @@
 """
 Workspace HTML rendering functions.
 
-Produces job card HTML, section HTML,
-filter option HTML, and the full results fragment. No scraping or pipeline
-logic belongs here.
+This module follows an "App Shell + Fragment" architecture. 
+It processes 'results.html' as a template fragment to produce the data-heavy 
+content (job cards, filters, stats), which is then injected into the 
+'workspace.html' shell by the frontend. No scraping or pipeline logic belongs here.
 """
 
 import json
@@ -909,4 +910,3 @@ def render_match_level_guide_html(profile: Optional[dict] = None) -> str:
         '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
     ])
     return "".join(guide_bits)
-
