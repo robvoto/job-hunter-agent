@@ -12,20 +12,9 @@ KEY_CURRENCIES_WITH_DOLLAR = "currencies_with_dollar"
 _cached_rules: Optional[Dict] = None
 
 
-def load_salary(force_reload: bool = False) -> dict:
-    """
-    Load salary formatting rules from persistent storage.
-
-    Results are cached in memory to avoid repeated disk reads.
-    """
+def load_salary() -> Dict:
     global _cached_rules
-
-    if _cached_rules is not None and not force_reload:
-        return _cached_rules
-
-    if _SALARY_PATH.exists():
-        _cached_rules = json.loads(_SALARY_PATH.read_text())
-    else:
-        _cached_rules = {}
-
+    if _cached_rules is None:
+        with open(_SALARY_PATH, encoding="utf-8") as f:
+            _cached_rules = json.load(f)
     return _cached_rules

@@ -13,7 +13,6 @@ const refs = Object.freeze({
   progressFill: document.getElementById('wizard_progress_fill'),
   primaryCvInput: document.getElementById('primary_cv'),
   primaryCvDropZone: document.getElementById('cv_drop_zone'),
-  primaryCvStatus: document.getElementById('primary_cv_status'),
   cvDropZoneContent: document.getElementById('cv_drop_zone_content'),
   locationSelect: document.getElementById('location_search'),
   locationSelected: document.getElementById('location_selected'),
@@ -37,7 +36,6 @@ const refs = Object.freeze({
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
   reviewCapabilityHelp: document.getElementById('review_capability_help'),
   primaryCvLimitHelp: document.getElementById('primary_cv_limit_help'),
-  engagementInputs: Array.from(document.querySelectorAll('input[name="engagement_pref"]')),
 });
 const {
   status: statusEl,
@@ -52,7 +50,6 @@ const {
   progressFill: progressFillEl,
   primaryCvInput,
   primaryCvDropZone,
-  primaryCvStatus: primaryCvStatusEl,
   cvDropZoneContent: primaryCvDropZoneContentEl,
   locationSelect,
   locationSelected,
@@ -81,21 +78,12 @@ const REVIEW_STEP = 2;
 const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
 const locationUi = window.JobHunterLocationUi || {};
-const onboardingCurrencyUi = window.JobHunterCurrencyUi || {};
 const capabilityUi = window.JobHunterCapabilityUi || {};
 const capabilityReviewCopy = capabilityUi.reviewCopy || {};
+const onboardingSettingsUtils = window.JobHunterSettingsUtils || {};
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const ONBOARDING_CV_PAGE_LIMIT = Number(ONBOARDING_DEFAULTS.cv_max_pages || 0);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
-const ENGAGEMENT_TYPE_OPTIONS = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
-  ? window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
-  : [];
-const ENGAGEMENT_TYPE_DEFAULT = String(
-  window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__
-  || window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__?.[0]?.value
-  || ''
-).trim().toLowerCase();
-const ENGAGEMENT_TYPE_VALUES = new Set(ENGAGEMENT_TYPE_OPTIONS.map((option) => String(option.value || '').trim().toLowerCase()).filter(Boolean));
 const GOVERNMENT_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
   : [];
@@ -109,22 +97,33 @@ const GOVERNMENT_PREFERENCE_LABELS = Object.fromEntries(
     .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
     .filter(([value]) => Boolean(value))
 );
-const WORK_MODE_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__)
-  ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
-  : [];
-const WORK_MODE_PREFERENCE_VALUES = new Set(
-  WORK_MODE_PREFERENCE_OPTIONS
-    .map((option) => String(option.value || '').trim().toLowerCase())
-    .filter((value) => Boolean(value))
-);
+const {
+  WORK_MODE_PREFERENCE_VALUES: ONBOARDING_WORK_MODE_PREFERENCE_VALUES,
+  ENGAGEMENT_TYPE_VALUES,
+  getEngagementTypeValues: getOnboardingEngagementTypeValues,
+  setEngagementTypeValues: setOnboardingEngagementTypeValues,
+} = onboardingSettingsUtils;
+const {
+  getWorkModePreferenceValues: getOnboardingWorkModePreferenceValues,
+  setWorkModePreferenceValues: setOnboardingWorkModePreferenceValues,
+  parseCurrencyValue: onboardingParseCurrencyValue,
+  setCurrencyFieldValue: onboardingSetCurrencyFieldValue,
+} = onboardingSettingsUtils;
+const onboardingCopy = window.__JOB_HUNTER_ONBOARDING_COPY__;
+if (!onboardingCopy?.steps) {
+  throw new Error('Missing onboarding copy.');
+}
+const onboardingStepCopy = onboardingCopy.steps;
 
 if (reviewCapabilityHelpEl) {
   reviewCapabilityHelpEl.textContent = capabilityReviewCopy.onboardingHelp || reviewCapabilityHelpEl.textContent;
 }
 if (primaryCvLimitHelpEl) {
-  primaryCvLimitHelpEl.textContent = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
-    ? `We read the first ${ONBOARDING_CV_PAGE_LIMIT} pages of your CV. Longer files are truncated and flagged during onboarding.`
-    : 'We read only a limited slice of your CV. Longer files are truncated and flagged during onboarding.';
+  const pageClause = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
+    ? ` We currently read the first ${ONBOARDING_CV_PAGE_LIMIT} pages during setup, so place your most relevant experience early in the document.`
+    : '';
+  primaryCvLimitHelpEl.innerHTML =
+    ` Use your most detailed CV, not the prettiest one.${pageClause}`;
 }
 if (workflowStep2El) {
   workflowStep2El.textContent = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
@@ -139,6 +138,8 @@ const PRIMARY_CV_COPY = {
 const WIZARD_STATE_KEY = 'jobHunter.onboardingWizard';
 const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
 const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
+const SOURCE_PACK_DATA_PREFIX = '/data/';
+const ROOT_DATA_PREFIX = 'data/';
 const INITIAL_CAPABILITY_VISIBLE_COUNT = 12;
 const CAPABILITY_VISIBLE_INCREMENT = 24;
 const isTestMode = document.body.dataset.testMode === 'true';
@@ -155,6 +156,8 @@ let selectedReviewCapabilityIndexes = new Set();
 let reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
 let maxUnlockedStep = 1;
 let searchBasicsPersistTimer = null;
+let savedPrimaryCvSourcePath = '';
+let savedPrimaryCvFileName = '';
 
 function hasDraftProfileState() {
   return Boolean(
@@ -223,21 +226,13 @@ async function postTestAction(path) {
 
 
 
-function getSelectedEngagementType() {
-  const value = String(refs.engagementInputs.find((input) => input.checked)?.value || ENGAGEMENT_TYPE_DEFAULT || 'both').trim().toLowerCase();
-  if (ENGAGEMENT_TYPE_VALUES.size > 0 && !ENGAGEMENT_TYPE_VALUES.has(value)) {
-    const fallback = refs.engagementInputs[0];
-    if (fallback) fallback.checked = true;
-    return String(fallback?.value || ENGAGEMENT_TYPE_DEFAULT || 'both').trim().toLowerCase();
+function getOnboardingStepCopy(stepNumber, key, options = {}) {
+  const { allowEmpty = false } = options;
+  const value = onboardingStepCopy?.[String(stepNumber)]?.[key];
+  if (typeof value !== 'string' || (!allowEmpty && !value.trim())) {
+    throw new Error(`Missing onboarding copy: steps.${stepNumber}.${key}`);
   }
   return value;
-}
-
-function setSelectedEngagementType(value) {
-  const selected = String(value || ENGAGEMENT_TYPE_DEFAULT).trim().toLowerCase();
-  const input = refs.engagementInputs.find((item) => item.value === selected)
-    || refs.engagementInputs.find((item) => item.value === ENGAGEMENT_TYPE_DEFAULT);
-  if (input) input.checked = true;
 }
 
 function getGovernmentPreferenceValue() {
@@ -252,28 +247,10 @@ function setGovernmentPreferenceValue(value) {
   }
 }
 
-function getSalaryLimitMaximum(key) {
-  const limit = salaryLimits?.[key] || {};
-  const parsed = Number(limit.max);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : Infinity;
-}
-
-function setCurrencyFieldValue(input, value) {
-  if (!input) return;
-  if (onboardingCurrencyUi.setCurrencyInputValue) {
-    onboardingCurrencyUi.setCurrencyInputValue(input, value);
-    return;
-  }
-  input.value = String(value ?? '');
-}
-
-function parseCurrencyFieldValue(value) {
-  if (onboardingCurrencyUi.parseCurrencyValue) {
-    return onboardingCurrencyUi.parseCurrencyValue(value);
-  }
-  const cleaned = String(value ?? '').replace(/[^\d]/g, '');
-  return cleaned ? Number(cleaned) : '';
-}
+const getSalaryLimitMaximum = (key) => {
+  const max = Number(salaryLimits?.[key]?.max);
+  return Number.isFinite(max) && max >= 0 ? max : Infinity;
+};
 
 function resetOnboardingWizardState() {
   lastImportPayload = null;
@@ -283,6 +260,8 @@ function resetOnboardingWizardState() {
   selectedReviewCapabilityIndexes.clear();
   reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
   maxUnlockedStep = 1;
+  savedPrimaryCvSourcePath = '';
+  savedPrimaryCvFileName = '';
   window.sessionStorage.removeItem(WIZARD_STATE_KEY);
   if (reviewCapabilityFilterEl) reviewCapabilityFilterEl.value = '';
   if (reviewCapabilityCardsEl) reviewCapabilityCardsEl.innerHTML = '';
@@ -294,6 +273,17 @@ function saveWizardState() {
     window.sessionStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
+  const primaryCvSource = String(
+    lastImportPayload?.materials?.profile_sources?.[0]?.path
+    || savedPrimaryCvSourcePath
+    || ''
+  ).trim();
+  const primaryCvFileName = String(
+    preservedPrimaryCvFile?.name
+    || primaryCvInput?.files?.[0]?.name
+    || savedPrimaryCvFileName
+    || ''
+  ).trim();
   window.sessionStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: currentStep,
     maxUnlockedStep,
@@ -302,21 +292,58 @@ function saveWizardState() {
     reviewCapabilityRules,
     reviewCapabilityVisibleCount,
     selectedLocations,
-    workModePreference: getWorkModePreferenceValues(),
+    workModePreference: getOnboardingWorkModePreferenceValues(),
     searchKeywords: reviewSearchKeywordsEl?.value || '',
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
-    engagementType: getSelectedEngagementType() || ENGAGEMENT_TYPE_DEFAULT,
+    engagementType: getOnboardingEngagementTypeValue(),
     preferGovernment: getGovernmentPreferenceValue(),
+    primaryCvSourcePath: primaryCvSource,
+    primaryCvFileName,
   }));
+}
+
+function normalizePrimaryCvSourcePath(path) {
+  const value = String(path || '').trim().replace(/^\/+/, '');
+  return value.startsWith(ROOT_DATA_PREFIX) ? value.slice(ROOT_DATA_PREFIX.length) : value;
+}
+
+async function restorePrimaryCvFromSourcePath() {
+  if (!primaryCvInput || primaryCvInput.files?.[0] || preservedPrimaryCvFile) {
+    return false;
+  }
+  const state = (() => {
+    try {
+      const raw = window.sessionStorage.getItem(WIZARD_STATE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const sourcePath = String(state?.primaryCvSourcePath || savedPrimaryCvSourcePath || '').trim();
+  if (!sourcePath) {
+    return false;
+  }
+  const dataPath = normalizePrimaryCvSourcePath(sourcePath);
+  const response = await fetch(`${SOURCE_PACK_DATA_PREFIX}${encodeURI(dataPath)}`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    return false;
+  }
+  const blob = await response.blob();
+  const fileName = String(state?.primaryCvFileName || savedPrimaryCvFileName || dataPath.split('/').pop() || 'cv').trim();
+  const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+  assignPrimaryCvFile(file);
+  return true;
 }
 
 function buildSearchBasicsProfilePatch() {
   const location = String(selectedLocations[0] || locationSelect?.value || '').trim();
   const keywords = String(reviewSearchKeywordsEl?.value || '').trim();
-  const minimumSalaryYearly = parseCurrencyFieldValue(reviewMinimumSalaryYearlyEl?.value || '');
-  const minimumDailyRate = parseCurrencyFieldValue(reviewMinimumDailyRateEl?.value || '');
-  const engagementType = getSelectedEngagementType();
+  const minimumSalaryYearly = onboardingParseCurrencyValue(reviewMinimumSalaryYearlyEl?.value || '');
+  const minimumDailyRate = onboardingParseCurrencyValue(reviewMinimumDailyRateEl?.value || '');
+  const engagementType = getOnboardingEngagementTypeValues();
   const preferGovernment = getGovernmentPreferenceValue();
 
   return {
@@ -326,7 +353,7 @@ function buildSearchBasicsProfilePatch() {
     },
     match_preferences: {
       engagement_type: engagementType,
-      work_mode_preference: getWorkModePreferenceValues(),
+      work_mode_preference: getOnboardingWorkModePreferenceValues(),
       prefer_government: preferGovernment,
     },
     salary_preferences: {
@@ -387,17 +414,19 @@ function restoreWizardState() {
     reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0
       ? Number(state.reviewCapabilityVisibleCount)
       : INITIAL_CAPABILITY_VISIBLE_COUNT;
+    savedPrimaryCvSourcePath = String(state.primaryCvSourcePath || '').trim();
+    savedPrimaryCvFileName = String(state.primaryCvFileName || '').trim();
     setStep(state.step, { scroll: false, persist: false });
     setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '');
     renderReviewStep();
     const kwEl = reviewSearchKeywordsEl;
     if (kwEl) kwEl.value = state.searchKeywords || '';
     const salaryEl = reviewMinimumSalaryYearlyEl;
-    if (salaryEl) setCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
+    if (salaryEl) onboardingSetCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
     const dailyEl = reviewMinimumDailyRateEl;
-    if (dailyEl) setCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
-    setSelectedEngagementType(state.engagementType || ENGAGEMENT_TYPE_DEFAULT);
-    setWorkModePreferenceValues(state.workModePreference || []);
+    if (dailyEl) onboardingSetCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
+  setOnboardingEngagementTypeValues(state.engagementType);
+    setOnboardingWorkModePreferenceValues(state.workModePreference || []);
     setGovernmentPreferenceValue(state.preferGovernment || GOVERNMENT_PREFERENCE_DEFAULT);
     updateCompensationVisibility();
     if (state.step >= CHECK_STEP) {
@@ -409,36 +438,29 @@ function restoreWizardState() {
     return false;
   }
 }
-
-function formatExtractionSummary(counts) {
-  const targetTitles = Number(counts?.target_titles || 0);
-  const secondaryTitles = Number(counts?.secondary_titles || 0);
-  const capabilities = Number(counts?.capabilities || 0);
-  return `Fresh onboarding run started. Extracted ${targetTitles} primary title${targetTitles === 1 ? '' : 's'}, ${secondaryTitles} secondary title${secondaryTitles === 1 ? '' : 's'}, and ${capabilities} capabilit${capabilities === 1 ? 'y' : 'ies'} from the current run only.`;
-}
-
+ 
 const stepMeta = {
   1: {
-    title: () => isRebuildMode ? 'Upload Updated CV' : 'Upload Your CV',
-    heroTitle: () => isRebuildMode ? 'Refresh Your Profile' : 'Set Up Your Job Hunting Profile',
+    title: () => isRebuildMode ? getOnboardingStepCopy(1, 'title_rebuild') : getOnboardingStepCopy(1, 'title'),
+    heroTitle: () => isRebuildMode ? getOnboardingStepCopy(1, 'hero_title_rebuild') : getOnboardingStepCopy(1, 'hero_title'),
     heroCopy: () => isRebuildMode
-      ? 'Upload an updated CV. Job Hunter will refresh your profile, let you review the draft, and keep your wider settings in place until you confirm the new version.'
-      : 'Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.',
+      ? getOnboardingStepCopy(1, 'hero_copy_rebuild', { allowEmpty: true })
+      : getOnboardingStepCopy(1, 'hero_copy', { allowEmpty: true }),
   },
   2: {
-    title: () => 'Review Draft Profile',
-    heroTitle: () => isRebuildMode ? 'Review Refreshed Draft' : 'Review Your Draft Profile',
-    heroCopy: () => 'Check the job titles and capabilities Job Hunter learned from your CV before you lock in the search direction.',
+    title: () => getOnboardingStepCopy(2, 'title'),
+    heroTitle: () => isRebuildMode ? getOnboardingStepCopy(2, 'hero_title_rebuild') : getOnboardingStepCopy(2, 'hero_title'),
+    heroCopy: () => getOnboardingStepCopy(2, 'hero_copy', { allowEmpty: true }),
   },
   3: {
-    title: () => 'Set Search Basics',
-    heroTitle: () => 'Set Your Search Basics',
-    heroCopy: () => 'Add the minimum search constraints Job Hunter needs before it starts matching roles.',
+    title: () => getOnboardingStepCopy(3, 'title'),
+    heroTitle: () => getOnboardingStepCopy(3, 'hero_title'),
+    heroCopy: () => getOnboardingStepCopy(3, 'hero_copy', { allowEmpty: true }),
   },
   4: {
-    title: () => 'Check Your Setup',
-    heroTitle: () => isRebuildMode ? 'Confirm Profile Refresh' : 'Confirm Your Setup',
-    heroCopy: () => 'Review the draft profile and search basics together before finishing setup.',
+    title: () => getOnboardingStepCopy(4, 'title'),
+    heroTitle: () => isRebuildMode ? getOnboardingStepCopy(4, 'hero_title_rebuild') : getOnboardingStepCopy(4, 'hero_title'),
+    heroCopy: () => getOnboardingStepCopy(4, 'hero_copy', { allowEmpty: true }),
   },
 };
 
@@ -469,11 +491,9 @@ function startWorkingStatus(messages, stepMs = 1400) {
 }
 
 function updatePrimaryCvStatus(file) {
-  if (!primaryCvStatusEl || !primaryCvDropZoneContentEl) return;
+  if (!primaryCvDropZoneContentEl) return;
 
   if (!file) {
-    primaryCvStatusEl.textContent = 'No file selected yet.';
-    primaryCvStatusEl.classList.remove('is-selected');
     primaryCvDropZone?.classList.remove('has-file');
     primaryCvDropZoneContentEl.innerHTML = `
       <div class="drop-zone-content-shell">
@@ -486,8 +506,6 @@ function updatePrimaryCvStatus(file) {
     return;
   }
 
-  primaryCvStatusEl.textContent = `Selected file: ${file.name}`;
-  primaryCvStatusEl.classList.add('is-selected');
   primaryCvDropZone?.classList.add('has-file');
   resetPrimaryCvDropZoneAppearance();
 
@@ -530,7 +548,9 @@ function setStep(stepNumber, options = {}) {
 
   const meta = stepMeta[stepNumber];
   heroTitleEl.textContent = meta.heroTitle();
-  heroCopyEl.textContent = meta.heroCopy();
+  const heroCopy = meta.heroCopy();
+  heroCopyEl.textContent = heroCopy;
+  heroCopyEl.hidden = !String(heroCopy || '').trim();
   const isDetailStep = stepNumber > 1;
   if (heroSectionEl) heroSectionEl.classList.toggle('is-compact', isDetailStep);
   if (workflowSummaryEl) {
@@ -541,6 +561,8 @@ function setStep(stepNumber, options = {}) {
   if (stepNumber === 1 && preservedPrimaryCvFile) {
     restorePrimaryCvSelection(preservedPrimaryCvFile);
     updatePrimaryCvStatus(preservedPrimaryCvFile);
+  } else if (stepNumber === 1) {
+    void restorePrimaryCvFromSourcePath();
   }
 
   if (stepNumber === SEARCH_STEP) {
@@ -669,8 +691,8 @@ function searchPreferencesPayload() {
   return {
     keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
-    engagement_type: getSelectedEngagementType(),
-    work_mode_preference: getWorkModePreferenceValues(),
+    engagement_type: getOnboardingEngagementTypeValues(),
+    work_mode_preference: getOnboardingWorkModePreferenceValues(),
     prefer_government: getGovernmentPreferenceValue(),
     minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
     minimum_daily_rate: reviewMinimumDailyRateEl?.value.trim() || '',
@@ -678,9 +700,9 @@ function searchPreferencesPayload() {
 }
 
 function updateCompensationVisibility() {
-  const engagementType = getSelectedEngagementType();
-  if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType === 'contract';
-  if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType === 'permanent';
+  const engagementType = new Set(getOnboardingEngagementTypeValues());
+  if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType.size === 1 && engagementType.has('contract');
+  if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType.size === 1 && engagementType.has('permanent');
 }
 
 function validateOnboardingSettings(settings) {
@@ -704,17 +726,17 @@ function validateSearchPreferences(searchPrefs) {
   if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
     throw new Error('Location should look like a normal city, state, or region name.');
   }
-  if (ENGAGEMENT_TYPE_VALUES.size > 0 && !ENGAGEMENT_TYPE_VALUES.has(searchPrefs.engagement_type)) {
+  if (!Array.isArray(searchPrefs.engagement_type) || searchPrefs.engagement_type.length === 0 || searchPrefs.engagement_type.some((value) => !ENGAGEMENT_TYPE_VALUES.has(value))) {
     throw new Error('Please choose what type of work you are open to.');
   }
-  if ((Array.isArray(searchPrefs.work_mode_preference) ? searchPrefs.work_mode_preference : []).some((mode) => !WORK_MODE_PREFERENCE_VALUES.has(mode))) {
+  if ((Array.isArray(searchPrefs.work_mode_preference) ? searchPrefs.work_mode_preference : []).some((mode) => !ONBOARDING_WORK_MODE_PREFERENCE_VALUES.has(mode))) {
     throw new Error('Please choose only remote, hybrid, or on-site.');
   }
   if (!searchPrefs.keywords) {
     throw new Error('Please confirm one primary search title.');
   }
   if (searchPrefs.minimum_salary_yearly !== '' && searchPrefs.minimum_salary_yearly !== null && searchPrefs.minimum_salary_yearly !== undefined) {
-    const yearly = parseCurrencyFieldValue(searchPrefs.minimum_salary_yearly);
+    const yearly = onboardingParseCurrencyValue(searchPrefs.minimum_salary_yearly);
     if (yearly === '' || !Number.isFinite(yearly) || yearly < 0) {
       throw new Error('Please enter a valid minimum permanent salary excluding super.');
     }
@@ -723,7 +745,7 @@ function validateSearchPreferences(searchPrefs) {
     }
   }
   if (searchPrefs.minimum_daily_rate !== '' && searchPrefs.minimum_daily_rate !== null && searchPrefs.minimum_daily_rate !== undefined) {
-    const daily = parseCurrencyFieldValue(searchPrefs.minimum_daily_rate);
+    const daily = onboardingParseCurrencyValue(searchPrefs.minimum_daily_rate);
     if (daily === '' || !Number.isFinite(daily) || daily < 0) {
       throw new Error('Please enter a valid minimum contract daily rate excluding super.');
     }
@@ -791,13 +813,14 @@ function applyProfileDefaults(profile) {
     reviewSearchKeywordsEl.value = savedKeywords || reviewTargetTitles.join(', ');
   }
   if (reviewMinimumSalaryYearlyEl && !String(reviewMinimumSalaryYearlyEl.value || '').trim()) {
-    setCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly ?? 0);
+    onboardingSetCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly ?? 0);
   }
   if (reviewMinimumDailyRateEl && !String(reviewMinimumDailyRateEl.value || '').trim()) {
-    setCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate ?? 0);
+    onboardingSetCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate ?? 0);
   }
-  if (!getWorkModePreferenceValues().length) {
-    setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
+  setOnboardingEngagementTypeValues(matchPreferences.engagement_type || []);
+  if (!getOnboardingWorkModePreferenceValues().length) {
+    setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
   if (governmentPreferenceSelect && !String(governmentPreferenceSelect.value || '').trim()) {
     setGovernmentPreferenceValue(matchPreferences.prefer_government || GOVERNMENT_PREFERENCE_DEFAULT);
@@ -824,6 +847,17 @@ if (governmentPreferenceSelect) {
     scheduleSearchBasicsPersistence();
   });
 }
+document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    if (!input.checked) {
+      const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
+      if (!anyChecked) input.checked = true;
+    }
+    updateCompensationVisibility();
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+});
 if (refs.workModePreferences.length) {
   refs.workModePreferences.forEach((element) => element.addEventListener('change', () => {
     saveWizardState();
@@ -834,6 +868,6 @@ if (refs.workModePreferences.length) {
   reviewMinimumSalaryYearlyEl,
   reviewMinimumDailyRateEl,
 ].filter(Boolean).forEach((input) => {
-  onboardingCurrencyUi.bindCurrencyInput?.(input);
+    window.JobHunterCurrencyUi?.bindCurrencyInput?.(input);
 });
 renderLocationSelect();

@@ -89,12 +89,18 @@ Add structured debug logs when work mode is extracted:
 
 These logs exist to support later review and learning. They must not promote new rules automatically.
 
+## Age filtering
+
+- Both SEEK and LinkedIn **always** reject ads whose `posted_age_days` exceeds `date_range_days` (hard-reject, reason `POSTED_TOO_OLD:<n>`) before scoring.
+- There is no configurable bypass — the window is always enforced.
+
 ## Search parameter guards
 
 - `build_seek_search_targets` raises `ValueError` if keywords are empty — never send a blank keyword search to SEEK.
 - `/api/run` checks `_onboarding_complete()` before starting a scrape job — returns HTTP 400 if onboarding is not done.
 - Onboarding is complete when `primary_job_title_pattern`, `search_settings.keywords`, and `search_settings.locations` are all non-empty.
 - These guards are application-level validation, not scraper filtering logic.
+- `search_settings.keywords` and `primary_job_title_pattern` are independent — keywords control what SEEK returns, patterns control what the title filter passes. A mismatch (e.g. keywords = "software developer" but pattern = "accounts officer") silently yields 0 kept records. When debugging zero results, verify both fields agree.
 
 ## Checklist
 - Is this collection logic, not judgement?

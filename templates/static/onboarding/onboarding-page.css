@@ -1,12 +1,12 @@
-/* Variables supplied by themes.css */
+﻿/* Variables supplied by themes.css */
 
-/* ── Animations ─────────────────────────────────────────────────────── */
+/* â”€â”€ Animations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 @keyframes workingSpin {
   to { transform: rotate(360deg); }
 }
 
-/* ── Page-level reset ────────────────────────────────────────────────── */
+/* â”€â”€ Page-level reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 * {
   box-sizing: border-box;
@@ -25,14 +25,12 @@ body {
   display: none;
 }
 
-/* ── Page layout ─────────────────────────────────────────────────────── */
+/* â”€â”€ Page layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .page {
   max-width: 980px;
   margin: 0 auto;
   padding: 24px var(--surface-pad-inline-sm) 44px;
-  --setting-control-width: 240px;
-  --setting-control-min-width: 210px;
 }
 
 .grid {
@@ -41,9 +39,13 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* ── Form defaults ───────────────────────────────────────────────────── */
+.panel {
+  padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
+}
 
-/* Generic baseline — scoped to .page so it doesn't bleed into choice-card labels */
+/* â”€â”€ Form defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+/* Generic baseline â€” scoped to .page so it doesn't bleed into choice-card labels */
 .page input,
 .page select,
 .page textarea {
@@ -80,8 +82,12 @@ body {
 .help {
   margin-top: 6px;
   color: var(--text-muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
+}
+
+.info-icon {
+  color: var(--state-info-text);
 }
 
 .sr-only {
@@ -96,10 +102,11 @@ body {
   border: 0;
 }
 
-/* ── Hero ────────────────────────────────────────────────────────────── */
+/* â”€â”€ Hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .hero {
   margin-bottom: var(--surface-gap-md);
+  padding: var(--surface-pad-block-lg) var(--surface-pad-inline-lg);
   background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-muted) 100%);
 }
 
@@ -109,7 +116,7 @@ body {
 
 .hero h1 {
   margin: 0 0 10px;
-  font-size: clamp(2rem, 4vw, 3.1rem);
+  font-size: clamp(1.8rem, 3.2vw, 2.6rem);
   letter-spacing: -0.04em;
 }
 
@@ -180,7 +187,7 @@ body {
   gap: 8px;
 }
 
-/* ── Test panel ──────────────────────────────────────────────────────── */
+/* â”€â”€ Test panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .onb-test-panel {
   position: relative;
@@ -211,7 +218,7 @@ body {
   right: 0;
   min-width: 196px;
   padding: 8px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   box-shadow: var(--shadow-soft);
@@ -259,17 +266,17 @@ body {
   color: var(--state-error-text);
 }
 
-/* ── Wizard progress ─────────────────────────────────────────────────── */
+/* â”€â”€ Wizard progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .wizard-progress {
   margin-bottom: 18px;
 }
 
 .wizard-progress-bar {
-  height: 12px;
+  height: 8px;
   border-radius: 999px;
-  background: var(--bg-muted);
-  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--selection-accent) 14%, var(--bg-muted));
+  border: 1px solid color-mix(in srgb, var(--selection-accent) 18%, var(--border-subtle));
   overflow: hidden;
 }
 
@@ -277,9 +284,9 @@ body {
   display: block;
   height: 100%;
   min-width: 0;
-  background: var(--selection-accent);
+  background: color-mix(in srgb, var(--selection-accent) 82%, var(--bg-muted));
   border-radius: 999px;
-  box-shadow: var(--shadow-inset);
+  box-shadow: none;
   transition: width 0.35s ease;
 }
 
@@ -353,7 +360,7 @@ body {
   background: transparent;
 }
 
-/* ── Wizard steps ────────────────────────────────────────────────────── */
+/* â”€â”€ Wizard steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .wizard-step[hidden] {
   display: none !important;
@@ -371,17 +378,17 @@ body {
   line-height: var(--help-copy-line-height);
 }
 
-/* ── Drop zone ───────────────────────────────────────────────────────── */
+/* â”€â”€ Drop zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .drop-zone {
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 48px 24px;
+  padding: 28px 24px;
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
   background-color: var(--bg-surface);
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .drop-zone:hover {
@@ -403,7 +410,9 @@ body {
 
 .upload-icon {
   color: var(--text-muted);
-  margin-bottom: 16px;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 8px;
   transition: color 0.2s ease;
 }
 
@@ -418,14 +427,14 @@ body {
 .drop-zone p {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 500;
 }
 
 .drop-zone-hint {
   font-size: var(--help-copy-font-size);
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .file-loaded-label {
@@ -437,6 +446,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 6px;
   text-align: center;
   color: var(--text-primary);
 }
@@ -447,25 +457,19 @@ body {
   line-height: var(--help-copy-line-height);
 }
 
-/* ── Workflow card ────────────────────────────────────────────────────── */
-
-.workflow-card {
-  display: grid;
-  gap: var(--surface-gap-sm);
+.file-upload-guidance,
+.drop-zone-note,
+.upload-guidance-copy {
+  margin: 14px 0 26px;
+  max-width: 72ch;
+  color: var(--text-muted);
+  line-height: 1.65;
 }
 
-.workflow-card h3,
 .review-block h3,
 .check-card h3 {
   margin: 0;
   font-size: 1rem;
-}
-
-.workflow-card p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--help-copy-font-size);
-  line-height: var(--help-copy-line-height);
 }
 
 .workflow-steps {
@@ -510,7 +514,7 @@ body {
   font-weight: 600;
 }
 
-/* ── Field components ────────────────────────────────────────────────── */
+/* â”€â”€ Field components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .field-stack {
   display: grid;
@@ -529,12 +533,12 @@ body {
 .salary-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 10px;
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-muted);
+  gap: 18px;
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .salary-pair label {
@@ -574,7 +578,7 @@ body {
   gap: 8px;
   justify-content: end;
   padding: 6px 0;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
 }
 
 .compact-number {
@@ -594,41 +598,8 @@ body {
   text-align: left;
 }
 
-#primary_cv_status.is-selected {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--state-success-border);
-  border-radius: 999px;
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  font-weight: 700;
-}
-
-#primary_cv_status.is-selected::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: currentColor;
-  flex: 0 0 auto;
-}
-
-/* ── Guidance card ────────────────────────────────────────────────────── */
-
-.guidance-card {
-  margin-top: var(--surface-gap-sm);
-  padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-}
-
-.guidance-card summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--selection-accent);
+#primary_cv_limit_help {
+  margin-bottom: 4px;
 }
 
 .guidance-grid {
@@ -657,7 +628,7 @@ body {
   color: var(--text-primary);
 }
 
-/* ── Actions & buttons ───────────────────────────────────────────────── */
+/* â”€â”€ Actions & buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .actions {
   display: flex;
@@ -690,12 +661,12 @@ body {
   margin: 0 0 var(--surface-gap-sm);
 }
 
-/* ── Status ──────────────────────────────────────────────────────────── */
+/* â”€â”€ Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .status {
   margin-top: var(--surface-gap-md);
   padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   font-weight: 600;
   display: none;
 }
@@ -737,7 +708,7 @@ body {
   color: var(--state-error-text);
 }
 
-/* ── Review / check grids ────────────────────────────────────────────── */
+/* â”€â”€ Review / check grids â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .review-grid,
 .check-grid {
@@ -768,7 +739,7 @@ body {
   line-height: 1.5;
 }
 
-/* ── Chip list ───────────────────────────────────────────────────────── */
+/* â”€â”€ Chip list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .chip-list {
   display: flex;
@@ -787,31 +758,6 @@ body {
   font-size: 0.88rem;
 }
 
-.chip-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  font-size: 0.92rem;
-}
-
-.chip-item-subtle {
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg-chip-subtle));
-  color: var(--text-primary);
-}
-
-.chip-item button {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
 .chip-editor-row {
   display: flex;
   gap: 8px;
@@ -823,46 +769,9 @@ body {
   min-width: 0;
 }
 
-.chip-button,
-.location-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font: inherit;
-}
+/* .chip-button and .location-chip defined in themes.widgets.css */
 
-.chip-button {
-  cursor: pointer;
-}
-
-.chip-button.is-active {
-  background: var(--state-success-bg);
-  border-color: var(--state-success-border);
-  color: var(--state-success-text);
-}
-
-.location-chip {
-  border-color: var(--state-success-border);
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  font-weight: 600;
-}
-
-.location-chip button {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-/* ── Location picker ─────────────────────────────────────────────────── */
+/* â”€â”€ Location picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .location-picker {
   margin-top: 10px;
@@ -896,87 +805,38 @@ body {
   display: none;
 }
 
-/* ── Choice cards ────────────────────────────────────────────────────── */
-
-.choice-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 10px;
+.location-picker-shell {
+  position: relative;
+  width: 100%;
 }
 
-.choice-list--engagement {
-  display: flex;
-  gap: 0;
-  margin-top: 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
+.location-picker-shell select {
+  padding-left: 126px;
 }
 
-.choice-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.location-selected--inside {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  font-weight: 500;
-  cursor: pointer;
+  min-height: 0;
+  max-width: calc(100% - 72px);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.choice-card input {
-  width: auto;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--selection-accent);
-}
-
-/* Engagement type — segmented button strip */
-
-.choice-card--engagement {
-  flex: 1;
-  min-height: unset;
-  padding: 9px 14px;
-  border: none;
-  border-right: 1px solid var(--border-subtle);
-  border-radius: 0;
-  box-shadow: none;
-  justify-content: center;
-  text-align: center;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background 120ms ease;
-}
-
-.choice-card--engagement:last-child {
-  border-right: none;
-}
-
-.choice-card--engagement input[type="radio"] {
+.location-selected--inside:empty {
   display: none;
 }
 
-.choice-card--engagement:has(input:checked) {
-  background: var(--selection-accent);
-  color: var(--button-text);
-  border-color: var(--selection-accent);
+.location-selected--inside .location-chip {
+  padding: 6px 12px;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.choice-card--engagement:has(input:checked) span {
-  color: var(--button-text);
-  font-weight: 700;
-}
-
-.choice-card--engagement:not(:has(input:checked)):hover {
-  background: var(--bg-muted);
-}
-
-/* Work mode — choice chips */
-
-/* ── Review capability ───────────────────────────────────────────────── */
 
 .review-capability-filter {
   margin-top: 0;
@@ -1293,7 +1153,13 @@ body {
   text-underline-offset: 2px;
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────── */
+/* â”€â”€ Experience weighting dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+#os_capability_strength_preset {
+  min-width: 300px;
+}
+
+/* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 @media (max-width: 720px) {
   .hero-shell {
@@ -1313,6 +1179,11 @@ body {
   .guidance-grid,
   .salary-pair {
     grid-template-columns: 1fr;
+  }
+
+  #os_capability_strength_preset {
+    min-width: unset;
+    width: 100%;
   }
 
   .setting-row,
@@ -1343,5 +1214,346 @@ body {
 
   .review-capability-main {
     align-items: flex-start;
+  }
+}
+
+
+
+
+/* Keep currency values clear of the visual currency prefix on onboarding forms. */
+.currency-input-wrap input,
+.currency-input-wrap input[type='text'] {
+  padding-left: 52px !important;
+}
+
+
+/* Search Basics: size controls by expected content, not by panel width. */
+#review_search_keywords {
+  width: min(100%, 56rem);
+}
+
+#location_search,
+#government_preference {
+  width: min(100%, 34rem);
+}
+
+#review_search_keywords + .help {
+  max-width: 56rem;
+}
+
+#location_search + .help,
+#government_preference + .help {
+  max-width: 34rem;
+}
+
+.salary-pair {
+  width: min(100%, 52rem);
+  grid-template-columns: repeat(2, minmax(min(100%, 16rem), 1fr));
+}
+
+.salary-pair .currency-input-wrap {
+  max-width: 28rem;
+}
+
+@media (max-width: 720px) {
+  #review_search_keywords,
+  #location_search,
+  #government_preference,
+  .salary-pair,
+  .salary-pair .currency-input-wrap {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* Search Basics: grouped composition instead of a long single-column form. */
+.search-basics-form {
+  display: grid;
+  gap: 22px;
+  margin-top: 18px;
+  max-width: 74rem;
+}
+
+.search-basics-form .onb-field {
+  margin-top: 0;
+}
+
+.search-basics-row {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+.search-basics-row--two {
+  grid-template-columns: repeat(2, minmax(min(100%, 24rem), 1fr));
+  max-width: 58rem;
+}
+
+.search-basics-row--choices {
+  grid-template-columns: repeat(2, minmax(min(100%, 24rem), 1fr));
+  max-width: 58rem;
+}
+
+.search-basics-keywords,
+.search-basics-compensation {
+  max-width: none;
+}
+
+#review_search_keywords,
+#location_search,
+#government_preference {
+  width: 100%;
+}
+
+#review_search_keywords + .help,
+#location_search + .help,
+#government_preference + .help {
+  max-width: none;
+}
+
+.search-basics-compensation .salary-pair {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(min(100%, 17rem), 1fr));
+  gap: 18px;
+}
+
+.search-basics-actions {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+}
+
+@media (max-width: 860px) {
+  .search-basics-row--two,
+  .search-basics-row--choices,
+  .search-basics-compensation .salary-pair {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+
+  .search-basics-keywords,
+  .search-basics-compensation {
+    max-width: none;
+  }
+}
+
+/* Final review step: denser and more confident summary layout. */
+.setup-review-header {
+  margin-bottom: 22px;
+}
+
+.setup-review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.check-grid {
+  align-items: start;
+  gap: 18px;
+}
+
+.check-card {
+  height: auto;
+  min-height: 0;
+  padding: 18px 18px 16px;
+}
+
+.check-card-head {
+  margin-bottom: 14px;
+}
+
+.check-card-head h3 {
+  font-size: 1.02rem;
+}
+
+.text-link--edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.check-list {
+  gap: 12px;
+}
+
+.check-list dt {
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.check-list dd {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.check-list dd:empty::after {
+  content: 'Not provided';
+  color: var(--text-muted);
+}
+
+.check-list .choice-chip,
+.check-list .summary-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 6px 2px 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.actions {
+  margin-top: 22px;
+}
+
+/* Restore breathing room specifically for Upload CV onboarding step. */
+.wizard-step[data-step="1"] .section-copy {
+  margin-bottom: 18px;
+}
+
+.wizard-step[data-step="1"] .upload-dropzone {
+  margin-top: 18px;
+  margin-bottom: 18px;
+}
+
+.wizard-step[data-step="1"] .accordion-trigger,
+.wizard-step[data-step="1"] .accordion-panel,
+.wizard-step[data-step="1"] .onboarding-accordion {
+  margin-top: 14px;
+}
+
+.wizard-step[data-step="1"] .profile-priority-row {
+  margin-top: 24px;
+  padding-top: 20px;
+}
+
+.wizard-step[data-step="1"] .actions {
+  margin-top: 24px;
+}
+
+.wizard-step[data-step="1"] .upload-help-copy,
+.wizard-step[data-step="1"] .upload-guidance-copy {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+/* Check Setup hierarchy rebuild. Keep the final confirmation content as the page anchor. */
+.wizard-step[data-step="4"] .setup-review-header {
+  margin-bottom: 28px;
+}
+
+.wizard-step[data-step="4"] .setup-review-badge {
+  margin-bottom: 18px;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.wizard-step[data-step="4"] .setup-review-header h2 {
+  margin: 0 0 10px;
+  font-size: clamp(2rem, 2.3vw, 2.35rem);
+  line-height: 1.08;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  color: var(--text-primary);
+}
+
+.wizard-step[data-step="4"] .setup-review-header .section-copy {
+  max-width: 70ch;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.wizard-step[data-step="4"] .check-grid {
+  gap: 22px;
+  margin-top: 0;
+  align-items: start;
+}
+
+.wizard-step[data-step="4"] .check-card {
+  min-height: 0;
+  height: auto;
+  padding: 22px 24px 20px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-surface) 94%, var(--bg-muted));
+  box-shadow: 0 14px 36px color-mix(in srgb, #000 22%, transparent);
+}
+
+.wizard-step[data-step="4"] .check-card-head {
+  margin-bottom: 18px;
+}
+
+.wizard-step[data-step="4"] .check-card-head h3 {
+  font-size: 1.22rem;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.wizard-step[data-step="4"] .text-link--edit {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.wizard-step[data-step="4"] .check-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.wizard-step[data-step="4"] .check-list dt {
+  margin: 0 0 4px;
+  color: color-mix(in srgb, var(--text-muted) 78%, var(--text-primary));
+  font-size: 0.82rem;
+  line-height: 1.25;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.wizard-step[data-step="4"] .check-list dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.55;
+  font-weight: 500;
+}
+
+.wizard-step[data-step="4"] .actions {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
+@media (max-width: 900px) {
+  .wizard-step[data-step="4"] .check-card {
+    padding: 20px;
   }
 }

@@ -70,7 +70,9 @@ Think of settings as the maintenance surface for your profile, not the place whe
 
 Search location uses one canonical AU choice only. The UI defaults to a recommended state or capital city, then SEEK and LinkedIn adapt that same value to their own search format.
 
-Government preference is a search preference too. Turn it on when you want public sector roles to receive government preference scoring.
+SEEK also has its own on/off switch in the Search section. Turn it off when you want to skip SEEK runs entirely while leaving the rest of your settings alone.
+
+Government preference now uses the same checkbox-strip pattern as work mode and work type. Pick Government, Private, or both if you do not care which sector a role is in.
 
 ## What Admin Is For
 
@@ -117,11 +119,27 @@ Changes here affect the app globally, but users do not edit them from their own 
 - target and secondary title patterns plus search keywords
 - used to keep role targeting configurable per candidate instead of hardcoded in code
 
-`Minimum annual salary` / `Minimum daily rate`
+`Minimum annual base (excludes super)` / `Minimum daily rate (excludes super)`
 
 - optional salary targets used as light fit signals
 - if a role lists pay, the workspace can show whether it meets your target
 - these targets also power the salary filter in the workspace
+
+`Search keyword`
+
+- the primary title list used by onboarding and search
+- keep it broad enough to capture relevant roles
+- the helper text under the field should stay short and explanatory
+
+`Sector preference`
+
+- optional public/private preference for search
+- leave it at no preference unless you want sector filtering to be active
+
+`Work mode`
+
+- lets you include remote, hybrid, and on-site in search
+- this is the search preference shown on the onboarding Search Basics step
 
 ## Running A Job Review
 
@@ -131,9 +149,13 @@ Run the current source connector:
 python -m job_hunter_agent.source_connector
 ```
 
+The runtime profile controls which sources are active. If `LinkedIn` is not in `enabled_sources` for the current user profile, the run will skip it.
+
 Then open the workspace at:
 
 - `http://127.0.0.1:8765/workspace`
+
+If the workspace sidebar shows all zeroes after a run that otherwise completed, check that you are in the same authenticated user session that triggered the scrape. The `This Run`, `Crawler Stats`, and `Applications` cards are user-scoped, so a mismatched session or fallback local path can make a good run look empty.
 
 ## Match Score Bands
 
@@ -149,6 +171,8 @@ The workspace groups jobs into:
 - `Potential Jobs`
 - `Applied`
 - `Hidden`
+
+The sidebar counts on the workspace are not global totals. They come from the active user bucket and the most recent saved run for that same user.
 
 The workspace can filter by:
 

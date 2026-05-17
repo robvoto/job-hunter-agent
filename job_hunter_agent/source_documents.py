@@ -29,14 +29,15 @@ from job_hunter_agent.profile_learning import (
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
-    ENGAGEMENT_TYPE_BOTH,
     build_candidate_profile_tiers_from_sections,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_EVIDENCE_TIERS,
+    KEY_ONBOARDING_COMPLETE,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
     load_profile,
+    normalize_engagement_type_preferences,
     patch_profile,
 )
 from job_hunter_agent.signal_registry import register_signals
@@ -50,6 +51,7 @@ ONBOARDING_RESET_FIELDS = (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_CAPABILITY_PROFILE_RULES,
+    KEY_ONBOARDING_COMPLETE,
     "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
@@ -338,8 +340,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
             search_settings["locations"] = [llm_location]
 
     # 3. Engagement
-    eng_type = str(prefs.get("engagement_type") or ENGAGEMENT_TYPE_BOTH).lower()
-    match_preferences["engagement_type"] = eng_type
+    match_preferences["engagement_type"] = normalize_engagement_type_preferences(prefs.get("engagement_type"))
 
     search_settings["locations"] = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()][:1]
 

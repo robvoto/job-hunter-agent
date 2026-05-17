@@ -2,12 +2,13 @@
           <h2 class="section-title">Search</h2>
           <div class="grid search-settings-grid">
             <section class="panel search-common-panel">
-              <h2>Common Search Settings</h2>
+              <h2>Search Settings</h2>
               <p class="panel-copy">Shared source-search inputs that apply across SEEK and LinkedIn.</p>
+              <p class="panel-copy">Where sector, work type, or work mode cannot be determined from the ad, the job is always included for you to review.</p>
 
               <div class="common-search-grid">
-                <div class="common-search-field">
-                  <label>Search keywords</label>
+                <div class="common-search-field common-search-field--keywords">
+                  <label>Search titles</label>
                   <div class="badge-editor" data-chip-editor="keywords">
                     <div id="keywords_chips" class="badge-editor-list" aria-live="polite"></div>
                     <div class="badge-editor-form">
@@ -22,31 +23,25 @@
                 <div class="common-search-field">
                   <label for="locations">Location</label>
                   <select id="locations"></select>
-                  <div class="help">Choose one state or capital city. Job Hunter uses the same canonical location for SEEK and LinkedIn, then adapts the query format per source.</div>
+                  <div class="help">Choose one state or capital city. Job Hunter uses the same location for all job boards.</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="engagement_type">Work type</label>
-                  <select id="engagement_type">
-                    __JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
-                  </select>
-                  <div class="help">Filter which engagement types are searched. Both includes permanent and contract roles.</div>
+                  <label id="engagement_type_label">Work type</label>
+                  __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+                  <div class="help">Select both if job type does not matter.</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label>Work mode</label>
-                  <div id="work_mode_preference">
-                    __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
-                  </div>
+                  <label id="work_mode_preference_label">Work mode</label>
+                  __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
                   <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="prefer_government">Government preference</label>
-                  <select id="prefer_government">
-                    __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
-                  </select>
-                  <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__ This affects matching, not eligibility.</div>
+                  <label id="prefer_government_label">Sector preference</label>
+                  __JOB_HUNTER_GOVERNMENT_PREFERENCE_CHOICES__
+                  <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
@@ -59,13 +54,13 @@
                     <option value="15">Last 15 days</option>
                     <option value="30">Last 30 days</option>
                   </select>
-                  <div class="help">How recently listings must have been posted. Applies to all sources, including SEEK and LinkedIn.</div>
+                  <div class="help">How recently listings must have been posted.</div>
                 </div>
 
                 <div class="common-search-field">
                   <label for="workspace_minimum_score">Minimum fit level to show</label>
                   <select id="workspace_minimum_score"></select>
-                  <div class="help">Hide roles below this fit level. Options are drawn from your configured match levels.</div>
+                  <div class="help">Hide roles below this fit level.</div>
                 </div>
 
                 <div class="common-search-field">
@@ -89,35 +84,46 @@
             </section>
 
             <div class="search-source-panels">
-              <section class="panel">
-                <h2>SEEK</h2>
-                <label for="classification_ids" hidden>Classification IDs</label>
-                <textarea id="classification_ids" placeholder="One id per line" hidden></textarea>
-                <div class="help" hidden>Broad pre-filter before fit logic runs.</div>
+                <section class="search-source-panel">
+                  <h2>SEEK</h2>
+                  <label class="toggle-switch" for="seek_enabled">
+                    <span class="toggle-switch-copy">
+                      <span class="toggle-switch-title">Enable SEEK</span>
+                  </span>
+                  <span class="toggle-switch-control">
+                    <input id="seek_enabled" type="checkbox" role="switch" checked>
+                    <span class="toggle-switch-ui"></span>
+                  </span>
+                  </label>
+                  <div class="help">When off, SEEK is skipped entirely during scrape runs.</div>
 
-                <label for="seek_max_pages">Max pages to check</label>
-                <input id="seek_max_pages" type="number" min="1" max="10">
-                <div class="help">Saved SEEK page limit used by manual and scheduled runs. Allowed range is 1 to 10.</div>
+                  <div hidden>
+                    <label for="classification_ids">Classification IDs</label>
+                    <textarea id="classification_ids" placeholder="One id per line"></textarea>
+                    <div class="help">Broad pre-filter before fit logic runs.</div>
+                  </div>
 
-                <label for="enforce_posted_age_limit">Strictly reject older ads</label>
-                <select id="enforce_posted_age_limit">
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-                <div class="help">When Yes, ads posted outside the search window are discarded before scoring. When No, older ads are still evaluated.</div>
+                  <label id="seek_max_pages_label">Max pages to check</label>
+                  __JOB_HUNTER_SEEK_MAX_PAGES_CHOICES__
+                  <div class="help">Limit how many pages to scrap.</div>
 
-                <label for="sort_newest_first">Prefer newest jobs first</label>
-                <select id="sort_newest_first">
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-                <div class="help">When Yes, the workspace orders results with the freshest listings at the top.</div>
-              </section>
+                </section>
 
-              <section class="panel">
+              <section class="search-source-panel">
                 <h2>LinkedIn</h2>
+                <label class="toggle-switch" for="linkedin_enabled">
+                  <span class="toggle-switch-copy">
+                    <span class="toggle-switch-title">Enable LinkedIn</span>
+                  </span>
+                  <span class="toggle-switch-control">
+                    <input id="linkedin_enabled" type="checkbox" role="switch" checked>
+                    <span class="toggle-switch-ui"></span>
+                  </span>
+                </label>
+                <div class="help">When off, LinkedIn is skipped entirely during scrape runs.</div>
+
                 <label for="linkedin_results_per_search">Results per search</label>
-                <input id="linkedin_results_per_search" type="number" min="5" max="100">
+                <input id="linkedin_results_per_search" class="source-number-input" type="number" min="5" max="100">
                 <div class="help">Max results per keyword and location pair.</div>
 
                 <label for="linkedin_easy_apply_only">Easy Apply filter</label>

@@ -29,7 +29,6 @@ from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_DATE_RANGE_DAYS,
-    KEY_ENFORCE_POSTED_AGE_LIMIT,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
@@ -51,7 +50,6 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
 from job_hunter_agent.paths import (
-    DATA_DIR,
     SCORING_RULES_PATH,
     get_profile_path,
 )
@@ -67,47 +65,57 @@ KEY_PREFER_GOVERNMENT = "prefer_government"
 KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 
-ENGAGEMENT_TYPE_BOTH = "both"
+class Engagement:
+    PERMANENT = "permanent"
+    CONTRACT = "contract"
+
 ENGAGEMENT_TYPE_OPTIONS = (
-    {"value": ENGAGEMENT_TYPE_BOTH, "label": "Both permanent and contract"},
-    {"value": "permanent", "label": "Permanent only"},
-    {"value": "contract", "label": "Contract only"},
+    {"value": Engagement.PERMANENT, "label": "Permanent"},
+    {"value": Engagement.CONTRACT, "label": "Contract"},
 )
 VALID_ENGAGEMENT_TYPES = frozenset({item["value"] for item in ENGAGEMENT_TYPE_OPTIONS})
+ENGAGEMENT_TYPE_DEFAULT_VALUES = [item["value"] for item in ENGAGEMENT_TYPE_OPTIONS]
 
-WORK_MODE_PREFERENCE_NONE = ""
-WORK_MODE_PREFERENCE_REMOTE = "remote"
-WORK_MODE_PREFERENCE_HYBRID = "hybrid"
-WORK_MODE_PREFERENCE_ONSITE = "onsite"
+class WorkMode:
+    NONE = ""
+    REMOTE = "remote"
+    HYBRID = "hybrid"
+    ONSITE = "onsite"
+    UNKNOWN = "unknown"
+
 WORK_MODE_PREFERENCE_OPTIONS = (
-    {"value": WORK_MODE_PREFERENCE_REMOTE, "label": "Remote"},
-    {"value": WORK_MODE_PREFERENCE_HYBRID, "label": "Hybrid"},
-    {"value": WORK_MODE_PREFERENCE_ONSITE, "label": "On-site"},
+    {"value": WorkMode.REMOTE, "label": "Remote"},
+    {"value": WorkMode.HYBRID, "label": "Hybrid"},
+    {"value": WorkMode.ONSITE, "label": "On-site"},
 )
 VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
-WORK_MODE_PREFERENCE_NONE_LABEL = "No preference"
-WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to include in search. Leave all unselected to keep every mode."
+WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to include in search."
+WORK_MODE_PREFERENCE_NONE_LABEL = "Any"
 
-GOVERNMENT_PREFERENCE_ANY = "any"
-GOVERNMENT_PREFERENCE_GOVERNMENT = "government"
-GOVERNMENT_PREFERENCE_PRIVATE = "private"
+class GovPref:
+    ANY = "any"
+    GOVERNMENT = "government"
+    PRIVATE = "private"
+
 GOVERNMENT_PREFERENCE_OPTIONS = (
-    {"value": GOVERNMENT_PREFERENCE_ANY, "label": "No preference"},
-    {"value": GOVERNMENT_PREFERENCE_GOVERNMENT, "label": "Government only"},
-    {"value": GOVERNMENT_PREFERENCE_PRIVATE, "label": "Private only"},
+    {"value": GovPref.ANY, "label": "No preference"},
+    {"value": GovPref.GOVERNMENT, "label": "Government"},
+    {"value": GovPref.PRIVATE, "label": "Private"},
+)
+GOVERNMENT_PREFERENCE_CHOICE_OPTIONS = (
+    {"value": GovPref.GOVERNMENT, "label": "Government"},
+    {"value": GovPref.PRIVATE, "label": "Private"},
 )
 VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
 GOVERNMENT_PREFERENCE_DEFAULT_LABEL = next(
-    (item["label"] for item in GOVERNMENT_PREFERENCE_OPTIONS if item["value"] == GOVERNMENT_PREFERENCE_ANY), ""
+    (item["label"] for item in GOVERNMENT_PREFERENCE_OPTIONS if item["value"] == GovPref.ANY), ""
 )
-GOVERNMENT_PREFERENCE_HELP_TEXT = "Choose government only, private only, or no preference."
+GOVERNMENT_PREFERENCE_HELP_TEXT = "Select both if sector preference does not matter."
 
-SALARY_MIN_ANNUAL_LABEL = "Minimum annual base"
-SALARY_MIN_DAILY_LABEL = "Minimum daily rate"
-SALARY_ANNUAL_HELP_TEXT = "Excludes super."
-SALARY_DAILY_HELP_TEXT = "Excludes super."
-SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Used when permanent roles list salary. Excludes super."
-SETTINGS_SALARY_DAILY_HELP_TEXT = "Used when contract roles list a day rate. Excludes super."
+SALARY_MIN_ANNUAL_LABEL = "Minimum annual base (excludes super)"
+SALARY_MIN_DAILY_LABEL = "Minimum daily rate (excludes super)"
+SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Used when permanent roles list salary."
+SETTINGS_SALARY_DAILY_HELP_TEXT = "Used when contract roles list a day rate."
 
 KEY_LOOKBACK_YEARS = "extraction_lookback_years"
 KEY_MIN_MONTHS = "title_extraction_min_months"
@@ -129,6 +137,7 @@ KEY_CAPABILITY_PROFILE_RULES = "capability_profile_rules"
 KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
 KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
+KEY_ONBOARDING_COMPLETE = "onboarding_complete"
 KEY_MATCH_PREFS = "match_preferences"
 KEY_PRIMARY_PATTERNS = "primary_job_title_pattern"
 KEY_SECONDARY_PATTERNS = "secondary_title_patterns"
@@ -150,11 +159,12 @@ KEY_ALIASES = "aliases"
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
 
-LEVEL_STRONG = "strong"
-LEVEL_WORKING = "working"
-LEVEL_BASIC = "basic"
-VALID_CAPABILITY_RULE_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC})
-VALID_CAPABILITY_MATCH_LEVELS = frozenset({LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC})
+class CapabilityLevel:
+    STRONG = "strong"
+    WORKING = "working"
+    BASIC = "basic"
+
+VALID_CAPABILITY_RULE_LEVELS = frozenset({CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC})
 
 DEFAULT_CANDIDATE_PROFILE_TIERS  = {
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: "",
@@ -163,9 +173,12 @@ DEFAULT_CANDIDATE_PROFILE_TIERS  = {
 }
 
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
-LLM_PROFILE_BRIEF_MODE_AUTO = "auto"
-LLM_PROFILE_BRIEF_MODE_MANUAL = "manual"
-DEFAULT_LLM_PROFILE_BRIEF_MODE = LLM_PROFILE_BRIEF_MODE_AUTO
+
+class BriefMode:
+    AUTO = "auto"
+    MANUAL = "manual"
+
+DEFAULT_LLM_PROFILE_BRIEF_MODE = BriefMode.AUTO
 
 
 class ProfileLoadError(RuntimeError):
@@ -196,7 +209,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
 DEFAULT_SCORING_RULES = _load_default_scoring_rules()
 
 DEFAULT_PROFILE = {
-    "enabled_sources": ["seek"], # Default to 'seek' if not explicitly configured
+    "enabled_sources": ["seek", "linkedin"],
     "search_settings": {
         **DEFAULT_SEARCH_SETTINGS,
     },
@@ -204,6 +217,7 @@ DEFAULT_PROFILE = {
         "applied_job_keys": [],
         "hidden_job_keys": [],
     },    
+    KEY_ONBOARDING_COMPLETE: False,
     "salary_preferences": {
         "minimum_salary_yearly": 0,
         "minimum_daily_rate": 0,
@@ -219,7 +233,7 @@ DEFAULT_PROFILE = {
         KEY_WORK_MODE_PREFERENCE: [],
         KEY_PREFER_GOVERNMENT: False,
         "prefer_permanent": False,
-        "engagement_type": ENGAGEMENT_TYPE_BOTH,
+        "engagement_type": list(ENGAGEMENT_TYPE_DEFAULT_VALUES),
         "preferred_contract_months": 12,
         "short_contract_months": 6,
     },
@@ -357,17 +371,17 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
 
     raw_government = merged.get(KEY_PREFER_GOVERNMENT)
     if isinstance(raw_government, bool):
-        merged[KEY_PREFER_GOVERNMENT] = GOVERNMENT_PREFERENCE_GOVERNMENT if raw_government else GOVERNMENT_PREFERENCE_ANY
+        merged[KEY_PREFER_GOVERNMENT] = GovPref.GOVERNMENT if raw_government else GovPref.ANY
     else:
         normalized_government = str(raw_government or "").strip().lower()
         if normalized_government not in VALID_GOVERNMENT_PREFERENCES:
-            normalized_government = GOVERNMENT_PREFERENCE_ANY
+            normalized_government = GovPref.ANY
         merged[KEY_PREFER_GOVERNMENT] = normalized_government
 
     merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(merged.get(KEY_WORK_MODE_PREFERENCE))
 
     merged["prefer_permanent"] = bool(merged.get("prefer_permanent", False))
-    merged["engagement_type"] = str(merged.get("engagement_type") or ENGAGEMENT_TYPE_BOTH).strip().lower()
+    merged["engagement_type"] = normalize_engagement_type_preferences(merged.get("engagement_type"))
     merged["preferred_contract_months"] = int(merged.get("preferred_contract_months") or 12)
     merged["short_contract_months"] = int(merged.get("short_contract_months") or 6)
     return merged
@@ -388,6 +402,25 @@ def normalize_work_mode_preferences(values: Any) -> list[str]:
             seen.add(value)
             selected.append(value)
     return selected
+
+
+def normalize_engagement_type_preferences(values: Any, *, default_to_all: bool = True) -> list[str]:
+    if isinstance(values, str):
+        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+    elif isinstance(values, (list, tuple, set)):
+        source_values = [str(value).strip().lower() for value in values if str(value).strip()]
+    else:
+        source_values = []
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in ENGAGEMENT_TYPE_OPTIONS:
+        value = str(item["value"]).strip().lower()
+        if value in source_values and value not in seen:
+            seen.add(value)
+            selected.append(value)
+    if selected:
+        return selected
+    return list(ENGAGEMENT_TYPE_DEFAULT_VALUES) if default_to_all else []
 
 
 def normalize_capability_rules(
@@ -427,7 +460,7 @@ def normalize_capability_rules(
         if level == "none":
             continue
         if level not in VALID_CAPABILITY_RULE_LEVELS:
-            level = LEVEL_BASIC
+            level = CapabilityLevel.BASIC
 
         raw_aliases = rule.get("aliases")
         if isinstance(raw_aliases, str):
@@ -507,6 +540,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["onboarding_settings"] = normalize_onboarding_settings(
         merged.get("onboarding_settings", {})
     )
+    merged[KEY_ONBOARDING_COMPLETE] = bool(merged.get(KEY_ONBOARDING_COMPLETE, False))
     merged["match_preferences"] = normalize_match_preferences(
         merged.get("match_preferences", {})
     )
@@ -612,13 +646,9 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
     except Exception:
         merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
 
-    merged[KEY_ENFORCE_POSTED_AGE_LIMIT] = bool(merged.get(KEY_ENFORCE_POSTED_AGE_LIMIT, True))
     merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()
     merged["locations"] = [str(value).strip() for value in merged.get("locations", []) if str(value).strip()]
-    merged["classification_ids"] = [
-        str(value).strip() for value in merged.get("classification_ids", []) if str(value).strip()
-    ]
     easy_apply_only = merged.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
     if easy_apply_only is None or easy_apply_only == "":
         merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = None
@@ -707,8 +737,8 @@ def normalize_profile_match_levels(payload: list[dict[str, Any]] | None) -> list
 
 def normalize_llm_profile_brief_mode(value: Any) -> str:
     normalized = str(value or "").strip().lower()
-    if normalized == LLM_PROFILE_BRIEF_MODE_MANUAL:
-        return LLM_PROFILE_BRIEF_MODE_MANUAL
+    if normalized == BriefMode.MANUAL:
+        return BriefMode.MANUAL
     return DEFAULT_LLM_PROFILE_BRIEF_MODE
 
 

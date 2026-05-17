@@ -8,7 +8,7 @@ from job_hunter_agent.company_rules import normalize_company_name
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
-from job_hunter_agent.global_settings import get_max_history_sightings
+from job_hunter_agent.global_settings import get_max_history_sightings, get_multi_listing_red_flag_min_listings, get_multi_listing_red_flag_min_span_days, get_repeated_listing_min_times_seen, get_repeated_listing_min_span_days
 
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = CLI_FLAG_RESET_NEW_TO_YOU in set(sys.argv[1:])
  

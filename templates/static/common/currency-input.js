@@ -4,8 +4,10 @@
   }
 
   function formatCurrencyValue(value) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
     const digits = normalizeCurrencyDigits(value);
-    if (!digits) return '';
+    if (!digits) return '0';
     return Number(digits).toLocaleString('en-AU');
   }
 

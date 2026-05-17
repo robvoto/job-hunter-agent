@@ -13,7 +13,6 @@
     const workTypeFilter = document.getElementById('work_type_filter');
     const workModeFilter = document.getElementById('work_mode_filter');
     const scoreFilter = document.getElementById('score_filter');
-    const salaryFilter = document.getElementById('salary_filter');
     const DEFAULT_SCORE_FILTER_VALUE = WORKSPACE_CONTEXT.defaultScoreFilterValue || 55;
     const resetFiltersButton = document.getElementById('reset_workspace_filters');
     const resultsHelper = document.getElementById('results_helper');
@@ -105,7 +104,6 @@
         workType: workTypeFilter?.value,
         workMode: workModeFilter?.value,
         score: scoreFilter?.value,
-        salary: salaryFilter?.value,
       };
       try {
         window.localStorage.setItem(WORKSPACE_FILTERS_KEY, JSON.stringify(filters));
@@ -135,7 +133,6 @@
         setSelectValueIfAvailable(workTypeFilter, filters.workType);
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
         setSelectValueIfAvailable(scoreFilter, filters.score);
-        setSelectValueIfAvailable(salaryFilter, filters.salary);
       } catch (e) {}
     }
 
@@ -149,7 +146,6 @@
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
       }
-      if (salaryFilter) salaryFilter.value = 'all';
       try {
         window.localStorage.removeItem(WORKSPACE_FILTERS_KEY);
       } catch (e) {}
@@ -216,7 +212,6 @@
       const workTypeValues = workType !== 'all' ? workType.split('|') : null;
       const workMode = workModeFilter?.value || 'all';
       const scoreMode = scoreFilter?.value || 'all';
-      const salaryMode = salaryFilter?.value || 'all';
       const activeWorkspace = getActiveWorkspace();
 
       for (const card of getVisibleCards()) {
@@ -226,7 +221,6 @@
         const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
         const cardScore = Number(card.dataset.fitScore || 0);
         const postedAge = Number(card.dataset.postedAge || 9999);
-        const salaryState = (card.dataset.salaryFit || 'missing').toLowerCase();
 
         let visible = true;
         if (card.dataset.reviewDismissed === '1') visible = false;
@@ -240,10 +234,6 @@
           if (workTypeValues && !workTypeValues.includes(cardWorkType)) visible = false;
           if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
           if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
-          if (salaryMode === 'listed' && salaryState === 'missing') visible = false;
-          if (salaryMode === 'meets' && salaryState !== 'meets') visible = false;
-          if (salaryMode === 'below' && salaryState !== 'below') visible = false;
-          if (salaryMode === 'missing' && salaryState !== 'missing') visible = false;
         } else if (activeWorkspace === 'applied') {
           if (cardScope !== 'applied') visible = false;
         } else if (activeWorkspace === 'hidden') {
@@ -553,11 +543,11 @@
         hideBlockConfirm(card);
         card.classList.add('is-reviewed');
         status.textContent = options.successMessage || reviewSuccessMessage(action, payload);
+        if (payload?.reload_workspace || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
+          window.location.reload();
+          return;
+        }
         window.setTimeout(() => {
-          if (payload?.reload_workspace || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
-            window.location.reload();
-            return;
-          }
           card.dataset.reviewDismissed = '1';
           applyWorkspaceControls();
           if (action === 'block_similar') {
@@ -680,7 +670,7 @@
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, scoreFilter, salaryFilter]) {
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, scoreFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveWorkspaceFilters();

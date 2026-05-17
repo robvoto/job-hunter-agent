@@ -156,7 +156,7 @@
   for (const method of methods) {
     console[method] = (...args) => {
       const displayArgs = args.map(arg => (typeof arg === 'string' ? expandUrl(arg) : arg));
-      nativeConsolemethod;
+      nativeConsole[method](...displayArgs);
       emit(method, args);
     };
   }

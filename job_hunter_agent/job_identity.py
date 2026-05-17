@@ -6,7 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 from job_hunter_agent.company_rules import company_names_weakly_match
 from job_hunter_agent.duplicate_rules import load_duplicate_rules
 from job_hunter_agent.source_registry import get_domain_to_source_map
-from job_hunter_agent.title_normalization_rules import BASE_ROLE_KEY, decompose_title_text, normalize_title_text
+from job_hunter_agent.title_normalization_rules import normalize_title_text
 from job_hunter_agent.record_schema import (
     RECORD_JOB_KEY, RECORD_SOURCE_KEY, RECORD_SOURCE_NAME_KEY,
     RECORD_COMPANY_KEY, RECORD_TITLE_KEY, RECORD_URL_KEY,
@@ -193,10 +193,8 @@ def _append_duplicate_link(record: dict, linked_record: dict, matched_on: str, m
 
 def _potential_duplicate_signature(record: dict) -> dict[str, str]:
     title = str(record.get(RECORD_TITLE_KEY) or "").strip()
-    decomposition = decompose_title_text(title)
     return {
         "normalized_title": normalize_title_text(title),
-        "base_role": str(decomposition.get(BASE_ROLE_KEY) or "").strip(),
     }
 
 
@@ -229,9 +227,6 @@ def _potential_duplicate_match(a: dict, b: dict) -> Optional[list[str]]:
 
     if signatures_a["normalized_title"] and signatures_a["normalized_title"] == signatures_b["normalized_title"]:
         matched_on.append("normalized_title")
-    elif signatures_a["base_role"] and signatures_a["base_role"] == signatures_b["base_role"]:
-        matched_on.append("base_role")
-
     if not matched_on:
         return None
 

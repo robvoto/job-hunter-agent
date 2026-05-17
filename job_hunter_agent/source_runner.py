@@ -14,7 +14,6 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     profile = context.profile
     configured_seek_max_pages = context.configured_seek_max_pages
     configured_date_range = context.configured_date_range
-    enforce_posted_age_limit = context.enforce_posted_age_limit
     sort_newest_first = context.sort_newest_first
     playwright_viewport_width = context.playwright_viewport_width
     playwright_viewport_height = context.playwright_viewport_height
@@ -28,6 +27,11 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     headless = bool(getattr(context, "headless", False))
 
     if SOURCE_SEEK in enabled_sources:
+        print("[Seek] enabled")
+    else:
+        print("[Seek] disabled in enabled_sources; skipping")
+
+    if SOURCE_SEEK in enabled_sources:
         search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
         s_kept, s_audit, s_skills = seek_scrape_to_records(
             profile=profile,
@@ -38,7 +42,6 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
             hidden_job_keys=hidden_job_keys,
             run_iso=run_iso,
             configured_date_range=configured_date_range,
-            enforce_posted_age_limit=enforce_posted_age_limit,
             configured_seek_max_pages=configured_seek_max_pages,
             playwright_viewport_width=playwright_viewport_width,
             playwright_viewport_height=playwright_viewport_height,
@@ -48,6 +51,10 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         kept_records.extend(s_kept)
         audit_rows.extend(s_audit)
         skill_observations.extend(s_skills)
+    if SOURCE_LINKEDIN in enabled_sources:
+        print("[LinkedIn] enabled")
+    else:
+        print("[LinkedIn] disabled in enabled_sources; skipping")
 
     if SOURCE_LINKEDIN in enabled_sources:
         from job_hunter_agent.scrapers.linkedin import LinkedInScraper  # noqa: PLC0415

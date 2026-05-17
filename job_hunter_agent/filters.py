@@ -6,7 +6,6 @@ from typing import Any, Tuple
 from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, load_profile
 from job_hunter_agent.parsing_schema import (
     KEY_P_CONF_MIN_BULLETS,
@@ -32,10 +31,6 @@ from job_hunter_agent.title_normalization_rules import decompose_title_text, nor
 TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\[\]]")
 
 
-def _matches_any(text: str, patterns: list[str]) -> bool:
-    return any(re.search(pattern, text) for pattern in patterns if pattern)
-
-
 def _normalize_title_pattern_text(value: str) -> str:
     raw = str(value or "").strip().lower()
     if not raw:
@@ -46,19 +41,32 @@ def _normalize_title_pattern_text(value: str) -> str:
     return str(decomposition.get("base_role") or decomposition.get("normalized_title") or normalize_title_text(raw)).strip()
 
 
+def _get_synonym_group(role: str) -> set[str]:
+    """Return all roles in the same synonym group as role, including role itself."""
+    groups = load_parsing_rules().get("title_role_synonyms", [])
+    for group in groups:
+        normalized = [normalize_title_text(r) for r in group]
+        if role in normalized:
+            return set(normalized)
+    return {role}
+
+
 def _find_matching_title_pattern(text: str, patterns: list[str]) -> str:
     normalized_text = decompose_title_text(text).get("base_role") or normalize_title_text(text)
     if not normalized_text:
         return ""
+    text_synonyms = _get_synonym_group(normalized_text)
     for pattern in patterns:
         cleaned = _normalize_title_pattern_text(pattern)
         if not cleaned:
             continue
-        if normalized_text == cleaned:
+        pattern_synonyms = _get_synonym_group(cleaned)
+        # Match if any synonym of the text equals any synonym of the pattern
+        if text_synonyms & pattern_synonyms:
             return cleaned
-        if re.search(rf"\b{re.escape(cleaned)}\b", normalized_text):
+        if any(re.search(rf"\b{re.escape(s)}\b", normalized_text) for s in pattern_synonyms):
             return cleaned
-        if re.search(rf"\b{re.escape(normalized_text)}\b", cleaned):
+        if any(re.search(rf"\b{re.escape(normalized_text)}\b", s) for s in pattern_synonyms):
             return cleaned
     return ""
 
@@ -334,87 +342,6 @@ def _matches_soft_requirement(text: str, alias: str) -> bool:
         rf"{escaped_alias}.{{0,{window_chars}}}{suffix}",
     ]
     return any(re.search(pattern, text) for pattern in patterns)
-
-
-def matches_mandatory_requirement(description_text: str, required_term: str) -> bool:
-    description_lower = (description_text or "").lower()
-    skill_lower = (required_term or "").strip().lower()
-    if not description_lower or not skill_lower:
-        return False
-
-    escaped_skill = re.escape(skill_lower)
-    term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
-    matching_context = _load_matching_context_patterns()
-    mandatory_indicators = _load_required_parsing_rule_terms("mandatory_language_indicators")
-    mandatory_pattern = rf"\b({'|'.join(re.escape(term) for term in mandatory_indicators)})\b"
-    hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
-    try:
-        window_chars = int(matching_context.get(KEY_P_CTX_HARD_WINDOW))
-    except Exception as exc:
-        raise ValueError("parsing_rules.json must define hard_requirement_window_chars") from exc
-    if window_chars <= 0:
-        raise ValueError("parsing_rules.json must define hard_requirement_window_chars")
-
-    def hard_requirement_matches(context: str) -> bool:
-        for hard_match in hard_requirement_re.finditer(context):
-            prefix = context[max(0, hard_match.start() - negation_window):hard_match.start()]
-            if re.search(r"\bnot\s+$", prefix):
-                continue
-            return True
-        return False
-
-    for match in re.finditer(term_pattern, description_lower):
-        start = max(match.start() - window_chars, 0)
-        end = min(match.end() + window_chars, len(description_lower))
-        context = description_lower[start:end]
-        if hard_requirement_matches(context):
-            return True
-    return False
-
-
-def matches_missing_requirement(description_text: str, required_term: str) -> bool:
-    description_lower = (description_text or "").lower()
-    skill_lower = (required_term or "").strip().lower()
-    if not description_lower or not skill_lower:
-        return False
-    escaped_skill = re.escape(skill_lower)
-    term_pattern = rf"(?<!\w){escaped_skill}(?!\w)"
-    mandatory_indicators = _load_required_parsing_rule_terms("mandatory_language_indicators")
-    strength_indicators = _load_required_parsing_rule_terms("strength_language_indicators")
-    desirable_indicators = _load_required_parsing_rule_terms("desirable_language_indicators")
-    matching_context = _load_matching_context_patterns()
-    mandatory_pattern = rf"\b({'|'.join(re.escape(term) for term in mandatory_indicators)})\b"
-    strength_pattern = rf"\b({'|'.join(re.escape(term) for term in strength_indicators)})\b"
-    desirable_pattern = rf"\b({'|'.join(re.escape(term) for term in desirable_indicators)})\b"
-
-    hard_requirement_re = re.compile(mandatory_pattern, re.IGNORECASE)
-    strength_re = re.compile(strength_pattern, re.IGNORECASE)
-    desirable_re = re.compile(desirable_pattern, re.IGNORECASE)
-    try:
-        window_chars = int(matching_context.get(KEY_P_CTX_HARD_WINDOW))
-        negation_window = int(matching_context.get(KEY_P_CTX_NEGATION_WINDOW))
-    except Exception as exc:
-        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars") from exc
-    if window_chars <= 0 or negation_window <= 0:
-        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars")
-
-    def hard_requirement_matches(context: str) -> bool:
-        for hard_match in hard_requirement_re.finditer(context):
-            prefix = context[max(0, hard_match.start() - negation_window):hard_match.start()]
-            if re.search(r"\bnot\s+$", prefix):
-                continue
-            return True
-        return False
-
-    for match in re.finditer(term_pattern, description_lower):
-        start = max(match.start() - window_chars, 0)
-        end = min(match.end() + window_chars, len(description_lower))
-        context = description_lower[start:end]
-        if hard_requirement_matches(context):
-            return True
-        if strength_re.search(context) and not desirable_re.search(context):
-            return True
-    return False
 
 
 def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:

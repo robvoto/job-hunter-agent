@@ -759,7 +759,7 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                 payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
             except (json.JSONDecodeError, OSError):
                 payload = {}
-                blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS) if isinstance(payload, dict) else []
+            blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS) if isinstance(payload, dict) else []
             if isinstance(blockers, list):
                 for blocker in blockers:
                     cleaned = _clean_text(blocker)

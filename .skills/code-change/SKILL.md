@@ -10,6 +10,9 @@ Use before modifying existing code.
 - Do not introduce legacy/backward-compatibility code unless explicitly requested.
 - Do not change business judgement during mechanical cleanup.
 - Load `.skills/no-hardcoding/SKILL.md` if the change touches thresholds, mappings, labels, schema fields, defaults, or rule IDs.
+- If a task is likely owned by one module, search that owner first and stop once you find the source of truth.
+- Prefer the smallest relevant validation over broad test runs unless the change crosses multiple owners or the user asks for a full pass.
+- When a symptom is visible in the UI, inspect the rendered template, injected bootstrap data, and owning normaliser in parallel before editing.
 
 ## Finish format
 Report:

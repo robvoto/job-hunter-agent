@@ -46,6 +46,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER,
     LLM_PROMPT_USER_FIT_REVIEW_GUIDANCE_HEADER,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
+    LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_REVIEW_GRADE_GUIDANCE,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
 )
@@ -151,6 +152,11 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
 
 def get_session_cost_usd() -> float:
     return round(_session_cost_usd, 6)
+
+
+def reset_session_cost() -> None:
+    global _session_cost_usd
+    _session_cost_usd = 0.0
 
 
 def _profile_fingerprint() -> str:
@@ -352,23 +358,6 @@ def build_capability_naming_guidance(profile: dict[str, Any] | None = None) -> s
         ])
     parts.extend(["", LLM_PROMPT_CLUSTERS_HEADER])
     return "\n".join(parts)
-
-def build_system_prompt() -> str:
-    from job_hunter_agent.profile_store import load_profile
-    profile = load_profile()
-    parts = [
-        LLM_PROMPT_SYSTEM_REVIEW_INTRO,
-        build_fit_review_guidance(profile),
-        build_profile_prompt_context(),
-    ]
-    parts.append(
-        f"{LLM_PROMPT_REVIEW_OUTPUT_FORMAT} "
-        f"DECISION must be {', '.join(sorted(LLM_ALLOWED_DECISIONS))}. "
-        f"GRADE must be {', '.join(sorted(LLM_ALLOWED_GRADES))}. "
-        f"{LLM_REVIEW_GRADE_GUIDANCE} "
-        "Do not explain your answer."
-    )
-    return "\n".join(part for part in parts if part)
 
 
 def build_llm_cache_key(job_description_text: str) -> str:

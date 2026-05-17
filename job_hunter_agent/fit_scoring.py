@@ -24,10 +24,8 @@ from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_CONVERGENCE,
     KEY_LLM_GRADE_POINTS,
-    LEVEL_BASIC,
-    LEVEL_STRONG,
-    LEVEL_WORKING,
-    VALID_CAPABILITY_MATCH_LEVELS,
+    CapabilityLevel,
+    VALID_CAPABILITY_RULE_LEVELS,
     get_preference_weights,
     get_scoring_rules,
     load_profile,
@@ -83,7 +81,7 @@ def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
         if not isinstance(rule, dict):
             continue
         level = str(rule.get("level") or "").strip().lower()
-        if level not in VALID_CAPABILITY_MATCH_LEVELS:
+        if level not in VALID_CAPABILITY_RULE_LEVELS:
             continue
         canonical = canonical_capability_term(rule)
         if not canonical or not text_contains_term(lowered, canonical):
@@ -132,9 +130,9 @@ def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = N
     scoring_rules = get_scoring_rules(active_profile)
     convergence_rules = scoring_rules[KEY_CONVERGENCE]
     positive_count = (
-        len(matches.get(LEVEL_STRONG, []))
-        + len(matches.get(LEVEL_WORKING, []))
-        + len(matches.get(LEVEL_BASIC, []))
+        len(matches.get(CapabilityLevel.STRONG, []))
+        + len(matches.get(CapabilityLevel.WORKING, []))
+        + len(matches.get(CapabilityLevel.BASIC, []))
     )
     if (
         title_reason != convergence_rules["required_title_reason"]
@@ -160,9 +158,9 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     capability_matches = find_profile_capability_matches(role_bundle, active_profile)
 
     matched_profile_areas = (
-        [(highlight_labels["strong_capability_match"], area) for area in capability_matches[LEVEL_STRONG][:hl_config["strong_capability_count"]]]
-        + [(highlight_labels["capability_match"], area) for area in capability_matches[LEVEL_WORKING][:hl_config["working_capability_count"]]]
-        + [(highlight_labels["capability_match"], area) for area in capability_matches[LEVEL_BASIC][:hl_config["basic_capability_count"]]]
+        [(highlight_labels["strong_capability_match"], area) for area in capability_matches[CapabilityLevel.STRONG][:hl_config["strong_capability_count"]]]
+        + [(highlight_labels["capability_match"], area) for area in capability_matches[CapabilityLevel.WORKING][:hl_config["working_capability_count"]]]
+        + [(highlight_labels["capability_match"], area) for area in capability_matches[CapabilityLevel.BASIC][:hl_config["basic_capability_count"]]]
     )
     for prefix, area in matched_profile_areas:
         label = friendly_capability_label(area)

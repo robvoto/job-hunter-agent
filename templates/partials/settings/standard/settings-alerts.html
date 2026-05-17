@@ -5,11 +5,15 @@
               <h2>Telegram Alerts</h2>
               <div class="panel-kicker" style="color: var(--state-error-text);">Use your own bot</div>
               <div class="help">Create a bot with <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">BotFather</a> and keep it private to your account.</div>
-              <label for="telegram_enabled">Telegram alerts enabled</label>
-              <select id="telegram_enabled">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
+              <label class="toggle-switch" for="telegram_enabled">
+                <span class="toggle-switch-copy">
+                  <span class="toggle-switch-title">Telegram alerts enabled</span>
+                </span>
+                <span class="toggle-switch-control">
+                  <input id="telegram_enabled" type="checkbox" role="switch">
+                  <span class="toggle-switch-ui"></span>
+                </span>
+              </label>
 
               <label for="telegram_bot_token">Bot token</label>
               <input id="telegram_bot_token" type="password" placeholder="123456:ABC...">
@@ -19,11 +23,15 @@
               <input id="telegram_bot_username" type="text" placeholder="JobNotifierBot">
               <div class="help">Used to build the connect link. Leave off the @ symbol.</div>
 
-              <label for="telegram_disable_link_preview">Disable workspace link preview</label>
-              <select id="telegram_disable_link_preview">
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-              </select>
+              <label class="toggle-switch" for="telegram_disable_link_preview">
+                <span class="toggle-switch-copy">
+                  <span class="toggle-switch-title">Disable workspace link preview</span>
+                </span>
+                <span class="toggle-switch-control">
+                  <input id="telegram_disable_link_preview" type="checkbox" role="switch">
+                  <span class="toggle-switch-ui"></span>
+                </span>
+              </label>
               <div class="help">If enabled, Telegram sends the workspace link without a preview card.</div>
 
               <div class="telegram-connect-shell">

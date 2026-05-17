@@ -37,7 +37,7 @@ from job_hunter_agent.auth import (
     read_session_username,
     verify_csrf_token,
 )
-from job_hunter_agent.config import LOGIN_PATH
+from job_hunter_agent.config import LOGIN_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
 from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")
     print(f"Workspace:   http://{HOST}:{PORT}/")
     print(f"Settings:    http://{HOST}:{PORT}/settings")
-    print(f"Onboarding:  http://{HOST}:{PORT}/start")
+    print(f"Onboarding:  http://{HOST}:{PORT}{ONBOARDING_PATH} (alias {ONBOARDING_DEBUG_ALIAS_PATH})")
     print(f"Docs API:    http://{HOST}:{PORT}/docs")
     print(f"Swagger UI:  http://{HOST}:{PORT}/swagger-ui")
 

@@ -23,6 +23,26 @@ from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.posting_utils import parse_timestamp
 
 
+def _format_issue_summary(run_stats: dict) -> str:
+    issues = run_stats.get("issue_summary") or []
+    if not issues:
+        return "none"
+    parts = [f"- {item.get('issue', 'unknown')}={item.get('count', 0)}" for item in issues[:5]]
+    return "\n" + "\n".join(parts)
+
+
+def _print_run_summary(run_stats: dict) -> None:
+    print("\nRun summary:")
+    print(f"  pages={run_stats.get('page_count', 0)}")
+    print(f"  cards_seen={run_stats.get('cards_seen', 0)}")
+    print(f"  cards_read={run_stats.get('cards_read', run_stats.get('detail_fetches', 0))}")
+    print(f"  kept={run_stats.get('kept_count', 0)}")
+    print(f"  rejected={run_stats.get('rejected_count', 0)}")
+    print(f"  with_issues={run_stats.get('issue_count', 0)}")
+    print(f"  total_llm_cost=${float(run_stats.get('llm_total_cost_usd', 0.0) or 0.0):.6f}")
+    print(f"Issues:{_format_issue_summary(run_stats)}")
+
+
 def finalize_scrape_run(
     context: ScrapeRunContext,
     kept_records: list[dict],
@@ -30,9 +50,22 @@ def finalize_scrape_run(
     skill_observations: list[dict],
 ) -> str:
     """Persist scrape outputs and rebuild the workspace HTML."""
+    from job_hunter_agent.llm_gate import get_session_cost_usd
+
     kept_records = deduplicate_across_sources(kept_records)
 
     if not audit_rows and context.previous_audit_rows:
+        run_stats = {
+            "page_count": 0,
+            "cards_seen": 0,
+            "cards_read": 0,
+            "kept_count": 0,
+            "rejected_count": 0,
+            "issue_count": 0,
+            "issue_summary": [],
+            "llm_total_cost_usd": round(get_session_cost_usd(), 6),
+        }
+        _print_run_summary(run_stats)
         workspace_service.render_html(
             get_workspace_results_path(),
             workspace_service.load_last_kept_records(
@@ -66,6 +99,7 @@ def finalize_scrape_run(
         context.configured_seek_max_pages,
     )
     run_stats["last_run_attempt_at"] = context.run_iso
+    run_stats["llm_total_cost_usd"] = round(get_session_cost_usd(), 6)
 
     workspace_path = get_workspace_results_path()
     workspace_service.render_html(
@@ -85,6 +119,7 @@ def finalize_scrape_run(
     write_debug_json(audit_rows)
     write_run_stats(run_stats)
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
+    _print_run_summary(run_stats)
     print(f"\nSaved {len(kept_records)} jobs to {workspace_path}")
     print(f"Saved {len(audit_rows)} audit rows to {get_audit_records_path()}")
     print(f"Saved run stats to {get_run_stats_path()}")

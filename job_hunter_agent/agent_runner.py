@@ -248,7 +248,7 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
         _format_summary_timestamp(str(payload.get("run_finished_at", payload.get("run_started_at", "Unknown"))))
     )
     summary_line = (
-        f"Matches this run: <b>{payload.get(KEY_DIGEST_CURRENT_COUNT, 0)}</b> | "
+        f"Matches last run: <b>{payload.get(KEY_DIGEST_CURRENT_COUNT, 0)}</b> | "
         f"New this run: <b>{payload.get(KEY_DIGEST_NEW_COUNT, 0)}</b>"
     )
     workspace_line = (

@@ -57,6 +57,7 @@ def list_to_phrase(items: List[str]) -> str:
 
 def summarize_snippet(snippet: str, max_length: int = 180) -> str:
     cleaned = compact_whitespace(snippet)
+    cleaned = re.sub(r"^([A-Z][a-z]{3,30})(?=[A-Z][a-z])", r"\1 ", cleaned)
     if len(cleaned) <= max_length:
         return cleaned
     return cleaned[: max_length - 3].rstrip() + "..."

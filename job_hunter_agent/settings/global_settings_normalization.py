@@ -28,7 +28,6 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_DATE_RANGE_DAYS,
     KEY_DEFAULT_COUNTRY_SUFFIX,
     KEY_DESCRIPTION_TRUST_SETTINGS,
-    KEY_ENFORCE_POSTED_AGE_LIMIT,
     KEY_EVIDENCE_TIER_WEIGHTS,
     KEY_FIT_HIGHLIGHTS,
     KEY_HISTORY_SETTINGS,
@@ -675,9 +674,6 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
                 normalized_search_limits[KEY_SEEK_MAX_PAGES]["max"],
                 normalized_search_limits[KEY_SEEK_MAX_PAGES]["min"],
                 normalized_search_limits[KEY_SEEK_MAX_PAGES]["max"],
-            ),
-            KEY_ENFORCE_POSTED_AGE_LIMIT: _normalize_bool(
-                search_source, KEY_ENFORCE_POSTED_AGE_LIMIT, DEFAULT_SEARCH_SETTINGS[KEY_ENFORCE_POSTED_AGE_LIMIT]
             ),
             KEY_SORT_NEWEST_FIRST: _normalize_bool(
                 search_source, KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]

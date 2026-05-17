@@ -1,21 +1,25 @@
 import re
+from functools import lru_cache
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.description_trust import get_trusted_full_description
-from job_hunter_agent.filters import matches_missing_requirement
+from job_hunter_agent.filters import _matches_soft_requirement as matches_missing_requirement
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
+from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_MUST_NOT_REQUIRED_SKILLS,
+    CapabilityLevel,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
 )
 from job_hunter_agent.role_analysis import friendly_capability_label, text_contains_term
+from job_hunter_agent.title_normalization_rules import load_title_normalization_rules
 from job_hunter_agent.scoring_utils import (
     build_scoring_source_text,
     find_profile_experience_year_in_text,
@@ -30,12 +34,23 @@ from job_hunter_agent.signal_schema import (
     SIGNAL_ALIGNMENT_KEY,
     SIGNAL_LABEL_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
+    CATEGORY_ROLE_TITLE_TOKEN,
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+    CATEGORY_TITLE_PARSE_BLOCKER,
 )
 from job_hunter_agent.text_processing import (
     compact_whitespace,
     dedupe_preserve_order,
     list_to_phrase,
 )
+
+
+_REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset({
+    CATEGORY_ROLE_TITLE_TOKEN,
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+    CATEGORY_TITLE_PARSE_BLOCKER,
+})
+_REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {CATEGORY_HARD_BLOCKER_PATTERN}
 
 
 def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
@@ -53,7 +68,8 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
     for record in registry.values():
         if not isinstance(record, dict):
             continue
-        if compact_whitespace(record.get(LEARNING_CATEGORY_KEY) or "").lower() == CATEGORY_HARD_BLOCKER_PATTERN:
+        category = compact_whitespace(record.get(LEARNING_CATEGORY_KEY) or "").lower()
+        if category in _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS:
             continue
         label = compact_whitespace(record.get(LEARNING_SIGNAL_KEY) or "")
         terms = [label, *(record.get(LEARNING_ORIGINAL_TEXTS_KEY) or [])]
@@ -62,24 +78,29 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
         if not any(text_contains_term(lowered, term) for term in terms if str(term).strip()):
             continue
         decision = compact_whitespace(record.get("decision") or record.get("learning_status") or record.get("status")).lower()
+        display_label = _display_review_signal_label(label)
+        if not display_label:
+            continue
         if decision in {"use", "approved", "keep", "accept"}:
-            buckets["matched"].append(label.lower())
+            buckets["matched"].append(display_label)
         elif decision in {"evidence_only", "evidence only"}:
-            buckets["evidence_only"].append(label.lower())
+            buckets["evidence_only"].append(display_label)
         elif decision in {"ignore", "ignored"}:
-            buckets["ignored"].append(label.lower())
+            buckets["ignored"].append(display_label)
         else:
-            buckets["unresolved"].append(label.lower())
+            buckets["unresolved"].append(display_label)
 
     for item in load_approved_signal_catalog():
         label = compact_whitespace(item.get("label") or "")
         terms = item.get("terms") if isinstance(item, dict) else []
         category = compact_whitespace(item.get(LEARNING_CATEGORY_KEY) or "").lower()
-        if not label or not isinstance(terms, list) or category in {"role_title_token", CATEGORY_HARD_BLOCKER_PATTERN}:
+        if not label or not isinstance(terms, list) or category in _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS:
             continue
         if not any(text_contains_term(lowered, term) for term in terms):
             continue
-        buckets["matched"].append(label.lower())
+        display_label = _display_review_signal_label(label)
+        if display_label:
+            buckets["matched"].append(display_label)
 
     return {
         key: dedupe_preserve_order(values)
@@ -87,14 +108,58 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
     }
 
 
+@lru_cache(maxsize=1)
+def _review_signal_display_rules() -> tuple[frozenset[str], dict[str, str]]:
+    parsing_rules = load_parsing_rules()
+    noisy_title_tokens = {
+        str(token).strip().lower()
+        for token in (parsing_rules.get("title_candidate_leading_verb_blockers") or [])
+        if str(token).strip()
+    }
+    title_rules = load_title_normalization_rules()
+    expansions = title_rules.get("abbreviation_expansions", {})
+    normalized_expansions = {
+        str(key).strip().lower(): compact_whitespace(value).lower()
+        for key, value in expansions.items()
+        if str(key).strip() and compact_whitespace(value)
+    } if isinstance(expansions, dict) else {}
+    suppressed_title_terms = frozenset({
+        *noisy_title_tokens,
+        *normalized_expansions.keys(),
+        *normalized_expansions.values(),
+    })
+    return suppressed_title_terms, normalized_expansions
+
+
+def _display_review_signal_label(value: str) -> str:
+    cleaned = compact_whitespace(value).lower()
+    if not cleaned:
+        return ""
+
+    noisy_title_tokens, expansions = _review_signal_display_rules()
+    if cleaned in noisy_title_tokens:
+        return ""
+
+    cleaned = expansions.get(cleaned, cleaned)
+    return friendly_capability_label(cleaned)
+
+
 def reviewed_signal_match_summary(record: dict, profile: Optional[dict] = None) -> dict[str, list[str]]:
     existing = record.get("reviewed_signal_matches")
     if isinstance(existing, dict):
         return {
-            "matched": dedupe_preserve_order(existing.get("matched") or []),
-            "evidence_only": dedupe_preserve_order(existing.get("evidence_only") or []),
-            "ignored": dedupe_preserve_order(existing.get("ignored") or []),
-            "unresolved": dedupe_preserve_order(existing.get("unresolved") or []),
+            "matched": dedupe_preserve_order(
+                [label for label in (_display_review_signal_label(item) for item in existing.get("matched") or []) if label]
+            ),
+            "evidence_only": dedupe_preserve_order(
+                [label for label in (_display_review_signal_label(item) for item in existing.get("evidence_only") or []) if label]
+            ),
+            "ignored": dedupe_preserve_order(
+                [label for label in (_display_review_signal_label(item) for item in existing.get("ignored") or []) if label]
+            ),
+            "unresolved": dedupe_preserve_order(
+                [label for label in (_display_review_signal_label(item) for item in existing.get("unresolved") or []) if label]
+            ),
         }
     source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
     return reviewed_signal_matches_for_text(source_text)
@@ -126,13 +191,13 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
             matched_core.append(label)
         elif fit == "supporting":
             matched_supporting.append(label)
-        if level == "strong":
+        if level == CapabilityLevel.STRONG:
             matched_strong.append(label)
-        elif level == "working":
+        elif level == CapabilityLevel.WORKING:
             matched_working.append(label)
-        elif level == "basic":
+        elif level == CapabilityLevel.BASIC:
             matched_basic.append(label)
-        elif level == "low":
+        elif level == CapabilityLevel.LOW:
             matched_limited_depth.append(label)
 
     for skill in profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, []):

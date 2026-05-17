@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Set Up Job Hunter | Job Hunter</title>
-  <link rel="stylesheet" href="/static/themes.css">
-  <link rel="stylesheet" href="/static/onboarding-page.css">
+  <link rel="stylesheet" href="/static/theme/themes.css">
+  <link rel="stylesheet" href="/static/onboarding/onboarding-page.css">
   __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
-  <script src="/static/csrf.js"></script>
-  <script src="/static/console-bridge.js"></script>
-  <script src="/static/capability-ui.js"></script>
-  <script src="/static/theme-switcher.js"></script>
-  <script src="/static/currency-input.js"></script>
+  <script src="/static/common/csrf.js"></script>
+  <script src="/static/common/console-bridge.js"></script>
+  <script src="/static/common/capability-ui.js"></script>
+  <script src="/static/settings/shared/settings-utils.js"></script>
+  <script src="/static/theme/theme-switcher.js"></script>
+  <script src="/static/common/currency-input.js"></script>
 </head>
 <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__">
   <main class="page">
@@ -19,13 +20,13 @@
       <div class="hero-shell">
         <div class="hero-copy-shell">
           <div class="hero-brand-row">
-            <img src="/static/job_hunter_img.png" alt="Job Hunter Logo" class="brand-logo">
+            <img src="/static/assets/job_hunter_img.png" alt="Job Hunter Logo" class="brand-logo">
             <div class="brand-lockup">
               <p class="brand-eyebrow">Job Hunter</p>
             </div>
           </div>
-          <h1 id="hero_title">Set Up Your Job Search Profile</h1>
-          <p id="hero_copy">Upload one detailed CV. Job Hunter will build a draft profile, let you review the job titles and capabilities it found, and then ask for the minimum search basics before matching starts.</p>
+          <h1 id="hero_title">__JOB_HUNTER_ONBOARDING_HERO_TITLE__</h1>
+          <p id="hero_copy">__JOB_HUNTER_ONBOARDING_HERO_COPY__</p>
           <div class="hero-progress" aria-label="Profile setup progress">
             <div class="wizard-progress wizard-progress-hero">
               <div class="wizard-progress-bar">
@@ -81,15 +82,14 @@
     <div class="grid">
       <section class="panel">
         <section class="wizard-step is-active" data-step="1">
-          <h2 id="form_title">Upload Your CV</h2>
-          <p class="section-copy">Start with the CV that best represents your real experience. We will use it to build your starting profile.</p>
+          <h2 id="form_title">__JOB_HUNTER_ONBOARDING_STEP_1_TITLE__</h2>
+          <p class="section-copy">__JOB_HUNTER_ONBOARDING_STEP_1_SECTION_COPY__</p>
 
-          <details class="support-note workflow-card workflow-drawer" id="workflow_summary">
+          <details class="support-note workflow-drawer" id="workflow_summary">
             <summary class="workflow-drawer-summary">
               <span id="workflow_title">How this works</span>
             </summary>
             <div class="workflow-drawer-body">
-              <p id="workflow_intro">This creates the profile Job Hunter uses to find and score relevant jobs for you.</p>
               <ol class="workflow-steps">
                 <li id="workflow_step_1">You upload one detailed CV.</li>
                 <li id="workflow_step_2">We extract likely job titles, capabilities, and a starter search direction.</li>
@@ -103,48 +103,67 @@
               <label class="sr-only" for="primary_cv">Upload your CV</label>
               <div class="drop-zone" id="cv_drop_zone">
                 <input id="primary_cv" type="file" accept=".docx,.pdf,.md,.txt" required aria-label="Upload your CV" style="display: none;">
-                <div id="cv_drop_zone_content">
+                <div id="cv_drop_zone_content" class="drop-zone-content-shell">
                   <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   <p>Drag & drop your CV here, or click to browse</p>
                   <p class="drop-zone-hint">Supported formats: .docx, .pdf, .md, .txt</p>
                 </div>
               </div>
-              <div class="help" id="primary_cv_status">No file selected yet.</div>
               <div class="help" id="primary_cv_limit_help"></div>
-              <div class="help">ⓘ Use your most detailed CV, not the prettiest version.</div>
-              <div class="help">🔒 Privacy tip: only upload the CV content needed for matching. Remove date of birth, licence numbers, passport details, street address, and other sensitive personal identifiers.</div>
-              <details class="guidance-card">
-                <summary>What makes a good CV for setup?</summary>
-                <p class="help">Best results come from a detailed CV with role titles, dates, employers, and bullet points.</p>
-                <div class="guidance-grid">
-                  <section>
-                    <h3>Include</h3>
-                    <ul class="guidance-list">
-                      <li>Recent and older roles with dates</li>
-                      <li>Clear job titles</li>
-                      <li>Employer names</li>
-                      <li>Bullet points describing what you did</li>
-                      <li>Skills, tools, domains, or platforms you actually used</li>
-                    </ul>
-                  </section>
-                  <section>
-                    <h3>Avoid</h3>
-                    <ul class="guidance-list">
-                      <li>One-page marketing CVs with very little detail</li>
-                      <li>Image-heavy layouts where the text is hard to extract</li>
-                      <li>CVs with missing dates or vague role names</li>
-                      <li>Multiple different target directions crammed into a short summary</li>
-                    </ul>
-                  </section>
+              <details class="support-note workflow-drawer">
+                <summary class="workflow-drawer-summary">
+                  <span>Privacy &amp; sensitive information</span>
+                </summary>
+                <div class="workflow-drawer-body">
+                  <p>We take privacy seriously.</p>
+                  <p>Upload only the CV content needed for job matching.</p>
+                  <p>Avoid including sensitive personal identifiers such as:</p>
+                  <ul>
+                    <li>passport numbers</li>
+                    <li>licence numbers</li>
+                    <li>street address</li>
+                    <li>date of birth</li>
+                    <li>national identity numbers</li>
+                  </ul>
+                  <p>Basic contact details like your name, email address, and phone number are generally expected in a CV.</p>
+                  <p>When processing your CV, we try to detect and remove sensitive information if it appears. Sensitive personal identifiers are not intentionally stored as part of profile matching data.</p>
                 </div>
-                <p class="guidance-note">Plain, detailed content beats pretty formatting.</p>
+              </details>
+              <details class="support-note workflow-drawer">
+                <summary class="workflow-drawer-summary">
+                  <span>What makes a good CV for setup?</span>
+                </summary>
+                <div class="workflow-drawer-body">
+                  <div class="guidance-grid">
+                    <section>
+                      <h3>Include</h3>
+                      <ul class="guidance-list">
+                        <li>Recent and older roles with dates</li>
+                        <li>Clear job titles</li>
+                        <li>Employer names</li>
+                        <li>Bullet points describing what you did</li>
+                        <li>Skills, tools, domains, or platforms you actually used</li>
+                      </ul>
+                    </section>
+                    <section>
+                      <h3>Avoid</h3>
+                      <ul class="guidance-list">
+                        <li>One-page marketing CVs with very little detail</li>
+                        <li>Image-heavy layouts where the text is hard to extract</li>
+                        <li>CVs with missing dates or vague role names</li>
+                        <li>Multiple different target directions crammed into a short summary</li>
+                      </ul>
+                    </section>
+                  </div>
+                  <p class="guidance-note">Plain, detailed content beats pretty formatting.</p>
+                </div>
               </details>
             </div>
 
             <div class="setting-row">
               <div class="setting-copy">
                 <label for="os_capability_strength_preset">Prioritise recent or total experience?</label>
-                <div class="help">Select a weighting preset. This determines if older experience is treated as a current strength or supporting background.</div>
+                <div class="help">Choose how much older experience should count when matching you to jobs.</div>
               </div>
               <div>
                 <select id="os_capability_strength_preset">
@@ -162,13 +181,13 @@
         </section>
 
         <section class="wizard-step" data-step="2" hidden>
-          <h2>Review Draft Profile</h2>
-          <p class="section-copy">Check the job titles and capabilities Job Hunter learned from your CV. Move titles between Primary and Secondary if needed before you continue.</p>
+          <h2>__JOB_HUNTER_ONBOARDING_STEP_2_TITLE__</h2>
+          <p class="section-copy">__JOB_HUNTER_ONBOARDING_STEP_2_SECTION_COPY__</p>
 
           <div class="review-grid">
             <section class="review-block">
               <h3>Primary job titles</h3>
-              <p class="help">Titles in this list stay as primary search targets. Use the move button to send one to Secondary if it fits better there.</p>
+              <p class="help">Titles in this list stay as primary search targets.</p>
               <div class="chip-list" id="review_target_titles_list"></div>
               <div class="chip-editor-row">
                 <input id="review_target_titles_input" type="text" placeholder="Add a primary title">
@@ -178,7 +197,7 @@
 
             <section class="review-block">
               <h3>Secondary job titles</h3>
-              <p class="help">Titles here stay as secondary search targets. Use the move button to bring one back to Primary.</p>
+              <p class="help">Titles here stay as secondary search targets.</p>
               <div class="chip-list" id="review_secondary_titles_list"></div>
               <div class="chip-editor-row">
                 <input id="review_secondary_titles_input" type="text" placeholder="Add a secondary title">
@@ -203,81 +222,89 @@
         </section>
 
         <section class="wizard-step" data-step="3" hidden>
-          <h2>Set Search Basics</h2>
-          <p class="section-copy">Set the minimum information Job Hunter needs to search safely and score roles in the right direction.</p>
+          <h2>__JOB_HUNTER_ONBOARDING_STEP_3_TITLE__</h2>
+          <p class="section-copy">__JOB_HUNTER_ONBOARDING_STEP_3_SECTION_COPY__</p>
 
-          <div class="onb-field">
-            <label for="review_search_keywords">Search keyword</label>
-            <input id="review_search_keywords" type="text" placeholder="e.g. Technical Business Analyst, Integration BA">
-            <div class="help">These titles guide what Job Hunter searches for. Matching still uses your CV experience and capabilities.
-              <br> Separate multiple role types with commas.</div>
-          </div>
-
-          <div class="onb-field">
-            <label for="location_search">Location</label>
-            <select id="location_search"></select>
-            <div class="help">Required. Choose one state or capital city.</div>
-            <div class="location-selected" id="location_selected"></div>
-          </div>
-
-          <div class="onb-field">
-            <label id="engagement_pref_label">Work Type</label>
-            __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
-          </div>
-
-          <div class="onb-field">
-            <label>Work mode</label>
-            <div id="work_mode_preference">
-              __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
+          <div class="search-basics-form">
+            <div class="onb-field search-basics-keywords">
+              <label for="review_search_keywords">Search keyword</label>
+              <input id="review_search_keywords" type="text" placeholder="e.g. Technical Business Analyst, Integration BA">
+              <div class="help">These titles guide what Job Hunter searches for. Matching still uses your CV experience and capabilities. Separate multiple role types with commas.</div>
             </div>
-            <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
-          </div>
 
-          <div class="onb-field">
-            <label for="government_preference">Sector preference</label>
-            <select id="government_preference">
-              __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
-            </select>
-            <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__</div>
-          </div>
-
-          <div class="onb-field">
-            <label>Minimum compensation</label>
-            <div class="salary-pair">
-              <div id="salary_yearly_block">
-                <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
-                <div class="currency-input-wrap">
-                  <span class="currency-prefix">$</span>
-                  <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 140,000">
+            <div class="search-basics-row search-basics-row--two">
+              <div class="onb-field">
+                <label for="location_search">Location</label>
+                <div class="location-picker-shell">
+                  <select id="location_search"></select>
+                  <div class="location-selected location-selected--inside" id="location_selected"></div>
                 </div>
-                <div class="help">__JOB_HUNTER_SALARY_ANNUAL_HELP__</div>
+                <div class="help">Choose one state or capital city.</div>
               </div>
-              <div id="salary_daily_block">
-                <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
-                <div class="currency-input-wrap">
-                  <span class="currency-prefix">$</span>
-                  <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 900">
-                </div>
-                <div class="help">__JOB_HUNTER_SALARY_DAILY_HELP__</div>
+
+              <div class="onb-field">
+                <label for="government_preference">Sector preference</label>
+                <select id="government_preference">
+                  __JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+                </select>
+                <div class="help">__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__</div>
               </div>
             </div>
+
+            <div class="search-basics-row search-basics-row--choices">
+              <div class="onb-field">
+                <label id="engagement_type_label">Work type</label>
+                __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+              </div>
+
+              <div class="onb-field">
+                <label id="work_mode_preference_label">Work mode</label>
+                __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
+                <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
+              </div>
+            </div>
+
+            <div class="onb-field search-basics-compensation">
+              <label>Minimum compensation</label>
+              <div class="salary-pair">
+                <div id="salary_yearly_block">
+                  <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                  <div class="currency-input-wrap">
+                    <span class="currency-prefix">$</span>
+                    <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
+                  </div>
+                  <div class="help">__JOB_HUNTER_SALARY_ANNUAL_HELP__</div>
+                </div>
+                <div id="salary_daily_block">
+                  <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                  <div class="currency-input-wrap">
+                    <span class="currency-prefix">$</span>
+                    <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
+                  </div>
+                  <div class="help">__JOB_HUNTER_SALARY_DAILY_HELP__</div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="actions">
+          <div class="actions search-basics-actions">
             <button class="btn btn-secondary" id="back_to_review_footer" type="button">Back</button>
             <button class="btn btn-primary" id="continue_to_check" type="button">Continue</button>
           </div>
         </section>
 
         <section class="wizard-step" data-step="4" hidden>
-          <h2>Check Your Setup</h2>
-          <p class="section-copy">Make sure this looks right. When you finish, onboarding is complete and Settings will unlock.</p>
+          <div class="setup-review-header">
+            <div class="setup-review-badge">✓ Draft profile ready</div>
+            <h2>Review your setup</h2>
+            <p class="section-copy">Review your draft profile and search direction before Job Hunter starts matching roles.</p>
+          </div>
 
           <div class="check-grid">
             <section class="check-card">
               <div class="check-card-head">
                 <h3>Draft profile</h3>
-                <button class="text-link" id="edit_draft_profile" type="button">Change</button>
+                <button class="text-link text-link--edit" id="edit_draft_profile" type="button">✎ Edit</button>
               </div>
               <dl class="check-list">
                 <div>
@@ -298,7 +325,7 @@
             <section class="check-card">
               <div class="check-card-head">
                 <h3>Search basics</h3>
-                <button class="text-link" id="edit_search_basics" type="button">Change</button>
+                <button class="text-link text-link--edit" id="edit_search_basics" type="button">✎ Edit</button>
               </div>
               <dl class="check-list">
                 <div>
@@ -318,7 +345,7 @@
                   <dd id="check_work_mode_preference"></dd>
                 </div>
                 <div>
-                  <dt>Government preference</dt>
+                  <dt>Sector preference</dt>
                   <dd id="check_government_preference"></dd>
                 </div>
                 <div>
@@ -344,8 +371,8 @@
     </div>
   </main>
 
-  <script src="/static/location-options.js"></script>
-  <script src="/static/onboarding-page.js"></script>
-  <script src="/static/onboarding-flow.js"></script>
+  <script src="/static/common/location-options.js"></script>
+  <script src="/static/onboarding/onboarding-page.js"></script>
+  <script src="/static/onboarding/onboarding-flow.js"></script>
 </body>
 </html>

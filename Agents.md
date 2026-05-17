@@ -10,10 +10,10 @@ Local-first job discovery system:
 scrape → deterministic filters → optional LLM → fit score → workspace
 
 Runtime source of truth:
-- `data/profile.json`
+- `data/users/<user_id>/profile.json`
 
 Managed knowledge:
-- `data/*.json`
+- `data/knowledge/*.json`
 
 Main entry point:
 - `python -m job_hunter_agent.source_connector`
@@ -49,7 +49,14 @@ Load the relevant skill before editing that area.
 | `.skills/signal-registry/SKILL.md` | Learning and approval flow |
 | `.skills/preferences/SKILL.md` | Location/contract/government/salary |
 | `.skills/dashboard-ui/SKILL.md` | Workspace and FastAPI UI |
+| `.skills/workspace-output-sync/SKILL.md` | Live workspace HTML vs source template sync |
 | `.skills/scraping/SKILL.md` | SEEK/LinkedIn scraping |
+| `.skills/text-utilities/SKILL.md` | Text normalisation, matching helpers, description trust |
+| `.skills/ad-learning/SKILL.md` | Learning candidates from job ads, signal suggestions |
+| `.skills/knowledge-management/SKILL.md` | Managed JSON knowledge, rule loaders, path ownership |
+| `.skills/signal-review-map/SKILL.md` | Capability alias flow: dominant_signal_clusters vs capability_profile_rules |
+| `.skills/history-dedup/SKILL.md` | Job history, viewed/applied/hidden state, deduplication |
+| `.skills/initialise/SKILL.md` | Repo bootstrap and workflow guardrails |
 
 ## Context hygiene
 
@@ -85,9 +92,10 @@ Product and decision philosophy:
 6. Weak/uncertain signals are preserved for review — not silently deleted.
 7. Learning flows through the signal registry before becoming runtime knowledge.
 8. Touch only files required for the task. Avoid unrelated refactors.
-9. We dont want legacy coding... this is not a production application. Remove Unused Remove Legacy
-10. You code like PRO and don't use bad heuristics and silent fallbacks
-11. UI UX updates must respect themes implementation?
+9. No legacy code. Remove unused code and dead paths instead of leaving them in place.
+10. No bad heuristics or silent fallbacks. Surface missing/invalid values as explicit errors.
+11. UI/UX updates must respect the themes implementation.
+12. For Settings booleans and sector preferences, reuse the shared switch or choice-strip patterns and update the owning skill/docs/tests instead of adding one-off controls.
 
 ## Failure handling rule
 

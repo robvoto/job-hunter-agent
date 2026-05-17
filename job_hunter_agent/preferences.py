@@ -5,15 +5,14 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
-    GOVERNMENT_PREFERENCE_ANY,
-    GOVERNMENT_PREFERENCE_GOVERNMENT,
-    GOVERNMENT_PREFERENCE_PRIVATE,
-    WORK_MODE_PREFERENCE_HYBRID,
-    WORK_MODE_PREFERENCE_ONSITE,
-    WORK_MODE_PREFERENCE_REMOTE,
+    ENGAGEMENT_TYPE_OPTIONS,
+    GovPref,
+    Engagement,
+    WorkMode,
     KEY_WORK_MODE_PREFERENCE,
     get_scoring_rules,
     load_profile,
+    normalize_engagement_type_preferences,
     normalize_match_preferences,
     normalize_work_mode_preferences,
 )
@@ -29,12 +28,13 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
     preferences = get_match_preferences(active_profile)
 
     # Work type — exclude only when type is unambiguously incompatible with the stated preference
-    eng_pref = str(preferences.get("engagement_type") or "").strip().lower()
-    if eng_pref and eng_pref != "both":
+    selected_engagement_types = normalize_engagement_type_preferences(preferences.get("engagement_type"))
+    selected_engagement_type_set = set(selected_engagement_types)
+    if selected_engagement_type_set != {Engagement.PERMANENT, Engagement.CONTRACT}:
         is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
-        if is_perm and eng_pref == "contract":
+        if is_perm and selected_engagement_type_set == {Engagement.CONTRACT}:
             return False, "PREF_CONTRACT_TYPE"
-        if not is_perm and is_contract and eng_pref == "permanent":
+        if not is_perm and is_contract and selected_engagement_type_set == {Engagement.PERMANENT}:
             return False, "PREF_CONTRACT_TYPE"
 
     work_mode_prefs = normalize_work_mode_preferences(preferences.get(KEY_WORK_MODE_PREFERENCE))
@@ -45,8 +45,8 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
     # Sector — exclude only when government context is explicitly detected and user wants private only.
     # "Government only" preference does NOT hard-filter: absence of government context ≠ confirmed private.
-    sector_pref = str(preferences.get("prefer_government") or GOVERNMENT_PREFERENCE_ANY).strip().lower()
-    if sector_pref == GOVERNMENT_PREFERENCE_PRIVATE:
+    sector_pref = str(preferences.get("prefer_government") or GovPref.ANY).strip().lower()
+    if sector_pref == GovPref.PRIVATE:
         if has_government_context(_government_combined_text(record)):
             return False, "PREF_SECTOR_GOVERNMENT"
 
@@ -129,19 +129,21 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     source_text = build_scoring_source_text(record)
     preferred_contract_months = int(preferences["preferred_contract_months"])
     short_contract_months = int(preferences["short_contract_months"])
-    eng_pref = str(preferences["engagement_type"]).strip().lower()
+    selected_engagement_types = normalize_engagement_type_preferences(preferences["engagement_type"])
+    selected_engagement_type_set = set(selected_engagement_types)
     is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
 
+    if selected_engagement_type_set == {Engagement.PERMANENT, Engagement.CONTRACT}:
+        return None
+
     if is_perm:
-        if eng_pref == "contract":
-            return {"label": "Permanent role (preference is Contract)", "value": int(contract_rules["permanent_when_contract_preferred"])}
         return {"label": "Permanent role", "value": int(contract_rules["permanent_match"])}
 
     if not is_contract:
         return None
 
-    if eng_pref == "permanent":
-        return {"label": "Contract role (preference is Permanent)", "value": int(contract_rules["contract_when_permanent_preferred"])}
+    if selected_engagement_type_set != {Engagement.CONTRACT}:
+        return None
 
     contract_months = extract_contract_months(source_text)
     if contract_months is None:
@@ -159,17 +161,17 @@ def assess_government_preference(record: dict, profile: Optional[dict] = None) -
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
-    preference = str(preferences["prefer_government"] or GOVERNMENT_PREFERENCE_ANY).strip().lower()
-    if preference == GOVERNMENT_PREFERENCE_ANY:
+    preference = str(preferences["prefer_government"] or GovPref.ANY).strip().lower()
+    if preference == GovPref.ANY:
         return None
 
     combined = _government_combined_text(record)
-    if preference == GOVERNMENT_PREFERENCE_GOVERNMENT:
+    if preference == GovPref.GOVERNMENT:
         if has_government_context(combined):
             return {"label": "Government context", "value": abs(int(scoring_rules["government"]["match_bonus"]))}
         return None
 
-    if preference == GOVERNMENT_PREFERENCE_PRIVATE:
+    if preference == GovPref.PRIVATE:
         if has_government_context(combined):
             return {"label": "Government context (private only)", "value": -abs(int(scoring_rules["government"]["match_bonus"]))}
         return None
@@ -183,6 +185,28 @@ def _canonical_job_type(work_type: str) -> str:
         return ""
     mapping = load_job_type()
     return compact_whitespace(str(mapping.get(normalized) or "")).lower()
+
+
+def _engagement_label(value: str) -> str:
+    normalized = compact_whitespace(value).lower()
+    for item in ENGAGEMENT_TYPE_OPTIONS:
+        if str(item.get("value") or "").strip().lower() == normalized:
+            return str(item.get("label") or "").strip()
+    return ""
+
+
+def display_work_type_label(record: dict) -> str:
+    raw_work_type = compact_whitespace(record.get("work_type") or "")
+    if not raw_work_type:
+        return ""
+
+    is_perm, is_contract = _parse_work_type_flags(raw_work_type)
+    if is_perm and not is_contract:
+        return _engagement_label(Engagement.PERMANENT)
+    if is_contract and not is_perm:
+        return _engagement_label(Engagement.CONTRACT)
+
+    return ""
 
 
 def _salary_period_hint(salary_text: str) -> str:
@@ -226,11 +250,11 @@ def _parse_work_type_flags(work_type: str) -> tuple[bool, bool]:
 def _normalize_work_mode(value: str) -> str:
     normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(value).lower()).strip()
     if normalized in {"on site", "onsite"}:
-        return WORK_MODE_PREFERENCE_ONSITE
-    if normalized == WORK_MODE_PREFERENCE_REMOTE:
-        return WORK_MODE_PREFERENCE_REMOTE
-    if normalized == WORK_MODE_PREFERENCE_HYBRID:
-        return WORK_MODE_PREFERENCE_HYBRID
+        return WorkMode.ONSITE
+    if normalized == WorkMode.REMOTE:
+        return WorkMode.REMOTE
+    if normalized == WorkMode.HYBRID:
+        return WorkMode.HYBRID
     return ""
 
 

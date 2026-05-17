@@ -35,8 +35,8 @@
             <input id="search_default_date_range_days" type="number" min="1" max="30" step="1">
             <div class="field-help">How many days back each run looks for new listings by default. Profile search settings override this per run. Valid range: <span id="search_default_date_range_days_bounds"></span>.</div>
 
-            <label for="search_default_seek_max_pages">Default SEEK pages</label>
-            <input id="search_default_seek_max_pages" type="number" min="1" max="10" step="1">
+            <label id="search_default_seek_max_pages_label">Default SEEK pages</label>
+            __JOB_HUNTER_SEARCH_DEFAULT_SEEK_MAX_PAGES_CHOICES__
             <div class="field-help">Default SEEK crawl cap. Valid range: <span id="search_default_seek_max_pages_bounds"></span>.</div>
 
             <label for="search_default_linkedin_hours_old">Default LinkedIn age window</label>
@@ -47,18 +47,16 @@
             <input id="search_default_linkedin_results_per_search" type="number" min="5" max="100" step="1">
             <div class="field-help">Default result budget for each LinkedIn search. Valid range: <span id="search_default_linkedin_results_per_search_bounds"></span>.</div>
 
-            <label for="search_default_enforce_posted_age_limit">Enforce posted-age limit</label>
-            <select id="search_default_enforce_posted_age_limit">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-            <div class="field-help">When enabled, the scraper skips jobs that are older than the configured search window.</div>
 
-            <label for="search_default_sort_newest_first">Sort newest first</label>
-            <select id="search_default_sort_newest_first">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
+            <label class="toggle-switch" for="search_default_sort_newest_first">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">Sort newest first</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="search_default_sort_newest_first" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
             <div class="field-help">When enabled, the workspace prefers fresher jobs in search results.</div>
 
             <label for="search_default_linkedin_easy_apply_only">LinkedIn Easy Apply only</label>
@@ -273,12 +271,14 @@
             <input id="onboarding_signal_cluster_dense_snippet_alias_hits" type="number" min="1" max="20" step="1">
             <div class="field-help">A dense mention threshold that can keep a signal even when the snippet count is lower.</div>
 
-            <label for="onboarding_capability_strength_preset">Capability strength preset</label>
-            <select id="onboarding_capability_strength_preset">
-              <option value="recent_focus">Recent focus</option>
-              <option value="balanced">Balanced</option>
-              <option value="include_older_experience">Include older experience</option>
-            </select>
+            <div class="cap-strength-row">
+              <label for="onboarding_capability_strength_preset">Capability preset</label>
+              <select id="onboarding_capability_strength_preset">
+                <option value="recent_focus">Recent focus</option>
+                <option value="balanced">Balanced</option>
+                <option value="include_older_experience">Include older experience</option>
+              </select>
+            </div>
           </section>
 
           <section class="panel">

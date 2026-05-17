@@ -67,8 +67,19 @@ def deterministic_review_outcome(
 
     def _log(rule: str, decision: str, grade: str) -> dict:
         logger.info(
-            "[det-review] %s/%s via %s | strong=%d high=%d medium=%d | title_reason=%s | %s",
-            decision, grade, rule, strong_signal_count, high_risks, medium_risks, title_reason, title,
+            "[det-review] %s/%s\n"
+            "  via=%s\n"
+            "  strong=%d high=%d medium=%d\n"
+            "  title_reason=%s\n"
+            "  %s",
+            decision,
+            grade,
+            rule,
+            strong_signal_count,
+            high_risks,
+            medium_risks,
+            title_reason,
+            title,
         )
         return {"decision": decision, "grade": grade, "det_rule": rule}
 

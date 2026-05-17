@@ -1,5 +1,5 @@
-<link rel="stylesheet" href="/static/results-page.css">
-<link rel="stylesheet" href="/static/workspace-page.css">
+<link rel="stylesheet" href="/static/results/results-page.css">
+<link rel="stylesheet" href="/static/workspace/workspace-page.css">
   <main class="page">
     <div class="workspace-layout">
       <div class="workspace-main">
@@ -41,8 +41,8 @@
                 <span>Show</span>
                 <select id="scope_filter">
                   <option value="all" selected>All potential jobs</option>
-                  <option value="current">Matches this run</option>
-                  <option value="saved">Saved From Earlier Searches</option>
+                  <option value="current">Matches last run</option>
+                  $SCOPE_SAVED_OPTION_HTML
                 </select>
               </label>
               <label class="filter-field">
@@ -70,16 +70,6 @@
                 <span>Match level</span>
                 <select id="score_filter">
                   $SCORE_FILTER_OPTIONS_HTML
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>Salary</span>
-                <select id="salary_filter">
-                  <option value="all">Any</option>
-                  <option value="listed">Any salary shown</option>
-                  <option value="meets">Meets my target</option>
-                  <option value="below">Below my target</option>
-                  <option value="missing">No salary shown</option>
                 </select>
               </label>
             </div>
@@ -114,8 +104,8 @@
           <section class="snapshot-section">
             <div class="search-summary-head">
               <div>
-                <h3 class="snapshot-subheading">Common Search</h3>
-                <p class="snapshot-helper">Shared search preferences used across sources.</p>
+                <h3 class="snapshot-subheading">Search Settings</h3>
+                <p class="snapshot-helper">Shared search settings used across sources.</p>
               </div>
               <a class="settings-cog-link" href="/settings#section-search" aria-label="Open search settings" title="Open search settings">
                 <span aria-hidden="true">&#128393;</span>
@@ -126,12 +116,13 @@
               <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value">$SEARCH_LOCATIONS_LABEL</span></div>
               <div class="snapshot-meta-row"><span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">$WORK_TYPE_LABEL</span></div>
               <div class="snapshot-meta-row"><span class="snapshot-meta-label">Work mode</span><span class="snapshot-meta-value">$WORK_MODE_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Government preference</span><span class="snapshot-meta-value">$GOVERNMENT_PREFERENCE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Sector</span><span class="snapshot-meta-value">$GOVERNMENT_PREFERENCE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date range</span><span class="snapshot-meta-value">$DATE_RANGE_LABEL</span></div>
             </div>
           </section>
 
           <section class="snapshot-section">
-            <h2 class="snapshot-heading">This Run</h2>
+            <h2 class="snapshot-heading">Last Run</h2>
             <div class="summary-grid">
               $THIS_RUN_CARDS_HTML
             </div>
@@ -210,4 +201,4 @@
       viewedBadgeHtml: $VIEWED_BADGE_HTML_JSON
     };
   </script>
-    <script src="/static/results-page.js" defer></script>
+    <script src="/static/results/results-page.js" defer></script>

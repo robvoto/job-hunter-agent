@@ -10,37 +10,131 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Missing required settings or labels should fail clearly, not be invented in UI code.
 - Route aliases such as `/workspace` and `/` must stay intentional and documented.
 - UI structure and visual treatment must come from shared theme tokens/widgets first; page-level CSS is only for screen-specific layout exceptions.
+- Shared blocking overlays must use the existing `job-hunter-wait-*` component from `themes.primitives.css` and `body.job-hunter-wait-active`; do not invent screen-local `ws-wait-*` variants or rename the mount/backdrop/shell classes without updating every consumer.
+- If a workspace run is meant to be non-blocking, make that an explicit product decision. Do not let a class mismatch or partial CSS move silently change blocking behavior.
 - Reuse existing widget patterns for help, drawers, chips, cards, and settings rows instead of creating new variants for the same job.
 - Keep common language consistent across the app; if a screen is called settings or review, do not introduce alternate labels for the same concept.
+- If a card shows summary + debug detail, keep the summary human-facing and make the debug detail readable. Do not surface raw matcher tokens, parser fragments, or implementation words in the card itself.
+- If the same display text appears in more than one place, centralise it in the owning JSON label source instead of copying it into renderer code.
+- If text or layout looks wrong, check the rendered HTML, the server-side copy source, and the CSS constraint together before editing one layer in isolation.
+- Prefer adjusting the owning copy/data source over patching a template placeholder when the text is injected server-side.
+- If a layout issue is local to one row or field, change only that block instead of widening the whole page.
 
 ## Workspace filter pattern
-- Filter options that require data-driven groups (e.g., work type) are rendered server-side via a `render_*_filter_options()` function in `workspace_renderer.py` and injected as `$..._FILTER_OPTIONS_HTML` placeholders in `results.html`.
-- When one filter option covers multiple canonical values (e.g., "Contract / Temp" covers "contract" and "temporary"), encode the option `value` as pipe-separated lowercase canonical values: `value="contract|temporary"`. JS splits on `|` before comparing against the card's data attribute.
-- Card data attributes store the lowercased canonical value (e.g., `data-work-type="contract"`). Never store display labels in data attributes.
-- Filter group definitions live in the relevant JSON data file (e.g., `data/job_type.json` `filter_groups` key), not in Python or JS.
+- Filter options that require data-driven groups are rendered server-side via a `render_*_filter_options()` function in `workspace_renderer.py` and injected as `$..._FILTER_OPTIONS_HTML` placeholders in `results.html`.
+- When one filter option covers multiple canonical values, encode the option `value` as pipe-separated lowercase canonical values: `value="contract|temporary"`. JS splits on `|` before comparing against the card's data attribute.
+- Card data attributes store the lowercased canonical value, for example `data-work-type="contract"`. Never store display labels in data attributes.
+- Filter group definitions live in the relevant JSON data file, for example `data/job_type.json` `filter_groups` key, not in Python or JS.
 
 ## Per-user data paths
-- All runtime data lives under `data/users/{uid}/` when a user is authenticated; path helpers (`get_profile_path()`, `get_source_pack_dir()`, etc.) return the per-user path automatically via `get_user_id()` ContextVar.
-- When `get_user_id()` returns `None` (unauthenticated or no Google auth configured), every path helper falls back to root `data/` files. This means operations that call helpers without an active user silently hit the wrong files.
-- Test reset tools (`_reset_current_user_state`) must wipe `USERS_DIR` subdirectories directly — do **not** rely on path helpers, which are context-dependent. Also reset root fallback files explicitly. Preserve `data/users.json` (auth accounts).
+- All runtime data lives under `data/users/{uid}/` when a user is authenticated; path helpers such as `get_profile_path()` and `get_source_pack_dir()` return the per-user path automatically via `get_user_id()` ContextVar.
+- When `get_user_id()` returns `None` (unauthenticated or no Google auth configured), every path helper falls back to root `data/` files. That means operations that call helpers without an active user can read or write the wrong bucket.
+- Workspace sidebar counts (`This Run`, `Crawler Stats`, `Applications`) are user-scoped. If they show zero after a successful scrape, verify the active request or run context resolved the same `user_id` before assuming the scrape found nothing.
+- Test reset tools (`_reset_current_user_state`) must wipe `USERS_DIR` subdirectories directly. Do not rely on path helpers, which are context-dependent. Also reset root fallback files explicitly. Preserve `data/users.json` (auth accounts).
 
 ## Onboarding / settings widget patterns
+
+### Source enable toggles (`seek_enabled`, `linkedin_enabled`)
+- Both rendered as `<label class="toggle-switch">` wrapping `<input type="checkbox" role="switch">` with a `<span class="toggle-switch-state" id="*_state">` sibling.
+- JS reads/writes via `getToggleChecked(id)` / `setToggleChecked(id, bool)` / `setToggleStateText(stateId, bool)` from `settings-utils.js`.
+- `collectProfile()` builds `enabled_sources` using `getToggleChecked('seek_enabled')` and `getToggleChecked('linkedin_enabled')`.
+- **Never use `.value === 'true'` for a checkbox toggle** — a checkbox's `.value` is `"on"`, not `"true"`.
+
+### Government preference (two patterns — do not merge them)
+- **Settings** uses a choice strip (two checkboxes: Government, Private) via `__JOB_HUNTER_GOVERNMENT_PREFERENCE_CHOICES__` → `render_government_preference_choices()`. Both checked = "any". JS: `getGovernmentPreferenceValues()` / `setGovernmentPreferenceValues()`. Uses `card_class="choice-card--work-mode"` — same styled buttons as work mode and engagement type. Never use `choice-card--government` (class does not exist).
+- **Onboarding** uses `<select id="government_preference">` with options via `__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__` → `render_government_preference_select_options()`.
+- `window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__` is injected by `build_bootstrap_script()` — required by onboarding-flow.js for label lookups.
+- Do not remove `render_government_preference_select_options` or its `pages.py` replacement — it powers the onboarding select.
 
 ### Work mode (`input[name="work_mode_preference"]`)
 - Rendered by `server_helpers.render_work_mode_preference_choices()` as three `<label class="choice-card--work-mode">` checkboxes inside `<div id="work_mode_preference">`.
 - CSS grid (`#work_mode_preference`) and card styles (`.choice-card--work-mode`) already exist in `onboarding-page.css` and `settings-page.css`. Do not re-create them.
-- `setWorkModePreferenceValues(values)` in `onboarding-flow.js` and `settings-page.js`: when `values` is empty/none, **all checkboxes must default to checked** (`selected.size === 0 || selected.has(...)`). The same rule applies to the legacy `<select>` path — keep them consistent.
-- The min-one constraint (user cannot uncheck the last checkbox) is enforced via a `change` listener added at init in both `onboarding-flow.js` and `settings-page.js`. Programmatic unchecking (e.g. `setWorkModePreferenceValues([])`) does **not** fire `change`, so the "default all selected" rule in the setter is the only guard there.
+- `setWorkModePreferenceValues(values)` in `onboarding-flow.js` and `settings-page.js`: when `values` is empty or none, all checkboxes must default to checked (`selected.size === 0 || selected.has(...)`). The same rule applies to the legacy `<select>` path.
+- The min-one constraint, where the user cannot uncheck the last checkbox, is enforced via a `change` listener added at init in both `onboarding-flow.js` and `settings-page.js`. Programmatic unchecking, for example `setWorkModePreferenceValues([])`, does not fire `change`, so the default-all-selected rule in the setter is the only guard there.
 
 ### Engagement type (`input[name="engagement_pref"]`)
 - Rendered by `server_helpers.render_engagement_type_radio_group()` as hidden radio inputs inside `.choice-card--engagement` labels.
-- `getSelectedEngagementType()` reads `refs.engagementInputs` (populated at script-load time). If no radio is checked and `ENGAGEMENT_TYPE_DEFAULT` is falsy, it returns `''` — which fails `validateSearchPreferences`.
+- `getSelectedEngagementType()` reads `refs.engagementInputs`, populated at script-load time. If no radio is checked and `ENGAGEMENT_TYPE_DEFAULT` is falsy, it returns `''`, which fails `validateSearchPreferences`.
 - `validateSearchPreferences` guards the engagement-type check with `ENGAGEMENT_TYPE_VALUES.size > 0` so a bootstrap timing issue does not block the user.
 - `getSelectedEngagementType()` self-corrects: if the resolved value is not in `ENGAGEMENT_TYPE_VALUES`, it checks the first radio and returns its value.
+
+### Source enable switches
+- Source on/off controls in Settings should use the shared `toggle-switch` row pattern, not a dropdown select.
+- Keep the control state wired through the same profile/settings normalisers and let the owning source code decide what "disabled" means.
+- Apply this pattern one source at a time when the UI needs a focused review, rather than changing every boolean control in one pass.
+
+### Government preference (`input[name="prefer_government"]`)
+- Rendered by `render_government_preference_choices()` as two checkbox cards for government and private.
+- Both checked means no government preference; one checked means the user wants that sector only.
+- Keep the constraint logic in the shared settings JS so the UI and saved profile stay aligned.
 
 ### Bootstrap globals and validation
 - `window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__`, `__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__`, and related globals are injected by `build_bootstrap_script()` in `<head>`. They must be available before `onboarding-page.js` runs.
 - Client-side validators (`validateSearchPreferences`) should guard `Set.size > 0` before treating an absent value as an error, to tolerate any edge case where globals are not yet set.
+
+## Reset User flow
+
+- The reset redirects to `/start?fresh=1`. `initWizard()` in `onboarding-flow.js` detects `?fresh=1`, calls `clearOnboardingBrowserState()`, strips the param from the URL, explicitly clears the search-keyword and salary fields to `''`, awaits `loadProfileDefaults()`, then sets step 1. Do not change this without preserving all five steps.
+- `clearOnboardingBrowserState()` removes sessionStorage key `jobHunter.onboardingWizard`. This function is defined in two places: `onboarding-page.js` for onboarding and inline in `workspace.html` for workspace. Keep them in sync if the key ever changes.
+- `setCurrencyFieldValue` and `readCurrencyFieldValue` in `settings-utils.js` accept either a string ID or an HTMLElement. Do not change this back to ID-only, because onboarding callers always pass elements.
+- After reset, keywords and location on the Search Basics step will re-populate from fresh CV extraction. That is correct, not stale state.
+- `_onboarding_resume_step()` returns 2, Review Draft, only when `capability_profile_rules` is non-empty. A fresh-reset profile has `[]`, so it returns 1 and onboarding always starts at step 1 after reset.
+- `applyProfileDefaults()` in `onboarding-page.js` only sets form fields when they are currently empty. After `bindCurrencyInput` runs `sync()` on page load, any non-empty field value is locked in and `applyProfileDefaults` will not override it. The `?fresh=1` handler bypasses this by explicitly resetting field `.value = ''` before `loadProfileDefaults()` runs.
+
+## Theme CSS file map
+
+| File | Purpose |
+|---|---|
+| `themes.tokens.css` | Per-theme palette tokens only. Edit here for colour, radius, spacing. |
+| `themes.widgets.css` | Shared widget surface rules (card, panel, badge, chip, toggle). |
+| `themes.primitives.css` | Wait-state overlay; touch before changing blocking behaviour. |
+| `themes.css` | Imports the above three in order. |
+| `workspace-page.css` | Workspace layout, filter panel, sidebar, pagination. Dark-professional overrides go here. |
+| `results-page.css` | Job card, badge, button, block-confirm, rejection panel. Dark-professional badge overrides go here. |
+| `settings-page.css` | Settings layout, inputs, capability editor. |
+| `onboarding-page.css` | Onboarding-specific layout only. |
+
+## Sidebar search card
+
+The Common Search sidebar card is rendered from `$`-prefixed placeholders in `results.html`. Values are supplied by `workspace_service.py::render_html()`:
+- `$SEARCH_KEYWORDS_LABEL`, `$SEARCH_LOCATIONS_LABEL`, `$WORK_TYPE_LABEL`, `$WORK_MODE_LABEL`
+- `$GOVERNMENT_PREFERENCE_LABEL` — built by `_format_common_search_preferences()`, displayed as "Sector" (not "Government preference")
+- `$DATE_RANGE_LABEL` — computed from `date_range_days` param passed to `render_html()`
+
+If a new sidebar row is needed: add the placeholder to `results.html`, compute the value in `workspace_service.py::render_html()`, and add it to the substitutions dict.
+
+## Dark professional theme conventions
+
+Target aesthetic: Linear / GitHub dark / Vercel dashboard. Enterprise dark SaaS.
+
+**Semantic colour roles (dark professional only):**
+- Orange (`--accent`): primary action, active tab, app emphasis
+- Blue (`--state-info-*`): source/info only — SEEK badge uses info-blue
+- Amber (`--state-warning-*`): advisory signals — Potential Duplicates, Description Issue, block-confirm panel
+- Red (`--state-error-*`): destructive or hard blockers only — badge-hidden, error states
+- Neutral (`--state-neutral-*`): default labels, LinkedIn badge, Government badge, inactive states
+
+**Component-specific rules:**
+- `badge-warning` uses warning/amber tokens (not error/red) — it covers advisory signals, not errors
+- `block-confirm` (Hide title words panel) uses warning tokens — amber accent, not red background
+- `.job-insights` (Fit breakdown) overrides `--insight-bg` to `var(--bg-muted)` — keeps it neutral, not blue
+- `.results-helper` gets left orange accent border in dark professional — info callout, not background panel
+- `badge-source-seek` gets dark-professional override to info-blue tokens
+- `badge-new` gets dark-professional override to clean orange-subtle (accent-soft alone is not clean enough in dark)
+
+**Token palette (dark professional) — defined in `themes.tokens.css`:**
+```
+--bg-page: #0d1117  --bg-surface: #111827  --bg-muted: #161e2b
+--text-primary: #f8fafc  --text-muted: #94a3b8
+--border-subtle: #263241  --border-strong: #334155
+--accent: #ff6b1a  --accent-hover: #ff7a2f
+--state-info-text: #60a5fa  --state-warning-text: #fbbf24  --state-error-text: #f87171
+```
+
+**Where to add dark-professional CSS overrides:**
+- Workspace-specific: `workspace-page.css` (filter focus, Fit breakdown bg, results-helper)
+- Card/badge/button: `results-page.css`
+- Token values: `themes.tokens.css` only — never hardcode palette hex in component CSS
 
 ## Owners
 - `routes/`: HTTP routes.
@@ -54,6 +148,6 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Is this display logic, not business judgement?
 - Does UI consume canonical data from the owner module?
 - Can admin/user-tunable display policy be changed without code?
-- Are labels/settings validated before use?
-- Is the widget/surface styling owned centrally in the theme unless there is a screen-specific exception?
-- Did you run the smallest relevant server/template check?
+- Are labels and settings validated before use?
+- Is the widget or surface styling owned centrally in the theme unless there is a screen-specific exception?
+- Did you run the smallest relevant server or template check?

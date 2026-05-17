@@ -90,3 +90,11 @@ def test_confirmed_duplicate_metadata_is_linked():
     deduped = deduplicate_across_sources([first, second])
     assert len(deduped) == 1
     assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
+
+
+def test_potential_duplicate_requires_same_normalized_title():
+    first = {"company": "Microsoft", "title": "Senior Software Engineer - Azure Storage"}
+    second = {"company": "Microsoft", "title": "Senior Software Engineer - AFD"}
+    assert not are_jobs_confirmed_duplicates(first, second)
+    deduped = deduplicate_across_sources([first, second])
+    assert len(deduped) == 2

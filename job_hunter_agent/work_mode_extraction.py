@@ -15,9 +15,10 @@ Design principles:
 
 import logging
 import re
+from functools import lru_cache
 from typing import Any, Optional
 
-from job_hunter_agent.io_utils import load_work_mode_rules
+from job_hunter_agent.io_utils import load_ui_labels, load_work_mode_rules
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,32 @@ def _normalise_label(text: str) -> str:
 def _lookup_label(text: str) -> Optional[str]:
     """Return canonical mode for a known label, or None if unrecognised."""
     return _LABEL_TO_CANONICAL.get(_normalise_label(text))
+
+
+@lru_cache(maxsize=1)
+def _work_mode_display_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("work_mode_labels", {})
+    if not isinstance(labels, dict):
+        return {}
+    return {
+        "remote": str(labels.get("remote_label") or "").strip(),
+        "hybrid": str(labels.get("hybrid_label") or "").strip(),
+        "onsite": str(labels.get("onsite_label") or "").strip(),
+    }
+
+
+def display_work_mode_label(record: dict) -> str:
+    raw_mode = str(record.get("work_mode") or "").strip()
+    if not raw_mode:
+        return ""
+
+    canonical = _lookup_label(raw_mode)
+    if not canonical:
+        canonical = _normalise_label(raw_mode)
+    if canonical not in {WORK_MODE_REMOTE, WORK_MODE_HYBRID, WORK_MODE_ONSITE}:
+        return ""
+
+    return _work_mode_display_labels().get(canonical, "")
 
 
 def _text_fallback(text: str, source_label: str) -> dict:

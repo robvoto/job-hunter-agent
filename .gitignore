@@ -67,3 +67,6 @@ docs/backlog/ui.md
 docs/backlog/README.md
 docs/job_hunter_learning_architecture_plan.txt
 remove bad char.ps1
+docs/UI_COMPONENT_MAP.md
+tmp-fastapi.err.log
+tmp-fastapi.out.log

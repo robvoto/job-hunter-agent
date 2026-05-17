@@ -15,6 +15,13 @@ from job_hunter_agent.record_schema import (
     RECORD_LAST_VIEWED_AT_KEY, RECORD_SIGHTINGS_KEY, RECORD_SEEN_BEFORE_KEY
 )
 
+def _record_source(entry: dict, job_key: str) -> str:
+    source = str(entry.get(RECORD_SOURCE_KEY) or entry.get("source") or "").strip().lower()
+    if source:
+        return source
+    return str(job_key).split(":", 1)[0].strip().lower() if ":" in str(job_key) else "unknown"
+
+
 def build_history_workspace_record(
     job_key: str,
     entry: dict,
@@ -31,10 +38,9 @@ def build_history_workspace_record(
         snapshot = {}
 
     archived_age_days = days_since_fn(entry.get("last_kept_at"), run_started_at)
-    source = str(job_key).split(":", 1)[0] if ":" in str(job_key) else "unknown"
     return {
         RECORD_JOB_KEY: job_key,
-        RECORD_SOURCE_KEY: source,
+        RECORD_SOURCE_KEY: _record_source(snapshot or entry, job_key),
         RECORD_TITLE_KEY: snapshot.get(RECORD_TITLE_KEY) or entry.get(RECORD_TITLE_KEY) or "Untitled",
         RECORD_COMPANY_KEY: snapshot.get(RECORD_COMPANY_KEY) or entry.get(RECORD_COMPANY_KEY) or "N/A",
         RECORD_URL_KEY: snapshot.get(RECORD_URL_KEY) or entry.get(RECORD_URL_KEY) or "#",
@@ -121,10 +127,9 @@ def build_hidden_workspace_record(
 
     hidden_at = entry.get("last_hidden_at") or entry.get("first_hidden_at")
     hidden_age_days = days_since_fn(hidden_at, run_started_at) if hidden_at else None
-    source = str(job_key).split(":", 1)[0] if ":" in str(job_key) else "unknown"
     return {
         RECORD_JOB_KEY: job_key,
-        RECORD_SOURCE_KEY: source,
+        RECORD_SOURCE_KEY: _record_source(snapshot or entry, job_key),
         RECORD_TITLE_KEY: snapshot.get(RECORD_TITLE_KEY) or entry.get(RECORD_TITLE_KEY) or f"Hidden job {job_key}",
         RECORD_COMPANY_KEY: snapshot.get(RECORD_COMPANY_KEY) or entry.get(RECORD_COMPANY_KEY) or "N/A",
         RECORD_URL_KEY: snapshot.get(RECORD_URL_KEY) or entry.get(RECORD_URL_KEY) or "#",
@@ -208,6 +213,7 @@ def build_applied_workspace_record(
     applied_age_days = days_since_fn(applied_at, run_started_at) if applied_at else None
     return {
         "job_key": job_key,
+        "source": _record_source(snapshot or entry, job_key),
         "title": snapshot.get("title") or entry.get("title") or f"Applied job {job_key}",
         "company": snapshot.get("company") or entry.get("company") or "N/A",
         "url": snapshot.get("url") or entry.get("url") or "#",
@@ -375,6 +381,12 @@ def build_run_stats(
     page_visits: set[tuple[str, str, int]] = set()
     reject_counts: dict[str, int] = {}
     skip_counts: dict[str, int] = {}
+    issue_counts: dict[str, int] = {}
+
+    def _add_issue(key: str) -> None:
+        if not key:
+            return
+        issue_counts[key] = issue_counts.get(key, 0) + 1
 
     for row in audit_rows:
         source_name = str(row.get("source") or "Unknown")
@@ -391,14 +403,45 @@ def build_run_stats(
         elif decision != "KEEP":
             reject_counts[reason] = reject_counts.get(reason, 0) + 1
 
+        if row.get("job_quality_signals"):
+            _add_issue("quality_signals")
+            for signal in row.get("job_quality_signals") or []:
+                if isinstance(signal, dict):
+                    kind = str(signal.get("kind") or signal.get("label") or "quality_signal").strip()
+                    _add_issue(f"quality:{kind.lower()}")
+                else:
+                    _add_issue("quality:signal")
+        if row.get("hard_block_reasons"):
+            _add_issue("hard_block_reasons")
+        if row.get("soft_risk_reasons"):
+            _add_issue("soft_risk_reasons")
+        if row.get("missing_evidence"):
+            _add_issue("missing_evidence")
+        if row.get("reviewed_signal_matches"):
+            _add_issue("reviewed_signal_matches")
+
     top_reject_reasons = [
         {"reason": reason, "count": count}
         for reason, count in sorted(reject_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+    ]
+    issue_summary = [
+        {"issue": issue, "count": count}
+        for issue, count in sorted(issue_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
     ]
 
     detail_fetches = sum(1 for row in audit_rows if int(row.get("details_length") or 0) > 0)
     cards_seen = len(audit_rows)
     kept_count = len(kept_records)
+    rejected_count = sum(1 for row in audit_rows if str(row.get("decision") or "").upper() == "REJECT")
+    issue_row_count = sum(
+        1
+        for row in audit_rows
+        if row.get("job_quality_signals")
+        or row.get("hard_block_reasons")
+        or row.get("soft_risk_reasons")
+        or row.get("missing_evidence")
+        or row.get("reviewed_signal_matches")
+    )
 
     return {
         "run_started_at": run_started_at.isoformat(timespec="seconds"),
@@ -412,8 +455,12 @@ def build_run_stats(
         },
         "page_count": len(page_visits),
         "cards_seen": cards_seen,
+        "cards_read": detail_fetches,
         "detail_fetches": detail_fetches,
         "kept_count": kept_count,
+        "rejected_count": rejected_count,
+        "issue_count": issue_row_count,
+        "issue_summary": issue_summary,
         "keep_rate": round((kept_count / cards_seen), 4) if cards_seen else 0.0,
         "top_reject_reasons": top_reject_reasons,
         "skip_counts": skip_counts,

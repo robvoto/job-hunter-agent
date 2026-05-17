@@ -11,6 +11,7 @@ Notes:
 - the normalized record shape is intended to be reusable for additional sources
 """
 
+import argparse
 import sys
 from typing import Any
 
@@ -37,6 +38,7 @@ from job_hunter_agent.run_context import build_scrape_run_context
 from job_hunter_agent.scrape_finalize import finalize_scrape_run
 from job_hunter_agent.source_runner import run_enabled_sources
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
 
 NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
@@ -78,13 +80,27 @@ def _process_seek_job_details(record: dict, detail_page, profile: dict, title_re
 
 
 def scrape_jobs_direct(headless: bool = False) -> str:
-    from job_hunter_agent.llm_gate import get_llm_model
+    from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
+    get_user_id_for_runtime()
     context = build_scrape_run_context(sys.argv)
+    reset_session_cost()
+    search_keywords = str(context.search_settings.get("keywords") or "").strip()
+    search_locations = [
+        str(value).strip()
+        for value in context.search_settings.get("locations", [])
+        if str(value).strip()
+    ]
     print("=" * CONSOLE_BANNER_WIDTH)
     print("  JOB HUNTER AGENT - SCRAPE RUN")
     print("=" * CONSOLE_BANNER_WIDTH)
     print("  Trigger            : manual scrape command")
     print("  Action             : scrape fresh jobs, review them, rebuild workspace")
+    print(f"  Enabled sources    : {', '.join(context.enabled_sources) or '(none)'}")
+    print("  Search params")
+    print(f"    Keywords         : {search_keywords or '(unset)'}")
+    print(f"    Locations        : {', '.join(search_locations) or '(unset)'}")
+    print(f"    SEEK pages       : 1..{context.configured_seek_max_pages}")
+    print(f"    Date range       : {context.configured_date_range} day(s)")
     print("  Fresh scrape       : YES")
     print(f"  Workspace debug    : {'ON (--debug)' if context.dashboard_debug_mode else 'OFF'}")
     print(f"  LLM Disabled       : {'YES (--no-llm)' if context.no_llm_mode else 'NO'}")
@@ -102,7 +118,21 @@ def scrape_jobs_direct(headless: bool = False) -> str:
 
 
 if __name__ == "__main__":
-    if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_WORKSPACE):
-        rebuild_workspace_results()
-    else:
-        scrape_jobs_direct()
+    parser = argparse.ArgumentParser(description="Job Hunter Agent source connector")
+    parser.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="Explicit user id for CLI runs that need a per-user workspace.",
+    )
+    args, _ = parser.parse_known_args()
+    if args.user_id:
+        set_user_id(str(args.user_id).strip())
+    try:
+        if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_WORKSPACE):
+            rebuild_workspace_results(user_id=args.user_id)
+        else:
+            scrape_jobs_direct()
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}")
+        raise SystemExit(2) from exc

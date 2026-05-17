@@ -15,7 +15,6 @@ from job_hunter_agent.user_settings import (
     DEFAULT_USER_SETTINGS,
     load_agent_state,
     KEY_WORKSPACE,
-    KEY_EMAIL,
     KEY_TELEGRAM,
     KEY_SCHEDULE,
     KEY_LLM,
@@ -23,15 +22,11 @@ from job_hunter_agent.user_settings import (
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.io_utils import load_job_history
+from job_hunter_agent.config import AUTH_DISABLED
 from job_hunter_agent.paths import (
     DATA_DIR,
     USERS_DIR,
     REPO_ROOT as ROOT_DIR,
-    SETTINGS_HTML_PATH,
-    SHOWCASE_PATH,
-    STATIC_DIR,
-    WORKSPACE_HTML_PATH,
-    ONBOARDING_HTML_PATH,
     get_audit_records_path,
     get_job_history_path,
     get_review_data_path,
@@ -40,39 +35,28 @@ from job_hunter_agent.paths import (
     get_source_pack_dir,
 )
 from job_hunter_agent.profile_store import (
+    BriefMode,
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
-    LLM_PROFILE_BRIEF_MODE_AUTO,
-    LLM_PROFILE_BRIEF_MODE_MANUAL,
-    ENGAGEMENT_TYPE_BOTH,
     ENGAGEMENT_TYPE_OPTIONS,
-    GOVERNMENT_PREFERENCE_ANY,
-    GOVERNMENT_PREFERENCE_DEFAULT_LABEL,
-    GOVERNMENT_PREFERENCE_HELP_TEXT,
+    ENGAGEMENT_TYPE_DEFAULT_VALUES,
+    GovPref,
+    GOVERNMENT_PREFERENCE_CHOICE_OPTIONS,
     GOVERNMENT_PREFERENCE_OPTIONS,
+    WorkMode,
     VALID_ENGAGEMENT_TYPES,
-    VALID_GOVERNMENT_PREFERENCES,
-    VALID_WORK_MODE_PREFERENCES,
-    WORK_MODE_PREFERENCE_HELP_TEXT,
-    WORK_MODE_PREFERENCE_NONE,
     WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
-    SALARY_MIN_ANNUAL_LABEL,
-    SALARY_MIN_DAILY_LABEL,
-    SALARY_ANNUAL_HELP_TEXT,
-    SALARY_DAILY_HELP_TEXT,
-    SETTINGS_SALARY_ANNUAL_HELP_TEXT,
-    SETTINGS_SALARY_DAILY_HELP_TEXT,
     build_candidate_profile_tiers_from_sections,
-    load_profile, 
+    load_profile,
+    normalize_engagement_type_preferences,
     normalize_onboarding_settings,
-    normalize_search_settings, 
+    normalize_search_settings,
     normalize_work_mode_preferences,
     save_profile,
     KEY_KEYWORDS,
     KEY_LOCATIONS,
     KEY_ENGAGEMENT_TYPE,
-    KEY_PREFER_GOVERNMENT,
     KEY_MIN_SALARY_YEARLY,
     KEY_MIN_DAILY_RATE,
     KEY_LOOKBACK_YEARS,
@@ -88,46 +72,30 @@ from job_hunter_agent.profile_store import (
     KEY_CV_TEXT,
     KEY_EVIDENCE_TIERS,
     KEY_CAPABILITY_PROFILE_RULES,
+    KEY_ONBOARDING_COMPLETE,
     KEY_ONBOARDING_SETTINGS,
     MATCHING_RULE_PROFILE_KEYS,
     patch_profile,
 )
 from job_hunter_agent.locations import resolve_location
-from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_suggested_tuning_from_saved_review
-from job_hunter_agent.review_history_service import (
-    append_review_key,
-    get_job_description,
-    persist_review_event,
-    record_job_view,
-    remove_review_key,
-    save_block_similar_feedback,
-    save_description_block_feedback,
-    save_not_for_me_feedback,
-)
-from job_hunter_agent.server_review import (
-    build_description_block_followups,
-    build_title_block_followups,
-    save_requirement_blockers_feedback,
-)
+
 from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.source_connector import scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
     build_llm_profile_brief,
-    load_source_materials,
-    persist_uploaded_source_pack,
-    run_onboarding,
     save_source_materials,
 )
 from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
+    KEY_LIMITS,
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_DATE_RANGE_DAYS,
     KEY_LLM_SETTINGS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_SEARCH_SETTINGS,
     KEY_MODEL_OPTIONS,
     KEY_SEEK_MAX_PAGES,
     KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
@@ -135,8 +103,39 @@ from job_hunter_agent.global_settings import (
     KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     load_global_settings,
     get_salary_limits,
-    save_global_settings,
 )
+ONBOARDING_PAGE_COPY = {
+    "steps": {
+        "1": {
+            "title": "Upload Your CV",
+            "title_rebuild": "Upload Updated CV",
+            "hero_title": "Build Your Job Profile",
+            "hero_title_rebuild": "Refresh Your Profile",
+            "hero_copy": "",
+            "section_copy": "Start with the CV that best represents your real experience. We will use it to build your starting profile.",
+        },
+        "2": {
+            "title": "Review Draft Profile",
+            "hero_title": "Review Your Draft Profile",
+            "hero_title_rebuild": "Review Refreshed Draft",
+            "hero_copy": "",
+            "section_copy": "Move titles between Primary and Secondary if needed before you continue.",
+        },
+        "3": {
+            "title": "Set Search Basics",
+            "hero_title": "Set Your Search Basics",
+            "hero_copy": "",
+            "section_copy": "Set the minimum information Job Hunter needs to search safely and score roles in the right direction.",
+        },
+        "4": {
+            "title": "Check Your Setup",
+            "hero_title": "Confirm Your Setup",
+            "hero_title_rebuild": "Confirm Profile Refresh",
+            "hero_copy": "",
+            "section_copy": "Make sure this looks right. When you finish, onboarding is complete and Settings will unlock.",
+        },
+    },
+}
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -164,6 +163,7 @@ def _set_run_in_progress(value: bool) -> None:
 def _is_run_in_progress() -> bool:
     with _run_state_lock:
         return _run_in_progress
+
 
 
 def _try_mark_run_started() -> bool:
@@ -211,6 +211,7 @@ def build_bootstrap_script(
     location_options: list[dict[str, Any]] | None = None,
     default_location: str | None = None,
     onboarding_defaults: dict[str, Any] | None = None,
+    onboarding_copy: dict[str, Any] | None = None,
     global_settings: dict[str, Any] | None = None,
     resume_step: int | None = None,
 ) -> str:
@@ -218,6 +219,10 @@ def build_bootstrap_script(
     if onboarding_defaults is not None:
         parts.append(
             f'<script>window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ = {json.dumps(onboarding_defaults, ensure_ascii=True)};</script>'
+        )
+    if onboarding_copy is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_ONBOARDING_COPY__ = {json.dumps(onboarding_copy, ensure_ascii=True)};</script>'
         )
     if resume_step is not None:
         parts.append(
@@ -246,13 +251,13 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__ = {json.dumps(ENGAGEMENT_TYPE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__ = {json.dumps(ENGAGEMENT_TYPE_BOTH, ensure_ascii=True)};</script>'
+        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT_VALUES__ = {json.dumps(ENGAGEMENT_TYPE_DEFAULT_VALUES, ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__ = {json.dumps(WORK_MODE_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(WORK_MODE_PREFERENCE_NONE, ensure_ascii=True)};</script>'
+        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(WorkMode.NONE, ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__ = {json.dumps(WORK_MODE_PREFERENCE_NONE_LABEL, ensure_ascii=True)};</script>'
@@ -261,10 +266,7 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__ = {json.dumps(GOVERNMENT_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__ = {json.dumps(GOVERNMENT_PREFERENCE_ANY, ensure_ascii=True)};</script>'
-    )
-    parts.append(
-        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT_LABEL__ = {json.dumps(GOVERNMENT_PREFERENCE_DEFAULT_LABEL, ensure_ascii=True)};</script>'
+        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__ = {json.dumps(GovPref.ANY, ensure_ascii=True)};</script>'
     )
     return "\n  ".join(parts)
 
@@ -281,30 +283,54 @@ def _parse_locations_override(value: Any) -> list[str]:
 LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
 
 
-def render_engagement_type_radio_group(*, name: str, selected_value: str) -> str:
-    selected = str(selected_value or ENGAGEMENT_TYPE_BOTH).strip().lower()
-    options = []
-    for item in ENGAGEMENT_TYPE_OPTIONS:
-        checked = " checked" if item["value"] == selected else ""
-        options.append(
-            f'<label class="choice-card choice-card--engagement"><input type="radio" name="{escape(name)}" value="{escape(item["value"])}"{checked}><span>{escape(item["label"])}</span></label>'
-        )
-    return f'<div class="choice-list choice-list--engagement" role="radiogroup" aria-labelledby="engagement_pref_label">{"".join(options)}</div>'
+def _normalize_choice_values(values: object) -> list[str]:
+    if isinstance(values, str):
+        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+    elif isinstance(values, (list, tuple, set)):
+        source_values = [str(value).strip().lower() for value in values if str(value).strip()]
+    else:
+        source_values = []
+    selected: list[str] = []
+    seen: set[str] = set()
+    for value in source_values:
+        if value and value not in seen:
+            seen.add(value)
+            selected.append(value)
+    return selected
 
 
-def render_engagement_type_select_options(*, selected_value: str) -> str:
-    selected = str(selected_value or ENGAGEMENT_TYPE_BOTH).strip().lower()
-    options = []
-    for item in ENGAGEMENT_TYPE_OPTIONS:
-        selected_attr = " selected" if item["value"] == selected else ""
-        options.append(
-            f'<option value="{escape(item["value"])}"{selected_attr}>{escape(item["label"])}</option>'
+def render_choice_strip(*, name: str, options: list[dict[str, str]], selected_values: object, input_type: str, group_id: str, label_id: str, card_class: str) -> str:
+    input_type = str(input_type or "radio").strip().lower()
+    selected = _normalize_choice_values(selected_values)
+    selected_set = set(selected)
+    selected_value = selected[0] if selected else str(options[0]["value"] if options else "").strip().lower()
+    if input_type == "radio" and not selected_value:
+        selected_value = str(options[0]["value"] if options else "").strip().lower()
+    rendered_options = []
+    for item in options:
+        value = str(item["value"]).strip().lower()
+        checked = " checked" if (input_type == "radio" and value == selected_value) or (input_type != "radio" and value in selected_set) else ""
+        rendered_options.append(
+            f'<label class="choice-card {escape(card_class)}"><input type="{escape(input_type)}" name="{escape(name)}" value="{escape(value)}"{checked}><span>{escape(item["label"])}</span></label>'
         )
-    return "".join(options)
+    role = "radiogroup" if input_type == "radio" else "group"
+    return f'<div id="{escape(group_id)}" class="choice-strip" role="{role}" aria-labelledby="{escape(label_id)}">{"".join(rendered_options)}</div>'
+
+
+def render_engagement_type_choices(*, name: str, selected_values: object) -> str:
+    return render_choice_strip(
+        name=name,
+        options=list(ENGAGEMENT_TYPE_OPTIONS),
+        selected_values=normalize_engagement_type_preferences(selected_values),
+        input_type="checkbox",
+        group_id="engagement_type_choices",
+        label_id="engagement_type_label",
+        card_class="choice-card--work-mode",
+    )
 
 
 def render_government_preference_select_options(*, selected_value: str) -> str:
-    selected = str(selected_value or GOVERNMENT_PREFERENCE_ANY).strip().lower()
+    selected = str(selected_value or GovPref.ANY).strip().lower()
     options = []
     for item in GOVERNMENT_PREFERENCE_OPTIONS:
         selected_attr = " selected" if item["value"] == selected else ""
@@ -314,27 +340,66 @@ def render_government_preference_select_options(*, selected_value: str) -> str:
     return "".join(options)
 
 
+def render_government_preference_choices(*, selected_values: object) -> str:
+    valid_values = {item["value"] for item in GOVERNMENT_PREFERENCE_CHOICE_OPTIONS}
+    selected = [value for value in _normalize_choice_values(selected_values) if value in valid_values]
+    if not selected:
+        selected = [item["value"] for item in GOVERNMENT_PREFERENCE_CHOICE_OPTIONS]
+    return render_choice_strip(
+        name="prefer_government",
+        options=list(GOVERNMENT_PREFERENCE_CHOICE_OPTIONS),
+        selected_values=selected,
+        input_type="checkbox",
+        group_id="prefer_government_choices",
+        label_id="prefer_government_label",
+        card_class="choice-card--work-mode",
+    )
+
+
 def render_work_mode_preference_choices(*, selected_values: object) -> str:
-    selected = set(normalize_work_mode_preferences(selected_values))
-    options = []
-    for item in WORK_MODE_PREFERENCE_OPTIONS:
-        value = str(item["value"]).strip().lower()
-        checked_attr = " checked" if value in selected else ""
-        options.append(
-            f'<label class="choice-card choice-card--work-mode"><input type="checkbox" name="work_mode_preference" value="{escape(value)}"{checked_attr}><span>{escape(item["label"])}</span></label>'
-        )
-    return "".join(options)
+    return render_choice_strip(
+        name="work_mode_preference",
+        options=list(WORK_MODE_PREFERENCE_OPTIONS),
+        selected_values=normalize_work_mode_preferences(selected_values),
+        input_type="checkbox",
+        group_id="work_mode_preference",
+        label_id="work_mode_preference_label",
+        card_class="choice-card--work-mode",
+    )
+
+
+def render_seek_max_pages_choices(*, selected_value: object | None = None, label_id: str = "seek_max_pages_label") -> str:
+    global_settings = load_global_settings()
+    search_settings = global_settings.get(KEY_SEARCH_SETTINGS, {}) if isinstance(global_settings, dict) else {}
+    search_limits = global_settings.get(KEY_LIMITS, {}).get("search", {}) if isinstance(global_settings, dict) else {}
+    bounds = search_limits.get(KEY_SEEK_MAX_PAGES, {})
+    min_value = int(bounds.get("min", 1))
+    max_value = int(bounds.get("max", 10))
+    if min_value > max_value:
+        raise ValueError("global_settings.limits.search.seek_max_pages.min must be <= max")
+    options = [{"value": str(value), "label": str(value)} for value in range(min_value, max_value + 1)]
+    selected = str(selected_value if selected_value is not None else search_settings.get(KEY_SEEK_MAX_PAGES, max_value)).strip()
+    if selected not in {option["value"] for option in options}:
+        raise ValueError(f"global_settings.search_settings.{KEY_SEEK_MAX_PAGES} must be between {min_value} and {max_value}")
+    return render_choice_strip(
+        name=KEY_SEEK_MAX_PAGES,
+        options=options,
+        selected_values=selected,
+        input_type="radio",
+        group_id="seek_max_pages_choices",
+        label_id=label_id,
+        card_class="choice-card--work-mode choice-card--seek-pages",
+    )
 
 
 def _normalize_onboarding_search_preferences(payload: dict | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
-    engagement_type = str(source.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
     keywords = str(source.get(KEY_KEYWORDS) or "").strip()
     locations = _parse_locations_override(source.get(KEY_LOCATIONS))
     normalized = {
         KEY_KEYWORDS: keywords,
         KEY_LOCATIONS: locations,
-        KEY_ENGAGEMENT_TYPE: engagement_type,
+        KEY_ENGAGEMENT_TYPE: normalize_engagement_type_preferences(source.get(KEY_ENGAGEMENT_TYPE), default_to_all=False),
     }
     if KEY_MIN_SALARY_YEARLY in source:
         normalized[KEY_MIN_SALARY_YEARLY] = source.get(KEY_MIN_SALARY_YEARLY)
@@ -349,7 +414,7 @@ def _validate_required_onboarding_inputs(
 ) -> None:
     keywords = str(search_preferences.get(KEY_KEYWORDS) or "").strip()
     locations = _parse_locations_override(search_preferences.get(KEY_LOCATIONS))
-    engagement_type = str(search_preferences.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
+    engagement_type = normalize_engagement_type_preferences(search_preferences.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
 
     if keywords and (len(keywords) < 2 or len(keywords) > 120):
         raise ValueError("Please keep the primary search title between 2 and 120 characters.")
@@ -361,7 +426,7 @@ def _validate_required_onboarding_inputs(
     if not LOCATION_NAME_RE.match(location):
         raise ValueError("Location should look like a normal city, state, or region name.")
     resolve_location(location)
-    if engagement_type not in VALID_ENGAGEMENT_TYPES:
+    if not engagement_type or any(value not in VALID_ENGAGEMENT_TYPES for value in engagement_type):
         raise ValueError("Please choose what type of work you are open to.")
 
     raw_yearly = search_preferences.get(KEY_MIN_SALARY_YEARLY)
@@ -490,11 +555,7 @@ def describe_capability_strength_preset(preset_name: str) -> dict[str, Any]:
 
 def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
     current = profile if isinstance(profile, dict) else load_profile()
-    target_titles = [str(value).strip() for value in current.get("primary_job_title_pattern", []) if str(value).strip()]
-    search_settings = normalize_search_settings(current.get("search_settings", {}))
-    locations = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
-    keywords = str(search_settings.get("keywords") or "").strip()
-    return bool(target_titles and locations[:1] and keywords)
+    return bool(current.get(KEY_ONBOARDING_COMPLETE))
 
 
 def _onboarding_resume_step(profile: dict[str, Any] | None = None) -> int:
@@ -540,6 +601,9 @@ def _run_scrape_job() -> None:
 def _rebuild_workspace_on_startup() -> None:
     if not get_workspace_results_path().exists() and not get_run_stats_path().exists() and not get_audit_records_path().exists():
         return
+    if not AUTH_DISABLED:
+        print("[WORKSPACE][INFO] Startup rebuild skipped: no request user context is available.")
+        return
     try:
         rebuild_workspace_results(reason="server startup rebuild")
     except Exception as exc:
@@ -556,14 +620,14 @@ class SettingsHandler:
         normalized = dict(patch or {})
         current = current or load_profile()
         brief_mode = str(
-            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, LLM_PROFILE_BRIEF_MODE_AUTO))
-            or LLM_PROFILE_BRIEF_MODE_AUTO
+            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, BriefMode.AUTO))
+            or BriefMode.AUTO
         ).strip().lower()
-        if brief_mode != LLM_PROFILE_BRIEF_MODE_MANUAL:
-            brief_mode = LLM_PROFILE_BRIEF_MODE_AUTO
+        if brief_mode != BriefMode.MANUAL:
+            brief_mode = BriefMode.AUTO
         normalized[KEY_BRIEF_MODE] = brief_mode
 
-        if brief_mode == LLM_PROFILE_BRIEF_MODE_MANUAL:
+        if brief_mode == BriefMode.MANUAL:
             normalized[KEY_BRIEF] = str(normalized.get(KEY_BRIEF) or "").strip()
         else:
             auto_brief = build_llm_profile_brief(
@@ -593,14 +657,6 @@ class SettingsHandler:
                     normalized[KEY_EVIDENCE_TIERS] = inferred_tiers
         return normalized
 
-    @staticmethod
-    def _write_json_file(path: Path, payload: Any) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
     @classmethod
     def _reset_current_user_state(cls) -> dict[str, Any]:
         import traceback as _tb
@@ -625,13 +681,20 @@ class SettingsHandler:
         if source_pack_dir.exists():
             shutil.rmtree(source_pack_dir)
 
-        for path, default in [
+        for path, empty_payload in [
             (get_job_history_path(), {}),
             (get_review_data_path(), {}),
             (get_run_stats_path(), {}),
             (get_audit_records_path(), []),
         ]:
-            cls._write_json_file(path, default)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(empty_payload), encoding="utf-8")
+            except Exception:
+                try:
+                    path.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
         for output_path in [get_workspace_results_path()]:
             try:
@@ -642,7 +705,7 @@ class SettingsHandler:
         return {
             "ok": True,
             "message": "All user state reset. Shared learning was preserved.",
-            "redirect_to": "/start",
+            "redirect_to": "/start?fresh=1",
         }
 
     @staticmethod

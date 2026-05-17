@@ -9,7 +9,6 @@ from job_hunter_agent.global_settings import (
     DEFAULT_PLAYWRIGHT_SETTINGS,
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
-    KEY_ENFORCE_POSTED_AGE_LIMIT,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
     KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
@@ -45,7 +44,6 @@ class ScrapeRunContext:
     dashboard_min_score: int
     configured_seek_max_pages: int
     configured_date_range: int
-    enforce_posted_age_limit: bool
     sort_newest_first: bool
     playwright_viewport_width: int
     playwright_viewport_height: int
@@ -71,7 +69,6 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
     dashboard_min_score = get_workspace_minimum_score()
     configured_seek_max_pages = int(search_settings.get(KEY_SEEK_MAX_PAGES, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]) or DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES])
     configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
-    enforce_posted_age_limit = bool(search_settings.get(KEY_ENFORCE_POSTED_AGE_LIMIT, DEFAULT_SEARCH_SETTINGS[KEY_ENFORCE_POSTED_AGE_LIMIT]))
     sort_newest_first = bool(search_settings.get(KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]))
     playwright_viewport_width = int(search_settings.get(KEY_PLAYWRIGHT_VIEWPORT_WIDTH, DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_WIDTH]) or DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_WIDTH])
     playwright_viewport_height = int(search_settings.get(KEY_PLAYWRIGHT_VIEWPORT_HEIGHT, DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_HEIGHT]) or DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_VIEWPORT_HEIGHT])
@@ -88,7 +85,6 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         dashboard_min_score=dashboard_min_score,
         configured_seek_max_pages=configured_seek_max_pages,
         configured_date_range=configured_date_range,
-        enforce_posted_age_limit=enforce_posted_age_limit,
         sort_newest_first=sort_newest_first,
         playwright_viewport_width=playwright_viewport_width,
         playwright_viewport_height=playwright_viewport_height,

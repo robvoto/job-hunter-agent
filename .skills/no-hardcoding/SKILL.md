@@ -20,6 +20,7 @@ Business judgement must not hide in feature code.
 - Consumers use canonical fields directly, e.g. `signal["label"]`.
 - If required data is missing, fix the producer; do not patch around it in consumers.
 - Do not add local fallback defaults for business values, decision labels, or display labels in feature code. If the owner does not provide the value, surface an explicit error or fix the owner.
+- If the same label or copy is reused across summary, tooltip, and debug views, put it in the owning JSON/data file once and read it from there.
 
 ## Checklist
 - Search for `.get(..., fallback)`.

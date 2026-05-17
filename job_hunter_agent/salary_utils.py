@@ -34,6 +34,29 @@ def salary_max_value(value: str) -> float:
     return 0.0
 
 
+def salary_display_score(value: str) -> tuple[int, int]:
+    text = str(value or "").strip()
+    if not text or text == "N/A":
+        return (0, 0)
+    normalized = text.lower().replace(",", "")
+    amount_count = len(re.findall(r"\$?\d+(?:\.\d+)?\s*k?", normalized))
+    return amount_count, len(text)
+
+
+def preferred_salary_display(*values: str) -> str:
+    best_value = ""
+    best_score = (-1, -1)
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text == "N/A":
+            continue
+        score = salary_display_score(text)
+        if score > best_score:
+            best_score = score
+            best_value = text
+    return best_value
+
+
 def salary_includes_super_or_package(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text or text == "n/a":

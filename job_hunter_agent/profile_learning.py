@@ -29,11 +29,8 @@ from job_hunter_agent.profile_store import (
     KEY_NAME,
     KEY_LEVEL,
     KEY_ALIASES,
-    WORK_MODE_PREFERENCE_REMOTE,
-    WORK_MODE_PREFERENCE_HYBRID,
-    LEVEL_STRONG,
-    LEVEL_WORKING,
-    LEVEL_BASIC,
+    WorkMode,
+    CapabilityLevel,
 )
 KEY_NEEDS_REVIEW = "needs_review"
 
@@ -83,7 +80,7 @@ CAT_ROLE_TITLE = CATEGORY_ROLE_TITLE_TOKEN
 CAT_TITLE_NORM = CATEGORY_TITLE_NORMALIZATION_CANDIDATE
 KEY_TITLE_PARSE_BLOCKERS = "title_candidate_leading_verb_blockers"
 
-_VALID_LEVELS = {LEVEL_STRONG, LEVEL_WORKING, LEVEL_BASIC}
+_VALID_LEVELS = {CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC}
 _CURRENT_YEAR = datetime.now().year
 
 
@@ -752,7 +749,7 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
             rejected.append("<non-dict>")
             continue
         name = str(item.get(KEY_NAME) or "").strip().lower()
-        level = str(item.get(KEY_LEVEL) or LEVEL_BASIC).strip().lower()
+        level = str(item.get(KEY_LEVEL) or CapabilityLevel.BASIC).strip().lower()
         aliases = [str(a).strip().lower() for a in (item.get(KEY_ALIASES) or []) if str(a).strip()]
         if not name:
             rejected.append("<empty name>")
@@ -764,7 +761,7 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
         needs_review = bool(item.get(KEY_NEEDS_REVIEW))
         result.append({
             KEY_NAME: name,
-            KEY_LEVEL: level if level in _VALID_LEVELS else LEVEL_BASIC,
+            KEY_LEVEL: level if level in _VALID_LEVELS else CapabilityLevel.BASIC,
             KEY_ALIASES: aliases[:6],
             KEY_NEEDS_REVIEW: needs_review,
         })
