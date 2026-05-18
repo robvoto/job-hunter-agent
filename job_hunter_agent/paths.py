@@ -40,58 +40,59 @@ ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
 SHOWCASE_PATH = DOCS_DIR / "SHOWCASE.html"
 
 
-def _active_user_dir() -> Path | None:
+def _active_user_dir() -> Path:
     from job_hunter_agent.user_context import get_user_id
+    from job_hunter_agent.config import AUTH_DISABLED
     uid = get_user_id()
-    return (USERS_DIR / uid) if uid else None
-
-
-def _active_or_local_user_dir() -> Path:
-    d = _active_user_dir()
-    return d if d is not None else USERS_DIR / LOCAL_USER_ID
+    if uid:
+        return USERS_DIR / uid
+    if AUTH_DISABLED:
+        return USERS_DIR / LOCAL_USER_ID
+    raise RuntimeError(
+        "No active user id is set. Call set_user_id() before performing file operations."
+    )
 
 
 def get_profile_path() -> Path:
-    return _active_or_local_user_dir() / "profile.json"
+    return _active_user_dir() / "profile.json"
 
 
 def get_job_history_path() -> Path:
-    return _active_or_local_user_dir() / "job_history.json"
+    return _active_user_dir() / "job_history.json"
 
 
 def get_review_data_path() -> Path:
-    return _active_or_local_user_dir() / "review_data.json"
+    return _active_user_dir() / "review_data.json"
 
 
 def get_run_stats_path() -> Path:
-    return _active_or_local_user_dir() / "run_stats.json"
+    return _active_user_dir() / "run_stats.json"
 
 
 def get_workspace_results_path() -> Path:
-    d = _active_user_dir()
-    return (d / WORKSPACE_RESULTS_FILENAME) if d else OUTPUT_DIR / WORKSPACE_RESULTS_FILENAME
+    return _active_user_dir() / WORKSPACE_RESULTS_FILENAME
 
 
 def get_audit_records_path() -> Path:
-    return _active_or_local_user_dir() / "audit_records.json"
+    return _active_user_dir() / "audit_records.json"
+
+
+def get_workspace_pool_path() -> Path:
+    return _active_user_dir() / "workspace_pool.json"
 
 
 def get_user_settings_path(user_id: str | None = None) -> Path:
-    if user_id is None:
-        d = _active_user_dir()
-    else:
-        d = USERS_DIR / user_id if user_id else None
-    if d is None:
-        d = USERS_DIR / LOCAL_USER_ID
-    return d / USER_SETTINGS_FILENAME
+    if user_id is not None:
+        return USERS_DIR / user_id / USER_SETTINGS_FILENAME
+    return _active_user_dir() / USER_SETTINGS_FILENAME
 
 
 def get_source_materials_path() -> Path:
-    return _active_or_local_user_dir() / "application_materials.json"
+    return _active_user_dir() / "application_materials.json"
 
 
 def get_source_pack_dir() -> Path:
-    return _active_or_local_user_dir() / "source_pack"
+    return _active_user_dir() / "source_pack"
 GLOBAL_SETTINGS_PATH = CONFIG_DIR / "global_settings.json"
 DEFAULT_USER_SETTINGS_PATH = DEFAULTS_DIR / "user_settings.json"
 SCORING_RULES_PATH = KNOWLEDGE_DIR / "scoring_rules.json"

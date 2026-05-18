@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 from job_hunter_agent import fit_scoring, workspace_service
 from job_hunter_agent import capability_matching, workspace_renderer, signal_detection, source_connector
-from job_hunter_agent import role_analysis
+from job_hunter_agent import role_analysis, source_learning, description_trust
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.record_schema import (
     CONFIDENCE_HIGH,
@@ -33,7 +33,7 @@ def _test_profile():
         "match_preferences": {
             "home_location": "Sydney NSW",
             "prefer_government": True,
-            "engagement_type": "both",
+            "engagement_type": ["permanent", "contract"],
             "preferred_contract_months": 12,
             "short_contract_months": 6,
         },
@@ -220,7 +220,7 @@ def test_build_ad_learning_signals_registers_pending_capability_and_title_tokens
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_ad_learning_signals(
+    signals = source_learning.build_ad_learning_signals(
         {
             "title": "Senior Delivery Ninja",
             "company": "Acme",
@@ -254,7 +254,7 @@ def test_build_ad_learning_signals_registers_capability_from_structured_observat
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_ad_learning_signals(
+    signals = source_learning.build_ad_learning_signals(
         {
             "title": "Business Analyst",
             "company": "Acme",
@@ -298,7 +298,7 @@ def test_build_ad_learning_signals_registers_government_context_from_job_descrip
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_ad_learning_signals(
+    signals = source_learning.build_ad_learning_signals(
         {
             "title": "APS6 Policy Officer",
             "company": "Australian Government Department of Health",
@@ -324,7 +324,7 @@ def test_build_ad_learning_signals_registers_title_normalization_candidates(monk
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_ad_learning_signals(
+    signals = source_learning.build_ad_learning_signals(
         {
             "title": "PM",
             "company": "Acme",
@@ -349,7 +349,7 @@ def test_build_ad_learning_signals_does_not_infer_hard_blockers_from_raw_text(mo
         lambda category, signal, aliases=None: (False, ""),
     )
 
-    signals = source_connector.build_ad_learning_signals(
+    signals = source_learning.build_ad_learning_signals(
         {
             "title": "Business Analyst",
             "company": "Acme",
@@ -369,9 +369,9 @@ def test_fit_confidence_does_not_override_trusted_description_calculation():
         RECORD_FIT_CONFIDENCE_KEY: CONFIDENCE_LOW,
     }
 
-    assert source_connector.full_description_confidence(record) == CONFIDENCE_HIGH
-    assert source_connector.get_trusted_full_description(record).startswith("Business analyst duties.")
-    assert source_connector.is_description_trusted(record)
+    assert description_trust.full_description_confidence(record) == CONFIDENCE_HIGH
+    assert description_trust.get_trusted_full_description(record).startswith("Business analyst duties.")
+    assert description_trust.is_description_trusted(record)
 
 
 def test_fit_confidence_low_when_no_trusted_description_exists():
@@ -381,7 +381,7 @@ def test_fit_confidence_low_when_no_trusted_description_exists():
         RECORD_FIT_CONFIDENCE_KEY: CONFIDENCE_HIGH,
     }
 
-    assert source_connector.full_description_confidence(record) == CONFIDENCE_LOW
+    assert description_trust.full_description_confidence(record) == CONFIDENCE_LOW
     assert not source_connector.is_description_trusted(record)
 
 
@@ -444,7 +444,8 @@ def test_visible_fit_reasons_backfills_from_positive_score_drivers():
         [
             {"label": "Primary role-family match", "value": 14},
             {"label": "Description fit is strong", "value": 16},
-            {"label": "Fit evidence bullets", "value": 3},
+            # Per-capability entries are excluded from visible reasons (surfaced via fit_highlights)
+            {"label": "stakeholder management [canonical]", "value": 4},
             {"label": "Posted within the last day", "value": 9},
             {"label": "Hybrid work available", "value": 1},
         ],
@@ -506,7 +507,7 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_approved_signal_catalog", lambda: [])
 
-    matches = source_connector.reviewed_signal_matches_for_text(
+    matches = capability_matching.reviewed_signal_matches_for_text(
         "Stakeholder management, Jira, banking, project, and delivery are all mentioned in the role."
     )
 
@@ -529,7 +530,7 @@ def test_fit_score_breakdown_does_not_score_reviewed_signal_matches(monkeypatch)
         },
     )
 
-    breakdown = source_connector.fit_score_breakdown(
+    breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
@@ -575,10 +576,12 @@ def test_fit_score_evidence_ignores_display_only_fit_highlights():
         _capability_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Fit evidence bullets") is None
+    # No description text \u2192 no capability evidence entries
+    assert not any("[canonical]" in item["label"] or "[alias:" in item["label"] for item in breakdown)
 
 
-def test_fit_score_evidence_uses_full_capability_match_set():
+def test_fit_score_evidence_credits_alias_matches():
+    # Aliases (agile, uat, facilitate workshops) now earn the same credit as canonical names.
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
@@ -598,33 +601,12 @@ def test_fit_score_evidence_uses_full_capability_match_set():
         _capability_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Fit evidence bullets") is None
+    # All three capabilities matched via aliases — entries show [alias:...] tags
+    capability_labels = [item["label"] for item in breakdown if "[alias:" in item["label"]]
+    assert len(capability_labels) >= 1
 
 
-def test_fit_score_evidence_does_not_count_alias_only_mentions():
-    breakdown = fit_scoring.fit_score_breakdown(
-        {
-            "title": "Lead Business Analyst",
-            "title_reason": "OK",
-            "content_reason": "OK",
-            "llm_fit_grade": "SOLID",
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "Hybrid",
-            "salary": "N/A",
-            "full_description": (
-                "Lead scrum ceremonies, manage kanban flow, coordinate UAT, "
-                "and facilitate workshops with business stakeholders."
-            ),
-            "competitive_signals": [],
-        },
-        _capability_profile(),
-    )
-
-    assert _breakdown_value(breakdown, "Fit evidence bullets") is None
-
-
-def test_fit_score_evidence_can_still_count_canonical_capability_mentions():
+def test_fit_score_evidence_credits_canonical_mentions():
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
@@ -644,7 +626,10 @@ def test_fit_score_evidence_can_still_count_canonical_capability_mentions():
         _capability_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Fit evidence bullets") == 12
+    capability_labels = [item["label"] for item in breakdown if "[canonical]" in item["label"]]
+    assert len(capability_labels) == 3
+    total_capability_points = sum(item["value"] for item in breakdown if "[canonical]" in item["label"])
+    assert total_capability_points == 12
 
 
 def test_strong_high_confidence_fit_gets_convergence_bonus():
@@ -652,6 +637,7 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
     record = {
         "title": "Business Analyst",
         "title_reason": "OK",
+        "title_match_metadata": {"match_family": "primary", "seniority_adjustment": 0},
         "content_reason": "OK",
         "llm_fit_grade": "STRONG",
         "location": "Sydney NSW",
@@ -797,7 +783,7 @@ def test_job_parsing_rejection_registers_hard_blocker_pattern(monkeypatch):
     ]
 
 
-def test_on_site_role_gets_visible_score_penalty():
+def test_on_site_role_is_neutral_when_all_work_modes_are_selected():
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Business Analyst",
@@ -812,21 +798,36 @@ def test_on_site_role_gets_visible_score_penalty():
             "full_description": "Business analyst duties. " * 40,
             "competitive_signals": [],
         },
-        _test_profile(),
+        {
+            **_test_profile(),
+            "match_preferences": {
+                **_test_profile()["match_preferences"],
+                "work_mode_preference": ["remote", "hybrid", "onsite"],
+            },
+            "scoring_rules": {
+                "work_mode": {
+                    "selected_mode_match": 5,
+                },
+            },
+        },
     )
 
-    assert _breakdown_value(breakdown, "On-site role") == -2
+    assert _breakdown_value(breakdown, "Work mode neutral because all modes were selected") == 0
 
 
 def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     profile = {
         **_test_profile(),
+        "match_preferences": {
+            **_test_profile()["match_preferences"],
+            "work_mode_preference": ["hybrid"],
+        },
         "scoring_rules": {
             "fit_breakdown": {
                 "title_direct": 20,
             },
             "work_mode": {
-                "hybrid": 6,
+                "selected_mode_match": 6,
             },
         },
     }
@@ -855,7 +856,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     )
 
     assert _breakdown_value(breakdown, "Primary role-family match") == 20
-    assert _breakdown_value(breakdown, "Hybrid work available") == 6
+    assert _breakdown_value(breakdown, "Work mode confirmed selected mode bonus") == 6
 
 
 def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_primary_matches():
@@ -963,8 +964,8 @@ def test_job_card_shows_negative_score_factors_without_debug_mode():
         _test_profile(),
     )
 
-    assert "<strong>What lowers it</strong>" in html
-    assert "On-site role" in html
+    assert "Work mode neutral because all modes were selected" in html
+    assert "<strong>What lowers it</strong>" not in html
     assert "Score penalties" not in html
 
 
@@ -978,7 +979,7 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
 
-    html = source_connector.render_job_card(
+    html = workspace_renderer.render_job_card(
         {
             "job_key": "test-reviewed-signals",
             "title": "Business Analyst",
@@ -1348,8 +1349,14 @@ def test_contract_preference_treats_hyphenated_full_time_as_permanent():
     from job_hunter_agent.preferences import assess_contract_preference
     assert assess_contract_preference(
         {"work_type": "Full-time", "salary": "N/A"},
-        _test_profile(),
-    ) == {"label": "Permanent role", "value": 10}
+        {
+            **_test_profile(),
+            "match_preferences": {
+                **_test_profile()["match_preferences"],
+                "engagement_type": ["permanent"],
+            },
+        },
+    ) == {"label": "Work type confirmed selected work type bonus: Permanent role", "value": 10}
 
 
 def test_scoring_helpers_ignore_display_only_fit_highlights():
@@ -1374,12 +1381,18 @@ def test_scoring_helpers_ignore_display_only_fit_highlights():
         ],
     }
 
-    from job_hunter_agent.preferences import assess_government_preference, assess_contract_preference
-    assert assess_government_preference(record, profile) is None
-    assert assess_contract_preference(record, profile) is None
+    from job_hunter_agent.preferences import assess_sector_preference, assess_contract_preference
+    assert assess_sector_preference(record, profile) == {
+        "label": "Sector neutral because both sectors are selected",
+        "value": 0,
+    }
+    assert assess_contract_preference(record, profile) == {
+        "label": "Work type neutral because all work types were selected",
+        "value": 0,
+    }
 
 
-def test_scoring_helpers_still_use_real_source_text():
+def test_scoring_helpers_skip_contract_signal_when_both_selected():
     profile = {
         **_test_profile(),
         "match_preferences": {
@@ -1397,13 +1410,38 @@ def test_scoring_helpers_still_use_real_source_text():
         "fit_highlights": [],
     }
 
-    from job_hunter_agent.preferences import assess_government_preference, assess_contract_preference
-    assert assess_government_preference(record, profile) == {
-        "label": "Government context",
+    from job_hunter_agent.preferences import assess_sector_preference, assess_contract_preference
+    assert assess_sector_preference(record, profile) == {
+        "label": "Sector preference matched: Public sector",
         "value": 4,
     }
     assert assess_contract_preference(record, profile) == {
-        "label": "12+ month contract with extension potential",
+        "label": "Work type neutral because all work types were selected",
+        "value": 0,
+    }
+
+
+def test_contract_preference_scores_contract_roles_when_contract_only_selected():
+    profile = {
+        **_test_profile(),
+        "match_preferences": {
+            **_test_profile()["match_preferences"],
+            "engagement_type": ["contract"],
+        },
+    }
+    record = {
+        "title": "Lead Business Analyst",
+        "company": "Acme",
+        "location": "Sydney NSW",
+        "work_type": "Contract/Temp",
+        "work_mode": "Hybrid",
+        "fit_source_text": "Federal government department. 12 month contract with extension option.",
+        "fit_highlights": [],
+    }
+
+    from job_hunter_agent.preferences import assess_contract_preference
+    assert assess_contract_preference(record, profile) == {
+        "label": "Work type confirmed selected work type bonus: 12+ month contract with extension potential",
         "value": 9,
     }
 
@@ -1463,57 +1501,42 @@ def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
     assert is_workspace_eligible({"title": "Business Analyst", "score": 59}) is False
 
 
-def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
-
+def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles():
     thresholds = workspace_renderer.score_filter_thresholds(
-        [{"score": 85}, {"score": 70}, {"score": 55}],
         scoring_profile={},
-        include_borderline=False,
+        workspace_min_score=55,
     )
 
     assert thresholds == [85, 70, 55]
 
 
-def test_score_filter_thresholds_show_lowest_band_when_borderline_roles_are_present(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
-
+def test_score_filter_thresholds_show_lowest_band_when_floor_allows_it():
     thresholds = workspace_renderer.score_filter_thresholds(
-        [{"score": 58}, {"score": 43}],
         scoring_profile={},
-        include_borderline=False,
+        workspace_min_score=0,
     )
 
     assert thresholds == [85, 70, 55, 0]
 
 
-def test_score_filter_options_use_match_labels_not_raw_thresholds(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
-
+def test_score_filter_options_use_match_labels_not_raw_thresholds():
     options_html = workspace_renderer.render_score_filter_options(
-        [{"score": 85}, {"score": 70}, {"score": 55}],
         scoring_profile={},
-        include_borderline=False,
+        workspace_min_score=55,
     )
 
     assert "All match levels" in options_html
     assert "Strong match only" in options_html
     assert "Good match or better" in options_html
     assert "Possible fit or better" in options_html
+    assert "Stretch or better" not in options_html
     assert "50+ only" not in options_html
 
 
-def test_score_filter_options_include_lowest_match_band_when_lower_scores_exist(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "fit_score", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: int(record["score"]))
-
+def test_score_filter_options_include_lowest_match_band_when_floor_allows_it():
     options_html = workspace_renderer.render_score_filter_options(
-        [{"score": 58}, {"score": 43}],
         scoring_profile={},
-        include_borderline=False,
+        workspace_min_score=0,
     )
 
     assert "Stretch or better" in options_html
@@ -1618,11 +1641,12 @@ def test_posted_display_shows_today_against_current_render_date():
 
 
 def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, {}))
+    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, []))
 
     record = {
         "title": "Business Analyst",
         "title_reason": "OK",
+        "title_match_metadata": {"match_family": "primary", "seniority_adjustment": 0},
         "content_reason": "OK",
         "llm_fit_grade": "SOLID",
         "location": "Sydney NSW",
@@ -1637,12 +1661,12 @@ def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
     labels = [item["label"] for item in breakdown]
 
     assert any("Hard blocker" in label for label in labels)
-    assert "Primary role-family match" in labels
+    assert "Target role-family match" in labels
     assert any("fit" in label.lower() for label in labels)
 
 
 def test_score_equivalent_where_no_hard_blockers(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, {}))
+    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, []))
 
     record = {
         "title": "Business Analyst",

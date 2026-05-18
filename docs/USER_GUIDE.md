@@ -116,7 +116,7 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 `Title targeting`
 
-- target and secondary title patterns plus search keywords
+- target roles, also-consider roles, and a single search keyword
 - used to keep role targeting configurable per candidate instead of hardcoded in code
 
 `Minimum annual base (excludes super)` / `Minimum daily rate (excludes super)`
@@ -127,8 +127,8 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 `Search keyword`
 
-- the primary title list used by onboarding and search
-- keep it broad enough to capture relevant roles
+- a single role term used by onboarding and search
+- keep it broad enough to capture relevant roles without combining multiple titles into one field
 - the helper text under the field should stay short and explanatory
 
 `Sector preference`

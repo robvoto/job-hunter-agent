@@ -71,6 +71,10 @@
     {
       "value": "send your resume",
       "aliases": []
+    },
+    {
+      "value": "team development",
+      "aliases": []
     }
   ]
 }

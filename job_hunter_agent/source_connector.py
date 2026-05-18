@@ -39,6 +39,8 @@ from job_hunter_agent.scrape_finalize import finalize_scrape_run
 from job_hunter_agent.source_runner import run_enabled_sources
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
+from job_hunter_agent.paths import LOCAL_USER_ID
+from job_hunter_agent.config import AUTH_DISABLED
 
 NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
@@ -128,6 +130,8 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
     if args.user_id:
         set_user_id(str(args.user_id).strip())
+    elif AUTH_DISABLED:
+        set_user_id(LOCAL_USER_ID)
     try:
         if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_WORKSPACE):
             rebuild_workspace_results(user_id=args.user_id)

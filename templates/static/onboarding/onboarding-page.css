@@ -599,7 +599,10 @@ body {
 }
 
 #primary_cv_limit_help {
-  margin-bottom: 4px;
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 22px;
+  line-height: 1.5;
 }
 
 .guidance-grid {

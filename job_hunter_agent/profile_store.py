@@ -99,12 +99,12 @@ class GovPref:
 
 GOVERNMENT_PREFERENCE_OPTIONS = (
     {"value": GovPref.ANY, "label": "No preference"},
-    {"value": GovPref.GOVERNMENT, "label": "Government"},
-    {"value": GovPref.PRIVATE, "label": "Private"},
+    {"value": GovPref.GOVERNMENT, "label": "Public sector"},
+    {"value": GovPref.PRIVATE, "label": "Private sector"},
 )
 GOVERNMENT_PREFERENCE_CHOICE_OPTIONS = (
-    {"value": GovPref.GOVERNMENT, "label": "Government"},
-    {"value": GovPref.PRIVATE, "label": "Private"},
+    {"value": GovPref.GOVERNMENT, "label": "Public sector"},
+    {"value": GovPref.PRIVATE, "label": "Private sector"},
 )
 VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
 GOVERNMENT_PREFERENCE_DEFAULT_LABEL = next(
@@ -114,6 +114,7 @@ GOVERNMENT_PREFERENCE_HELP_TEXT = "Select both if sector preference does not mat
 
 SALARY_MIN_ANNUAL_LABEL = "Minimum annual base (excludes super)"
 SALARY_MIN_DAILY_LABEL = "Minimum daily rate (excludes super)"
+SALARY_MIN_COMPENSATION_HELP_TEXT = "Set the lowest pay you want included in search."
 SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Used when permanent roles list salary."
 SETTINGS_SALARY_DAILY_HELP_TEXT = "Used when contract roles list a day rate."
 
@@ -139,8 +140,8 @@ KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
 KEY_ONBOARDING_COMPLETE = "onboarding_complete"
 KEY_MATCH_PREFS = "match_preferences"
-KEY_PRIMARY_PATTERNS = "primary_job_title_pattern"
-KEY_SECONDARY_PATTERNS = "secondary_title_patterns"
+KEY_PRIMARY_PATTERNS = "target_roles"
+KEY_SECONDARY_PATTERNS = "also_consider_roles"
 KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
@@ -158,6 +159,7 @@ KEY_LEVEL = "level"
 KEY_ALIASES = "aliases"
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
+KEY_CAPABILITY_CONTEXTUAL_LLM = "capability_contextual_llm"
 
 class CapabilityLevel:
     STRONG = "strong"
@@ -196,6 +198,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),
+        KEY_CAPABILITY_CONTEXTUAL_LLM: dict(payload.get(KEY_CAPABILITY_CONTEXTUAL_LLM) or {}),
         "deterministic_review_thresholds": dict(payload.get("deterministic_review_thresholds") or {}),
         "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
@@ -236,6 +239,7 @@ DEFAULT_PROFILE = {
         "engagement_type": list(ENGAGEMENT_TYPE_DEFAULT_VALUES),
         "preferred_contract_months": 12,
         "short_contract_months": 6,
+        "min_contract_months": None,
     },
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
@@ -251,8 +255,8 @@ DEFAULT_PROFILE = {
     },
     KEY_CAPABILITY_PROFILE_RULES: [],
     "dominant_signal_clusters": [],
-    "primary_job_title_pattern": [],
-    "secondary_title_patterns": [],
+    "target_roles": [],
+    "also_consider_roles": [],
     "must_not_require_skills": [],  
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
@@ -380,10 +384,14 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
 
     merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(merged.get(KEY_WORK_MODE_PREFERENCE))
 
+    merged["home_location"] = str(merged.get("home_location") or "").strip()
+    merged["secondary_location"] = str(merged.get("secondary_location") or "").strip()
     merged["prefer_permanent"] = bool(merged.get("prefer_permanent", False))
     merged["engagement_type"] = normalize_engagement_type_preferences(merged.get("engagement_type"))
     merged["preferred_contract_months"] = int(merged.get("preferred_contract_months") or 12)
     merged["short_contract_months"] = int(merged.get("short_contract_months") or 6)
+    raw_min = merged.get("min_contract_months")
+    merged["min_contract_months"] = int(raw_min) if raw_min else None
     return merged
 
 
@@ -544,16 +552,22 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["match_preferences"] = normalize_match_preferences(
         merged.get("match_preferences", {})
     )
+    primary_search_location = next(
+        (str(value).strip() for value in merged["search_settings"].get("locations", []) if str(value).strip()),
+        "",
+    )
+    if primary_search_location and not merged["match_preferences"].get("home_location"):
+        merged["match_preferences"]["home_location"] = primary_search_location
     merged[KEY_CAPABILITY_PROFILE_RULES] = normalize_capability_rules(
         merged.get(KEY_CAPABILITY_PROFILE_RULES, []),
         merged.get("onboarding_settings", {}),
     )
     primary_titles, secondary_titles = normalize_title_pattern_lists(
-        merged.get("primary_job_title_pattern", []),
-        merged.get("secondary_title_patterns", []),
+        merged.get(KEY_PRIMARY_PATTERNS, []),
+        merged.get(KEY_SECONDARY_PATTERNS, []),
     )
-    merged["primary_job_title_pattern"] = primary_titles
-    merged["secondary_title_patterns"] = secondary_titles
+    merged[KEY_PRIMARY_PATTERNS] = primary_titles
+    merged[KEY_SECONDARY_PATTERNS] = secondary_titles
     merged["must_not_require_skills"] = normalize_multiline_string_list(
         merged.get("must_not_require_skills", [])
     )

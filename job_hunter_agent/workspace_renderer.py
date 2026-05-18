@@ -28,7 +28,6 @@ from job_hunter_agent.company_rules import normalize_company_name
 from job_hunter_agent.filters import suggest_title_block_phrases
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
-    capability_match_summary,
     fit_score,
     fit_score_breakdown,
 )
@@ -108,6 +107,13 @@ def _duplicate_match_label(matched_on: str) -> str:
     return _workspace_label("duplicate_labels", key, matched_on.replace("_", " "))
 
 
+_CAPABILITY_ENTRY_TAGS = ("[canonical]", "[alias:", "[contextual_llm]")
+
+
+def _is_capability_entry(label: str) -> bool:
+    return any(tag in label for tag in _CAPABILITY_ENTRY_TAGS)
+
+
 def visible_fit_reasons(
     fit_highlights: List[str],
     score_breakdown: List[dict],
@@ -120,14 +126,16 @@ def visible_fit_reasons(
         if compact_whitespace(item)
     ])
     excluded = {
-        "Fit evidence bullets",
         "Passed content filters",
     }
 
     for item in score_breakdown:
         label = compact_whitespace(item.get("label") or "")
         value = int(item.get("value", 0) or 0)
-        if not label or value <= 0 or label in excluded:
+        # Per-capability entries (tagged [canonical], [alias:...], [contextual_llm]) are scoring
+        # internals already surfaced via fit_highlights — skip them here.
+        if not label or value <= 0 or label in excluded or _is_capability_entry(label):
+        if not ((label.startswith("Work mode") or label.startswith("Work type") or label.startswith("Sector")) and label not in reasons):
             continue
         if label not in reasons:
             reasons.append(label)
@@ -173,10 +181,8 @@ def negative_score_reasons(
 
 def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int = 4) -> List[str]:
     labels = [compact_whitespace(item.get("label") or "") for item in score_breakdown]
-    evidence_points = next(
-        (int(item.get("value", 0) or 0) for item in score_breakdown if item.get("label") == "Fit evidence bullets"),
-        0,
-    )
+    capability_entries = [item for item in score_breakdown if _is_capability_entry(compact_whitespace(item.get("label") or ""))]
+    evidence_points = sum(int(item.get("value", 0) or 0) for item in capability_entries)
     gap_labels = _workspace_ui_labels().get("score_gap_labels", {})
     capability_gap_label = "Capability evidence is limited: {count} matches contributed to scoring"
     if isinstance(gap_labels, dict):
@@ -192,12 +198,7 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
             gaps.append(_workspace_label("score_gap_labels", "no_comparable_salary_rate", "No comparable salary/rate found"))
 
     if evidence_points < 12:
-        capability_matches = capability_match_summary(record)
-        capability_count = (
-            len(capability_matches.get("strong", []))
-            + len(capability_matches.get("working", []))
-            + len(capability_matches.get("basic", []))
-        )
+        capability_count = len(capability_entries)
         gaps.append(capability_gap_label.format(count=capability_count))
 
     if full_description_confidence(record) == "LOW":
@@ -221,26 +222,26 @@ def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = 
 
 
 def score_filter_thresholds(
-    records: List[dict],
     scoring_profile: Optional[dict] = None,
-    include_borderline: Optional[bool] = None,
+    workspace_min_score: Optional[int] = None,
 ) -> List[int]:
     active_profile = scoring_profile or load_profile()
-    show_borderline = WORKSPACE_DEBUG_MODE if include_borderline is None else bool(include_borderline)
-    scores = [fit_score(record, active_profile) for record in records]
     match_levels = get_match_levels(active_profile)
-    thresholds = [int(level.get("minimum_score", 0) or 0) for level in match_levels if int(level.get("minimum_score", 0) or 0) > 0]
-    lowest_band_threshold = int(match_levels[-1].get("minimum_score", 0) or 0) if match_levels else 0
-    if (show_borderline or any(score < (thresholds[-1] if thresholds else 0) for score in scores)) and lowest_band_threshold not in thresholds:
-        thresholds.append(lowest_band_threshold)
-    return thresholds
+    active_workspace_min_score = (
+        int(workspace_min_score)
+        if workspace_min_score is not None
+        else get_workspace_minimum_score()
+    )
+    return [
+        int(level.get("minimum_score", 0) or 0)
+        for level in match_levels
+        if int(level.get("minimum_score", 0) or 0) >= active_workspace_min_score
+    ]
 
 
 def render_score_filter_options(
-    records: List[dict],
     scoring_profile: Optional[dict] = None,
     workspace_min_score: Optional[int] = None,
-    include_borderline: Optional[bool] = None,
 ) -> str:
     active_profile = scoring_profile or load_profile()
     active_workspace_min_score = (
@@ -249,7 +250,7 @@ def render_score_filter_options(
         else get_workspace_minimum_score()
     )
     options = ['<option value="all">All match levels</option>']
-    for threshold in score_filter_thresholds(records, active_profile, include_borderline=include_borderline):
+    for threshold in score_filter_thresholds(active_profile, active_workspace_min_score):
         selected_attr = " selected" if active_workspace_min_score == threshold else ""
         options.append(
             f'<option value="{threshold}"{selected_attr}>'
@@ -325,8 +326,10 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Excluded description pattern: {cleaned_detail}"
     if prefix == "LEARNED_REJECT" and cleaned_detail:
         return f"Learned blocker: {cleaned_detail.split(':')[-1].strip()}"
+    if prefix == "PREF_SECTOR_OUTSIDE_SELECTED":
+        return "Rejected because job sector is outside selected sectors."
     if prefix == TITLE_REASON_POTENTIAL_MATCH:
-        return "Secondary role-family match"
+        return load_ui_labels().get("title_match_labels", {}).get("secondary_match", "Also-consider role-family match")
     if prefix == "CARD_SPECIALIST" and cleaned_detail:
         return f"Rejected early from card metadata: {cleaned_detail}"
     fallback = raw.replace("_", " ").lower()
@@ -472,7 +475,7 @@ def render_job_card(
         badges.append(render_badge("Description Issue", "badge-warning", "The full job description was not captured clearly, so this match needs manual checking."))
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
     if sector_signal.get("kind") == "government":
-        badges.append(render_badge("Government", "badge-sector-government", "Government/public-sector context detected from the captured job text."))
+        badges.append(render_badge("Public sector", "badge-sector-government", "Public-sector context detected from the captured job text."))
     channel_kind = channel_signal.get("kind", "unknown")
     channel_source = channel_signal.get("source", "")
     if channel_kind == "agency_or_recruiter" and channel_source == "metadata_first":
@@ -967,7 +970,7 @@ def render_match_level_guide_html(profile: Optional[dict] = None) -> str:
         '<span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span>',
         '<span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span>',
         '<span class="chip"><strong>Freshness:</strong> newer roles are favored</span>',
-        '<span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, contract, government, and freshness can be dialed up or down</span>',
+        '<span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, work type, sector, and freshness can be dialed up or down</span>',
         '<span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>',
         '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
     ])

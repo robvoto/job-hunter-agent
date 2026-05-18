@@ -4,15 +4,13 @@ Set once by the user-context middleware in fastapi_app.py for each HTTP request.
 All per-user path helpers in paths.py read from this context to resolve the
 correct data directory for the active user.
 
-Non-request code (agent_runner, CLI) should call set_user_id() explicitly
-before performing any file operations.
+Non-request code (agent_runner, CLI) must call set_user_id() explicitly before
+performing file operations. Debug/auth-disabled mode uses LOCAL_USER_ID from paths.py.
 """
 
 from __future__ import annotations
 
 from contextvars import ContextVar
-
-from job_hunter_agent.config import AUTH_DISABLED
 
 _user_id: ContextVar[str | None] = ContextVar("job_hunter_user_id", default=None)
 
@@ -25,12 +23,10 @@ def get_user_id() -> str | None:
     return _user_id.get()
 
 
-def get_user_id_for_runtime() -> str | None:
+def get_user_id_for_runtime() -> str:
     user_id = get_user_id()
     if user_id:
         return user_id
-    if AUTH_DISABLED:
-        return None
     raise RuntimeError(
-        "No active user id is set. Pass --user-id for CLI rebuilds or run the operation from an authenticated request.",
+        "No active user id is set. Call set_user_id() before performing file operations.",
     )

@@ -36,6 +36,7 @@
         </div>
       </div>
       <a href="/settings" class="btn btn-secondary ws-settings-link" aria-label="Open settings" title="Open settings">&#9881;</a>
+      <a href="/logout" class="btn btn-secondary ws-logout-link" aria-label="Log out" title="Log out">Log out</a>
     </div>
   </header>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
@@ -222,7 +223,7 @@
         ? state.search_locations.map((value) => String(value || '').trim()).filter(Boolean)
         : [];
       const parts = [...titles, ...locations.slice(0, 1)];
-      return parts.length ? parts.join(' ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ') : 'Your saved search is ready.';
+      return parts.length ? parts.join(' · ') : 'Your saved search is ready.';
     }
 
     function dismissOnboardingOverlay() {
@@ -309,7 +310,10 @@
       }
       const actions = document.createElement('div');
       actions.className = 'search-settings-actions';
-      actions.innerHTML = '<button class="btn btn-primary" id="ws_sidebar_run_btn" type="button">Run search</button>';
+      actions.innerHTML = `
+        <button class="btn btn-primary" id="ws_sidebar_run_btn" type="button">Run search</button>
+        <p class="snapshot-helper">New searches add to your existing results. Nothing is lost.</p>
+      `;
       searchMeta.insertAdjacentElement('afterend', actions);
     }
 
@@ -432,6 +436,7 @@
         <div class="ws-flash-backdrop" data-onboarding-backdrop></div>
         <div class="ws-flash-shell">
           <section class="ws-flash-card is-visible" role="dialog" aria-modal="true" aria-label="Onboarding summary">
+            <button class="ws-flash-close" id="ws_flash_dismiss" type="button" aria-label="Close">&times;</button>
             <div class="ws-flash-body">
               <div class="ws-flash-main">
                 <h1 class="ws-flash-title">Welcome</h1>
@@ -443,9 +448,6 @@
                 <h2>Quick start</h2>
                 <div class="ws-flash-action-list">
                   <button class="btn btn-primary ws-flash-primary" id="ws_flash_run_search" type="button">Run search</button>
-                  <div class="ws-flash-actions">
-                    <button class="btn btn-secondary" id="ws_flash_dismiss" type="button">Dismiss</button>                    
-                  </div>
                 </div>
               </aside>
             </div>

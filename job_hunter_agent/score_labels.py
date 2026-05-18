@@ -43,11 +43,11 @@ def compact_score_label(label: str) -> str:
         return "Location"
     if label.startswith("Competitive signal"):
         return "Competitive"
-    if "contract" in label.lower() or "permanent" in label.lower():
-        return "Engagement"
-    if "government" in label.lower():
-        return "Government"
-    if "remote" in label.lower() or "hybrid" in label.lower() or label == "On-site role":
+    if label.startswith("Work type") or "contract" in label.lower() or "permanent" in label.lower():
+        return "Work type"
+    if label.startswith("Sector") or "government" in label.lower() or "public sector" in label.lower() or "private sector" in label.lower():
+        return "Sector"
+    if label.startswith("Work mode") or "remote" in label.lower() or "hybrid" in label.lower():
         return "Work mode"
     return label
 

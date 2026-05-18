@@ -4,10 +4,47 @@
   "version": 13,
   "stopwords_description": "Common filler words stripped during title parsing and token matching.",
   "stopwords": [
-    "a", "an", "and", "the", "to", "for", "of", "in", "on", "with", "by", "from", "into",
-    "using", "use", "used", "within", "through", "under", "over", "per", "or", "as", "at",
-    "is", "are", "was", "were", "be", "been", "being", "that", "this", "these", "those",
-    "will", "would", "can", "could", "should", "may"
+    "a",
+    "an",
+    "and",
+    "the",
+    "to",
+    "for",
+    "of",
+    "in",
+    "on",
+    "with",
+    "by",
+    "from",
+    "into",
+    "using",
+    "use",
+    "used",
+    "within",
+    "through",
+    "under",
+    "over",
+    "per",
+    "or",
+    "as",
+    "at",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "that",
+    "this",
+    "these",
+    "those",
+    "will",
+    "would",
+    "can",
+    "could",
+    "should",
+    "may"
   ],
   "title_candidate_leading_verb_blockers_description": "Words that make a title too generic or role-like to treat as a clean title candidate during title extraction.",
   "title_candidate_leading_verb_blockers": [
@@ -75,9 +112,30 @@
   ],
   "salary_indicators_description": "Copy cues that help identify salary text and distinguish annual, daily, and super-inclusive pay wording.",
   "salary_indicators": {
-    "superannuation": ["inc super", "pkg", "package", "plus super", "superannuation", "super", "+ super"],
-    "daily_rate": ["per day", "daily", "p.d.", "day rate", "/day"],
-    "annual_rate": ["p.a.", "per annum", "annually", "/year", "/yr", "base +"]
+    "superannuation": [
+      "inc super",
+      "pkg",
+      "package",
+      "plus super",
+      "superannuation",
+      "super",
+      "+ super"
+    ],
+    "daily_rate": [
+      "per day",
+      "daily",
+      "p.d.",
+      "day rate",
+      "/day"
+    ],
+    "annual_rate": [
+      "p.a.",
+      "per annum",
+      "annually",
+      "/year",
+      "/yr",
+      "base +"
+    ]
   },
   "contract_type_indicators_description": "Words that suggest permanent, contract, casual, temp, or part-time engagement.",
   "contract_type_indicators": [
@@ -222,11 +280,29 @@
       "minister"
     ],
     "clearance_normalization": {
-      "baseline": ["baseline", "baseline clearance"],
-      "nv1": ["nv1", "nv 1", "negative vetting 1", "negative vetting level 1"],
-      "nv2": ["nv2", "nv 2", "negative vetting 2", "negative vetting level 2"],
-      "top secret": ["top secret", "ts"],
-      "protected": ["protected clearance"]
+      "baseline": [
+        "baseline",
+        "baseline clearance"
+      ],
+      "nv1": [
+        "nv1",
+        "nv 1",
+        "negative vetting 1",
+        "negative vetting level 1"
+      ],
+      "nv2": [
+        "nv2",
+        "nv 2",
+        "negative vetting 2",
+        "negative vetting level 2"
+      ],
+      "top secret": [
+        "top secret",
+        "ts"
+      ],
+      "protected": [
+        "protected clearance"
+      ]
     }
   },
   "government_discovery_patterns": {
@@ -234,5 +310,7 @@
     "el": "\\bel\\s*(\\d+)\\b",
     "clearance": "\\b(?:baseline|nv\\s*\\d|negative\\s+vetting\\s+\\d|top\\s+secret|protected)\\s*(?:clearance)?\\b|\\bclearance\\s+required\\b",
     "department": "department(?:\\s+of)?\\s+(?:[a-z]+(?:\\s+[a-z]+)*)"
-  }
+  },
+  "title_role_synonyms_description": "Groups of job title base-roles that the title filter treats as equivalent. Only add groups here for roles that are genuinely interchangeable (e.g. different spellings of the same role). Do NOT add profession-wide synonym lists — semantic relevance is the LLM's job.",
+  "title_role_synonyms": []
 }

@@ -9,6 +9,7 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Settings UI must save/load through the same profile/settings normalisers as runtime code.
 - Missing required settings or labels should fail clearly, not be invented in UI code.
 - Route aliases such as `/workspace` and `/` must stay intentional and documented.
+- Workspace header actions keep settings and logout in the top-right action cluster; do not move logout into the sidebar or hide it behind a drawer.
 - UI structure and visual treatment must come from shared theme tokens/widgets first; page-level CSS is only for screen-specific layout exceptions.
 - Shared blocking overlays must use the existing `job-hunter-wait-*` component from `themes.primitives.css` and `body.job-hunter-wait-active`; do not invent screen-local `ws-wait-*` variants or rename the mount/backdrop/shell classes without updating every consumer.
 - If a workspace run is meant to be non-blocking, make that an explicit product decision. Do not let a class mismatch or partial CSS move silently change blocking behavior.
@@ -47,6 +48,8 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Do not remove `render_government_preference_select_options` or its `pages.py` replacement — it powers the onboarding select.
 
 ### Work mode (`input[name="work_mode_preference"]`)
+- `window.__JOB_HUNTER_TITLE_TIER_LABELS__` is injected by `build_bootstrap_script()` and owns the onboarding labels/help text for target roles, also-consider roles, and the search keyword field.
+- The onboarding search keyword is a single term. Do not auto-fill it with comma-joined title lists.
 - Rendered by `server_helpers.render_work_mode_preference_choices()` as three `<label class="choice-card--work-mode">` checkboxes inside `<div id="work_mode_preference">`.
 - CSS grid (`#work_mode_preference`) and card styles (`.choice-card--work-mode`) already exist in `onboarding-page.css` and `settings-page.css`. Do not re-create them.
 - `setWorkModePreferenceValues(values)` in `onboarding-flow.js` and `settings-page.js`: when `values` is empty or none, all checkboxes must default to checked (`selected.size === 0 || selected.has(...)`). The same rule applies to the legacy `<select>` path.

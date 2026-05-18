@@ -10,6 +10,18 @@
       "aliases": [
         "state health department"
       ]
+    },
+    {
+      "value": "baseline",
+      "aliases": []
+    },
+    {
+      "value": "government",
+      "aliases": []
+    },
+    {
+      "value": "public sector",
+      "aliases": []
     }
   ]
 }

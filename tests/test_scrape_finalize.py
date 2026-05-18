@@ -15,7 +15,6 @@ def _build_context() -> ScrapeRunContext:
         dashboard_min_score=50,
         configured_seek_max_pages=4,
         configured_date_range=3,
-        enforce_posted_age_limit=True,
         sort_newest_first=True,
         playwright_viewport_width=1400,
         playwright_viewport_height=900,

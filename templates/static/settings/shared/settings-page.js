@@ -3,66 +3,40 @@ window.LINKEDIN_EASY_APPLY_ONLY = LINKEDIN_EASY_APPLY_ONLY;
 
 const statusEl = document.getElementById('status');
 const isTestMode = document.body?.dataset.testMode === 'true';
-const runNowButton = document.getElementById('run_now');
-const rebuildProfileButton = document.getElementById('rebuild_profile');
-const capabilityUi = window.JobHunterCapabilityUi || {};
 
 // Module references
 const chipEditor = window.JobHunterChipEditor;
 const capabilityEditor = window.JobHunterCapabilityEditor;
 const adminSettings = window.JobHunterAdminSettings;
 const alertsSettings = window.JobHunterAlertsSettings;
-const { escapeHtml, toLines, rulesToText, textToRules, settingsField, bindCurrencyFields, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
+const {
+  escapeHtml,
+  toLines,
+  rulesToText,
+  textToRules,
+  settingsField,
+  bindCurrencyFields,
+  getEngagementTypeValues,
+  setEngagementTypeValues,
+  getGovernmentPreferenceValues,
+  setGovernmentPreferenceValues,
+  setCurrencyFieldValue,
+  readCurrencyFieldValue,
+  getWorkModePreferenceValues,
+  setWorkModePreferenceValues,
+  setToggleChecked,
+  getToggleChecked,
+  setChoiceGroupValue,
+  getChoiceGroupValue,
+  GOVERNMENT_PREFERENCE_DEFAULT,
+} = window.JobHunterSettingsUtils;
 
 // Aliases kept in scope for settings-review-panel.js which reads these by name
 const capabilityStrengthMeta = capabilityEditor.capabilityStrengthMeta;
-const collectCapabilityRuleState = capabilityEditor.collectCapabilityRuleState;
-const flushChipEditorInputs = chipEditor.flushChipEditorInputs;
 const fillUserSettings = (s) => alertsSettings.fillUserSettings(s);
 const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserSettings);
 
-const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
-  ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
-  : [];
-const governmentPreferenceDefault = String(
-  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
-  || governmentPreferenceOptions?.[0]?.value
-  || 'any'
-).trim().toLowerCase();
-const workModePreferenceOptions = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__)
-  ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
-  : [];
-
-function normalizeWorkModePreferences(value) {
-  const values = Array.isArray(value)
-    ? value
-    : String(value || '').split(/[,\n|/]+/);
-  const selected = [];
-  const seen = new Set();
-  for (const option of workModePreferenceOptions) {
-    const key = String(option.value || '').trim().toLowerCase();
-    if (!key) continue;
-    if (values.some((item) => String(item || '').trim().toLowerCase() === key) && !seen.has(key)) {
-      seen.add(key);
-      selected.push(key);
-    }
-  }
-  return selected;
-}
-
-function getWorkModePreferenceValues() {
-  return normalizeWorkModePreferences(
-    Array.from(document.querySelectorAll('input[name="work_mode_preference"]:checked')).map((input) => input.value)
-  );
-}
-
-function setWorkModePreferenceValues(values) {
-  const selected = new Set(normalizeWorkModePreferences(values));
-  document.querySelectorAll('input[name="work_mode_preference"]').forEach((input) => {
-    input.checked = selected.size === 0 || selected.has(String(input.value || '').trim().toLowerCase());
-  });
-}
-
+const governmentPreferenceDefault = String(GOVERNMENT_PREFERENCE_DEFAULT || 'any').trim().toLowerCase();
 function readOnboardingWelcomeSearchKeywords() {
   try {
     const raw = window.sessionStorage.getItem('jobHunter.onboardingWelcome');
@@ -169,22 +143,26 @@ function renderLocationOptions() {
   if (preferred) select.value = preferred;
 }
 
+
 function collectProfile() {
   chipEditor.flushChipEditorInputs();
   const locationSelect = document.getElementById('locations');
   const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
   const hoursMap = { 0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720 };
   const linkedinEasyApplyRaw = document.getElementById(LINKEDIN_EASY_APPLY_ONLY)?.value;
+  const governmentPreferenceValues = getGovernmentPreferenceValues();
+  const seekMaxPages = Number(getChoiceGroupValue('seek_max_pages'));
+  if (!Number.isFinite(seekMaxPages)) {
+    throw new Error('Please choose a valid SEEK page limit.');
+  }
   return {
     search_settings: {
-      keywords: toLines(settingsField('keywords').value).join(', '),
+      keywords: String(settingsField('keywords').value || '').trim(),
       locations: locationSelect && locationSelect.value.trim() ? [locationSelect.value.trim()] : [],
       classification_ids: toLines(document.getElementById('classification_ids').value),
       date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
       linkedin_hours_old: hoursMap[searchDateWindow] ?? 72,
-      seek_max_pages: Number(document.getElementById('seek_max_pages').value),
-      enforce_posted_age_limit: document.getElementById('enforce_posted_age_limit').value === 'true',
-      sort_newest_first: document.getElementById('sort_newest_first').value === 'true',
+      seek_max_pages: seekMaxPages,
       linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
       [LINKEDIN_EASY_APPLY_ONLY]: linkedinEasyApplyRaw === '' ? null : linkedinEasyApplyRaw === 'true',
     },
@@ -193,9 +171,10 @@ function collectProfile() {
       minimum_daily_rate: readCurrencyFieldValue('minimum_daily_rate', 0),
     },
     match_preferences: {
-      engagement_type: document.getElementById('engagement_type').value,
+      engagement_type: getEngagementTypeValues(),
       work_mode_preference: getWorkModePreferenceValues(),
-      prefer_government: String(document.getElementById('prefer_government').value || governmentPreferenceDefault).trim().toLowerCase(),
+      prefer_government: governmentPreferenceValues.length === 1 ? governmentPreferenceValues[0] : governmentPreferenceDefault,
+      min_contract_months: Number(document.getElementById('min_contract_months')?.value || '') || null,
     },
     preference_weights: {
       fit: Number(document.getElementById('fit_weight').value || 1),
@@ -209,23 +188,22 @@ function collectProfile() {
     llm_profile_brief_mode: 'auto',
     llm_profile_brief: '',
     capability_profile_rules: capabilityEditor.collectCapabilityRuleState(),
-    primary_job_title_pattern: toLines(settingsField('primary_job_title_pattern').value),
-    secondary_title_patterns: toLines(settingsField('secondary_title_patterns').value),
+    target_roles: toLines(settingsField('target_roles').value),
+    also_consider_roles: toLines(settingsField('also_consider_roles').value),
     must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
     reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
     reject_description_phrase_rules: textToRules(settingsField('reject_description_phrase_rules').value, 'phrase'),
+    enabled_sources: [
+      ...(getToggleChecked('seek_enabled') ? ['seek'] : []),
+      ...(getToggleChecked('linkedin_enabled') ? ['linkedin'] : []),
+    ],
   };
 }
 
 function fillForm(profile) {
   const savedKeywords = String(profile.search_settings?.keywords || '').trim();
   const onboardingKeywords = savedKeywords ? '' : readOnboardingWelcomeSearchKeywords();
-  const keywordList = (savedKeywords || onboardingKeywords || '')
-    .split(',')
-    .map(k => k.trim())
-    .filter(Boolean);
-  settingsField('keywords').value = keywordList.join('\n');
-  chipEditor.renderChipEditor('keywords');
+  settingsField('keywords').value = savedKeywords || onboardingKeywords || '';
   renderLocationOptions();
   const locationSelect = document.getElementById('locations');
   if (locationSelect) {
@@ -233,9 +211,7 @@ function fillForm(profile) {
     locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
   }
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
-  document.getElementById('seek_max_pages').value = String(profile.search_settings?.seek_max_pages);
-  document.getElementById('enforce_posted_age_limit').value = String(Boolean(profile.search_settings?.enforce_posted_age_limit));
-  document.getElementById('sort_newest_first').value = String(Boolean(profile.search_settings?.sort_newest_first));
+  setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);
   document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search);
   const _dateWindowEl = document.getElementById('search_date_window');
   if (_dateWindowEl) {
@@ -245,22 +221,16 @@ function fillForm(profile) {
       : _windowValues.reduce((p, c) => Math.abs(c - _savedDays) < Math.abs(p - _savedDays) ? c : p);
     _dateWindowEl.value = String(_closest);
   }
-  const _minScoreSelect = document.getElementById('workspace_minimum_score');
-  if (_minScoreSelect) {
-    const _levels = (profile.match_levels || []).slice().sort((a, b) => (a.minimum_score || 0) - (b.minimum_score || 0));
-    _minScoreSelect.innerHTML = '<option value="0">All roles</option>' +
-      _levels.map(l => `<option value="${l.minimum_score}">${escapeHtml(l.label)} &amp; above</option>`).join('');
-    const _savedScore = loadedUserSettings?.workspace?.minimum_score;
-    if (_savedScore !== undefined) _minScoreSelect.value = String(_savedScore);
-  }
   const _liEasyApply = profile.search_settings?.[LINKEDIN_EASY_APPLY_ONLY];
   document.getElementById(LINKEDIN_EASY_APPLY_ONLY).value = (_liEasyApply === null || _liEasyApply === undefined) ? '' : String(_liEasyApply);
-  document.getElementById('engagement_type').value = profile.match_preferences?.engagement_type || 'both';
+  const _enabledSources = profile.enabled_sources || ['seek', 'linkedin'];
+  setToggleChecked('seek_enabled', _enabledSources.includes('seek'));
+  setToggleChecked('linkedin_enabled', _enabledSources.includes('linkedin'));
+  setEngagementTypeValues(profile.match_preferences?.engagement_type);
   setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);
-  const governmentPreference = document.getElementById('prefer_government');
-  if (governmentPreference) {
-    governmentPreference.value = String(profile.match_preferences?.prefer_government || governmentPreferenceDefault).trim().toLowerCase();
-  }
+  setGovernmentPreferenceValues(profile.match_preferences?.prefer_government || governmentPreferenceDefault);
+  const _minContractEl = document.getElementById('min_contract_months');
+  if (_minContractEl) _minContractEl.value = String(profile.match_preferences?.min_contract_months ?? '');
   document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
   setCurrencyFieldValue('minimum_salary_yearly', profile.salary_preferences?.minimum_salary_yearly ?? 0);
   setCurrencyFieldValue('minimum_daily_rate', profile.salary_preferences?.minimum_daily_rate ?? 0);
@@ -273,13 +243,13 @@ function fillForm(profile) {
   document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness);
   capabilityEditor.setCapabilityRuleState(profile.capability_profile_rules || []);
   document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
-  for (const id of ['primary_job_title_pattern', 'secondary_title_patterns', 'must_not_require_skills']) {
+  for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
     settingsField(id).value = (profile[id] || []).join('\n');
   }
   for (const [id, key] of ruleTextAreas) {
     settingsField(id).value = rulesToText(profile[id], key);
   }
-  chipEditor.renderGlobaldChipEditors();
+  chipEditor.renderGlobalChipEditors();
 }
 
 async function loadProfile() {
@@ -373,10 +343,28 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
   }
 });
 
+document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
+  cb.addEventListener('change', () => {
+    if (!cb.checked) {
+      const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
+      if (!anyChecked) cb.checked = true;
+    }
+  });
+});
+
 document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => {
   cb.addEventListener('change', () => {
     if (!cb.checked) {
       const anyChecked = document.querySelectorAll('input[name="work_mode_preference"]:checked').length > 0;
+      if (!anyChecked) cb.checked = true;
+    }
+  });
+});
+
+document.querySelectorAll('input[name="prefer_government"]').forEach((cb) => {
+  cb.addEventListener('change', () => {
+    if (!cb.checked) {
+      const anyChecked = document.querySelectorAll('input[name="prefer_government"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
   });

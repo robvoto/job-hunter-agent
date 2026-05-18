@@ -10,6 +10,7 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - Heuristic fallback findings may be logged and stored, but they are not learned unless they go through the approval flow.
 - Do not auto-promote suggestions.
 - Signal schema must be canonical at the registry boundary; consumers must not guess fields.
+- Title-related learning candidates (`role_title_token`, `title_normalization_candidate`, `title_parse_blocker`) are often triage noise in workspace cards; keep them in the registry if needed, but suppress them in user-facing review text instead of inventing new labels.
 
 ## Allowed categories
 - `capability_concept`

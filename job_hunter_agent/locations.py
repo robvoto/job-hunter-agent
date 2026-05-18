@@ -14,6 +14,10 @@ _cached_locations: Optional[Dict[str, dict]] = None
 _cached_location_options: Optional[list[dict[str, str]]] = None
 
 
+def _normalize_location_key(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
 def load_locations_au(force_reload: bool = False) -> dict:
     """
     Load canonical AU locations used by the search picker.
@@ -44,12 +48,13 @@ def load_location_options(force_reload: bool = False) -> list[dict[str, str]]:
         kind = str(entry.get("kind") or "").strip().lower()
         if kind not in LOCATION_GROUP_LABELS:
             continue
+        code = str(entry.get("code") or "").strip()
         label = str(entry.get("name") or "").strip()
         if not label:
             continue
         options.append(
             {
-                "value": label,
+                "value": code or label,
                 "label": label,
                 "kind": kind,
                 "group": LOCATION_GROUP_LABELS[kind],
@@ -76,11 +81,12 @@ def resolve_location(raw: str) -> dict:
     """
     locations = load_locations_au()
 
-    key = raw.strip().lower()
+    key = _normalize_location_key(raw)
 
     for loc in locations.values():
-        aliases = [a.lower() for a in loc.get("aliases", [])]
-        if key == loc["code"].lower() or key in aliases:
+        code = _normalize_location_key(loc.get("code", ""))
+        name = _normalize_location_key(loc.get("name", ""))
+        if key and key in {code, name}:
             return loc
 
     raise ValueError(f"Unsupported location: {raw}")

@@ -5,6 +5,13 @@ import re
 from fastapi import APIRouter, Body, Query
 
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.review_history_service import (
+    append_review_key,
+    record_job_view,
+    remove_review_key,
+    save_block_similar_feedback,
+    save_not_for_me_feedback,
+)
 
 from job_hunter_agent.routes.responses import json_response
 
@@ -174,9 +181,9 @@ def api_review(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         company = str(body.get("company") or "").strip()
         teaser = str(body.get("teaser") or "").strip()
         if action == "viewed":
-            result = srv.record_job_view(job_key, url, title)
+            result = record_job_view(job_key, url, title)
         elif action == "not_for_me":
-            result = srv.save_not_for_me_feedback(job_key, url, title, company, teaser)
+            result = save_not_for_me_feedback(job_key, url, title, company, teaser)
         elif action == "block_similar":
             raw = body.get("block_phrases")
             if isinstance(raw, list) and raw:
@@ -184,7 +191,7 @@ def api_review(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             else:
                 single = str(body.get("block_phrase") or "").strip()
                 phrases_arg = [single] if single else []
-            result = srv.save_block_similar_feedback(
+            result = save_block_similar_feedback(
                 job_key,
                 url,
                 title,
@@ -193,9 +200,9 @@ def api_review(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                 block_phrases=phrases_arg or None,
             )
         elif action in {"unapply", "unhide"}:
-            result = srv.remove_review_key(action, job_key, url, title, company, teaser)
+            result = remove_review_key(action, job_key, url, title, company, teaser)
         else:
-            result = srv.append_review_key(action, job_key, url, title, company, teaser)
+            result = append_review_key(action, job_key, url, title, company, teaser)
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(result)

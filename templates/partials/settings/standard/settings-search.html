@@ -8,16 +8,9 @@
 
               <div class="common-search-grid">
                 <div class="common-search-field common-search-field--keywords">
-                  <label>Search titles</label>
-                  <div class="badge-editor" data-chip-editor="keywords">
-                    <div id="keywords_chips" class="badge-editor-list" aria-live="polite"></div>
-                    <div class="badge-editor-form">
-                      <input id="keywords_add" type="text" data-chip-input="keywords" placeholder="Add a search title">
-                      <button class="secondary" type="button" data-add-chip="keywords">Add</button>
-                    </div>
-                  </div>
-                  <textarea id="keywords" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-                  <div class="help">Each title is sent as a separate search query to job boards. At least one must remain.</div>
+                  <label for="keywords">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__</label>
+                  <input id="keywords" type="text" autocomplete="off" placeholder="__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_EXAMPLE__">
+                  <div class="help">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
@@ -30,6 +23,17 @@
                   <label id="engagement_type_label">Work type</label>
                   __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
                   <div class="help">Select both if job type does not matter.</div>
+                </div>
+
+                <div class="common-search-field">
+                  <label for="min_contract_months">Minimum contract length</label>
+                  <select id="min_contract_months">
+                    <option value="">No minimum</option>
+                    <option value="3">3+ months</option>
+                    <option value="6">6+ months</option>
+                    <option value="12">12+ months</option>
+                  </select>
+                  <div class="help">Contracts shorter than this are excluded before scoring. Only applies when the listing states a duration explicitly.</div>
                 </div>
 
                 <div class="common-search-field">
@@ -55,12 +59,6 @@
                     <option value="30">Last 30 days</option>
                   </select>
                   <div class="help">How recently listings must have been posted.</div>
-                </div>
-
-                <div class="common-search-field">
-                  <label for="workspace_minimum_score">Minimum fit level to show</label>
-                  <select id="workspace_minimum_score"></select>
-                  <div class="help">Hide roles below this fit level.</div>
                 </div>
 
                 <div class="common-search-field">

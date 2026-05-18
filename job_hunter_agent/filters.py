@@ -102,8 +102,8 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
     decomposition = decompose_title_text(title)
     normalized_title = str(decomposition.get("normalized_title") or "").strip()
     base_role = _title_match_family_text(title)
-    target_patterns = profile.get("primary_job_title_pattern", [])
-    adjacent_patterns = profile.get("secondary_title_patterns", [])
+    target_patterns = profile.get("target_roles", [])
+    adjacent_patterns = profile.get("also_consider_roles", [])
     matched_primary_pattern = ""
     primary_pattern_has_seniority = False
     for pattern in target_patterns:
@@ -146,10 +146,6 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
         elif title_seniority == "preferred":
             result["seniority_adjustment"] = adjustments.get("preferred", 3)
 
-    if not is_direct_match and not is_adjacent_match:
-        result["reason"] = "TITLE_NOT_TARGET"
-        return result
-
     for rule in profile.get("reject_title_rules", []):
         pattern = rule.get("pattern", "")
         reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
@@ -164,7 +160,11 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
         result.update({"ok": True, "reason": "OK", "match_family": "primary"})
         return result
 
-    result.update({"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"})
+    if is_adjacent_match:
+        result.update({"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"})
+        return result
+
+    result.update({"ok": False, "reason": "TITLE_NOT_TARGET", "match_family": "none"})
     return result
 
 
@@ -533,7 +533,7 @@ def passes_quick_card_filters(
     )
     counter_patterns = profile.get("cheap_keep_counter_patterns", [])
     counter_hits = sum(1 for pattern in counter_patterns if pattern and re.search(pattern, combined))
-    direct_target_title = _matches_normalized_title(normalized_title, profile.get("primary_job_title_pattern", []))
+    direct_target_title = _matches_normalized_title(normalized_title, profile.get("target_roles", []))
 
     for rule in profile.get("cheap_reject_metadata_rules", []):
         pattern = rule.get("pattern", "")

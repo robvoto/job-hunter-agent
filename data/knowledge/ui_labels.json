@@ -2,10 +2,11 @@
     "kind":  "ui_labels",
     "name":  "ui_labels",
     "version":  1,
-    "updated_at":  "2026-05-15",
+    "updated_at":  "2026-05-18",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {
                              "remote_label":  "Remote",
+                             "hybrid_label":  "Hybrid",
                              "onsite_label":  "On-site",
                              "default_work_mode":  ""
                          },
@@ -21,16 +22,60 @@
     "negative_score_labels":  {
                                   "Description capture incomplete":  "Description capture incomplete",
                                   "Salary/rate below target":  "Salary/rate below target",
-                                  "On-site role":  "On-site role",
                                   "Already viewed by you":  "Already viewed by you",
                                   "Fit evidence bullets":  "Fit evidence bullets",
                                   "Passed content filters":  "Passed content filters"
                               },
+    "work_mode_score_labels_description":  "Display labels for work-mode eligibility and scoring explanations.",
+    "work_mode_score_labels":  {
+                                  "selected_bonus":  "Work mode confirmed selected mode bonus",
+                                  "multiple_selected_neutral":  "Work mode neutral because multiple modes were selected",
+                                  "all_selected_neutral":  "Work mode neutral because all modes were selected",
+                                  "unknown_neutral":  "Work mode neutral because work mode was unknown"
+                              },
+    "work_type_score_labels_description":  "Display labels for work-type eligibility and scoring explanations.",
+    "work_type_score_labels":  {
+                                  "selected_bonus":  "Work type confirmed selected work type bonus",
+                                  "multiple_selected_neutral":  "Work type neutral because multiple work types were selected",
+                                  "all_selected_neutral":  "Work type neutral because all work types were selected",
+                                  "unknown_neutral":  "Work type neutral because work type was unknown"
+                              },
+    "sector_score_labels_description":  "Display labels for sector eligibility and scoring explanations.",
+    "sector_score_labels":  {
+                                  "selected_bonus":  "Sector preference matched",
+                                  "multiple_selected_neutral":  "Sector neutral because multiple sectors were selected",
+                                  "all_selected_neutral":  "Sector neutral because both sectors are selected",
+                                  "unknown_neutral":  "Sector unknown"
+                              },
+    "title_match_labels_description":  "Display labels for title-match score breakdown entries.",
+    "title_match_labels":  {
+                               "primary_match":  "Target role-family match",
+                               "primary_seniority":  "Target seniority adjustment",
+                               "secondary_match":  "Also-consider role-family match"
+                           },
+    "title_tier_labels_description":  "Display labels and help text for the target-role and keyword fields.",
+    "title_tier_labels":  {
+                              "target_roles_label":  "Target roles",
+                              "target_roles_help":  "Roles you want and are strongest in. These get the highest title-match score.",
+                              "target_roles_input_placeholder":  "Add a target role",
+                              "target_roles_empty_text":  "No target roles extracted yet.",
+                              "move_to_target_roles_label":  "Move to target roles",
+                              "keep_target_roles_continue_error":  "Please keep at least one target role before continuing.",
+                              "keep_target_roles_finish_error":  "Please keep at least one target role before finishing setup.",
+                              "also_consider_roles_label":  "Also consider",
+                              "also_consider_roles_help":  "Roles you can do but aren't your main focus. These still match but score lower.",
+                              "also_consider_roles_input_placeholder":  "Add an also-consider role",
+                              "also_consider_roles_empty_text":  "No also-consider roles extracted yet.",
+                              "move_to_also_consider_label":  "Move to also consider",
+                              "search_keyword_label":  "Search keyword",
+                              "search_keyword_help":  "The term sent to job boards. Change this and run search again to find different roles.",
+                              "search_keyword_example":  "e.g. Business Analyst"
+                          },
     "core_label_compact_map_description":  "Compact workspace labels for score explanations shown on cards and in summaries.",
     "core_label_compact_map":  {
-                                   "Primary role-family match":  "Title",
-                                   "Secondary role-family match":  "Title",
-                                   "Primary seniority adjustment":  "Title",
+                                   "Target role-family match":  "Title",
+                                   "Also-consider role-family match":  "Title",
+                                   "Target seniority adjustment":  "Title",
                                    "Description fit is excellent":  "Description",
                                    "Description fit is strong":  "Description",
                                    "Description fit is solid":  "Description",
@@ -43,8 +88,28 @@
                                    "Salary/rate below target":  "Salary",
                                    "Already viewed by you":  "Viewed",
                                    "Description capture incomplete":  "Description",
-                                   "On-site role":  "Work mode"
+                                   "Work mode confirmed selected mode bonus":  "Work mode",
+                                   "Work mode neutral because multiple modes were selected":  "Work mode",
+                                   "Work mode neutral because all modes were selected":  "Work mode",
+                                   "Work mode neutral because work mode was unknown":  "Work mode",
+                                   "Work type confirmed selected work type bonus":  "Work type",
+                                   "Work type neutral because multiple work types were selected":  "Work type",
+                                   "Work type neutral because all work types were selected":  "Work type",
+                                   "Work type neutral because work type was unknown":  "Work type",
+                                   "Work type confirmed selected work type bonus: Permanent role":  "Work type",
+                                   "Work type confirmed selected work type bonus: 12+ month contract with extension potential":  "Work type",
+                                   "Work type confirmed selected work type bonus: 12+ month contract":  "Work type",
+                                   "Work type confirmed selected work type bonus: 6-12 month contract":  "Work type",
+                                   "Work type confirmed selected work type bonus: Contract is shorter than preferred":  "Work type",
+                                   "Sector preference matched: Public sector":  "Sector",
+                                   "Sector neutral because multiple sectors were selected":  "Sector",
+                                   "Sector neutral because both sectors are selected":  "Sector",
+                                   "Sector unknown":  "Sector"
                                },
+    "workspace_meta_labels_description":  "Display labels for job card metadata rows in the workspace.",
+    "workspace_meta_labels":  {
+                                "work_type":  "Work type"
+                             },
     "reject_reason_human_map_description":  "Human-readable labels for deterministic reject reasons.",
     "reject_reason_human_map":  {
                                     "TITLE_NOT_TARGET":  "Title outside target role family",
@@ -57,6 +122,9 @@
                                     "DUPLICATE_URL":  "Duplicate listing removed",
                                     "ALREADY_APPLIED":  "Already marked as applied",
                                     "MANUALLY_HIDDEN":  "Already hidden by you",
+                                    "PREF_WORK_MODE":  "Rejected because work mode is outside selected modes.",
+                                    "PREF_SECTOR_OUTSIDE_SELECTED":  "Rejected because job sector is outside selected sectors.",
+                                    "PREF_CONTRACT_TYPE":  "Rejected because work type is outside selected work types.",
                                     "UNKNOWN":  "Other filtered-out roles"
                                 },
     "level_labels_description":  "Display labels for level aliases and evidence-strength labels.",
@@ -82,6 +150,32 @@
                                  "capability_match":  "Capability match",
                                  "matched_signal":  "Matched signal",
                                  "long_contract":  "12+ month contract",
-                                 "permanent_role":  "Permanent role"
-                             }
+                                 "permanent_role":  "Permanent role",
+                                 "competitive_signal_aligns":  "Competitive signal",
+                                 "competitive_signal_elsewhere":  "Signal elsewhere"
+                                },
+    "score_gap_labels_description":  "Display labels for workspace score-gap explanations.",
+    "score_gap_labels":  {
+                              "capability_evidence_limited":  "Capability evidence is limited: {count} matches contributed to scoring",
+                              "no_recent_posted_signal":  "No reliable recent-posted signal",
+                              "no_comparable_salary_rate":  "No comparable salary/rate found",
+                              "limited_description_confidence":  "Scoring confidence is limited because the full description was not captured"
+                          },
+    "duplicate_labels_description":  "Display labels and copy for workspace duplicate and related-job cards.",
+    "duplicate_labels":  {
+                             "confirmed_badge":  "Duplicate in workspace",
+                             "potential_badge":  "Related cards",
+                             "confirmed_tooltip":  "This job already has a matching card in your workspace.",
+                             "potential_tooltip":  "This job looks related to another card in your workspace.",
+                             "confirmed_section_heading":  "Matching cards",
+                             "potential_section_heading":  "Related cards",
+                             "callout_prefix":  "Open matching card",
+                             "help_text":  "This is the matching card in your workspace. Use it to compare details.",
+                             "match_on_normalized_title":  "same title",
+                             "match_on_company_name":  "same company",
+                             "match_on_job_key":  "same job ID",
+                             "match_on_url":  "same URL",
+                             "match_on_ats_requisition_id":  "same ATS requisition",
+                             "match_on_platform_job_id":  "same platform job ID"
+                         }
 }

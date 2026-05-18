@@ -28,6 +28,7 @@ from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.capability_matching import build_risk_and_missing_evidence, reviewed_signal_matches_for_text
 from job_hunter_agent.fit_scoring import build_fit_highlights, fit_score, fit_score_breakdown
 from job_hunter_agent.role_analysis import infer_posting_channel
+from job_hunter_agent.salary_utils import preferred_salary_display
 from job_hunter_agent.scrapers.base import (
     build_initial_flat_record,
     _build_initial_source_metadata,
@@ -277,15 +278,25 @@ def apply_hard_block_result(record: dict, details_text: str, profile: dict) -> t
 def apply_learning_signal_enrichment(record: dict, details_text: str, profile: dict) -> None:
     record["skill_observations"] = extract_skill_observations(record, profile)
     record["ad_learning_signals"] = build_ad_learning_signals(record, details_text, profile)
-    record[rs.RECORD_SALARY_KEY] = extract_salary(details_text) or record.get(rs.RECORD_CARD_SALARY_KEY) or ""
+    record[rs.RECORD_SALARY_KEY] = preferred_salary_display(
+        record.get(rs.RECORD_CARD_SALARY_KEY),
+        extract_salary(details_text),
+    )
 
 
 def apply_preference_result(record: dict, profile: dict) -> tuple[bool, str]:
     ok_pref, pref_reason = passes_preference_filters(record, profile)
     if not ok_pref:
-        print(f"REJECTED (preference gate) [{pref_reason}] {record.get(rs.RECORD_TITLE_KEY)} @ {record.get(rs.RECORD_COMPANY_KEY)}")
+        print(f"[SEEK] REJECTED (preference gate) [{pref_reason}] {record.get(rs.RECORD_TITLE_KEY)} @ {record.get(rs.RECORD_COMPANY_KEY)}")
         return False, pref_reason
     return True, "OK"
+
+
+def apply_quality_signal_enrichment(record: dict) -> None:
+    from job_hunter_agent.job_quality import detect_broad_engagement_signal  # noqa: PLC0415
+    signals = list(record.get(rs.RECORD_JOB_QUALITY_SIGNALS_KEY) or [])
+    signals.extend(detect_broad_engagement_signal(record))
+    record[rs.RECORD_JOB_QUALITY_SIGNALS_KEY] = signals
 
 
 def apply_work_mode_enrichment(record: dict, raw_source_payload: object, details_text: str) -> None:
@@ -352,6 +363,7 @@ def _process_seek_job_details(record: dict, detail_page, profile: dict, title_re
     if not ok:
         return False, reason
 
+    apply_quality_signal_enrichment(record)
     apply_work_mode_enrichment(record, raw_source_payload, details_text)
     apply_fit_summary_enrichment(record, details_text, profile, title_reason)
     return True, "OK"
@@ -362,6 +374,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record, profile, record["fit_highlights"], record["missing_evidence"], record["soft_risk_reasons"]
     )
     record["llm_learning_candidates"] = []
+    contextual_capability_matches: list = []
 
     if deterministic_review is not None:
         review = deterministic_review
@@ -382,6 +395,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         )
         review = payload["fit_review"]
         record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+        contextual_capability_matches = payload.get("contextual_capability_matches") or []
         source = str(payload.get("payload_source") or "llm")
 
     return {
@@ -389,6 +403,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         "llm_fit_grade": review["grade"],
         "review_source": source,
         "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
+        "contextual_capability_matches": contextual_capability_matches,
     }
 
 
@@ -401,7 +416,6 @@ def seek_scrape_to_records(
     hidden_job_keys: Set[str],
     run_iso: str,
     configured_date_range: int,
-    enforce_posted_age_limit: bool,
     configured_seek_max_pages: int,
     playwright_viewport_width: int,
     playwright_viewport_height: int,
@@ -433,38 +447,40 @@ def seek_scrape_to_records(
 
         try:
             seen_urls: Set[str] = set()
-            for search_target in search_targets:
+            total_targets = len(search_targets)
+            for target_index, search_target in enumerate(search_targets, start=1):
                 base_search_url = search_target["url"]
                 search_location = search_target["location"]
                 search_keywords = search_target["keywords"]
                 classification_ids = ",".join(search_target.get("classification_ids", []))
                 current_page_num = 1
 
-                print(f"Location: {search_location}")
-                print(f"Keywords: {search_keywords}")
-                print(f"classification_ids: {classification_ids}")
+                print(
+                    f"[SEEK] target {target_index}/{total_targets} | "
+                    f"location={search_location or '(all)'} | "
+                    f"keywords={search_keywords or '(unset)'} | "
+                    f"classifications={classification_ids or '(none)'} | "
+                    f"pages=1..{configured_seek_max_pages}"
+                )
 
                 while current_page_num <= configured_seek_max_pages:
+                    page_tag = f"[SEEK p{current_page_num}/{configured_seek_max_pages}]"
                     page_url = set_page_param(base_search_url, current_page_num) if current_page_num > 1 else base_search_url
 
-                    print(f"\n=== {search_location} | Page {current_page_num} ===")
-                    print("URL:", page_url)
+                    print(f"{page_tag} url={page_url}")
 
                     try:
                         list_page.goto(page_url, wait_until="domcontentloaded")
                         list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
                     except Exception as exc:
-                        print(
-                            f"No visible job cards for {search_location} on page {current_page_num}. "
-                            f"Stopping this target. [{type(exc).__name__}]"
-                        )
+                        print(f"{page_tag} no visible job cards; stopping target [{type(exc).__name__}]")
                         break
 
                     job_cards = list_page.query_selector_all(SELECTOR_CARDS)
-                    print(f"Found {len(job_cards)} job cards")
+                    print(f"{page_tag} cards={len(job_cards)}")
 
                     if len(job_cards) == 0:
-                        print("No cards found. Stopping this target.")
+                        print(f"{page_tag} no cards found; stopping target")
                         break
 
                     filter_state = extract_seek_filter_panel_state(list_page)
@@ -483,38 +499,38 @@ def seek_scrape_to_records(
                             title_reason = str(title_analysis.get("reason") or "")
                             apply_title_match_result(record, title_analysis, title_reason)
                             if not ok_title:
-                                print(f"REJECTED (title) [{title_reason}] {title}")
+                                print(f"{page_tag} REJECTED (title) [{title_reason}] {title}")
                                 apply_reject_result(record, title_reason)
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if not record[rs.RECORD_URL_KEY]:
-                                print(f"REJECTED (card) [NO_URL] {title} @ {company}")
+                                print(f"{page_tag} REJECTED (card) [NO_URL] {title} @ {company}")
                                 apply_reject_result(record, "NO_URL")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             job_key = record[rs.RECORD_JOB_KEY]
                             if job_key in applied_job_keys:
-                                print(f"SKIP (applied) {title} @ {company}")
+                                print(f"{page_tag} SKIP (applied) {title} @ {company}")
                                 apply_skip_result(record, "ALREADY_APPLIED")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if job_key in hidden_job_keys:
-                                print(f"SKIP (hidden) {title} @ {company}")
+                                print(f"{page_tag} SKIP (hidden) {title} @ {company}")
                                 apply_skip_result(record, "MANUALLY_HIDDEN")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            if enforce_posted_age_limit and posted_age_days is not None and posted_age_days > configured_date_range:
-                                print(f"REJECTED (posted) [POSTED_TOO_OLD:{configured_date_range}] {title} @ {company}")
+                            if posted_age_days is not None and posted_age_days > configured_date_range:
+                                print(f"{page_tag} REJECTED (posted) [POSTED_TOO_OLD:{configured_date_range}] {title} @ {company}")
                                 apply_reject_result(record, f"POSTED_TOO_OLD:{configured_date_range}")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
                             if record[rs.RECORD_URL_KEY] in seen_urls:
-                                print(f"SKIP (duplicate) {title} @ {company}")
+                                print(f"{page_tag} SKIP (duplicate) {title} @ {company}")
                                 apply_skip_result(record, "DUPLICATE_URL")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
@@ -530,7 +546,7 @@ def seek_scrape_to_records(
                                 salary=record.get(rs.RECORD_CARD_SALARY_KEY) or "",
                             )
                             if not ok_card:
-                                print(f"REJECTED (card gate) [{card_reason}] {title} @ {company}")
+                                print(f"{page_tag} REJECTED (card gate) [{card_reason}] {title} @ {company}")
                                 apply_reject_result(record, card_reason)
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
@@ -540,12 +556,15 @@ def seek_scrape_to_records(
                                 record = apply_kept_job_reuse(record, history_entry)
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 kept_records.append(record)
-                                print(f"KEPT (history reuse): {title} @ {company}")
+                                print(f"{page_tag} KEPT (history reuse) {title} @ {company}")
                                 continue
 
                             ok_details, reject_reason = _process_seek_job_details(record, detail_page, profile, title_reason)
                             if not ok_details:
-                                print(f"REJECTED (details/content) [{reject_reason}] {title} @ {company}")
+                                print(
+                                    f"{page_tag} REJECTED (details/content) [{reject_reason}]\n"
+                                    f"  {title} @ {company}"
+                                )
                                 apply_reject_result(record, reject_reason)
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
@@ -556,12 +575,12 @@ def seek_scrape_to_records(
                             if WORKSPACE_DEBUG_MODE:
                                 score = fit_score(record, profile)
                                 breakdown = fit_score_breakdown(record, profile)
-                                print(f"[DEBUG][SCORE] {score}/100 | {record[rs.RECORD_TITLE_KEY]} @ {record[rs.RECORD_COMPANY_KEY]} | Grade: {record.get('llm_fit_grade')} ({record.get('review_source')})")
+                                print(f"{page_tag} [DEBUG][SCORE] {score}/100 | {record[rs.RECORD_TITLE_KEY]} @ {record[rs.RECORD_COMPANY_KEY]} | Grade: {record.get('llm_fit_grade')} ({record.get('review_source')}) | {record.get(rs.RECORD_URL_KEY, '')}")
                                 for entry in breakdown:
-                                    print(f"    {entry['label']}: {entry['value']:+d}")
+                                    print(f"{page_tag}   {entry['label']}: {entry['value']:+d}")
 
                             if record[rs.RECORD_DECISION_KEY] == "REJECT":
-                                print(f"REJECTED ({record['review_source']}) {title} @ {company}")
+                                print(f"{page_tag} REJECTED ({record['review_source']}) {title} @ {company}")
                                 apply_reject_result(record, "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT")
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
@@ -577,23 +596,18 @@ def seek_scrape_to_records(
                             record.pop("llm_learning_candidates", None)
                             finalize_record(job_history, audit_rows, record, run_iso)
                             kept_records.append(record)
-                            print(f"KEPT: {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
+                            print(f"{page_tag} KEPT {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
 
                         except TargetClosedError:
-                            print(
-                                f"Stopping SEEK scraping for {search_location} on page {current_page_num} because the browser target was closed."
-                            )
+                            print(f"{page_tag} browser target closed; stopping target")
                             break
                         except Exception as exc:
                             apply_reject_result(record, f"CARD_EXCEPTION:{type(exc).__name__}")
-                            print(f"REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}\n{traceback.format_exc()}")
+                            print(f"{page_tag} REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}\n{traceback.format_exc()}")
                             finalize_record(job_history, audit_rows, record, run_iso)
 
-                    if enforce_posted_age_limit and not page_has_fresh_card:
-                        print(
-                            f"All cards for {search_location} on page {current_page_num} "
-                            f"were older than {configured_date_range} day(s). Stopping this target."
-                        )
+                    if not page_has_fresh_card:
+                        print(f"{page_tag} all cards were older than {configured_date_range} day(s); stopping target")
                         break
 
                     current_page_num += 1

@@ -12,7 +12,7 @@ from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.source_registry import SOURCE_SEEK
-from job_hunter_agent.scrapers.base import keywords_to_search_string, map_job_type
+from job_hunter_agent.scrapers.base import map_job_type
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.record_schema import RECORD_LOCATION_KEY, RECORD_WORK_TYPE_KEY, RECORD_WORK_MODE_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY, RECORD_WORK_MODE_NEEDS_REVIEW_KEY, RECORD_CARD_SALARY_KEY, RECORD_TEASER_KEY
 from job_hunter_agent.utils import set_query_param
@@ -125,7 +125,7 @@ def extract_card_metadata(card, filter_state=None) -> dict:
 
 def build_seek_search_targets(profile: dict, configured_date_range: int, sort_newest_first: bool) -> List[dict]:
     search_settings = get_search_settings(profile)
-    keywords = keywords_to_search_string(search_settings.get("keywords") or "")
+    keywords = str(search_settings.get("keywords") or "").strip()
     if not keywords:
         raise ValueError(
             "Search keywords are not configured. Please complete onboarding and set a search keyword before running."
@@ -133,9 +133,6 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
     locations = _dedupe_preserve_order(
         [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     ) or [""]
-    classification_ids = _dedupe_preserve_order(
-        [str(value).strip() for value in search_settings.get("classification_ids", []) if str(value).strip()]
-    )
 
     targets: List[dict] = []
     for location in locations:
@@ -144,8 +141,6 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
         if location:
             search_location = to_seek(resolve_location(location))
             search_url = set_query_param(search_url, "where", search_location)
-        if classification_ids:
-            search_url = set_query_param(search_url, "classification", ",".join(classification_ids))
         search_url = set_query_param(search_url, "daterange", configured_date_range)
         if sort_newest_first:
             search_url = set_query_param(search_url, "sortMode", "ListedDate")
@@ -153,7 +148,6 @@ def build_seek_search_targets(profile: dict, configured_date_range: int, sort_ne
             {
                 "keywords": keywords,
                 "location": search_location if location else "",
-                "classification_ids": classification_ids,
                 "url": search_url,
             }
         )
@@ -190,6 +184,22 @@ def _expand_detail_page(detail_page) -> None:
             continue
 
 
+def _read_visible_text(page, selector: str) -> str:
+    try:
+        page.wait_for_selector(selector, timeout=8000)
+    except Exception:
+        return ""
+
+    for reader in ("inner_text", "text_content"):
+        try:
+            text = getattr(page.locator(selector), reader)()
+            if text:
+                return str(text).strip()
+        except Exception:
+            continue
+    return ""
+
+
 def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> dict:
     last_status = "empty"
     last_text = ""
@@ -202,12 +212,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
     for attempt_index in range(max(attempts, 1)):
         _expand_detail_page(detail_page)
 
-        details_text = ""
-        try:
-            detail_page.wait_for_selector(SELECTOR_DETAILS, timeout=8000)
-            details_text = (detail_page.text_content(SELECTOR_DETAILS) or "").strip()
-        except Exception:
-            details_text = ""
+        details_text = _read_visible_text(detail_page, SELECTOR_DETAILS)
 
         details_status = classify_detail_page_text(details_text)
         if details_text and details_status == "ok":
@@ -218,10 +223,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
         except Exception:
             pass
 
-        try:
-            body_text = (detail_page.text_content("body") or "").strip()
-        except Exception:
-            body_text = ""
+        body_text = _read_visible_text(detail_page, "body")
 
         body_status = classify_detail_page_text(body_text)
         if body_text and body_status == "ok":

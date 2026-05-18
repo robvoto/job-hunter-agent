@@ -10,12 +10,14 @@ from job_hunter_agent.profile_store import (
     Engagement,
     WorkMode,
     KEY_WORK_MODE_PREFERENCE,
+    VALID_WORK_MODE_PREFERENCES,
     get_scoring_rules,
     load_profile,
     normalize_engagement_type_preferences,
     normalize_match_preferences,
     normalize_work_mode_preferences,
 )
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.role_analysis import has_government_context
 from job_hunter_agent.salary_utils import salary_includes_super_or_package, salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
@@ -43,12 +45,22 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
         if work_mode and work_mode not in work_mode_prefs:
             return False, "PREF_WORK_MODE"
 
-    # Sector — exclude only when government context is explicitly detected and user wants private only.
-    # "Government only" preference does NOT hard-filter: absence of government context ≠ confirmed private.
+    # Sector — exclude only when public-sector context is explicitly detected and user wants private only.
+    # Public-sector-only preference does NOT hard-filter: absence of public-sector context ≠ confirmed private.
     sector_pref = str(preferences.get("prefer_government") or GovPref.ANY).strip().lower()
     if sector_pref == GovPref.PRIVATE:
         if has_government_context(_government_combined_text(record)):
-            return False, "PREF_SECTOR_GOVERNMENT"
+            return False, "PREF_SECTOR_OUTSIDE_SELECTED"
+
+    # Min contract length — exclude only when the job is a contract and the stated duration is below the minimum.
+    # Unknown contract duration always passes through.
+    min_months = preferences.get("min_contract_months")
+    if min_months:
+        _, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
+        if is_contract:
+            contract_months = extract_contract_months(build_scoring_source_text(record))
+            if contract_months is not None and contract_months < int(min_months):
+                return False, "CONTRACT_TOO_SHORT"
 
     # Salary — exclude only when salary is explicitly stated, parseable, and below the minimum.
     # Missing or non-comparable salary (hourly/weekly/package) always passes through.
@@ -59,6 +71,36 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
             return False, "PREF_SALARY_BELOW_MIN"
 
     return True, "OK"
+
+
+def assess_work_mode_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
+    active_profile = profile or load_profile()
+    preferences = get_match_preferences(active_profile)
+    selected_work_modes = normalize_work_mode_preferences(preferences.get(KEY_WORK_MODE_PREFERENCE))
+    selected_mode_set = set(selected_work_modes)
+    work_mode = _normalize_work_mode(record.get("work_mode") or "")
+    scoring_rules = get_scoring_rules(active_profile)
+    work_mode_rules = scoring_rules["work_mode"]
+    labels = load_ui_labels().get("work_mode_score_labels", {})
+    label_bonus = str(labels.get("selected_bonus") or "").strip()
+    label_multiple = str(labels.get("multiple_selected_neutral") or "").strip()
+    label_all = str(labels.get("all_selected_neutral") or "").strip()
+    label_unknown = str(labels.get("unknown_neutral") or "").strip()
+    if not label_bonus or not label_multiple or not label_all or not label_unknown:
+        raise ValueError("work_mode_score_labels are required in ui_labels")
+    if not selected_mode_set or selected_mode_set == VALID_WORK_MODE_PREFERENCES:
+        if work_mode:
+            return {"label": label_all, "value": 0}
+        return {"label": label_unknown, "value": 0}
+    if len(selected_mode_set) > 1:
+        if work_mode:
+            return {"label": label_multiple, "value": 0}
+        return {"label": label_unknown, "value": 0}
+    if not work_mode:
+        return {"label": label_unknown, "value": 0}
+    if work_mode in selected_mode_set:
+        return {"label": label_bonus, "value": int(work_mode_rules["selected_mode_match"])}
+    return None
 
 
 def get_match_preferences(profile: Optional[dict] = None) -> dict:
@@ -126,6 +168,13 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     preferences = get_match_preferences(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
     contract_rules = scoring_rules["contract"]
+    labels = load_ui_labels().get("work_type_score_labels", {})
+    label_bonus = str(labels.get("selected_bonus") or "").strip()
+    label_multiple = str(labels.get("multiple_selected_neutral") or "").strip()
+    label_all = str(labels.get("all_selected_neutral") or "").strip()
+    label_unknown = str(labels.get("unknown_neutral") or "").strip()
+    if not label_bonus or not label_multiple or not label_all or not label_unknown:
+        raise ValueError("work_type_score_labels are required in ui_labels")
     source_text = build_scoring_source_text(record)
     preferred_contract_months = int(preferences["preferred_contract_months"])
     short_contract_months = int(preferences["short_contract_months"])
@@ -133,48 +182,60 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
     selected_engagement_type_set = set(selected_engagement_types)
     is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
 
-    if selected_engagement_type_set == {Engagement.PERMANENT, Engagement.CONTRACT}:
-        return None
+    if not is_perm and not is_contract:
+        return {"label": label_unknown, "value": 0}
+
+    if not selected_engagement_type_set or selected_engagement_type_set == {Engagement.PERMANENT, Engagement.CONTRACT}:
+        return {"label": label_all, "value": 0}
+
+    if len(selected_engagement_type_set) > 1:
+        return {"label": label_multiple, "value": 0}
 
     if is_perm:
-        return {"label": "Permanent role", "value": int(contract_rules["permanent_match"])}
+        if selected_engagement_type_set == {Engagement.PERMANENT}:
+            return {"label": f"{label_bonus}: Permanent role", "value": int(contract_rules["permanent_match"])}
+        return None
 
     if not is_contract:
         return None
 
-    if selected_engagement_type_set != {Engagement.CONTRACT}:
-        return None
-
     contract_months = extract_contract_months(source_text)
     if contract_months is None:
-        return None
+        return {"label": label_unknown, "value": 0}
     if contract_months >= preferred_contract_months:
         if "extension" in source_text.lower():
-            return {"label": "12+ month contract with extension potential", "value": int(contract_rules["long_with_extension"])}
-        return {"label": "12+ month contract", "value": int(contract_rules["long_contract"])}
+            return {"label": f"{label_bonus}: 12+ month contract with extension potential", "value": int(contract_rules["long_with_extension"])}
+        return {"label": f"{label_bonus}: 12+ month contract", "value": int(contract_rules["long_contract"])}
     if contract_months >= short_contract_months:
-        return {"label": "6-12 month contract", "value": int(contract_rules["medium_contract"])}
-    return {"label": "Contract is shorter than preferred", "value": int(contract_rules["short_contract"])}
+        return {"label": f"{label_bonus}: 6-12 month contract", "value": int(contract_rules["medium_contract"])}
+    return {"label": f"{label_bonus}: Contract is shorter than preferred", "value": int(contract_rules["short_contract"])}
 
 
-def assess_government_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
+def assess_sector_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     active_profile = profile or load_profile()
     preferences = get_match_preferences(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
+    labels = load_ui_labels().get("sector_score_labels", {})
+    label_bonus = str(labels.get("selected_bonus") or "").strip()
+    label_multiple = str(labels.get("multiple_selected_neutral") or "").strip()
+    label_all = str(labels.get("all_selected_neutral") or "").strip()
+    label_unknown = str(labels.get("unknown_neutral") or "").strip()
+    if not label_bonus or not label_multiple or not label_all or not label_unknown:
+        raise ValueError("sector_score_labels are required in ui_labels")
     preference = str(preferences["prefer_government"] or GovPref.ANY).strip().lower()
     if preference == GovPref.ANY:
-        return None
+        return {"label": label_all, "value": 0}
 
     combined = _government_combined_text(record)
     if preference == GovPref.GOVERNMENT:
         if has_government_context(combined):
-            return {"label": "Government context", "value": abs(int(scoring_rules["government"]["match_bonus"]))}
-        return None
+            return {"label": f"{label_bonus}: Public sector", "value": abs(int(scoring_rules["government"]["match_bonus"]))}
+        return {"label": label_unknown, "value": 0}
 
     if preference == GovPref.PRIVATE:
         if has_government_context(combined):
-            return {"label": "Government context (private only)", "value": -abs(int(scoring_rules["government"]["match_bonus"]))}
-        return None
+            return {"label": f"{label_bonus}: Public sector", "value": -abs(int(scoring_rules["government"]["match_bonus"]))}
+        return {"label": label_unknown, "value": 0}
 
     return None
 

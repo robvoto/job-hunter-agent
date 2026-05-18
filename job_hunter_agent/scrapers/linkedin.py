@@ -35,8 +35,9 @@ from job_hunter_agent.description_trust import get_min_trusted_description_lengt
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
-from job_hunter_agent.scrapers.base import BaseJobScraper, keywords_to_search_string, normalize_jobspy_record
+from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
 from job_hunter_agent.utils import extract_salary
+from job_hunter_agent.salary_utils import preferred_salary_display
 from job_hunter_agent.work_mode_extraction import (
     extract_from_text,
     log_work_mode_result,
@@ -125,19 +126,25 @@ class LinkedInScraper(BaseJobScraper):
 
         targets = self._build_search_targets()
         if not targets:
-            print("[LinkedIn] No search targets configured. Skipping.")
+            print("[LinkedIn] no search targets configured; skipping")
             return kept_records, audit_rows, skill_observations
 
-        for target in targets:
-            print(f"\n[LinkedIn] Searching: {target['search_term']} | {target['location']} (Targeting up to {target['results_wanted']} results)")
+        total_targets = len(targets)
+        for target_index, target in enumerate(targets, start=1):
+            target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
+            print(
+                f"{target_tag} search_term={target['search_term'] or '(unset)'} | "
+                f"location={target['location'] or '(all)'} | "
+                f"results_wanted={target['results_wanted']}"
+            )
             try:
                 rows = self._fetch_jobspy(target)
             except Exception as exc:
-                print(f"[LinkedIn] jobspy call failed for {target['location']}: {type(exc).__name__}: {exc}")
+                print(f"{target_tag} jobspy call failed: {type(exc).__name__}: {exc}")
                 continue
 
             if rows is None or len(rows) == 0:
-                print(f"[LinkedIn] No results for {target['location']}")
+                print(f"{target_tag} no results")
                 continue
 
             if target.get("sort_newest_first"):
@@ -150,7 +157,7 @@ class LinkedInScraper(BaseJobScraper):
                 except Exception:
                     pass
 
-            print(f"[LinkedIn] Fetched {len(rows)} raw listings. Starting filter and score pipeline...")
+            print(f"{target_tag} rows={len(rows)}")
 
             for _, row in rows.iterrows():
                 record = normalize_jobspy_record(
@@ -183,7 +190,7 @@ class LinkedInScraper(BaseJobScraper):
                 record[RECORD_TITLE_REASON_KEY] = title_reason
                 record[RECORD_TITLE_MATCH_METADATA_KEY] = title_analysis
                 if not ok_title:
-                    print(f"[LinkedIn] REJECTED (title) [{title_reason}] {title}")
+                    print(f"{target_tag} REJECTED (title) [{title_reason}] {title}")
                     record[RECORD_REJECT_REASON_KEY] = title_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
@@ -205,8 +212,7 @@ class LinkedInScraper(BaseJobScraper):
                 search_settings = get_search_settings(self.profile)
                 date_range_days = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
                 posted_age = record.get(RECORD_POSTED_AGE_DAYS_KEY)
-                enforce_limit = bool(search_settings.get("enforce_posted_age_limit", DEFAULT_SEARCH_SETTINGS["enforce_posted_age_limit"]))
-                if enforce_limit and posted_age is not None and posted_age > date_range_days:
+                if posted_age is not None and posted_age > date_range_days:
                     record[RECORD_REJECT_REASON_KEY] = f"POSTED_TOO_OLD:{date_range_days}"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
@@ -222,7 +228,7 @@ class LinkedInScraper(BaseJobScraper):
                     salary=record.get(RECORD_SALARY_KEY) or "",
                 )
                 if not ok_card:
-                    print(f"[LinkedIn] REJECTED (card gate) [{card_reason}] {title} @ {company}")
+                    print(f"{target_tag} REJECTED (card gate) [{card_reason}] {title} @ {company}")
                     record[RECORD_REJECT_REASON_KEY] = card_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
@@ -233,7 +239,7 @@ class LinkedInScraper(BaseJobScraper):
                     record = apply_kept_job_reuse(record, history_entry)
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     kept_records.append(record)
-                    print(f"[LinkedIn] KEPT (history reuse): {title} @ {company}")
+                    print(f"{target_tag} KEPT (history reuse) {title} @ {company}")
                     continue
 
                 details_text = record.get(RECORD_DETAILS_TEXT_KEY) or ""
@@ -263,7 +269,7 @@ class LinkedInScraper(BaseJobScraper):
                             for match in find_hard_block_matches(details_text, self.profile.get("must_not_require_skills", []))
                         ]
                     register_hard_blocker_learning_from_rejection(record, desc_reason, details_text, profile=self.profile)
-                    print(f"[LinkedIn] REJECTED (content) [{desc_reason}] {title} @ {company}")
+                    print(f"{target_tag} REJECTED (content) [{desc_reason}] {title} @ {company}")
                     record[RECORD_REJECT_REASON_KEY] = desc_reason
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
@@ -276,9 +282,11 @@ class LinkedInScraper(BaseJobScraper):
                         fetch_external_html,
                         detect_external_date_signals,
                         detect_cv_farming_signals,
+                        detect_broad_engagement_signal,
                     )
                     _dodgy_rules = load_dodgy_job_rules()
                     _job_quality_signals.extend(detect_cv_farming_signals(details_text, _dodgy_rules))
+                    _job_quality_signals.extend(detect_broad_engagement_signal(record))
                     _raw_fields = record.get(RECORD_SOURCE_METADATA_KEY, {}).get("raw_source_fields", {})
                     _is_easy_apply = bool(_raw_fields.get("easy_apply"))
                     _apply_url = str(record.get(RECORD_SOURCE_METADATA_KEY, {}).get("apply_url") or "").strip()
@@ -295,17 +303,17 @@ class LinkedInScraper(BaseJobScraper):
                             )
                         )
                 except Exception as _qe:
-                    print(f"[LinkedIn] Job quality check skipped: {type(_qe).__name__}: {_qe}")
+                    print(f"{target_tag} job quality check skipped: {type(_qe).__name__}: {_qe}")
                 record[RECORD_JOB_QUALITY_SIGNALS_KEY] = _job_quality_signals
                 if _job_quality_signals:
                     _kinds = ", ".join(s.get("kind", "?") for s in _job_quality_signals)
-                    print(f"[LinkedIn] Quality signals [{_kinds}]: {title} @ {company}")
+                    print(f"{target_tag} Quality signals [{_kinds}] {title} @ {company}")
 
                 # Enrich from full description text
-                salary = extract_salary(details_text)
-                if salary == "N/A":
-                    salary = record.get(RECORD_SALARY_KEY) or "N/A"
-                record[RECORD_SALARY_KEY] = salary
+                record[RECORD_SALARY_KEY] = preferred_salary_display(
+                    record.get(RECORD_SALARY_KEY),
+                    extract_salary(details_text),
+                )
 
                 # Upgrade work mode via text inference only if structured metadata found nothing.
                 if record.get(RECORD_WORK_MODE_KEY) in (WORK_MODE_UNKNOWN, "", None):
@@ -341,10 +349,7 @@ class LinkedInScraper(BaseJobScraper):
                         hard_block_matches,
                         profile=self.profile,
                     )
-                    print(
-                        f"[LinkedIn] REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | "
-                        f"{'; '.join(record['hard_block_reasons'])}"
-                    )
+                    print(f"{target_tag} REJECTED (hard block) [{record['content_reason']}] {title} @ {company} | {'; '.join(record['hard_block_reasons'])}")
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
                 record_skill_observations = extract_skill_observations(record, self.profile)
@@ -383,11 +388,12 @@ class LinkedInScraper(BaseJobScraper):
 
                 # LLM gate
                 deterministic_review = deterministic_review_outcome(
-                    record, record["fit_highlights"], missing_evidence, soft_risk_reasons
+                    record, self.profile, record["fit_highlights"], missing_evidence, soft_risk_reasons
                 )
+                contextual_capability_matches: list = []
                 if deterministic_review is not None:
                     llm_review = deterministic_review
-                    print(f"[LinkedIn][LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
+                    print(f"{target_tag} [LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
                     if has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
                         payload = resolve_llm_review_payload(
                             record,
@@ -401,13 +407,15 @@ class LinkedInScraper(BaseJobScraper):
                         self.llm_cache,
                     )
                     llm_review = payload["fit_review"]
-                    print(f"[LinkedIn][LLM][{payload.get('payload_source', 'llm').upper()}] {llm_review['decision']}|{llm_review['grade']} {title}")
+                    contextual_capability_matches = payload.get("contextual_capability_matches") or []
+                    print(f"{target_tag} [LLM][{payload.get('payload_source', 'llm').upper()}] {llm_review['decision']}|{llm_review['grade']} {title}")
 
                 record["llm_decision"] = llm_review["decision"]
                 record["llm_fit_grade"] = llm_review["grade"]
+                record["contextual_capability_matches"] = contextual_capability_matches
 
                 if llm_review["decision"] == "REJECT":
-                    print(f"[LinkedIn] REJECTED (llm) {title} @ {company}")
+                    print(f"{target_tag} REJECTED (llm) {title} @ {company}")
                     record["reject_reason"] = "LLM_REJECT"
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
@@ -424,13 +432,11 @@ class LinkedInScraper(BaseJobScraper):
                 finalize_record(self.job_history, audit_rows, record, self.run_iso)
                 kept_records.append(record)
                 print(
-                    f"[LinkedIn] KEPT: {title} @ {company} | {record.get('posted')} | "
-                    f"{record.get('location')} | {record.get('work_type')} | {salary}"
+                    f"{target_tag} KEPT {title} @ {company} | {record.get('posted')} | "
+                    f"{record.get('location')} | {record.get('work_type')} | {record.get(RECORD_SALARY_KEY) or 'N/A'}"
                 )
 
-        print(
-            f"\n[LinkedIn] Done - kept {len(kept_records)} / {len(audit_rows)} total records"
-        )
+        print(f"[LinkedIn] done | kept={len(kept_records)} audit={len(audit_rows)}")
         return kept_records, audit_rows, skill_observations
 
     # -----------------------------------------------------------------------
@@ -439,7 +445,7 @@ class LinkedInScraper(BaseJobScraper):
 
     def _build_search_targets(self) -> List[dict]:
         search_settings = get_search_settings(self.profile)
-        keywords = keywords_to_search_string(search_settings.get("keywords") or "")
+        keywords = str(search_settings.get("keywords") or "").strip()
         locations = [
             str(loc).strip()
             for loc in search_settings.get("locations", [])

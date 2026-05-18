@@ -350,20 +350,22 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Title patterns - always rebuilt from parsed role headers during onboarding
     try:
         suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
-        patch["primary_job_title_pattern"] = suggestion.get("primary_job_title_pattern") or []
-        patch["secondary_title_patterns"] = suggestion.get("secondary_title_patterns") or []
-        print(f"[TITLE_PATTERNS] Extracted {len(patch['primary_job_title_pattern'])} target and {len(patch['secondary_title_patterns'])} secondary patterns")
+        patch[KEY_PRIMARY_PATTERNS] = suggestion.get(KEY_PRIMARY_PATTERNS) or []
+        patch[KEY_SECONDARY_PATTERNS] = suggestion.get(KEY_SECONDARY_PATTERNS) or []
+        print(f"[TITLE_PATTERNS] Extracted {len(patch[KEY_PRIMARY_PATTERNS])} target and {len(patch[KEY_SECONDARY_PATTERNS])} secondary patterns")
         review_signals = build_role_title_review_signals(
-            patch["secondary_title_patterns"],
+            patch[KEY_SECONDARY_PATTERNS],
             source_sections=source_sections,
         )
         if review_signals:
             register_signals(review_signals)
-        all_titles = list(patch.get("primary_job_title_pattern") or []) + list(patch.get("secondary_title_patterns") or [])
-        if all_titles:
+        target_roles = list(patch.get(KEY_PRIMARY_PATTERNS) or [])
+        if target_roles:
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
-                patch["search_settings"]["keywords"] = ", ".join(t for t in all_titles if t)
+                from job_hunter_agent.title_normalization_rules import derive_base_title_from_seniority
+                base = derive_base_title_from_seniority(target_roles[0])
+                patch["search_settings"]["keywords"] = base or target_roles[0]
                 print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
@@ -371,8 +373,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     profile = patch_profile(patch)
 
     extraction_counts = {
-        "target_titles": len(patch.get("primary_job_title_pattern") or []),
-        "secondary_titles": len(patch.get("secondary_title_patterns") or []),
+        "target_titles": len(patch.get(KEY_PRIMARY_PATTERNS) or []),
+        "secondary_titles": len(patch.get(KEY_SECONDARY_PATTERNS) or []),
         "capabilities": len(patch.get(KEY_CAPABILITY_PROFILE_RULES) or []),
         "dominant_signal_clusters": len(patch.get("dominant_signal_clusters") or []),
     }

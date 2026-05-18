@@ -84,6 +84,18 @@ const onboardingSettingsUtils = window.JobHunterSettingsUtils || {};
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const ONBOARDING_CV_PAGE_LIMIT = Number(ONBOARDING_DEFAULTS.cv_max_pages || 0);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
+const onboardingPageTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
+
+if (!onboardingPageTitleTierLabels) {
+  throw new Error('Missing title tier labels.');
+}
+
+function defaultSearchKeywordFromTargetRoles(profile) {
+  const reviewedTitles = Array.isArray(reviewTargetTitles) ? reviewTargetTitles : [];
+  const profileTitles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
+  const allTitles = reviewedTitles.concat(profileTitles).filter(Boolean);
+  return allTitles.length ? allTitles[0] : '';
+}
 const GOVERNMENT_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
   : [];
@@ -296,7 +308,7 @@ function saveWizardState() {
     searchKeywords: reviewSearchKeywordsEl?.value || '',
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
-    engagementType: getOnboardingEngagementTypeValue(),
+    engagementType: getOnboardingEngagementTypeValues(),
     preferGovernment: getGovernmentPreferenceValue(),
     primaryCvSourcePath: primaryCvSource,
     primaryCvFileName,
@@ -592,7 +604,15 @@ function setStep(stepNumber, options = {}) {
 }
 
 function normalizeLocationValue(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  return locationUi.resolveLocationValue
+    ? locationUi.resolveLocationValue(value)
+    : String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function locationLabel(value) {
+  return locationUi.getLocationLabel
+    ? locationUi.getLocationLabel(value)
+    : String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 async function tryGeolocationDefault() {
@@ -654,7 +674,7 @@ function renderSelectedLocation() {
   if (!locationSelected) return;
   const current = normalizeLocationValue(selectedLocations[0] || locationSelect?.value || '');
   locationSelected.innerHTML = current
-    ? `<span class="location-chip">${current}</span>`
+    ? `<span class="location-chip">${locationLabel(current)}</span>`
     : '';
 }
 
@@ -714,7 +734,7 @@ function validateOnboardingSettings(settings) {
 
 function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.keywords && (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120)) {
-    throw new Error('Please keep the primary search title between 2 and 120 characters.');
+    throw new Error(`Please keep the ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()} between 2 and 120 characters.`);
   }
   if (searchPrefs.locations.length !== 1) {
     throw new Error('Please choose one search location.');
@@ -733,7 +753,7 @@ function validateSearchPreferences(searchPrefs) {
     throw new Error('Please choose only remote, hybrid, or on-site.');
   }
   if (!searchPrefs.keywords) {
-    throw new Error('Please confirm one primary search title.');
+    throw new Error(`Please confirm one ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()}.`);
   }
   if (searchPrefs.minimum_salary_yearly !== '' && searchPrefs.minimum_salary_yearly !== null && searchPrefs.minimum_salary_yearly !== undefined) {
     const yearly = onboardingParseCurrencyValue(searchPrefs.minimum_salary_yearly);
@@ -802,15 +822,15 @@ function applyProfileDefaults(profile) {
   if (capabilityStrengthPresetEl) capabilityStrengthPresetEl.value = String(preset);
   if (!reviewTargetTitles.length && !reviewSecondaryTitles.length) {
     const normalizedTitles = normalizeReviewTitleLists(
-      profile?.primary_job_title_pattern || [],
-      profile?.secondary_title_patterns || [],
+      profile?.target_roles || [],
+      profile?.also_consider_roles || [],
     );
     reviewTargetTitles = normalizedTitles.primary;
     reviewSecondaryTitles = normalizedTitles.secondary;
   }
   if (reviewSearchKeywordsEl && !String(reviewSearchKeywordsEl.value || '').trim()) {
     const savedKeywords = String(searchSettings.keywords || '').trim();
-    reviewSearchKeywordsEl.value = savedKeywords || reviewTargetTitles.join(', ');
+    reviewSearchKeywordsEl.value = savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
   }
   if (reviewMinimumSalaryYearlyEl && !String(reviewMinimumSalaryYearlyEl.value || '').trim()) {
     onboardingSetCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly ?? 0);

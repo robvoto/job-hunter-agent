@@ -12,6 +12,7 @@
     const postedFilter = document.getElementById('posted_filter');
     const workTypeFilter = document.getElementById('work_type_filter');
     const workModeFilter = document.getElementById('work_mode_filter');
+    const sectorFilter = document.getElementById('sector_filter');
     const scoreFilter = document.getElementById('score_filter');
     const DEFAULT_SCORE_FILTER_VALUE = WORKSPACE_CONTEXT.defaultScoreFilterValue || 55;
     const resetFiltersButton = document.getElementById('reset_workspace_filters');
@@ -103,6 +104,7 @@
         posted: postedFilter?.value,
         workType: workTypeFilter?.value,
         workMode: workModeFilter?.value,
+        sector: sectorFilter?.value,
         score: scoreFilter?.value,
       };
       try {
@@ -132,6 +134,7 @@
         setSelectValueIfAvailable(postedFilter, filters.posted);
         setSelectValueIfAvailable(workTypeFilter, filters.workType);
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
+        setSelectValueIfAvailable(sectorFilter, filters.sector);
         setSelectValueIfAvailable(scoreFilter, filters.score);
       } catch (e) {}
     }
@@ -143,6 +146,7 @@
       if (postedFilter) postedFilter.value = 'all';
       if (workTypeFilter) workTypeFilter.value = 'all';
       if (workModeFilter) workModeFilter.value = 'all';
+      if (sectorFilter) sectorFilter.value = 'all';
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
       }
@@ -211,6 +215,7 @@
       const workType = workTypeFilter?.value || 'all';
       const workTypeValues = workType !== 'all' ? workType.split('|') : null;
       const workMode = workModeFilter?.value || 'all';
+      const sector = sectorFilter?.value || 'all';
       const scoreMode = scoreFilter?.value || 'all';
       const activeWorkspace = getActiveWorkspace();
 
@@ -219,6 +224,7 @@
         const viewed = card.dataset.viewed === '1';
         const cardWorkType = (card.dataset.workType || '').toLowerCase();
         const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
+        const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
         const cardScore = Number(card.dataset.fitScore || 0);
         const postedAge = Number(card.dataset.postedAge || 9999);
 
@@ -233,6 +239,7 @@
           if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
           if (workTypeValues && !workTypeValues.includes(cardWorkType)) visible = false;
           if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
+          if (sector !== 'all' && cardSector !== sector) visible = false;
           if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
         } else if (activeWorkspace === 'applied') {
           if (cardScope !== 'applied') visible = false;
@@ -670,7 +677,7 @@
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, scoreFilter]) {
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveWorkspaceFilters();

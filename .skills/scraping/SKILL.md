@@ -102,6 +102,12 @@ These logs exist to support later review and learning. They must not promote new
 - These guards are application-level validation, not scraper filtering logic.
 - `search_settings.keywords` and `primary_job_title_pattern` are independent — keywords control what SEEK returns, patterns control what the title filter passes. A mismatch (e.g. keywords = "software developer" but pattern = "accounts officer") silently yields 0 kept records. When debugging zero results, verify both fields agree.
 
+## Where to find current run logs
+
+When debugging a scrape run, use **`output/server.log`** — it contains both the FastAPI/uvicorn access log AND the full `job_hunter_agent.app` pipeline output (SEEK/LinkedIn progress, per-card REJECTED/KEPT lines, summaries). It is appended on every run, so the bottom is always the most recent run.
+
+Do **not** use `output/console.log` for diagnosing current behaviour — it is written by a separate PowerShell redirect mechanism and is stale from a previous run.
+
 ## Checklist
 - Is this collection logic, not judgement?
 - Is full-description confidence preserved?

@@ -22,13 +22,7 @@
       "pattern": "\\baps\\d+\\b",
       "kind": "positive",
       "enabled": true
-    },
-    {
-      "value": "department",
-      "pattern": "\\bdepartment\\b",
-      "kind": "positive",
-      "enabled": true
-    },
+    }, 
     {
       "value": "council",
       "pattern": "\\bcouncil\\b",

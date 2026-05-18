@@ -1,7 +1,6 @@
 """Shared base class and helpers for all job source connectors."""
 
 import json
-import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Any, Optional, Set
@@ -84,20 +83,6 @@ JOBSPY_TITLE_KEY = "title"
 JOBSPY_COMPANY_KEY = "company"
 JOBSPY_LOCATION_KEY = "location"
 JOBSPY_JOB_URL_KEY = "job_url"
-
-def keywords_to_search_string(keywords: str) -> str:
-    """Convert comma-separated keywords stored in profile to a boolean OR search string.
-
-    "Senior Business Analyst, Scrum Master" -> "Senior Business Analyst OR Scrum Master"
-    Already-OR-joined strings are returned unchanged.
-    """
-    raw = str(keywords or "").strip()
-    if not raw:
-        return raw
-    parts = [p.strip() for p in re.split(r",\s*", raw) if p.strip()]
-    if len(parts) <= 1:
-        return raw
-    return " OR ".join(parts)
 
 
 def blank_source_metadata(source: str) -> dict:
@@ -596,7 +581,7 @@ def _map_job_type(raw: str, mapping: dict) -> str:
     if mapped:
         return mapped
     _register_unknown_job_type(cleaned_raw)
-    return cleaned_raw
+    return ""
 
 
 map_job_type = _map_job_type

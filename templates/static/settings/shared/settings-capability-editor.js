@@ -92,15 +92,14 @@ window.JobHunterCapabilityEditor = (function () {
                 </button>
               </div>
               <div class="capability-card-meta">
-                <span class="cap-alias-summary">${escapeHtml(aliasCount ? `${aliasCount} alias${aliasCount === 1 ? '' : 'es'}` : 'No aliases')}</span>
                 ${aliasCount ? `
                   <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
-                    <summary>View aliases</summary>
+                    <summary class="cap-alias-summary">${escapeHtml(`${aliasCount} alias${aliasCount === 1 ? '' : 'es'}`)}</summary>
                     <div class="cap-alias-chips">${aliasChips}</div>
                   </details>
                 ` : ''}
               </div>
-              <label class="cap-strength-label">
+              <label class="cap-strength">
                 <span>Strength</span>
                 <select class="cap-level-select capability-strength-select level-${escapeHtml(rule.level || 'basic')}"
                         data-capability-field="level" aria-label="Capability strength">
@@ -119,7 +118,7 @@ window.JobHunterCapabilityEditor = (function () {
       <section class="capability-group">
         <div class="capability-group-head">
           <div>
-            <h4 style="color: var(--accent);">Capabilities</h4>
+            <h4 class="capability-group-title">Capabilities</h4>
             <p class="capability-group-copy">${helpText}</p>
           </div>
           <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>

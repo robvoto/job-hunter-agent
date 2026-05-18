@@ -39,6 +39,7 @@ from job_hunter_agent.auth import (
 )
 from job_hunter_agent.config import LOGIN_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
 from job_hunter_agent.user_context import set_user_id
+from job_hunter_agent.paths import LOCAL_USER_ID
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 
 
@@ -170,7 +171,12 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def user_context_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
         user = read_session_user(request)
-        set_user_id(user["user_id"] if user else None)
+        if user:
+            set_user_id(user["user_id"])
+        elif is_auth_disabled():
+            set_user_id(LOCAL_USER_ID)
+        else:
+            set_user_id(None)
         return await call_next(request)
 
     @app.middleware("http")

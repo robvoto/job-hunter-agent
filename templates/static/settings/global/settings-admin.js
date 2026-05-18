@@ -1,5 +1,13 @@
 window.JobHunterAdminSettings = (function () {
-  const { escapeHtml, toLines, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
+  const {
+    escapeHtml,
+    toLines,
+    setCurrencyFieldValue,
+    readCurrencyFieldValue,
+    setToggleChecked,
+    setChoiceGroupValue,
+    getChoiceGroupValue,
+  } = window.JobHunterSettingsUtils;
 
   // Fills the admin/global-settings form. Caller is responsible for storing settings
   // in loadedGlobalSettings and calling renderLlmModelOptions() afterwards.
@@ -34,15 +42,13 @@ window.JobHunterAdminSettings = (function () {
     document.getElementById('highlight_max_highlights').value = String(fitHl.max_highlights ?? '');
 
     document.getElementById('search_default_date_range_days').value = String(searchDefaults.date_range_days ?? '');
-    document.getElementById('search_default_seek_max_pages').value = String(searchDefaults.seek_max_pages ?? '');
+    setChoiceGroupValue('seek_max_pages', searchDefaults.seek_max_pages);
     document.getElementById('search_default_linkedin_hours_old').value = String(searchDefaults.linkedin_hours_old ?? '');
     document.getElementById('search_default_linkedin_results_per_search').value = String(searchDefaults.linkedin_results_per_search ?? '');
-    document.getElementById('search_default_enforce_posted_age_limit').value = searchDefaults.enforce_posted_age_limit === false ? 'false' : 'true';
-    document.getElementById('search_default_sort_newest_first').value = searchDefaults.sort_newest_first === false ? 'false' : 'true';
+    setToggleChecked('search_default_sort_newest_first', searchDefaults.sort_newest_first !== false);
     const liEasyApply = searchDefaults[LINKEDIN_EASY_APPLY_ONLY];
     document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value = (liEasyApply === null || liEasyApply === undefined) ? '' : String(liEasyApply);
     setBounds('search_default_date_range_days', searchLimits.date_range_days);
-    setBounds('search_default_seek_max_pages', searchLimits.seek_max_pages);
     setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
     setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
     document.getElementById('default_country_suffix').value = defaultCountrySuffix;
@@ -144,13 +150,6 @@ window.JobHunterAdminSettings = (function () {
       const raw = Number(document.getElementById(id).value);
       return Number.isNaN(raw) ? fallback : raw;
     };
-    const readBoolean = (id, fallback) => {
-      const raw = document.getElementById(id).value;
-      if (raw === 'true') return true;
-      if (raw === 'false') return false;
-      return fallback;
-    };
-
     return {
       fit_highlights: {
         strong_capability_count: readNumber('highlight_strong_capability_count', current.fit_highlights?.strong_capability_count),
@@ -162,11 +161,16 @@ window.JobHunterAdminSettings = (function () {
       search_settings: {
         ...currentSearch,
         date_range_days: readNumber('search_default_date_range_days', currentSearch.date_range_days),
-        seek_max_pages: readNumber('search_default_seek_max_pages', currentSearch.seek_max_pages),
+        seek_max_pages: (() => {
+          const value = Number(getChoiceGroupValue('seek_max_pages'));
+          if (!Number.isFinite(value)) {
+            throw new Error('Invalid SEEK page default.');
+          }
+          return value;
+        })(),
         linkedin_hours_old: readNumber('search_default_linkedin_hours_old', currentSearch.linkedin_hours_old),
         linkedin_results_per_search: readNumber('search_default_linkedin_results_per_search', currentSearch.linkedin_results_per_search),
-        enforce_posted_age_limit: readBoolean('search_default_enforce_posted_age_limit', currentSearch.enforce_posted_age_limit),
-        sort_newest_first: readBoolean('search_default_sort_newest_first', currentSearch.sort_newest_first),
+        sort_newest_first: Boolean(document.getElementById('search_default_sort_newest_first')?.checked),
         [LINKEDIN_EASY_APPLY_ONLY]: (() => {
           const raw = document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value;
           if (raw === '') return null;

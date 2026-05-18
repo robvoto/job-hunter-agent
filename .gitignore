@@ -46,8 +46,7 @@ pytest.ini
 docs/RUN_COMMANDS.txt 
 CLAUDE.md
 .gitignore
-NEXT_RUN.md
-CLAUDE.md
+NEXT_RUN.md 
 AGENTS - OLD.md
 docs/ARCHITECTURE - OLD.md
 docs/OPERATIONS - OLD.md
@@ -70,3 +69,4 @@ remove bad char.ps1
 docs/UI_COMPONENT_MAP.md
 tmp-fastapi.err.log
 tmp-fastapi.out.log
+CLAUDE.md

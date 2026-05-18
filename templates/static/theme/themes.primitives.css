@@ -1,0 +1,177 @@
+/* Shared primitives
+   Base document defaults, buttons, wait state, and small input wrappers.
+*/
+
+html {
+  color-scheme: light;
+}
+
+[data-theme="dark-professional"] html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.95; }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--button-text);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-soft);
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.btn-secondary {
+  background: var(--bg-surface);
+  color: var(--accent-secondary);
+  border-color: var(--border-subtle);
+}
+
+.btn-secondary:hover:not(:disabled) { background: var(--bg-muted); }
+
+.btn-danger {
+  background: var(--state-error-bg);
+  color: var(--state-error-text);
+  border-color: var(--state-error-border);
+}
+
+@keyframes waitSpin {
+  to { transform: rotate(360deg); }
+}
+
+body.job-hunter-wait-active {
+  overflow: hidden;
+}
+
+.wait-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 94%, transparent), color-mix(in srgb, var(--bg-muted) 84%, transparent)),
+    var(--bg-surface);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+
+.wait-state__spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid color-mix(in srgb, var(--text-muted) 22%, transparent);
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: waitSpin 0.9s linear infinite;
+  opacity: 0.8;
+}
+
+.wait-state__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.wait-state__copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.94rem;
+  line-height: 1.45;
+  max-width: 36ch;
+}
+
+.wait-state__subcopy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
+  max-width: 42ch;
+}
+
+.job-hunter-wait-mount {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  padding: 20px;
+  display: grid;
+  place-items: center;
+}
+
+.job-hunter-wait-mount[hidden] {
+  display: none;
+}
+
+.job-hunter-wait-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-page) 18%, transparent), color-mix(in srgb, var(--scrim) 92%, transparent)),
+    color-mix(in srgb, var(--bg-page) 14%, transparent);
+  backdrop-filter: blur(14px) saturate(0.9);
+  -webkit-backdrop-filter: blur(14px) saturate(0.9);
+}
+
+.job-hunter-wait-shell {
+  position: relative;
+  width: min(100%, 620px);
+}
+
+.job-hunter-wait-shell .wait-state {
+  min-width: 0;
+}
+
+.currency-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-input-wrap .currency-prefix {
+  position: absolute;
+  left: 14px;
+  color: var(--text-muted);
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.currency-input-wrap input,
+.currency-input-wrap input[type="text"] {
+  padding-left: 52px !important;
+  font-variant-numeric: tabular-nums;
+}

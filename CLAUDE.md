@@ -52,7 +52,7 @@ Entry point: `source_connector.py` → `source_runner.py` → individual scraper
 
 All per-user data lives under `data/users/<user_id>/`. The active user is resolved per HTTP request via a `ContextVar` in `user_context.py`, which all path helpers in `paths.py` read from. CLI/agent code must call `set_user_id()` explicitly before file operations.
 
-The local (unauthenticated) user maps to `data/users/_local/`. Key per-user files:
+When auth is disabled (debug mode), the active user is explicitly set to `_local` (`LOCAL_USER_ID`). There is no silent fallback — calling any path helper without a user set raises a `RuntimeError`. Key per-user files:
 - `profile.json` — runtime candidate truth (capabilities, preferences, learning state)
 - `job_history.json` — viewed/applied/hidden state and dedup history
 - `settings.json` — per-user workspace settings

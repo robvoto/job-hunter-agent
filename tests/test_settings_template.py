@@ -8,7 +8,7 @@ from job_hunter_agent.fastapi_app import create_app
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-SETTINGS_ADMIN_PARTIAL_PATH = ROOT_DIR / "templates" / "partials" / "settings-admin.html"
+SETTINGS_ADMIN_PARTIAL_PATH = ROOT_DIR / "templates" / "partials" / "settings" / "global" / "settings-admin.html"
 
 
 def test_source_document_suffixes_are_rendered_read_only():
@@ -50,4 +50,26 @@ def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):
     monkeypatch.setattr(_pages, "is_admin", lambda request: False)
     candidate_html = client.get("/settings").text
     assert 'class="sidebar-admin-badge"' not in candidate_html
-    assert 'href="/global-settings"' not in candidate_html
+
+
+def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(_fa, "read_session_username", lambda request: "test@example.com")
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
+
+    client = TestClient(create_app())
+    html = client.get("/settings").text
+
+    assert 'id="engagement_type_label"' in html
+    assert 'class="choice-strip"' in html
+    assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'input type="checkbox" name="engagement_type"' in html
+    assert 'select id="engagement_type"' not in html
+    assert 'id="keywords"' in html
+    assert 'data-chip-editor="keywords"' not in html
+    assert 'Search keyword' in html
+    assert 'placeholder="e.g. Business Analyst"' in html
+    assert 'id="prefer_government_choices"' in html
+    assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'select id="prefer_government"' not in html

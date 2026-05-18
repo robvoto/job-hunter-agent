@@ -106,10 +106,8 @@
     }
   },
   "work_mode": {
-    "description": "Score adjustments for hybrid, remote, and on-site roles.",
-    "hybrid": 3,
-    "remote": 5,
-    "on_site": -2
+    "description": "Score adjustment for a confirmed selected work mode. Multiple selected modes are neutral.",
+    "selected_mode_match": 5
   },
   "salary": {
     "description": "Score adjustments for salary or rate fit.",
@@ -130,17 +128,15 @@
     "secondary_match": -1
   },
   "contract": {
-    "description": "Score adjustments for permanent, contract, and contract-length preferences.",
+    "description": "Score adjustments for selected work type preference and contract-length confidence.",
     "permanent_match": 10,
-    "permanent_when_contract_preferred": -5,
-    "contract_when_permanent_preferred": -5,
     "long_with_extension": 9,
     "long_contract": 8,
     "medium_contract": 5,
     "short_contract": -4
   },
   "government": {
-    "description": "Score adjustments for government-context matches.",
+    "description": "Score adjustments for sector matches using public-sector context evidence.",
     "match_bonus": 4
   },
   "evidence_tier_weights": {
@@ -158,6 +154,12 @@
     "contract": 1.0,
     "government": 1.0,
     "freshness": 1.0
+  },
+  "capability_contextual_llm": {
+    "description": "Controls how LLM contextual capability matches are credited in scoring. High-confidence matches receive the same credit as deterministic matches. Medium and low receive no credit but are logged for review.",
+    "confidence_levels_with_credit": ["high"],
+    "confidence_levels_logged_only": ["medium"],
+    "confidence_levels_ignored": ["low"]
   },
   "deterministic_review_thresholds": {
     "description": "Controls the pre-LLM deterministic shortcut in source_learning.deterministic_review_outcome. When a job clears one of these rules it is decided without an LLM call (review_source='rule'). To calibrate, filter audit_records.json on review_source='rule' or 'rule+learning' and check whether the det_rule value matches your expectation.",

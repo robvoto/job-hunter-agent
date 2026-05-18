@@ -3,6 +3,12 @@ const { escapeHtml, normalizeReviewText, patternToLabel, normalizeWorkModePrefer
 const onboardingFlowCurrencyUi = window.JobHunterCurrencyUi || {};
 const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
+const onboardingLocationUi = window.JobHunterLocationUi || {};
+const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
+
+if (!onboardingFlowTitleTierLabels) {
+  throw new Error('Missing title tier labels.');
+}
 
 function normalizeReviewTitle(value) {
   return patternToLabel(value) || normalizeReviewText(value);
@@ -14,6 +20,10 @@ function normalizeReviewTitleKey(value) {
 
 function normalizeReviewAlias(value) {
   return normalizeReviewText(value).toLowerCase();
+}
+
+function locationLabel(value) {
+  return onboardingLocationUi.getLocationLabel ? onboardingLocationUi.getLocationLabel(value) : normalizeReviewText(value);
 }
 
 function normalizeReviewCapability(rule) {
@@ -152,7 +162,7 @@ function workModePreferenceLabel(values) {
   if (!selected.length) {
     return workModePreferenceNoneLabel;
   }
-  return selected.map((value) => workModePreferenceLabels[value] || value).join(', ');
+  return selected.map((value) => workModePreferenceLabels[value] || value).join(' | ');
 }
 
 function governmentPreferenceLabel(value) {
@@ -233,7 +243,9 @@ function updateCheckStep() {
     ? `${reviewCapabilityRules.length} capability row${reviewCapabilityRules.length === 1 ? '' : 's'}`
     : 'None';
   flowRefs.checkSearchTitle.textContent = searchPrefs.keywords || 'Not provided';
-  flowRefs.checkLocations.textContent = searchPrefs.locations.length ? searchPrefs.locations.join(' | ') : 'Not provided';
+  flowRefs.checkLocations.textContent = searchPrefs.locations.length
+    ? searchPrefs.locations.map(locationLabel).join(' | ')
+    : 'Not provided';
   flowRefs.checkEngagementType.textContent = engagementTypeLabel(searchPrefs.engagement_type);
   flowRefs.checkWorkModePreference.textContent = workModePreferenceLabel(searchPrefs.work_mode_preference);
   flowRefs.checkGovernmentPreference.textContent = governmentPreferenceLabel(searchPrefs.prefer_government);
@@ -246,15 +258,17 @@ function setSelectedLocations(locations) {
   const value = String(Array.isArray(locations) && locations.length ? locations[0] : '').trim();
   const current = String(select?.value || selectedLocations[0] || '').trim();
   const next = value || current;
-  selectedLocations = next ? [next] : [];
-  if (select) select.value = next;
+  const resolved = onboardingLocationUi.resolveLocationValue ? onboardingLocationUi.resolveLocationValue(next) : next;
+  selectedLocations = resolved ? [resolved] : [];
+  if (select) select.value = resolved;
   renderSelectedLocation();
 }
 
-function defaultSearchKeywordsFromReviewedTitles(profile) {
+function defaultSearchKeywordFromTargetRoles(profile) {
   const reviewedTitles = Array.isArray(reviewTargetTitles) ? reviewTargetTitles : [];
-  const profileTitles = Array.isArray(profile?.primary_job_title_pattern) ? profile.primary_job_title_pattern : [];
-  return dedupeReviewList([...reviewedTitles, ...profileTitles]).join(', ');
+  const profileTitles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
+  const allTitles = dedupeReviewList([...reviewedTitles, ...profileTitles]);
+  return allTitles.length ? allTitles[0] : '';
 }
 
 function hydrateSearchBasics(profile) {
@@ -263,7 +277,7 @@ function hydrateSearchBasics(profile) {
   const salaryPreferences = profile?.salary_preferences || {};
   const currentKeywords = String(flowRefs.reviewSearchKeywords.value || '').trim();
   const savedKeywords = String(searchSettings.keywords || '').trim();
-  flowRefs.reviewSearchKeywords.value = currentKeywords || savedKeywords || defaultSearchKeywordsFromReviewedTitles(profile);
+  flowRefs.reviewSearchKeywords.value = currentKeywords || savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
   const currentSalaryYearly = String(flowRefs.reviewMinimumSalaryYearly.value || '').trim();
   const currentSalaryDaily = String(flowRefs.reviewMinimumDailyRate.value || '').trim();
   if (!currentSalaryYearly) {
@@ -438,18 +452,18 @@ function renderReviewStep() {
   renderReviewChipList(
     'review_target_titles_list',
     reviewTargetTitles,
-    'No primary job titles extracted yet.',
+    onboardingFlowTitleTierLabels.target_roles_empty_text,
     'data-remove-review-target',
     'data-move-review-target',
-    'Move to secondary',
+    onboardingFlowTitleTierLabels.move_to_also_consider_label,
   );
   renderReviewChipList(
     'review_secondary_titles_list',
     reviewSecondaryTitles,
-    'No secondary titles extracted yet.',
+    onboardingFlowTitleTierLabels.also_consider_roles_empty_text,
     'data-remove-review-secondary',
     'data-move-review-secondary',
-    'Move to primary',
+    onboardingFlowTitleTierLabels.move_to_target_roles_label,
   );
   renderReviewCapabilities();
   saveWizardState();
@@ -457,8 +471,8 @@ function renderReviewStep() {
 
 function hydrateDraftStep(profile) {
   const normalizedTitles = normalizeReviewTitleLists(
-    profile?.primary_job_title_pattern || [],
-    profile?.secondary_title_patterns || [],
+    profile?.target_roles || [],
+    profile?.also_consider_roles || [],
   );
   reviewTargetTitles = normalizedTitles.primary;
   reviewSecondaryTitles = normalizedTitles.secondary;
@@ -470,11 +484,11 @@ function hydrateDraftStep(profile) {
 
 function buildCompletionRedirectState(payload, searchPrefs) {
   const profile = payload?.profile || {};
-  const targets = Array.isArray(profile.primary_job_title_pattern)
-    ? profile.primary_job_title_pattern.slice(0, 4).map((value) => String(value || '').trim()).filter(Boolean)
+  const targets = Array.isArray(profile.target_roles)
+    ? profile.target_roles.slice(0, 4).map((value) => String(value || '').trim()).filter(Boolean)
     : [];
   const locations = Array.isArray(searchPrefs?.locations)
-    ? searchPrefs.locations.map((value) => String(value || '').trim()).filter(Boolean)
+    ? searchPrefs.locations.map((value) => locationLabel(value)).filter(Boolean)
     : [];
   return {
     kind: isRebuildMode ? 'profile-refresh' : 'onboarding-complete',
@@ -500,7 +514,7 @@ function formatExtractionSummary(counts) {
   const primary = Number(counts.target_titles || 0);
   const secondary = Number(counts.secondary_titles || 0);
   const capabilities = Number(counts.capabilities || 0);
-  return `Extracted ${primary} primary title(s), ${secondary} secondary title(s), and ${capabilities} capability row(s) from your CV.`;
+  return `Extracted ${primary} ${onboardingFlowTitleTierLabels.target_roles_label}, ${secondary} ${onboardingFlowTitleTierLabels.also_consider_roles_label}, and ${capabilities} capability row(s) from your CV.`;
 }
 
 async function createProfile() {
@@ -551,7 +565,7 @@ async function createProfile() {
 
 function continueFromReview() {
   if (!reviewTargetTitles.length) {
-    throw new Error('Please keep at least one primary job title before continuing.');
+    throw new Error(onboardingFlowTitleTierLabels.keep_target_roles_continue_error);
   }
   maxUnlockedStep = Math.max(maxUnlockedStep, SEARCH_STEP);
   renderReviewStep();
@@ -578,7 +592,7 @@ async function finishSetup() {
   const searchPrefs = searchPreferencesPayload();
   validateSearchPreferences(searchPrefs);
   if (!reviewTargetTitles.length) {
-    throw new Error('Please keep at least one target title before finishing setup.');
+    throw new Error(onboardingFlowTitleTierLabels.keep_target_roles_finish_error);
   }
 
   const response = await jobHunterFetch('/api/onboarding/confirm-profile-signals', {
@@ -592,8 +606,8 @@ async function finishSetup() {
         prefer_government: searchPrefs.prefer_government,
         minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
         minimum_daily_rate: searchPrefs.minimum_daily_rate,
-      primary_job_title_pattern: reviewTargetTitles,
-      secondary_title_patterns: reviewSecondaryTitles,
+      target_roles: reviewTargetTitles,
+      also_consider_roles: reviewSecondaryTitles,
       capability_profile_rules: reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
     }),
   });

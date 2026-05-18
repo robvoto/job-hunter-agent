@@ -247,6 +247,8 @@ Workspace responsibilities:
 * filtering visibility
 * diagnostics visibility
 
+Workspace sidebar totals are user-scoped and should be read from the same active user bucket that produced the latest run. A zeroed sidebar after a successful scrape usually means the request or run context resolved a different user id, not that the scrape found nothing.
+
 The workspace is a persistent operational workspace.
 
 ---
@@ -290,10 +292,11 @@ It is not intended for normal end-user preferences.
 | Data Type                     | Authority Level                     |
 | ----------------------------- | ----------------------------------- |
 | `data/users/<user_id>/profile.json` | Runtime candidate truth             |
+| `data/users/<user_id>/job_history.json` | Persistent job state and dedup     |
+| `data/users/<user_id>/workspace_results.html` | Rendered workspace output      |
 | Knowledge JSON files          | Approved runtime business knowledge |
 | Signal registry pending items | Review-only                         |
-| `output/` files               | Disposable runtime output           |
-| Workspace state/history       | Persistent operational state        |
+| `data/runtime/` files         | Disposable runtime output (costs, cache) |
 
 ---
 

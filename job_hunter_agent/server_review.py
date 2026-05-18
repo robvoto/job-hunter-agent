@@ -119,7 +119,7 @@ def _save_block_similar_feedback_impl(
         labels = "', '".join(r["reason"].split("'")[1] if "'" in r["reason"] else r["pattern"] for r in added)
         message = f"Blocked '{labels}'. {len(skipped)} pattern(s) already existed."
     elif added:
-        message = f"Blocked {len(added_rules)} pattern(s). Similar jobs will be filtered in future runs."
+        message = f"Blocked {len(added)} pattern(s). Similar jobs will be filtered in future runs."
     else:
         message = "All selected patterns already existed as title block rules."
 

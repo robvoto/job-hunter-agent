@@ -1,5 +1,5 @@
-from job_hunter_agent import filters
-from job_hunter_agent.preferences import assess_contract_preference, passes_preference_filters, salary_fit_adjustment
+from job_hunter_agent import filters, fit_scoring, workspace_renderer
+from job_hunter_agent.preferences import assess_contract_preference, display_work_type_label, passes_preference_filters, salary_fit_adjustment
 
 
 def _profile():
@@ -51,18 +51,16 @@ def test_salary_fit_adjustment_is_neutral_for_unsupported_periods():
     assert salary_fit_adjustment({"work_type": "Full time", "salary": "$14,000 per month"}, profile) == 0
 
 
-def test_unknown_work_type_does_not_create_a_contract_signal():
+def test_unknown_work_type_returns_neutral_signal():
     profile = {
         "match_preferences": {
-            "engagement_type": "both",
+            "engagement_type": ["permanent", "contract"],
             "preferred_contract_months": 12,
             "short_contract_months": 6,
         },
         "scoring_rules": {
             "contract": {
                 "permanent_match": 1,
-                "permanent_when_contract_preferred": -1,
-                "contract_when_permanent_preferred": -1,
                 "long_with_extension": 4,
                 "long_contract": 3,
                 "medium_contract": 2,
@@ -71,8 +69,14 @@ def test_unknown_work_type_does_not_create_a_contract_signal():
         },
     }
 
-    assert assess_contract_preference({"work_type": ""}, profile) is None
-    assert assess_contract_preference({"work_type": "unknown"}, profile) is None
+    assert assess_contract_preference({"work_type": ""}, profile) == {
+        "label": "Work type neutral because work type was unknown",
+        "value": 0,
+    }
+    assert assess_contract_preference({"work_type": "unknown"}, profile) == {
+        "label": "Work type neutral because work type was unknown",
+        "value": 0,
+    }
 
 
 def test_unknown_work_type_still_passes_quick_card_filter(monkeypatch):
@@ -80,8 +84,8 @@ def test_unknown_work_type_still_passes_quick_card_filter(monkeypatch):
         filters,
         "load_profile",
         lambda: {
-            "primary_job_title_pattern": [r"software engineer"],
-            "secondary_title_patterns": [],
+            "target_roles": [r"software engineer"],
+            "also_consider_roles": [],
             "reject_title_rules": [],
             "cheap_reject_metadata_rules": [],
             "cheap_keep_counter_patterns": [],
@@ -100,6 +104,91 @@ def test_unknown_work_type_still_passes_quick_card_filter(monkeypatch):
     assert reason == "OK"
 
 
+def test_display_work_type_label_normalizes_full_time_to_permanent():
+    assert display_work_type_label({"work_type": "Full time"}) == "Permanent"
+
+def test_display_work_type_label_normalizes_contract_to_contract():
+    assert display_work_type_label({"work_type": "Contract"}) == "Contract"
+
+
+def test_display_work_type_label_returns_empty_for_unknown():
+    assert display_work_type_label({"work_type": "unknown"}) == ""
+
+
+def test_single_selected_work_type_blocks_confirmed_full_time_role():
+    profile = {
+        "match_preferences": {
+            "engagement_type": ["contract"],
+        },
+    }
+
+    ok, reason = passes_preference_filters({"work_type": "Full time"}, profile)
+
+    assert ok is False
+    assert reason == "PREF_CONTRACT_TYPE"
+    assert workspace_renderer.humanize_reject_reason(reason) == "Rejected because work type is outside selected work types."
+
+
+def test_single_selected_work_type_scores_confirmed_contract_role():
+    profile = {
+        "match_preferences": {
+            "engagement_type": ["contract"],
+            "preferred_contract_months": 12,
+            "short_contract_months": 6,
+        },
+        "scoring_rules": {
+            "contract": {
+                "permanent_match": 1,
+                "long_with_extension": 4,
+                "long_contract": 3,
+                "medium_contract": 2,
+                "short_contract": -1,
+            },
+        },
+    }
+
+    item = assess_contract_preference(
+        {
+            "work_type": "Contract/Temp",
+            "fit_source_text": "12 month contract with extension option.",
+        },
+        profile,
+    )
+
+    assert item == {
+        "label": "Work type confirmed selected work type bonus: 12+ month contract with extension potential",
+        "value": 4,
+    }
+
+
+def test_multiple_selected_work_types_are_neutral_for_scoring():
+    profile = {
+        "match_preferences": {
+            "engagement_type": ["permanent", "contract"],
+            "preferred_contract_months": 12,
+            "short_contract_months": 6,
+        },
+        "scoring_rules": {
+            "contract": {
+                "permanent_match": 1,
+                "long_with_extension": 4,
+                "long_contract": 3,
+                "medium_contract": 2,
+                "short_contract": -1,
+            },
+        },
+    }
+
+    assert assess_contract_preference({"work_type": "Full time"}, profile) == {
+        "label": "Work type neutral because all work types were selected",
+        "value": 0,
+    }
+    assert assess_contract_preference({"work_type": "Contract/Temp", "fit_source_text": "12 month contract."}, profile) == {
+        "label": "Work type neutral because all work types were selected",
+        "value": 0,
+    }
+
+
 def test_work_mode_preference_blocks_mismatched_known_modes():
     profile = {
         "match_preferences": {
@@ -111,16 +200,160 @@ def test_work_mode_preference_blocks_mismatched_known_modes():
 
     assert ok is False
     assert reason == "PREF_WORK_MODE"
+    assert workspace_renderer.humanize_reject_reason(reason) == "Rejected because work mode is outside selected modes."
 
 
 def test_work_mode_preference_allows_any_selected_mode():
     profile = {
         "match_preferences": {
-            "work_mode_preference": ["remote", "hybrid"],
+            "work_mode_preference": ["remote", "hybrid", "onsite"],
         },
     }
 
-    ok, reason = passes_preference_filters({"work_mode": "Hybrid"}, profile)
+    ok, reason = passes_preference_filters({"work_mode": "On-site"}, profile)
 
     assert ok is True
     assert reason == "OK"
+
+
+def test_all_work_modes_selected_keeps_onsite_neutral_for_scoring():
+    profile = {
+        "match_preferences": {
+            "work_mode_preference": ["remote", "hybrid", "onsite"],
+        },
+        "scoring_rules": {
+            "work_mode": {
+                "selected_mode_match": 5,
+            },
+        },
+    }
+
+    breakdown = fit_scoring.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney",
+            "work_type": "Contract",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        profile,
+    )
+
+    assert any(item["label"] == "Work mode neutral because all modes were selected" and item["value"] == 0 for item in breakdown)
+
+
+def test_work_mode_selection_bonus_applies_only_to_single_selected_mode():
+    profile = {
+        "match_preferences": {
+            "work_mode_preference": ["remote"],
+        },
+        "scoring_rules": {
+            "work_mode": {
+                "selected_mode_match": 5,
+            },
+        },
+    }
+
+    breakdown = fit_scoring.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney",
+            "work_type": "Contract",
+            "work_mode": "Remote",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        profile,
+    )
+
+    assert any(item["label"] == "Work mode confirmed selected mode bonus" and item["value"] == 5 for item in breakdown)
+
+
+def test_multiple_selected_work_modes_are_neutral_for_scoring():
+    profile = {
+        "match_preferences": {
+            "work_mode_preference": ["remote", "onsite"],
+        },
+        "scoring_rules": {
+            "work_mode": {
+                "selected_mode_match": 5,
+            },
+        },
+    }
+
+    remote_breakdown = fit_scoring.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney",
+            "work_type": "Contract",
+            "work_mode": "Remote",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        profile,
+    )
+    onsite_breakdown = fit_scoring.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney",
+            "work_type": "Contract",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        profile,
+    )
+
+    assert any(item["label"] == "Work mode neutral because multiple modes were selected" and item["value"] == 0 for item in remote_breakdown)
+    assert any(item["label"] == "Work mode neutral because multiple modes were selected" and item["value"] == 0 for item in onsite_breakdown)
+
+
+def test_unknown_work_mode_stays_neutral():
+    profile = {
+        "match_preferences": {
+            "work_mode_preference": ["remote"],
+        },
+        "scoring_rules": {
+            "work_mode": {
+                "selected_mode_match": 5,
+            },
+        },
+    }
+
+    ok, reason = passes_preference_filters({"work_mode": "unknown"}, profile)
+    breakdown = fit_scoring.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney",
+            "work_type": "Contract",
+            "work_mode": "unknown",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+        },
+        profile,
+    )
+
+    assert ok is True
+    assert reason == "OK"
+    assert any(item["label"] == "Work mode neutral because work mode was unknown" and item["value"] == 0 for item in breakdown)

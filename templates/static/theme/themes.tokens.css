@@ -1,0 +1,270 @@
+/* Theme tokens
+   This file owns theme palettes and shared design tokens only.
+*/
+
+/* Theme: Soft Professional
+   Default theme. Balanced surfaces with a green primary accent and blue support accent.
+*/
+:root,
+[data-theme="soft-professional"] {
+  /* Core surfaces */
+  --bg-page: #f4f8f3;
+  --bg-surface: #fbfef9;
+  --bg-muted: #e9f2e7;
+  --scrim: rgba(31, 41, 51, 0.35);
+  /* Text and borders */
+  --text-primary: #1f2933;
+  --text-muted: #5b6470;
+  --border-subtle: #d3dfcf;
+  --border-strong: #7ea67c;
+  /* Brand accents */
+  --accent: #2f7d5f;
+  --accent-hover: #25644b;
+  --accent-soft: #dff0e6;
+  --button-text: #ffffff;
+  --shadow-soft: 0 12px 30px rgba(31, 41, 51, 0.08);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  /* Semantic states */
+  --state-success-bg: #ecfdf3;
+  --state-success-border: #bbf7d0;
+  --state-success-text: #166534;
+  --state-info-bg: #eef6fb;
+  --state-info-border: #bfd9ea;
+  --state-info-text: #275e86;
+  --state-error-bg: #fff7ed;
+  --state-error-border: #fed7aa;
+  --state-error-text: #9a3412;
+  --state-warning-bg: #fff9e8;
+  --state-warning-border: #ebd68a;
+  --state-warning-text: #8a5b14;
+  --state-neutral-bg: #f8fafc;
+  --state-neutral-border: #cbd5e1;
+  --state-neutral-text: #475569;
+  /* Helper text and spacing */
+  --help-copy-font-size: 0.8rem;
+  --help-copy-line-height: 1.32;
+  --surface-pad-block-xl: 20px;
+  --surface-pad-block-lg: 16px;
+  --surface-pad-block-md: 14px;
+  --surface-pad-block-sm: 10px;
+  --surface-pad-block-xs: 8px;
+  --surface-pad-inline-xl: 26px;
+  --surface-pad-inline-lg: 22px;
+  --surface-pad-inline-md: 18px;
+  --surface-pad-inline-sm: 14px;
+  --surface-pad-inline-xs: 12px;
+  --surface-gap-lg: 16px;
+  --surface-gap-md: 12px;
+  --surface-gap-sm: 8px;
+  --setting-control-min-width: 280px;
+  --setting-control-width: 320px;
+  /* Fit / tone tokens */
+  --tone-strong: var(--state-success-text);
+  --tone-good: var(--state-info-text);
+  --tone-possible: var(--state-warning-text);
+  --tone-stretch: var(--state-error-text);
+  --opacity-med: 0.4;
+  --opacity-high: 0.8;
+  --progress-track: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  --insight-bg: var(--state-info-bg);
+  --insight-border: var(--state-info-border);
+  --block-bg: var(--state-error-bg);
+  --block-text: var(--state-error-text);
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  --muted: var(--text-muted);
+  --tone-strong-bg: color-mix(in srgb, var(--tone-strong) 8%, transparent);
+  --tone-good-bg: color-mix(in srgb, var(--tone-good) 8%, transparent);
+  --tone-possible-bg: color-mix(in srgb, var(--tone-possible) 10%, transparent);
+  --tone-stretch-bg: color-mix(in srgb, var(--tone-stretch) 8%, transparent);
+  /* Secondary accent and focus highlight */
+  --accent-secondary: #275e86;
+  --selection-accent: var(--accent);
+  /* Derived surface variants */
+  --bg-panel-glass: var(--bg-surface);
+  --border-panel-glass: var(--border-subtle);
+  --bg-toolbar-glass: var(--bg-surface);
+  --bg-chip-subtle: color-mix(in srgb, var(--bg-surface) 86%, var(--border-subtle));
+  --border-chip-subtle: color-mix(in srgb, var(--border-subtle) 84%, var(--accent) 16%);
+  --font-sans: "Segoe UI", Aptos, Arial, sans-serif;
+  --font-serif: "Iowan Old Style", Georgia, serif;
+}
+
+/* Theme: Bold Aggressive
+   Higher contrast theme with sharp corners and an orange primary accent.
+*/
+[data-theme="bold-aggressive"] {
+  /* Core surfaces */
+  --bg-page: #f0f0f0;
+  --bg-surface: #ffffff;
+  --bg-muted: #f5f5f5;
+  --scrim: rgba(0, 0, 0, 0.45);
+  /* Text and borders */
+  --text-primary: #0a0a0a;
+  --text-muted: #444444;
+  --border-subtle: #c0c0c0;
+  --border-strong: #777777;
+  /* Brand accents */
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
+  --accent-soft: #ffe8d9;
+  --button-text: #ffffff;
+  --shadow-soft: 0 4px 10px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.10);
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  /* Semantic states */
+  --state-success-bg: #ecfdf5;
+  --state-success-border: #86efac;
+  --state-success-text: #166534;
+  --state-info-bg: #eff6ff;
+  --state-info-border: #93c5fd;
+  --state-info-text: #1d4ed8;
+  --state-error-bg: #fff7ed;
+  --state-error-border: #fdba74;
+  --state-error-text: #9a3412;
+  --state-warning-bg: #fffbeb;
+  --state-warning-border: #fbbf24;
+  --state-warning-text: #78350f;
+  --state-neutral-bg: #f8fafc;
+  --state-neutral-border: #cbd5e1;
+  --state-neutral-text: #475569;
+  /* Helper text and spacing */
+  --help-copy-font-size: 0.8rem;
+  --help-copy-line-height: 1.32;
+  --surface-pad-block-xl: 20px;
+  --surface-pad-block-lg: 16px;
+  --surface-pad-block-md: 14px;
+  --surface-pad-block-sm: 10px;
+  --surface-pad-block-xs: 8px;
+  --surface-pad-inline-xl: 26px;
+  --surface-pad-inline-lg: 22px;
+  --surface-pad-inline-md: 18px;
+  --surface-pad-inline-sm: 14px;
+  --surface-pad-inline-xs: 12px;
+  --surface-gap-lg: 16px;
+  --surface-gap-md: 12px;
+  --surface-gap-sm: 8px;
+  --setting-control-min-width: 280px;
+  --setting-control-width: 320px;
+  /* Fit / tone tokens */
+  --tone-strong: var(--state-success-text);
+  --tone-good: var(--state-info-text);
+  --tone-possible: var(--state-warning-text);
+  --tone-stretch: var(--state-error-text);
+  --opacity-med: 0.4;
+  --opacity-high: 0.8;
+  --progress-track: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  --insight-bg: var(--state-info-bg);
+  --insight-border: var(--state-info-border);
+  --block-bg: var(--state-error-bg);
+  --block-text: var(--state-error-text);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+  --muted: var(--text-muted);
+  --tone-strong-bg: color-mix(in srgb, var(--tone-strong) 15%, transparent);
+  --tone-good-bg: color-mix(in srgb, var(--tone-good) 15%, transparent);
+  --tone-possible-bg: color-mix(in srgb, var(--tone-possible) 20%, transparent);
+  --tone-stretch-bg: color-mix(in srgb, var(--tone-stretch) 15%, transparent);
+  /* Secondary accent and focus highlight */
+  --accent-secondary: #d97706;
+  --selection-accent: var(--accent);
+  /* Derived surface variants */
+  --bg-panel-glass: var(--bg-surface);
+  --border-panel-glass: var(--border-subtle);
+  --bg-toolbar-glass: var(--bg-surface);
+  --bg-chip-subtle: color-mix(in srgb, var(--bg-surface) 86%, var(--border-subtle));
+  --border-chip-subtle: color-mix(in srgb, var(--border-subtle) 84%, var(--accent) 16%);
+  --font-sans: "Segoe UI", Aptos, Arial, sans-serif;
+  --font-serif: "Iowan Old Style", Georgia, serif;
+}
+
+/* Theme: Dark Professional
+   Enterprise dark SaaS. Orange primary, blue info, amber warn, red danger.
+   Target aesthetic: Linear / GitHub dark / Vercel dashboard.
+*/
+[data-theme="dark-professional"] {
+  /* Core surfaces */
+  --bg-page: #0d1117;
+  --bg-surface: #111827;
+  --bg-muted: #161e2b;
+  --scrim: rgba(0, 0, 0, 0.65);
+  /* Text */
+  --text-primary: #f8fafc;
+  --text-muted: #94a3b8;
+  /* Borders */
+  --border-subtle: #263241;
+  --border-strong: #334155;
+  /* Brand accents */
+  --accent: #ff6b1a;
+  --accent-hover: #ff7a2f;
+  --accent-soft: rgba(255, 107, 26, 0.14);
+  --button-text: #ffffff;
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  /* Semantic states — rgba so they layer cleanly on any dark surface */
+  --state-success-bg: rgba(74, 222, 128, 0.10);
+  --state-success-border: rgba(74, 222, 128, 0.28);
+  --state-success-text: #4ade80;
+  --state-info-bg: rgba(96, 165, 250, 0.12);
+  --state-info-border: rgba(96, 165, 250, 0.35);
+  --state-info-text: #60a5fa;
+  --state-error-bg: rgba(248, 113, 113, 0.10);
+  --state-error-border: rgba(248, 113, 113, 0.30);
+  --state-error-text: #f87171;
+  --state-warning-bg: rgba(251, 191, 36, 0.12);
+  --state-warning-border: rgba(251, 191, 36, 0.35);
+  --state-warning-text: #fbbf24;
+  --state-neutral-bg: #1d2736;
+  --state-neutral-border: #334155;
+  --state-neutral-text: #cbd5e1;
+  /* Helper text and spacing */
+  --help-copy-font-size: 0.8rem;
+  --help-copy-line-height: 1.32;
+  --surface-pad-block-xl: 20px;
+  --surface-pad-block-lg: 16px;
+  --surface-pad-block-md: 14px;
+  --surface-pad-block-sm: 10px;
+  --surface-pad-block-xs: 8px;
+  --surface-pad-inline-xl: 26px;
+  --surface-pad-inline-lg: 22px;
+  --surface-pad-inline-md: 18px;
+  --surface-pad-inline-sm: 14px;
+  --surface-pad-inline-xs: 12px;
+  --surface-gap-lg: 16px;
+  --surface-gap-md: 12px;
+  --surface-gap-sm: 8px;
+  --setting-control-min-width: 280px;
+  --setting-control-width: 320px;
+  /* Fit / tone tokens */
+  --tone-strong: var(--state-success-text);
+  --tone-good: var(--state-info-text);
+  --tone-possible: var(--state-warning-text);
+  --tone-stretch: var(--state-error-text);
+  --opacity-med: 0.4;
+  --opacity-high: 0.8;
+  --progress-track: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  --insight-bg: var(--state-info-bg);
+  --insight-border: var(--state-info-border);
+  --block-bg: var(--state-error-bg);
+  --block-text: var(--state-error-text);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+  --muted: var(--text-muted);
+  --tone-strong-bg: color-mix(in srgb, var(--tone-strong) 14%, transparent);
+  --tone-good-bg: color-mix(in srgb, var(--tone-good) 14%, transparent);
+  --tone-possible-bg: color-mix(in srgb, var(--tone-possible) 18%, transparent);
+  --tone-stretch-bg: color-mix(in srgb, var(--tone-stretch) 14%, transparent);
+  /* Secondary accent and focus */
+  --accent-secondary: #60a5fa;
+  --selection-accent: var(--accent);
+  /* Derived surface variants */
+  --bg-panel-glass: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 98%, transparent), color-mix(in srgb, var(--bg-page) 96%, transparent));
+  --border-panel-glass: var(--border-subtle);
+  --bg-toolbar-glass: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  --bg-chip-subtle: color-mix(in srgb, var(--bg-surface) 86%, var(--border-subtle));
+  --border-chip-subtle: color-mix(in srgb, var(--border-subtle) 78%, var(--accent) 22%);
+  --font-sans: "Segoe UI", Aptos, Arial, sans-serif;
+  --font-serif: "Iowan Old Style", Georgia, serif;
+}

@@ -4,7 +4,14 @@ LLM_ALLOWED_DECISIONS = frozenset({"KEEP", "REJECT", "MAYBE"})
 LLM_ALLOWED_GRADES = frozenset({"EXCELLENT", "STRONG", "SOLID", "WEAK", "POOR", "MISMATCH"})
 
 LLM_FIT_REVIEW_PROMPT_SHAPE = (
-    '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"}}'
+    '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
+    '"contextual_capability_matches":[{"capability_name":"...","confidence":"high|medium|low","matched_text":"...","reason":"..."}]}'
+)
+LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO = (
+    "For contextual_capability_matches: identify profile capabilities evidenced in the ad but not stated verbatim. "
+    "Use only capability names from the 'Capability levels' list above. "
+    "Set confidence to high (clearly evidenced), medium (plausibly evidenced), or low (weak signal only). "
+    "Leave the list empty if nothing is clearly evidenced beyond what is verbatim."
 )
 
 LLM_LEARNING_ONLY_PROMPT_SHAPE = (

@@ -12,7 +12,6 @@
     "classification_ids": [],
     "date_range_days": 3,
     "seek_max_pages": 3,
-    "enforce_posted_age_limit": true,
     "sort_newest_first": true,
     "linkedin_hours_old": 24,
     "linkedin_results_per_search": 25,

@@ -33,8 +33,8 @@ def test_passes_title_filters_normalizes_runtime_abbreviations(tmp_path, monkeyp
         filters,
         "load_profile",
         lambda: {
-            "primary_job_title_pattern": ["senior business analyst"],
-            "secondary_title_patterns": [],
+            "target_roles": ["senior business analyst"],
+            "also_consider_roles": [],
             "reject_title_rules": [],
         },
     )
@@ -85,8 +85,8 @@ def test_passes_title_filters_matches_base_role_family(tmp_path, monkeypatch):
         filters,
         "load_profile",
         lambda: {
-            "primary_job_title_pattern": ["business analyst"],
-            "secondary_title_patterns": ["project coordinator"],
+            "target_roles": ["business analyst"],
+            "also_consider_roles": ["project coordinator"],
             "reject_title_rules": [],
         },
     )
@@ -103,8 +103,8 @@ def test_analyze_title_filters_applies_reject_rules_to_primary_matches(monkeypat
         filters,
         "load_profile",
         lambda: {
-            "primary_job_title_pattern": ["business analyst"],
-            "secondary_title_patterns": [],
+            "target_roles": ["business analyst"],
+            "also_consider_roles": [],
             "reject_title_rules": [{"pattern": r"\btechnical\b", "reason": "TITLE_BAD_KEYWORD:technical"}],
         },
     )
@@ -120,8 +120,8 @@ def test_analyze_title_filters_applies_reject_rules_to_secondary_matches(monkeyp
         filters,
         "load_profile",
         lambda: {
-            "primary_job_title_pattern": ["business analyst"],
-            "secondary_title_patterns": ["project coordinator"],
+            "target_roles": ["business analyst"],
+            "also_consider_roles": ["project coordinator"],
             "reject_title_rules": [{"pattern": r"\btechnical\b", "reason": "TITLE_BAD_KEYWORD:technical"}],
         },
     )

@@ -276,6 +276,8 @@ def resolve_llm_review_payload(
             merged["fit_review"] = payload["fit_review"]
         if payload.get("learning_candidates"):
             merged["learning_candidates"] = payload["learning_candidates"]
+        if payload.get("contextual_capability_matches") is not None:
+            merged["contextual_capability_matches"] = payload["contextual_capability_matches"]
         merged["payload_source"] = "cache+llm"
         return merged
 

@@ -20,8 +20,10 @@ from job_hunter_agent.user_settings import (
     KEY_LLM,
 )
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.io_utils import load_job_history
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.config import AUTH_DISABLED
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -139,6 +141,33 @@ ONBOARDING_PAGE_COPY = {
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
+_ONBOARDING_TITLE_TIER_LABEL_KEYS = (
+    "target_roles_label",
+    "target_roles_help",
+    "target_roles_input_placeholder",
+    "target_roles_empty_text",
+    "move_to_target_roles_label",
+    "keep_target_roles_continue_error",
+    "keep_target_roles_finish_error",
+    "also_consider_roles_label",
+    "also_consider_roles_help",
+    "also_consider_roles_input_placeholder",
+    "also_consider_roles_empty_text",
+    "move_to_also_consider_label",
+    "search_keyword_label",
+    "search_keyword_help",
+    "search_keyword_example",
+)
+
+
+def load_onboarding_title_tier_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("title_tier_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing title_tier_labels")
+    missing = [key for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing title_tier_labels values: {', '.join(missing)}")
+    return {key: str(labels[key]).strip() for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS}
 
 
 def get_docs() -> list[dict[str, str]]:
@@ -244,6 +273,9 @@ def build_bootstrap_script(
         parts.append(
             f'<script>window.__JOB_HUNTER_GLOBAL_SETTINGS__ = {json.dumps(global_settings, ensure_ascii=True)};</script>'
         )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_TITLE_TIER_LABELS__ = {json.dumps(load_onboarding_title_tier_labels(), ensure_ascii=True)};</script>'
+    )
     parts.append(
         f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'
     )
@@ -427,7 +459,7 @@ def _validate_required_onboarding_inputs(
         raise ValueError("Location should look like a normal city, state, or region name.")
     resolve_location(location)
     if not engagement_type or any(value not in VALID_ENGAGEMENT_TYPES for value in engagement_type):
-        raise ValueError("Please choose what type of work you are open to.")
+        raise ValueError("Please choose which work types you want to include.")
 
     raw_yearly = search_preferences.get(KEY_MIN_SALARY_YEARLY)
     if raw_yearly not in (None, ""):
@@ -659,21 +691,22 @@ class SettingsHandler:
 
     @classmethod
     def _reset_current_user_state(cls) -> dict[str, Any]:
-        import traceback as _tb
-        print("WARNING: _reset_current_user_state called — all user data will be wiped")
-        _tb.print_stack()
         # Wipe every per-user data directory under data/users/
         if USERS_DIR.exists():
-            for user_dir in USERS_DIR.iterdir():
+            try:
+                user_entries = list(USERS_DIR.iterdir())
+            except OSError as _enum_err:
+                print(f"[RESET][WARN] Could not enumerate {USERS_DIR}: {_enum_err}")
+                user_entries = []
+            for user_dir in user_entries:
                 try:
                     if user_dir.is_dir():
-                        shutil.rmtree(user_dir)
+                        shutil.rmtree(user_dir, ignore_errors=True)
                     else:
                         user_dir.unlink(missing_ok=True)
                 except Exception:
                     continue
 
-        # Reset root-level fallback files (used when no user is authenticated)
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
@@ -850,3 +883,31 @@ class SettingsHandler:
             expected = expected_tokens.get(phrase, "")
             if not expected or str(provided.get(phrase) or "").strip() != expected:
                 raise ValueError(f"Missing explicit approval for suggested blocker: {phrase}")
+
+
+def _validate_onboarding_settings_inputs(onboarding_settings_payload: dict | None) -> None:
+    raw_settings = onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
+    if isinstance(raw_settings.get(KEY_ONBOARDING_SETTINGS), dict):
+        raw_settings = raw_settings.get(KEY_ONBOARDING_SETTINGS) or {}
+
+    raw_lookback = raw_settings.get(KEY_LOOKBACK_YEARS)
+    raw_min_months = raw_settings.get(KEY_MIN_MONTHS)
+    if raw_lookback in (None, ''):
+        raise ValueError('Please choose how far back we should look.')
+    if raw_min_months in (None, ''):
+        raise ValueError('Please choose when a role is too short to count as a main signal.')
+
+    try:
+        lookback = int(raw_lookback)
+    except Exception as exc:
+        raise ValueError('Lookback must be a whole number of years.') from exc
+    try:
+        min_months = int(raw_min_months)
+    except Exception as exc:
+        raise ValueError('Short-role threshold must be a whole number of months.') from exc
+
+    if lookback < 1 or lookback > 20:
+        raise ValueError('Please enter a lookback between 1 and 20 years.')
+    if min_months < 1 or min_months > 24:
+        raise ValueError('Please enter a short-role threshold between 1 and 24 months.')
+

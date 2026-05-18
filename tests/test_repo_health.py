@@ -30,7 +30,7 @@ def test_search_settings_clamp_source_fetch_limits():
         }
     )
 
-    assert normalized["seek_max_pages"] == DEFAULT_SEARCH_SETTINGS["seek_max_pages"]
+    assert normalized["seek_max_pages"] == profile_store.load_global_settings()["limits"]["search"]["seek_max_pages"]["max"]
     assert normalized["linkedin_hours_old"] == profile_store.load_global_settings()["limits"]["search"]["linkedin_hours_old"]["max"]
     assert normalized["linkedin_results_per_search"] == 5
     assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
@@ -79,22 +79,38 @@ def test_default_match_preferences_are_neutral():
 def test_active_modules_import():
     modules = [
         "job_hunter_agent.agent_runner",
-        "job_hunter_agent.user_settings",
+        "job_hunter_agent.capability_matching",
         "job_hunter_agent.config",
         "job_hunter_agent.cv_pipeline",
-        "job_hunter_agent.filters",
-        "job_hunter_agent.llm_gate",
+        "job_hunter_agent.description_trust",
         "job_hunter_agent.fastapi_app",
-        "job_hunter_agent.server_helpers",
+        "job_hunter_agent.filters",
+        "job_hunter_agent.fit_scoring",
+        "job_hunter_agent.history",
+        "job_hunter_agent.llm_gate",
+        "job_hunter_agent.preferences",
         "job_hunter_agent.profile_learning",
         "job_hunter_agent.profile_store",
         "job_hunter_agent.review_insights",
+        "job_hunter_agent.salary",
+        "job_hunter_agent.scrape_finalize",
         "job_hunter_agent.scrapers.base",
         "job_hunter_agent.scrapers.linkedin",
         "job_hunter_agent.scrapers.seek",
+        "job_hunter_agent.scrapers.seek_runner",
+        "job_hunter_agent.server_helpers",
+        "job_hunter_agent.signal_registry",
         "job_hunter_agent.source_connector",
         "job_hunter_agent.source_documents",
+        "job_hunter_agent.user_settings",
         "job_hunter_agent.utils",
+        "job_hunter_agent.workspace_rebuild_service",
+        "job_hunter_agent.workspace_refresh_service",
+        "job_hunter_agent.workspace_service",
+        "job_hunter_agent.routes.onboarding_api",
+        "job_hunter_agent.routes.pages",
+        "job_hunter_agent.routes.signals",
+        "job_hunter_agent.routes.workspace_api",
     ]
     for module in modules:
         importlib.import_module(module)

@@ -381,12 +381,12 @@ def build_run_stats(
     page_visits: set[tuple[str, str, int]] = set()
     reject_counts: dict[str, int] = {}
     skip_counts: dict[str, int] = {}
-    issue_counts: dict[str, int] = {}
+    flag_counts: dict[str, int] = {}
 
-    def _add_issue(key: str) -> None:
+    def _add_flag(key: str) -> None:
         if not key:
             return
-        issue_counts[key] = issue_counts.get(key, 0) + 1
+        flag_counts[key] = flag_counts.get(key, 0) + 1
 
     for row in audit_rows:
         source_name = str(row.get("source") or "Unknown")
@@ -404,36 +404,36 @@ def build_run_stats(
             reject_counts[reason] = reject_counts.get(reason, 0) + 1
 
         if row.get("job_quality_signals"):
-            _add_issue("quality_signals")
+            _add_flag("quality_signals")
             for signal in row.get("job_quality_signals") or []:
                 if isinstance(signal, dict):
                     kind = str(signal.get("kind") or signal.get("label") or "quality_signal").strip()
-                    _add_issue(f"quality:{kind.lower()}")
+                    _add_flag(f"quality:{kind.lower()}")
                 else:
-                    _add_issue("quality:signal")
+                    _add_flag("quality:signal")
         if row.get("hard_block_reasons"):
-            _add_issue("hard_block_reasons")
+            _add_flag("hard_block_reasons")
         if row.get("soft_risk_reasons"):
-            _add_issue("soft_risk_reasons")
+            _add_flag("soft_risk_reasons")
         if row.get("missing_evidence"):
-            _add_issue("missing_evidence")
+            _add_flag("missing_evidence")
         if row.get("reviewed_signal_matches"):
-            _add_issue("reviewed_signal_matches")
+            _add_flag("reviewed_signal_matches")
 
     top_reject_reasons = [
         {"reason": reason, "count": count}
         for reason, count in sorted(reject_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
     ]
-    issue_summary = [
-        {"issue": issue, "count": count}
-        for issue, count in sorted(issue_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+    issue_flag_summary = [
+        {"flag": flag, "count": count}
+        for flag, count in sorted(flag_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
     ]
 
     detail_fetches = sum(1 for row in audit_rows if int(row.get("details_length") or 0) > 0)
     cards_seen = len(audit_rows)
     kept_count = len(kept_records)
     rejected_count = sum(1 for row in audit_rows if str(row.get("decision") or "").upper() == "REJECT")
-    issue_row_count = sum(
+    cards_with_flags_count = sum(
         1
         for row in audit_rows
         if row.get("job_quality_signals")
@@ -459,8 +459,8 @@ def build_run_stats(
         "detail_fetches": detail_fetches,
         "kept_count": kept_count,
         "rejected_count": rejected_count,
-        "issue_count": issue_row_count,
-        "issue_summary": issue_summary,
+        "cards_with_flags_count": cards_with_flags_count,
+        "issue_flag_summary": issue_flag_summary,
         "keep_rate": round((kept_count / cards_seen), 4) if cards_seen else 0.0,
         "top_reject_reasons": top_reject_reasons,
         "skip_counts": skip_counts,

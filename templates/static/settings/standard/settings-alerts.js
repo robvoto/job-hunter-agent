@@ -1,5 +1,9 @@
 window.JobHunterAlertsSettings = (function () {
-  const { escapeHtml } = window.JobHunterSettingsUtils;
+  const {
+    escapeHtml,
+    setToggleChecked,
+    getToggleChecked,
+  } = window.JobHunterSettingsUtils;
 
   let telegramConnectLink = '';
 
@@ -55,21 +59,16 @@ window.JobHunterAlertsSettings = (function () {
   // settings-page.js scope (resolved lazily at call time).
   function fillUserSettings(settings) {
     settings = settings || {};
-    const workspace = settings.workspace || {};
-    const el = document.getElementById('workspace_minimum_score');
-    if (el) el.value = String(workspace.minimum_score ?? '');
     const schedule = settings.schedule || {};
     const scheduleEl = document.getElementById('schedule_daily_time_local');
     if (scheduleEl) scheduleEl.value = schedule.daily_time_local || '08:30';
     const telegram = settings.telegram || {};
-    const telegramEnabled = document.getElementById('telegram_enabled');
-    if (telegramEnabled) telegramEnabled.value = String(Boolean(telegram.enabled));
+    setToggleChecked('telegram_enabled', Boolean(telegram.enabled));
     const botToken = document.getElementById('telegram_bot_token');
     if (botToken) botToken.value = '';
     const botUsername = document.getElementById('telegram_bot_username');
     if (botUsername) botUsername.value = telegram.bot_username || '';
-    const disableLinkPreview = document.getElementById('telegram_disable_link_preview');
-    if (disableLinkPreview) disableLinkPreview.value = String(Boolean(telegram.disable_link_preview));
+    setToggleChecked('telegram_disable_link_preview', Boolean(telegram.disable_link_preview));
     telegramConnectLink = telegram.bot_username
       ? `https://t.me/${telegram.bot_username}?start=connect`
       : telegramConnectLink;
@@ -89,21 +88,15 @@ window.JobHunterAlertsSettings = (function () {
       || ''
     ).trim();
     return {
-      workspace: {
-        minimum_score: (() => {
-          const raw = document.getElementById('workspace_minimum_score')?.value;
-          return raw !== '' && raw !== undefined ? Number(raw) : (currentUserSettings?.workspace?.minimum_score ?? 0);
-        })(),
-      },
       schedule: {
         daily_time_local: document.getElementById('schedule_daily_time_local')?.value || '08:30',
         loop_sleep_seconds: Number(currentSchedule.loop_sleep_seconds || 300),
       },
       telegram: {
-        enabled: document.getElementById('telegram_enabled')?.value === 'true',
+        enabled: getToggleChecked('telegram_enabled'),
         bot_token: document.getElementById('telegram_bot_token')?.value.trim(),
         bot_username: document.getElementById('telegram_bot_username')?.value.trim().replace(/^@+/, ''),
-        disable_link_preview: document.getElementById('telegram_disable_link_preview')?.value === 'true',
+        disable_link_preview: getToggleChecked('telegram_disable_link_preview'),
       },
       llm: currentLlmModel ? { model: currentLlmModel } : {},
     };

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body
 from job_hunter_agent.locations import resolve_location, find_nearest_location
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.source_documents import persist_uploaded_source_pack, run_onboarding, load_source_materials
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ENGAGEMENT_TYPE,
@@ -14,6 +15,7 @@ from job_hunter_agent.profile_store import (
     KEY_MATCH_PREFS,
     KEY_MIN_DAILY_RATE,
     KEY_MIN_SALARY_YEARLY,
+    KEY_ONBOARDING_COMPLETE,
     KEY_PREFER_GOVERNMENT,
     KEY_WORK_MODE_PREFERENCE,
     KEY_ONBOARDING_SETTINGS,
@@ -23,6 +25,7 @@ from job_hunter_agent.profile_store import (
     VALID_GOVERNMENT_PREFERENCES,
     VALID_WORK_MODE_PREFERENCES,
     normalize_capability_rules,
+    normalize_engagement_type_preferences,
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.global_settings import get_salary_limits
@@ -72,7 +75,8 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
             suffix = Path(filename).suffix.lower()
             if suffix not in get_allowed_source_document_suffixes():
                 raise ValueError(f"Please upload CV files as {get_allowed_source_document_suffixes_label()}.")
-        materials = srv.persist_uploaded_source_pack(files) if files else srv.load_source_materials(create_if_missing=True)
+        srv._validate_onboarding_settings_inputs(onboarding_settings)
+        materials = persist_uploaded_source_pack(files) if files else load_source_materials(create_if_missing=True)
         preset_info = srv.describe_capability_strength_preset(onboarding_settings.get("capability_strength_preset"))
         print(
             "[ONBOARDING][CAPABILITY_STRENGTH] "
@@ -80,7 +84,7 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
             f"values={json.dumps(preset_info['values'], ensure_ascii=True)}"
         )
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
-        result = srv.run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
+        result = run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
         result["materials"] = materials
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
@@ -94,7 +98,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         secondary = [str(p).strip() for p in body.get(KEY_SECONDARY_PATTERNS, []) if str(p).strip()]
         keyword = str(body.get(REQUEST_SEARCH_KEYWORD_KEY) or "").strip()
         locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
-        engagement_type = str(body.get(KEY_ENGAGEMENT_TYPE) or "").strip().lower()
+        engagement_type = normalize_engagement_type_preferences(body.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
         work_mode_preference = normalize_work_mode_preferences(body.get(KEY_WORK_MODE_PREFERENCE))
         prefer_government = str(body.get(KEY_PREFER_GOVERNMENT) or "").strip().lower()
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
@@ -114,12 +118,12 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         if not srv.LOCATION_NAME_RE.fullmatch(location):
             raise ValueError("Location should look like a normal city, state, or region name.")
         locations = [resolve_location(location)["name"]]
-        if engagement_type not in VALID_ENGAGEMENT_TYPES:
+        if not engagement_type or any(value not in VALID_ENGAGEMENT_TYPES for value in engagement_type):
             raise ValueError("Please choose what type of work you are open to.")
         if any(value not in VALID_WORK_MODE_PREFERENCES for value in work_mode_preference):
             raise ValueError("Please choose only remote, hybrid, or on-site.")
         if prefer_government not in VALID_GOVERNMENT_PREFERENCES:
-            prefer_government = srv.GOVERNMENT_PREFERENCE_ANY
+            prefer_government = srv.GovPref.ANY
         try:
             minimum_salary_yearly = int(str(raw_minimum_salary_yearly).replace(",", "").strip() or 0)
         except Exception as exc:
@@ -142,6 +146,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         profile_patch: dict = {
             KEY_PRIMARY_PATTERNS: target,
             KEY_SECONDARY_PATTERNS: secondary,
+            KEY_ONBOARDING_COMPLETE: True,
         }
         if capability_rules:
             profile_patch[KEY_CAPABILITY_PROFILE_RULES] = capability_rules

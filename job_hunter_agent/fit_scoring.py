@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List, Optional
 
 from job_hunter_agent.capability_matching import (
@@ -6,19 +7,23 @@ from job_hunter_agent.capability_matching import (
     reviewed_signal_match_summary,
     reviewed_signal_matches_for_text,
 )
-from job_hunter_agent.capability_matrix import canonical_capability_term
+from job_hunter_agent.capability_matrix import canonical_capability_term, expand_capability_terms
+
+logger = logging.getLogger(__name__)
 from job_hunter_agent.description_trust import full_description_confidence, get_trusted_full_description
 from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.history import viewed_by_user
 from job_hunter_agent.posting_utils import current_posted_age_days
 from job_hunter_agent.preferences import (
     assess_contract_preference,
-    assess_government_preference,
     assess_location_preference,
+    assess_sector_preference,
+    assess_work_mode_preference,
     salary_fit_adjustment,
 )
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.profile_store import (
+    KEY_CAPABILITY_CONTEXTUAL_LLM,
     KEY_CAPABILITY_EVIDENCE,
     KEY_CAPABILITY_LEVEL_WEIGHTS,
     KEY_CAPABILITY_PROFILE_RULES,
@@ -75,6 +80,7 @@ def capability_match_summary(record: dict, profile: Optional[dict] = None) -> Di
 
 
 def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
+    """Return deterministic capability matches (canonical name or alias) with match metadata."""
     lowered = compact_whitespace(source_text).lower()
     results = []
     for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
@@ -84,33 +90,115 @@ def capability_scored_matches(source_text: str, profile: dict) -> list[dict]:
         if level not in VALID_CAPABILITY_RULE_LEVELS:
             continue
         canonical = canonical_capability_term(rule)
-        if not canonical or not text_contains_term(lowered, canonical):
+        if not canonical:
+            continue
+        match_type = None
+        matched_text = None
+        if text_contains_term(lowered, canonical):
+            match_type = "canonical"
+            matched_text = canonical
+        else:
+            for term in expand_capability_terms(rule):
+                if term != canonical and text_contains_term(lowered, term):
+                    match_type = "alias"
+                    matched_text = term
+                    break
+        if not match_type:
             continue
         rule_strength = _capability_rule_strength(rule)
         profile_evidence = evidence_tier_alignment_score(profile, [canonical])
         combined = max(rule_strength, profile_evidence)
         results.append({
+            "name": str(rule.get("name") or ""),
             "label": friendly_capability_label(str(rule.get("name") or "")),
             "level": level,
             "combined_strength": combined,
+            "match_type": match_type,
+            "matched_text": matched_text,
         })
     return results
 
 
-def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> tuple[int, dict]:
+def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> tuple[int, list[dict]]:
+    """Return (score, scored_matches) where scored_matches carry match_type, matched_text, and points.
+
+    Deterministic matches (canonical / alias) come first. LLM high-confidence contextual
+    matches fill gaps for capabilities not already credited. Accumulation stops once the
+    configured cap is reached so further matches are not needlessly evaluated.
+    """
     active_profile = profile or load_profile()
     source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
     scoring_rules = get_scoring_rules(active_profile)
     level_weights = scoring_rules[KEY_CAPABILITY_LEVEL_WEIGHTS]
     max_score = int(scoring_rules[KEY_CAPABILITY_EVIDENCE]["max_score"])
+    contextual_config = scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {})
+    levels_with_credit = set(contextual_config.get("confidence_levels_with_credit") or [])
+    levels_logged_only = set(contextual_config.get("confidence_levels_logged_only") or [])
+
     scored = capability_scored_matches(source_text, active_profile)
-    total = sum(
-        m["combined_strength"] * int(level_weights[str(m.get("level") or "")])
-        for m in scored
-    )
-    score = min(round(total), max_score)
-    matches = capability_match_summary(record, active_profile)
-    return score, matches
+    credited_names = {m["name"].lower() for m in scored}
+
+    profile_rules_by_name = {
+        str(r.get("name") or "").lower(): r
+        for r in active_profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
+        if isinstance(r, dict)
+    }
+
+    for match in (record.get("contextual_capability_matches") or []):
+        cap_name = str(match.get("capability_name") or "").strip().lower()
+        confidence = str(match.get("confidence") or "").strip().lower()
+        matched_text = str(match.get("matched_text") or "").strip()
+        reason = str(match.get("reason") or "").strip()
+        if cap_name in credited_names:
+            continue
+        rule = profile_rules_by_name.get(cap_name)
+        if rule is None:
+            logger.warning("[CAPABILITY_CONTEXTUAL] Unknown capability from LLM ignored: %r", cap_name)
+            continue
+        level = str(rule.get("level") or "").strip().lower()
+        if level not in VALID_CAPABILITY_RULE_LEVELS:
+            continue
+        if confidence in levels_with_credit:
+            rule_strength = _capability_rule_strength(rule)
+            profile_evidence = evidence_tier_alignment_score(active_profile, [cap_name])
+            combined = max(rule_strength, profile_evidence)
+            scored.append({
+                "name": str(rule.get("name") or ""),
+                "label": friendly_capability_label(str(rule.get("name") or "")),
+                "level": level,
+                "combined_strength": combined,
+                "match_type": "contextual_llm",
+                "matched_text": matched_text,
+            })
+            credited_names.add(cap_name)
+        elif confidence in levels_logged_only:
+            logger.info(
+                "[CAPABILITY_CONTEXTUAL][MEDIUM] capability=%r matched_text=%r reason=%r",
+                cap_name, matched_text, reason,
+            )
+        else:
+            logger.debug(
+                "[CAPABILITY_CONTEXTUAL][LOW] capability=%r matched_text=%r reason=%r",
+                cap_name, matched_text, reason,
+            )
+
+    scored.sort(key=lambda m: int(level_weights.get(m["level"], 0)), reverse=True)
+
+    total = 0
+    credited: list[dict] = []
+    for m in scored:
+        weight = int(level_weights.get(m["level"], 0))
+        points = round(m["combined_strength"] * weight)
+        remaining = max_score - total
+        if remaining <= 0:
+            break
+        points = min(points, remaining)
+        if points <= 0:
+            continue
+        total += points
+        credited.append({**m, "points": points})
+
+    return total, credited
 
 
 def convergence_bonus_entry(record: dict, capability_matches: Optional[dict] = None, profile: Optional[dict] = None) -> Optional[dict]:
@@ -177,9 +265,9 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
         if entry and entry not in highlights:
             highlights.append(entry)
 
-    govt_signal = assess_government_preference(record, active_profile)
-    if govt_signal and int(govt_signal.get("value", 0) or 0) > 0:
-        highlights.append(govt_signal["label"])
+    sector_signal = assess_sector_preference(record, active_profile)
+    if sector_signal and int(sector_signal.get("value", 0) or 0) > 0:
+        highlights.append(sector_signal["label"])
 
     contract_signal = assess_contract_preference(record, active_profile)
     if contract_signal and int(contract_signal.get("value", 0) or 0) > 0:
@@ -213,28 +301,28 @@ def build_core_fit_breakdown(
     record: dict,
     scoring_rules: dict,
     weights: dict,
-    evidence_score: int,
-    capability_matches: dict,
+    scored_matches: list[dict],
     title_family: str,
     title_seniority_adjustment: int,
     title_reason: str,
     content_reason: str,
     active_profile: dict,
 ) -> List[dict]:
+    title_match_labels = load_ui_labels().get("title_match_labels", {})
     entries: List[dict] = []
     if title_family == "primary" or (not title_family and title_reason == "OK"):
         entries.append({
-            "label": "Primary role-family match",
+            "label": title_match_labels["primary_match"],
             "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"]),
         })
         if title_seniority_adjustment:
             entries.append({
-                "label": "Primary seniority adjustment",
+                "label": title_match_labels["primary_seniority"],
                 "value": weighted_points(int(title_seniority_adjustment), weights["fit"]),
             })
     elif title_family == "secondary" or (not title_family and title_reason == TITLE_REASON_POTENTIAL_MATCH):
         entries.append({
-            "label": "Secondary role-family match",
+            "label": title_match_labels["secondary_match"],
             "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"]),
         })
     llm_entry = llm_description_fit_entry(record, active_profile)
@@ -243,8 +331,20 @@ def build_core_fit_breakdown(
         entries.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"])})
     if full_description_confidence(record) == "LOW":
         entries.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"])})
-    if evidence_score:
-        entries.append({"label": "Fit evidence bullets", "value": weighted_points(evidence_score, weights["fit"])})
+    for m in scored_matches:
+        points = int(m.get("points") or 0)
+        if not points:
+            continue
+        match_type = m.get("match_type") or "canonical"
+        label_tag = f"[{match_type}]" if match_type != "alias" else f"[alias: {m.get('matched_text') or ''}]"
+        entries.append({
+            "label": f"{m['label']} {label_tag}",
+            "value": weighted_points(points, weights["fit"]),
+        })
+    capability_matches = {}
+    for m in scored_matches:
+        capability_matches.setdefault(m["level"], [])
+        capability_matches[m["level"]].append(m["name"])
     convergence_entry = convergence_bonus_entry(record, capability_matches, active_profile)
     if convergence_entry:
         entries.append({
@@ -270,19 +370,18 @@ def build_preference_breakdown(record: dict, scoring_rules: dict, weights: dict,
             "label": contract_item["label"],
             "value": weighted_points(int(contract_item["value"]), weights["contract"]),
         })
-    government_item = assess_government_preference(record, active_profile)
-    if government_item:
+    sector_item = assess_sector_preference(record, active_profile)
+    if sector_item:
         entries.append({
-            "label": government_item["label"],
-            "value": weighted_points(int(government_item["value"]), weights["government"]),
+            "label": sector_item["label"],
+            "value": weighted_points(int(sector_item["value"]), weights["government"]),
         })
-    work_mode = str(record.get("work_mode") or "").lower()
-    if work_mode == "hybrid":
-        entries.append({"label": "Hybrid work available", "value": weighted_points(int(scoring_rules["work_mode"]["hybrid"]), weights["work_mode"])})
-    elif work_mode == "remote":
-        entries.append({"label": "Remote work available", "value": weighted_points(int(scoring_rules["work_mode"]["remote"]), weights["work_mode"])})
-    elif work_mode in {"on-site", "onsite", "on site"}:
-        entries.append({"label": "On-site role", "value": weighted_points(int(scoring_rules["work_mode"]["on_site"]), weights["work_mode"])})
+    work_mode_item = assess_work_mode_preference(record, active_profile)
+    if work_mode_item:
+        entries.append({
+            "label": work_mode_item["label"],
+            "value": weighted_points(int(work_mode_item["value"]), weights["work_mode"]),
+        })
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
         entries.append({"label": "Salary/rate signal", "value": salary_score})
@@ -340,14 +439,14 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     weights = get_preference_weights(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
     hard_block_labels = hard_block_reasons(record, active_profile)
-    evidence_score, capability_matches = capability_evidence_score(record, active_profile)
+    _evidence_score, scored_matches = capability_evidence_score(record, active_profile)
     if not title_metadata and str(record.get("title") or "").strip():
         title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
     title_family = str(title_metadata.get("match_family") or "").strip().lower()
     title_seniority_adjustment = int(title_metadata.get("seniority_adjustment") or 0)
 
     return (
-        build_core_fit_breakdown(record, scoring_rules, weights, evidence_score, capability_matches, title_family, title_seniority_adjustment, title_reason, content_reason, active_profile)
+        build_core_fit_breakdown(record, scoring_rules, weights, scored_matches, title_family, title_seniority_adjustment, title_reason, content_reason, active_profile)
         + build_preference_breakdown(record, scoring_rules, weights, active_profile)
         + build_convenience_breakdown(record, scoring_rules, weights, posted_age_days)
         + build_risk_breakdown(scoring_rules, hard_block_labels)

@@ -1,5 +1,73 @@
 # Filtering Backlog
 
+### Capability evidence scoring
+
+- [ ] Level-vs-demand mismatch penalty for capability scoring
+
+  Context:
+  - When a job explicitly requires STRONG for a capability and the candidate only has BASIC, the current system still awards 2 pts (basic level weight).
+  - This is a silent undercount: the job signals a gap but scoring does not penalise it.
+  - Deferred from the capability evidence scoring MVP (contextual LLM match implementation, 2026-05).
+  - Current behaviour: level weights (STRONG=4, WORKING=3, BASIC=2) provide a natural discount but do not model demand-side signals.
+
+  Goal:
+  - Detect when the job description explicitly states a proficiency level requirement (e.g. "must have extensive experience in...", "expert level required") for a specific capability.
+  - Apply a penalty (or reduced credit) when the candidate's level is lower than what the job demands.
+
+  Constraints:
+  - Requires reliable demand-level extraction — this is an LLM task, not text matching.
+  - Must be documented in SCORING_RATIONALE.md before implementation.
+  - Must be calibrated against real ads before going live.
+  - Do not add complexity to the contextual match path until demand extraction is reliable.
+
+  Acceptance checks:
+  - "Expert-level stakeholder management required" + BASIC profile level → penalty applied, visible in breakdown.
+  - "Stakeholder management experience desirable" + BASIC profile level → no penalty (desirable ≠ required).
+  - Logged demand mismatches appear in application logs for calibration review.
+
+---
+
+- [ ] Configurable LLM capability call trigger threshold
+
+  Context:
+  - Currently the LLM contextual capability pass fires on every job that clears hard blockers + title check.
+  - If deterministic capability evidence is already strong (e.g. 3+ canonical matches filling the cap), the LLM contextual pass adds zero points but still costs tokens.
+  - Deferred from capability evidence scoring MVP (2026-05).
+
+  Goal:
+  - Skip the contextual capability pass when deterministic evidence already reaches the cap.
+  - Configurable threshold in `scoring_rules.json` (e.g. `skip_contextual_if_deterministic_score_gte: 20`).
+
+  Constraints:
+  - Must not change scores for jobs where deterministic evidence is below the threshold.
+  - Threshold must have a sensible default (the cap itself, 20) so existing behaviour is unchanged if not configured.
+
+  Acceptance checks:
+  - Job with 3 STRONG canonical matches (12 pts) still triggers contextual pass.
+  - Job with 5 STRONG canonical matches (20 pts cap hit) skips contextual pass.
+  - Application log confirms skip reason.
+
+---
+
+- [ ] Outcome-calibrated capability scoring weights
+
+  Context:
+  - Current level weights (STRONG=4, WORKING=3, BASIC=2) and the 20 pt budget are structured judgements, not empirically derived.
+  - The SCORING_RATIONALE.md notes this explicitly.
+  - Deferred from capability evidence scoring MVP (2026-05).
+
+  Goal:
+  - Collect interview/response outcome data per score band.
+  - Use that data to calibrate whether the current weights predict outcomes better than alternatives.
+  - Document changes in SCORING_RATIONALE.md with rationale grounded in observed outcomes.
+
+  Constraints:
+  - Requires at least 30–50 application outcomes before calibration is meaningful.
+  - Do not change weights without outcome data — structured judgements are acceptable until then.
+  - Any calibration must be documented alongside the data that drove it.
+
+---
+
 ### Job boards and source configuration
 
 - [ ] Investigate dynamic job board support

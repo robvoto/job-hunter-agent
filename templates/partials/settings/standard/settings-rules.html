@@ -3,27 +3,27 @@
           <div class="advanced-grid">
             <section class="subpanel">
               <h3>Role Matching</h3>
-              <label for="primary_job_title_pattern_add">Primary job titles</label>
-              <div class="badge-editor" data-chip-editor="primary_job_title_pattern">
-                <div id="primary_job_title_pattern_chips" class="badge-editor-list" aria-live="polite"></div>
+              <label for="target_roles_add">Target roles</label>
+              <div class="badge-editor" data-chip-editor="target_roles">
+                <div id="target_roles_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
-                  <input id="primary_job_title_pattern_add" type="text" data-chip-input="primary_job_title_pattern" placeholder="e.g. Business Analyst">
-                  <button class="secondary" type="button" data-add-chip="primary_job_title_pattern">Add</button>
+                  <input id="target_roles_add" type="text" data-chip-input="target_roles" placeholder="e.g. Business Analyst">
+                  <button class="secondary" type="button" data-add-chip="target_roles">Add</button>
                 </div>
               </div>
-              <textarea id="primary_job_title_pattern" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-              <div class="field-help">Jobs with these titles are treated as strong matches.</div>
+              <textarea id="target_roles" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Roles you want and are strongest in. These get the highest title-match score.</div>
 
-              <label for="adjacent_title_patterns_add">Secondary job titles</label>
-              <div class="badge-editor" data-chip-editor="adjacent_title_patterns">
-                <div id="adjacent_title_patterns_chips" class="badge-editor-list" aria-live="polite"></div>
+              <label for="also_consider_roles_add">Also consider</label>
+              <div class="badge-editor" data-chip-editor="also_consider_roles">
+                <div id="also_consider_roles_chips" class="badge-editor-list" aria-live="polite"></div>
                 <div class="badge-editor-form">
-                  <input id="adjacent_title_patterns_add" type="text" data-chip-input="adjacent_title_patterns" placeholder="e.g. Product Owner">
-                  <button class="secondary" type="button" data-add-chip="adjacent_title_patterns">Add</button>
+                  <input id="also_consider_roles_add" type="text" data-chip-input="also_consider_roles" placeholder="e.g. Product Owner">
+                  <button class="secondary" type="button" data-add-chip="also_consider_roles">Add</button>
                 </div>
               </div>
-              <textarea id="adjacent_title_patterns" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-              <div class="field-help">Jobs with these titles can still match when other evidence is strong.</div>
+              <textarea id="also_consider_roles" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              <div class="field-help">Roles you can do but aren't your main focus. These still match but score lower.</div>
 
               <label for="reject_title_rules_add">Blocked job titles</label>
               <div class="badge-editor" data-chip-editor="reject_title_rules">

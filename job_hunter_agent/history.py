@@ -45,6 +45,7 @@ KEEP_SNAPSHOT_FIELDS = (
     "competitive_signals",
     "hard_block_reasons",
     "reviewed_signal_matches",
+    "contextual_capability_matches",
 )
 
 

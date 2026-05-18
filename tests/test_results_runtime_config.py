@@ -10,7 +10,7 @@ def test_results_page_uses_runtime_workspace_config():
     assert 'href="/settings#section-search"' in results_html
     assert "Common Search" in results_html
     assert "Work type" in results_html
-    assert "Government preference" in results_html
+    assert "Sector preference" in results_html
     assert "SEEK Settings" not in results_html
     assert "LinkedIn Settings" not in results_html
     assert "Run Search Now" not in results_html

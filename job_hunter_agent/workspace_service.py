@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -32,13 +31,13 @@ from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import REPO_ROOT, get_audit_records_path
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.profile_store import (
-    ENGAGEMENT_TYPE_BOTH,
     ENGAGEMENT_TYPE_OPTIONS,
-    GOVERNMENT_PREFERENCE_ANY,
+    GovPref,
     GOVERNMENT_PREFERENCE_OPTIONS,
     KEY_ENGAGEMENT_TYPE,
     KEY_PREFER_GOVERNMENT,
     KEY_WORK_MODE_PREFERENCE,
+    normalize_engagement_type_preferences,
     WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
     get_match_levels,
@@ -47,11 +46,11 @@ from job_hunter_agent.profile_store import (
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.score_labels import viewed_badge_html
-from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
+from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.utils import safe_html
 
 
-WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
+WORKSPACE_DEBUG_MODE = DEBUG_MODE
 
 
 def _label_from_options(options: tuple[dict[str, Any], ...], value: object, default: str) -> str:
@@ -64,10 +63,12 @@ def _label_from_options(options: tuple[dict[str, Any], ...], value: object, defa
 
 def _format_common_search_preferences(profile: dict[str, Any]) -> tuple[str, str, str]:
     match_preferences = dict(profile.get("match_preferences") or {})
-    work_type_label = _label_from_options(
-        ENGAGEMENT_TYPE_OPTIONS,
-        match_preferences.get(KEY_ENGAGEMENT_TYPE),
-        _label_from_options(ENGAGEMENT_TYPE_OPTIONS, ENGAGEMENT_TYPE_BOTH, "Both permanent and contract"),
+    selected_work_types = normalize_engagement_type_preferences(match_preferences.get(KEY_ENGAGEMENT_TYPE))
+    work_type_lookup = {str(item["value"]).strip().lower(): str(item["label"]).strip() for item in ENGAGEMENT_TYPE_OPTIONS}
+    work_type_label = " | ".join(
+        work_type_lookup.get(value, value.title())
+        for value in selected_work_types
+        if value in work_type_lookup
     )
     selected_work_modes = normalize_work_mode_preferences(match_preferences.get(KEY_WORK_MODE_PREFERENCE))
     work_mode_lookup = {str(item["value"]).strip().lower(): str(item["label"]).strip() for item in WORK_MODE_PREFERENCE_OPTIONS}
@@ -76,12 +77,24 @@ def _format_common_search_preferences(profile: dict[str, Any]) -> tuple[str, str
         for value in selected_work_modes
         if value in work_mode_lookup
     ) or WORK_MODE_PREFERENCE_NONE_LABEL
-    government_label = _label_from_options(
+    sector_label = _label_from_options(
         GOVERNMENT_PREFERENCE_OPTIONS,
         match_preferences.get(KEY_PREFER_GOVERNMENT),
-        _label_from_options(GOVERNMENT_PREFERENCE_OPTIONS, GOVERNMENT_PREFERENCE_ANY, "No preference"),
+        _label_from_options(GOVERNMENT_PREFERENCE_OPTIONS, GovPref.ANY, "No preference"),
     )
-    return work_type_label, work_mode_label, government_label
+    return work_type_label, work_mode_label, sector_label
+
+
+def _format_salary_min_label(profile: dict[str, Any]) -> str:
+    salary_prefs = dict(profile.get("salary_preferences") or {})
+    yearly = int(salary_prefs.get("minimum_salary_yearly", 0) or 0)
+    daily = int(salary_prefs.get("minimum_daily_rate", 0) or 0)
+    parts = []
+    if yearly > 0:
+        parts.append(f"${yearly:,}/yr")
+    if daily > 0:
+        parts.append(f"${daily:,}/day")
+    return " | ".join(parts) if parts else "Not set"
 
 
 def is_workspace_eligible(
@@ -281,7 +294,6 @@ def render_html(
     hidden_records = workspace_records["hidden_records"]
     potential_records = shortlist_records
     score_filter_options_html = render_score_filter_options(
-        potential_records,
         scoring_profile,
         workspace_min_score,
     )
@@ -313,7 +325,13 @@ def render_html(
     search_keywords_label = str(search_settings.get("keywords") or "").strip() or "Not set"
     search_locations = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     search_locations_label = " | ".join(search_locations) or "Not set"
-    work_type_label, work_mode_label, government_label = _format_common_search_preferences(scoring_profile)
+    work_type_label, work_mode_label, sector_label = _format_common_search_preferences(scoring_profile)
+    salary_min_label = _format_salary_min_label(scoring_profile)
+    date_range_label = (
+        "Any time" if date_range_days <= 0
+        else "Last 24 hours" if date_range_days == 1
+        else f"Last {date_range_days} days"
+    )
 
     view_history_text = (
         "treats all roles as New To You"
@@ -345,6 +363,7 @@ def render_html(
         f'<span class="chip" title="{safe_html(str(item.get("reason", "UNKNOWN")))}"><strong>{safe_html(humanize_reject_reason(str(item.get("reason", "UNKNOWN"))))}:</strong> {safe_html(str(item.get("count", 0)))}</span>'
         for item in run_stats.get("top_reject_reasons", [])
     )
+    scope_saved_option_html = '<option value="saved">Saved Earlier Searches</option>' if WORKSPACE_DEBUG_MODE else ""
     html = render_results_fragment(
         {
             "SHORTLIST_COUNT": str(shortlist_count),
@@ -354,7 +373,7 @@ def render_html(
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
             "WORK_TYPE_FILTER_OPTIONS_HTML": work_type_filter_options_html,
             "CURRENT_SECTION_HTML": render_section(
-                "Best Matches",
+                "Job Results",
                 shortlist_records,
                 "No shortlist matches are available right now.",
                 scoring_profile,
@@ -381,7 +400,10 @@ def render_html(
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),
             "WORK_TYPE_LABEL": safe_html(work_type_label),
             "WORK_MODE_LABEL": safe_html(work_mode_label),
-            "GOVERNMENT_PREFERENCE_LABEL": safe_html(government_label),
+            "GOVERNMENT_PREFERENCE_LABEL": safe_html(sector_label),
+            "SALARY_MIN_LABEL": safe_html(salary_min_label),
+            "DATE_RANGE_LABEL": safe_html(date_range_label),
+            "SCOPE_SAVED_OPTION_HTML": scope_saved_option_html,
             "THIS_RUN_CARDS_HTML": this_run_cards_html,
             "CRAWLER_CARDS_HTML": crawler_cards_html,
             "APPLICATION_CARDS_HTML": application_cards_html,

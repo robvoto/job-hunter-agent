@@ -258,6 +258,9 @@ async function applyOneSkipDecision(skill, choice) {
 
 // -- Event listeners ---------------------------------------
 
+const runNowButton = document.getElementById('run_now');
+const rebuildProfileButton = document.getElementById('rebuild_profile');
+
 if (runNowButton) {
   runNowButton.addEventListener('click', async () => {
     try {

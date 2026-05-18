@@ -31,6 +31,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
     LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER,
     LLM_PROMPT_CLUSTERS_HEADER,
+    LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO,
     LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER,
     LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER,
     LLM_PROMPT_DO_NOT_INVENT,
@@ -205,6 +206,13 @@ class _LLMReviewDecision(BaseModel):
     grade: str
 
 
+class _LLMContextualCapabilityMatch(BaseModel):
+    capability_name: str
+    confidence: str
+    matched_text: str
+    reason: str
+
+
 class _LLMReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision | None = None
     learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
@@ -212,6 +220,7 @@ class _LLMReviewPayload(BaseModel):
 
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
+    contextual_capability_matches: list[_LLMContextualCapabilityMatch] = Field(default_factory=list)
 
 
 _api_key = os.environ.get("OPENAI_API_KEY")
@@ -451,6 +460,37 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
     return candidates
 
 
+_ALLOWED_CONTEXTUAL_CONFIDENCES = frozenset({"high", "medium", "low"})
+
+
+def normalize_llm_contextual_capability_matches(
+    value: Any,
+    valid_capability_names: frozenset[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    results: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        cap_name = re.sub(r"\s+", " ", str(item.get("capability_name") or "")).strip().lower()
+        confidence = re.sub(r"\s+", " ", str(item.get("confidence") or "")).strip().lower()
+        matched_text = re.sub(r"\s+", " ", str(item.get("matched_text") or "")).strip()
+        reason = re.sub(r"\s+", " ", str(item.get("reason") or "")).strip()
+        if not cap_name or confidence not in _ALLOWED_CONTEXTUAL_CONFIDENCES:
+            continue
+        if valid_capability_names is not None and cap_name not in valid_capability_names:
+            print(f"[LLM][CONTEXTUAL_CAPABILITY] Unknown capability name ignored: {cap_name!r}")
+            continue
+        results.append({
+            "capability_name": cap_name,
+            "confidence": confidence,
+            "matched_text": matched_text,
+            "reason": reason,
+        })
+    return results
+
+
 def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
@@ -464,12 +504,16 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
             return {
                 "fit_review": _require_fit_review(fit_review),
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
+                "contextual_capability_matches": normalize_llm_contextual_capability_matches(
+                    value.get("contextual_capability_matches")
+                ),
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
             return {
                 "fit_review": None,
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
+                "contextual_capability_matches": [],
             }
 
         raise ValueError("LLM review payload is missing fit_review")
@@ -481,6 +525,7 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
             return {
                 "fit_review": _require_fit_review({"decision": decision, "grade": grade}),
                 "learning_candidates": [],
+                "contextual_capability_matches": [],
             }
         try:
             parsed = _json_mod.loads(_strip_json_fence(text))
@@ -621,6 +666,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
     if fit_review:
         parts.extend([
             f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
+            LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO,
         ])
     else:
         parts.extend([

@@ -33,7 +33,7 @@ Primary modules:
 
   | Module               | Routes                                                                                                      |
   | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-  | `pages.py`           | `/` `/workspace` `/workspace` `/admin` `/profile` `/settings` `/start` `/onboarding` (redirects) `/demo`               |
+  | `pages.py`           | `/` `/workspace` `/admin` `/profile` `/settings` `/start` `/onboarding` (redirects) `/demo`               |
   | `workspace_api.py`   | `GET /api/results-html` `/api/health` `/api/run-stats` `/api/run-status` `/api/review-data` `/api/job-history` |
   | `profile_materials.py` | `GET/PATCH/PUT /api/profile` · `GET/PUT /api/source-materials` · `GET/PATCH /api/advance-settings`        |
   | `agent_telegram.py`  | `GET /api/llm-costs` · `GET/PATCH /api/agent-settings` · `GET /api/telegram/connect-link` · `POST /api/telegram/sync` `/api/telegram/test-message` |
@@ -109,13 +109,17 @@ For product-level docs and future architecture, prefer:
 
 Do not rename major files casually unless there is time to clean the whole project consistently.
 
-## Current Onboarding Flow
+ ## Current Onboarding Flow
 
-1. User visits `/start`
-2. Uploads a detailed CV
-3. Uploaded documents are saved into a local source pack under ignored paths
-4. The source pack is imported into `data/profile.json`
-5. Settings UI is then used to refine the runtime profile
+ 1. User visits `/start`
+ 2. Uploads a detailed CV
+  3. Uploaded documents are saved into a local source pack under ignored paths
+  4. The source pack is imported into `data/profile.json`
+  5. Review Draft, Search Basics, and Check Setup are completed inside the onboarding flow
+  6. Settings is then used to refine the runtime profile
+
+- Onboarding copy for target roles, also-consider roles, and the search keyword comes from `data/knowledge/ui_labels.json` and is injected into the page as `window.__JOB_HUNTER_TITLE_TIER_LABELS__`.
+- The onboarding search keyword is a single term. Do not comma-join multiple title candidates in auto-fill logic.
 
 ## Score Presentation
 
@@ -168,23 +172,15 @@ Design assumption:
 
 Do not accidentally commit:
 
-- `data/profile.json`
-- `data/job_history.json`
-- `data/llm_cache.json`
-- `data/capability_profile.txt`
-- `data/agent_settings.json`
-- `data/agent_state.json`
-- `data/llm_costs.jsonl`
-- `output/rejection_rules.json` 
+- `data/users/` — all per-user runtime state lives here
+- `data/runtime/` — LLM cost tracking and cache
+- `output/` — server logs and disposable output
 - `TODO.txt`
 - `.venv/`
 
 ## Testing Workflow
 
-Use the repo test runner for repeatable local validation:
-
 ```powershell
-python -m job_hunter_agent.test_runner
+python -m pytest
+python -m pytest tests/test_<name>.py -k "<selector>" -v
 ```
-
-The runner resolves the local virtualenv automatically when present and forwards normal pytest selectors such as `-k` and `-m`.

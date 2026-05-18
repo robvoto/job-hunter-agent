@@ -2,15 +2,14 @@ window.JobHunterChipEditor = (function () {
   const { escapeHtml, toLines, rulesToText, textToRules, settingsField } = window.JobHunterSettingsUtils;
 
   const chipEditors = {
-    keywords: { kind: 'list', listId: 'keywords_chips', inputId: 'keywords_add', emptyText: 'No search keywords yet.', minItems: 1 },
-    primary_job_title_pattern: { kind: 'list', listId: 'primary_job_title_pattern_chips', inputId: 'primary_job_title_pattern_add', emptyText: 'No primary job titles yet.' },
-    secondary_title_patterns: { kind: 'list', listId: 'secondary_title_patterns_chips', inputId: 'secondary_title_patterns_add', emptyText: 'No secondary job titles yet.' },
+    target_roles: { kind: 'list', listId: 'target_roles_chips', inputId: 'target_roles_add', emptyText: 'No target roles yet.' },
+    also_consider_roles: { kind: 'list', listId: 'also_consider_roles_chips', inputId: 'also_consider_roles_add', emptyText: 'No also-consider roles yet.' },
     must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory skills to reject yet.' },
     reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked job titles yet.' },
     reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No excluded keywords or phrases yet.' },
   };
 
-  const chipHtmlIdAliases = { adjacent_title_patterns: 'secondary_title_patterns' };
+  const chipHtmlIdAliases = {};
 
   function resolveChipEditorId(id) { return chipHtmlIdAliases[id] || id; }
 
@@ -48,7 +47,7 @@ window.JobHunterChipEditor = (function () {
   }
 
   function friendlyListLabel(id, value) {
-    if (id === 'primary_job_title_pattern' || id === 'secondary_title_patterns') {
+    if (id === 'target_roles' || id === 'also_consider_roles') {
       return patternToLabel(value) || value;
     }
     return normalizePlainPhrase(value);
@@ -96,7 +95,7 @@ window.JobHunterChipEditor = (function () {
   function buildChipValue(id, rawValue) {
     const raw = normalizePlainPhrase(rawValue);
     if (!raw) return null;
-    if (id === 'primary_job_title_pattern' || id === 'secondary_title_patterns') return titlePhraseToPattern(raw);
+    if (id === 'target_roles' || id === 'also_consider_roles') return titlePhraseToPattern(raw);
     if (id === 'must_not_require_skills') return raw;
     if (id === 'reject_title_rules') {
       const phrase = normalizeTitleBlockPhrase(raw);
@@ -131,7 +130,7 @@ window.JobHunterChipEditor = (function () {
     }).join('');
   }
 
-  function renderGlobaldChipEditors() {
+  function renderGlobalChipEditors() {
     Object.keys(chipEditors).forEach(renderChipEditor);
   }
 
@@ -212,7 +211,7 @@ window.JobHunterChipEditor = (function () {
   return {
     resolveChipEditorId,
     renderChipEditor,
-    renderGlobaldChipEditors,
+    renderGlobalChipEditors,
     addChipValue,
     removeChipValue,
     flushChipEditorInputs,

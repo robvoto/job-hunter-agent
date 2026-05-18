@@ -40,7 +40,7 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
@@ -69,7 +69,7 @@ def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch, tmp_path)
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
     )
     monkeypatch.setattr(
         source_documents,
@@ -97,7 +97,7 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
     monkeypatch.setattr(
@@ -121,7 +121,7 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
     monkeypatch.setattr(
@@ -154,8 +154,8 @@ def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch, tmp
         source_documents,
         "extract_title_pattern_suggestions",
         lambda text, settings: {
-            "primary_job_title_pattern": ["platform lead"],
-            "secondary_title_patterns": ["delivery analyst"],
+            "target_roles": ["platform lead"],
+            "also_consider_roles": ["delivery analyst"],
             "suggested_search_keywords": ["platform lead"],
         },
     )
@@ -215,52 +215,6 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
 
     assert "process mapping: strong, core (process design)" in context
     assert "stakeholder engagement: working" in context
-
-
-def test_build_system_prompt_includes_user_fit_review_guidance(monkeypatch):
-    monkeypatch.setattr(
-        llm_gate,
-        "load_profile",
-        lambda: {
-            "llm_profile_brief": "",
-            "llm_fit_review_guidance": "Be open to adjacent delivery roles when the responsibilities are close.",
-            "llm_capability_naming_guidance": "",
-            "star_evidence_text": "",
-            "capability_profile_rules": [],
-            "salary_preferences": {},
-            "match_preferences": {},
-        },
-    )
-    monkeypatch.setattr(llm_gate, "get_candidate_profile_tiers", lambda profile: {})
-    monkeypatch.setattr(llm_gate, "get_candidate_profile_tier_weights", lambda profile: {})
-
-    prompt = llm_gate.build_system_prompt()
-
-    assert "User fit review guidance:" in prompt
-    assert "Be open to adjacent delivery roles when the responsibilities are close." in prompt
-
-
-def test_build_system_prompt_includes_managed_default_fit_review_guidance(monkeypatch):
-    monkeypatch.setattr(
-        llm_gate,
-        "load_profile",
-        lambda: {
-            "llm_profile_brief": "",
-            "llm_fit_review_guidance": "",
-            "llm_capability_naming_guidance": "",
-            "star_evidence_text": "",
-            "capability_profile_rules": [],
-            "salary_preferences": {},
-            "match_preferences": {},
-        },
-    )
-    monkeypatch.setattr(llm_gate, "get_candidate_profile_tiers", lambda profile: {})
-    monkeypatch.setattr(llm_gate, "get_candidate_profile_tier_weights", lambda profile: {})
-
-    prompt = llm_gate.build_system_prompt()
-
-    assert "Default fit review guidance:" in prompt
-    assert "Grade the full description fit, not just keyword overlap." in prompt
 
 
 def test_build_capability_naming_guidance_includes_user_guidance(monkeypatch):

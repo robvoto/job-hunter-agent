@@ -27,6 +27,7 @@ from job_hunter_agent.signal_schema import CATEGORY_CV_FARMING_PATTERN
 SIGNAL_KIND_DATE_MISMATCH = "date_mismatch"
 SIGNAL_KIND_JOB_CLOSED = "job_closed"
 SIGNAL_KIND_CV_FARMING = "cv_farming"
+SIGNAL_KIND_BROAD_ENGAGEMENT = "broad_engagement"
 
 _MONTH_NAMES = {
     "january": 1, "february": 2, "march": 3, "april": 4,
@@ -277,6 +278,25 @@ def detect_external_date_signals(
             })
 
     return signals
+
+
+def detect_broad_engagement_signal(record: dict) -> list:
+    """Flag jobs that advertise for both permanent and contract — may indicate a broad talent-pool search."""
+    work_type = _clean_text(record.get("work_type") or "").lower()
+    if not work_type:
+        return []
+    perm_keywords = ("full time", "permanent", "full-time")
+    contract_keywords = ("contract",)
+    is_perm = any(k in work_type for k in perm_keywords)
+    is_contract = any(k in work_type for k in contract_keywords)
+    if is_perm and is_contract:
+        return [{
+            "kind": SIGNAL_KIND_BROAD_ENGAGEMENT,
+            "label": "Broad Ad",
+             "evidence": f'Ad lists both permanent and contract work types ("{work_type}") — may be a wide talent-pool search rather than a specific vacancy.',
+            "needs_review": False,
+        }]
+    return []
 
 
 def detect_cv_farming_signals(description_text: str, rules: dict) -> list:

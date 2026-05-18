@@ -10,12 +10,36 @@
     "contractor": "Contract",
     "temporary": "Temporary",
     "internship": "Internship",
-    "casual": "Casual"
+    "casual": "Casual",
+    "contract/temp": "Contract/Temp",
+    "casual/vacation": "Casual/Vacation"
   },
   "filter_groups": [
-    { "label": "Full time", "values": ["Full time"] },
-    { "label": "Part time", "values": ["Part time"] },
-    { "label": "Contract / Temp", "values": ["Contract", "Temporary"] },
-    { "label": "Casual", "values": ["Casual", "Internship"] }
+    {
+      "label": "Full time",
+      "values": [
+        "Full time"
+      ]
+    },
+    {
+      "label": "Part time",
+      "values": [
+        "Part time"
+      ]
+    },
+    {
+      "label": "Contract / Temp",
+      "values": [
+        "Contract",
+        "Temporary"
+      ]
+    },
+    {
+      "label": "Casual",
+      "values": [
+        "Casual",
+        "Internship"
+      ]
+    }
   ]
 }

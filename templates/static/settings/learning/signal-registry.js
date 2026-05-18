@@ -75,34 +75,82 @@
       return srCategoryOptions().find(item => item.key === category) || null;
     }
 
+    function srHelpDrawerHtml(summaryLabel, ariaLabel, bodyHtml, drawerClass = '') {
+      return `
+        <details class="signal-help-drawer ${escapeHtml(drawerClass)}">
+          <summary title="${escapeHtml(ariaLabel)}" aria-label="${escapeHtml(ariaLabel)}">${escapeHtml(summaryLabel)}</summary>
+          <div class="signal-help-panel">
+            ${bodyHtml}
+          </div>
+        </details>`;
+    }
+
     function srCategoryHelpHtml(categoryKey) {
       const meta = srCategoryMetadata(categoryKey);
       if (!meta) return '';
-      
       const hasWarning = meta.warning && String(meta.warning).trim();
       const examples = Array.isArray(meta.examples) ? meta.examples : [];
-      
-      let html = `<div class="sr-category-help">`;
-      
+
+      let body = `<div class="sr-category-help">`;
+
       if (meta.description) {
-        html += `<p class="sr-help-description">${escapeHtml(meta.description)}</p>`;
+        body += `<p class="sr-help-description">${escapeHtml(meta.description)}</p>`;
       }
-      
+
       if (examples.length > 0) {
-        html += `<div class="sr-help-examples">
+        body += `<div class="sr-help-examples">
           <strong>Examples:</strong>
           <ul>
             ${examples.map(ex => `<li>${escapeHtml(ex)}</li>`).join('')}
           </ul>
         </div>`;
       }
-      
+
       if (hasWarning) {
-        html += `<div class="sr-help-warning">${escapeHtml(meta.warning)}</div>`;
+        body += `<div class="sr-help-warning">${escapeHtml(meta.warning)}</div>`;
       }
-      
-      html += `</div>`;
-      return html;
+
+      body += `</div>`;
+      return srHelpDrawerHtml('ii', 'Title meaning', body, 'sr-category-help-drawer');
+    }
+
+    function srSignalContextHtml(signal) {
+      const aliases = srSignalAliases(signal);
+      const source = srSignalSource(signal);
+      const knowledge = srSignalKnowledge(signal);
+      const context = srSignalContext(signal);
+      const evidence = srSignalEvidence(signal);
+      const parts = [];
+      if (aliases.length) {
+        parts.push(`<div class="signal-context-section"><strong>Seen as</strong><ul>${aliases.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul></div>`);
+      }
+      if (source) {
+        parts.push(`<div class="signal-context-section"><strong>Source</strong><p>${escapeHtml(source)}</p></div>`);
+      }
+      if (knowledge) {
+        parts.push(`<div class="signal-context-section"><strong>Match</strong><p>${escapeHtml(knowledge)}</p></div>`);
+      }
+      if (srSignalNeedsReview(signal)) {
+        parts.push(`<div class="signal-context-section"><strong>Status</strong><p>Needs review</p></div>`);
+      }
+      if (context.length) {
+        parts.push(`<div class="signal-context-section"><strong>Context</strong><ul>${context.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul></div>`);
+      }
+      if (evidence.length) {
+        parts.push(`<div class="signal-context-section"><strong>Evidence</strong><ul>${evidence.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul></div>`);
+      }
+      const body = parts.length
+        ? parts.join('')
+        : '<div class="signal-context-section"><p>No extra context recorded yet.</p></div>';
+      return srHelpDrawerHtml('i', 'Signal context', body, 'signal-context-drawer');
+    }
+
+    function srRemoveSignalFromData(key) {
+      const signals = Array.isArray(_srData?.signals) ? _srData.signals : [];
+      const index = signals.findIndex(signal => srSignalKey(signal) === key);
+      if (index >= 0) {
+        signals.splice(index, 1);
+      }
     }
 
     function srTimestampValue(signal) {
@@ -189,9 +237,13 @@
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || 'Could not save');
         const signals = Array.isArray(_srData?.signals) ? _srData.signals : [];
-        const index = signals.findIndex(signal => srSignalKey(signal) === key);
-        if (index >= 0 && data.signal) {
-          signals[index] = data.signal;
+        if (payload.action === 'ignore' || payload.action === 'approve') {
+          srRemoveSignalFromData(key);
+        } else {
+          const index = signals.findIndex(signal => srSignalKey(signal) === key);
+          if (index >= 0 && data.signal) {
+            signals[index] = data.signal;
+          }
         }
         srSetInlineState(key, successText, 'ok', 1400);
       } catch (error) {
@@ -219,45 +271,18 @@
         ? '<p class="help signal-empty">No signals match the current view.</p>'
         : visibleRows.map(signal => {
             const key = srSignalKey(signal);
-            const aliases = srSignalAliases(signal);
             const category = srSignalCategory(signal);
-            const source = srSignalSource(signal);
-            const knowledge = srSignalKnowledge(signal);
-            const context = srSignalContext(signal);
-            const evidence = srSignalEvidence(signal);
             const inlineState = srInlineState(key);
             const isBusy = _srBusyKeys.has(key);
-            const history = Array.isArray(signal.history) ? signal.history : [];
-            const addedAt = history.find(entry => String(entry?.action || '').toLowerCase() === 'added') || history[0] || null;
-            const timestamp = String(addedAt?.timestamp || '').trim();            
             const statusText = inlineState?.text || '';
             const statusClass = inlineState ? ` is-status-${escapeHtml(inlineState.kind)}` : '';
-            const detailLines = [];
-            if (source) detailLines.push(`Source: ${source}`);
-            if (knowledge) detailLines.push(`Knowledge match: ${knowledge}`);
-            if (srSignalNeedsReview(signal)) detailLines.push('Needs review');
-            if (timestamp) detailLines.push(`First seen: ${new Date(timestamp).toLocaleString()}`);
-            if (context.length) {
-              detailLines.push(`Context: ${context.join(' | ')}`);
-            }
-            if (evidence.length) {
-              detailLines.push(`Evidence: ${evidence.join(' | ')}`);
-            }
             return `
 <article class="signal-row${statusClass}" data-sr-key="${escapeHtml(key)}">
   <div class="signal-row-title">
     <h3>${escapeHtml(signal.signal || 'Unnamed signal')}</h3>
     ${statusText ? `<span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(statusText)}</span>` : ''}
-    <details class="signal-context-drawer">
-      <summary title="Signal context" aria-label="Signal context">(i)</summary>
-      <div class="signal-context-panel">
-        ${detailLines.length
-          ? detailLines.map(line => `<p>${escapeHtml(line)}</p>`).join('')
-          : '<p>No extra context recorded yet.</p>'}
-      </div>
-    </details>
+    ${srSignalContextHtml(signal)}
   </div>
-  ${aliases.length ? `<div class="signal-row-meta">Seen as: ${escapeHtml(aliases.join(', '))}</div>` : '<div class="signal-row-meta signal-row-meta-empty"></div>'}
   <div class="signal-category-wrapper">
     <select class="signal-category-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
       <option value="">Choose category</option>
@@ -354,12 +379,16 @@
           const key = select.dataset.srKey || '';
           const newCategory = String(select.value || '').trim();
           const wrapper = select.closest('.signal-category-wrapper');
-          
+
           // Update help panel dynamically
           if (wrapper) {
             const existingHelp = wrapper.querySelector('.sr-category-help');
+            const existingDrawer = wrapper.querySelector('.sr-category-help-drawer');
             if (existingHelp) {
               existingHelp.remove();
+            }
+            if (existingDrawer) {
+              existingDrawer.remove();
             }
             if (newCategory) {
               const helpHtml = srCategoryHelpHtml(newCategory);
@@ -368,7 +397,7 @@
               }
             }
           }
-          
+
           // Update approve button state
           const article = select.closest('.signal-row');
           if (article) {
@@ -381,7 +410,7 @@
               }
             }
           }
-          
+
           await srPatchSignal(key, { key, category: newCategory }, 'Category saved');
         });
       });
