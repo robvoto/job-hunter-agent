@@ -205,8 +205,14 @@
 }
 
 /* ── Layout & Surfaces ── */
+html {
+  min-height: 100%;
+  background: var(--bg-page);
+}
+
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--sans);
   background: var(--bg-page);
   color: var(--text-primary);
