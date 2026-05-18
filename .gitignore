@@ -24,49 +24,32 @@ data/runtime/
 data/users/
 data/capability_profile.txt
 data/application_inputs/
-TODO.txt
-appData-dontupload.txt
+data/signals/ignored_signal.json
+data/signals/signal_defaults.json
+data/signals/signal_registry.json
+docs/signals/
+
 # ---- OS / IDE ----
 .DS_Store
 .vscode/
 .idea/
 *.code-workspace
+
+# ---- Local-only files ----
+.claude/settings.json
+TODO.txt
+NEXT_RUN.md
+BACKLOG.md
+GEMINI.md
+appData-dontupload.txt
+debug/
+tmp-fastapi.err.log
+tmp-fastapi.out.log
+docs/RUN_COMMANDS.txt
+venv activate.ps1
+remove bad char.ps1
+Programming - Shortcut.lnk
 MAIN LOGOS IMG.png
 job_hunter_img.png
 templates/static/job_hunter_img2.png
-BACKLOG.md
-.claude/settings.json
-HARD_CODED_JUDGEMENT_BACKLOG.md
-docs/RUN_COMMANDS.txt
-venv activate.ps1 
-docs/RUN_COMMANDS.txt
-ALIAS_LOGIC_RATIONALE.md
-CAPABILITY_AGING_RATIONALE.md 
 pytest.ini
-docs/RUN_COMMANDS.txt 
-CLAUDE.md
-.gitignore
-NEXT_RUN.md 
-AGENTS - OLD.md
-docs/ARCHITECTURE - OLD.md
-docs/OPERATIONS - OLD.md
-docs/LOCAL_MCP_SETUP.md
-GEMINI.md
-CLAUDE.md
-Programming - Shortcut.lnk
-docs/backlog/
-debug/
-.skills/
-docs/signals/
-docs/backlog/learning.md
-data/signals/ignored_signal.json
-data/signals/signal_defaults.json
-data/signals/signal_registry.json
-docs/backlog/ui.md
-docs/backlog/README.md
-docs/job_hunter_learning_architecture_plan.txt
-remove bad char.ps1
-docs/UI_COMPONENT_MAP.md
-tmp-fastapi.err.log
-tmp-fastapi.out.log
-CLAUDE.md
