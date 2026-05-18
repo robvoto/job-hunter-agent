@@ -1,6 +1,6 @@
 from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases, expand_capability_terms
 from job_hunter_agent.profile_store import normalize_capability_rules
-from job_hunter_agent.capability_matching import find_profile_capability_matches
+from job_hunter_agent.capability_matching import find_profile_capability_matches, reviewed_signal_matches_for_text
 
 
 def test_expand_capability_terms_returns_name_and_aliases():
@@ -84,3 +84,41 @@ def test_find_profile_capability_matches_uses_expanded_alias_terms():
         },
     )
     assert matches["core"] == ["Agile delivery"]
+
+
+def test_reviewed_signal_matches_excludes_title_noise(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.capability_matching.load_registry",
+        lambda: {
+            "working": {
+                "signal": "working",
+                "original_texts": ["working"],
+                "category": "role_title_token",
+                "decision": "use",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.capability_matching.load_approved_signal_catalog",
+        lambda: [
+            {
+                "label": "sr",
+                "terms": ["senior"],
+                "category": "title_normalization_candidate",
+            },
+            {
+                "label": "agile methodologies",
+                "terms": ["agile"],
+                "category": "capability_concept",
+            },
+        ],
+    )
+
+    matches = reviewed_signal_matches_for_text("We use agile methods and senior delivery practice.")
+
+    assert matches == {
+        "matched": ["Agile methodologies"],
+        "evidence_only": [],
+        "ignored": [],
+        "unresolved": [],
+    }

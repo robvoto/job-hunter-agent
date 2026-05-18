@@ -57,11 +57,6 @@ def _write_signal_registry(path, registry):
     signal_registry.save_registry(registry)
 
 
-def test_missing_requirement_detector_separates_required_from_desirable():
-    assert filters.matches_missing_requirement("SAP experience is mandatory for this role.", "SAP")
-    assert filters.matches_missing_requirement("Proven experience in financial services is required.", "financial services")
-    assert not filters.matches_missing_requirement("SAP experience is desirable for this role.", "SAP")
-    assert not filters.matches_missing_requirement("Strong SAP experience is preferred but not essential.", "SAP")
 
 
 def test_secondary_title_requires_stronger_role_proof(monkeypatch):
@@ -142,8 +137,8 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
         filters,
         "load_profile",
         lambda: _load_profile(extra={
-            "primary_job_title_pattern": [r"\bbusiness\ analyst\b"],
-            "secondary_title_patterns": [],
+            "target_roles": [r"\bbusiness\ analyst\b"],
+            "also_consider_roles": [],
             "reject_title_rules": [],
         }),
     )

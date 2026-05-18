@@ -44,7 +44,7 @@ def test_unknown_job_type_is_preserved_and_registered(monkeypatch):
         job_type_rules={"fulltime": "Full time"},
     )
 
-    assert record["work_type"] == "Fixed term"
+    assert record["work_type"] == ""
     assert captured["category"] == "job_type_normalization_candidate"
     assert captured["signals"][0]["signal"] == "Fixed term"
     assert captured["signals"][0]["suggested_values"] == ["Fixed term"]

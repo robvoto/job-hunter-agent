@@ -22,7 +22,6 @@ def test_save_global_settings_normalizes_values(tmp_path, monkeypatch):
             "seek_max_pages": "12",
             "linkedin_hours_old": "48",
             "linkedin_results_per_search": "40",
-            "enforce_posted_age_limit": "false",
             "sort_newest_first": "true",
             KEY_LINKEDIN_EASY_APPLY_ONLY: "true",
         },

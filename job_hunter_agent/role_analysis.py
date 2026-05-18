@@ -120,7 +120,7 @@ def infer_role_sector(record: dict, details_text: str) -> dict[str, str]:
     combined = f"{company}\n{compact_whitespace(details_text).lower()}"
 
     if has_government_context(combined):
-        return {"kind": "government", "label": "Government", "confidence": "high"}
+        return {"kind": "government", "label": "Public sector", "confidence": "high"}
     return {"kind": "unknown", "label": "", "confidence": "unknown"}
 
 

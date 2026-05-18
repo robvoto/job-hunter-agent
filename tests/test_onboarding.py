@@ -1,7 +1,9 @@
 import base64
 import json
+from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from job_hunter_agent import server_helpers
 from job_hunter_agent import server_review
@@ -9,6 +11,9 @@ from job_hunter_agent import source_documents
 from job_hunter_agent import profile_store
 from job_hunter_agent import review_history_service
 from job_hunter_agent import workspace_refresh_service
+from job_hunter_agent.fastapi_app import create_app
+import job_hunter_agent.fastapi_app as _fa
+import job_hunter_agent.routes.pages as _pages
 from job_hunter_agent.routes import onboarding_api
 
 
@@ -16,21 +21,50 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
     normalized = server_helpers._normalize_onboarding_search_preferences(
         {
             "keywords": "  business analyst  ",
-            "locations": [" Sydney NSW ", "", "Melbourne VIC"],
+            "locations": [" Sydney ", "", "Melbourne"],
             "engagement_type": " Permanent ",
         }
     )
 
     assert normalized == {
         "keywords": "business analyst",
-        "locations": ["Sydney NSW", "Melbourne VIC"],
-        "engagement_type": "permanent",
+        "locations": ["Sydney", "Melbourne"],
+        "engagement_type": ["permanent"],
     }
 
 
+def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: True)
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
+
+    client = TestClient(create_app())
+    html = client.get("/onboarding").text
+
+    assert 'Target roles' in html
+    assert 'Also consider' in html
+    assert 'Search keyword' in html
+    assert 'placeholder="e.g. Business Analyst"' in html
+    assert 'Add a target role' in html
+    assert 'Add an also-consider role' in html
+    assert 'id="engagement_type_label"' in html
+    assert 'class="choice-strip"' in html
+    assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'input type="checkbox" name="engagement_type"' in html
+    assert 'input type="checkbox" name="work_mode_preference"' in html
+
+
+def test_onboarding_flow_keyword_helper_uses_single_target_role():
+    js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    js_text = js_path.read_text(encoding="utf-8")
+
+    assert "defaultSearchKeywordFromTargetRoles" in js_text
+    assert "reviewTargetTitles.join(', ')" not in js_text
+    assert "defaultSearchKeywordsFromReviewedTitles" not in js_text
+
+
 def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
-    monkeypatch.setattr(onboarding_api.srv, "persist_uploaded_source_pack", lambda files: {"profile_sources": [], "cv_variants": []})
-    monkeypatch.setattr(onboarding_api.srv, "run_onboarding", lambda materials, search_preferences=None, onboarding_settings=None: {"ok": True, "materials": materials})
+    monkeypatch.setattr(onboarding_api, "persist_uploaded_source_pack", lambda files: {"profile_sources": [], "cv_variants": []})
+    monkeypatch.setattr(onboarding_api, "run_onboarding", lambda materials, search_preferences=None, onboarding_settings=None: {"ok": True, "materials": materials})
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
 
     response = onboarding_api.api_onboarding_import(
@@ -40,7 +74,15 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
                     "filename": "cv.csv",
                     "content_base64": base64.b64encode(b"header,value\n").decode("ascii"),
                 }
-            ]
+            ],
+            "search_preferences": {
+                "keywords": "business analyst",
+                "locations": ["Sydney"],
+                "engagement_type": ["permanent", "contract"],
+            },
+            "onboarding_settings": {
+                "capability_strength_preset": "balanced",
+            },
         }
     )
 
@@ -57,11 +99,11 @@ def test_api_onboarding_confirm_allows_no_government_preference(monkeypatch):
 
     response = onboarding_api.api_onboarding_confirm(
         {
-            "primary_job_title_pattern": ["Business Analyst"],
-            "secondary_title_patterns": [],
+            "target_roles": ["Business Analyst"],
+            "also_consider_roles": [],
             "search_keyword": "business analyst",
-            "search_locations": ["Sydney NSW"],
-            "engagement_type": "both",
+            "search_locations": ["Sydney"],
+            "engagement_type": ["permanent", "contract"],
             "prefer_government": "",
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
@@ -72,7 +114,7 @@ def test_api_onboarding_confirm_allows_no_government_preference(monkeypatch):
     assert response.status_code == 200
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
-    assert captured["patch"]["match_preferences"]["prefer_government"] == profile_store.GOVERNMENT_PREFERENCE_ANY
+    assert captured["patch"]["match_preferences"]["prefer_government"] == profile_store.GovPref.ANY
 
 
 def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
@@ -83,11 +125,11 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
 
     response = onboarding_api.api_onboarding_confirm(
         {
-            "primary_job_title_pattern": ["Business Analyst"],
-            "secondary_title_patterns": [],
+            "target_roles": ["Business Analyst"],
+            "also_consider_roles": [],
             "search_keyword": "business analyst",
-            "search_locations": ["Sydney NSW"],
-            "engagement_type": "both",
+            "search_locations": ["Sydney"],
+            "engagement_type": ["permanent", "contract"],
             "work_mode_preference": ["remote", "hybrid"],
             "prefer_government": "",
             "minimum_salary_yearly": 0,
@@ -108,7 +150,7 @@ def test_validate_required_onboarding_inputs_requires_locations_and_engagement()
             {
                 "keywords": "",
                 "locations": [],
-                "engagement_type": "",
+                "engagement_type": [],
             },
             {},
         )
@@ -120,11 +162,11 @@ def test_validate_required_onboarding_inputs_requires_locations_and_engagement()
 
 def test_validate_required_onboarding_inputs_allows_blank_keywords():
     server_helpers._validate_required_onboarding_inputs(
-        {
-            "keywords": "",
-            "locations": ["Sydney NSW"],
-            "engagement_type": "both",
-        },
+            {
+                "keywords": "",
+                "locations": ["Sydney"],
+                "engagement_type": ["permanent", "contract"],
+            },
         {
             "extraction_lookback_years": 12,
             "title_extraction_min_months": 6,
@@ -137,8 +179,8 @@ def test_validate_required_onboarding_inputs_rejects_bad_boundaries():
         server_helpers._validate_required_onboarding_inputs(
             {
                 "keywords": "x",
-                "locations": ["Sydney NSW", "!" * 5],
-                "engagement_type": "both",
+                "locations": ["Sydney", "!" * 5],
+                "engagement_type": ["permanent", "contract"],
             },
             {
                 "extraction_lookback_years": 99,
@@ -229,7 +271,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"primary_job_title_pattern": [], "secondary_title_patterns": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
@@ -256,25 +298,42 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
 def test_normalize_full_profile_preserves_selected_title_categories():
     normalized = profile_store.normalize_full_profile(
         {
-            "primary_job_title_pattern": ["senior business analyst"],
-            "secondary_title_patterns": ["scrum master"],
+            "target_roles": ["senior business analyst"],
+            "also_consider_roles": ["scrum master"],
         }
     )
 
-    assert normalized["primary_job_title_pattern"] == ["senior business analyst"]
-    assert normalized["secondary_title_patterns"] == ["scrum master"]
+    assert normalized["target_roles"] == ["senior business analyst"]
+    assert normalized["also_consider_roles"] == ["scrum master"]
 
 
 def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
     normalized = profile_store.normalize_full_profile(
         {
-            "primary_job_title_pattern": ["senior business analyst"],
-            "secondary_title_patterns": ["Senior Business Analyst", "scrum master"],
+            "target_roles": ["senior business analyst"],
+            "also_consider_roles": ["Senior Business Analyst", "scrum master"],
         }
     )
 
-    assert normalized["primary_job_title_pattern"] == ["senior business analyst"]
-    assert normalized["secondary_title_patterns"] == ["scrum master"]
+    assert normalized["target_roles"] == ["senior business analyst"]
+    assert normalized["also_consider_roles"] == ["scrum master"]
+
+
+def test_normalize_full_profile_mirrors_primary_search_location_into_match_preferences():
+    normalized = profile_store.normalize_full_profile(
+        {
+            "search_settings": {
+                "locations": ["Sydney"],
+            },
+            "match_preferences": {
+                "secondary_location": "Melbourne",
+            },
+        }
+    )
+
+    assert normalized["search_settings"]["locations"] == ["Sydney"]
+    assert normalized["match_preferences"]["home_location"] == "Sydney"
+    assert normalized["match_preferences"]["secondary_location"] == "Melbourne"
 
 
 def test_user_settings_schedule_payload_is_sanitized_and_exposed():
@@ -428,6 +487,7 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
     monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
     monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
+    monkeypatch.setattr(server_helpers, "AUTH_DISABLED", True)
     (tmp_path / "run_stats.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(server_helpers, "rebuild_workspace_results", lambda reason="": rebuilds.append(reason))
 
@@ -469,7 +529,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     result = server_helpers.SettingsHandler._reset_current_user_state()
 
     assert result["ok"] is True
-    assert result["redirect_to"] == "/start"
+    assert result["redirect_to"] == "/start?fresh=1"
     assert not fake_local_dir.exists()
     assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]

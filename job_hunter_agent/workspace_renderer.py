@@ -135,8 +135,8 @@ def visible_fit_reasons(
         # Per-capability entries (tagged [canonical], [alias:...], [contextual_llm]) are scoring
         # internals already surfaced via fit_highlights — skip them here.
         if not label or value <= 0 or label in excluded or _is_capability_entry(label):
-        if not ((label.startswith("Work mode") or label.startswith("Work type") or label.startswith("Sector")) and label not in reasons):
-            continue
+            if not ((label.startswith("Work mode") or label.startswith("Work type") or label.startswith("Sector")) and label not in reasons):
+                continue
         if label not in reasons:
             reasons.append(label)
         if len(reasons) >= max_items:

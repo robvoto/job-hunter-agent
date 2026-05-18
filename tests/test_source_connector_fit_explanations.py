@@ -1383,7 +1383,7 @@ def test_scoring_helpers_ignore_display_only_fit_highlights():
 
     from job_hunter_agent.preferences import assess_sector_preference, assess_contract_preference
     assert assess_sector_preference(record, profile) == {
-        "label": "Sector neutral because both sectors are selected",
+        "label": "Sector unknown",
         "value": 0,
     }
     assert assess_contract_preference(record, profile) == {

@@ -44,8 +44,8 @@ _LLM_FIXTURE = {
         {"name": "process mapping", "level": "working", "fit": "core", "aliases": []},
         {"name": "requirements analysis", "level": "strong", "fit": "core", "aliases": ["requirements gathering"]},
     ],
-    "primary_job_title_pattern": ["delivery lead"],
-    "secondary_title_patterns": ["project coordinator"],
+    "target_roles": ["delivery lead"],
+    "also_consider_roles": ["project coordinator"],
     "suggested_search_keywords": ["delivery lead", "business analysis"],
     "match_preferences": {"prefer_permanent": None, "work_mode_preference": None, "home_location": ""},
 }
@@ -183,21 +183,21 @@ def test_extract_title_pattern_suggestions_returns_llm_patterns():
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE):
         result = extract_title_pattern_suggestions(SAMPLE_CV, {"extraction_lookback_years": 8})
 
-    assert any("delivery lead" in item for item in result["primary_job_title_pattern"])
+    assert any("delivery lead" in item for item in result["target_roles"])
     assert any("delivery lead" in item for item in result["suggested_search_keywords"])
 
 
 def test_extract_title_pattern_suggestions_respects_max_limits():
     fixture = {
         **_LLM_FIXTURE,
-        "primary_job_title_pattern": ["a", "b", "c", "d", "e"],
-        "secondary_title_patterns": ["x", "y", "z"],
+        "target_roles": ["a", "b", "c", "d", "e"],
+        "also_consider_roles": ["x", "y", "z"],
     }
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
         result = extract_title_pattern_suggestions(SAMPLE_CV, {"max_target_patterns": 2, "max_secondary_patterns": 1})
 
-    assert len(result["primary_job_title_pattern"]) <= 2
-    assert len(result["secondary_title_patterns"]) <= 1
+    assert len(result["target_roles"]) <= 2
+    assert len(result["also_consider_roles"]) <= 1
 
 
 # ── _parse_role_entries: inline format (title/employer set directly) ───────────
