@@ -342,7 +342,7 @@
 /* Search choice groups use the same soft-chip visual language. */
 #engagement_type_choices.choice-strip,
 #work_mode_preference.choice-strip,
-#prefer_government_choices.choice-strip {
+#prefer_sector_choices.choice-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -356,7 +356,7 @@
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode,
 #work_mode_preference.choice-strip > .choice-card--work-mode,
-#prefer_government_choices.choice-strip > .choice-card--work-mode {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode {
   flex: 0 0 auto;
   min-height: 34px;
   min-width: 86px;
@@ -372,13 +372,13 @@
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode:last-child,
 #work_mode_preference.choice-strip > .choice-card--work-mode:last-child,
-#prefer_government_choices.choice-strip > .choice-card--work-mode:last-child {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:last-child {
   border-right: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
 }
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode:has(input:checked),
 #work_mode_preference.choice-strip > .choice-card--work-mode:has(input:checked),
-#prefer_government_choices.choice-strip > .choice-card--work-mode:has(input:checked) {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) {
   background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 46%, var(--border-subtle));
   color: var(--accent);
@@ -386,14 +386,14 @@
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode:has(input:checked) span,
 #work_mode_preference.choice-strip > .choice-card--work-mode:has(input:checked) span,
-#prefer_government_choices.choice-strip > .choice-card--work-mode:has(input:checked) span {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) span {
   color: inherit;
   font-weight: 700;
 }
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode:hover,
 #work_mode_preference.choice-strip > .choice-card--work-mode:hover,
-#prefer_government_choices.choice-strip > .choice-card--work-mode:hover {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:hover {
   background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle));
 }
@@ -622,7 +622,7 @@
 .choice-strip > .choice-card--work-mode,
 #engagement_type_choices.choice-strip > .choice-card--work-mode,
 #work_mode_preference.choice-strip > .choice-card--work-mode,
-#prefer_government_choices.choice-strip > .choice-card--work-mode {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode {
   background: transparent;
   border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
@@ -632,7 +632,7 @@
 .choice-strip > .choice-card--work-mode:hover,
 #engagement_type_choices.choice-strip > .choice-card--work-mode:hover,
 #work_mode_preference.choice-strip > .choice-card--work-mode:hover,
-#prefer_government_choices.choice-strip > .choice-card--work-mode:hover {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:hover {
   background: color-mix(in srgb, var(--text-primary) 5%, transparent);
   border-color: color-mix(in srgb, var(--text-muted) 32%, var(--border-subtle));
   color: var(--text-primary);
@@ -641,7 +641,7 @@
 .choice-strip > .choice-card--work-mode:has(input:checked),
 #engagement_type_choices.choice-strip > .choice-card--work-mode:has(input:checked),
 #work_mode_preference.choice-strip > .choice-card--work-mode:has(input:checked),
-#prefer_government_choices.choice-strip > .choice-card--work-mode:has(input:checked) {
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) {
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 62%, var(--border-subtle));
   color: var(--accent);

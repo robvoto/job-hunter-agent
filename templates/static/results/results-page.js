@@ -239,7 +239,8 @@
           if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
           if (workTypeValues && !workTypeValues.includes(cardWorkType)) visible = false;
           if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
-          if (sector !== 'all' && cardSector !== sector) visible = false;
+          if (sector === 'public' && cardSector !== 'public') visible = false;
+          if (sector === 'private' && cardSector === 'public') visible = false;
           if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
         } else if (activeWorkspace === 'applied') {
           if (cardScope !== 'applied') visible = false;

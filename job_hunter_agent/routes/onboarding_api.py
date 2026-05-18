@@ -16,13 +16,13 @@ from job_hunter_agent.profile_store import (
     KEY_MIN_DAILY_RATE,
     KEY_MIN_SALARY_YEARLY,
     KEY_ONBOARDING_COMPLETE,
-    KEY_PREFER_GOVERNMENT,
+    KEY_PREFER_SECTOR,
     KEY_WORK_MODE_PREFERENCE,
     KEY_ONBOARDING_SETTINGS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     VALID_ENGAGEMENT_TYPES,
-    VALID_GOVERNMENT_PREFERENCES,
+    VALID_SECTOR_PREFERENCES,
     VALID_WORK_MODE_PREFERENCES,
     normalize_capability_rules,
     normalize_engagement_type_preferences,
@@ -100,7 +100,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
         engagement_type = normalize_engagement_type_preferences(body.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
         work_mode_preference = normalize_work_mode_preferences(body.get(KEY_WORK_MODE_PREFERENCE))
-        prefer_government = str(body.get(KEY_PREFER_GOVERNMENT) or "").strip().lower()
+        prefer_sector = str(body.get(KEY_PREFER_SECTOR) or "").strip().lower()
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
@@ -122,8 +122,8 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             raise ValueError("Please choose what type of work you are open to.")
         if any(value not in VALID_WORK_MODE_PREFERENCES for value in work_mode_preference):
             raise ValueError("Please choose only remote, hybrid, or on-site.")
-        if prefer_government not in VALID_GOVERNMENT_PREFERENCES:
-            prefer_government = srv.GovPref.ANY
+        if prefer_sector not in VALID_SECTOR_PREFERENCES:
+            prefer_sector = srv.GovPref.ANY
         try:
             minimum_salary_yearly = int(str(raw_minimum_salary_yearly).replace(",", "").strip() or 0)
         except Exception as exc:
@@ -161,7 +161,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         match_preferences = dict(current.get(KEY_MATCH_PREFS, {}))
         match_preferences[KEY_ENGAGEMENT_TYPE] = engagement_type
         match_preferences[KEY_WORK_MODE_PREFERENCE] = work_mode_preference
-        match_preferences[KEY_PREFER_GOVERNMENT] = prefer_government
+        match_preferences[KEY_PREFER_SECTOR] = prefer_sector
         profile_patch[KEY_MATCH_PREFS] = match_preferences
         profile_patch[PROFILE_SALARY_PREFS_KEY] = {
             KEY_MIN_SALARY_YEARLY: minimum_salary_yearly,

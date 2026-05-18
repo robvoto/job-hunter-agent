@@ -72,7 +72,7 @@ def test_default_match_preferences_are_neutral():
     assert prefs["home_location"] == ""
     assert prefs["secondary_location"] == ""
     assert prefs["work_mode_preference"] == []
-    assert prefs["prefer_government"] is False
+    assert prefs["prefer_sector"] is False
     assert prefs["prefer_permanent"] is False
 
 

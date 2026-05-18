@@ -61,7 +61,7 @@ KEY_KEYWORDS = "keywords"
 KEY_LOCATIONS = "locations"
 KEY_ENGAGEMENT_TYPE = "engagement_type"
 KEY_WORK_MODE_PREFERENCE = "work_mode_preference"
-KEY_PREFER_GOVERNMENT = "prefer_government"
+KEY_PREFER_SECTOR = "prefer_sector"
 KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 
@@ -97,20 +97,20 @@ class GovPref:
     GOVERNMENT = "government"
     PRIVATE = "private"
 
-GOVERNMENT_PREFERENCE_OPTIONS = (
+SECTOR_PREFERENCE_OPTIONS = (
     {"value": GovPref.ANY, "label": "No preference"},
     {"value": GovPref.GOVERNMENT, "label": "Public sector"},
     {"value": GovPref.PRIVATE, "label": "Private sector"},
 )
-GOVERNMENT_PREFERENCE_CHOICE_OPTIONS = (
+SECTOR_PREFERENCE_CHOICE_OPTIONS = (
     {"value": GovPref.GOVERNMENT, "label": "Public sector"},
     {"value": GovPref.PRIVATE, "label": "Private sector"},
 )
-VALID_GOVERNMENT_PREFERENCES = frozenset({item["value"] for item in GOVERNMENT_PREFERENCE_OPTIONS})
-GOVERNMENT_PREFERENCE_DEFAULT_LABEL = next(
-    (item["label"] for item in GOVERNMENT_PREFERENCE_OPTIONS if item["value"] == GovPref.ANY), ""
+VALID_SECTOR_PREFERENCES = frozenset({item["value"] for item in SECTOR_PREFERENCE_OPTIONS})
+SECTOR_PREFERENCE_DEFAULT_LABEL = next(
+    (item["label"] for item in SECTOR_PREFERENCE_OPTIONS if item["value"] == GovPref.ANY), ""
 )
-GOVERNMENT_PREFERENCE_HELP_TEXT = "Select both if sector preference does not matter."
+SECTOR_PREFERENCE_HELP_TEXT = "Select both if sector preference does not matter."
 
 SALARY_MIN_ANNUAL_LABEL = "Minimum annual base (excludes super)"
 SALARY_MIN_DAILY_LABEL = "Minimum daily rate (excludes super)"
@@ -234,7 +234,7 @@ DEFAULT_PROFILE = {
         "home_location": "",
         "secondary_location": "",
         KEY_WORK_MODE_PREFERENCE: [],
-        KEY_PREFER_GOVERNMENT: False,
+        KEY_PREFER_SECTOR: False,
         "prefer_permanent": False,
         "engagement_type": list(ENGAGEMENT_TYPE_DEFAULT_VALUES),
         "preferred_contract_months": 12,
@@ -373,14 +373,14 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
     merged = dict(DEFAULT_PROFILE["match_preferences"])
     merged.update({k: v for k, v in source.items() if v is not None})
 
-    raw_government = merged.get(KEY_PREFER_GOVERNMENT)
-    if isinstance(raw_government, bool):
-        merged[KEY_PREFER_GOVERNMENT] = GovPref.GOVERNMENT if raw_government else GovPref.ANY
+    raw_sector = merged.get(KEY_PREFER_SECTOR)
+    if isinstance(raw_sector, bool):
+        merged[KEY_PREFER_SECTOR] = GovPref.GOVERNMENT if raw_sector else GovPref.ANY
     else:
-        normalized_government = str(raw_government or "").strip().lower()
-        if normalized_government not in VALID_GOVERNMENT_PREFERENCES:
-            normalized_government = GovPref.ANY
-        merged[KEY_PREFER_GOVERNMENT] = normalized_government
+        normalized_sector = str(raw_sector or "").strip().lower()
+        if normalized_sector not in VALID_SECTOR_PREFERENCES:
+            normalized_sector = GovPref.ANY
+        merged[KEY_PREFER_SECTOR] = normalized_sector
 
     merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(merged.get(KEY_WORK_MODE_PREFERENCE))
 

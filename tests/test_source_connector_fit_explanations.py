@@ -32,7 +32,7 @@ def _test_profile():
         "dominant_signal_clusters": [],
         "match_preferences": {
             "home_location": "Sydney NSW",
-            "prefer_government": True,
+            "prefer_sector": True,
             "engagement_type": ["permanent", "contract"],
             "preferred_contract_months": 12,
             "short_contract_months": 6,
@@ -1364,7 +1364,7 @@ def test_scoring_helpers_ignore_display_only_fit_highlights():
         **_test_profile(),
         "match_preferences": {
             **_test_profile()["match_preferences"],
-            "prefer_government": True,
+            "prefer_sector": True,
         },
     }
     record = {
@@ -1397,7 +1397,7 @@ def test_scoring_helpers_skip_contract_signal_when_both_selected():
         **_test_profile(),
         "match_preferences": {
             **_test_profile()["match_preferences"],
-            "prefer_government": True,
+            "prefer_sector": True,
         },
     }
     record = {

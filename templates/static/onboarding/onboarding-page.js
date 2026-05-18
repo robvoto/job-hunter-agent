@@ -17,7 +17,7 @@ const refs = Object.freeze({
   locationSelect: document.getElementById('location_search'),
   locationSelected: document.getElementById('location_selected'),
   workModePreferences: Array.from(document.querySelectorAll('input[name="work_mode_preference"]')),
-  governmentPreferenceSelect: document.getElementById('government_preference'),
+  sectorPreferenceSelect: document.getElementById('sector_preference'),
   reviewCapabilityCount: document.getElementById('review_capability_count'),
   salaryYearlyBlock: document.getElementById('salary_yearly_block'),
   salaryDailyBlock: document.getElementById('salary_daily_block'),
@@ -53,7 +53,7 @@ const {
   cvDropZoneContent: primaryCvDropZoneContentEl,
   locationSelect,
   locationSelected,
-  governmentPreferenceSelect,
+  sectorPreferenceSelect,
   reviewCapabilityCount: reviewCapabilityCountEl,
   salaryYearlyBlock,
   salaryDailyBlock,
@@ -96,16 +96,16 @@ function defaultSearchKeywordFromTargetRoles(profile) {
   const allTitles = reviewedTitles.concat(profileTitles).filter(Boolean);
   return allTitles.length ? allTitles[0] : '';
 }
-const GOVERNMENT_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
-  ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+const SECTOR_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__
   : [];
-const GOVERNMENT_PREFERENCE_DEFAULT = String(
-  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
-  || GOVERNMENT_PREFERENCE_OPTIONS?.[0]?.value
+const SECTOR_PREFERENCE_DEFAULT = String(
+  window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__
+  || SECTOR_PREFERENCE_OPTIONS?.[0]?.value
   || 'any'
 ).trim().toLowerCase();
-const GOVERNMENT_PREFERENCE_LABELS = Object.fromEntries(
-  GOVERNMENT_PREFERENCE_OPTIONS
+const SECTOR_PREFERENCE_LABELS = Object.fromEntries(
+  SECTOR_PREFERENCE_OPTIONS
     .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
     .filter(([value]) => Boolean(value))
 );
@@ -247,15 +247,15 @@ function getOnboardingStepCopy(stepNumber, key, options = {}) {
   return value;
 }
 
-function getGovernmentPreferenceValue() {
-  return String(governmentPreferenceSelect?.value || GOVERNMENT_PREFERENCE_DEFAULT).trim().toLowerCase();
+function getSectorPreferenceValue() {
+  return String(sectorPreferenceSelect?.value || SECTOR_PREFERENCE_DEFAULT).trim().toLowerCase();
 }
 
-function setGovernmentPreferenceValue(value) {
-  const selected = String(value || GOVERNMENT_PREFERENCE_DEFAULT).trim().toLowerCase();
-  if (governmentPreferenceSelect) {
-    const validValue = GOVERNMENT_PREFERENCE_LABELS[selected] ? selected : GOVERNMENT_PREFERENCE_DEFAULT;
-    governmentPreferenceSelect.value = validValue;
+function setSectorPreferenceValue(value) {
+  const selected = String(value || SECTOR_PREFERENCE_DEFAULT).trim().toLowerCase();
+  if (sectorPreferenceSelect) {
+    const validValue = SECTOR_PREFERENCE_LABELS[selected] ? selected : SECTOR_PREFERENCE_DEFAULT;
+    sectorPreferenceSelect.value = validValue;
   }
 }
 
@@ -309,7 +309,7 @@ function saveWizardState() {
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
     engagementType: getOnboardingEngagementTypeValues(),
-    preferGovernment: getGovernmentPreferenceValue(),
+    preferSector: getSectorPreferenceValue(),
     primaryCvSourcePath: primaryCvSource,
     primaryCvFileName,
   }));
@@ -356,7 +356,7 @@ function buildSearchBasicsProfilePatch() {
   const minimumSalaryYearly = onboardingParseCurrencyValue(reviewMinimumSalaryYearlyEl?.value || '');
   const minimumDailyRate = onboardingParseCurrencyValue(reviewMinimumDailyRateEl?.value || '');
   const engagementType = getOnboardingEngagementTypeValues();
-  const preferGovernment = getGovernmentPreferenceValue();
+  const preferSector = getSectorPreferenceValue();
 
   return {
     search_settings: {
@@ -366,7 +366,7 @@ function buildSearchBasicsProfilePatch() {
     match_preferences: {
       engagement_type: engagementType,
       work_mode_preference: getOnboardingWorkModePreferenceValues(),
-      prefer_government: preferGovernment,
+      prefer_sector: preferSector,
     },
     salary_preferences: {
       minimum_salary_yearly: Number(minimumSalaryYearly || 0),
@@ -439,7 +439,7 @@ function restoreWizardState() {
     if (dailyEl) onboardingSetCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
   setOnboardingEngagementTypeValues(state.engagementType);
     setOnboardingWorkModePreferenceValues(state.workModePreference || []);
-    setGovernmentPreferenceValue(state.preferGovernment || GOVERNMENT_PREFERENCE_DEFAULT);
+    setSectorPreferenceValue(state.preferSector || SECTOR_PREFERENCE_DEFAULT);
     updateCompensationVisibility();
     if (state.step >= CHECK_STEP) {
       updateCheckStep();
@@ -713,7 +713,7 @@ function searchPreferencesPayload() {
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
     engagement_type: getOnboardingEngagementTypeValues(),
     work_mode_preference: getOnboardingWorkModePreferenceValues(),
-    prefer_government: getGovernmentPreferenceValue(),
+    prefer_sector: getSectorPreferenceValue(),
     minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
     minimum_daily_rate: reviewMinimumDailyRateEl?.value.trim() || '',
   };
@@ -842,8 +842,8 @@ function applyProfileDefaults(profile) {
   if (!getOnboardingWorkModePreferenceValues().length) {
     setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
-  if (governmentPreferenceSelect && !String(governmentPreferenceSelect.value || '').trim()) {
-    setGovernmentPreferenceValue(matchPreferences.prefer_government || GOVERNMENT_PREFERENCE_DEFAULT);
+  if (sectorPreferenceSelect && !String(sectorPreferenceSelect.value || '').trim()) {
+    setSectorPreferenceValue(matchPreferences.prefer_sector || SECTOR_PREFERENCE_DEFAULT);
   }
   if (!selectedLocations.length) {
     setSelectedLocation((searchSettings.locations || [])[0] || '');
@@ -861,8 +861,8 @@ if (locationSelect) {
     scheduleSearchBasicsPersistence();
   });
 }
-if (governmentPreferenceSelect) {
-  governmentPreferenceSelect.addEventListener('change', () => {
+if (sectorPreferenceSelect) {
+  sectorPreferenceSelect.addEventListener('change', () => {
     saveWizardState();
     scheduleSearchBasicsPersistence();
   });

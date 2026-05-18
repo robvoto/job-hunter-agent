@@ -54,8 +54,8 @@ window.JobHunterSettingsUtils = (function () {
       .map((option) => String(option.value || '').trim().toLowerCase())
       .filter(Boolean)
   );
-  const governmentPreferenceDefault = String(
-    window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
+  const sectorPreferenceDefault = String(
+    window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__
     || 'any'
   ).trim().toLowerCase();
   const workModePreferenceValues = new Set(
@@ -129,11 +129,11 @@ window.JobHunterSettingsUtils = (function () {
     });
   }
 
-  function normalizeGovernmentPreferenceValues(value, defaultToAll = true) {
+  function normalizeSectorPreferenceValues(value, defaultToAll = true) {
     const values = Array.isArray(value)
       ? value
       : String(value || '').split(/[,\n|/]+/);
-    const inputs = Array.from(document.querySelectorAll('input[name="prefer_government"]'));
+    const inputs = Array.from(document.querySelectorAll('input[name="prefer_sector"]'));
     const selected = [];
     const seen = new Set();
     for (const input of inputs) {
@@ -152,15 +152,15 @@ window.JobHunterSettingsUtils = (function () {
       : [];
   }
 
-  function getGovernmentPreferenceValues() {
-    return normalizeGovernmentPreferenceValues(
-      Array.from(document.querySelectorAll('input[name="prefer_government"]:checked')).map((input) => input.value)
+  function getSectorPreferenceValues() {
+    return normalizeSectorPreferenceValues(
+      Array.from(document.querySelectorAll('input[name="prefer_sector"]:checked')).map((input) => input.value)
     );
   }
 
-  function setGovernmentPreferenceValues(value) {
-    const selected = new Set(normalizeGovernmentPreferenceValues(value));
-    document.querySelectorAll('input[name="prefer_government"]').forEach((input) => {
+  function setSectorPreferenceValues(value) {
+    const selected = new Set(normalizeSectorPreferenceValues(value));
+    document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
       input.checked = selected.size === 0 || selected.has(String(input.value || '').trim().toLowerCase());
     });
   }
@@ -255,9 +255,9 @@ window.JobHunterSettingsUtils = (function () {
     normalizeEngagementTypePreferences,
     getEngagementTypeValues,
     setEngagementTypeValues,
-    normalizeGovernmentPreferenceValues,
-    getGovernmentPreferenceValues,
-    setGovernmentPreferenceValues,
+    normalizeSectorPreferenceValues,
+    getSectorPreferenceValues,
+    setSectorPreferenceValues,
     setToggleChecked,
     getToggleChecked,
     setChoiceGroupValue,
@@ -265,7 +265,7 @@ window.JobHunterSettingsUtils = (function () {
     ENGAGEMENT_TYPE_VALUES: engagementTypeValues,
     ENGAGEMENT_TYPE_DEFAULT_VALUES: engagementTypeDefaultValues,
     WORK_MODE_PREFERENCE_VALUES: workModePreferenceValues,
-    GOVERNMENT_PREFERENCE_DEFAULT: governmentPreferenceDefault,
+    SECTOR_PREFERENCE_DEFAULT: sectorPreferenceDefault,
     parseCurrencyValue,
     setCurrencyFieldValue,
     readCurrencyFieldValue,

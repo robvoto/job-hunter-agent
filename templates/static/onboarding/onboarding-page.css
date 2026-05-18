@@ -1236,7 +1236,7 @@ body {
 }
 
 #location_search,
-#government_preference {
+#sector_preference {
   width: min(100%, 34rem);
 }
 
@@ -1245,7 +1245,7 @@ body {
 }
 
 #location_search + .help,
-#government_preference + .help {
+#sector_preference + .help {
   max-width: 34rem;
 }
 
@@ -1261,7 +1261,7 @@ body {
 @media (max-width: 720px) {
   #review_search_keywords,
   #location_search,
-  #government_preference,
+#sector_preference,
   .salary-pair,
   .salary-pair .currency-input-wrap {
     width: 100%;
@@ -1304,13 +1304,13 @@ body {
 
 #review_search_keywords,
 #location_search,
-#government_preference {
+#sector_preference {
   width: 100%;
 }
 
 #review_search_keywords + .help,
 #location_search + .help,
-#government_preference + .help {
+#sector_preference + .help {
   max-width: none;
 }
 

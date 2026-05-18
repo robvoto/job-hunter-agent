@@ -91,7 +91,7 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
     assert payload["ok"] is True
 
 
-def test_api_onboarding_confirm_allows_no_government_preference(monkeypatch):
+def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
     captured = {}
     monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
@@ -104,7 +104,7 @@ def test_api_onboarding_confirm_allows_no_government_preference(monkeypatch):
             "search_keyword": "business analyst",
             "search_locations": ["Sydney"],
             "engagement_type": ["permanent", "contract"],
-            "prefer_government": "",
+            "prefer_sector": "",
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
             "capability_profile_rules": [],
@@ -114,7 +114,7 @@ def test_api_onboarding_confirm_allows_no_government_preference(monkeypatch):
     assert response.status_code == 200
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
-    assert captured["patch"]["match_preferences"]["prefer_government"] == profile_store.GovPref.ANY
+    assert captured["patch"]["match_preferences"]["prefer_sector"] == profile_store.GovPref.ANY
 
 
 def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
@@ -131,7 +131,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
             "search_locations": ["Sydney"],
             "engagement_type": ["permanent", "contract"],
             "work_mode_preference": ["remote", "hybrid"],
-            "prefer_government": "",
+            "prefer_sector": "",
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
             "capability_profile_rules": [],
@@ -553,4 +553,3 @@ def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
 
     assert result["ok"] is True
     assert calls == [True]
-

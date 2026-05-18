@@ -77,14 +77,14 @@ const flowRefs = Object.freeze({
   checkLocations: document.getElementById('check_locations'),
   checkEngagementType: document.getElementById('check_engagement_type'),
   checkWorkModePreference: document.getElementById('check_work_mode_preference'),
-  checkGovernmentPreference: document.getElementById('check_government_preference'),
+  checkSectorPreference: document.getElementById('check_sector_preference'),
   checkSalaryYearly: document.getElementById('check_salary_yearly'),
   checkSalaryDaily: document.getElementById('check_salary_daily'),
   locationSearch: document.getElementById('location_search'),
   reviewSearchKeywords: document.getElementById('review_search_keywords'),
   reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
-  governmentPreference: document.getElementById('government_preference'),
+  sectorPreference: document.getElementById('sector_preference'),
   reviewCapabilityFilter: document.getElementById('review_capability_filter'),
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
   reviewTargetTitlesList: document.getElementById('review_target_titles_list'),
@@ -119,20 +119,20 @@ const engagementTypeDefaultLabel = engagementTypeDefaultValues
   .map((value) => engagementTypeLabels[String(value || '').trim().toLowerCase()] || String(value || '').trim())
   .filter(Boolean)
   .join(' | ');
-const governmentPreferenceOptions = Array.isArray(window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__)
-  ? window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__
+const sectorPreferenceOptions = Array.isArray(window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__)
+  ? window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__
   : [];
-const governmentPreferenceDefault = String(
-  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__
-  || governmentPreferenceOptions?.[0]?.value
+const sectorPreferenceDefault = String(
+  window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__
+  || sectorPreferenceOptions?.[0]?.value
   || 'any'
 ).trim().toLowerCase();
-const governmentPreferenceDefaultLabel = String(
-  window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT_LABEL__
+const sectorPreferenceDefaultLabel = String(
+  window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT_LABEL__
   || ''
 ).trim();
-const governmentPreferenceLabels = Object.fromEntries(
-  governmentPreferenceOptions
+const sectorPreferenceLabels = Object.fromEntries(
+  sectorPreferenceOptions
     .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
     .filter(([value]) => Boolean(value))
 );
@@ -165,9 +165,9 @@ function workModePreferenceLabel(values) {
   return selected.map((value) => workModePreferenceLabels[value] || value).join(' | ');
 }
 
-function governmentPreferenceLabel(value) {
+function sectorPreferenceLabel(value) {
   const key = String(value || '').trim().toLowerCase();
-  return governmentPreferenceLabels[key] || governmentPreferenceDefaultLabel || governmentPreferenceLabels[governmentPreferenceDefault] || '';
+  return sectorPreferenceLabels[key] || sectorPreferenceDefaultLabel || sectorPreferenceLabels[sectorPreferenceDefault] || '';
 }
 
 function preventFileNavigation(event) {
@@ -248,7 +248,7 @@ function updateCheckStep() {
     : 'Not provided';
   flowRefs.checkEngagementType.textContent = engagementTypeLabel(searchPrefs.engagement_type);
   flowRefs.checkWorkModePreference.textContent = workModePreferenceLabel(searchPrefs.work_mode_preference);
-  flowRefs.checkGovernmentPreference.textContent = governmentPreferenceLabel(searchPrefs.prefer_government);
+  flowRefs.checkSectorPreference.textContent = sectorPreferenceLabel(searchPrefs.prefer_sector);
   flowRefs.checkSalaryYearly.textContent = formatCurrencySummaryValue(searchPrefs.minimum_salary_yearly);
   flowRefs.checkSalaryDaily.textContent = formatCurrencySummaryValue(searchPrefs.minimum_daily_rate);
 }
@@ -294,8 +294,8 @@ function hydrateSearchBasics(profile) {
   if (!getWorkModePreferenceValues().length) {
     setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
-  if (flowRefs.governmentPreference && !String(flowRefs.governmentPreference.value || '').trim()) {
-    flowRefs.governmentPreference.value = String(matchPreferences.prefer_government || governmentPreferenceDefault).trim().toLowerCase();
+  if (flowRefs.sectorPreference && !String(flowRefs.sectorPreference.value || '').trim()) {
+    flowRefs.sectorPreference.value = String(matchPreferences.prefer_sector || sectorPreferenceDefault).trim().toLowerCase();
   }
   updateCompensationVisibility();
 }
@@ -603,7 +603,7 @@ async function finishSetup() {
         search_locations: searchPrefs.locations,
       engagement_type: searchPrefs.engagement_type,
         work_mode_preference: searchPrefs.work_mode_preference,
-        prefer_government: searchPrefs.prefer_government,
+        prefer_sector: searchPrefs.prefer_sector,
         minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
         minimum_daily_rate: searchPrefs.minimum_daily_rate,
       target_roles: reviewTargetTitles,
@@ -621,7 +621,7 @@ async function finishSetup() {
     keywords: searchPrefs.keywords || String(payload?.profile?.search_settings?.keywords || '').trim(),
     locations: searchPrefs.locations,
     engagement_type: searchPrefs.engagement_type,
-    prefer_government: searchPrefs.prefer_government,
+    prefer_sector: searchPrefs.prefer_sector,
   };
   storeCompletionRedirectState(payload, finalSearchPrefs);
   showStatus(payload.message || 'Setup complete.', 'ok');
@@ -912,7 +912,7 @@ flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
 ].filter(Boolean).forEach((input) => {
   onboardingFlowCurrencyUi.bindCurrencyInput?.(input);
 });
-flowRefs.governmentPreference?.addEventListener('change', () => {
+flowRefs.sectorPreference?.addEventListener('change', () => {
   saveWizardState();
   if (typeof scheduleSearchBasicsPersistence === 'function') {
     scheduleSearchBasicsPersistence();

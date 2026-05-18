@@ -8,6 +8,7 @@ from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
     GovPref,
     Engagement,
+    KEY_PREFER_SECTOR,
     WorkMode,
     KEY_WORK_MODE_PREFERENCE,
     VALID_WORK_MODE_PREFERENCES,
@@ -47,7 +48,7 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
     # Sector — exclude only when public-sector context is explicitly detected and user wants private only.
     # Public-sector-only preference does NOT hard-filter: absence of public-sector context ≠ confirmed private.
-    sector_pref = str(preferences.get("prefer_government") or GovPref.ANY).strip().lower()
+    sector_pref = str(preferences.get(KEY_PREFER_SECTOR) or GovPref.ANY).strip().lower()
     if sector_pref == GovPref.PRIVATE:
         if has_government_context(_government_combined_text(record)):
             return False, "PREF_SECTOR_OUTSIDE_SELECTED"
@@ -222,7 +223,7 @@ def assess_sector_preference(record: dict, profile: Optional[dict] = None) -> Op
     label_unknown = str(labels.get("unknown_neutral") or "").strip()
     if not label_bonus or not label_multiple or not label_all or not label_unknown:
         raise ValueError("sector_score_labels are required in ui_labels")
-    preference = str(preferences["prefer_government"] or GovPref.ANY).strip().lower()
+    preference = str(preferences[KEY_PREFER_SECTOR] or GovPref.ANY).strip().lower()
     if preference == GovPref.ANY:
         return {"label": label_all, "value": 0}
 

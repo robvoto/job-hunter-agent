@@ -18,8 +18,8 @@ const {
   bindCurrencyFields,
   getEngagementTypeValues,
   setEngagementTypeValues,
-  getGovernmentPreferenceValues,
-  setGovernmentPreferenceValues,
+  getSectorPreferenceValues,
+  setSectorPreferenceValues,
   setCurrencyFieldValue,
   readCurrencyFieldValue,
   getWorkModePreferenceValues,
@@ -28,7 +28,7 @@ const {
   getToggleChecked,
   setChoiceGroupValue,
   getChoiceGroupValue,
-  GOVERNMENT_PREFERENCE_DEFAULT,
+  SECTOR_PREFERENCE_DEFAULT,
 } = window.JobHunterSettingsUtils;
 
 // Aliases kept in scope for settings-review-panel.js which reads these by name
@@ -36,7 +36,7 @@ const capabilityStrengthMeta = capabilityEditor.capabilityStrengthMeta;
 const fillUserSettings = (s) => alertsSettings.fillUserSettings(s);
 const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserSettings);
 
-const governmentPreferenceDefault = String(GOVERNMENT_PREFERENCE_DEFAULT || 'any').trim().toLowerCase();
+const sectorPreferenceDefault = String(SECTOR_PREFERENCE_DEFAULT || 'any').trim().toLowerCase();
 function readOnboardingWelcomeSearchKeywords() {
   try {
     const raw = window.sessionStorage.getItem('jobHunter.onboardingWelcome');
@@ -150,7 +150,7 @@ function collectProfile() {
   const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
   const hoursMap = { 0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720 };
   const linkedinEasyApplyRaw = document.getElementById(LINKEDIN_EASY_APPLY_ONLY)?.value;
-  const governmentPreferenceValues = getGovernmentPreferenceValues();
+  const sectorPreferenceValues = getSectorPreferenceValues();
   const seekMaxPages = Number(getChoiceGroupValue('seek_max_pages'));
   if (!Number.isFinite(seekMaxPages)) {
     throw new Error('Please choose a valid SEEK page limit.');
@@ -173,7 +173,7 @@ function collectProfile() {
     match_preferences: {
       engagement_type: getEngagementTypeValues(),
       work_mode_preference: getWorkModePreferenceValues(),
-      prefer_government: governmentPreferenceValues.length === 1 ? governmentPreferenceValues[0] : governmentPreferenceDefault,
+      prefer_sector: sectorPreferenceValues.length === 1 ? sectorPreferenceValues[0] : sectorPreferenceDefault,
       min_contract_months: Number(document.getElementById('min_contract_months')?.value || '') || null,
     },
     preference_weights: {
@@ -228,7 +228,7 @@ function fillForm(profile) {
   setToggleChecked('linkedin_enabled', _enabledSources.includes('linkedin'));
   setEngagementTypeValues(profile.match_preferences?.engagement_type);
   setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);
-  setGovernmentPreferenceValues(profile.match_preferences?.prefer_government || governmentPreferenceDefault);
+  setSectorPreferenceValues(profile.match_preferences?.prefer_sector || sectorPreferenceDefault);
   const _minContractEl = document.getElementById('min_contract_months');
   if (_minContractEl) _minContractEl.value = String(profile.match_preferences?.min_contract_months ?? '');
   document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
@@ -361,10 +361,10 @@ document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => 
   });
 });
 
-document.querySelectorAll('input[name="prefer_government"]').forEach((cb) => {
+document.querySelectorAll('input[name="prefer_sector"]').forEach((cb) => {
   cb.addEventListener('change', () => {
     if (!cb.checked) {
-      const anyChecked = document.querySelectorAll('input[name="prefer_government"]:checked').length > 0;
+      const anyChecked = document.querySelectorAll('input[name="prefer_sector"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
   });

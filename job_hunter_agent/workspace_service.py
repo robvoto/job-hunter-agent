@@ -33,9 +33,9 @@ from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
     GovPref,
-    GOVERNMENT_PREFERENCE_OPTIONS,
+    KEY_PREFER_SECTOR,
+    SECTOR_PREFERENCE_OPTIONS,
     KEY_ENGAGEMENT_TYPE,
-    KEY_PREFER_GOVERNMENT,
     KEY_WORK_MODE_PREFERENCE,
     normalize_engagement_type_preferences,
     WORK_MODE_PREFERENCE_NONE_LABEL,
@@ -78,9 +78,9 @@ def _format_common_search_preferences(profile: dict[str, Any]) -> tuple[str, str
         if value in work_mode_lookup
     ) or WORK_MODE_PREFERENCE_NONE_LABEL
     sector_label = _label_from_options(
-        GOVERNMENT_PREFERENCE_OPTIONS,
-        match_preferences.get(KEY_PREFER_GOVERNMENT),
-        _label_from_options(GOVERNMENT_PREFERENCE_OPTIONS, GovPref.ANY, "No preference"),
+        SECTOR_PREFERENCE_OPTIONS,
+        match_preferences.get(KEY_PREFER_SECTOR),
+        _label_from_options(SECTOR_PREFERENCE_OPTIONS, GovPref.ANY, "No preference"),
     )
     return work_type_label, work_mode_label, sector_label
 
@@ -400,7 +400,7 @@ def render_html(
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),
             "WORK_TYPE_LABEL": safe_html(work_type_label),
             "WORK_MODE_LABEL": safe_html(work_mode_label),
-            "GOVERNMENT_PREFERENCE_LABEL": safe_html(sector_label),
+            "SECTOR_PREFERENCE_LABEL": safe_html(sector_label),
             "SALARY_MIN_LABEL": safe_html(salary_min_label),
             "DATE_RANGE_LABEL": safe_html(date_range_label),
             "SCOPE_SAVED_OPTION_HTML": scope_saved_option_html,

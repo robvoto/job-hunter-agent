@@ -11,7 +11,7 @@ from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
     GovPref,
     WorkMode,
-    GOVERNMENT_PREFERENCE_HELP_TEXT,
+    SECTOR_PREFERENCE_HELP_TEXT,
     SALARY_MIN_ANNUAL_LABEL,
     SALARY_MIN_DAILY_LABEL,
     SALARY_MIN_COMPENSATION_HELP_TEXT,
@@ -112,9 +112,9 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__", srv.render_engagement_type_choices(name="engagement_type", selected_values=ENGAGEMENT_TYPE_DEFAULT_VALUES))
         .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__", srv.render_work_mode_preference_choices(selected_values=WorkMode.NONE))
         .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__", WORK_MODE_PREFERENCE_HELP_TEXT)
-        .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__", srv.render_government_preference_select_options(selected_value=GovPref.ANY))
-        .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_CHOICES__", srv.render_government_preference_choices(selected_values=GovPref.ANY))
-        .replace("__JOB_HUNTER_GOVERNMENT_PREFERENCE_HELP__", GOVERNMENT_PREFERENCE_HELP_TEXT)
+        .replace("__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__", srv.render_sector_preference_select_options(selected_value=GovPref.ANY))
+        .replace("__JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__", srv.render_sector_preference_choices(selected_values=GovPref.ANY))
+        .replace("__JOB_HUNTER_SECTOR_PREFERENCE_HELP__", SECTOR_PREFERENCE_HELP_TEXT)
         .replace("__JOB_HUNTER_SEEK_MAX_PAGES_CHOICES__", srv.render_seek_max_pages_choices(label_id="seek_max_pages_label"))
         .replace(
             "__JOB_HUNTER_SEARCH_DEFAULT_SEEK_MAX_PAGES_CHOICES__",

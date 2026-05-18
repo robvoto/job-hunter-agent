@@ -70,6 +70,6 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'data-chip-editor="keywords"' not in html
     assert 'Search keyword' in html
     assert 'placeholder="e.g. Business Analyst"' in html
-    assert 'id="prefer_government_choices"' in html
+    assert 'id="prefer_sector_choices"' in html
     assert 'class="choice-card choice-card--work-mode"' in html
-    assert 'select id="prefer_government"' not in html
+    assert 'select id="sector_preference"' not in html

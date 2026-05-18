@@ -423,6 +423,7 @@ def render_job_card(
     company_attr = safe_html(company_display)
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
     sector_signal = infer_role_sector(display_record, trusted_desc if trusted_desc else stored_snapshot)
+    card_sector = "public" if sector_signal.get("kind") == "government" else "unknown"
     channel_signal = display_record.get("posting_channel_evidence")
     if not isinstance(channel_signal, dict):
         channel_signal = {}
@@ -446,7 +447,7 @@ def render_job_card(
         f'data-job-title="{title}" '
         f'data-job-company="{company_attr}" '
         f'data-job-teaser="{teaser_attr}" '
-        f'data-role-sector="{safe_html(sector_signal.get("kind") or "unknown")}" '
+        f'data-role-sector="{safe_html(card_sector)}" '
         f'data-similar-applied-warning="{"1" if is_possible_repost else "0"}" '
         f'data-similar-applied-job-key="{similar_applied_job_key}" '
         f'data-similar-applied-title="{similar_applied_title}" '
@@ -475,7 +476,7 @@ def render_job_card(
         badges.append(render_badge("Description Issue", "badge-warning", "The full job description was not captured clearly, so this match needs manual checking."))
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
     if sector_signal.get("kind") == "government":
-        badges.append(render_badge("Public sector", "badge-sector-government", "Public-sector context detected from the captured job text."))
+        badges.append(render_badge("Public sector", "badge-sector-public", "Public-sector context detected from the captured job text."))
     channel_kind = channel_signal.get("kind", "unknown")
     channel_source = channel_signal.get("source", "")
     if channel_kind == "agency_or_recruiter" and channel_source == "metadata_first":

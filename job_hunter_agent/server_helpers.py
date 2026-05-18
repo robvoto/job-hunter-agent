@@ -43,8 +43,8 @@ from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
     GovPref,
-    GOVERNMENT_PREFERENCE_CHOICE_OPTIONS,
-    GOVERNMENT_PREFERENCE_OPTIONS,
+    SECTOR_PREFERENCE_CHOICE_OPTIONS,
+    SECTOR_PREFERENCE_OPTIONS,
     WorkMode,
     VALID_ENGAGEMENT_TYPES,
     WORK_MODE_PREFERENCE_NONE_LABEL,
@@ -295,10 +295,10 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__ = {json.dumps(WORK_MODE_PREFERENCE_NONE_LABEL, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__ = {json.dumps(GOVERNMENT_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
+        f'<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__ = {json.dumps(SECTOR_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_DEFAULT__ = {json.dumps(GovPref.ANY, ensure_ascii=True)};</script>'
+        f'<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__ = {json.dumps(GovPref.ANY, ensure_ascii=True)};</script>'
     )
     return "\n  ".join(parts)
 
@@ -361,10 +361,10 @@ def render_engagement_type_choices(*, name: str, selected_values: object) -> str
     )
 
 
-def render_government_preference_select_options(*, selected_value: str) -> str:
+def render_sector_preference_select_options(*, selected_value: str) -> str:
     selected = str(selected_value or GovPref.ANY).strip().lower()
     options = []
-    for item in GOVERNMENT_PREFERENCE_OPTIONS:
+    for item in SECTOR_PREFERENCE_OPTIONS:
         selected_attr = " selected" if item["value"] == selected else ""
         options.append(
             f'<option value="{escape(item["value"])}"{selected_attr}>{escape(item["label"])}</option>'
@@ -372,18 +372,18 @@ def render_government_preference_select_options(*, selected_value: str) -> str:
     return "".join(options)
 
 
-def render_government_preference_choices(*, selected_values: object) -> str:
-    valid_values = {item["value"] for item in GOVERNMENT_PREFERENCE_CHOICE_OPTIONS}
+def render_sector_preference_choices(*, selected_values: object) -> str:
+    valid_values = {item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS}
     selected = [value for value in _normalize_choice_values(selected_values) if value in valid_values]
     if not selected:
-        selected = [item["value"] for item in GOVERNMENT_PREFERENCE_CHOICE_OPTIONS]
+        selected = [item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS]
     return render_choice_strip(
-        name="prefer_government",
-        options=list(GOVERNMENT_PREFERENCE_CHOICE_OPTIONS),
+        name="prefer_sector",
+        options=list(SECTOR_PREFERENCE_CHOICE_OPTIONS),
         selected_values=selected,
         input_type="checkbox",
-        group_id="prefer_government_choices",
-        label_id="prefer_government_label",
+        group_id="prefer_sector_choices",
+        label_id="prefer_sector_label",
         card_class="choice-card--work-mode",
     )
 
