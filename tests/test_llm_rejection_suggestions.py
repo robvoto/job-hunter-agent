@@ -129,7 +129,8 @@ def test_managed_llm_prompt_knowledge_files_contain_lines():
 
 def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
     monkeypatch.setattr(
-        "job_hunter_agent.profile_store.load_profile",
+        llm_gate,
+        "load_profile",
         lambda: {
             "llm_profile_brief": "",
             "star_evidence_text": "",
@@ -145,7 +146,8 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "job_hunter_agent.profile_store.get_candidate_profile_tiers",
+        llm_gate,
+        "get_candidate_profile_tiers",
         lambda profile: {
             "primary_candidate_profile_context": "Primary evidence",
             "secondary_candidate_profile_context": "Secondary evidence",
@@ -153,7 +155,8 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "job_hunter_agent.profile_store.get_candidate_profile_tier_weights",
+        llm_gate,
+        "get_candidate_profile_tier_weights",
         lambda profile: {
             "primary_candidate_profile_context": 0.9,
             "secondary_candidate_profile_context": 0.5,
@@ -294,6 +297,7 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
                 "original_texts": ["platform engineer"],
             }
         ],
+        "contextual_capability_matches": [],
     }
 
 
@@ -311,6 +315,6 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
 
     payload = llm_gate._request_learning_payload("Example role description", fit_review=True)
 
-    assert payload == {"fit_review": {"decision": "KEEP", "grade": "SOLID"}, "learning_candidates": []}
+    assert payload == {"fit_review": {"decision": "KEEP", "grade": "SOLID"}, "learning_candidates": [], "contextual_capability_matches": []}
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"
 

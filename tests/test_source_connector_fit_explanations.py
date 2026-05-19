@@ -169,14 +169,34 @@ def test_government_context_rules_file_contains_pattern_lists():
     from job_hunter_agent.paths import GOVERNMENT_CONTEXT_RULES_PATH
     payload = json.loads(GOVERNMENT_CONTEXT_RULES_PATH.read_text(encoding="utf-8"))
 
+    assert payload["kind"] == "rules"
+    assert payload["name"] == "government_context_rules"
+    assert payload["positive_patterns"] == [
+        "\\baps\\d+\\b",
+        "\\bel\\s*[12]\\b",
+        "\\bnv\\s*[12]\\b",
+        "\\bbaseline clearance\\b",
+    ]
+    assert payload["false_positive_patterns"] == [
+        "\\bgovernment-issued\\s+id(?:entification)?\\b",
+        "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
+    ]
+
+
+def test_government_context_knowledge_file_contains_approved_terms():
+    from job_hunter_agent.paths import GOVERNMENT_CONTEXT_KNOWLEDGE_PATH
+    payload = json.loads(GOVERNMENT_CONTEXT_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+
     assert payload["kind"] == "managed_knowledge"
-    positives = [entry for entry in payload["entries"] if entry.get("kind") == "positive"]
-    false_positives = [entry for entry in payload["entries"] if entry.get("kind") == "false_positive"]
-    assert len(positives) <= 7
-    assert len(false_positives) <= 2
-    assert any(entry.get("value") == "government" for entry in positives)
-    assert any("\\baps\\d+\\b" in str(entry.get("pattern") or "") or "\\baps\\d*\\b" in str(entry.get("pattern") or "") for entry in positives)
-    assert any("government-issued" in str(entry.get("value") or "") for entry in false_positives)
+    assert payload["name"] == "government_context_knowledge"
+    values = [entry.get("value") for entry in payload["entries"]]
+    assert values == [
+        "government",
+        "public sector",
+        "council",
+        "government agency",
+        "state agency",
+    ]
 
 
 def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch):
@@ -185,11 +205,11 @@ def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch
     rules_path.write_text(
         json.dumps(
             {
-                "kind": "managed_knowledge",
+                "kind": "rules",
                 "name": "government_context_rules",
-                "entries": [
-                    {"value": "government", "pattern": "\\bgovernment\\b", "kind": "positive", "enabled": True},
-                    {"value": "government id", "pattern": "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b", "kind": "false_positive", "enabled": True},
+                "positive_patterns": ["\\bgovernment\\b"],
+                "false_positive_patterns": [
+                    "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
                 ],
             }
         ),
@@ -382,7 +402,7 @@ def test_fit_confidence_low_when_no_trusted_description_exists():
     }
 
     assert description_trust.full_description_confidence(record) == CONFIDENCE_LOW
-    assert not source_connector.is_description_trusted(record)
+    assert not description_trust.is_description_trusted(record)
 
 
 def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_method():
@@ -512,10 +532,10 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
     )
 
     assert matches == {
-        "matched": ["stakeholder management", "jira"],
-        "evidence_only": ["delivery"],
-        "ignored": ["project"],
-        "unresolved": ["banking"],
+        "matched": ["Stakeholder management", "Jira"],
+        "evidence_only": ["Delivery"],
+        "ignored": ["Project"],
+        "unresolved": ["Banking"],
     }
 
 
@@ -855,7 +875,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
         profile,
     )
 
-    assert _breakdown_value(breakdown, "Primary role-family match") == 20
+    assert _breakdown_value(breakdown, "Target role-family match") == 20
     assert _breakdown_value(breakdown, "Work mode confirmed selected mode bonus") == 6
 
 
@@ -883,8 +903,8 @@ def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_prima
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Primary role-family match") == 15
-    assert _breakdown_value(breakdown, "Primary seniority adjustment") == 3
+    assert _breakdown_value(breakdown, "Target role-family match") == 15
+    assert _breakdown_value(breakdown, "Target seniority adjustment") == 3
 
 
 def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_matches():
@@ -911,8 +931,8 @@ def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Primary role-family match") == 15
-    assert _breakdown_value(breakdown, "Primary seniority adjustment") == -5
+    assert _breakdown_value(breakdown, "Target role-family match") == 15
+    assert _breakdown_value(breakdown, "Target seniority adjustment") == -5
 
 
 def test_fit_score_breakdown_keeps_secondary_role_family_clean():
@@ -939,8 +959,8 @@ def test_fit_score_breakdown_keeps_secondary_role_family_clean():
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Secondary role-family match") == 4
-    assert _breakdown_value(breakdown, "Primary seniority adjustment") is None
+    assert _breakdown_value(breakdown, "Also-consider role-family match") == 4
+    assert _breakdown_value(breakdown, "Target seniority adjustment") is None
 
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
@@ -964,7 +984,6 @@ def test_job_card_shows_negative_score_factors_without_debug_mode():
         _test_profile(),
     )
 
-    assert "Work mode neutral because all modes were selected" in html
     assert "<strong>What lowers it</strong>" not in html
     assert "Score penalties" not in html
 
@@ -1003,12 +1022,11 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
     )
 
     assert "<strong>Matched signals</strong>" in html
-    assert "<li>stakeholder management</li>" in html
-    assert "<li>jira</li>" in html
-    assert "<strong>Unresolved signals</strong>" in html
-    assert "<li>banking</li>" in html
+    assert "<li>Stakeholder management</li>" in html
+    assert "<li>Jira</li>" in html
     assert "<strong>Ignored</strong>" in html
-    assert "<li>project</li>" in html
+    assert "<li>Project</li>" in html
+    # Unresolved signals (Banking) only render in debug mode
 
 
 def test_job_card_uses_score_tone_as_card_accent_class():
@@ -1066,7 +1084,7 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
         _test_profile(),
     )
 
-    assert "badge-warning" in html
+    assert 'badge-warning" title="Posting channel unconfirmed' in html
     assert "Posting evidence" in html
     assert "badge-sector-government" not in html
 
@@ -1175,10 +1193,10 @@ def test_potential_duplicate_card_shows_visible_callout_and_help_text():
         _test_profile(),
     )
 
-    assert "Potential duplicate" in html
-    assert "Similar to" in html
-    assert "Informational only. No merge, hide, or review action is taken from this signal." in html
-    assert 'href="https://example.com/related-role"' in html
+    assert "Related cards" in html
+    assert "Open matching card" in html
+    assert "This is the matching card in your workspace" in html
+    assert 'href="#job-card-linkedin-2"' in html
     assert "senior business analyst @ acme" in html.lower()
 
 
@@ -1447,7 +1465,7 @@ def test_contract_preference_scores_contract_roles_when_contract_only_selected()
 
 
 def test_profile_recency_multiplier_uses_tiered_evidence_dates():
-    current_year = source_connector.datetime.now().year
+    current_year = datetime.now().year
     profile = {
         **_test_profile(),
         KEY_EVIDENCE_TIERS: {

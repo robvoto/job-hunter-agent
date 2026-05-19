@@ -19,10 +19,7 @@ from job_hunter_agent.signal_schema import (
     SOURCE_CV_PARSING,
 )
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.parsing_schema import (
-    PARSING_STOPWORDS_KEY,
-    KEY_P_TITLE_VERB_BLOCKERS,
-)
+from job_hunter_agent.parsing_schema import PARSING_STOPWORDS_KEY
 
 
 TITLE_NORMALIZATION_REVIEW_PATH = OUTPUT_DIR / "title_normalization_review.json"
@@ -95,21 +92,6 @@ def load_title_normalization_rules() -> dict[str, Any]:
         raise ValueError("title_normalization_rules.json must contain a rules object")
     return payload
 
-
-@lru_cache(maxsize=1)
-def load_title_candidate_leading_verb_blockers() -> frozenset[str]:
-    try:
-        payload = load_parsing_rules()
-    except Exception:
-        return frozenset()
-    blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS)
-    if not isinstance(blockers, list):
-        return frozenset()
-    return frozenset(
-        _clean_rule_token(value)
-        for value in blockers
-        if _clean_rule_token(value)
-    )
 
 def _save_rules_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload or {})

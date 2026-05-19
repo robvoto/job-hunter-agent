@@ -42,6 +42,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
     LLM_PROMPT_REVIEW_OUTPUT_FORMAT,
+    LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
     LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER,
@@ -50,6 +51,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_REVIEW_GRADE_GUIDANCE,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
+    LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
 )
 from job_hunter_agent.hard_blocker_rules import normalize_rejection_blocker_suggestions as _normalize_rejection_blocker_suggestions
 from job_hunter_agent.global_settings import (
@@ -92,6 +94,7 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SIGNAL_KEY,
     LEARNING_SUGGESTED_CATEGORY_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
+    PATTERN_SIGNAL_CATEGORIES,
     VALID_SIGNAL_CATEGORIES,
 )
 # Import at module level to allow monkeypatching in tests
@@ -430,6 +433,8 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
             continue
         if any(char in signal for char in "\r\n") or re.search(r"[.!?]", signal):
             continue
+        if category in PATTERN_SIGNAL_CATEGORIES and "[*]" not in signal:
+            continue
         key = (signal.lower(), category)
         if key in seen:
             continue
@@ -538,10 +543,11 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
 
 def _strip_json_fence(value: str) -> str:
     raw = str(value or "").strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1].lstrip("json").strip()
+    # Use regex to find content inside triple backticks, potentially with 'json' identifier
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", raw, re.DOTALL)
+    if match:
+        return match.group(1).strip()
     return raw
-
 
 def normalize_rejection_blocker_suggestions(value: Any, max_items: int | None = None) -> list[str]:
     if max_items is None:
@@ -662,6 +668,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
         LLM_PROMPT_DO_NOT_INVENT,
         LLM_PROMPT_USE_VISIBLE_STRINGS,
         LLM_PROMPT_LEARNING_PENDING_ONLY,
+        LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
     ]
     if fit_review:
         parts.extend([
@@ -718,6 +725,61 @@ def llm_should_consider_with_learning(job_description_text: str) -> dict[str, An
 
 def llm_should_consider_learning_candidates(job_description_text: str) -> list[dict[str, Any]]:
     return normalize_llm_review_payload(_request_learning_payload(job_description_text, fit_review=False)).get("learning_candidates", [])
+
+
+def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, Any] | None:
+    """Classify an unknown CV section heading into primary/secondary/supplementary.
+
+    Returns {"bucket": str, "confident": bool} or None if LLM unavailable or output unparseable.
+    """
+    active_client = llm_client or client
+    label = str(label or "").strip()
+    if active_client is None or not label:
+        return None
+
+    system_prompt = "\n".join([
+        "You are routing a CV section heading to one of three evidence tiers for a job-match assistant.",
+        "primary: current or recent work experience (roles, projects, achievements).",
+        "secondary: older or supporting work experience.",
+        "supplementary: education, certifications, training, or non-work background sections.",
+        f"Return JSON only, shape: {LLM_SECTION_LABEL_CLASSIFICATION_SHAPE}",
+        "Set confident=true only if the heading unambiguously maps to one tier.",
+        "Set confident=false if the heading is ambiguous (e.g. Overview, Profile, Summary).",
+    ])
+
+    try:
+        model = _log_llm_model_once()
+        resp = active_client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f'Section heading: "{label}"'},
+            ],
+            max_output_tokens=50,
+        )
+        _log_llm_call(resp, "section_label_classification", model)
+    except Exception as exc:
+        print(f"[LLM][SECTION_LABEL][ERROR] {exc}")
+        return None
+
+    raw = str(getattr(resp, "output_text", "") or "").strip()
+    if not raw:
+        return None
+
+    try:
+        parsed = _json_mod.loads(raw)
+    except _json_mod.JSONDecodeError:
+        print(f"[LLM][SECTION_LABEL][PARSE_ERROR] {raw[:200]}")
+        return None
+
+    bucket = str(parsed.get("bucket") or "").strip().lower()
+    confident = bool(parsed.get("confident"))
+    if bucket not in {"primary", "secondary", "supplementary"}:
+        print(f"[LLM][SECTION_LABEL][INVALID_BUCKET] {bucket!r}")
+        return None
+
+    print(f"[LLM][SECTION_LABEL] '{label}' → {bucket} (confident={confident})")
+    return {"bucket": bucket, "confident": confident}
 
 
 def get_cost_summary() -> dict[str, Any]:

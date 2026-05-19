@@ -4,7 +4,7 @@ from job_hunter_agent.job_identity import (
     deduplicate_across_sources,
     find_confirmed_duplicate,
 )
-from job_hunter_agent.company_rules import company_names_weakly_match, normalize_company_name
+from job_hunter_agent.company_normalization import company_names_weakly_match, normalize_company_name
 from job_hunter_agent.record_schema import RECORD_DUPLICATE_LINKS_KEY, RECORD_POTENTIAL_DUPLICATE_LINKS_KEY
 
 
@@ -45,7 +45,7 @@ def test_deduplicate_across_sources_prefers_seek_when_duplicate_appears_later():
     assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
 
 
-def test_company_rules_strips_only_safe_legal_suffixes():
+def test_company_name_normalization_strips_only_safe_legal_suffixes():
     assert normalize_company_name("Acme Pty Ltd") == "acme"
     assert normalize_company_name("Acme Holdings Australia") == "acme holdings australia"
     assert company_names_weakly_match("Acme Pty Ltd", "Acme")

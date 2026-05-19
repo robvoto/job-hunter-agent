@@ -5,9 +5,9 @@ from typing import Dict, List, Optional, Tuple
 
 from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.description_trust import get_trusted_full_description
-from job_hunter_agent.filters import _matches_soft_requirement as matches_missing_requirement
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
-from job_hunter_agent.io_utils import load_parsing_rules
+
+
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
@@ -36,7 +36,6 @@ from job_hunter_agent.signal_schema import (
     TITLE_REASON_POTENTIAL_MATCH,
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-    CATEGORY_TITLE_PARSE_BLOCKER,
 )
 from job_hunter_agent.text_processing import (
     compact_whitespace,
@@ -48,7 +47,6 @@ from job_hunter_agent.text_processing import (
 _REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset({
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-    CATEGORY_TITLE_PARSE_BLOCKER,
 })
 _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {CATEGORY_HARD_BLOCKER_PATTERN}
 
@@ -110,12 +108,6 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
 
 @lru_cache(maxsize=1)
 def _review_signal_display_rules() -> tuple[frozenset[str], dict[str, str]]:
-    parsing_rules = load_parsing_rules()
-    noisy_title_tokens = {
-        str(token).strip().lower()
-        for token in (parsing_rules.get("title_candidate_leading_verb_blockers") or [])
-        if str(token).strip()
-    }
     title_rules = load_title_normalization_rules()
     expansions = title_rules.get("abbreviation_expansions", {})
     normalized_expansions = {
@@ -124,7 +116,6 @@ def _review_signal_display_rules() -> tuple[frozenset[str], dict[str, str]]:
         if str(key).strip() and compact_whitespace(value)
     } if isinstance(expansions, dict) else {}
     suppressed_title_terms = frozenset({
-        *noisy_title_tokens,
         *normalized_expansions.keys(),
         *normalized_expansions.values(),
     })
@@ -202,8 +193,13 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
 
     for skill in profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, []):
         cleaned_skill = str(skill).strip().lower()
-        if cleaned_skill and matches_missing_requirement(lowered, cleaned_skill):
-            matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
+        if not cleaned_skill or not text_contains_term(lowered, cleaned_skill):
+            continue
+        pos = lowered.find(cleaned_skill)
+        context_window = lowered[max(0, pos - 90): pos + 90] if pos >= 0 else lowered
+        if re.search(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b", context_window):
+            continue
+        matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
 
     return {
         "core": dedupe_preserve_order(matched_core),
@@ -234,15 +230,12 @@ def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
         if not cleaned_skill or not text_contains_term(lowered, cleaned_skill):
             continue
         label = cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill
-        if matches_missing_requirement(lowered, cleaned_skill):
-            watchouts.append(f"{label} appears required")
-        elif re.search(
-            r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b",
-            lowered[max(0, lowered.find(cleaned_skill) - 90): lowered.find(cleaned_skill) + 90] if cleaned_skill in lowered else lowered,
-        ):
+        pos = lowered.find(cleaned_skill)
+        context_window = lowered[max(0, pos - 90): pos + 90] if pos >= 0 else lowered
+        if re.search(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b", context_window):
             watchouts.append(f"{label} appears desirable")
         else:
-            watchouts.append(f"{label} appears in the description")
+            watchouts.append(f"{label} appears required")
 
     for match in find_hard_block_matches(details_text, profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, [])):
         canonical = compact_whitespace(match.get("value") or "")

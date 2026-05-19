@@ -14,6 +14,8 @@ Use before editing logic that learns from job ads or proposes new knowledge from
 - `capability_concept`: possible capability/skill concept found in ads.
 - `government_context`: government/public-sector signal.
 - `role_title_token`: role-title token or phrase useful for title matching.
+- `role_title_pattern`: structural title pattern using `[*]` as a wildcard (e.g. `"Head of [*]"`). Use when a title has a recognisable shape but the variable part is unknown. The pattern must contain `[*]`.
+- `government_context_pattern`: structural government/clearance pattern using `[*]` as a wildcard (e.g. `"Baseline [*] clearance"`, `"NV[*] clearance"`). Use when a clearance or agency term has a recognisable shape. The pattern must contain `[*]`.
 - `hard_blocker_pattern`: explicit requirement that may become a blocker after approval.
 - `title_normalization_candidate`: possible title wording/normalisation candidate.
 - `cv_farming_pattern`: learned job-quality phrase or regex that suggests CV collection behaviour.

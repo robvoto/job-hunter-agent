@@ -132,20 +132,68 @@ def test_apply_capability_tuning_decisions_uses_internal_level_tokens():
     assert updated["capability_profile_rules"][0]["level"] == "working"
 
 
+_ROUTING_FIXTURE = {
+    "candidate_profile_section_routing": {
+        "default_bucket": "primary_candidate_profile_context",
+        "primary_labels": ["primary", "current", "main"],
+        "secondary_labels": ["supporting"],
+        "supplementary_labels": ["background", "education"],
+    }
+}
+
+
 def test_classify_candidate_profile_section_label_uses_parsing_rules(monkeypatch):
-    monkeypatch.setattr(
-        profile_store,
-        "load_parsing_rules",
-        lambda: {
-            "candidate_profile_section_routing": {
-                "default_bucket": "primary_candidate_profile_context",
-                "primary_labels": ["primary", "current"],
-                "secondary_labels": ["supporting"],
-                "supplementary_labels": ["background", "education"],
-            }
-        },
-    )
+    monkeypatch.setattr(profile_store, "load_parsing_rules", lambda: _ROUTING_FIXTURE)
 
     assert profile_store.classify_candidate_profile_section_label("Supporting Background") == "secondary_candidate_profile_context"
     assert profile_store.classify_candidate_profile_section_label("Education") == "supplementary_candidate_profile_context"
     assert profile_store.classify_candidate_profile_section_label("Main CV") == "primary_candidate_profile_context"
+
+
+def test_classify_unknown_section_label_llm_confident(monkeypatch):
+    monkeypatch.setattr(profile_store, "load_parsing_rules", lambda: _ROUTING_FIXTURE)
+
+    captured = {}
+
+    def fake_classify(label, llm_client=None):
+        captured["label"] = label
+        return {"bucket": "secondary", "confident": True}
+
+    def fake_upsert(word, bucket):
+        captured["upserted"] = (word, bucket)
+
+    monkeypatch.setattr("job_hunter_agent.llm_gate.llm_classify_section_label", fake_classify)
+    monkeypatch.setattr("job_hunter_agent.signal_registry.upsert_profile_section_label", fake_upsert)
+
+    result = profile_store.classify_candidate_profile_section_label("Career History")
+    assert result == "secondary_candidate_profile_context"
+    assert captured["upserted"] == ("career history", "secondary")
+
+
+def test_classify_unknown_section_label_llm_uncertain(monkeypatch):
+    monkeypatch.setattr(profile_store, "load_parsing_rules", lambda: _ROUTING_FIXTURE)
+
+    registered = []
+
+    def fake_classify(label, llm_client=None):
+        return {"bucket": "primary", "confident": False}
+
+    def fake_register(signals):
+        registered.extend(signals)
+
+    monkeypatch.setattr("job_hunter_agent.llm_gate.llm_classify_section_label", fake_classify)
+    monkeypatch.setattr("job_hunter_agent.signal_registry.register_signals", fake_register)
+
+    result = profile_store.classify_candidate_profile_section_label("Overview")
+    assert result == "primary_candidate_profile_context"
+    assert len(registered) == 1
+    assert registered[0]["category"] == "profile_section_label"
+    assert registered[0]["suggested_values"] == ["primary"]
+
+
+def test_classify_unknown_section_label_llm_unavailable(monkeypatch):
+    monkeypatch.setattr(profile_store, "load_parsing_rules", lambda: _ROUTING_FIXTURE)
+    monkeypatch.setattr("job_hunter_agent.llm_gate.llm_classify_section_label", lambda label, llm_client=None: None)
+
+    result = profile_store.classify_candidate_profile_section_label("Overview")
+    assert result == "primary_candidate_profile_context"

@@ -2,6 +2,9 @@ const urlParams = new URLSearchParams(window.location.search);
 const isRebuildMode = urlParams.get('mode') === 'rebuild';
 const refs = Object.freeze({
   status: document.getElementById('status'),
+  onboardingImportHelper: document.getElementById('onboarding_import_helper'),
+  onboardingImportHelperCopy: document.getElementById('onboarding_import_helper_copy'),
+  dismissOnboardingImportHelperButton: document.getElementById('dismiss_onboarding_import_helper'),
   stepEls: Array.from(document.querySelectorAll('.wizard-step')),
   wizardProgressSteps: Array.from(document.querySelectorAll('.wizard-progress-step')),
   heroSection: document.querySelector('.hero'),
@@ -39,6 +42,9 @@ const refs = Object.freeze({
 });
 const {
   status: statusEl,
+  onboardingImportHelper: onboardingImportHelperEl,
+  onboardingImportHelperCopy: onboardingImportHelperCopyEl,
+  dismissOnboardingImportHelperButton: dismissOnboardingImportHelperButtonEl,
   stepEls,
   wizardProgressSteps,
   heroSection: heroSectionEl,
@@ -147,13 +153,20 @@ const PRIMARY_CV_COPY = {
   emptyHint: 'Formats: .docx, .pdf, .md, .txt',
   loadedHint: 'Drop another file or click to replace',
 };
-const WIZARD_STATE_KEY = 'jobHunter.onboardingWizard';
-const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
-const ONBOARDING_WELCOME_OPT_OUT_KEY = 'jobHunter.onboardingWelcomeOptOut';
+const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
+if (!ONBOARDING_USER_ID) {
+  throw new Error('Missing user id.');
+}
+function buildScopedStorageKey(baseKey) {
+  return `${baseKey}:${ONBOARDING_USER_ID}`;
+}
+const WIZARD_STATE_KEY = buildScopedStorageKey('jobHunter.onboardingWizard');
+const ONBOARDING_WELCOME_KEY = buildScopedStorageKey('jobHunter.onboardingWelcome');
+const ONBOARDING_WELCOME_OPT_OUT_KEY = buildScopedStorageKey('jobHunter.onboardingWelcomeOptOut');
+const ONBOARDING_IMPORT_HELPER_DISMISSED_KEY = buildScopedStorageKey('jobHunter.onboardingImportHelperDismissed');
 const SOURCE_PACK_DATA_PREFIX = '/data/';
 const ROOT_DATA_PREFIX = 'data/';
-const INITIAL_CAPABILITY_VISIBLE_COUNT = 12;
-const CAPABILITY_VISIBLE_INCREMENT = 24;
+const REVIEW_CAPABILITY_PREVIEW_ROWS = 2;
 const isTestMode = document.body.dataset.testMode === 'true';
 
 let currentStep = 1;
@@ -165,11 +178,71 @@ let reviewSecondaryTitles = [];
 let reviewCapabilityRules = [];
 let selectedLocations = [];
 let selectedReviewCapabilityIndexes = new Set();
-let reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+let reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
 let maxUnlockedStep = 1;
 let searchBasicsPersistTimer = null;
 let savedPrimaryCvSourcePath = '';
 let savedPrimaryCvFileName = '';
+let reviewCapabilityResizeObserver = null;
+
+function getReviewCapabilityPreviewCount() {
+  const container = flowRefs.reviewCapabilityCards?.querySelector('.review-capability-row-list');
+  if (!container) {
+    return REVIEW_CAPABILITY_PREVIEW_ROWS;
+  }
+  const width = container.getBoundingClientRect().width;
+  if (!width) {
+    return reviewCapabilityVisibleCount || REVIEW_CAPABILITY_PREVIEW_ROWS;
+  }
+  const styles = window.getComputedStyle(container);
+  const minWidth = Number.parseFloat(styles.getPropertyValue('--review-capability-min-card-width')) || 250;
+  const gap = Number.parseFloat(styles.getPropertyValue('--review-capability-grid-gap'))
+    || Number.parseFloat(styles.columnGap || styles.gap || '0')
+    || 0;
+  const columns = Math.max(1, Math.floor((width + gap) / (minWidth + gap)));
+  return Math.max(columns * REVIEW_CAPABILITY_PREVIEW_ROWS, REVIEW_CAPABILITY_PREVIEW_ROWS);
+}
+
+function syncReviewCapabilityVisibleCount(forceRender = false) {
+  const next = getReviewCapabilityPreviewCount();
+  if (!next || next === reviewCapabilityVisibleCount) {
+    return false;
+  }
+  reviewCapabilityVisibleCount = next;
+  if (forceRender && currentStep === REVIEW_STEP) {
+    renderReviewCapabilities();
+  }
+  return true;
+}
+
+function onboardingImportHelperDismissed() {
+  try {
+    return window.localStorage.getItem(ONBOARDING_IMPORT_HELPER_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function showOnboardingImportHelper(message) {
+  if (!onboardingImportHelperEl || !onboardingImportHelperCopyEl) {
+    return;
+  }
+  onboardingImportHelperCopyEl.textContent = String(message || '').trim();
+  onboardingImportHelperEl.hidden = false;
+}
+
+function hideOnboardingImportHelper(markDismissed = false) {
+  if (onboardingImportHelperEl) {
+    onboardingImportHelperEl.hidden = true;
+  }
+  if (!markDismissed) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(ONBOARDING_IMPORT_HELPER_DISMISSED_KEY, '1');
+  } catch {
+  }
+}
 
 function hasDraftProfileState() {
   return Boolean(
@@ -270,11 +343,15 @@ function resetOnboardingWizardState() {
   reviewSecondaryTitles = [];
   reviewCapabilityRules = [];
   selectedReviewCapabilityIndexes.clear();
-  reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+  reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
   maxUnlockedStep = 1;
   savedPrimaryCvSourcePath = '';
   savedPrimaryCvFileName = '';
   window.sessionStorage.removeItem(WIZARD_STATE_KEY);
+  try {
+    window.localStorage.removeItem(ONBOARDING_IMPORT_HELPER_DISMISSED_KEY);
+  } catch {
+  }
   if (reviewCapabilityFilterEl) reviewCapabilityFilterEl.value = '';
   if (reviewCapabilityCardsEl) reviewCapabilityCardsEl.innerHTML = '';
   refreshStepNavigation();
@@ -425,7 +502,7 @@ function restoreWizardState() {
     maxUnlockedStep = Math.max(1, Math.min(STEP_COUNT, Number(state.maxUnlockedStep) || 1));
     reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0
       ? Number(state.reviewCapabilityVisibleCount)
-      : INITIAL_CAPABILITY_VISIBLE_COUNT;
+      : getReviewCapabilityPreviewCount();
     savedPrimaryCvSourcePath = String(state.primaryCvSourcePath || '').trim();
     savedPrimaryCvFileName = String(state.primaryCvFileName || '').trim();
     setStep(state.step, { scroll: false, persist: false });
@@ -597,6 +674,9 @@ function setStep(stepNumber, options = {}) {
 
   if (persist) {
     saveWizardState();
+  }
+  if (stepNumber === REVIEW_STEP) {
+    window.requestAnimationFrame(() => syncReviewCapabilityVisibleCount(true));
   }
   if (scroll) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -855,11 +935,28 @@ function applyProfileDefaults(profile) {
   }
 }
 
+function observeReviewCapabilityLayout() {
+  if (reviewCapabilityResizeObserver || !window.ResizeObserver) {
+    return;
+  }
+  const container = flowRefs.reviewCapabilityCards;
+  if (!container) {
+    return;
+  }
+  reviewCapabilityResizeObserver = new ResizeObserver(() => {
+    syncReviewCapabilityVisibleCount(true);
+  });
+  reviewCapabilityResizeObserver.observe(container);
+}
+
 if (locationSelect) {
   locationSelect.addEventListener('change', () => {
     setSelectedLocation(locationSelect.value);
     scheduleSearchBasicsPersistence();
   });
+}
+if (dismissOnboardingImportHelperButtonEl) {
+  dismissOnboardingImportHelperButtonEl.addEventListener('click', () => hideOnboardingImportHelper(true));
 }
 if (sectorPreferenceSelect) {
   sectorPreferenceSelect.addEventListener('change', () => {
@@ -891,3 +988,4 @@ if (refs.workModePreferences.length) {
     window.JobHunterCurrencyUi?.bindCurrencyInput?.(input);
 });
 renderLocationSelect();
+observeReviewCapabilityLayout();

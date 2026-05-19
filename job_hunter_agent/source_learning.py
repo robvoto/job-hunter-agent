@@ -36,7 +36,6 @@ from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-    CATEGORY_TITLE_PARSE_BLOCKER,
     LEARNING_CATEGORY_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
@@ -211,7 +210,6 @@ def has_high_value_ambiguous_learning_candidate(signals: list[dict[str, Any]]) -
     interesting_categories = {
         CATEGORY_ROLE_TITLE_TOKEN,
         CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-        CATEGORY_TITLE_PARSE_BLOCKER,
     }
     for signal in signals or []:
         if not isinstance(signal, dict):

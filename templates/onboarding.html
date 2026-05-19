@@ -126,7 +126,9 @@
                     <li>national identity numbers</li>
                   </ul>
                   <p>Basic contact details like your name, email address, and phone number are generally expected in a CV.</p>
-                  <p>When processing your CV, we try to detect and remove sensitive information if it appears. Sensitive personal identifiers are not intentionally stored as part of profile matching data.</p>
+                  <p>When processing your CV, sensitive personal identifiers are not intentionally stored as part of profile matching data.
+                  <p>Your CV itself is not stored in our system. We only extract and retain relevant job-related information to build your profile and match you with suitable roles.</p>
+                  </p>
                 </div>
               </details>
               <details class="support-note workflow-drawer">
@@ -183,6 +185,11 @@
         <section class="wizard-step" data-step="2" hidden>
           <h2>__JOB_HUNTER_ONBOARDING_STEP_2_TITLE__</h2>
           <p class="section-copy">__JOB_HUNTER_ONBOARDING_STEP_2_SECTION_COPY__</p>
+
+          <div class="results-helper onboarding-results-helper" id="onboarding_import_helper" hidden>
+            <p class="results-helper-copy" id="onboarding_import_helper_copy"></p>
+            <button class="results-helper-dismiss" id="dismiss_onboarding_import_helper" type="button">Dismiss</button>
+          </div>
 
           <div class="review-grid">
             <section class="review-block">
@@ -255,6 +262,7 @@
               <div class="onb-field">
                 <label id="engagement_type_label">Work type</label>
                 __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+                <div class="help">__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__</div>
               </div>
 
               <div class="onb-field">

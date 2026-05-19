@@ -78,7 +78,6 @@ KEY_SUGGESTED_KEYWORDS = "suggested_search_keywords"
 CAT_CAPABILITY = CATEGORY_CAPABILITY_CONCEPT
 CAT_ROLE_TITLE = CATEGORY_ROLE_TITLE_TOKEN
 CAT_TITLE_NORM = CATEGORY_TITLE_NORMALIZATION_CANDIDATE
-KEY_TITLE_PARSE_BLOCKERS = "title_candidate_leading_verb_blockers"
 
 _VALID_LEVELS = {CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC}
 _CURRENT_YEAR = datetime.now().year
@@ -228,6 +227,7 @@ class _CvExtractionResponse(BaseModel):
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
+    role_titles: list[str] = Field(default_factory=list)
 
 
 # ── Text repair ────────────────────────────────────────────────────────────────
@@ -366,8 +366,6 @@ def _looks_like_role_title_line(text: str) -> bool:
     normalized = _normalize_role_title_value(cleaned)
     tokens = _pattern_tokens(normalized)
     if not tokens or len(tokens) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_TOKENS):
-        return False
-    if tokens[0] in get_parsing_rule_set(KEY_TITLE_PARSE_BLOCKERS):
         return False
     if _has_approved_role_title_token(normalized):
         return True
@@ -716,6 +714,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "that refer to the same skill (e.g. for 'business process modeling': ['bpmn', 'process mapping', 'workflow design']). "
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
+        "- role_titles: list the job titles from the evidence roles exactly as they appear in the title field. One entry per role, no duplicates.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
         f"Evidence pack JSON:\n{evidence_json[:evidence_json_limit]}\n\n"
@@ -1119,12 +1118,9 @@ def build_learning_patch(
 
     patch: dict[str, Any] = {KEY_CV_TEXT: source_text}
 
-    role_titles = [
-        str(role.get("title") or "").strip()
-        for role in _parse_role_entries(source_text)
-        if str(role.get("title") or "").strip()
-    ]
-    role_titles = _split_compound_role_titles(role_titles)
+    role_titles = _split_compound_role_titles(
+        [str(t).strip() for t in (extracted.get("role_titles") or []) if str(t).strip()]
+    )
     if role_titles:
         learn_title_normalization_candidates(
             role_titles,

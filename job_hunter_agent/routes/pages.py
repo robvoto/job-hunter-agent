@@ -18,6 +18,7 @@ from job_hunter_agent.profile_store import (
     SETTINGS_SALARY_ANNUAL_HELP_TEXT,
     SETTINGS_SALARY_DAILY_HELP_TEXT,
     WORK_MODE_PREFERENCE_HELP_TEXT,
+    WORK_TYPE_PREFERENCE_HELP_TEXT,
 )
 from job_hunter_agent.global_settings import KEY_SEEK_MAX_PAGES
 from job_hunter_agent.paths import (
@@ -28,6 +29,7 @@ from job_hunter_agent.paths import (
     SETTINGS_STANDARD_PARTIALS_DIR,
     WORKSPACE_HTML_PATH,
 )
+from job_hunter_agent.user_context import get_user_id_for_runtime
 
 from job_hunter_agent.routes.responses import html_response
 
@@ -55,6 +57,7 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         onboarding_copy=onboarding_copy,
         global_settings=global_settings,
         resume_step=resume_step,
+        user_id=get_user_id_for_runtime(),
     )
     html = srv._render_template(template_path)
     if template_path == SETTINGS_HTML_PATH:
@@ -110,6 +113,7 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         html
         .replace("__JOB_HUNTER_DEBUG_MODE_BOOL__", "true" if srv.DEBUG_MODE else "false")
         .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__", srv.render_engagement_type_choices(name="engagement_type", selected_values=ENGAGEMENT_TYPE_DEFAULT_VALUES))
+        .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__", WORK_TYPE_PREFERENCE_HELP_TEXT)
         .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__", srv.render_work_mode_preference_choices(selected_values=WorkMode.NONE))
         .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__", WORK_MODE_PREFERENCE_HELP_TEXT)
         .replace("__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__", srv.render_sector_preference_select_options(selected_value=GovPref.ANY))
@@ -159,9 +163,12 @@ def page_workspace(request: Request):  # type: ignore[no-untyped-def]
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
     if WORKSPACE_HTML_PATH.exists():
         csrf_token = issue_csrf_token(request) or ""
+        bootstrap_script = srv.build_bootstrap_script(
+            csrf_token=csrf_token,
+            user_id=get_user_id_for_runtime(),
+        )
         html = srv._render_template(WORKSPACE_HTML_PATH)
-        html = html.replace("__JOB_HUNTER_DEBUG_MODE__", "true" if srv.DEBUG_MODE else "false")
-        html = html.replace("__JOB_HUNTER_CSRF_TOKEN__", csrf_token)
+        html = html.replace("__JOB_HUNTER_BOOTSTRAP_SCRIPTS__", bootstrap_script)
         return html_response(html)
     return html_response("<h1>Template missing</h1><p>Missing templates/workspace.html</p>")
 

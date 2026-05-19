@@ -243,8 +243,13 @@ def build_bootstrap_script(
     onboarding_copy: dict[str, Any] | None = None,
     global_settings: dict[str, Any] | None = None,
     resume_step: int | None = None,
+    user_id: str | None = None,
 ) -> str:
     parts = [f'<script>window.__JOB_HUNTER_DEBUG_MODE__ = {"true" if DEBUG_MODE else "false"};</script>']
+    if user_id is not None:
+        parts.append(
+            f'<script>window.__JOB_HUNTER_USER_ID__ = {json.dumps(user_id, ensure_ascii=True)};</script>'
+        )
     if onboarding_defaults is not None:
         parts.append(
             f'<script>window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ = {json.dumps(onboarding_defaults, ensure_ascii=True)};</script>'

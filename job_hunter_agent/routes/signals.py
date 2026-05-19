@@ -10,6 +10,7 @@ router = APIRouter()
 @router.get("/api/signal-registry")
 def api_signal_registry():  # type: ignore[no-untyped-def]
     from job_hunter_agent.signal_registry import CATEGORY_LABELS, CATEGORY_METADATA, VALID_SIGNAL_CATEGORIES, load_registry
+    from job_hunter_agent.signal_schema import PATTERN_SIGNAL_CATEGORIES
 
     registry = load_registry()
     signals = sorted(registry.values(), key=lambda r: str(r.get("signal", "")).lower())
@@ -17,6 +18,7 @@ def api_signal_registry():  # type: ignore[no-untyped-def]
         {
             "signals": signals,
             "total": len(signals),
+            "pattern_categories": sorted(PATTERN_SIGNAL_CATEGORIES),
             "categories": [
                 {
                     "key": category,
@@ -38,13 +40,14 @@ def api_signal_registry_patch(body: dict = Body(...)):  # type: ignore[no-untype
 
         key = str(body.get("key") or "").strip()
         category = str(body.get("category") or "").strip()
+        value = str(body.get("value") or "").strip()
 
         if not key:
             return json_response({"error": "key is required"}, 400)
 
         action = str(body.get("action") or "category").strip().lower()
         if action == "approve":
-            updated = approve_signal(key, category=category)
+            updated = approve_signal(key, category=category, value=value)
             if updated is None:
                 return json_response({"error": f"Signal '{key}' not found in registry"}, 404)
             return json_response({"ok": True, "signal": updated})

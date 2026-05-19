@@ -24,7 +24,7 @@ from job_hunter_agent.description_trust import (
     full_description_confidence,
     get_trusted_full_description,
 )
-from job_hunter_agent.company_rules import normalize_company_name
+from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.filters import suggest_title_block_phrases
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
@@ -483,6 +483,8 @@ def render_job_card(
         badges.append(render_badge("Recruiter", "badge-source-neutral", "Posted via a recruitment agency or third-party recruiter."))
     elif channel_kind == "direct_employer" and channel_source == "metadata_first":
         badges.append(render_badge("Company", "badge-source-neutral", "Posted directly by the employer."))
+    elif channel_signal.get("needs_review") and channel_kind not in ("agency_or_recruiter", "direct_employer"):
+        badges.append(render_badge("Posting evidence", "badge-warning", "Posting channel unconfirmed — may be via a recruiter or intermediary."))
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if history_warning_signals:
         badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))

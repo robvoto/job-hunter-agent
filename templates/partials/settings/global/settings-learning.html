@@ -3,7 +3,28 @@
           <section class="panel">
             <div class="panel-kicker">Global learning</div>
             <h2>Learning</h2>
-            <p class="panel-copy">This inbox is shared across the whole system. It helps the parser, signal learning, and signal registry for every candidate profile, so it stays out of candidate-specific settings.</p>
+            <p class="panel-copy">This inbox is shared across the whole system. Signals here help the parser and signal registry for every candidate profile.</p>
+            <details class="help-block">
+              <summary>Signal categories explained</summary>
+              <dl class="help-dl">
+                <dt>Capability concept</dt>
+                <dd>A skill or technology to track in job ads and your profile (e.g. "stakeholder engagement", "Power BI").</dd>
+                <dt>Government context</dt>
+                <dd>A government-specific term — agency, clearance level, or APS grade (e.g. "baseline clearance", "EL2").</dd>
+                <dt>Government context pattern</dt>
+                <dd>A structural clearance or agency pattern using <code>[*]</code> as a wildcard (e.g. <code>NV[*] clearance</code>). Use when the exact value varies but the shape is fixed.</dd>
+                <dt>Role title token</dt>
+                <dd>A word or short phrase that signals a job title (e.g. "analyst", "coordinator"). Used to recognise titles in your CV and in job ads.</dd>
+                <dt>Role title pattern</dt>
+                <dd>A structural title shape using <code>[*]</code> as a wildcard (e.g. <code>Head of [*]</code>). Use when the role type is fixed but the domain varies.</dd>
+                <dt>Title normalization candidate</dt>
+                <dd>An abbreviation or alternate spelling to map to a canonical title (e.g. "BA" → "Business Analyst").</dd>
+                <dt>Hard blocker pattern</dt>
+                <dd>A phrase that disqualifies a job outright (e.g. "must hold NV2 clearance"). Approved blockers filter jobs before scoring.</dd>
+                <dt>CV farming pattern</dt>
+                <dd>A phrase or pattern that suggests a job ad is collecting CVs rather than filling a real role.</dd>
+              </dl>
+            </details>
             <div id="signal_registry_panel">
               <p class="help">Open Learning to load the shared learning inbox.</p>
             </div>

@@ -39,44 +39,21 @@ def text_contains_term(text: str, term: str) -> bool:
 
 def _load_government_context_rules() -> tuple[tuple[str, ...], tuple[str, ...]]:
     payload = load_json_dict(GOVERNMENT_CONTEXT_RULES_PATH)
-    entries = payload.get("entries")
-    if not isinstance(entries, list):
-        raise ValueError("government_context_rules.json must define an entries list")
+    positive_patterns = payload.get("positive_patterns")
+    false_positive_patterns = payload.get("false_positive_patterns")
+    if not isinstance(positive_patterns, list) or not isinstance(false_positive_patterns, list):
+        raise ValueError(
+            "government_context_rules.json must define positive_patterns and false_positive_patterns"
+        )
 
-    positive_patterns: list[str] = []
-    false_positive_patterns: list[str] = []
+    cleaned_positive = tuple(str(pattern).strip() for pattern in positive_patterns if str(pattern).strip())
+    cleaned_false_positive = tuple(
+        str(pattern).strip() for pattern in false_positive_patterns if str(pattern).strip()
+    )
+    if not cleaned_positive:
+        raise ValueError("government_context_rules.json must define at least one positive pattern")
 
-    def add_pattern(target: list[str], raw_value: str) -> None:
-        cleaned = compact_whitespace(raw_value).lower()
-        if not cleaned:
-            return
-        if raw_value.startswith("\\b") or raw_value.endswith("\\b") or any(token in raw_value for token in ("\\d", "[", "(", ")", "^", "$")):
-            target.append(raw_value)
-        else:
-            target.append(rf"\b{re.escape(cleaned)}\b")
-
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("enabled", True) is False:
-            continue
-        kind = str(entry.get("kind") or "positive").strip().lower()
-        value = str(entry.get("value") or "").strip()
-        pattern = str(entry.get("pattern") or "").strip()
-        aliases = entry.get("aliases") if isinstance(entry.get("aliases"), list) else []
-        patterns = [pattern, value, *(str(alias or "").strip() for alias in aliases)]
-        for item in patterns:
-            if not item:
-                continue
-            if kind in {"false_positive", "negative", "ignore"}:
-                add_pattern(false_positive_patterns, item)
-            else:
-                add_pattern(positive_patterns, item)
-
-    if not positive_patterns:
-        raise ValueError("government_context_rules.json must define at least one enabled positive entry")
-
-    return tuple(positive_patterns), tuple(false_positive_patterns)
+    return cleaned_positive, cleaned_false_positive
 
 
 def _load_government_context_knowledge_patterns() -> tuple[str, ...]:
@@ -89,8 +66,6 @@ def _load_government_context_knowledge_patterns() -> tuple[str, ...]:
     seen: set[str] = set()
     for entry in knowledge_entries:
         if not isinstance(entry, dict):
-            continue
-        if entry.get("enabled", True) is False:
             continue
         value = str(entry.get("value") or "").strip()
         aliases = entry.get("aliases") if isinstance(entry.get("aliases"), list) else []

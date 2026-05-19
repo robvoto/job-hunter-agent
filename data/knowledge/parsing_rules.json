@@ -46,20 +46,6 @@
     "should",
     "may"
   ],
-  "title_candidate_leading_verb_blockers_description": "Words that make a title too generic or role-like to treat as a clean title candidate during title extraction.",
-  "title_candidate_leading_verb_blockers": [
-    "working",
-    "helping",
-    "involved",
-    "role",
-    "responsible",
-    "supporting",
-    "managing",
-    "leading",
-    "coordinating",
-    "performing",
-    "delivering"
-  ],
   "title_candidate_line_rules_description": "Structural limits used to avoid treating sentence fragments as role titles.",
   "title_candidate_line_rules": {
     "max_length_chars": 80,
@@ -99,7 +85,7 @@
       "education"
     ]
   },
-  "generic_summary_phrases_description": "Short phrases that usually belong to marketing copy, not job evidence.",
+  "generic_summary_phrases_description": "Short phrases that belong to marketing copy — used to filter teaser text in workspace cards.",
   "generic_summary_phrases": [
     "opportunity to join",
     "fast-paced environment",
@@ -109,81 +95,6 @@
     "urgent",
     "must be based in",
     "full working rights"
-  ],
-  "salary_indicators_description": "Copy cues that help identify salary text and distinguish annual, daily, and super-inclusive pay wording.",
-  "salary_indicators": {
-    "superannuation": [
-      "inc super",
-      "pkg",
-      "package",
-      "plus super",
-      "superannuation",
-      "super",
-      "+ super"
-    ],
-    "daily_rate": [
-      "per day",
-      "daily",
-      "p.d.",
-      "day rate",
-      "/day"
-    ],
-    "annual_rate": [
-      "p.a.",
-      "per annum",
-      "annually",
-      "/year",
-      "/yr",
-      "base +"
-    ]
-  },
-  "contract_type_indicators_description": "Words that suggest permanent, contract, casual, temp, or part-time engagement.",
-  "contract_type_indicators": [
-    "contract",
-    "perm",
-    "permanent",
-    "fixed term",
-    "casual",
-    "temp",
-    "full-time",
-    "part-time"
-  ],
-  "desirable_language_indicators_description": "Soft wording that usually marks optional rather than required capabilities.",
-  "desirable_language_indicators": [
-    "desirable",
-    "advantage",
-    "plus",
-    "preferred",
-    "ideally",
-    "nice to have",
-    "not essential",
-    "highly regarded",
-    "advantageous",
-    "beneficial",
-    "highly desirable"
-  ],
-  "mandatory_language_indicators_description": "Words that usually mean a capability or condition is required.",
-  "mandatory_language_indicators": [
-    "required",
-    "requires",
-    "required to",
-    "essential",
-    "must have",
-    "mandatory",
-    "need to have",
-    "needs to have"
-  ],
-  "strength_language_indicators_description": "Words that help judge whether capability language is strong or weak.",
-  "strength_language_indicators": [
-    "strong",
-    "extensive",
-    "proven",
-    "solid",
-    "deep",
-    "hands[- ]on",
-    "expert",
-    "demonstrated",
-    "advanced"
   ],
   "level_aliases_description": "Normalised aliases used when the app maps evidence strength labels to a shared level system.",
   "level_aliases": {
@@ -195,43 +106,6 @@
     "intermediate": "working",
     "strong": "strong",
     "expert": "strong"
-  },
-  "description_confidence_rules_description": "Signals that help decide whether a description reads like real role content or thin copy.",
-  "description_confidence_rules": {
-    "section_indicators": [
-      "responsibilities",
-      "requirements",
-      "you will",
-      "key duties",
-      "about the role",
-      "experience with",
-      "must have",
-      "essential"
-    ],
-    "coordination_tokens": [
-      "coordination",
-      "coordinating",
-      "reporting",
-      "liaise",
-      "liaison",
-      "administration",
-      "scheduling"
-    ],
-    "min_text_length_chars": 500,
-    "min_section_hits": 2,
-    "min_bullet_points": 3,
-    "min_generic_phrases": 2,
-    "min_coordination_tokens": 3
-  },
-  "matching_context_patterns_description": "Regex fragments and context windows used to judge whether capability mentions read as required or desirable.",
-  "matching_context_patterns": {
-    "hard_requirement_prefix": "(?:required|essential|must have|mandatory|need to have|needs to have|strongly required)",
-    "hard_requirement_suffix": "(?:required|essential|must have|mandatory|need to have|needs to have)",
-    "hard_requirement_window_chars": 45,
-    "soft_requirement_prefix": "(?:desirable|preferred|advantage|plus|ideally|nice to have|not essential|highly regarded|advantageous|beneficial|highly desirable)",
-    "soft_requirement_suffix": "(?:desirable|preferred|advantage|plus|ideally|nice to have|not essential|highly regarded|advantageous|beneficial|highly desirable)",
-    "soft_requirement_window_chars": 35,
-    "negation_prefix_window_chars": 5
   },
   "salary_extraction_patterns_description": "Regex patterns used to extract salary and rate text from descriptions.",
   "salary_extraction_patterns": [

@@ -272,16 +272,9 @@ def display_work_type_label(record: dict) -> str:
 
 
 def _salary_period_hint(salary_text: str) -> str:
-    indicators = load_parsing_rules().get("salary_indicators", {})
-    if not isinstance(indicators, dict):
-        return ""
-
     lowered = salary_text.lower()
-    daily_indicators = [str(item).strip().lower() for item in indicators.get("daily_rate", []) if str(item).strip()]
-    annual_indicators = [str(item).strip().lower() for item in indicators.get("annual_rate", []) if str(item).strip()]
-
-    daily_match = any(re.search(re.escape(indicator), lowered) for indicator in daily_indicators)
-    annual_match = any(re.search(re.escape(indicator), lowered) for indicator in annual_indicators)
+    daily_match = bool(re.search(r"\b(per\s+day|daily|p\.d\.|day\s+rate)\b|/day", lowered))
+    annual_match = bool(re.search(r"\b(p\.a\.|per\s+annum|annually)\b|/yr\b|/year\b|base\s*\+", lowered))
     if daily_match and not annual_match:
         return "daily"
     if annual_match and not daily_match:

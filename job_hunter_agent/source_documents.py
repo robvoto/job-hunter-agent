@@ -3,6 +3,7 @@ import copy
 import json
 import re
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -69,6 +70,14 @@ UPLOAD_SLOT_MAP = {
     "primary cv": "primary_cv",
 }
  
+
+def _format_count(count: int, singular: str, plural: str) -> str:
+    if count == 0:
+        return f"no {plural}"
+    if count == 1:
+        return f"1 {singular}"
+    return f"{count} {plural}"
+
 
 def _normalize_profile_sources(items: Any) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
@@ -301,12 +310,11 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
-    pipeline_patch = run_cv_pipeline(combined_text, llm_client, onboarding_settings=active_onboarding_settings)
-    learning_patch = build_learning_patch(
-        combined_text,
-        onboarding_settings=active_onboarding_settings,
-        source_sections=source_sections,
-    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        pipeline_future = pool.submit(run_cv_pipeline, combined_text, llm_client, active_onboarding_settings)
+        learning_future = pool.submit(build_learning_patch, combined_text, active_onboarding_settings, source_sections)
+        pipeline_patch = pipeline_future.result()
+        learning_patch = learning_future.result()
     patch.update(pipeline_patch)
     for key, value in learning_patch.items():
         if key in {"cv_text", KEY_CAPABILITY_PROFILE_RULES}:
@@ -384,9 +392,9 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         "message": (
             "Fresh onboarding run started. "
             f"Imported {len(imported_sources)} source document(s) and extracted "
-            f"{extraction_counts['target_titles']} primary title(s), "
-            f"{extraction_counts['secondary_titles']} secondary title(s), and "
-            f"{extraction_counts['capabilities']} capability row(s) from the current run only."
+            f"{_format_count(extraction_counts['target_titles'], 'target role', 'target roles')}, "
+            f"{_format_count(extraction_counts['secondary_titles'], 'also-consider role', 'also-consider roles')}, and "
+            f"{_format_count(extraction_counts['capabilities'], 'capability row', 'capability rows')} from this run only."
         ),
         "profile": profile,
         "imported_sources": imported_sources,

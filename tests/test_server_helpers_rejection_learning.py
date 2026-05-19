@@ -321,7 +321,7 @@ def test_save_requirement_blockers_feedback_applies_both_title_and_description_b
     assert result["description_block_suggestions"] == []  # Applied, so no suggestions
     assert "Added 2 mandatory requirement blockers" in result["message"]
     assert "Added 1 title block" in result["message"]
-    assert "Added 1 hard description block" in result["message"]
+    assert "Added 1 description block" in result["message"]
 
     # Assert side effects
     assert len(rebuilds) == 2  # One for title, one for description

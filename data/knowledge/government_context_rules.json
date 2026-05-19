@@ -1,57 +1,15 @@
 {
-  "kind": "managed_knowledge",
+  "kind": "rules",
   "name": "government_context_rules",
   "version": 1,
-  "updated_at": "2026-04-29",
-  "description": "Managed knowledge entries for identifying government/public-sector job context and known false positives.",
-  "entries": [
-    {
-      "value": "government",
-      "pattern": "\\bgovernment\\b",
-      "kind": "positive",
-      "enabled": true
-    },
-    {
-      "value": "public sector",
-      "pattern": "\\bpublic sector\\b",
-      "kind": "positive",
-      "enabled": true
-    },
-    {
-      "value": "APS\\d+",
-      "pattern": "\\baps\\d+\\b",
-      "kind": "positive",
-      "enabled": true
-    }, 
-    {
-      "value": "council",
-      "pattern": "\\bcouncil\\b",
-      "kind": "positive",
-      "enabled": true
-    },
-    {
-      "value": "government agency",
-      "pattern": "\\bgovernment agency\\b",
-      "kind": "positive",
-      "enabled": true
-    },
-    {
-      "value": "state agency",
-      "pattern": "\\bstate agency\\b",
-      "kind": "positive",
-      "enabled": true
-    },
-    {
-      "value": "government id",
-      "pattern": "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
-      "kind": "false_positive",
-      "enabled": true
-    },
-    {
-      "value": "government-issued id",
-      "pattern": "\\bgovernment-issued\\s+id(?:entification)?\\b",
-      "kind": "false_positive",
-      "enabled": true
-    }
+  "positive_patterns": [
+    "\\baps\\d+\\b",
+    "\\bel\\s*[12]\\b",
+    "\\bnv\\s*[12]\\b",
+    "\\bbaseline clearance\\b"
+  ],
+  "false_positive_patterns": [
+    "\\bgovernment-issued\\s+id(?:entification)?\\b",
+    "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b"
   ]
 }

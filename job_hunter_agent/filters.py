@@ -7,21 +7,6 @@ from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, load_profile
-from job_hunter_agent.parsing_schema import (
-    KEY_P_CONF_MIN_BULLETS,
-    KEY_P_CONF_MIN_COORDINATION,
-    KEY_P_CONF_MIN_GENERIC,
-    KEY_P_CONF_MIN_SECTIONS,
-    KEY_P_CONF_MIN_LENGTH,
-    KEY_P_CTX_HARD_PREFIX,
-    KEY_P_CTX_HARD_SUFFIX,
-    KEY_P_CTX_HARD_WINDOW,
-    KEY_P_MATCHING_CONTEXT,
-    KEY_P_CTX_NEGATION_WINDOW,
-    KEY_P_CTX_SOFT_PREFIX,
-    KEY_P_CTX_SOFT_SUFFIX,
-    KEY_P_CTX_SOFT_WINDOW,
-)
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
 
@@ -284,66 +269,6 @@ def _load_required_parsing_rule_terms(rule_key: str) -> list[str]:
     return terms
 
 
-def _load_matching_context_patterns() -> dict[str, Any]:
-    rules = load_parsing_rules()
-    patterns = rules.get(KEY_P_MATCHING_CONTEXT)
-    if not isinstance(patterns, dict):
-        raise ValueError("parsing_rules.json must define matching_context_patterns")
-    return patterns
-
-
-def _matches_hard_requirement(text: str, alias: str) -> bool:
-    alias_lower = (alias or "").strip().lower()
-    if not alias_lower:
-        return False
-
-    context_pats = _load_matching_context_patterns()
-    escaped_alias = re.escape(alias_lower)
-    prefix = str(context_pats.get(KEY_P_CTX_HARD_PREFIX) or "").strip()
-    suffix = str(context_pats.get(KEY_P_CTX_HARD_SUFFIX) or "").strip()
-    if not prefix or not suffix:
-        raise ValueError("parsing_rules.json must define hard_requirement_prefix and hard_requirement_suffix")
-    try:
-        window_chars = int(context_pats.get(KEY_P_CTX_HARD_WINDOW))
-        negation_window = int(context_pats.get(KEY_P_CTX_NEGATION_WINDOW))
-    except Exception as exc:
-        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars") from exc
-    if window_chars <= 0 or negation_window <= 0:
-        raise ValueError("parsing_rules.json must define hard_requirement_window_chars and negation_prefix_window_chars")
-
-    patterns = [
-        rf"{prefix}.{{0,{window_chars}}}{escaped_alias}",
-        rf"{escaped_alias}.{{0,{window_chars}}}{suffix}",
-        rf"{suffix}.{{0,{window_chars}}}{escaped_alias}",
-    ]
-    return any(re.search(pattern, text) for pattern in patterns)
-
-
-def _matches_soft_requirement(text: str, alias: str) -> bool:
-    alias_lower = (alias or "").strip().lower()
-    if not alias_lower:
-        return False
-
-    context_pats = _load_matching_context_patterns()
-    escaped_alias = re.escape(alias_lower)
-    prefix = str(context_pats.get(KEY_P_CTX_SOFT_PREFIX) or "").strip()
-    suffix = str(context_pats.get(KEY_P_CTX_SOFT_SUFFIX) or "").strip()
-    if not prefix or not suffix:
-        raise ValueError("parsing_rules.json must define soft_requirement_prefix and soft_requirement_suffix")
-    try:
-        window_chars = int(context_pats.get(KEY_P_CTX_SOFT_WINDOW))
-    except Exception as exc:
-        raise ValueError("parsing_rules.json must define soft_requirement_window_chars") from exc
-    if window_chars <= 0:
-        raise ValueError("parsing_rules.json must define soft_requirement_window_chars")
-
-    patterns = [
-        rf"{prefix}.{{0,{window_chars}}}{escaped_alias}",
-        rf"{escaped_alias}.{{0,{window_chars}}}{suffix}",
-    ]
-    return any(re.search(pattern, text) for pattern in patterns)
-
-
 def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:
     capability_rules = profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
     positive_hits = 0
@@ -360,14 +285,12 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
         if level in {"strong", "working"}:
             positive_hits += distinct_hits
 
-        hard_requirement_match = _matches_hard_requirement(description_lower, canonical)
-        soft_requirement_match = _matches_soft_requirement(description_lower, canonical)
         reason_token = _normalize_reason_token(name)
 
-        if level == "low" and (hard_requirement_match or soft_requirement_match or distinct_hits >= 3):
+        if level == "low" and distinct_hits >= 3:
             if warning_reason == "OK":
                 warning_reason = f"DESC_CAPABILITY_LOW:{reason_token}"
-        if level == "basic" and hard_requirement_match and distinct_hits >= 2:
+        if level == "basic" and distinct_hits >= 2:
             if warning_reason == "OK":
                 warning_reason = f"DESC_CAPABILITY_BASIC:{reason_token}"
         if level in {"low", "basic"} and distinct_hits >= 4 and positive_hits <= 2:
@@ -375,88 +298,6 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
                 warning_reason = f"DESC_PRIMARY_FOCUS:{reason_token}"
 
     return True, warning_reason
-
-
-def _count_capability_role_proof(description_lower: str, profile: dict) -> tuple[int, int]:
-    proof_hits = 0
-    mention_hits = 0
-
-    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
-        name = str(rule.get("name") or "").strip()
-        if not name:
-            continue
-
-        canonical = canonical_capability_term(rule)
-        if not canonical:
-            continue
-
-        _, distinct_hits = _count_alias_hits(description_lower, [canonical])
-        hard_requirement_match = _matches_hard_requirement(description_lower, canonical)
-        soft_requirement_match = _matches_soft_requirement(description_lower, canonical)
-
-        if distinct_hits > 0:
-            mention_hits += 1
-        if hard_requirement_match or soft_requirement_match or distinct_hits >= 2:
-            proof_hits += 1
-
-    return proof_hits, mention_hits
-
-
-def _evaluate_description_confidence(details_text: str, description_lower: str, title_reason: str, profile: dict) -> Tuple[bool, str]:
-    normalized_text = re.sub(r"\s+", " ", details_text).strip()
-    text_length = len(normalized_text)
-    rules = load_parsing_rules()
-    conf_rules = rules.get("description_confidence_rules", {})
-    if not isinstance(conf_rules, dict):
-        raise ValueError("parsing_rules.json must define description_confidence_rules")
-
-    try:
-        min_text_length = int(conf_rules.get(KEY_P_CONF_MIN_LENGTH))
-        min_section_hits = int(conf_rules.get(KEY_P_CONF_MIN_SECTIONS))
-        min_bullet_points = int(conf_rules.get(KEY_P_CONF_MIN_BULLETS))
-        min_generic_phrases = int(conf_rules.get(KEY_P_CONF_MIN_GENERIC))
-        min_coordination_tokens = int(conf_rules.get(KEY_P_CONF_MIN_COORDINATION))
-    except Exception as exc:
-        raise ValueError("parsing_rules.json must define description confidence thresholds") from exc
-
-    if min_text_length <= 0 or min_section_hits < 0 or min_bullet_points < 0 or min_generic_phrases < 0 or min_coordination_tokens < 0:
-        raise ValueError("parsing_rules.json must define description confidence thresholds")
-
-    section_score = sum(
-        1
-        for pattern in [rf"\b{re.escape(i)}\b" for i in conf_rules.get("section_indicators", [])]
-        if re.search(pattern, description_lower)
-    )
-    bullet_score = len(re.findall(r"(?m)^\s*[-*\u2022]", details_text))
-    generic_score = sum(
-        1
-        for phrase in rules.get("generic_summary_phrases", [])
-        if phrase.lower() in description_lower
-    )
-    coordination_score = sum(
-        1
-        for token in conf_rules.get("coordination_tokens", [])
-        if token.lower() in description_lower
-    )
-    proof_hits, mention_hits = _count_capability_role_proof(description_lower, profile)
-    has_capability_rules = any(
-        str(rule.get("name") or "").strip()
-        for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
-    )
-    structurally_thin = text_length < min_text_length and section_score < min_section_hits and bullet_score < min_bullet_points
-
-    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
-        if has_capability_rules and proof_hits == 0 and mention_hits == 0:
-            return False, "DESC_ROLE_PROOF_MISSING"
-        if proof_hits == 0 and mention_hits < 2 and (structurally_thin or generic_score >= min_generic_phrases or coordination_score >= min_coordination_tokens):
-            return False, "DESC_ROLE_PROOF_MISSING"
-        if proof_hits <= 1 and structurally_thin and mention_hits == 0:
-            return False, "DESC_ROLE_PROOF_WEAK"
-
-    if title_reason == "OK" and proof_hits == 0 and structurally_thin and generic_score >= min_generic_phrases:
-        return False, "DESC_VAGUE_TARGET_ROLE"
-
-    return True, "OK"
 
 
 def passes_title_filters(title: str) -> Tuple[bool, str]:
@@ -493,10 +334,6 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
     ok_capability, capability_reason = _evaluate_capability_profile(description_lower, profile)
     if not ok_capability:
         return False, capability_reason
-
-    ok_confidence, confidence_reason = _evaluate_description_confidence(details_text, description_lower, title_reason, profile)
-    if not ok_confidence:
-        return False, confidence_reason
 
     if hard_block_matches:
         return False, f"DESC_HARD_BLOCK_RULE:{_normalize_reason_token(hard_block_matches[0].get('matched_term') or '')}"

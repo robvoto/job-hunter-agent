@@ -12,7 +12,8 @@
     "internship": "Internship",
     "casual": "Casual",
     "contract/temp": "Contract/Temp",
-    "casual/vacation": "Casual/Vacation"
+    "casual/vacation": "Casual/Vacation",
+    "ftc": "ftc"
   },
   "filter_groups": [
     {

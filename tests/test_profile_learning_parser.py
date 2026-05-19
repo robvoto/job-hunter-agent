@@ -79,11 +79,11 @@ def test_build_learning_patch_splits_compound_role_titles_before_learning():
         captured_titles["source"] = source
         return {"pending": 0}
 
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={"capabilities": [], "match_preferences": {}}), \
-         patch("job_hunter_agent.profile_learning._parse_role_entries", return_value=[
-             {"title": "Senior Business Analyst and Scrum Master"},
-             {"title": "Product Owner / Delivery Manager"},
-         ]), \
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={
+        "capabilities": [],
+        "match_preferences": {},
+        "role_titles": ["Senior Business Analyst and Scrum Master", "Product Owner / Delivery Manager"],
+    }), \
          patch("job_hunter_agent.profile_learning.learn_title_normalization_candidates", side_effect=fake_learn_title_normalization_candidates):
         build_learning_patch("CV text")
 

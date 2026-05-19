@@ -91,6 +91,7 @@ WORK_MODE_PREFERENCE_OPTIONS = (
 VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
 WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to include in search."
 WORK_MODE_PREFERENCE_NONE_LABEL = "Any"
+WORK_TYPE_PREFERENCE_HELP_TEXT = "Select both if permanent versus contract does not matter."
 
 class GovPref:
     ANY = "any"
@@ -167,6 +168,10 @@ class CapabilityLevel:
     BASIC = "basic"
 
 VALID_CAPABILITY_RULE_LEVELS = frozenset({CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC})
+
+LEVEL_STRONG = CapabilityLevel.STRONG
+LEVEL_WORKING = CapabilityLevel.WORKING
+LEVEL_BASIC = CapabilityLevel.BASIC
 
 DEFAULT_CANDIDATE_PROFILE_TIERS  = {
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: "",
@@ -764,6 +769,13 @@ def normalize_llm_capability_naming_guidance(value: Any) -> str:
     return str(value or "").strip()
 
 
+_SECTION_BUCKET_TO_TIER = {
+    "primary": KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+    "secondary": KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+    "supplementary": KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+}
+
+
 def classify_candidate_profile_section_label(label: str) -> str:
     lowered = str(label or "").strip().lower()
     routing = load_parsing_rules().get(KEY_P_ROUTING)
@@ -788,7 +800,32 @@ def classify_candidate_profile_section_label(label: str) -> str:
         return KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT
     if any(token in lowered for token in supplementary_tokens):
         return KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT
-    return default_bucket
+    return _classify_unknown_section_label(lowered, default_bucket)
+
+
+def _classify_unknown_section_label(lowered: str, default_bucket: str) -> str:
+    from job_hunter_agent import llm_gate  # lazy import — llm_gate imports profile_store
+    from job_hunter_agent.signal_registry import register_signals, upsert_profile_section_label
+    from job_hunter_agent.signal_schema import CATEGORY_PROFILE_SECTION_LABEL, LEARNING_SUGGESTED_VALUES_KEY
+
+    result = llm_gate.llm_classify_section_label(lowered)
+    if result is None:
+        return default_bucket
+
+    bucket = result["bucket"]
+    tier = _SECTION_BUCKET_TO_TIER.get(bucket, default_bucket)
+
+    if result["confident"]:
+        upsert_profile_section_label(lowered, bucket)
+    else:
+        register_signals([{
+            "signal": lowered,
+            "category": CATEGORY_PROFILE_SECTION_LABEL,
+            LEARNING_SUGGESTED_VALUES_KEY: [bucket],
+            "evidence": [f'## {lowered} (profile section — LLM classified as {bucket}, confidence uncertain)'],
+        }])
+
+    return tier
 
 
 def _combine_unique_sections(parts: list[str]) -> str:

@@ -269,19 +269,20 @@ def build_title_block_followups(blockers: list[str]) -> list[dict[str, Any]]:
 
     Returns: A list of dictionaries, each suggesting a title block phrase and its impact."""
     profile = load_profile()
-    existing_patterns = {
-        str(rule.get("pattern") or "").strip()
+    existing_phrases = {
+        normalize_title_block_phrase(str(rule.get("reason") or "").split("TITLE_BAD_KEYWORD:")[-1])
         for rule in profile.get(RECORD_REJECT_TITLE_RULES_KEY, [])
-        if isinstance(rule, dict)
+        if isinstance(rule, dict) and "TITLE_BAD_KEYWORD:" in str(rule.get("reason") or "")
     }
 
     def title_matcher(p: str):
-        matcher = re.compile(p, re.IGNORECASE)
+        pattern = build_title_block_rule(p)["pattern"]
+        matcher = re.compile(pattern, re.IGNORECASE)
         return lambda r: bool(matcher.search(str(r.get(RECORD_TITLE_KEY) or "").strip()))
 
     return _build_block_followups_generic(
-        blockers, _load_audit_rows(), load_job_history(), existing_patterns,
-        normalize_fn=lambda b: build_title_block_rule(normalize_title_block_phrase(b))["pattern"],
+        blockers, _load_audit_rows(), load_job_history(), existing_phrases,
+        normalize_fn=lambda b: normalize_title_block_phrase(b),
         matcher_builder=title_matcher
     )
 

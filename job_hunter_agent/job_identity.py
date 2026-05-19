@@ -3,10 +3,10 @@ from functools import lru_cache
 from typing import Any, Iterable, List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from job_hunter_agent.company_rules import company_names_weakly_match
+from job_hunter_agent.company_normalization import company_names_weakly_match
 from job_hunter_agent.duplicate_rules import load_duplicate_rules
 from job_hunter_agent.source_registry import get_domain_to_source_map
-from job_hunter_agent.title_normalization_rules import normalize_title_text
+from job_hunter_agent.title_normalization_rules import normalize_title_text, decompose_title_text
 from job_hunter_agent.record_schema import (
     RECORD_JOB_KEY, RECORD_SOURCE_KEY, RECORD_SOURCE_NAME_KEY,
     RECORD_COMPANY_KEY, RECORD_TITLE_KEY, RECORD_URL_KEY,
@@ -193,9 +193,9 @@ def _append_duplicate_link(record: dict, linked_record: dict, matched_on: str, m
 
 def _potential_duplicate_signature(record: dict) -> dict[str, str]:
     title = str(record.get(RECORD_TITLE_KEY) or "").strip()
-    return {
-        "normalized_title": normalize_title_text(title),
-    }
+    decomposition = decompose_title_text(title)
+    base = str(decomposition.get("base_role") or "").strip() or normalize_title_text(title)
+    return {"normalized_title": base}
 
 
 def _potential_duplicate_link(record: dict, matched_on: list[str]) -> dict[str, Any]:

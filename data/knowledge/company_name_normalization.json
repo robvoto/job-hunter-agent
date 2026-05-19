@@ -1,0 +1,18 @@
+{
+  "kind": "system_config",
+  "name": "company_name_normalization",
+  "version": 1,
+  "description": "Managed company name normalization config used to strip safe legal suffixes before matching.",
+  "company_name_suffixes": [
+    "pty",
+    "ltd",
+    "pty ltd",
+    "pty limited",
+    "proprietary limited",
+    "inc",
+    "corp",
+    "corporation",
+    "limited",
+    "llc"
+  ]
+}

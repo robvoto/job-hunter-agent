@@ -1,0 +1,8 @@
+{
+  "kind": "managed_knowledge",
+  "name": "government_context_patterns",
+  "version": 1,
+  "updated_at": "2026-05-18",
+  "description": "Approved structural government-context patterns using [*] as a wildcard. Matches clearance levels, designation types, and agency patterns.",
+  "entries": []
+}

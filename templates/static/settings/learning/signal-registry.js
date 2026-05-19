@@ -6,6 +6,7 @@
     let _srSort = 'recently_updated';
     let _srFilter = 'all';
     let _srCategories = [];
+    let _srPatternCategories = [];
     let _srCurrentPage = 1;
     const _srItemsPerPage = 50;
     const _srSearchDebounceMs = 180;
@@ -73,6 +74,15 @@
 
     function srCategoryMetadata(category) {
       return srCategoryOptions().find(item => item.key === category) || null;
+    }
+
+    function srIsPatternCategory(category) {
+      return Array.isArray(_srPatternCategories) && _srPatternCategories.includes(category);
+    }
+
+    function srPatternValueValid(category, value) {
+      if (!srIsPatternCategory(category)) return true;
+      return String(value || '').includes('[*]');
     }
 
     function srHelpDrawerHtml(summaryLabel, ariaLabel, bodyHtml, drawerClass = '') {
@@ -260,6 +270,7 @@
       if (!panel || !_srData) return;
       const all = Array.isArray(_srData.signals) ? _srData.signals : [];
       _srCategories = Array.isArray(_srData.categories) ? _srData.categories : [];
+      _srPatternCategories = Array.isArray(_srData.pattern_categories) ? _srData.pattern_categories : [];
       const categoryOptions = srCategoryOptions();
       const visible = srFilteredSignals();
       const totalPages = srPageCount(visible.length);
@@ -276,10 +287,17 @@
             const isBusy = _srBusyKeys.has(key);
             const statusText = inlineState?.text || '';
             const statusClass = inlineState ? ` is-status-${escapeHtml(inlineState.kind)}` : '';
+            const isPatternCat = srIsPatternCategory(category);
+            const currentValue = signal.signal || '';
+            const patternValid = srPatternValueValid(category, currentValue);
+            const approveDisabled = isBusy || !category || !patternValid;
             return `
 <article class="signal-row${statusClass}" data-sr-key="${escapeHtml(key)}">
   <div class="signal-row-title">
-    <h3>${escapeHtml(signal.signal || 'Unnamed signal')}</h3>
+    <div class="signal-value-field">
+      <input type="text" class="signal-value-input" data-sr-key="${escapeHtml(key)}" value="${escapeHtml(currentValue)}" placeholder="Signal value"${isBusy ? ' disabled' : ''} aria-label="Signal value">
+      ${isPatternCat ? '<span class="signal-pattern-hint">Use [*] as wildcard — e.g. <code>Head of [*]</code></span>' : ''}
+    </div>
     ${statusText ? `<span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(statusText)}</span>` : ''}
     ${srSignalContextHtml(signal)}
   </div>
@@ -291,7 +309,7 @@
     ${category ? srCategoryHelpHtml(category) : ''}
   </div>
   <div class="signal-row-actions">
-    <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${isBusy || !category ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
+    <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${approveDisabled ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
     <button class="signal-action-btn signal-remove" type="button" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''} title="Remove" aria-label="Remove">&#215;</button>
   </div>
 </article>`;
@@ -398,20 +416,38 @@
             }
           }
 
-          // Update approve button state
+          // Update approve button state and pattern hint
           const article = select.closest('.signal-row');
           if (article) {
+            const valueInput = article.querySelector('.signal-value-input');
+            const currentVal = valueInput ? valueInput.value.trim() : '';
             const approveBtn = article.querySelector('.signal-approve');
             if (approveBtn) {
-              if (newCategory) {
-                approveBtn.disabled = false;
-              } else {
-                approveBtn.disabled = true;
-              }
+              approveBtn.disabled = !newCategory || !srPatternValueValid(newCategory, currentVal);
+            }
+            // Show/hide pattern hint when category changes
+            const existingHint = article.querySelector('.signal-pattern-hint');
+            if (existingHint) existingHint.remove();
+            if (srIsPatternCategory(newCategory) && valueInput) {
+              valueInput.insertAdjacentHTML('afterend', '<span class="signal-pattern-hint">Use [*] as wildcard — e.g. <code>Head of [*]</code></span>');
             }
           }
 
           await srPatchSignal(key, { key, category: newCategory }, 'Category saved');
+        });
+      });
+
+      panel.querySelectorAll('.signal-value-input').forEach(input => {
+        input.addEventListener('input', () => {
+          const key = input.dataset.srKey || '';
+          const article = input.closest('.signal-row');
+          if (!article) return;
+          const signal = all.find(item => srSignalKey(item) === key);
+          const category = signal ? srSignalCategory(signal) : '';
+          const approveBtn = article.querySelector('.signal-approve');
+          if (approveBtn) {
+            approveBtn.disabled = !category || !srPatternValueValid(category, input.value.trim());
+          }
         });
       });
 
@@ -421,7 +457,11 @@
           const signal = all.find(item => srSignalKey(item) === key);
           if (!signal) return;
           const category = srSignalCategory(signal);
-          await srPatchSignal(key, { key, action: 'approve', category }, 'Approved');
+          const article = button.closest('.signal-row');
+          const valueInput = article ? article.querySelector('.signal-value-input') : null;
+          const value = valueInput ? valueInput.value.trim() : (signal.signal || '');
+          if (!srPatternValueValid(category, value)) return;
+          await srPatchSignal(key, { key, action: 'approve', category, value }, 'Approved');
         });
       });
 

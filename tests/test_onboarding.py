@@ -36,6 +36,7 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
 def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     monkeypatch.setattr(_fa, "is_auth_disabled", lambda: True)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
+    monkeypatch.setattr(_pages, "get_user_id_for_runtime", lambda: "test-user")
 
     client = TestClient(create_app())
     html = client.get("/onboarding").text
@@ -51,6 +52,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="choice-card choice-card--work-mode"' in html
     assert 'input type="checkbox" name="engagement_type"' in html
     assert 'input type="checkbox" name="work_mode_preference"' in html
+    assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
 
 
 def test_onboarding_flow_keyword_helper_uses_single_target_role():

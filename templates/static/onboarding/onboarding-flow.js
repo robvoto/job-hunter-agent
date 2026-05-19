@@ -5,9 +5,17 @@ const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
 const onboardingLocationUi = window.JobHunterLocationUi || {};
 const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
+const onboardingUserId = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
 
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
+}
+if (!onboardingUserId) {
+  throw new Error('Missing user id.');
+}
+
+function scopedOnboardingStorageKey(baseKey) {
+  return `${baseKey}:${onboardingUserId}`;
 }
 
 function normalizeReviewTitle(value) {
@@ -307,7 +315,7 @@ function removeReviewCapability(index) {
       .filter((value) => value !== index)
       .map((value) => (value > index ? value - 1 : value))
   );
-  reviewCapabilityVisibleCount = Math.max(reviewCapabilityVisibleCount - 1, INITIAL_CAPABILITY_VISIBLE_COUNT);
+  reviewCapabilityVisibleCount = Math.max(reviewCapabilityVisibleCount - 1, getReviewCapabilityPreviewCount());
 }
 
 function applyReviewCapabilityAction(index, action) {
@@ -361,7 +369,7 @@ function renderReviewCapabilities() {
   if (!container) return;
   if (!reviewCapabilityRules.length) {
     if (reviewCapabilityCountEl) {
-      reviewCapabilityCountEl.textContent = '0 capability rows';
+      reviewCapabilityCountEl.textContent = '0 capabilities';
       reviewCapabilityCountEl.classList.remove('is-selected');
     }
     container.innerHTML = '<div class="chip-empty">No capabilities found yet.</div>';
@@ -380,7 +388,9 @@ function renderReviewCapabilities() {
   const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
   const selectedVisibleCount = visibleRules.filter(({ index }) => selectedReviewCapabilityIndexes.has(index)).length;
   if (reviewCapabilityCountEl) {
-    reviewCapabilityCountEl.textContent = `${visibleRules.length} capability row${visibleRules.length === 1 ? '' : 's'}${hiddenCount ? ` of ${orderedRules.length}` : ''}`;
+    reviewCapabilityCountEl.textContent = filterTerm
+      ? `${visibleRules.length} shown of ${orderedRules.length}`
+      : `${orderedRules.length} capabilities${selectedReviewCapabilityIndexes.size ? `, ${selectedReviewCapabilityIndexes.size} selected` : ''}`;
     reviewCapabilityCountEl.classList.toggle('is-selected', selectedReviewCapabilityIndexes.size > 0);
   }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
@@ -420,7 +430,7 @@ function renderReviewCapabilities() {
   const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
   const footerHtml = hiddenCount > 0 ? `
     <div class="review-capability-footer">
-      <button class="btn btn-secondary" type="button" data-review-show-more="true">Show ${escapeHtml(String(Math.min(CAPABILITY_VISIBLE_INCREMENT, hiddenCount)))} more</button>
+      <button class="btn btn-secondary" type="button" data-review-show-more="true">Show ${escapeHtml(String(Math.min(getReviewCapabilityPreviewCount(), hiddenCount)))} more</button>
       <button class="btn btn-secondary review-capability-footer-link" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))}</button>
     </div>
   ` : '';
@@ -437,11 +447,11 @@ function renderReviewCapabilities() {
     </div>
   ` : '';
   container.innerHTML = `
-    <section class="review-capability-group">
+    <div class="review-capability-group">
       <div class="review-capability-row-list">${rowsHtml}</div>
       ${footerHtml}
       ${toolbarHtml}
-    </section>
+    </div>
   `;
 }
 
@@ -478,7 +488,7 @@ function hydrateDraftStep(profile) {
   reviewSecondaryTitles = normalizedTitles.secondary;
   reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
   selectedReviewCapabilityIndexes.clear();
-  reviewCapabilityVisibleCount = INITIAL_CAPABILITY_VISIBLE_COUNT;
+  reviewCapabilityVisibleCount = getReviewCapabilityPreviewCount();
   renderReviewStep();
 }
 
@@ -504,7 +514,7 @@ function buildCompletionRedirectState(payload, searchPrefs) {
 function storeCompletionRedirectState(payload, searchPrefs) {
   try {
     const redirectState = buildCompletionRedirectState(payload, searchPrefs);
-    window.sessionStorage.setItem('jobHunter.onboardingWelcome', JSON.stringify(redirectState));
+    window.sessionStorage.setItem(scopedOnboardingStorageKey('jobHunter.onboardingWelcome'), JSON.stringify(redirectState));
   } catch (error) {
     console.warn('Could not store onboarding redirect state.', error);
   }
@@ -514,7 +524,8 @@ function formatExtractionSummary(counts) {
   const primary = Number(counts.target_titles || 0);
   const secondary = Number(counts.secondary_titles || 0);
   const capabilities = Number(counts.capabilities || 0);
-  return `Extracted ${primary} ${onboardingFlowTitleTierLabels.target_roles_label}, ${secondary} ${onboardingFlowTitleTierLabels.also_consider_roles_label}, and ${capabilities} capability row(s) from your CV.`;
+  const formatCount = (count, singular, plural) => `${count} ${count === 1 ? singular : plural}`;
+  return `${formatCount(primary, 'target role', 'target roles')}, ${formatCount(secondary, 'also consider role', 'also consider roles')}, and ${formatCount(capabilities, 'capability row', 'capability rows')} from your CV.`;
 }
 
 async function createProfile() {
@@ -557,10 +568,10 @@ async function createProfile() {
   const extractionMessage = payload?.fresh_onboarding_run_started
     ? formatExtractionSummary(payload.extraction_counts || {})
     : 'Your draft profile is ready. Review the role direction before you continue.';
-  showStatus(
-    pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage,
-    pageLimitNotice ? 'warning' : 'ok',
-  );
+  showStatus('', '');
+  if (typeof showOnboardingImportHelper === 'function') {
+    showOnboardingImportHelper(pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
+  }
 }
 
 function continueFromReview() {
@@ -571,7 +582,6 @@ function continueFromReview() {
   renderReviewStep();
   hydrateSearchBasics((lastImportPayload || {}).profile || {});
   setStep(SEARCH_STEP);
-  showStatus('', '');
 }
 
 async function continueFromSearchBasics() {
@@ -585,7 +595,6 @@ async function continueFromSearchBasics() {
   maxUnlockedStep = Math.max(maxUnlockedStep, CHECK_STEP);
   updateCheckStep();
   setStep(CHECK_STEP);
-  showStatus('', '');
 }
 
 async function finishSetup() {
@@ -624,7 +633,6 @@ async function finishSetup() {
     prefer_sector: searchPrefs.prefer_sector,
   };
   storeCompletionRedirectState(payload, finalSearchPrefs);
-  showStatus(payload.message || 'Setup complete.', 'ok');
   setTimeout(() => {
     window.location.href = '/';
   }, 700);
@@ -846,7 +854,7 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
   }
   if (event.target.closest('[data-review-show-more]')) {
     reviewCapabilityVisibleCount = Math.min(
-      reviewCapabilityVisibleCount + CAPABILITY_VISIBLE_INCREMENT,
+      reviewCapabilityVisibleCount + getReviewCapabilityPreviewCount(),
       reviewCapabilityRules.length,
     );
     renderReviewCapabilities();

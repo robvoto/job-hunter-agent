@@ -6,7 +6,9 @@ from job_hunter_agent.signal_schema import (
 )
 
 
-def test_government_learning_signals_use_managed_parsing_config():
+def test_government_learning_signals_use_managed_parsing_config(monkeypatch):
+    monkeypatch.setattr(signal_detection, "signal_in_approved_knowledge", lambda *args, **kwargs: (False, ""))
+
     record = {
         "company": "Federal Digital Service",
         "title": "Security Analyst",

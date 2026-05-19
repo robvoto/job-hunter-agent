@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.posting_utils import parse_timestamp
-from job_hunter_agent.company_rules import normalize_company_name 
+from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU

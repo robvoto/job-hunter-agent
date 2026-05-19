@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme/themes.css">
   <link rel="stylesheet" href="/static/workspace/workspace-page.css">
-  <script>window.__JOB_HUNTER_DEBUG_MODE__ = __JOB_HUNTER_DEBUG_MODE__;</script>
-  <script>window.__JOB_HUNTER_CSRF_TOKEN__ = "__JOB_HUNTER_CSRF_TOKEN__";</script>
+  __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
   <script src="/static/common/csrf.js"></script>
   <script src="/static/common/console-bridge.js"></script>
   <script src="/static/theme/theme-switcher.js"></script>
@@ -62,8 +61,15 @@
     const wsTestMenu = document.getElementById('ws_test_menu');
     const wsResetUserBtn = document.getElementById('ws_reset_user_btn');
     const wsResetLearningBtn = document.getElementById('ws_reset_learning_btn');
-    const ONBOARDING_WELCOME_KEY = 'jobHunter.onboardingWelcome';
-    const ONBOARDING_WIZARD_KEY = 'jobHunter.onboardingWizard';
+    const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
+    if (!ONBOARDING_USER_ID) {
+      throw new Error('Missing user id.');
+    }
+    function scopedOnboardingStorageKey(baseKey) {
+      return `${baseKey}:${ONBOARDING_USER_ID}`;
+    }
+    const ONBOARDING_WELCOME_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWelcome');
+    const ONBOARDING_WIZARD_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWizard');
     const ONBOARDING_KEYWORD_SPLIT_RE = /[,\n|/]+/;
     const RUN_INFO_DISMISSED_KEY = 'jobHunter.runInfoDismissed';
     const RUN_INFO_TITLE = 'What this means';

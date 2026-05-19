@@ -9,15 +9,17 @@ from typing import Any
 
 from job_hunter_agent.paths import (
     GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
+    GOVERNMENT_CONTEXT_PATTERNS_PATH,
     CV_FARMING_RULES_PATH,
     HARD_BLOCKER_RULES_PATH,
     IGNORED_SIGNAL_ARCHIVE_PATH,
     PARSING_RULES_PATH,
     ROLE_TITLE_KNOWLEDGE_PATH,
+    ROLE_TITLE_RULES_PATH,
     SIGNAL_REGISTRY_PATH as _REGISTRY_PATH,
     TITLE_NORMALIZATION_RULES_PATH,
 )
-from job_hunter_agent.parsing_schema import KEY_P_TITLE_VERB_BLOCKERS
+
 from job_hunter_agent.job_types import JOB_TYPE_STORE_PATH, load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.hard_blocker_rules import (
     load_hard_blocker_rules,
@@ -36,15 +38,34 @@ from job_hunter_agent.role_title_knowledge import (
     save_role_title_knowledge,
     upsert_role_title_entry,
 )
+from job_hunter_agent.role_title_rules import (
+    load_role_title_rules,
+    save_role_title_rules,
+    upsert_role_title_rule,
+)
+from job_hunter_agent.government_context_patterns import (
+    load_government_context_patterns,
+    save_government_context_patterns,
+    upsert_government_context_pattern,
+)
+from job_hunter_agent.parsing_schema import (
+    KEY_P_ROUTING,
+    KEY_P_ROUTING_PRIMARY,
+    KEY_P_ROUTING_SECONDARY,
+    KEY_P_ROUTING_SUPPLEMENTARY,
+)
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_CV_FARMING_PATTERN,
     CATEGORY_GOVERNMENT_CONTEXT,
+    CATEGORY_GOVERNMENT_CONTEXT_PATTERN,
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+    CATEGORY_PROFILE_SECTION_LABEL,
     CATEGORY_ROLE_TITLE_TOKEN,
+    CATEGORY_ROLE_TITLE_PATTERN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-    CATEGORY_TITLE_PARSE_BLOCKER,
+
     LEARNING_CATEGORY_KEY,
     LEARNING_CONFIDENCE_KEY,
     LEARNING_CONTEXT_KEY,
@@ -70,11 +91,13 @@ CATEGORY_LABELS = {
     CATEGORY_CAPABILITY_CONCEPT: "Capability",
     CATEGORY_CV_FARMING_PATTERN: "CV farming pattern",
     CATEGORY_GOVERNMENT_CONTEXT: "Government context",
+    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: "Government context pattern",
     CATEGORY_HARD_BLOCKER_PATTERN: "Hard blocker pattern",
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "Job type",
+    CATEGORY_PROFILE_SECTION_LABEL: "Profile section label",
     CATEGORY_ROLE_TITLE_TOKEN: "Role title",
+    CATEGORY_ROLE_TITLE_PATTERN: "Role title pattern",
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "Title abbreviation",
-    CATEGORY_TITLE_PARSE_BLOCKER: "Title parse blocker",
 }
 
 CATEGORY_METADATA = {
@@ -96,6 +119,12 @@ CATEGORY_METADATA = {
         "examples": ["APS", "department", "ministry", "Baseline", "NV1", "NV2", "Top Secret", "public servant", "federal", "state government"],
         "warning": None,
     },
+    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: {
+        "label": "Government context pattern",
+        "description": "Structural government context patterns using [*] as a wildcard. Matches clearance designations, agency types, and regulated-environment phrases that share a common shape.",
+        "examples": ["Baseline [*] clearance", "NV[*] clearance", "[*] security clearance", "APS [*]"],
+        "warning": None,
+    },
     CATEGORY_HARD_BLOCKER_PATTERN: {
         "label": "Hard blocker pattern",
         "description": "Strong rejection patterns that disqualify a job. Hard blockers are mandatory dealbreakers that block matching jobs from processing.",
@@ -114,17 +143,23 @@ CATEGORY_METADATA = {
         "examples": ["Business Analyst", "Technical BA", "Delivery Manager", "Project Manager", "Systems Administrator", "QA Engineer"],
         "warning": None,
     },
+    CATEGORY_ROLE_TITLE_PATTERN: {
+        "label": "Role title pattern",
+        "description": "Structural title patterns using [*] as a wildcard. Used to match role titles that share a common shape (e.g. 'Head of [*]' matches 'Head of Operations', 'Head of Insurance', etc.).",
+        "examples": ["Head of [*]", "[*] Manager", "Senior [*] Analyst", "Director of [*]"],
+        "warning": None,
+    },
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: {
         "label": "Title abbreviation",
         "description": "Short title forms and abbreviations that normalize to standard titles. Helps match abbreviated roles to the right job title.",
         "examples": ["BA = Business Analyst", "PM = Project Manager", "QA = Quality Assurance", "SME = Subject Matter Expert"],
         "warning": "⚠️ NOTE: Abbreviations can be ambiguous and may map to more than one title.",
     },
-    CATEGORY_TITLE_PARSE_BLOCKER: {
-        "label": "Title parse blocker",
-        "description": "Words or patterns that prevent false title matches. These block incorrect role classifications and reduce noise.",
-        "examples": ["BAU", "lead generation", "sales consultant", "operations support", "business support"],
-        "warning": "⚠️ DANGER: Wrong blockers can hide valid jobs by filtering titles too aggressively.",
+    CATEGORY_PROFILE_SECTION_LABEL: {
+        "label": "Profile section label",
+        "description": "CV section headings that route profile text to primary, secondary, or supplementary evidence tiers. The suggested bucket shows where the LLM classified the section.",
+        "examples": ["Career History → primary", "Older Roles → secondary", "Certifications → supplementary"],
+        "warning": None,
     },
 }
 
@@ -132,11 +167,12 @@ _CATEGORY_KNOWLEDGE_PATHS = {
     CATEGORY_CAPABILITY_CONCEPT: CAPABILITY_KNOWLEDGE_PATH,
     CATEGORY_CV_FARMING_PATTERN: CV_FARMING_RULES_PATH,
     CATEGORY_GOVERNMENT_CONTEXT: GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
+    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: GOVERNMENT_CONTEXT_PATTERNS_PATH,
     CATEGORY_HARD_BLOCKER_PATTERN: HARD_BLOCKER_RULES_PATH,
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: JOB_TYPE_STORE_PATH,
     CATEGORY_ROLE_TITLE_TOKEN: ROLE_TITLE_KNOWLEDGE_PATH,
+    CATEGORY_ROLE_TITLE_PATTERN: ROLE_TITLE_RULES_PATH,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: TITLE_NORMALIZATION_RULES_PATH,
-    CATEGORY_TITLE_PARSE_BLOCKER: PARSING_RULES_PATH,
 }
 
 
@@ -429,27 +465,6 @@ def _append_title_normalization_expansion(path, abbreviation: str, expansion: st
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _append_title_candidate_leading_verb_blocker(path, blocker: str) -> None:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except (json.JSONDecodeError, OSError):
-        payload = {}
-    if not isinstance(payload, dict):
-        payload = {}
-    payload.setdefault("kind", "rules")
-    payload.setdefault("name", "title_normalization_rules")
-    payload.setdefault("version", 1)
-    blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS)
-    if not isinstance(blockers, list):
-        blockers = []
-    blocker_value = _clean_text(blocker)
-    blocker_key = blocker_value.lower()
-    if blocker_key and blocker_key not in {_clean_text(item).lower() for item in blockers}:
-        blockers.append(blocker_value)
-    payload[KEY_P_TITLE_VERB_BLOCKERS] = blockers
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
 
 def load_registry() -> dict[str, dict[str, Any]]:
     if not _REGISTRY_PATH.exists():
@@ -615,7 +630,39 @@ def set_signal_category(key: str, category: str) -> dict[str, Any] | None:
     return record
 
 
-def approve_signal(key: str, category: str = "") -> dict[str, Any] | None:
+_BUCKET_TO_ROUTING_KEY = {
+    "primary": KEY_P_ROUTING_PRIMARY,
+    "secondary": KEY_P_ROUTING_SECONDARY,
+    "supplementary": KEY_P_ROUTING_SUPPLEMENTARY,
+}
+
+
+def upsert_profile_section_label(word: str, bucket: str) -> None:
+    """Append word to the correct routing list in parsing_rules.json."""
+    word = _clean_term(word)
+    list_key = _BUCKET_TO_ROUTING_KEY.get(bucket)
+    if not word or not list_key:
+        return
+    try:
+        payload = json.loads(PARSING_RULES_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+    routing = payload.get(KEY_P_ROUTING)
+    if not isinstance(routing, dict):
+        return
+    labels = routing.get(list_key)
+    if not isinstance(labels, list):
+        return
+    existing = [str(l).strip().lower() for l in labels]
+    if word in existing:
+        return
+    labels.append(word)
+    payload["version"] = int(payload.get("version", 0)) + 1
+    PARSING_RULES_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[PROFILE_SECTION_LABEL] Auto-added '{word}' to {list_key}")
+
+
+def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, Any] | None:
     key = _signal_key(key)
     if not key:
         return None
@@ -628,7 +675,7 @@ def approve_signal(key: str, category: str = "") -> dict[str, Any] | None:
     if category_key not in VALID_SIGNAL_CATEGORIES:
         raise ValueError(f"Invalid category '{category_key}'.")
 
-    value = _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
+    value = _clean_text(value) or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
     if category_key == CATEGORY_CAPABILITY_CONCEPT:
         upsert_capability_entry(value, [])
     elif category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
@@ -636,18 +683,23 @@ def approve_signal(key: str, category: str = "") -> dict[str, Any] | None:
         upsert_job_type_entry(value, suggested[0] if suggested else value)
     elif category_key == CATEGORY_ROLE_TITLE_TOKEN:
         upsert_role_title_entry(value)
+    elif category_key == CATEGORY_ROLE_TITLE_PATTERN:
+        upsert_role_title_rule(value)
+    elif category_key == CATEGORY_GOVERNMENT_CONTEXT_PATTERN:
+        upsert_government_context_pattern(value)
     elif category_key == CATEGORY_HARD_BLOCKER_PATTERN:
         upsert_hard_blocker_rule(value, [])
     elif category_key == CATEGORY_CV_FARMING_PATTERN:
         upsert_cv_farming_rule(value, [])
+    elif category_key == CATEGORY_PROFILE_SECTION_LABEL:
+        suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
+        upsert_profile_section_label(value, suggested[0] if suggested else "primary")
     elif category_key == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         if suggested:
             _append_title_normalization_expansion(
                 _CATEGORY_KNOWLEDGE_PATHS[category_key], value, suggested[0]
             )
-    elif category_key == CATEGORY_TITLE_PARSE_BLOCKER:
-        _append_title_candidate_leading_verb_blocker(_CATEGORY_KNOWLEDGE_PATHS[category_key], value)
     else:
         aliases = _clean_aliases(record.get("original_texts"), canonical=value)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)
@@ -689,9 +741,11 @@ def clear_signal_learning_state() -> None:
     save_capability_knowledge([])
     save_job_type({})
     save_role_title_knowledge([])
+    save_role_title_rules([])
+    save_government_context_patterns([])
     save_hard_blocker_rules([])
     for category, path in _CATEGORY_KNOWLEDGE_PATHS.items():
-        if path in {CAPABILITY_KNOWLEDGE_PATH, ROLE_TITLE_KNOWLEDGE_PATH, HARD_BLOCKER_RULES_PATH}:
+        if path in {CAPABILITY_KNOWLEDGE_PATH, ROLE_TITLE_KNOWLEDGE_PATH, ROLE_TITLE_RULES_PATH, GOVERNMENT_CONTEXT_PATTERNS_PATH, HARD_BLOCKER_RULES_PATH}:
             continue
         if category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
             if path.exists():
@@ -701,16 +755,6 @@ def clear_signal_learning_state() -> None:
                     payload = {}
                 if isinstance(payload, dict):
                     payload["abbreviation_expansions"] = {}
-                    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-            continue
-        if category == CATEGORY_TITLE_PARSE_BLOCKER:
-            if path.exists():
-                try:
-                    payload = json.loads(path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    payload = {}
-                if isinstance(payload, dict):
-                    payload[KEY_P_TITLE_VERB_BLOCKERS] = []
                     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
             continue
         _save_approved_knowledge_payload(path, {
@@ -754,21 +798,17 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                     "terms": terms,
                 })
             continue
-        if category == CATEGORY_TITLE_PARSE_BLOCKER:
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            except (json.JSONDecodeError, OSError):
-                payload = {}
-            blockers = payload.get(KEY_P_TITLE_VERB_BLOCKERS) if isinstance(payload, dict) else []
-            if isinstance(blockers, list):
-                for blocker in blockers:
-                    cleaned = _clean_text(blocker)
-                    if cleaned:
-                        catalog.append({
-                            "category": category,
-                            "label": cleaned,
-                            "terms": [cleaned],
-                        })
+        if category == CATEGORY_ROLE_TITLE_PATTERN:
+            for entry in load_role_title_rules():
+                pattern = _clean_text(entry.get("pattern"))
+                if pattern:
+                    catalog.append({"category": category, "label": pattern, "terms": [pattern]})
+            continue
+        if category == CATEGORY_GOVERNMENT_CONTEXT_PATTERN:
+            for entry in load_government_context_patterns():
+                pattern = _clean_text(entry.get("pattern"))
+                if pattern:
+                    catalog.append({"category": category, "label": pattern, "terms": [pattern]})
             continue
         if category == CATEGORY_CAPABILITY_CONCEPT:
             entries = load_capability_knowledge()

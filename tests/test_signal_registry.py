@@ -226,6 +226,7 @@ def test_register_signals_preserves_suggested_category(tmp_path, monkeypatch):
     monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
     monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
     monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "government_context", tmp_path / "government_context_knowledge.json")
 
     signal_registry.register_signals([
         {
@@ -507,45 +508,6 @@ def test_approve_signal_title_normalization_candidate_no_suggested_values(tmp_pa
 
     assert updated["category"] == "title_normalization_candidate"
     assert not rules_path.exists()
-
-
-def test_approve_signal_promotes_title_parse_blocker_to_parsing_rules(tmp_path, monkeypatch):
-    registry_path = tmp_path / "signal_registry.json"
-    parsing_rules_path = tmp_path / "parsing_rules.json"
-    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
-    monkeypatch.setattr(signal_registry, "PARSING_RULES_PATH", parsing_rules_path)
-    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
-    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
-    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
-    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
-    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_parse_blocker", parsing_rules_path)
-
-    signal_registry.save_registry({
-        "working": {
-            "signal": "working",
-            "normalized_key": "working",
-            "original_texts": ["Working on"],
-            "category": "title_parse_blocker",
-            "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
-        }
-    })
-
-    updated = signal_registry.approve_signal("working", "title_parse_blocker")
-
-    assert updated == {
-        "signal": "working",
-        "normalized_key": "working",
-        "original_texts": ["working", "Working on"],
-        "category": "title_parse_blocker",
-    }
-
-    saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
-    assert saved_registry == {}
-
-    payload = json.loads(parsing_rules_path.read_text(encoding="utf-8"))
-    assert payload["title_candidate_leading_verb_blockers"] == ["working"]
-
 
 def test_learn_title_normalization_candidates_stores_suggested_values(tmp_path, monkeypatch):
     registry_path = tmp_path / "signal_registry.json"
