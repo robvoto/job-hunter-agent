@@ -720,6 +720,7 @@ body {
 /* Screen-specific spacing for the shared onboarding import helper. */
 .onboarding-results-helper {
   margin-top: 18px;
+  align-items: center;
 }
 
 /* â”€â”€ Review / check grids â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

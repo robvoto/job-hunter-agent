@@ -25,6 +25,7 @@ const refs = Object.freeze({
   salaryYearlyBlock: document.getElementById('salary_yearly_block'),
   salaryDailyBlock: document.getElementById('salary_daily_block'),
   createProfileButton: document.getElementById('create_profile'),
+  continueToReview: document.getElementById('continue_to_review'),
   stepNavButtons: Array.from(document.querySelectorAll('[data-step-nav]')),
   onbTestPanel: document.getElementById('onb_test_panel'),
   onbTestTrigger: document.getElementById('onb_test_trigger'),
@@ -64,6 +65,7 @@ const {
   salaryYearlyBlock,
   salaryDailyBlock,
   createProfileButton,
+  continueToReview: continueToReviewEl,
   stepNavButtons,
   onbTestPanel,
   onbTestTrigger,
@@ -186,7 +188,7 @@ let savedPrimaryCvFileName = '';
 let reviewCapabilityResizeObserver = null;
 
 function getReviewCapabilityPreviewCount() {
-  const container = flowRefs.reviewCapabilityCards?.querySelector('.review-capability-row-list');
+  const container = reviewCapabilityCardsEl?.querySelector('.review-capability-row-list');
   if (!container) {
     return REVIEW_CAPABILITY_PREVIEW_ROWS;
   }
@@ -616,6 +618,9 @@ function resetPrimaryCvDropZoneAppearance() {
 function updateCreateProfileAvailability() {
   if (!createProfileButton) return;
   createProfileButton.disabled = !primaryCvInput?.files?.[0];
+  if (continueToReviewEl) {
+    continueToReviewEl.hidden = !hasDraftProfileState();
+  }
 }
 
 function restorePrimaryCvSelection(file) {
@@ -949,6 +954,9 @@ function observeReviewCapabilityLayout() {
   reviewCapabilityResizeObserver.observe(container);
 }
 
+if (continueToReviewEl) {
+  continueToReviewEl.addEventListener('click', () => setStep(REVIEW_STEP));
+}
 if (locationSelect) {
   locationSelect.addEventListener('change', () => {
     setSelectedLocation(locationSelect.value);

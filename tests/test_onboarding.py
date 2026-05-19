@@ -41,12 +41,12 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     client = TestClient(create_app())
     html = client.get("/onboarding").text
 
-    assert 'Target roles' in html
-    assert 'Also consider' in html
+    assert 'Preferred roles' in html
+    assert 'Alternative roles' in html
     assert 'Search keyword' in html
     assert 'placeholder="e.g. Business Analyst"' in html
-    assert 'Add a target role' in html
-    assert 'Add an also-consider role' in html
+    assert 'Add a preferred role' in html
+    assert 'Add an alternative role' in html
     assert 'id="engagement_type_label"' in html
     assert 'class="choice-strip"' in html
     assert 'class="choice-card choice-card--work-mode"' in html
@@ -62,6 +62,16 @@ def test_onboarding_flow_keyword_helper_uses_single_target_role():
     assert "defaultSearchKeywordFromTargetRoles" in js_text
     assert "reviewTargetTitles.join(', ')" not in js_text
     assert "defaultSearchKeywordsFromReviewedTitles" not in js_text
+
+
+def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_output():
+    js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-flow.js"
+    js_text = js_path.read_text(encoding="utf-8")
+
+    assert "window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__" in js_text
+    assert "onboardingImportSummaryLabels.lead_in" in js_text
+    assert "if (!parts.length)" in js_text
+    assert "extractionMessage && typeof showOnboardingImportHelper === 'function'" in js_text
 
 
 def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):

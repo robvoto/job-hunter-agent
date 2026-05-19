@@ -236,7 +236,7 @@ Penalties are intentionally smaller than in earlier versions. The capability evi
 
 **Scoring:** Sector is a small preference signal, not a universal ranking. Public sector evidence can earn the configured sector bonus when public is the only selected sector. If both sectors are selected, sector is neutral for scoring.
 
-The public-sector classifier still uses government/public-sector context evidence internally. That is classification input only, not the user-facing model.
+The public-sector classifier still uses public-sector context evidence internally. That is classification input only, not the user-facing model.
 
 ---
 
@@ -244,7 +244,7 @@ The public-sector classifier still uses government/public-sector context evidenc
 
 Each component belongs to a weight category (fit, freshness, location, contract, work_mode, salary, government). Weights default to 1.0 and can be raised up to 2.0 from the settings UI. The `government` weight name remains internal, but it now drives the user-facing sector signal.
 
-A weight of 2.0 doubles all points (positive and negative) in that category. This is a blunt importance multiplier â€” it shifts relative weight between categories, not within them. The clamping at 0â€“100 means very high weights on fit can push strong-fit scores to 100 even without logistics points.
+A weight of 2.0 doubles all points (positive and negative) in that category. This is a blunt importance multiplier — it shifts relative weight between categories, not within them. The clamping at 0–100 means very high weights on fit can push strong-fit scores to 100 even without logistics points.
 
 ---
 

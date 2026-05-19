@@ -1,9 +1,10 @@
 window.JobHunterChipEditor = (function () {
   const { escapeHtml, toLines, rulesToText, textToRules, settingsField } = window.JobHunterSettingsUtils;
+  const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
 
   const chipEditors = {
-    target_roles: { kind: 'list', listId: 'target_roles_chips', inputId: 'target_roles_add', emptyText: 'No target roles yet.' },
-    also_consider_roles: { kind: 'list', listId: 'also_consider_roles_chips', inputId: 'also_consider_roles_add', emptyText: 'No also-consider roles yet.' },
+    target_roles: { kind: 'list', listId: 'target_roles_chips', inputId: 'target_roles_add', emptyText: titleTierLabels.target_roles_empty_text },
+    also_consider_roles: { kind: 'list', listId: 'also_consider_roles_chips', inputId: 'also_consider_roles_add', emptyText: titleTierLabels.also_consider_roles_empty_text },
     must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No mandatory skills to reject yet.' },
     reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked job titles yet.' },
     reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No excluded keywords or phrases yet.' },

@@ -82,6 +82,12 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         html = html.replace("__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__", title_tier_labels["search_keyword_label"])
         html = html.replace("__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_HELP__", title_tier_labels["search_keyword_help"])
         html = html.replace("__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_EXAMPLE__", title_tier_labels["search_keyword_example"])
+        html = html.replace("__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__", title_tier_labels["target_roles_label"])
+        html = html.replace("__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__", title_tier_labels["target_roles_help"])
+        html = html.replace("__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_PLACEHOLDER__", title_tier_labels["target_roles_input_placeholder"])
+        html = html.replace("__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__", title_tier_labels["also_consider_roles_label"])
+        html = html.replace("__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_HELP__", title_tier_labels["also_consider_roles_help"])
+        html = html.replace("__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_PLACEHOLDER__", title_tier_labels["also_consider_roles_input_placeholder"])
     if template_path == GLOBAL_SETTINGS_HTML_PATH:
         for token, partial_path in SETTINGS_PARTIALS.items():
             if token in {"__JOB_HUNTER_SETTINGS_SECTION_ADMIN__", "__JOB_HUNTER_SETTINGS_SECTION_LEARNING__"}:

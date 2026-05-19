@@ -14,10 +14,10 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 
 ## Allowed categories
 - `capability_concept`
-- `government_context`
+- `sector`
 - `role_title_token`
 - `role_title_pattern` — structural title pattern using `[*]` wildcard; routes to `role_title_rules.json` via `upsert_role_title_rule()`
-- `government_context_pattern` — structural clearance/agency pattern using `[*]` wildcard; routes to `government_context_patterns.json` via `upsert_government_context_pattern()`
+- `sector_pattern` — structural clearance/agency pattern using `[*]` wildcard; routes to `sector_patterns.json` via `upsert_sector_pattern()`
 - `hard_blocker_pattern`
 - `title_normalization_candidate`
 - `cv_farming_pattern`

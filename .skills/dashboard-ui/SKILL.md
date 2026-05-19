@@ -42,10 +42,10 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - **Never use `.value === 'true'` for a checkbox toggle** — a checkbox's `.value` is `"on"`, not `"true"`.
 
 ### Government preference (two patterns — do not merge them)
-- **Settings** uses a choice strip (two checkboxes: Government, Private) via `__JOB_HUNTER_GOVERNMENT_PREFERENCE_CHOICES__` → `render_government_preference_choices()`. Both checked = "any". JS: `getGovernmentPreferenceValues()` / `setGovernmentPreferenceValues()`. Uses `card_class="choice-card--work-mode"` — same styled buttons as work mode and engagement type. Never use `choice-card--government` (class does not exist).
-- **Onboarding** uses `<select id="government_preference">` with options via `__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__` → `render_government_preference_select_options()`.
-- `window.__JOB_HUNTER_GOVERNMENT_PREFERENCE_OPTIONS__` is injected by `build_bootstrap_script()` — required by onboarding-flow.js for label lookups.
-- Do not remove `render_government_preference_select_options` or its `pages.py` replacement — it powers the onboarding select.
+- **Settings** uses a choice strip (two checkboxes: Public, Private) via `__JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__` → `render_sector_preference_choices()`. Both checked = "any". JS: `getSectorPreferenceValues()` / `setSectorPreferenceValues()`. Uses `card_class="choice-card--work-mode"` — same styled buttons as work mode and engagement type. Never use `choice-card--sector` (class does not exist).
+- **Onboarding** uses `<select id="sector_preference">` with options via `__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__` → `render_sector_preference_select_options()`.
+- `window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__` is injected by `build_bootstrap_script()` — required by onboarding-flow.js for label lookups.
+- Do not remove `render_sector_preference_select_options` or its `pages.py` replacement — it powers the onboarding select.
 
 ### Work mode (`input[name="work_mode_preference"]`)
 - `window.__JOB_HUNTER_TITLE_TIER_LABELS__` is injected by `build_bootstrap_script()` and owns the onboarding labels/help text for target roles, also-consider roles, and the search keyword field.
@@ -67,8 +67,8 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Apply this pattern one source at a time when the UI needs a focused review, rather than changing every boolean control in one pass.
 
 ### Government preference (`input[name="prefer_government"]`)
-- Rendered by `render_government_preference_choices()` as two checkbox cards for government and private.
-- Both checked means no government preference; one checked means the user wants that sector only.
+- Rendered by `render_sector_preference_choices()` as two checkbox cards for public and private.
+- Both checked means no sector preference; one checked means the user wants that sector only.
 - Keep the constraint logic in the shared settings JS so the UI and saved profile stay aligned.
 
 ### Bootstrap globals and validation
@@ -116,6 +116,7 @@ Target aesthetic: Linear / GitHub dark / Vercel dashboard. Enterprise dark SaaS.
 - Amber (`--state-warning-*`): advisory signals — Potential Duplicates, Description Issue, block-confirm panel
 - Red (`--state-error-*`): destructive or hard blockers only — badge-hidden, error states
 - Neutral (`--state-neutral-*`): default labels, LinkedIn badge, Government badge, inactive states
+- Neutral (`--state-neutral-*`): default labels, LinkedIn badge, Sector badge, inactive states
 
 **Component-specific rules:**
 - `badge-warning` uses warning/amber tokens (not error/red) — it covers advisory signals, not errors

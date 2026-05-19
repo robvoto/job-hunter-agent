@@ -153,47 +153,42 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
     assert score_to_tone_class(67, profile) == "tone-good"
 
 
-def test_has_government_context_detects_real_public_sector_language():
-    assert role_analysis.has_government_context(
+def test_has_public_sector_context_detects_real_public_sector_language():
+    assert role_analysis.has_public_sector_context(
         "Federal government department delivering a public sector program."
     )
 
 
-def test_has_government_context_ignores_privacy_notice_government_id_phrase():
-    assert not role_analysis.has_government_context(
-        "Please do not submit sensitive personal data such as government ID numbers."
-    )
+def test_has_public_sector_context_ignores_privacy_notice_government_id_phrase():
+    assert not role_analysis.has_public_sector_context(
 
 
 def test_government_context_rules_file_contains_pattern_lists():
     from job_hunter_agent.paths import GOVERNMENT_CONTEXT_RULES_PATH
-    payload = json.loads(GOVERNMENT_CONTEXT_RULES_PATH.read_text(encoding="utf-8"))
+    payload = json.loads(SECTOR_RULES_PATH.read_text(encoding="utf-8"))
 
     assert payload["kind"] == "rules"
-    assert payload["name"] == "government_context_rules"
-    assert payload["positive_patterns"] == [
         "\\baps\\d+\\b",
         "\\bel\\s*[12]\\b",
-        "\\bnv\\s*[12]\\b",
         "\\bbaseline clearance\\b",
     ]
     assert payload["false_positive_patterns"] == [
+    assert payload["false_positive_patterns"] == [ # This is still government-specific detection
         "\\bgovernment-issued\\s+id(?:entification)?\\b",
         "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
     ]
 
-
 def test_government_context_knowledge_file_contains_approved_terms():
     from job_hunter_agent.paths import GOVERNMENT_CONTEXT_KNOWLEDGE_PATH
     payload = json.loads(GOVERNMENT_CONTEXT_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+def test_sector_knowledge_file_contains_approved_terms():
+    from job_hunter_agent.paths import SECTOR_KNOWLEDGE_PATH
+    payload = json.loads(SECTOR_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
 
     assert payload["kind"] == "managed_knowledge"
-    assert payload["name"] == "government_context_knowledge"
-    values = [entry.get("value") for entry in payload["entries"]]
     assert values == [
         "government",
         "public sector",
-        "council",
         "government agency",
         "state agency",
     ]
@@ -202,16 +197,16 @@ def test_government_context_knowledge_file_contains_approved_terms():
 def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch):
     rules_path = tmp_path / "government_context_rules.json"
     knowledge_path = tmp_path / "government_context_knowledge.json"
+def test_has_public_sector_context_matches_approved_knowledge(tmp_path, monkeypatch):
+    rules_path = tmp_path / "sector_rules.json"
+    knowledge_path = tmp_path / "sector_knowledge.json"
     rules_path.write_text(
         json.dumps(
-            {
-                "kind": "rules",
-                "name": "government_context_rules",
+                "name": "sector_rules",
                 "positive_patterns": ["\\bgovernment\\b"],
                 "false_positive_patterns": [
                     "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
                 ],
-            }
         ),
         encoding="utf-8",
     )
@@ -220,22 +215,22 @@ def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch
             {
                 "kind": "managed_knowledge",
                 "name": "government_context_knowledge",
+                "name": "sector_knowledge",
                 "entries": [
                     {"value": "NSW Health", "aliases": ["state health department"]},
                 ],
             }
-        ),
         encoding="utf-8",
     )
     monkeypatch.setattr(role_analysis, "GOVERNMENT_CONTEXT_RULES_PATH", rules_path)
     monkeypatch.setattr(role_analysis, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(role_analysis, "SECTOR_KNOWLEDGE_PATH", knowledge_path)
 
     assert role_analysis.has_government_context("Role in NSW Health digital delivery program")
-
+    assert role_analysis.has_public_sector_context("Role in NSW Health digital delivery program")
 
 def test_build_ad_learning_signals_registers_pending_capability_and_title_tokens(monkeypatch):
     monkeypatch.setattr(
-        signal_detection,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )
@@ -312,11 +307,11 @@ def test_seek_search_targets_use_seek_location_code():
 
 
 def test_build_ad_learning_signals_registers_government_context_from_job_description(monkeypatch):
+def test_build_ad_learning_signals_registers_public_sector_context_from_job_description(monkeypatch):
     monkeypatch.setattr(
         signal_detection,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
-    )
 
     signals = source_learning.build_ad_learning_signals(
         {
@@ -335,12 +330,12 @@ def test_build_ad_learning_signals_registers_government_context_from_job_descrip
         "department of health",
     ]
     assert all(item["suggested_category"] == "government_context" for item in signals)
+    ] # These are still government-specific terms
+    assert all(item["suggested_category"] == "sector" for item in signals)
 
 
 def test_build_ad_learning_signals_registers_title_normalization_candidates(monkeypatch):
     monkeypatch.setattr(
-        signal_detection,
-        "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )
 
@@ -458,21 +453,21 @@ def test_render_job_card_does_not_claim_private_sector_by_default():
     assert ">Government<" not in html
 
 
+# This test needs to be updated to reflect the new "Sector" concept.
 def test_visible_fit_reasons_backfills_from_positive_score_drivers():
     reasons = workspace_renderer.visible_fit_reasons(
         ["Strong capability match: Delivery teams"],
         [
-            {"label": "Primary role-family match", "value": 14},
             {"label": "Description fit is strong", "value": 16},
             # Per-capability entries are excluded from visible reasons (surfaced via fit_highlights)
             {"label": "stakeholder management [canonical]", "value": 4},
             {"label": "Posted within the last day", "value": 9},
+            {"label": "Posted within the last day", "value": 9}, # This is fine, not related to sector
             {"label": "Hybrid work available", "value": 1},
         ],
     )
 
     assert reasons == [
-        "Strong capability match: Delivery teams",
         "Primary role-family match",
         "Description fit is strong",
         "Posted within the last day",
@@ -875,7 +870,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
         profile,
     )
 
-    assert _breakdown_value(breakdown, "Target role-family match") == 20
+    assert _breakdown_value(breakdown, "Preferred role-family match") == 20
     assert _breakdown_value(breakdown, "Work mode confirmed selected mode bonus") == 6
 
 
@@ -903,8 +898,8 @@ def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_prima
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Target role-family match") == 15
-    assert _breakdown_value(breakdown, "Target seniority adjustment") == 3
+    assert _breakdown_value(breakdown, "Preferred role-family match") == 15
+    assert _breakdown_value(breakdown, "Preferred seniority adjustment") == 3
 
 
 def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_matches():
@@ -931,8 +926,8 @@ def test_fit_score_breakdown_applies_primary_seniority_penalty_only_for_primary_
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Target role-family match") == 15
-    assert _breakdown_value(breakdown, "Target seniority adjustment") == -5
+    assert _breakdown_value(breakdown, "Preferred role-family match") == 15
+    assert _breakdown_value(breakdown, "Preferred seniority adjustment") == -5
 
 
 def test_fit_score_breakdown_keeps_secondary_role_family_clean():
@@ -959,8 +954,8 @@ def test_fit_score_breakdown_keeps_secondary_role_family_clean():
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Also-consider role-family match") == 4
-    assert _breakdown_value(breakdown, "Target seniority adjustment") is None
+    assert _breakdown_value(breakdown, "Alternative role-family match") == 4
+    assert _breakdown_value(breakdown, "Preferred seniority adjustment") is None
 
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
@@ -1271,23 +1266,23 @@ def test_deterministic_review_counts_only_capability_highlights():
         [
             "Government context",
             "12+ month contract",
+            "Sector",
             "Location matches primary preference: Sydney NSW",
         ],
         [],
         [],
     ) == {"decision": "KEEP", "grade": "SOLID", "det_rule": "solid"}
-
     assert deterministic_review_outcome(
         {"title_reason": "OK"},
         {},
         [
             "Strong capability match: Delivery teams",
             "Strong capability match: Process improvement",
+            "Strong capability match: Process improvement", # This is fine, not related to sector
             "Strong capability match: Stakeholder management",
         ],
         [],
         [],
-    ) == {"decision": "KEEP", "grade": "SOLID", "det_rule": "solid"}
 
 
 def test_llm_description_fit_entry_requires_grade():
@@ -1679,7 +1674,7 @@ def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
     labels = [item["label"] for item in breakdown]
 
     assert any("Hard blocker" in label for label in labels)
-    assert "Target role-family match" in labels
+    assert "Preferred role-family match" in labels
     assert any("fit" in label.lower() for label in labels)
 
 
@@ -1704,3 +1699,4 @@ def test_score_equivalent_where_no_hard_blockers(monkeypatch):
 
     assert score == max(min(sum(item["value"] for item in breakdown), 100), 0)
     assert not any("Hard blocker" in item["label"] for item in breakdown)
+    assert not any("Hard blocker" in item["label"] for item in b

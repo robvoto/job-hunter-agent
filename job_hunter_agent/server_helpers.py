@@ -158,6 +158,15 @@ _ONBOARDING_TITLE_TIER_LABEL_KEYS = (
     "search_keyword_help",
     "search_keyword_example",
 )
+_ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS = (
+    "lead_in",
+    "target_roles_singular",
+    "target_roles_plural",
+    "capabilities_singular",
+    "capabilities_plural",
+    "source_suffix",
+    "privacy_note",
+)
 
 
 def load_onboarding_title_tier_labels() -> dict[str, str]:
@@ -168,6 +177,16 @@ def load_onboarding_title_tier_labels() -> dict[str, str]:
     if missing:
         raise ValueError(f"ui_labels.json is missing title_tier_labels values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS}
+
+
+def load_onboarding_import_summary_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("onboarding_import_summary_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing onboarding_import_summary_labels")
+    missing = [key for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing onboarding_import_summary_labels values: {', '.join(missing)}")
+    return {key: str(labels[key]).strip() for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS}
 
 
 def get_docs() -> list[dict[str, str]]:
@@ -280,6 +299,9 @@ def build_bootstrap_script(
         )
     parts.append(
         f'<script>window.__JOB_HUNTER_TITLE_TIER_LABELS__ = {json.dumps(load_onboarding_title_tier_labels(), ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'

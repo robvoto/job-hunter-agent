@@ -5,10 +5,14 @@ const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
 const onboardingLocationUi = window.JobHunterLocationUi || {};
 const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
+const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
 const onboardingUserId = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
 
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
+}
+if (!onboardingImportSummaryLabels) {
+  throw new Error('Missing onboarding import summary labels.');
 }
 if (!onboardingUserId) {
   throw new Error('Missing user id.');
@@ -522,10 +526,20 @@ function storeCompletionRedirectState(payload, searchPrefs) {
 
 function formatExtractionSummary(counts) {
   const primary = Number(counts.target_titles || 0);
-  const secondary = Number(counts.secondary_titles || 0);
   const capabilities = Number(counts.capabilities || 0);
   const formatCount = (count, singular, plural) => `${count} ${count === 1 ? singular : plural}`;
-  return `${formatCount(primary, 'target role', 'target roles')}, ${formatCount(secondary, 'also consider role', 'also consider roles')}, and ${formatCount(capabilities, 'capability row', 'capability rows')} from your CV.`;
+  const parts = [];
+  if (primary > 0) {
+    parts.push(formatCount(primary, onboardingImportSummaryLabels.target_roles_singular, onboardingImportSummaryLabels.target_roles_plural));
+  }
+  if (capabilities > 0) {
+    parts.push(formatCount(capabilities, onboardingImportSummaryLabels.capabilities_singular, onboardingImportSummaryLabels.capabilities_plural));
+  }
+  if (!parts.length) {
+    return '';
+  }
+  const joined = parts.length === 2 ? `${parts[0]}, and ${parts[1]}` : parts[0];
+  return `${onboardingImportSummaryLabels.lead_in} ${joined} ${onboardingImportSummaryLabels.source_suffix} ${onboardingImportSummaryLabels.privacy_note}`;
 }
 
 async function createProfile() {
@@ -546,7 +560,7 @@ async function createProfile() {
   }
 
   const files = [await fileToPayload(primary, 'Primary CV')];
-      const response = await jobHunterFetch('/api/onboarding/import', {
+  const response = await jobHunterFetch('/api/onboarding/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -569,7 +583,7 @@ async function createProfile() {
     ? formatExtractionSummary(payload.extraction_counts || {})
     : 'Your draft profile is ready. Review the role direction before you continue.';
   showStatus('', '');
-  if (typeof showOnboardingImportHelper === 'function') {
+  if (extractionMessage && typeof showOnboardingImportHelper === 'function') {
     showOnboardingImportHelper(pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
   }
 }

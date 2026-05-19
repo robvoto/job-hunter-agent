@@ -70,7 +70,7 @@ Role title knowledge:
   "value": "analyst"
 }
 
-Government context knowledge:
+Sector knowledge:
 {
   "value": "public sector"
 }
@@ -184,7 +184,7 @@ Do not write directly to knowledge JSON.
 
 Register clean pending signals for:
 - capability_concept
-- government_context
+- sector
 - role_title_token
 - hard_blocker_pattern
 
