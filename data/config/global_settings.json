@@ -173,6 +173,7 @@
     "min_trusted_description_length": 600
   },
   "source_document_settings": {
+    "cv_chars_per_page": 3000,
     "allowed_suffixes": [
       ".docx",
       ".md",

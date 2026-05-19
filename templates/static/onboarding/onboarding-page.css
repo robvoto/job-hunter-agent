@@ -717,61 +717,9 @@ body {
   color: var(--state-error-text);
 }
 
-/* Inline helper used for onboarding completion messages, matching the workspace info callout. */
-.results-helper {
-  margin: 18px 0 0;
-  padding: 16px 18px;
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.results-helper[hidden] {
-  display: none !important;
-}
-
-.results-helper-copy {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.5;
-  font-size: 0.95rem;
-}
-
-.results-helper-dismiss {
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  background: var(--bg-surface);
-  color: var(--text-muted);
-}
-
-[data-theme="dark-professional"] .results-helper {
-  background: color-mix(in srgb, var(--accent) 5%, var(--bg-surface));
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border-subtle));
-  border-left: 3px solid color-mix(in srgb, var(--accent) 70%, var(--border-subtle));
-  border-radius: 12px;
-  box-shadow: none;
-}
-
-[data-theme="dark-professional"] .results-helper-copy {
-  color: var(--state-neutral-text);
-}
-
-[data-theme="dark-professional"] .results-helper-dismiss {
-  background: var(--bg-page);
-  border: 1px solid var(--border-strong);
-  color: var(--state-neutral-text);
-}
-
-[data-theme="dark-professional"] .results-helper-dismiss:hover {
-  border-color: var(--accent);
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-page));
+/* Screen-specific spacing for the shared onboarding import helper. */
+.onboarding-results-helper {
+  margin-top: 18px;
 }
 
 /* â”€â”€ Review / check grids â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

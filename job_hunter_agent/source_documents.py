@@ -9,7 +9,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from job_hunter_agent.cv_pipeline import run_cv_pipeline
-from job_hunter_agent.global_settings import get_allowed_source_document_suffixes
+from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_cv_chars_per_page
 from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -32,6 +32,7 @@ from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
     build_candidate_profile_tiers_from_sections,
     KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CV_MAX_PAGES,
     KEY_EVIDENCE_TIERS,
     KEY_ONBOARDING_COMPLETE,
     KEY_PRIMARY_PATTERNS,
@@ -264,10 +265,15 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     if not import_sources:
         raise ValueError("No onboarding input provided. Please upload your CV first.")
 
+    active_settings = onboarding_settings or {}
+    cv_max_pages = max(1, int(active_settings.get(KEY_CV_MAX_PAGES) or DEFAULT_ONBOARDING_SETTINGS.get(KEY_CV_MAX_PAGES) or 5))
+    cv_max_chars = cv_max_pages * get_cv_chars_per_page()
+
     imported_sources: list[dict[str, Any]] = []
     combined_sections: list[str] = []
     source_sections: list[dict[str, str]] = []
     missing_sources: list[str] = []
+    page_limit_notice: str = ""
 
     for source in import_sources:
         label = str(source.get("label") or "").strip()
@@ -282,6 +288,10 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         if not text:
             missing_sources.append(path)
             continue
+        if len(text) > cv_max_chars:
+            text = text[:cv_max_chars]
+            page_limit_notice = f"CV was truncated to approximately {cv_max_pages} page(s) for processing."
+            print(f"[ONBOARDING] CV truncated to {cv_max_chars} chars ({cv_max_pages} pages) for {label}")
         imported_sources.append({"label": label, "path": path, "characters": len(text)})
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
@@ -401,6 +411,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         "missing_sources": missing_sources,
         "fresh_onboarding_run_started": True,
         "extraction_counts": extraction_counts,
+        "page_limit_notice": page_limit_notice,
     }
 
 

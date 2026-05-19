@@ -939,7 +939,7 @@ function observeReviewCapabilityLayout() {
   if (reviewCapabilityResizeObserver || !window.ResizeObserver) {
     return;
   }
-  const container = flowRefs.reviewCapabilityCards;
+  const container = reviewCapabilityCardsEl;
   if (!container) {
     return;
   }

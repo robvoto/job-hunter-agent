@@ -189,6 +189,11 @@ def get_allowed_source_document_suffixes() -> frozenset[str]:
 def get_allowed_source_document_suffixes_label() -> str:
     return ", ".join(sorted(get_allowed_source_document_suffixes()))
 
+
+def get_cv_chars_per_page() -> int:
+    settings = load_global_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
+    return int(settings.get("cv_chars_per_page", 3000))
+
 @lru_cache(maxsize=1)
 def load_global_settings() -> dict[str, Any]:
     ensure_global_settings_exists()
