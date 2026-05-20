@@ -3,11 +3,86 @@ Read and normalize rows from the Google Sheet tab Job_Rejections.
 Build an application history index.
 Enrich workspace records with application_history metadata.
 
-No Google API calls in this module — pure data transformation only.
-Company and role extraction is delegated to the LLM via build_job_rejection_extraction_prompt.
+Company/role extraction is delegated to the LLM via extract_job_rejection_with_llm.
+Sheet data is fetched via Google Sheets CSV export URL (no OAuth, no Google API client).
 """
 
+import csv
+import io
+import json as _json
 import re
+
+import requests
+
+from job_hunter_agent.global_settings import (
+    get_candidate_application_history_spreadsheet_id,
+    get_candidate_application_history_tab_name,
+    get_candidate_application_history_required_headers,
+)
+from job_hunter_agent.llm_gate import (
+    client as _llm_client,
+    get_llm_model,
+    _log_llm_call,
+    _strip_json_fence,
+)
+
+_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab_name}"
+
+
+# ---------------------------------------------------------------------------
+# Google Sheet CSV fetch
+# ---------------------------------------------------------------------------
+
+
+def fetch_job_rejection_sheet_rows(
+    sheet_id: str | None = None,
+    tab_name: str | None = None,
+) -> list[dict]:
+    """
+    Fetch rows from the Job_Rejections Google Sheet tab via CSV export URL.
+
+    sheet_id and tab_name default to the values in global settings when omitted.
+
+    No OAuth or Google API client required — the sheet must be accessible
+    to the running session (e.g. publicly readable or within a shared domain).
+
+    Raises:
+        RuntimeError: if the HTTP request fails.
+        ValueError: if the sheet is missing any required headers.
+
+    Returns a list of dicts keyed by the sheet header row.
+    """
+    resolved_id = sheet_id or get_candidate_application_history_spreadsheet_id()
+    resolved_tab = tab_name or get_candidate_application_history_tab_name()
+    required_headers = get_candidate_application_history_required_headers()
+
+    url = _SHEET_CSV_URL.format(sheet_id=resolved_id, tab_name=resolved_tab)
+    resp = requests.get(url, timeout=30)
+    if not resp.ok:
+        raise RuntimeError(
+            f"Failed to fetch Job_Rejections sheet: HTTP {resp.status_code} from {url}"
+        )
+
+    reader = csv.DictReader(io.StringIO(resp.text))
+    headers = reader.fieldnames or []
+    missing = [h for h in required_headers if h not in headers]
+    if missing:
+        raise ValueError(
+            f"Job_Rejections sheet is missing required headers: {missing}"
+        )
+
+    return list(reader)
+
+_LLM_EXTRACTION_DEGRADED: dict = {
+    "is_rejection": False,
+    "company": None,
+    "role": None,
+    "application_status": "unknown",
+    "confidence": "low",
+    "evidence": "",
+    "needs_review": True,
+    "review_reason": "LLM extraction unavailable or invalid",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -19,16 +94,89 @@ def _clean(value: object) -> str:
 
 
 # ---------------------------------------------------------------------------
+# LLM extraction
+# ---------------------------------------------------------------------------
+
+def _validate_llm_extraction(data: dict) -> dict:
+    is_rejection = bool(data.get("is_rejection", False))
+    company = data.get("company")
+    role = data.get("role")
+    application_status = str(data.get("application_status") or "unknown").strip().lower()
+    confidence = str(data.get("confidence") or "low").strip().lower()
+    evidence = str(data.get("evidence") or "").strip()
+    needs_review = bool(data.get("needs_review", True))
+    review_reason = data.get("review_reason")
+
+    if application_status not in _ALLOWED_APPLICATION_STATUSES:
+        raise ValueError(f"Invalid application_status: {application_status!r}")
+    if confidence not in _ALLOWED_CONFIDENCES:
+        raise ValueError(f"Invalid confidence: {confidence!r}")
+
+    return {
+        "is_rejection": is_rejection,
+        "company": str(company).strip() or None if company else None,
+        "role": str(role).strip() or None if role else None,
+        "application_status": application_status,
+        "confidence": confidence,
+        "evidence": evidence,
+        "needs_review": needs_review,
+        "review_reason": str(review_reason).strip() or None if review_reason else None,
+    }
+
+
+def extract_job_rejection_with_llm(row: dict) -> dict:
+    """
+    Call the cheap LLM to extract rejection info from a normalized row.
+
+    Accepts both raw sheet keys (Subject, Content) and pre-cleaned keys
+    (subject, content) — build_job_rejection_extraction_prompt handles both.
+
+    Returns the validated extraction dict, or the degraded fallback when
+    the LLM is unavailable, errors, or returns unparseable output.
+    """
+    if _llm_client is None:
+        return dict(_LLM_EXTRACTION_DEGRADED)
+
+    prompt = build_job_rejection_extraction_prompt(row)
+
+    try:
+        model = get_llm_model()
+        resp = _llm_client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": prompt["system"]},
+                {"role": "user", "content": prompt["user"]},
+            ],
+            max_output_tokens=256,
+        )
+        _log_llm_call(resp, "rejection_email_extraction", model)
+    except Exception as exc:
+        print(f"[LLM][REJECTION_EMAIL_EXTRACTION][ERROR] {exc}")
+        return dict(_LLM_EXTRACTION_DEGRADED)
+
+    raw = str(getattr(resp, "output_text", "") or "").strip()
+    if not raw:
+        return dict(_LLM_EXTRACTION_DEGRADED)
+
+    try:
+        parsed = _json.loads(_strip_json_fence(raw))
+        return _validate_llm_extraction(parsed)
+    except Exception as exc:
+        print(f"[LLM][REJECTION_EMAIL_EXTRACTION][PARSE_ERROR] {exc} | raw={raw[:200]}")
+        return dict(_LLM_EXTRACTION_DEGRADED)
+
+
+# ---------------------------------------------------------------------------
 # Row normalisation
 # ---------------------------------------------------------------------------
 
 
 def normalize_job_rejection_row(row: dict) -> dict:
     """
-    Prepare a single raw row from the Job_Rejections sheet for LLM extraction.
+    Clean a raw Job_Rejections sheet row and run LLM extraction.
 
-    Cleans whitespace on all text fields and embeds the LLM prompt payload.
-    Company and role are not derived here — that is delegated to the LLM.
+    Raw sheet fields are preserved. LLM extraction results are merged
+    under llm_* keys. No regex derivation, no platform/vendor lists.
 
     Expected input keys: Run Date, Company, From, Subject, Content,
                          Thread ID, Message ID, Status
@@ -43,8 +191,15 @@ def normalize_job_rejection_row(row: dict) -> dict:
         "message_id": _clean(row.get("Message ID")),
         "status": _clean(row.get("Status")),
     }
-    cooked["llm_extraction_prompt"] = build_job_rejection_extraction_prompt(cooked)
-    cooked["llm_extraction_status"] = "pending"
+    extraction = extract_job_rejection_with_llm(cooked)
+    cooked["llm_company"] = extraction["company"]
+    cooked["llm_role"] = extraction["role"]
+    cooked["llm_is_rejection"] = extraction["is_rejection"]
+    cooked["llm_application_status"] = extraction["application_status"]
+    cooked["llm_confidence"] = extraction["confidence"]
+    cooked["llm_evidence"] = extraction["evidence"]
+    cooked["llm_needs_review"] = extraction["needs_review"]
+    cooked["llm_review_reason"] = extraction["review_reason"]
     return cooked
 
 
@@ -119,19 +274,21 @@ def match_job_application_history(
     best_score = 0.0
 
     for row in rejection_rows:
-        # Use LLM-extracted fields when available; fall back to raw_company for pending rows.
-        candidate_company = row.get("derived_company") or row.get("raw_company") or ""
-        candidate_role = row.get("derived_role") or ""
+        # Use LLM-extracted fields when available; fall back to raw_company.
+        candidate_company = row.get("llm_company") or row.get("raw_company") or ""
+        candidate_role = row.get("llm_role") or ""
 
         company_score = _company_match_score(job_company, candidate_company)
 
-        # If company doesn't match at all, skip — no point checking role.
+        # If company doesn't match at all, try a direct name scan of subject/content.
+        # Subject is stronger evidence than body text, so scores differ.
         if company_score < 0.5:
-            # Try one more: scan subject/content for job_company directly.
-            subject = row.get("subject", "")
-            content = row.get("content", "")
-            if _normalize_name(job_company) in _normalize_name(subject + " " + content):
-                company_score = 0.6
+            needle = _normalize_name(job_company)
+            if needle:
+                if needle in _normalize_name(row.get("subject", "")):
+                    company_score = 0.8
+                elif needle in _normalize_name(row.get("content", "")):
+                    company_score = 0.75
 
         if company_score < 0.5:
             continue

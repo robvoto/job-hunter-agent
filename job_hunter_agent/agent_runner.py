@@ -1,10 +1,16 @@
-"""Daily local agent runner.
+"""Daily local agent runner coordination and digest generation.
 
 Main goals:
 - run the current job-source connector on a schedule or on demand
 - build a compact daily digest from the latest results
 - send that digest through configured local notification channels
+
+This module orchestrates the execution of job scrapers, processes the results 
+to build daily digests, and sends notifications via email or Telegram. It 
+manages the agent's scheduled runs, maintains runtime state, and ensures 
+consistent delivery of match summaries to the user.
 """
+
 
 import argparse
 import html
@@ -345,9 +351,9 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
             try:
                 sync_result = sync_telegram_subscribers(settings[KEY_TELEGRAM])
                 save_user_settings(None, settings)
-                print(f"Telegram subscribers synced: {sync_result['total_subscribers']}")
+                print(f"[AGENT_RUNNER][INFO] Telegram subscribers synced: {sync_result['total_subscribers']}")
             except Exception as exc:
-                print(f"Telegram subscriber sync skipped: {exc}")
+                print(f"[AGENT_RUNNER][WARN] Telegram subscriber sync failed: {exc}")
         print("Sending notifications...")
         notification_results = send_daily_notifications(summary_text, summary_html, settings)
         print(f"Notifications sent: {len(notification_results)} channel(s).")
@@ -377,7 +383,8 @@ def should_run_now(state: dict[str, Any], daily_time_local: str, now: datetime) 
         hour_text, minute_text = daily_time_local.split(":", 1)
         scheduled_hour = int(hour_text)
         scheduled_minute = int(minute_text)
-    except Exception:
+    except Exception as exc:
+        print(f"[AGENT_RUNNER][WARN] Failed to parse scheduled time '{daily_time_local}', using default: {exc}")
         hour_text, minute_text = DEFAULT_DAILY_TIME_LOCAL.split(":", 1)
         scheduled_hour = int(hour_text)
         scheduled_minute = int(minute_text)

@@ -1,5 +1,11 @@
-"""Authentication helpers for the workspace server (Google OAuth)."""
+"""Authentication helpers for the workspace server (Google OAuth).
 
+This module provides functionalities for user authentication using Google OAuth,
+session management, and user store persistence. It handles the generation of
+authentication URLs, exchange of authorization codes for user information,
+and the creation/retrieval of user records. Session cookies are managed
+securely with HMAC-SHA256 signatures and CSRF protection.
+"""
 from __future__ import annotations
 
 import base64
@@ -98,8 +104,10 @@ def load_user_store() -> dict:
         if not USERS_PATH.exists():
             return {}
         try:
-            return json.loads(USERS_PATH.read_text(encoding="utf-8"))
-        except Exception:
+            payload = json.loads(USERS_PATH.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else {}
+        except Exception as exc:
+            print(f"[AUTH][WARN] Failed to load user store from {USERS_PATH}: {exc}")
             return {}
 
 
@@ -203,7 +211,8 @@ def read_session_user(request: Request) -> dict | None:
         payload = json.loads(
             base64.urlsafe_b64decode((payload_b64 + padding).encode(AUTH_ENCODING)).decode(AUTH_ENCODING)
         )
-    except Exception:
+    except Exception as exc:
+        print(f"[AUTH][WARN] Failed to decode session cookie payload: {exc}")
         return None
     user_id = str(payload.get("user_id") or "").strip()
     email = str(payload.get("email") or "").strip()
