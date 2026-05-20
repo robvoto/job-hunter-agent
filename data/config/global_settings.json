@@ -328,5 +328,22 @@
     "playwright_viewport_height": 900,
     "playwright_selector_timeout": 8000,
     "playwright_browser_mode": "ephemeral"
+  },
+  "candidate_application_history": {
+    "enabled": true,
+    "source_type": "google_sheet_csv_export",
+    "spreadsheet_id": "1kayUdF2fML62pUSLgJSUbzgvI3orz5SvR-3EPK1cAko",
+    "tab_name": "Job_Rejections",
+    "required_headers": [
+      "Run Date",
+      "Company",
+      "From",
+      "Subject",
+      "Content",
+      "Thread ID",
+      "Message ID",
+      "Status"
+    ],
+    "content_max_chars": 4000
   }
 }

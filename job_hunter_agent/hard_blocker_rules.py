@@ -1,3 +1,11 @@
+"""Hard blocker rule management and detection logic.
+
+This module handles the loading, normalisation, and persistence of rules used 
+to detect mandatory requirements in job ads that conflict with a candidate's 
+profile. It provides logic for matching these rules against job text to 
+automatically identify dealbreakers using candidate-specific exclusion terms.
+"""
+
 from __future__ import annotations
 
 import json
@@ -158,7 +166,8 @@ def normalize_rejection_blocker_suggestions(
     if isinstance(value, str):
         try:
             value = json.loads(value)
-        except Exception:
+        except Exception as exc:
+            print(f"[HARD_BLOCKERS][WARN] Failed to parse blocker suggestions JSON: {exc}")
             return []
     if isinstance(value, dict):
         value = value.get("blockers") or value.get("suggestions") or []

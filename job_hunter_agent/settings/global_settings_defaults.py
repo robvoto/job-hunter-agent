@@ -77,6 +77,8 @@ KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT = "capability_working_min_count"
 KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT = "title_not_target_min_count"
 KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT = "rule_suggestion_min_count"
 
+KEY_CANDIDATE_APPLICATION_HISTORY = "candidate_application_history"
+
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"

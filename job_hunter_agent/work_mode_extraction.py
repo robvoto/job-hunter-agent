@@ -1,4 +1,4 @@
-"""Work mode extraction — metadata-first, fallback-last.
+"""Work mode extraction from job metadata and description text.
 
 Design principles:
 - Metadata is trusted before heuristics. Structured platform fields and DOM metadata
@@ -11,6 +11,12 @@ Design principles:
   can verify it before acting on it.
 - No preference, scoring, or rejection logic belongs here. This module extracts
   and labels evidence only. Consumers decide what to do with the result.
+
+This module provides logic for identifying work arrangements (remote, hybrid, 
+onsite) from job listings. It prioritises structured metadata and platform-specific 
+fields (like SEEK's filter panel or LinkedIn's structured attributes) over 
+heuristic-based text analysis. Evidence is labeled and flagged for review 
+when derived from free-text fallbacks.
 """
 
 import logging
@@ -156,30 +162,30 @@ def extract_seek_filter_panel_state(list_page) -> Optional[dict]:
     The filter panel reflects search intent, not individual job metadata.
     Source label: "seek_filter_panel".
     """
+    container = list_page.query_selector(_SELECTOR_FILTER_PANEL)
     try:
-        container = list_page.query_selector(_SELECTOR_FILTER_PANEL)
         if not container:
             return None
-
+    
         checked = container.query_selector_all(_SELECTOR_CHECKED)
         if not checked:
             return None
-
+    
         modes = []
         for el in checked:
             raw = (el.inner_text() or "").strip()
             mode = _lookup_label(raw)
             if mode:
                 modes.append((mode, raw))
-
+    
         if len(modes) != 1:
             return None
-
+    
         mode, evidence = modes[0]
-        return _build_result(mode, "seek_filter_panel", evidence, False)
-    except Exception:
-        return None
-
+        return _build_result(mode, "seek_filter_panel", evidence, False)  
+    except Exception as exc:
+      print(f"[WORK_MODE][WARN] Failed to extract SEEK filter panel state: {exc}")
+      return None
 
 # ---------------------------------------------------------------------------
 # SEEK job card (per-card on search listing page)

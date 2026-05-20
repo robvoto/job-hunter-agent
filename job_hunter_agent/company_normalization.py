@@ -21,7 +21,7 @@ def _load_payload() -> dict[str, Any]:
 
 
 def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
-    normalized = dict(payload or {})
+    normalized = dict(payload)
     normalization_suffixes = normalized.get("company_name_suffixes")
     if not isinstance(normalization_suffixes, list):
         raise ValueError("company_name_normalization.json must define company_name_suffixes as a list")
@@ -47,13 +47,13 @@ def load_company_name_normalization() -> dict[str, Any]:
 
 
 def save_company_name_normalization(payload: dict[str, Any]) -> dict[str, Any]:
-    normalized = _normalize_config(payload)
-    normalized.setdefault("kind", "system_config")
-    normalized.setdefault("name", "company_name_normalization")
-    normalized.setdefault("version", 1)
+    config = _normalize_config(payload)
+    config.setdefault("kind", "system_config")
+    config.setdefault("name", "company_name_normalization")
+    config.setdefault("version", 1)
     COMPANY_NAME_NORMALIZATION_PATH.parent.mkdir(parents=True, exist_ok=True)
-    COMPANY_NAME_NORMALIZATION_PATH.write_text(json.dumps(normalized, indent=2, ensure_ascii=False), encoding="utf-8")
-    return normalized
+    COMPANY_NAME_NORMALIZATION_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    return config
 
 
 @lru_cache(maxsize=1)

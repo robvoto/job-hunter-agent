@@ -1,5 +1,10 @@
-"""Per-user settings and agent state helpers."""
+"""Per-user settings and agent state helpers.
 
+This module manages user-specific configurations and the persistent state of the agent. 
+It provides functions for loading, normalizing, and saving user settings, including
+workspace preferences, scheduling, notification rules (email, Telegram), and LLM model choices.
+It also handles the loading and saving of the agent's runtime state.
+"""
 from __future__ import annotations
 
 import copy
@@ -196,7 +201,8 @@ def load_agent_state(user_id: str | None = None) -> dict[str, Any]:
         payload = json.loads(state_path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
-    except Exception:
+    except Exception as exc:
+        print(f"[USER_SETTINGS][WARN] Failed to load agent state from {state_path}: {exc}")
         pass
     return {}
 

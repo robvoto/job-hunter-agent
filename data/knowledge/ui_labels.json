@@ -76,9 +76,7 @@
                                 "settings_title":  "Capability Matrix",
                                 "onboarding_title":  "Capabilities",
                                 "help_text":  "Related skills are the main capabilities Job Hunter uses to find jobs.",
-                                "add_button_label":  "+",
-                                "add_button_aria_label":  "Add capability",
-                                "add_button_title":  "Add capability",
+                                
                                 "related_skills_label":  "Related skills",
                                 "related_skills_summary":  "Related skills ({count})",
                                 "filter_placeholder":  "Filter related skills",
@@ -106,7 +104,7 @@
                             "account_menu_reset_learning_warning_label":  "Reset learning",
                             "add_button_label":  "+",
                             "add_button_aria_label":  "Add item",
-                            "add_button_title":  "Add"
+                            "add_button_title":  "+"
                         },
     "onboarding_import_summary_labels_description":  "Display labels for the onboarding import helper summary.",
     "onboarding_import_summary_labels":  {

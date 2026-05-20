@@ -1,7 +1,14 @@
 import re
 from functools import lru_cache
 from typing import Any, Iterable, List, Optional
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit, ParseResult 
+"""Manages job identity, duplicate detection, and linking across sources.
+
+This module provides functions for normalizing job keys, detecting confirmed
+and potential duplicate job postings based on various identifiers (job key, URL,
+ATS requisition ID, platform job ID), and annotating records with links to
+their duplicates. It relies on managed knowledge for duplicate rules and source
+priority to resolve conflicts."""
 
 from job_hunter_agent.company_normalization import company_names_weakly_match
 from job_hunter_agent.duplicate_rules import load_duplicate_rules
@@ -82,7 +89,8 @@ def _normalized_url(record: dict) -> str:
     raw_url = str(record.get(RECORD_URL_KEY) or "").strip()
     if not raw_url:
         return ""
-    try:
+    try: # Catches ValueError for malformed URLs
+        parsed: ParseResult = urlsplit(raw_url)
         parsed = urlsplit(raw_url)
     except ValueError:
         return raw_url.split("#", 1)[0].split("?", 1)[0].strip().lower()

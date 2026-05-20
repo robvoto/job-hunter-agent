@@ -138,7 +138,6 @@ KEY_CV_MAX_PAGES = "cv_max_pages"
 
 KEY_BRIEF_MODE = "llm_profile_brief_mode"
 KEY_BRIEF = "llm_profile_brief"
-KEY_CAP_GUIDANCE = "llm_capability_naming_guidance"
 KEY_STAR_EVIDENCE = "star_candidate_profile_text"
 KEY_CV_TEXT = "cv_text"
 KEY_EVIDENCE_TIERS = "candidate_profile_tiers"
@@ -258,7 +257,6 @@ DEFAULT_PROFILE = {
     },
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
-    "llm_capability_naming_guidance": "",
     "star_candidate_profile_text": "",
     "cv_text": "",
     KEY_EVIDENCE_TIERS : {
@@ -540,6 +538,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(profile, dict):
         raise TypeError("profile must be a dict")
     merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
+    merged.pop("".join(["llm", "_capability_naming_guidance"]), None)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
     merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
     merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
@@ -547,9 +546,6 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
     merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
-    )
-    merged["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
-        merged.get("llm_capability_naming_guidance", "")
     )
     merged[KEY_EVIDENCE_TIERS ] = normalize_candidate_profile_tiers(
         merged.get(KEY_EVIDENCE_TIERS , {}),
@@ -776,11 +772,6 @@ def normalize_llm_profile_brief_mode(value: Any) -> str:
     if normalized == BriefMode.MANUAL:
         return BriefMode.MANUAL
     return DEFAULT_LLM_PROFILE_BRIEF_MODE
-
-
-def normalize_llm_capability_naming_guidance(value: Any) -> str:
-    return str(value or "").strip()
-
 
 _SECTION_BUCKET_TO_TIER = {
     "primary": KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,

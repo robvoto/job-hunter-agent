@@ -199,6 +199,28 @@ def get_cv_chars_per_page() -> int:
     settings = load_global_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
     return int(settings.get("cv_chars_per_page", 3000))
 
+def get_candidate_application_history_settings() -> dict[str, Any]:
+    """Return the full candidate_application_history config section."""
+    return load_global_settings().get(KEY_CANDIDATE_APPLICATION_HISTORY, {})
+
+
+def is_candidate_application_history_enabled() -> bool:
+    return bool(get_candidate_application_history_settings().get("enabled", False))
+
+
+def get_candidate_application_history_spreadsheet_id() -> str:
+    return str(get_candidate_application_history_settings().get("spreadsheet_id", ""))
+
+
+def get_candidate_application_history_tab_name() -> str:
+    return str(get_candidate_application_history_settings().get("tab_name", ""))
+
+
+def get_candidate_application_history_required_headers() -> list[str]:
+    value = get_candidate_application_history_settings().get("required_headers", [])
+    return list(value) if isinstance(value, list) else []
+
+
 @lru_cache(maxsize=1)
 def load_global_settings() -> dict[str, Any]:
     ensure_global_settings_exists()

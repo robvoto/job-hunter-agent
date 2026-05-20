@@ -54,7 +54,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
-    LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER,
 
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
@@ -71,7 +70,6 @@ from job_hunter_agent.global_settings import (
     KEY_LLM_PROMPT_SETTINGS,
     KEY_LLM_PROMPT_TEMPLATES,
     get_llm_capability_naming_aliases_max_items,
-    get_llm_capability_naming_guidance_max_chars,
     get_llm_capability_naming_max_output_tokens,
     get_llm_capability_rule_aliases_max_items,
     get_llm_capability_rules_max_items,
@@ -365,21 +363,13 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
     return "\n".join(parts)
 
 
-def build_capability_naming_guidance(profile: dict[str, Any] | None = None) -> str:
-    active_profile = profile if isinstance(profile, dict) else load_profile()
+def build_capability_naming_guidance() -> str:
     parts = [
         LLM_PROMPT_CAPABILITY_NAMING_INTRO,
         "",
         LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER,
     ]
     parts.extend(f"- {line}" for line in CAPABILITY_NAMING_DEFAULT_LINES)
-    guidance = str(active_profile.get("llm_capability_naming_guidance") or "").strip()
-    if guidance:
-        parts.extend([
-            "",
-            LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER,
-            guidance[:get_llm_capability_naming_guidance_max_chars()],
-        ])
     parts.extend(["", LLM_PROMPT_CLUSTERS_HEADER])
     return "\n".join(parts)
 

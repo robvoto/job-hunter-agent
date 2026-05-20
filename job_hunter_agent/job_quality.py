@@ -1,7 +1,13 @@
 """Job quality signal detection - evidence collection only.
 
-CV-farming language is learned through managed knowledge in `data/cv_farming_rules.json`
-and approved through the signal registry. Closed-job and date-mismatch checks stay
+This module focuses on detecting signals related to job quality, such as 
+CV-farming patterns, job closure indicators, and date mismatches. It uses 
+managed knowledge files to identify suspicious job postings and provides 
+functions to fetch external HTML for deeper analysis. The module collects 
+evidence for review signals but does not make final decisions on job rejection.
+
+CV-farming language is learned through managed knowledge in `data/cv_farming_rules.json` 
+and approved through the signal registry. Closed-job and date-mismatch checks stay 
 in `data/dodgy_job_rules.json`.
 """
 
@@ -188,7 +194,8 @@ def fetch_external_html(url: str) -> str:
     try:
         with urlopen(req, timeout=20) as resp:
             return resp.read().decode("utf-8", errors="replace")
-    except (URLError, TimeoutError, ValueError, OSError):
+    except (URLError, TimeoutError, ValueError, OSError) as exc:
+        print(f"[JOB_QUALITY][WARN] Failed to fetch external HTML from {url}: {exc}")
         return ""
 
 
@@ -237,8 +244,9 @@ def _absolute_date_from_html(html: str) -> Optional[date]:
         try:
             return date(int(m.group(3)), _MONTH_NAMES[m.group(2).lower()], int(m.group(1)))
         except (ValueError, KeyError):
+            print(f"[JOB_QUALITY][WARN] Failed to parse date from HTML (format 3): {m.group(0)}")
             pass
-
+    
     return None
 
 

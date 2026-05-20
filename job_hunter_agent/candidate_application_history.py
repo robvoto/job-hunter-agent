@@ -15,6 +15,7 @@ import re
 import requests
 
 from job_hunter_agent.global_settings import (
+    is_candidate_application_history_enabled,
     get_candidate_application_history_spreadsheet_id,
     get_candidate_application_history_tab_name,
     get_candidate_application_history_required_headers,
@@ -72,6 +73,24 @@ def fetch_job_rejection_sheet_rows(
         )
 
     return list(reader)
+
+
+def fetch_candidate_job_rejection_rows() -> list[dict]:
+    """
+    Return rows from the configured Job_Rejections sheet.
+
+    Returns [] when candidate application history is disabled in global settings.
+    All connection parameters (spreadsheet_id, tab_name, required_headers) are
+    read from global settings — nothing is hardcoded.
+
+    Raises:
+        RuntimeError: if the HTTP request fails.
+        ValueError: if the sheet is missing any required headers.
+    """
+    if not is_candidate_application_history_enabled():
+        return []
+    return fetch_job_rejection_sheet_rows()
+
 
 _LLM_EXTRACTION_DEGRADED: dict = {
     "is_rejection": False,

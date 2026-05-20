@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Manages rules for identifying duplicate job postings.
+
+This module loads, normalizes, and persists configuration for how job records 
+are deduplicated, including defining source priority for resolving conflicts 
+between duplicate entries from different job boards.
+"""
 import json
 from typing import Any
 
@@ -11,7 +17,8 @@ def _load_payload() -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(DUPLICATE_RULES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"[DUPLICATE_RULES][WARN] Failed to load duplicate rules from {DUPLICATE_RULES_PATH}: {exc}")
         return {}
     return payload if isinstance(payload, dict) else {}
 

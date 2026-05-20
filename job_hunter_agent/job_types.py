@@ -2,6 +2,12 @@ import json
 import re
 from typing import Dict, List, Optional
 
+"""Manages job type normalization and filter groups.
+
+This module loads, caches, and persists mappings for various job type
+strings (e.g., "contract", "permanent") to canonical forms, and defines
+filter groups for UI presentation."""
+
 from job_hunter_agent.paths import KNOWLEDGE_DIR
 
 JOB_TYPE_STORE_PATH = KNOWLEDGE_DIR / "job_type.json"
@@ -21,8 +27,12 @@ def _normalize_key(value: object) -> str:
 def _load_raw() -> dict:
     if not JOB_TYPE_STORE_PATH.exists():
         return {}
-    payload = json.loads(JOB_TYPE_STORE_PATH.read_text(encoding="utf-8"))
-    return payload if isinstance(payload, dict) else {}
+    try:
+        payload = json.loads(JOB_TYPE_STORE_PATH.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception as exc:
+        print(f"[JOB_TYPES][WARN] Failed to load job type rules from {JOB_TYPE_STORE_PATH}: {exc}")
+        return {}
 
 
 def load_job_type(force_reload: bool = False) -> dict:

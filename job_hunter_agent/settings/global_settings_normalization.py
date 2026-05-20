@@ -38,6 +38,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_MAX_CHARS,
     KEY_LLM_MAX_CHARS_LIMITS,
+    KEY_CANDIDATE_APPLICATION_HISTORY,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
@@ -466,6 +467,7 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
     llm_source = source.get(KEY_LLM_SETTINGS, {})
     playwright_source = source.get("playwright_settings", {})
     review_source = source.get(KEY_REVIEW_SETTINGS, {})
+    candidate_application_history_source = source.get(KEY_CANDIDATE_APPLICATION_HISTORY, {})
 
     if not isinstance(fit_source, dict):
         raise ValueError(f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
@@ -840,4 +842,7 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
             ),
             KEY_PLAYWRIGHT_BROWSER_MODE: browser_mode,
         },
+        KEY_CANDIDATE_APPLICATION_HISTORY: candidate_application_history_source
+        if isinstance(candidate_application_history_source, dict)
+        else {},
     }

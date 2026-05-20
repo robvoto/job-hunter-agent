@@ -67,10 +67,9 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="choice-card choice-card--work-mode"' in html
     assert 'input type="checkbox" name="engagement_type"' in html
     assert 'select id="engagement_type"' not in html
-    assert 'Add capability' in html
     assert 'Include SEEK in search' in html
     assert 'Include LinkedIn in search' in html
-    assert '>Add<' not in html
+    assert '>+<' in html
     assert 'id="keywords"' in html
     assert 'data-chip-editor="keywords"' not in html
     assert 'Search keyword' in html
