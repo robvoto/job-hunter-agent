@@ -1,5 +1,16 @@
 """CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
 
+This module orchestrates the processing of raw CV text through a multi-stage pipeline 
+to extract structured information. It performs deterministic extraction of roles, 
+phrases, and clusters, followed by an optional LLM pass for renaming top clusters.
+
+Key functionalities include:
+- Parsing roles and extracting structured role lists from CV text.
+- Extracting n-gram phrases from bullet points.
+- Clustering similar phrases using Jaccard similarity.
+- Scoring and promoting clusters into strength bands.
+- Renaming top clusters using an LLM for improved readability and consistency.
+
 Produces the deterministic review fields from raw CV text:
   dominant_signal_clusters and must_not_require_skills.
 
@@ -29,7 +40,7 @@ from job_hunter_agent.profile_learning import (
 )
 from job_hunter_agent.profile_store import (
     KEY_SIGNAL_CLUSTERS,
-    KEY_MUST_NOT_REQUIRED_SKILLS,
+    KEY_MUST_NOT_REQUIRED_SKILLS ,
     normalize_onboarding_settings,
 )
 from job_hunter_agent.global_settings import (
