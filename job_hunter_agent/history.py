@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.company_normalization import normalize_company_name
+from job_hunter_agent.record_schema import RECORD_JOB_REQUIREMENTS_KEY
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
@@ -40,6 +41,7 @@ KEEP_SNAPSHOT_FIELDS = (
     "description_source",
     "role_snapshot",
     "fit_highlights",
+    RECORD_JOB_REQUIREMENTS_KEY,
     "soft_risk_reasons",
     "missing_evidence",
     "competitive_signals",
@@ -101,6 +103,8 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record["fit_confidence"] = snapshot.get("fit_confidence") or ""
     if not record.get("fit_highlights"):
         record["fit_highlights"] = snapshot.get("fit_highlights") or []
+    if not record.get(RECORD_JOB_REQUIREMENTS_KEY):
+        record[RECORD_JOB_REQUIREMENTS_KEY] = snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or []
     if not record.get("soft_risk_reasons"):
         record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []
     if not record.get("missing_evidence"):

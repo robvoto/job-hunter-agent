@@ -96,16 +96,26 @@ def upsert_hard_blocker_rule(value: str, aliases: list[str] | None = None) -> di
         raise ValueError("hard blocker rules must include {term}")
 
     entries = list(load_hard_blocker_rules())
+    incoming_aliases = clean_knowledge_aliases(aliases or [], canonical=cleaned_value)
     for entry in entries:
         if clean_knowledge_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
             continue
+        existing_aliases = clean_knowledge_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=cleaned_value)
+        merged: list[str] = []
+        seen: set[str] = {cleaned_value.lower()}
+        for alias in [*existing_aliases, *incoming_aliases]:
+            alias_key = alias.lower()
+            if alias_key in seen:
+                continue
+            seen.add(alias_key)
+            merged.append(alias)
         entry[MANAGED_KNOWLEDGE_VALUE_KEY] = cleaned_value
-        entry[MANAGED_KNOWLEDGE_ALIASES_KEY] = []
+        entry[MANAGED_KNOWLEDGE_ALIASES_KEY] = merged
         return save_hard_blocker_rules(entries)
 
     entries.append({
         MANAGED_KNOWLEDGE_VALUE_KEY: cleaned_value,
-        MANAGED_KNOWLEDGE_ALIASES_KEY: [],
+        MANAGED_KNOWLEDGE_ALIASES_KEY: incoming_aliases,
     })
     return save_hard_blocker_rules(entries)
 

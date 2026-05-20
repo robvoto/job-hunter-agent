@@ -39,7 +39,6 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_MAX_CHARS,
     KEY_LLM_MAX_CHARS_LIMITS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
-    KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
@@ -48,8 +47,10 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
     KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
     KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
+    KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
     KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
+    KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
     KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
@@ -211,95 +212,106 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
             )
         return value
 
+    # Output token limits: too low → truncated JSON → CARD_EXCEPTION; too high → runaway API cost.
+    # Char limits: cap prompt context sent to the model; inflating them wastes tokens but doesn't cause errors.
     fit_decision_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
-        minimum=1,
+        minimum=100,   # min needed for a valid fit_review + a few contextual matches
         maximum=2_000,
     )
     learning_candidates_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
-        minimum=1,
-        maximum=10_000,
+        minimum=100,
+        maximum=2_000,
     )
     rejection_blocker_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
-        minimum=1,
-        maximum=10_000,
+        minimum=50,
+        maximum=1_000,
     )
     capability_naming_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
-        minimum=1,
-        maximum=10_000,
+        minimum=50,
+        maximum=1_500,
     )
     profile_extraction_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
-        minimum=1,
-        maximum=10_000,
+        minimum=200,
+        maximum=4_000,
     )
     job_description_max_chars = _prompt_int(
         KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
         KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
-        minimum=1,
-        maximum=100_000,
+        minimum=500,
+        maximum=20_000,
     )
     cv_evidence_json_chars = _prompt_int(
         KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
         KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
-        minimum=1,
-        maximum=100_000,
+        minimum=500,
+        maximum=30_000,
     )
     cv_fallback_chars = _prompt_int(
         KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
         KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
-        minimum=1,
-        maximum=100_000,
+        minimum=200,
+        maximum=10_000,
     )
     profile_brief_max_chars = _prompt_int(
         KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
         KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
-        minimum=1,
-        maximum=100_000,
+        minimum=200,
+        maximum=10_000,
     )
     capability_rules_max_items = _prompt_int(
         KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
         KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
         minimum=1,
-        maximum=100,
+        maximum=50,
     )
     capability_rule_aliases_max_items = _prompt_int(
         KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
         KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
         minimum=1,
-        maximum=100,
+        maximum=20,
     )
     fit_guidance_max_chars = _prompt_int(
         KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
         KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
-        minimum=1,
-        maximum=100_000,
-    )
-    capability_naming_guidance_max_chars = _prompt_int(
-        KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS,
-        KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS,
-        minimum=1,
-        maximum=100_000,
+        minimum=100,
+        maximum=5_000,
     )
     capability_naming_aliases_max_items = _prompt_int(
         KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
         minimum=1,
-        maximum=100,
+        maximum=20,
     )
     raw_output_log_max_chars = _prompt_int(
         KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
         KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
+        minimum=100,
+        maximum=5_000,
+    )
+    # fit_decision_max_output_tokens must cover:
+    #   base JSON (~22 tok) + contextual_matches_max_items * ~102 tok/match (worst-case field lengths).
+    # At the default of 8 matches: 22 + 8*102 = 838 tokens. Budget must exceed that.
+    contextual_matches_max_items = _prompt_int(
+        KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
+        KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
         minimum=1,
-        maximum=100_000,
+        maximum=20,
+    )
+    job_requirements_max_items = _prompt_int(
+        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
+        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
+        minimum=1,
+        maximum=20,
     )
 
     try:
@@ -363,9 +375,10 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
         KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS: capability_rules_max_items,
         KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS: capability_rule_aliases_max_items,
         KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS: fit_guidance_max_chars,
-        KEY_LLM_PROMPT_CAPABILITY_NAMING_GUIDANCE_MAX_CHARS: capability_naming_guidance_max_chars,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS: capability_naming_aliases_max_items,
         KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS: raw_output_log_max_chars,
+        KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS: contextual_matches_max_items,
+        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS: job_requirements_max_items,
         KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS: rejection_blocker_max_words,

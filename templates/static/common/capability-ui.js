@@ -1,4 +1,9 @@
 (function () {
+  const labels = window.__JOB_HUNTER_CAPABILITY_UI_LABELS__;
+  if (!labels) {
+    throw new Error('Missing capability UI labels.');
+  }
+
   const capabilityLevelMeta = {
     strong: {
       label: 'Strong',
@@ -18,12 +23,9 @@
   };
 
   window.JobHunterCapabilityUi = {
+    labels,
     capabilityLevels: ['strong', 'working', 'basic'],
     capabilityLevelMeta,
-    reviewStrengthPromptLabel: 'How strong is this capability for you?',
-    reviewCopy: {
-      onboardingHelp: 'Review the capabilities Job Hunter learned from your CV. Keep only the ones that clearly belong to your profile; you can refine them later in Settings.',
-      settingsHelp: 'Keep the set tight. These rows feed fit scoring, CV learning, and review. Aliases are generated automatically when you save.',
-    },
+    reviewStrengthPromptLabel: labels.review_strength_prompt_label,
   };
 }());

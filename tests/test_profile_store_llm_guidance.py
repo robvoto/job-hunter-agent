@@ -6,37 +6,19 @@ from job_hunter_agent import profile_store
 from job_hunter_agent import review_insights
 
 
-def test_save_profile_normalizes_llm_fit_review_guidance(tmp_path, monkeypatch):
+def test_save_profile_strips_legacy_guidance_key(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
     monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
+    legacy_key = "".join(["llm", "_capability_naming_guidance"])
 
     saved = profile_store.save_profile({
         **profile_store.DEFAULT_PROFILE,
-        "llm_fit_review_guidance": "  Prefer adjacent roles when responsibilities align.  ",
+        legacy_key: "  Prefer stable business-analysis style labels.  ",
     })
 
-    assert saved["llm_fit_review_guidance"] == "Prefer adjacent roles when responsibilities align."
-
-
-def test_load_profile_defaults_llm_fit_review_guidance(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
-
-    loaded = profile_store.load_profile()
-
-    assert loaded["llm_fit_review_guidance"] == ""
-
-
-def test_save_profile_normalizes_llm_capability_naming_guidance(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
-
-    saved = profile_store.save_profile({
-        **profile_store.DEFAULT_PROFILE,
-        "llm_capability_naming_guidance": "  Prefer stable business-analysis style labels.  ",
-    })
-
-    assert saved["llm_capability_naming_guidance"] == "Prefer stable business-analysis style labels."
+    assert legacy_key not in saved
+    persisted = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert legacy_key not in persisted
 
 
 def test_save_profile_does_not_persist_scoring_rules(tmp_path, monkeypatch):
@@ -49,13 +31,23 @@ def test_save_profile_does_not_persist_scoring_rules(tmp_path, monkeypatch):
     assert "scoring_rules" not in persisted
 
 
-def test_load_profile_defaults_llm_capability_naming_guidance(tmp_path, monkeypatch):
+def test_load_profile_drops_legacy_guidance_key(tmp_path, monkeypatch):
     profile_path = tmp_path / "profile.json"
+    legacy_key = "".join(["llm", "_capability_naming_guidance"])
+    profile_path.write_text(
+        json.dumps({legacy_key: "Prefer labels close to business analysis."}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
 
     loaded = profile_store.load_profile()
 
-    assert loaded["llm_capability_naming_guidance"] == ""
+    assert legacy_key not in loaded
+
+
+def test_default_profile_does_not_include_legacy_guidance_key():
+    legacy_key = "".join(["llm", "_capability_naming_guidance"])
+    assert legacy_key not in profile_store.DEFAULT_PROFILE
 
 
 def test_load_profile_raises_for_invalid_json_and_backs_up_file(tmp_path, monkeypatch):
@@ -130,6 +122,28 @@ def test_apply_capability_tuning_decisions_uses_internal_level_tokens():
     )
 
     assert updated["capability_profile_rules"][0]["level"] == "working"
+
+
+def test_apply_capability_tuning_decisions_preserves_aliases():
+    profile = {"capability_profile_rules": []}
+
+    updated = review_insights.apply_capability_tuning_decisions(
+        profile,
+        [{"skill": "Process mapping", "choice": "working", "aliases": ["workflow design"]}],
+    )
+
+    assert updated["capability_profile_rules"][0]["aliases"] == ["workflow design"]
+
+
+def test_apply_capability_tuning_decisions_rejects_legacy_low_choice():
+    profile = {"capability_profile_rules": []}
+
+    updated = review_insights.apply_capability_tuning_decisions(
+        profile,
+        [{"skill": "Process mapping", "choice": "low"}],
+    )
+
+    assert updated["capability_profile_rules"] == []
 
 
 _ROUTING_FIXTURE = {

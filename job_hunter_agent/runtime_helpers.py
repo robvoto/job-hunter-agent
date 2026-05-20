@@ -1,4 +1,10 @@
-"""Shared runtime helpers for CLI flags and LLM cost logging."""
+"""Shared runtime helpers for CLI flags and LLM cost logging.
+
+This module provides common utilities for the job hunter agent's 
+execution environment. It includes logic for detecting command-line 
+arguments and maintains a persistent log of LLM interaction costs 
+to support budget tracking and debugging.
+"""
 
 import json
 from datetime import datetime, timezone
@@ -39,7 +45,8 @@ def append_llm_cost_log(path: Path, entry: dict[str, Any], *, prefix: str = "[LL
     try:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
-    except Exception:
+    except Exception as exc:
+        print(f"[RUNTIME_HELPERS][WARN] Failed to write LLM cost log to {path}: {exc}")
         pass
     print(
         f"{prefix} {entry['purpose']} | {entry['model']} | "

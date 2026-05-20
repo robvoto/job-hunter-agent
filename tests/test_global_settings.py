@@ -101,14 +101,6 @@ def test_save_global_settings_normalizes_values(tmp_path, monkeypatch):
         ".docx",
         ".md",
         ".txt",
-        ".csv",
-        ".json",
-        ".yaml",
-        ".yml",
-        ".xml",
-        ".html",
-        ".htm",
-        ".rst",
     ]
     assert settings_path.exists()
 
@@ -120,13 +112,13 @@ def test_save_global_settings_normalizes_source_document_suffixes(tmp_path, monk
 
     saved = global_settings.save_global_settings({
         "source_document_settings": {
-            "allowed_suffixes": [".CSV", ".txt", ".csv", ".md"],
+            "allowed_suffixes": [".DOCX", ".txt", ".docx", ".md"],
         },
     })
 
-    assert saved["source_document_settings"]["allowed_suffixes"] == [".csv", ".txt", ".md"]
-    assert global_settings.get_allowed_source_document_suffixes() == frozenset({".csv", ".txt", ".md"})
-    assert global_settings.get_allowed_source_document_suffixes_label() == ".csv, .md, .txt"
+    assert saved["source_document_settings"]["allowed_suffixes"] == [".docx", ".txt", ".md"]
+    assert global_settings.get_allowed_source_document_suffixes() == frozenset({".docx", ".txt", ".md"})
+    assert global_settings.get_allowed_source_document_suffixes_label() == ".docx, .md, .txt"
 
 
 def test_load_global_settings_backs_up_invalid_json(tmp_path, monkeypatch):
@@ -141,4 +133,3 @@ def test_load_global_settings_backs_up_invalid_json(tmp_path, monkeypatch):
     backups = sorted(tmp_path.glob("global_settings.invalid.*.json"))
     assert len(backups) == 1
     assert backups[0].read_text(encoding="utf-8") == "{bad json"
-

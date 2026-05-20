@@ -130,6 +130,8 @@ def finalize_scrape_run(
             context.applied_job_keys,
             context.hidden_job_keys,
             datetime.now().astimezone(),
+            audit_rows=context.previous_audit_rows,
+            debug_mode=context.dashboard_debug_mode,
         )
         save_llm_cache(context.llm_cache)
         save_job_history(context.job_history)
@@ -178,6 +180,8 @@ def finalize_scrape_run(
         context.applied_job_keys,
         context.hidden_job_keys,
         context.run_started_at,
+        audit_rows=audit_rows,
+        debug_mode=context.dashboard_debug_mode,
     )
     save_llm_cache(context.llm_cache)
     save_job_history(context.job_history)

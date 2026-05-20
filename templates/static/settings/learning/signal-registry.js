@@ -476,7 +476,7 @@
     async function loadSignalRegistry() {
       const panel = document.getElementById('signal_registry_panel');
       if (!panel) return;
-      panel.innerHTML = '<p class="help">Loading learning inbox...</p>';
+      panel.innerHTML = '<p class="help">Loading signals inbox...</p>';
       try {
         const resp = await jobHunterFetch('/api/signal-registry');
         if (!resp.ok) throw new Error('Could not load signal registry');
@@ -485,7 +485,7 @@
         renderSignalRegistry();
       } catch (err) {
         _srLoaded = false;
-        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} - click Learning again to retry.</p>`;
+        panel.innerHTML = `<p class="help" style="color:var(--accent);">${err.message} - click Signals again to retry.</p>`;
       }
     }
     function maybeLoadSignalRegistry() {

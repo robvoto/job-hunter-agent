@@ -1,10 +1,14 @@
 window.JobHunterCapabilityEditor = (function () {
   const capabilityUi = window.JobHunterCapabilityUi || {};
   const { escapeHtml, settingsField } = window.JobHunterSettingsUtils;
+  const capabilityLabels = capabilityUi.labels || {};
   const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
   const capabilityLevels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
     ? capabilityUi.capabilityLevels
     : Object.keys(capabilityLevelMeta);
+  if (!capabilityLabels.settings_title || !capabilityLabels.help_text) {
+    throw new Error('Missing capability UI labels.');
+  }
 
   let capabilityRuleState = [];
   let expandedCapabilityRows = new Set();
@@ -48,17 +52,43 @@ window.JobHunterCapabilityEditor = (function () {
     };
   }
 
-  function capabilityStrengthMeta(level) {
-    const key = String(level || '').trim().toLowerCase();
-    if (!key) return null;
-    return capabilityLevelMeta[key] || capabilityLevelMeta.basic || { label: 'Basic' };
+  function applyCapabilityUiLabels() {
+    const sectionTitle = document.getElementById('capability_matrix_section_title');
+    const panelTitle = document.getElementById('capability_matrix_title');
+    const panelCopy = document.getElementById('capability_matrix_help');
+    const filterInput = document.getElementById('capability_matrix_filter');
+    if (sectionTitle) sectionTitle.textContent = capabilityLabels.settings_title;
+    if (panelTitle) panelTitle.textContent = capabilityLabels.settings_title;
+    if (panelCopy) panelCopy.textContent = capabilityLabels.help_text;
+    if (filterInput) {
+      filterInput.placeholder = capabilityLabels.filter_placeholder;
+      filterInput.setAttribute('aria-label', capabilityLabels.filter_placeholder);
+    }
+  }
+
+  function removeCapabilityAlias(index, aliasValue) {
+    const rule = capabilityRuleState[index];
+    if (!rule) return;
+    const cleanedAlias = normalizeCapabilityAliasValue(aliasValue);
+    const aliases = (rule.aliases || []).filter(alias => alias !== cleanedAlias);
+    capabilityRuleState[index] = normalizeCapabilityRule({
+      ...rule,
+      aliases,
+      aliases_open: aliases.length > 0 && rule.aliases_open,
+    });
+    if (!aliases.length) {
+      expandedCapabilityRows.delete(index);
+    }
+    settingsField('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+    renderCapabilityRuleEditor();
   }
 
   function renderCapabilityRuleEditor() {
     const container = document.getElementById('capability_matrix_editor');
     if (!container) return;
+    applyCapabilityUiLabels();
     if (!capabilityRuleState.length) {
-      container.innerHTML = '<div class="capability-editor-empty">No capability rules yet. Run onboarding or add a capability row here.</div>';
+      container.innerHTML = `<div class="capability-editor-empty">${escapeHtml(capabilityLabels.settings_empty_text)}</div>`;
       return;
     }
     const filterTerm = String(document.getElementById('capability_matrix_filter')?.value || '').trim().toLowerCase();
@@ -74,9 +104,27 @@ window.JobHunterCapabilityEditor = (function () {
           const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
           const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
           const aliasCount = aliases.length;
+          const previewAliases = aliases.slice(0, 3);
+          const previewMoreCount = Math.max(aliasCount - previewAliases.length, 0);
+          const previewHtml = previewAliases.map(alias => `<span class="capability-summary-chip">${escapeHtml(alias)}</span>`).join('')
+            + (previewMoreCount > 0 ? `<span class="capability-summary-chip capability-summary-chip-more">+${previewMoreCount}</span>` : '');
           const aliasChips = aliases.map(alias => `
-            <span class="cap-alias-chip" title="${escapeHtml(alias)}">${escapeHtml(alias)}</span>
+            <span class="cap-alias-chip" title="${escapeHtml(alias)}">
+              <span class="cap-alias-chip-label">${escapeHtml(alias)}</span>
+              <button class="cap-alias-chip-remove" type="button" data-remove-capability-alias="${index}" data-capability-alias="${escapeHtml(alias)}" aria-label="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}" title="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}">&times;</button>
+            </span>
           `).join('');
+          const strengthChoices = capabilityLevels.map((level) => {
+            const meta = capabilityLevelMeta[level] || { label: level };
+            const inputId = `capability_level_${index}_${level}`;
+            const checked = rule.level === level ? ' checked' : '';
+            return `
+              <label class="choice-card choice-card--strength" for="${inputId}">
+                <input id="${inputId}" type="radio" name="capability_level_${index}" value="${escapeHtml(level)}" data-capability-field="level"${checked} aria-label="${escapeHtml(meta.label)}">
+                <span>${escapeHtml(meta.label)}</span>
+              </label>
+            `;
+          }).join('');
           return `
             <article class="capability-card" data-capability-index="${index}">
               <div class="capability-card-head">
@@ -90,37 +138,32 @@ window.JobHunterCapabilityEditor = (function () {
                     <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
                   </svg>
                 </button>
-              </div>
-              <div class="capability-card-meta">
-                ${aliasCount ? `
-                  <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
-                    <summary class="cap-alias-summary">${escapeHtml(`${aliasCount} alias${aliasCount === 1 ? '' : 'es'}`)}</summary>
-                    <div class="cap-alias-chips">${aliasChips}</div>
-                  </details>
-                ` : ''}
-              </div>
-              <label class="cap-strength">
-                <span>Strength</span>
-                <select class="cap-level-select capability-strength-select level-${escapeHtml(rule.level || 'basic')}"
-                        data-capability-field="level" aria-label="Capability strength">
-                  <option value="strong"${rule.level === 'strong' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('strong')?.label || 'Strong')}</option>
-                  <option value="working"${rule.level === 'working' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('working')?.label || 'Working')}</option>
-                  <option value="basic"${rule.level === 'basic' ? ' selected' : ''}>${escapeHtml(capabilityStrengthMeta('basic')?.label || 'Basic')}</option>
-                </select>
-              </label>
-            </article>
-          `;
+                </div>
+                <div class="capability-card-meta">
+                  ${aliasCount ? `
+                    <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
+                      <summary class="cap-alias-summary">
+                        <span class="capability-summary-label">${escapeHtml(capabilityLabels.related_skills_summary.replace('{count}', String(aliasCount)))}</span>
+                        <span class="capability-summary-preview" aria-hidden="true">${previewHtml}</span>
+                      </summary>
+                      <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
+                    </details>
+                  ` : ''}
+                </div>
+                <div class="cap-strength">
+                  <span>Strength</span>
+                  <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
+                    ${strengthChoices}
+                  </div>
+                </div>
+              </article>
+            `;
         }).join('')
-      : '<div class="capability-editor-empty-group">No matching capabilities.</div>';
+      : `<div class="capability-editor-empty-group">${escapeHtml(capabilityLabels.settings_no_match_text)}</div>`;
 
-    const helpText = escapeHtml(capabilityUi.reviewCopy?.settingsHelp || '');
     container.innerHTML = `
       <section class="capability-group">
         <div class="capability-group-head">
-          <div>
-            <h4 class="capability-group-title">Capabilities</h4>
-            <p class="capability-group-copy">${helpText}</p>
-          </div>
           <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
         </div>
         <div class="capability-grid">
@@ -154,6 +197,17 @@ window.JobHunterCapabilityEditor = (function () {
     capabilityRuleState = [...capabilityRuleState, { name: '', level: 'working', aliases: [] }];
     expandedCapabilityRows.add(capabilityRuleState.length - 1);
     renderCapabilityRuleEditor();
+    requestAnimationFrame(() => {
+      const container = document.getElementById('capability_matrix_editor');
+      const card = container?.querySelector('[data-capability-index]:last-child');
+      const input = card?.querySelector('input[data-capability-field="name"]');
+      if (card?.scrollIntoView) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (input?.focus) {
+        input.focus();
+      }
+    });
   }
 
   function initEventHandlers(markDirty) {
@@ -201,6 +255,15 @@ window.JobHunterCapabilityEditor = (function () {
       markDirty();
     });
 
+    document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
+      const removeAlias = event.target.closest('[data-remove-capability-alias]');
+      if (!removeAlias) return;
+      const card = removeAlias.closest('[data-capability-index]');
+      if (!card) return;
+      removeCapabilityAlias(Number(card.dataset.capabilityIndex), removeAlias.dataset.capabilityAlias);
+      markDirty();
+    });
+
     document.getElementById('capability_matrix_editor')?.addEventListener('change', (event) => {
       const field = event.target.closest('[data-capability-field]');
       if (!field) return;
@@ -232,7 +295,6 @@ window.JobHunterCapabilityEditor = (function () {
   }
 
   return {
-    capabilityStrengthMeta,
     setCapabilityRuleState,
     collectCapabilityRuleState,
     renderCapabilityRuleEditor,

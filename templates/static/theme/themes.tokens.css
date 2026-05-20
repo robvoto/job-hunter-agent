@@ -81,6 +81,17 @@
   /* Secondary accent and focus highlight */
   --accent-secondary: #275e86;
   --selection-accent: var(--accent);
+  /* Source brand colors */
+  --brand-seek-bg: #e8ecf5;
+  --brand-seek-border: #9bacd2;
+  --brand-seek-text: #0d3880;
+  --brand-linkedin-bg: #e7f1fb;
+  --brand-linkedin-border: #93c5f0;
+  --brand-linkedin-text: #0a66c2;
+  /* Viewed state — sky-blue, distinct from amber warning */
+  --state-viewed-bg: #e0f2fe;
+  --state-viewed-border: #7dd3fc;
+  --state-viewed-text: #0369a1;
   /* Derived surface variants */
   --bg-panel-glass: var(--bg-surface);
   --border-panel-glass: var(--border-subtle);
@@ -169,6 +180,17 @@
   /* Secondary accent and focus highlight */
   --accent-secondary: #d97706;
   --selection-accent: var(--accent);
+  /* Source brand colors */
+  --brand-seek-bg: #e8ecf5;
+  --brand-seek-border: #9bacd2;
+  --brand-seek-text: #0d3880;
+  --brand-linkedin-bg: #e7f1fb;
+  --brand-linkedin-border: #93c5f0;
+  --brand-linkedin-text: #0a66c2;
+  /* Viewed state — sky-blue, distinct from amber warning */
+  --state-viewed-bg: #e0f2fe;
+  --state-viewed-border: #7dd3fc;
+  --state-viewed-text: #0369a1;
   /* Derived surface variants */
   --bg-panel-glass: var(--bg-surface);
   --border-panel-glass: var(--border-subtle);
@@ -259,6 +281,17 @@
   /* Secondary accent and focus */
   --accent-secondary: #60a5fa;
   --selection-accent: var(--accent);
+  /* Source brand colors — dark-adjusted for legibility on dark surfaces */
+  --brand-seek-bg: rgba(13, 56, 128, 0.14);
+  --brand-seek-border: rgba(13, 56, 128, 0.42);
+  --brand-seek-text: #7db4e8;
+  --brand-linkedin-bg: rgba(10, 102, 194, 0.12);
+  --brand-linkedin-border: rgba(10, 102, 194, 0.36);
+  --brand-linkedin-text: #5aaafa;
+  /* Viewed state — sky-blue, distinct from amber warning */
+  --state-viewed-bg: rgba(56, 189, 248, 0.10);
+  --state-viewed-border: rgba(56, 189, 248, 0.28);
+  --state-viewed-text: #38bdf8;
   /* Derived surface variants */
   --bg-panel-glass: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 98%, transparent), color-mix(in srgb, var(--bg-page) 96%, transparent));
   --border-panel-glass: var(--border-subtle);

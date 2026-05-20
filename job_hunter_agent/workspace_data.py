@@ -12,7 +12,8 @@ from job_hunter_agent.record_schema import (
     RECORD_ROLE_SNAPSHOT_KEY, RECORD_TIMES_VIEWED_KEY, RECORD_TIMES_KEPT_KEY,
     RECORD_TIMES_SEEN_KEY, RECORD_FIRST_KEPT_AT_KEY, RECORD_LAST_KEPT_AT_KEY,
     RECORD_FIRST_SEEN_AT_KEY, RECORD_LAST_SEEN_AT_KEY, RECORD_FIRST_VIEWED_AT_KEY,
-    RECORD_LAST_VIEWED_AT_KEY, RECORD_SIGHTINGS_KEY, RECORD_SEEN_BEFORE_KEY
+    RECORD_LAST_VIEWED_AT_KEY, RECORD_SIGHTINGS_KEY, RECORD_SEEN_BEFORE_KEY,
+    RECORD_JOB_REQUIREMENTS_KEY,
 )
 
 def _record_source(entry: dict, job_key: str) -> str:
@@ -64,6 +65,7 @@ def build_history_workspace_record(
         "description_source": snapshot.get("description_source") or "",
         RECORD_ROLE_SNAPSHOT_KEY: snapshot.get(RECORD_ROLE_SNAPSHOT_KEY) or "N/A",
         "fit_highlights": snapshot.get("fit_highlights") or [],
+        RECORD_JOB_REQUIREMENTS_KEY: snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or [],
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
         "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
@@ -151,6 +153,7 @@ def build_hidden_workspace_record(
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
+        RECORD_JOB_REQUIREMENTS_KEY: snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or [],
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
         "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
@@ -235,6 +238,7 @@ def build_applied_workspace_record(
         "details_status": snapshot.get("details_status") or "",
         "description_source": snapshot.get("description_source") or "",
         "fit_highlights": snapshot.get("fit_highlights") or [],
+        RECORD_JOB_REQUIREMENTS_KEY: snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or [],
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
         "missing_evidence": snapshot.get("missing_evidence") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
@@ -291,6 +295,8 @@ def build_workspace_record_sets(
     build_archive_records_fn: Callable[[dict[str, dict], set[str], set[str], set[str], datetime], list[dict]],
     build_applied_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
     build_hidden_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
+    debug_mode: bool = False,
+    audit_rows: list[dict] | None = None,
 ) -> dict[str, list[dict]]:
     curated_kept_records = [record for record in kept_records if is_workspace_eligible_fn(record, profile)]
 
@@ -312,6 +318,23 @@ def build_workspace_record_sets(
         )
 
     current_records = sorted(curated_kept_records, key=_rank_by_fit)
+    if debug_mode and audit_rows:
+        current_keys = {
+            normalize_job_key_fn(str(record.get("job_key") or ""))
+            for record in current_records
+            if normalize_job_key_fn(str(record.get("job_key") or ""))
+        }
+        debug_records: list[dict] = []
+        for row in audit_rows:
+            if str(row.get("decision") or "").upper() != "REJECT":
+                continue
+            job_key = normalize_job_key_fn(str(row.get("job_key") or ""))
+            if not job_key or job_key in current_keys:
+                continue
+            debug_records.append(dict(row))
+            current_keys.add(job_key)
+        current_records = sorted([*current_records, *debug_records], key=_rank_by_fit)
+
     current_run_keys = {
         normalize_job_key_fn(str(record.get("job_key") or ""))
         for record in curated_kept_records

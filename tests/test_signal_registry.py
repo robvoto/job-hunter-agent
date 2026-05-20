@@ -61,6 +61,7 @@ def test_approve_signal_promotes_capability_with_clean_shape(tmp_path, monkeypat
             "signal": "BPMN 2.0",
             "normalized_key": "bpmn 2.0",
             "original_texts": ["BPMN 2.0", "Business Process Modelling"],
+            "aliases": ["BPMN", "Business Process Modelling"],
             "category": "capability_concept",
             "history": [{"action": "added", "timestamp": "2026-05-03T00:00:00+00:00"}],
         }
@@ -73,6 +74,7 @@ def test_approve_signal_promotes_capability_with_clean_shape(tmp_path, monkeypat
         "normalized_key": "bpmn 2.0",
         "original_texts": ["BPMN 2.0", "Business Process Modelling"],
         "category": "capability_concept",
+        "aliases": ["BPMN", "Business Process Modelling"],
     }
 
     saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -82,7 +84,7 @@ def test_approve_signal_promotes_capability_with_clean_shape(tmp_path, monkeypat
     assert knowledge["entries"] == [
         {
             "value": "BPMN 2.0",
-            "aliases": [],
+            "aliases": ["BPMN", "Business Process Modelling"],
         }
     ]
 
@@ -103,6 +105,7 @@ def test_approve_signal_promotes_hard_blocker_pattern_with_clean_shape(tmp_path,
             "signal": "demonstrated experience in {term}",
             "normalized_key": "demonstrated experience in {term}",
             "original_texts": ["demonstrated experience in SAP"],
+            "aliases": ["SAP"],
             "suggested_category": "hard_blocker_pattern",
             "history": [{"action": "added", "timestamp": "2026-05-03T00:00:00+00:00"}],
         }
@@ -115,6 +118,7 @@ def test_approve_signal_promotes_hard_blocker_pattern_with_clean_shape(tmp_path,
         "normalized_key": "demonstrated experience in {term}",
         "original_texts": ["demonstrated experience in {term}", "demonstrated experience in SAP"],
         "category": "hard_blocker_pattern",
+        "aliases": ["SAP"],
     }
 
     saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -127,7 +131,7 @@ def test_approve_signal_promotes_hard_blocker_pattern_with_clean_shape(tmp_path,
     assert knowledge["entries"] == [
         {
             "value": "demonstrated experience in {term}",
-            "aliases": [],
+            "aliases": ["SAP"],
         }
     ]
 
@@ -150,6 +154,7 @@ def test_approve_signal_promotes_cv_farming_pattern_with_clean_shape(tmp_path, m
             "signal": "send your resume",
             "normalized_key": "send your resume",
             "original_texts": ["Send your resume"],
+            "aliases": ["Send your CV"],
             "category": "cv_farming_pattern",
             "history": [{"action": "added", "timestamp": "2026-05-03T00:00:00+00:00"}],
         }
@@ -162,6 +167,7 @@ def test_approve_signal_promotes_cv_farming_pattern_with_clean_shape(tmp_path, m
         "normalized_key": "send your resume",
         "original_texts": ["send your resume"],
         "category": "cv_farming_pattern",
+        "aliases": ["Send your CV"],
     }
 
     saved_registry = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -174,7 +180,48 @@ def test_approve_signal_promotes_cv_farming_pattern_with_clean_shape(tmp_path, m
     assert knowledge["entries"] == [
         {
             "value": "send your resume",
-            "aliases": [],
+            "aliases": ["Send your CV"],
+        }
+    ]
+
+
+def test_approve_signal_promotes_generic_knowledge_with_aliases(tmp_path, monkeypatch):
+    registry_path = tmp_path / "signal_registry.json"
+    knowledge_path = tmp_path / "government_context_knowledge.json"
+    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
+    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
+    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
+    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", knowledge_path)
+    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
+    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "government_context", knowledge_path)
+
+    signal_registry.save_registry({
+        "nsw health": {
+            "signal": "NSW Health",
+            "normalized_key": "nsw health",
+            "original_texts": ["NSW Health"],
+            "aliases": ["state health department"],
+            "category": "government_context",
+            "history": [{"action": "added", "timestamp": "2026-05-03T00:00:00+00:00"}],
+        }
+    })
+
+    updated = signal_registry.approve_signal("nsw health", "government_context")
+
+    assert updated == {
+        "signal": "NSW Health",
+        "normalized_key": "nsw health",
+        "original_texts": ["NSW Health"],
+        "category": "government_context",
+        "aliases": ["state health department"],
+    }
+
+    knowledge = json.loads(knowledge_path.read_text(encoding="utf-8"))
+    assert knowledge["entries"] == [
+        {
+            "value": "NSW Health",
+            "aliases": ["state health department"],
         }
     ]
 
@@ -440,7 +487,7 @@ def test_approve_signal_promotes_government_context_with_clean_shape(tmp_path, m
     assert knowledge["entries"] == [
         {
             "value": "NSW Health",
-            "aliases": ["state health department"],
+            "aliases": [],
         }
     ]
 

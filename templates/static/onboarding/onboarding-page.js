@@ -18,7 +18,6 @@ const refs = Object.freeze({
   primaryCvDropZone: document.getElementById('cv_drop_zone'),
   cvDropZoneContent: document.getElementById('cv_drop_zone_content'),
   locationSelect: document.getElementById('location_search'),
-  locationSelected: document.getElementById('location_selected'),
   workModePreferences: Array.from(document.querySelectorAll('input[name="work_mode_preference"]')),
   sectorPreferenceSelect: document.getElementById('sector_preference'),
   reviewCapabilityCount: document.getElementById('review_capability_count'),
@@ -34,10 +33,12 @@ const refs = Object.freeze({
   onbResetLearningBtn: document.getElementById('onb_reset_learning_btn'),
   capabilityStrengthPreset: document.getElementById('os_capability_strength_preset'),
   reviewSearchKeywords: document.getElementById('review_search_keywords'),
+  minContractMonths: document.getElementById('min_contract_months'),
   reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
   reviewCapabilityFilter: document.getElementById('review_capability_filter'),
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
+  reviewCapabilityTitle: document.getElementById('review_capability_title'),
   reviewCapabilityHelp: document.getElementById('review_capability_help'),
   primaryCvLimitHelp: document.getElementById('primary_cv_limit_help'),
 });
@@ -59,7 +60,6 @@ const {
   primaryCvDropZone,
   cvDropZoneContent: primaryCvDropZoneContentEl,
   locationSelect,
-  locationSelected,
   sectorPreferenceSelect,
   reviewCapabilityCount: reviewCapabilityCountEl,
   salaryYearlyBlock,
@@ -78,6 +78,7 @@ const {
   reviewMinimumDailyRate: reviewMinimumDailyRateEl,
   reviewCapabilityFilter: reviewCapabilityFilterEl,
   reviewCapabilityCards: reviewCapabilityCardsEl,
+  reviewCapabilityTitle: reviewCapabilityTitleEl,
   reviewCapabilityHelp: reviewCapabilityHelpEl,
   primaryCvLimitHelp: primaryCvLimitHelpEl,
 } = refs;
@@ -87,15 +88,28 @@ const SEARCH_STEP = 3;
 const CHECK_STEP = 4;
 const locationUi = window.JobHunterLocationUi || {};
 const capabilityUi = window.JobHunterCapabilityUi || {};
-const capabilityReviewCopy = capabilityUi.reviewCopy || {};
+const capabilityLabels = capabilityUi.labels || {};
 const onboardingSettingsUtils = window.JobHunterSettingsUtils || {};
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const ONBOARDING_CV_PAGE_LIMIT = Number(ONBOARDING_DEFAULTS.cv_max_pages || 0);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
+const minContractMonthOptions = Array.isArray(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__)
+  ? window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
+  : [];
+const minContractMonthLabels = Object.fromEntries(
+  minContractMonthOptions
+    .map((option) => [String(option.value || '').trim(), String(option.label || '').trim()])
+    .filter(([value]) => Boolean(value))
+);
+const minContractMonthValues = new Set(minContractMonthOptions.map((option) => String(option.value || '').trim()));
+const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ || 'No minimum').trim();
 const onboardingPageTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 
 if (!onboardingPageTitleTierLabels) {
   throw new Error('Missing title tier labels.');
+}
+if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
+  throw new Error('Missing capability UI labels.');
 }
 
 function defaultSearchKeywordFromTargetRoles(profile) {
@@ -135,8 +149,19 @@ if (!onboardingCopy?.steps) {
 }
 const onboardingStepCopy = onboardingCopy.steps;
 
+if (reviewCapabilityTitleEl) {
+  reviewCapabilityTitleEl.textContent = capabilityLabels.onboarding_title;
+}
+const checkCapabilitiesLabelEl = document.getElementById('check_capabilities_label');
+if (checkCapabilitiesLabelEl) {
+  checkCapabilitiesLabelEl.textContent = capabilityLabels.onboarding_title;
+}
 if (reviewCapabilityHelpEl) {
-  reviewCapabilityHelpEl.textContent = capabilityReviewCopy.onboardingHelp || reviewCapabilityHelpEl.textContent;
+  reviewCapabilityHelpEl.textContent = capabilityLabels.help_text;
+}
+if (reviewCapabilityFilterEl) {
+  reviewCapabilityFilterEl.placeholder = capabilityLabels.filter_placeholder;
+  reviewCapabilityFilterEl.setAttribute('aria-label', capabilityLabels.filter_placeholder);
 }
 if (primaryCvLimitHelpEl) {
   const pageClause = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
@@ -168,7 +193,7 @@ const ONBOARDING_WELCOME_OPT_OUT_KEY = buildScopedStorageKey('jobHunter.onboardi
 const ONBOARDING_IMPORT_HELPER_DISMISSED_KEY = buildScopedStorageKey('jobHunter.onboardingImportHelperDismissed');
 const SOURCE_PACK_DATA_PREFIX = '/data/';
 const ROOT_DATA_PREFIX = 'data/';
-const REVIEW_CAPABILITY_PREVIEW_ROWS = 2;
+const REVIEW_CAPABILITY_PREVIEW_ROWS = (window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ || {}).capability_preview_rows || 1;
 const isTestMode = document.body.dataset.testMode === 'true';
 
 let currentStep = 1;
@@ -182,32 +207,19 @@ let selectedLocations = [];
 let selectedReviewCapabilityIndexes = new Set();
 let reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
 let maxUnlockedStep = 1;
+let draftBuiltExplicitly = false;
 let searchBasicsPersistTimer = null;
 let savedPrimaryCvSourcePath = '';
 let savedPrimaryCvFileName = '';
 let reviewCapabilityResizeObserver = null;
 
 function getReviewCapabilityPreviewCount() {
-  const container = reviewCapabilityCardsEl?.querySelector('.review-capability-row-list');
-  if (!container) {
-    return REVIEW_CAPABILITY_PREVIEW_ROWS;
-  }
-  const width = container.getBoundingClientRect().width;
-  if (!width) {
-    return reviewCapabilityVisibleCount || REVIEW_CAPABILITY_PREVIEW_ROWS;
-  }
-  const styles = window.getComputedStyle(container);
-  const minWidth = Number.parseFloat(styles.getPropertyValue('--review-capability-min-card-width')) || 250;
-  const gap = Number.parseFloat(styles.getPropertyValue('--review-capability-grid-gap'))
-    || Number.parseFloat(styles.columnGap || styles.gap || '0')
-    || 0;
-  const columns = Math.max(1, Math.floor((width + gap) / (minWidth + gap)));
-  return Math.max(columns * REVIEW_CAPABILITY_PREVIEW_ROWS, REVIEW_CAPABILITY_PREVIEW_ROWS);
+  return REVIEW_CAPABILITY_PREVIEW_ROWS;
 }
 
 function syncReviewCapabilityVisibleCount(forceRender = false) {
   const next = getReviewCapabilityPreviewCount();
-  if (!next || next === reviewCapabilityVisibleCount) {
+  if (!next || next <= reviewCapabilityVisibleCount) {
     return false;
   }
   reviewCapabilityVisibleCount = next;
@@ -334,6 +346,41 @@ function setSectorPreferenceValue(value) {
   }
 }
 
+function getMinContractMonthValue() {
+  return String(refs.minContractMonths?.value || '').trim();
+}
+
+function setMinContractMonthValue(value) {
+  if (refs.minContractMonths) {
+    refs.minContractMonths.value = String(value || '').trim();
+  }
+}
+
+function minContractMonthLabel(value) {
+  const selected = String(value || '').trim();
+  return selected ? (minContractMonthLabels[selected] || selected) : minContractMonthNoneLabel;
+}
+
+function updateMinContractMonthState() {
+  if (!refs.minContractMonths) return;
+  const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
+  refs.minContractMonths.disabled = !contractEnabled;
+  const contractRow = document.getElementById('contract_duration_row');
+  if (contractRow) contractRow.hidden = !contractEnabled;
+}
+
+function initFieldInfoToggles() {
+  document.querySelectorAll('button.field-info').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const field = btn.closest('.onb-field');
+      if (!field) return;
+      const isOpen = field.classList.toggle('is-help-visible');
+      btn.setAttribute('aria-expanded', String(isOpen));
+    });
+  });
+}
+
 const getSalaryLimitMaximum = (key) => {
   const max = Number(salaryLimits?.[key]?.max);
   return Number.isFinite(max) && max >= 0 ? max : Infinity;
@@ -347,6 +394,7 @@ function resetOnboardingWizardState() {
   selectedReviewCapabilityIndexes.clear();
   reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
   maxUnlockedStep = 1;
+  draftBuiltExplicitly = false;
   savedPrimaryCvSourcePath = '';
   savedPrimaryCvFileName = '';
   window.sessionStorage.removeItem(WIZARD_STATE_KEY);
@@ -385,6 +433,7 @@ function saveWizardState() {
     selectedLocations,
     workModePreference: getOnboardingWorkModePreferenceValues(),
     searchKeywords: reviewSearchKeywordsEl?.value || '',
+    minContractMonths: getMinContractMonthValue(),
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
     engagementType: getOnboardingEngagementTypeValues(),
@@ -435,6 +484,7 @@ function buildSearchBasicsProfilePatch() {
   const minimumSalaryYearly = onboardingParseCurrencyValue(reviewMinimumSalaryYearlyEl?.value || '');
   const minimumDailyRate = onboardingParseCurrencyValue(reviewMinimumDailyRateEl?.value || '');
   const engagementType = getOnboardingEngagementTypeValues();
+  const minContractMonths = engagementType.includes('contract') ? (getMinContractMonthValue() || null) : null;
   const preferSector = getSectorPreferenceValue();
 
   return {
@@ -444,6 +494,7 @@ function buildSearchBasicsProfilePatch() {
     },
     match_preferences: {
       engagement_type: engagementType,
+      min_contract_months: minContractMonths,
       work_mode_preference: getOnboardingWorkModePreferenceValues(),
       prefer_sector: preferSector,
     },
@@ -512,11 +563,12 @@ function restoreWizardState() {
     renderReviewStep();
     const kwEl = reviewSearchKeywordsEl;
     if (kwEl) kwEl.value = state.searchKeywords || '';
+    setMinContractMonthValue(state.minContractMonths || '');
     const salaryEl = reviewMinimumSalaryYearlyEl;
     if (salaryEl) onboardingSetCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
     const dailyEl = reviewMinimumDailyRateEl;
     if (dailyEl) onboardingSetCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
-  setOnboardingEngagementTypeValues(state.engagementType);
+    setOnboardingEngagementTypeValues(state.engagementType);
     setOnboardingWorkModePreferenceValues(state.workModePreference || []);
     setSectorPreferenceValue(state.preferSector || SECTOR_PREFERENCE_DEFAULT);
     updateCompensationVisibility();
@@ -564,6 +616,15 @@ function showStatus(message, kind) {
   statusEl.className = message ? `status ${kind}` : 'status';
 }
 
+function hideStatus() {
+  if (workingStatusTimer) {
+    window.clearInterval(workingStatusTimer);
+    workingStatusTimer = null;
+  }
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+}
+
 function startWorkingStatus(messages, stepMs = 1400) {
   const items = Array.isArray(messages) ? messages.filter(Boolean) : [];
   if (!items.length) return;
@@ -599,6 +660,7 @@ function updatePrimaryCvStatus(file) {
 
   primaryCvDropZone?.classList.add('has-file');
   resetPrimaryCvDropZoneAppearance();
+  hideStatus();
 
   primaryCvDropZoneContentEl.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
@@ -619,7 +681,7 @@ function updateCreateProfileAvailability() {
   if (!createProfileButton) return;
   createProfileButton.disabled = !primaryCvInput?.files?.[0];
   if (continueToReviewEl) {
-    continueToReviewEl.hidden = !hasDraftProfileState();
+    continueToReviewEl.hidden = !draftBuiltExplicitly || !primaryCvInput?.files?.[0];
   }
 }
 
@@ -680,6 +742,7 @@ function setStep(stepNumber, options = {}) {
   if (persist) {
     saveWizardState();
   }
+  hideStatus();
   if (stepNumber === REVIEW_STEP) {
     window.requestAnimationFrame(() => syncReviewCapabilityVisibleCount(true));
   }
@@ -691,12 +754,6 @@ function setStep(stepNumber, options = {}) {
 function normalizeLocationValue(value) {
   return locationUi.resolveLocationValue
     ? locationUi.resolveLocationValue(value)
-    : String(value || '').replace(/\s+/g, ' ').trim();
-}
-
-function locationLabel(value) {
-  return locationUi.getLocationLabel
-    ? locationUi.getLocationLabel(value)
     : String(value || '').replace(/\s+/g, ' ').trim();
 }
 
@@ -752,15 +809,6 @@ function renderLocationSelect() {
   }
   locationSelect.value = current;
   selectedLocations = current ? [current] : [];
-  renderSelectedLocation();
-}
-
-function renderSelectedLocation() {
-  if (!locationSelected) return;
-  const current = normalizeLocationValue(selectedLocations[0] || locationSelect?.value || '');
-  locationSelected.innerHTML = current
-    ? `<span class="location-chip">${locationLabel(current)}</span>`
-    : '';
 }
 
 function setSelectedLocation(value) {
@@ -793,10 +841,12 @@ function onboardingSettingsPayload() {
 }
 
 function searchPreferencesPayload() {
+  const engagementType = getOnboardingEngagementTypeValues();
   return {
     keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
-    engagement_type: getOnboardingEngagementTypeValues(),
+    engagement_type: engagementType,
+    min_contract_months: engagementType.includes('contract') ? (getMinContractMonthValue() || null) : null,
     work_mode_preference: getOnboardingWorkModePreferenceValues(),
     prefer_sector: getSectorPreferenceValue(),
     minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
@@ -833,6 +883,12 @@ function validateSearchPreferences(searchPrefs) {
   }
   if (!Array.isArray(searchPrefs.engagement_type) || searchPrefs.engagement_type.length === 0 || searchPrefs.engagement_type.some((value) => !ENGAGEMENT_TYPE_VALUES.has(value))) {
     throw new Error('Please choose what type of work you are open to.');
+  }
+  if (searchPrefs.min_contract_months !== null && searchPrefs.min_contract_months !== undefined) {
+    const minContractMonths = Number(searchPrefs.min_contract_months);
+    if (!Number.isInteger(minContractMonths) || !minContractMonthValues.has(String(minContractMonths))) {
+      throw new Error('Please choose a valid minimum contract length.');
+    }
   }
   if ((Array.isArray(searchPrefs.work_mode_preference) ? searchPrefs.work_mode_preference : []).some((mode) => !ONBOARDING_WORK_MODE_PREFERENCE_VALUES.has(mode))) {
     throw new Error('Please choose only remote, hybrid, or on-site.');
@@ -875,6 +931,7 @@ function assignPrimaryCvFile(file) {
   restorePrimaryCvSelection(file);
   preservedPrimaryCvFile = file;
   updatePrimaryCvStatus(file);
+  hideStatus();
   updateCreateProfileAvailability();
   refreshStepNavigation();
 }
@@ -894,7 +951,7 @@ function handlePrimaryCvDrop(event) {
     return;
   }
   assignPrimaryCvFile(file);
-  showStatus('', '');
+  hideStatus();
 }
 
 function applyProfileDefaults(profile) {
@@ -917,6 +974,10 @@ function applyProfileDefaults(profile) {
     const savedKeywords = String(searchSettings.keywords || '').trim();
     reviewSearchKeywordsEl.value = savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
   }
+  if (refs.minContractMonths && !String(refs.minContractMonths.value || '').trim()) {
+    setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
+  }
+  updateMinContractMonthState();
   if (reviewMinimumSalaryYearlyEl && !String(reviewMinimumSalaryYearlyEl.value || '').trim()) {
     onboardingSetCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly ?? 0);
   }
@@ -924,6 +985,7 @@ function applyProfileDefaults(profile) {
     onboardingSetCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate ?? 0);
   }
   setOnboardingEngagementTypeValues(matchPreferences.engagement_type || []);
+  updateMinContractMonthState();
   if (!getOnboardingWorkModePreferenceValues().length) {
     setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
@@ -959,6 +1021,7 @@ if (continueToReviewEl) {
 }
 if (locationSelect) {
   locationSelect.addEventListener('change', () => {
+    hideStatus();
     setSelectedLocation(locationSelect.value);
     scheduleSearchBasicsPersistence();
   });
@@ -968,6 +1031,14 @@ if (dismissOnboardingImportHelperButtonEl) {
 }
 if (sectorPreferenceSelect) {
   sectorPreferenceSelect.addEventListener('change', () => {
+    hideStatus();
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+}
+if (refs.minContractMonths) {
+  refs.minContractMonths.addEventListener('change', () => {
+    hideStatus();
     saveWizardState();
     scheduleSearchBasicsPersistence();
   });
@@ -978,6 +1049,8 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
       const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
       if (!anyChecked) input.checked = true;
     }
+    hideStatus();
+    updateMinContractMonthState();
     updateCompensationVisibility();
     saveWizardState();
     scheduleSearchBasicsPersistence();
@@ -985,6 +1058,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
 });
 if (refs.workModePreferences.length) {
   refs.workModePreferences.forEach((element) => element.addEventListener('change', () => {
+    hideStatus();
     saveWizardState();
     scheduleSearchBasicsPersistence();
   }));
@@ -997,3 +1071,4 @@ if (refs.workModePreferences.length) {
 });
 renderLocationSelect();
 observeReviewCapabilityLayout();
+initFieldInfoToggles();

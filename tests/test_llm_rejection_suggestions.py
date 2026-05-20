@@ -285,6 +285,10 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
                 {"signal": "platform engineer", "suggested_category": "role_title_token", "original_texts": ["Platform Engineer"]},
                 {"signal": "platform engineer", "suggested_category": "role_title_token", "original_texts": ["Platform Engineer"]},
             ],
+            "job_requirements": [
+                "Strong stakeholder engagement",
+                "Strong stakeholder engagement",
+            ],
         }
     )
 
@@ -298,6 +302,7 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
             }
         ],
         "contextual_capability_matches": [],
+        "job_requirements": ["Strong stakeholder engagement"],
     }
 
 
@@ -315,6 +320,5 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
 
     payload = llm_gate._request_learning_payload("Example role description", fit_review=True)
 
-    assert payload == {"fit_review": {"decision": "KEEP", "grade": "SOLID"}, "learning_candidates": [], "contextual_capability_matches": []}
+    assert payload == {"fit_review": {"decision": "KEEP", "grade": "SOLID"}, "learning_candidates": [], "contextual_capability_matches": [], "job_requirements": []}
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"
-

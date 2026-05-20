@@ -201,7 +201,7 @@
   padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
   display: flex;
   gap: var(--surface-gap-sm);
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
@@ -384,6 +384,59 @@
 .choice-strip > .choice-card--work-mode:hover {
   background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle));
+}
+
+.choice-strip > .choice-card--strength {
+  flex: 0 0 auto;
+  min-height: 34px;
+  min-width: 86px;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
+  font-size: 0.88rem;
+  font-weight: 650;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.choice-strip > .choice-card--strength input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+}
+
+.choice-strip > .choice-card--strength:has(input:checked) {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border-subtle));
+  color: var(--accent);
+}
+
+.choice-strip > .choice-card--strength:has(input:checked) span {
+  color: inherit;
+  font-weight: 700;
+}
+
+.choice-strip > .choice-card--strength:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 32%, var(--border-subtle));
+  color: var(--text-primary);
+}
+
+.choice-strip > .choice-card--strength:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
+  outline-offset: 2px;
 }
 
 /* Search choice groups use the same soft-chip visual language. */
@@ -572,6 +625,213 @@
   padding: 0;
 }
 
+/* ── Field label row + info icon ──────────────────────────────────────────────
+   Centralised — change .field-info here to update every form that uses it.
+   .field-label-row wraps a <label> and a .field-info button side by side.
+*/
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.field-label-row label {
+  margin: 0;
+}
+
+.field-label-row > h2,
+.field-label-row > h3,
+.field-label-row > strong {
+  margin: 0;
+}
+
+.field-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.field-info:hover,
+.field-info[aria-expanded="true"],
+.field-info-drawer[open] > .field-info {
+  color: var(--state-info-text);
+  border-color: var(--state-info-text);
+  background: var(--state-info-bg);
+}
+
+.field-info-drawer {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  align-self: center;
+  overflow: visible;
+}
+
+.field-info-drawer > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+}
+
+.field-info-drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-info-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--state-info-bg) 8%, var(--bg-surface));
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
+  box-shadow: var(--shadow-soft);
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.field-info-drawer[open] > .field-info-panel {
+  display: block;
+}
+
+.need-help-link {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.capability-alias-drawer {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  padding: 6px 8px;
+}
+
+.capability-alias-drawer > summary,
+.cap-alias-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--accent-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+  padding: 0;
+}
+
+.capability-alias-drawer > summary::before,
+.cap-alias-summary::before {
+  content: "▶";
+  display: inline-block;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  line-height: 1;
+  transition: transform 150ms ease;
+}
+
+.capability-alias-drawer[open] > summary::before,
+.capability-alias-drawer[open] > .cap-alias-summary::before {
+  transform: rotate(90deg);
+}
+
+.capability-alias-drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.capability-alias-drawer[open] > summary {
+  margin-bottom: 8px;
+}
+
+.capability-summary-preview {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.capability-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--selection-accent) 8%, var(--bg-chip-subtle));
+  border: 1px solid color-mix(in srgb, var(--selection-accent) 16%, var(--border-chip-subtle));
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.capability-summary-chip-more {
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  border-color: var(--border-subtle);
+}
+
+.cap-alias-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cap-alias-chip {
+  max-width: 100%;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.cap-alias-chip-label {
+  min-width: 0;
+}
+
+.cap-alias-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
 /* Selection chips — inline display of a chosen value (location, keyword, etc.) */
 
 .chip-button,
@@ -609,6 +869,119 @@
   line-height: 1;
 }
 
+.token-input-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.token-input-group:focus-within {
+  border-color: var(--selection-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
+}
+
+.token-input-field {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.token-input-field:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.token-input-action {
+  min-width: 42px;
+  padding-inline: 0;
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  align-self: stretch;
+}
+
+.token-input-action.btn-add:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-left-color: color-mix(in srgb, var(--accent) 32%, var(--border-subtle));
+}
+
+.btn-add {
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0 14px;
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-add:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
+  color: var(--accent-hover);
+  opacity: 1;
+}
+
+.btn-add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-icon {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  color: var(--state-info-text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn-icon:hover {
+  color: var(--text-primary);
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid var(--state-info-border);
+  outline-offset: 2px;
+}
+
 .capability-group,
 .capability-card {
   padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
@@ -633,9 +1006,42 @@
   }
 }
 
-/* Theme switcher widget
-   Small selector used in settings and workspace headers.
-*/
+.job-hunter-page-utility {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--surface-gap-sm);
+  width: 100%;
+  min-width: 0;
+}
+
+.job-hunter-page-utility__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.job-hunter-page-utility__brand-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.job-hunter-page-utility__brand-name {
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.job-hunter-page-utility .job-hunter-account-bar {
+  flex: 0 1 auto;
+  margin-left: auto;
+}
+
 .theme-switcher-widget {
   display: inline-flex;
   align-items: center;
@@ -663,6 +1069,199 @@
 
 .theme-switcher-widget select:focus {
   border-color: var(--accent);
+}
+
+.job-hunter-account-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.job-hunter-account-bar__cluster {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.account-bar-theme-switcher {
+  flex-shrink: 0;
+}
+
+.account-bar-shortcut {
+  white-space: nowrap;
+}
+
+.account-bar-test {
+  position: relative;
+}
+
+.account-bar-test-trigger {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.account-bar-test-trigger:hover,
+.account-bar-test-trigger[aria-expanded="true"] {
+  color: var(--text-primary);
+}
+
+.account-bar-test-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 196px;
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-soft);
+  display: none;
+  z-index: 220;
+}
+
+.account-bar-test-menu.is-open {
+  display: block;
+}
+
+.account-bar-test-menu-title {
+  padding: 4px 8px 8px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-bar-test-menu-separator {
+  height: 1px;
+  margin: 0 4px 6px;
+  background: var(--border-subtle);
+}
+
+.account-bar-test-action {
+  width: 100%;
+  border: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-bar-test-action:hover {
+  background: var(--bg-muted);
+}
+
+.account-bar-test-action--danger {
+  color: var(--state-error-text);
+}
+
+.job-hunter-account-bar__user {
+  position: relative;
+}
+
+@media (max-width: 760px) {
+  .job-hunter-page-utility {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .job-hunter-page-utility__brand {
+    flex: 1 1 auto;
+  }
+
+  .job-hunter-page-utility .job-hunter-account-bar {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+
+  .job-hunter-account-bar__cluster {
+    justify-content: flex-start;
+  }
+}
+
+.job-hunter-account-bar__avatar {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+}
+
+.job-hunter-account-bar__avatar:hover {
+  opacity: 0.85;
+}
+
+.job-hunter-account-bar__dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  padding: 14px 16px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-soft);
+  z-index: 250;
+}
+
+.job-hunter-account-bar__dropdown-sep {
+  height: 1px;
+  margin: 10px 0 8px;
+  background: var(--border-subtle);
+}
+
+.job-hunter-account-bar__name {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.job-hunter-account-bar__email {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.job-hunter-account-bar__logout {
+  display: block;
+  padding: 8px 4px;
+  color: var(--selection-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.job-hunter-account-bar__logout:hover {
+  text-decoration: underline;
 }
 
 /* Shared choice pills: inactive states must recede, selected states must be obvious. */

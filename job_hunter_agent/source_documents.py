@@ -1,3 +1,11 @@
+"""Source document processing and onboarding orchestration.
+
+This module handles the extraction of text from source files (such as CVs 
+in .docx or .txt format) and coordinates the multi-step onboarding process 
+to build an initial candidate profile. It manages the persistence of 
+uploaded source packs and ensures clean resets for fresh onboarding runs.
+"""
+
 import base64
 import copy
 import json
@@ -126,7 +134,8 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
         try:
             payload = json.loads(source_materials_path.read_text(encoding="utf-8"))
             return normalize_source_materials(payload)
-        except Exception:
+        except Exception as exc:
+            print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials: {exc}")
             return dict(DEFAULT_SOURCE_MATERIALS)
 
     if create_if_missing and SOURCE_MATERIALS_TEMPLATE_PATH.exists():
@@ -135,7 +144,8 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
             normalized = normalize_source_materials(payload)
             save_source_materials(normalized)
             return normalized
-        except Exception:
+        except Exception as exc:
+            print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials template: {exc}")
             pass
     return dict(DEFAULT_SOURCE_MATERIALS)
 
@@ -196,7 +206,7 @@ def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text
     for index, item in enumerate(files_payload or [], start=1):
         if not isinstance(item, dict):
             continue
-        label = str(item.get("label") or item.get("filename") or f"Source Document {index}").strip()
+        label = str(item.get("label") or item.get("filename") or f"CV File {index}").strip()
         filename = str(item.get("filename") or "").strip()
         content_base64 = str(item.get("content_base64") or "").strip()
         if not filename or not content_base64:
@@ -208,7 +218,8 @@ def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text
             target_name = f"{slot_name}{suffix}"
             target_path = SOURCE_PACK_DIR / target_name
             target_path.write_bytes(raw_bytes)
-        except Exception:
+        except Exception as exc:
+            print(f"[SOURCE_DOCUMENTS][WARN] Failed to save uploaded source file {filename}: {exc}")
             continue
         profile_sources.append({
             "label": label,
@@ -282,7 +293,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
             continue
         try:
             text = read_source_document(path)
-        except Exception:
+        except Exception as exc:
+            print(f"[ONBOARDING][WARN] Failed to read source document {path}: {exc}")
             missing_sources.append(path)
             continue
         if not text:
@@ -298,8 +310,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     if not combined_sections:
         if import_sources:
-            raise ValueError("Could not read any configured source documents.")
-        raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile source documents first.")
+            raise ValueError("Could not read any configured CV files.")
+        raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile CV files first.")
 
     combined_text = "\n\n".join(combined_sections).strip()
 

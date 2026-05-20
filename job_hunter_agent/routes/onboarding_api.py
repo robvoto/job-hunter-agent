@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from fastapi import APIRouter, Body
@@ -6,7 +5,7 @@ from fastapi import APIRouter, Body
 from job_hunter_agent.locations import resolve_location, find_nearest_location
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.source_documents import persist_uploaded_source_pack, run_onboarding, load_source_materials
+from job_hunter_agent.source_documents import log_onboarding_table, persist_uploaded_source_pack, run_onboarding, load_source_materials
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ENGAGEMENT_TYPE,
@@ -21,6 +20,7 @@ from job_hunter_agent.profile_store import (
     KEY_ONBOARDING_SETTINGS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
+    MIN_CONTRACT_MONTH_OPTIONS,
     VALID_ENGAGEMENT_TYPES,
     VALID_SECTOR_PREFERENCES,
     VALID_WORK_MODE_PREFERENCES,
@@ -77,12 +77,15 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
                 raise ValueError(f"Please upload CV files as {get_allowed_source_document_suffixes_label()}.")
         srv._validate_onboarding_settings_inputs(onboarding_settings)
         materials = persist_uploaded_source_pack(files) if files else load_source_materials(create_if_missing=True)
-        preset_info = srv.describe_capability_strength_preset(onboarding_settings.get("capability_strength_preset"))
-        print(
-            "[ONBOARDING][CAPABILITY_STRENGTH] "
-            f"preset={preset_info['capability_strength_preset']} "
-            f"values={json.dumps(preset_info['values'], ensure_ascii=True)}"
-        )
+        requested_preset = str(onboarding_settings.get("capability_strength_preset") or "").strip()
+        preset_info = srv.describe_capability_strength_preset(requested_preset)
+        resolved_preset = str(preset_info["capability_strength_preset"]).strip()
+        log_onboarding_table("Capability strength selection", [
+            ("selected by user", requested_preset or "(not set)"),
+            ("resolved preset", resolved_preset),
+            ("using selected preset", "yes" if requested_preset and requested_preset == resolved_preset else "no"),
+            ("preset values", preset_info["values"]),
+        ])
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
         result = run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
         result["materials"] = materials
@@ -101,6 +104,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         engagement_type = normalize_engagement_type_preferences(body.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
         work_mode_preference = normalize_work_mode_preferences(body.get(KEY_WORK_MODE_PREFERENCE))
         prefer_sector = str(body.get(KEY_PREFER_SECTOR) or "").strip().lower()
+        raw_min_contract_months = body.get("min_contract_months")
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
@@ -124,6 +128,16 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             raise ValueError("Please choose only remote, hybrid, or on-site.")
         if prefer_sector not in VALID_SECTOR_PREFERENCES:
             prefer_sector = srv.GovPref.ANY
+        min_contract_months = None
+        if raw_min_contract_months not in (None, ""):
+            try:
+                min_contract_months = int(str(raw_min_contract_months).strip())
+            except Exception as exc:
+                raise ValueError("Minimum contract length must be a whole number.") from exc
+            if min_contract_months not in {int(item["value"]) for item in MIN_CONTRACT_MONTH_OPTIONS}:
+                raise ValueError("Please choose a valid minimum contract length.")
+        if "contract" not in engagement_type:
+            min_contract_months = None
         try:
             minimum_salary_yearly = int(str(raw_minimum_salary_yearly).replace(",", "").strip() or 0)
         except Exception as exc:
@@ -160,6 +174,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         profile_patch[PROFILE_SEARCH_SETTINGS_KEY] = search_settings
         match_preferences = dict(current.get(KEY_MATCH_PREFS, {}))
         match_preferences[KEY_ENGAGEMENT_TYPE] = engagement_type
+        match_preferences["min_contract_months"] = min_contract_months
         match_preferences[KEY_WORK_MODE_PREFERENCE] = work_mode_preference
         match_preferences[KEY_PREFER_SECTOR] = prefer_sector
         profile_patch[KEY_MATCH_PREFS] = match_preferences

@@ -1,4 +1,3 @@
-from job_hunter_agent import llm_gate
 from job_hunter_agent import source_documents
 
 
@@ -21,10 +20,10 @@ def test_build_llm_profile_brief_handles_non_list_input():
 
 
 def test_read_source_document_supports_plain_text_formats(tmp_path):
-    csv_path = tmp_path / "cv.csv"
-    csv_path.write_text("header,value\nskills,delivery\n", encoding="utf-8")
+    cv_path = tmp_path / "cv.txt"
+    cv_path.write_text("header,value\nskills,delivery\n", encoding="utf-8")
 
-    text = source_documents.read_source_document(str(csv_path))
+    text = source_documents.read_source_document(str(cv_path))
 
     assert "skills,delivery" in text
 
@@ -215,19 +214,3 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
 
     assert "process mapping: strong, core (process design)" in context
     assert "stakeholder engagement: working" in context
-
-
-def test_build_capability_naming_guidance_includes_user_guidance(monkeypatch):
-    monkeypatch.setattr(
-        llm_gate,
-        "load_profile",
-        lambda: {
-            "llm_capability_naming_guidance": "Prefer labels close to business analysis and delivery work.",
-        },
-    )
-
-    prompt = llm_gate.build_capability_naming_guidance()
-
-    assert "Default capability naming guidance:" in prompt
-    assert "User capability naming guidance:" in prompt
-    assert "Prefer labels close to business analysis and delivery work." in prompt

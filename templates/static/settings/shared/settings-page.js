@@ -9,6 +9,8 @@ const chipEditor = window.JobHunterChipEditor;
 const capabilityEditor = window.JobHunterCapabilityEditor;
 const adminSettings = window.JobHunterAdminSettings;
 const alertsSettings = window.JobHunterAlertsSettings;
+const capabilityUi = window.JobHunterCapabilityUi || {};
+const capabilityLabels = capabilityUi.labels || {};
 const {
   escapeHtml,
   toLines,
@@ -31,8 +33,10 @@ const {
   SECTOR_PREFERENCE_DEFAULT,
 } = window.JobHunterSettingsUtils;
 
-// Aliases kept in scope for settings-review-panel.js which reads these by name
-const capabilityStrengthMeta = capabilityEditor.capabilityStrengthMeta;
+const capabilityMatrixNav = document.getElementById('settings_capability_matrix_nav');
+if (capabilityMatrixNav && capabilityLabels.settings_title) {
+  capabilityMatrixNav.textContent = capabilityLabels.settings_title;
+}
 const fillUserSettings = (s) => alertsSettings.fillUserSettings(s);
 const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserSettings);
 
@@ -143,6 +147,81 @@ function renderLocationOptions() {
   if (preferred) select.value = preferred;
 }
 
+function buildSettingsHelpDrawer(bodyHtml, extraClass = '') {
+  const drawer = document.createElement('details');
+  drawer.className = ['field-info-drawer', 'settings-help-drawer', extraClass].filter(Boolean).join(' ');
+
+  const summary = document.createElement('summary');
+  summary.className = 'field-info';
+  summary.setAttribute('aria-label', 'Help');
+  summary.textContent = 'i';
+
+  const panel = document.createElement('div');
+  panel.className = 'field-info-panel';
+  panel.innerHTML = bodyHtml;
+
+  drawer.append(summary, panel);
+  return drawer;
+}
+
+function findFieldLabelForHelp(node) {
+  let cursor = node.previousElementSibling;
+  while (cursor) {
+    if (cursor.matches('label')) {
+      return cursor;
+    }
+    if (cursor.matches('.field-label-row')) {
+      return null;
+    }
+    cursor = cursor.previousElementSibling;
+  }
+  return null;
+}
+
+function upgradeSettingsHelpBlocks() {
+  const scope = document.querySelector('.settings-main') || document;
+
+  scope.querySelectorAll('.settings-group .field-help').forEach((node) => {
+    if (node.closest('details.help-drawer, details.field-info-drawer')) return;
+    const bodyHtml = node.innerHTML.trim();
+    if (!bodyHtml) return;
+    const label = findFieldLabelForHelp(node);
+    if (!label || label.closest('.field-label-row')) return;
+    const row = document.createElement('div');
+    row.className = 'field-label-row';
+    label.parentNode.insertBefore(row, label);
+    row.appendChild(label);
+    row.appendChild(buildSettingsHelpDrawer(bodyHtml));
+    node.remove();
+  });
+}
+
+function initFieldInfoDrawers() {
+  const drawers = Array.from(document.querySelectorAll('details.field-info-drawer'));
+  if (!drawers.length) return;
+  const closeAll = (exceptDrawer = null) => {
+    drawers.forEach((drawer) => {
+      if (drawer !== exceptDrawer) {
+        drawer.open = false;
+      }
+    });
+  };
+  drawers.forEach((drawer) => {
+    drawer.addEventListener('toggle', () => {
+      if (drawer.open) closeAll(drawer);
+    });
+  });
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('details.field-info-drawer')) return;
+    closeAll();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeAll();
+  });
+}
+
+upgradeSettingsHelpBlocks();
+initFieldInfoDrawers();
 
 function collectProfile() {
   chipEditor.flushChipEditorInputs();
@@ -155,6 +234,9 @@ function collectProfile() {
   if (!Number.isFinite(seekMaxPages)) {
     throw new Error('Please choose a valid SEEK page limit.');
   }
+  const engagementTypeValues = getEngagementTypeValues();
+  const contractEnabled = engagementTypeValues.includes('contract');
+  const minContractEl = document.getElementById('min_contract_months');
   return {
     search_settings: {
       keywords: String(settingsField('keywords').value || '').trim(),
@@ -171,10 +253,10 @@ function collectProfile() {
       minimum_daily_rate: readCurrencyFieldValue('minimum_daily_rate', 0),
     },
     match_preferences: {
-      engagement_type: getEngagementTypeValues(),
+      engagement_type: engagementTypeValues,
       work_mode_preference: getWorkModePreferenceValues(),
       prefer_sector: sectorPreferenceValues.length === 1 ? sectorPreferenceValues[0] : sectorPreferenceDefault,
-      min_contract_months: Number(document.getElementById('min_contract_months')?.value || '') || null,
+      min_contract_months: contractEnabled ? (minContractEl?.value || null) : null,
     },
     preference_weights: {
       fit: Number(document.getElementById('fit_weight').value || 1),
@@ -230,7 +312,11 @@ function fillForm(profile) {
   setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);
   setSectorPreferenceValues(profile.match_preferences?.prefer_sector || sectorPreferenceDefault);
   const _minContractEl = document.getElementById('min_contract_months');
-  if (_minContractEl) _minContractEl.value = String(profile.match_preferences?.min_contract_months ?? '');
+  if (_minContractEl) {
+    _minContractEl.value = String(profile.match_preferences?.min_contract_months ?? '');
+    _minContractEl.disabled = !getEngagementTypeValues().includes('contract');
+  }
+  updateContractChipLabel();
   document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
   setCurrencyFieldValue('minimum_salary_yearly', profile.salary_preferences?.minimum_salary_yearly ?? 0);
   setCurrencyFieldValue('minimum_daily_rate', profile.salary_preferences?.minimum_daily_rate ?? 0);
@@ -343,11 +429,49 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
   }
 });
 
+function updateContractChipLabel() {
+  const chipSpan = document.querySelector('input[name="engagement_type"][value="contract"]')
+    ?.closest('label')?.querySelector('span');
+  if (!chipSpan) return;
+  const contractEnabled = getEngagementTypeValues().includes('contract');
+  const val = document.getElementById('min_contract_months')?.value || '';
+  if (!contractEnabled) {
+    chipSpan.textContent = 'Contract';
+  } else {
+    chipSpan.textContent = val ? `Contract (${val}+)` : 'Contract (All)';
+  }
+}
+
+function updateContractDurationRow() {
+  const contractEnabled = getEngagementTypeValues().includes('contract');
+  const minContractEl = document.getElementById('min_contract_months');
+  const contractRow = document.getElementById('contract_duration_row');
+  if (!contractEnabled) {
+    if (minContractEl) { minContractEl.disabled = true; minContractEl.value = ''; }
+    if (contractRow) contractRow.hidden = true;
+    updateContractChipLabel();
+  }
+}
+
+document.getElementById('min_contract_months')?.addEventListener('change', () => {
+  const contractRow = document.getElementById('contract_duration_row');
+  if (contractRow) contractRow.hidden = true;
+  updateContractChipLabel();
+});
+
 document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
   cb.addEventListener('change', () => {
     if (!cb.checked) {
       const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
+    }
+    if (!getEngagementTypeValues().includes('contract')) {
+      updateContractDurationRow();
+    } else if (cb.value === 'contract' && cb.checked) {
+      const minContractEl = document.getElementById('min_contract_months');
+      const contractRow = document.getElementById('contract_duration_row');
+      if (minContractEl) minContractEl.disabled = false;
+      if (contractRow) contractRow.hidden = false;
     }
   });
 });
@@ -489,7 +613,6 @@ async function saveActivePage() {
   } catch (err) {
     if (activeSaveButton) activeSaveButton.disabled = false;
     showInlineStatus(globalStatus, err?.message || 'Could not save changes.', 'error');
-    showStatus(err?.message || 'Could not save changes.', 'error');
   } finally {
     activeSaveButton.classList.remove('is-working');
     activeSaveButton.textContent = originalLabel;

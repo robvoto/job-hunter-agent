@@ -1,3 +1,11 @@
+"""Server-side helper functions for the Job Hunter Agent web application.
+
+This module provides utilities for handling server-specific logic,
+including user authentication, settings management, data normalization,
+and interaction with core agent functionalities like job scraping and
+workspace rebuilding. It centralizes common server-side operations
+to ensure consistency and maintainability.
+"""
 import json
 import hashlib
 from html import escape
@@ -27,6 +35,7 @@ from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.config import AUTH_DISABLED
 from job_hunter_agent.paths import (
     DATA_DIR,
+    LOCAL_USER_ID,
     USERS_DIR,
     REPO_ROOT as ROOT_DIR,
     get_audit_records_path,
@@ -42,6 +51,8 @@ from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
     ENGAGEMENT_TYPE_OPTIONS,
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
+    MIN_CONTRACT_MONTH_OPTIONS,
+    MIN_CONTRACT_MONTH_NONE_LABEL,
     GovPref,
     SECTOR_PREFERENCE_CHOICE_OPTIONS,
     SECTOR_PREFERENCE_OPTIONS,
@@ -69,8 +80,6 @@ from job_hunter_agent.profile_store import (
     KEY_BRIEF_MODE,
     KEY_BRIEF,
     KEY_STAR_EVIDENCE,
-    KEY_FIT_GUIDANCE,
-    KEY_CAP_GUIDANCE,
     KEY_CV_TEXT,
     KEY_EVIDENCE_TIERS,
     KEY_CAPABILITY_PROFILE_RULES,
@@ -164,8 +173,51 @@ _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS = (
     "target_roles_plural",
     "capabilities_singular",
     "capabilities_plural",
-    "source_suffix",
-    "privacy_note",
+    "source_suffix"
+)
+_CAPABILITY_UI_LABEL_KEYS = (
+    "settings_title",
+    "onboarding_title",
+    "help_text",
+    "add_button_label",
+    "add_button_aria_label",
+    "add_button_title",
+    "related_skills_label",
+    "related_skills_summary",
+    "filter_placeholder",
+    "remove_related_skill_aria_label",
+    "settings_empty_text",
+    "settings_no_match_text",
+    "onboarding_empty_text",
+    "onboarding_no_match_text",
+    "review_strength_prompt_label",
+)
+_SHARED_UI_LABEL_KEYS = (
+    "theme_label",
+    "select_theme_aria_label",
+    "account_menu_aria_label",
+    "account_menu_title",
+    "account_menu_logout_label",
+    "account_menu_settings_shortcut_label",
+    "account_menu_settings_shortcut_aria_label",
+    "account_menu_workspace_shortcut_label",
+    "account_menu_workspace_shortcut_aria_label",
+    "account_menu_test_label",
+    "account_menu_test_actions_label",
+    "account_menu_reset_user_label",
+    "account_menu_reset_learning_warning_label",
+    "add_button_label",
+    "add_button_aria_label",
+    "add_button_title",
+)
+_SEARCH_SOURCE_LABEL_KEYS = (
+    "section_title",
+    "section_copy",
+    "shared_inputs_copy",
+    "seek_toggle_label",
+    "seek_toggle_help",
+    "linkedin_toggle_label",
+    "linkedin_toggle_help",
 )
 
 
@@ -178,15 +230,53 @@ def load_onboarding_title_tier_labels() -> dict[str, str]:
         raise ValueError(f"ui_labels.json is missing title_tier_labels values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS}
 
+def get_docs() -> list[dict[str, str]]:
+    """Return allowed markdown docs under the repo root (for /docs API)."""
+    docs: list[dict[str, str]] = []
 
-def load_onboarding_import_summary_labels() -> dict[str, str]:
+def load_onboarding_import_summary_labels() -> dict:
     labels = load_ui_labels().get("onboarding_import_summary_labels", {})
     if not isinstance(labels, dict):
         raise ValueError("ui_labels.json is missing onboarding_import_summary_labels")
     missing = [key for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
         raise ValueError(f"ui_labels.json is missing onboarding_import_summary_labels values: {', '.join(missing)}")
-    return {key: str(labels[key]).strip() for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS}
+    result: dict = {key: str(labels[key]).strip() for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS}
+    raw = labels.get("capability_preview_rows")
+    if not isinstance(raw, int) or raw < 1:
+        raise ValueError("ui_labels.json onboarding_import_summary_labels.capability_preview_rows must be a positive integer")
+    result["capability_preview_rows"] = raw
+    return result
+
+
+def load_capability_ui_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("capability_ui_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing capability_ui_labels")
+    missing = [key for key in _CAPABILITY_UI_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing capability_ui_labels values: {', '.join(missing)}")
+    return {key: str(labels[key]).strip() for key in _CAPABILITY_UI_LABEL_KEYS}
+
+
+def load_shared_ui_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("shared_ui_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing shared_ui_labels")
+    missing = [key for key in _SHARED_UI_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing shared_ui_labels values: {', '.join(missing)}")
+    return {key: str(labels[key]).strip() for key in _SHARED_UI_LABEL_KEYS}
+
+
+def load_search_source_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("search_source_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing search_source_labels")
+    missing = [key for key in _SEARCH_SOURCE_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing search_source_labels values: {', '.join(missing)}")
+    return {key: str(labels[key]).strip() for key in _SEARCH_SOURCE_LABEL_KEYS}
 
 
 def get_docs() -> list[dict[str, str]]:
@@ -252,7 +342,6 @@ def _enforce_salary_caps(value: int, *, label: str, limit_key: str) -> int:
 def _render_template(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
-
 def build_bootstrap_script(
     *,
     csrf_token: str | None = None,
@@ -301,10 +390,19 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_TITLE_TIER_LABELS__ = {json.dumps(load_onboarding_title_tier_labels(), ensure_ascii=True)};</script>'
     )
     parts.append(
+        f'<script>window.__JOB_HUNTER_CAPABILITY_UI_LABELS__ = {json.dumps(load_capability_ui_labels(), ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_SHARED_UI_LABELS__ = {json.dumps(load_shared_ui_labels(), ensure_ascii=True)};</script>'
+    )
+    parts.append(
         f'<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__ = {json.dumps(MIN_CONTRACT_MONTH_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__ = {json.dumps(ENGAGEMENT_TYPE_OPTIONS, ensure_ascii=True)};</script>'
@@ -326,6 +424,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__ = {json.dumps(GovPref.ANY, ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ = {json.dumps(MIN_CONTRACT_MONTH_NONE_LABEL, ensure_ascii=True)};</script>'
     )
     return "\n  ".join(parts)
 
@@ -385,6 +486,14 @@ def render_engagement_type_choices(*, name: str, selected_values: object) -> str
         group_id="engagement_type_choices",
         label_id="engagement_type_label",
         card_class="choice-card--work-mode",
+    )
+
+
+def render_min_contract_month_options(*, selected_value: object | None) -> str:
+    selected = str(selected_value or "").strip()
+    return "".join(
+        f'<option value="{escape(item["value"])}"{(" selected" if item["value"] == selected else "")}>{escape(item["label"])}</option>'
+        for item in MIN_CONTRACT_MONTH_OPTIONS
     )
 
 
@@ -540,7 +649,8 @@ def _read_last_run_timestamp() -> str | None:
                     return timestamp
         state = load_agent_state()
         return str(state.get("last_agent_run_at") or "").strip() or None
-    except Exception:
+    except Exception as exc:
+        print(f"[SERVER_HELPERS][WARN] Failed to read last run timestamp: {exc}")
         return None
 
 
@@ -634,7 +744,8 @@ def _write_run_stats_field(key: str, value: object) -> None:
             import json as _json
             try:
                 payload = _json.loads(path.read_text(encoding="utf-8")) or {}
-            except Exception:
+            except Exception as exc:
+                print(f"[SERVER_HELPERS][WARN] Failed to load run_stats for field update: {exc}")
                 payload = {}
         if not isinstance(payload, dict):
             payload = {}
@@ -664,7 +775,7 @@ def _rebuild_workspace_on_startup() -> None:
         print("[WORKSPACE][INFO] Startup rebuild skipped: no request user context is available.")
         return
     try:
-        rebuild_workspace_results(reason="server startup rebuild")
+        rebuild_workspace_results(reason="server startup rebuild", user_id=LOCAL_USER_ID)
     except Exception as exc:
         print(f"[WORKSPACE][WARN] Could not rebuild on startup: {type(exc).__name__}: {exc}")
 
@@ -699,10 +810,6 @@ class SettingsHandler:
 
         if KEY_STAR_EVIDENCE in normalized:
             normalized[KEY_STAR_EVIDENCE] = str(normalized.get(KEY_STAR_EVIDENCE) or "").strip()
-        if KEY_FIT_GUIDANCE in normalized:
-            normalized[KEY_FIT_GUIDANCE] = str(normalized.get(KEY_FIT_GUIDANCE) or "").strip()
-        if KEY_CAP_GUIDANCE in normalized:
-            normalized[KEY_CAP_GUIDANCE] = str(normalized.get(KEY_CAP_GUIDANCE) or "").strip()
         if KEY_CV_TEXT in normalized:
             new_cv = str(normalized.get(KEY_CV_TEXT) or "").strip()
             current_cv = str(current.get(KEY_CV_TEXT) or "").strip()
@@ -731,7 +838,8 @@ class SettingsHandler:
                         shutil.rmtree(user_dir, ignore_errors=True)
                     else:
                         user_dir.unlink(missing_ok=True)
-                except Exception:
+                except Exception as exc:
+                    print(f"[SERVER_HELPERS][WARN] Failed to remove user directory {user_dir}: {exc}")
                     continue
 
         save_profile(DEFAULT_PROFILE)
@@ -764,7 +872,7 @@ class SettingsHandler:
 
         return {
             "ok": True,
-            "message": "All user state reset. Shared learning was preserved.",
+            "message": "All user state reset. Shared signals were preserved.",
             "redirect_to": "/start?fresh=1",
         }
 
@@ -775,7 +883,7 @@ class SettingsHandler:
         clear_signal_learning_state()
         return {
             "ok": True,
-            "message": "Global learning reset. Shared learned signals were cleared.",
+            "message": "Global signals reset. Shared learned signals were cleared.",
         }
 
     @staticmethod
@@ -937,4 +1045,3 @@ def _validate_onboarding_settings_inputs(onboarding_settings_payload: dict | Non
         raise ValueError('Please enter a lookback between 1 and 20 years.')
     if min_months < 1 or min_months > 24:
         raise ValueError('Please enter a short-role threshold between 1 and 24 months.')
-

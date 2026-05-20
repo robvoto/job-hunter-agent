@@ -22,6 +22,7 @@ from job_hunter_agent.profile_store import (
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
 )
+from job_hunter_agent.signal_schema import SIGNAL_ADJUSTMENT_KEY, SIGNAL_ALIGNMENT_KEY, SIGNAL_LABEL_KEY
 from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.work_mode_extraction import extract_from_text
 
@@ -1074,6 +1075,10 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
             "salary": "N/A",
             "full_description": "Our client is seeking a business analyst. Contact our recruitment team for details. " * 20,
             "fit_highlights": [],
+            "job_requirements": [
+                "Strong stakeholder engagement and communication skills",
+                "Experience across end-to-end BA activities",
+            ],
             "source": "seek",
             "posting_channel_evidence": {
                 "trusted_metadata": [],
@@ -1084,8 +1089,10 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
         _test_profile(),
     )
 
-    assert 'badge-warning" title="Posting channel unconfirmed' in html
-    assert "Posting evidence" in html
+    assert 'badge-warning" title="No trusted employer metadata was found' in html
+    assert "Direct employer unclear" in html
+    assert "Job requirements" in html
+    assert "Strong stakeholder engagement and communication skills" in html
     assert "badge-sector-government" not in html
 
 
@@ -1509,6 +1516,63 @@ def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypa
     ]
 
 
+def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(monkeypatch):
+    monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_service, "is_workspace_eligible", lambda record, profile=None, workspace_min_score=None: int(record["score"]) >= 55)
+
+    records = [
+        {"job_key": "fresh-high", "score": 90, "posted_age_days": 0.1, "times_viewed": 0, "decision": "KEEP"},
+        {"job_key": "fresh-low", "score": 40, "posted_age_days": 0.2, "times_viewed": 0, "decision": "KEEP"},
+    ]
+    audit_rows = [
+        {
+            "job_key": "filtered-role",
+            "score": 5,
+            "posted_age_days": 0.3,
+            "times_viewed": 0,
+            "decision": "REJECT",
+            "reject_reason": "TITLE_NOT_TARGET",
+            "title_reason": "TITLE_NOT_TARGET",
+            "content_reason": "OK",
+            "title": "Filtered Role",
+            "company": "Acme",
+        }
+    ]
+
+    normal_records = workspace_service.build_workspace_record_sets(
+        records,
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        reference_time=datetime(2026, 4, 21),
+        scoring_profile={"match_levels": []},
+        workspace_min_score=55,
+        debug_mode=False,
+        audit_rows=audit_rows,
+    )
+    debug_records = workspace_service.build_workspace_record_sets(
+        records,
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        reference_time=datetime(2026, 4, 21),
+        scoring_profile={"match_levels": []},
+        workspace_min_score=55,
+        debug_mode=True,
+        audit_rows=audit_rows,
+    )
+
+    assert [record["job_key"] for record in normal_records["current_records"]] == ["fresh-high"]
+    assert [record["job_key"] for record in debug_records["current_records"]] == [
+        "fresh-high",
+        "fresh-low",
+        "filtered-role",
+    ]
+    filtered_record = next(record for record in debug_records["current_records"] if record["job_key"] == "filtered-role")
+    assert filtered_record["reject_reason"] == "TITLE_NOT_TARGET"
+    assert filtered_record["decision"] == "REJECT"
+
+
 def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
     monkeypatch.setattr(workspace_service, "passes_title_filters", lambda title: (True, "OK"))
     monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
@@ -1537,6 +1601,16 @@ def test_score_filter_thresholds_show_lowest_band_when_floor_allows_it():
     assert thresholds == [85, 70, 55, 0]
 
 
+def test_score_filter_thresholds_include_all_bands_in_debug_mode():
+    thresholds = workspace_renderer.score_filter_thresholds(
+        scoring_profile={},
+        workspace_min_score=55,
+        debug_mode=True,
+    )
+
+    assert thresholds == [85, 70, 55, 0]
+
+
 def test_score_filter_options_use_match_labels_not_raw_thresholds():
     options_html = workspace_renderer.render_score_filter_options(
         scoring_profile={},
@@ -1558,6 +1632,83 @@ def test_score_filter_options_include_lowest_match_band_when_floor_allows_it():
     )
 
     assert "Stretch or better" in options_html
+
+
+def test_score_filter_options_default_to_all_in_debug_mode():
+    options_html = workspace_renderer.render_score_filter_options(
+        scoring_profile={},
+        workspace_min_score=55,
+        debug_mode=True,
+    )
+
+    assert '<option value="all" selected>All match levels</option>' in options_html
+    assert 'value="0"' in options_html
+
+
+def test_render_job_card_debug_mode_shows_filter_status_for_rejected_rows(monkeypatch):
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: 0)
+    monkeypatch.setattr(workspace_renderer, "fit_score_breakdown", lambda record, profile=None: [])
+
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-debug-filter",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "TITLE_NOT_TARGET",
+            "content_reason": "DESC_HARD_BLOCK_RULE:java",
+            "reject_reason": "DESC_HARD_BLOCK_RULE:java",
+            "decision": "REJECT",
+            "hard_block_reasons": ["Java"],
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+        debug_mode=True,
+    )
+
+    assert "Hard blocked" in html
+    assert "Filter status" in html
+    assert "Hard blocker details: Java" in html
+    assert "Title filter" in html or "Title outside target role family" in html
+
+
+def test_render_job_card_debug_mode_shows_debug_only_label_for_non_blocker_rejections(monkeypatch):
+    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: 0)
+    monkeypatch.setattr(workspace_renderer, "fit_score_breakdown", lambda record, profile=None: [])
+
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-debug-only",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "TITLE_NOT_TARGET",
+            "content_reason": "OK",
+            "reject_reason": "TITLE_NOT_TARGET",
+            "decision": "REJECT",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+        debug_mode=True,
+    )
+
+    assert "Debug only" in html
+    assert "Filter status" in html
+    assert "Title outside target role family" in html
 
 
 def test_posted_filter_options_show_explicit_day_windows():
@@ -1582,7 +1733,7 @@ def test_freshness_breakdown_uses_managed_bucket_cutoffs():
     scoring_rules = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
     weights = {"freshness": 1.0}
 
-    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02), "Posted within the last hour") == 10
+    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02), "Posted within the last 6 hours") == 10
     assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 2), "Posted within the last 3 days") == 5
     assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 10), "Still relatively recent") == 1
     assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 20) == []
@@ -1704,3 +1855,27 @@ def test_score_equivalent_where_no_hard_blockers(monkeypatch):
 
     assert score == max(min(sum(item["value"] for item in breakdown), 100), 0)
     assert not any("Hard blocker" in item["label"] for item in breakdown)
+
+
+def test_build_risk_and_missing_evidence_uses_shared_partial_support_label(monkeypatch):
+    monkeypatch.setattr(
+        capability_matching,
+        "find_profile_capability_matches",
+        lambda details_text, profile: {"must_not": [], "limited_depth": []},
+    )
+
+    risks, missing = capability_matching.build_risk_and_missing_evidence(
+        "",
+        None,
+        _test_profile(),
+        competitive_signals=[
+            {
+                SIGNAL_LABEL_KEY: "specialist context",
+                SIGNAL_ALIGNMENT_KEY: "strong",
+                SIGNAL_ADJUSTMENT_KEY: -1,
+            }
+        ],
+    )
+
+    assert missing == []
+    assert risks == ["specialist context is only partially supported"]

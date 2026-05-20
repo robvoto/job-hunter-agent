@@ -10,50 +10,23 @@
   <script src="/static/common/csrf.js"></script>
   <script src="/static/common/console-bridge.js"></script>
   <script src="/static/theme/theme-switcher.js"></script>
+  <script src="/static/common/account-bar.js"></script>
   <script src="/static/common/wait-state.js"></script>
-  <style>
-    /* Hide aliases when not in test mode */
-    [data-test-mode="false"] .test-only,
-    [data-test-mode="false"] .capability-aliases,
-    [data-test-mode="false"] .alias-tag {
-      display: none !important;
-    }
-
-    .sidebar-brand-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .sidebar-brand-icon {
-      width: 22px;
-      height: 22px;
-      object-fit: contain;
-      flex-shrink: 0;
-    }
-
-  </style>
 </head>
   <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
   <div class="job-hunter-wait-mount" id="job_hunter_wait_mount" hidden></div>
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Page sections">
       <div class="sidebar-brand">
-        <h1 class="sidebar-brand-title">
-          <img src="/static/assets/job_hunter_img.png" alt="" class="sidebar-brand-icon">
-          <span>Job Hunter</span>
-        </h1>
-        <div class="sidebar-brand-actions">
-          __JOB_HUNTER_ADMIN_BADGE__
-          <a href="/logout" class="nav-item nav-item-logout">Log out</a>
-        </div>
+        <h1>Job Hunter</h1>
+        __JOB_HUNTER_ADMIN_BADGE__
         <a href="/" class="nav-item nav-item-workspace">&#8592; Workspace</a>
       </div>
       <div class="sidebar-nav">
         <div class="sidebar-group-label">Standard settings</div>
         <button class="nav-item is-active" type="button" data-section="section-search" data-screen="settings">Search</button>
         <button class="nav-item" type="button" data-section="section-profile" data-screen="settings">Profile</button>
-        <button class="nav-item" type="button" data-section="section-matrix" data-screen="settings">Capability Matrix</button>
+        <button class="nav-item" id="settings_capability_matrix_nav" type="button" data-section="section-matrix" data-screen="settings"></button>
         <button class="nav-item" type="button" data-section="section-rules" data-screen="settings">Rules</button>
         <button class="nav-item" type="button" data-section="section-alerts" data-screen="settings">Alerts &amp; AI</button>
         <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise" data-screen="settings">Optimise</button>
@@ -65,17 +38,10 @@
     <main class="settings-main">
       <div class="settings-content-area">
         <section class="hero">
+          __JOB_HUNTER_TOP_UTILITY_BAR__
           <div class="hero-text">
             <h1>__JOB_HUNTER_PAGE_HEADING__</h1>
             <p>__JOB_HUNTER_PAGE_COPY__</p>
-          </div>
-          <div class="theme-switcher-widget" style="margin-left:auto;flex-shrink:0;">
-            <span>Theme test:</span>
-            <select id="theme_picker" aria-label="Select theme">
-              <option value="soft-professional">Soft Professional</option>
-              <option value="bold-aggressive">Bold Aggressive</option>
-              <option value="dark-professional">Dark Professional</option>
-            </select>
           </div>
         </section>
 

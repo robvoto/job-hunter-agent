@@ -60,6 +60,7 @@ from job_hunter_agent.source_learning import (
     deterministic_review_outcome,
     register_hard_blocker_learning_from_rejection,
 )
+from job_hunter_agent.llm_gate import llm_extract_job_requirements
 from job_hunter_agent.text_processing import build_role_summary, compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.utils import extract_salary, parse_seek_posted_age_days, set_page_param
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_seek_detail, extract_seek_filter_panel_state, log_work_mode_result
@@ -374,20 +375,30 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record, profile, record["fit_highlights"], record["missing_evidence"], record["soft_risk_reasons"]
     )
     record["llm_learning_candidates"] = []
+    record[rs.RECORD_JOB_REQUIREMENTS_KEY] = []
     contextual_capability_matches: list = []
 
     if deterministic_review is not None:
         review = deterministic_review
         source = "rule"
         if has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
-            payload = resolve_llm_review_payload(
-                record,
-                llm_cache,
-                learning_only=True,
-            )
-            record["llm_learning_candidates"] = payload.get("learning_candidates") or []
-            if record["llm_learning_candidates"]:
-                source = "rule+learning"
+            try:
+                payload = resolve_llm_review_payload(
+                    record,
+                    llm_cache,
+                    learning_only=True,
+                )
+                record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+                record[rs.RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
+                if record["llm_learning_candidates"]:
+                    source = "rule+learning"
+            except Exception as llm_exc:
+                print(f"[LLM][LEARNING_ERROR] {type(llm_exc).__name__}: {llm_exc}")
+        if not record[rs.RECORD_JOB_REQUIREMENTS_KEY]:
+            try:
+                record[rs.RECORD_JOB_REQUIREMENTS_KEY] = llm_extract_job_requirements(record.get("full_description") or record.get("fit_source_text") or "")
+            except Exception as llm_exc:
+                print(f"[LLM][JOB_REQUIREMENTS_ERROR] {type(llm_exc).__name__}: {llm_exc}")
     else:
         payload = resolve_llm_review_payload(
             record,
@@ -395,6 +406,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         )
         review = payload["fit_review"]
         record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+        record[rs.RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
         contextual_capability_matches = payload.get("contextual_capability_matches") or []
         source = str(payload.get("payload_source") or "llm")
 
@@ -404,6 +416,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         "review_source": source,
         "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
         "contextual_capability_matches": contextual_capability_matches,
+        rs.RECORD_JOB_REQUIREMENTS_KEY: record[rs.RECORD_JOB_REQUIREMENTS_KEY],
     }
 
 
@@ -569,7 +582,13 @@ def seek_scrape_to_records(
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 
-                            fit_eval = _evaluate_job_fit(record, profile, llm_cache)
+                            try:
+                                fit_eval = _evaluate_job_fit(record, profile, llm_cache)
+                            except Exception as llm_exc:
+                                print(f"{page_tag} [LLM][ERROR] {type(llm_exc).__name__}: {llm_exc} — {title} @ {company}")
+                                apply_reject_result(record, "LLM_ERROR")
+                                finalize_record(job_history, audit_rows, record, run_iso)
+                                continue
                             apply_fit_review_result(record, fit_eval)
 
                             if WORKSPACE_DEBUG_MODE:

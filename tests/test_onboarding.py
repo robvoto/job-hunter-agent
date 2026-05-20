@@ -48,11 +48,19 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'Add a preferred role' in html
     assert 'Add an alternative role' in html
     assert 'id="engagement_type_label"' in html
+    assert 'id="min_contract_months"' in html
     assert 'class="choice-strip"' in html
     assert 'class="choice-card choice-card--work-mode"' in html
     assert 'input type="checkbox" name="engagement_type"' in html
     assert 'input type="checkbox" name="work_mode_preference"' in html
+    assert 'field-info-drawer' in html
+    assert 'job-hunter-account-bar' in html
+    assert 'btn-add' in html
+    assert 'btn-add token-input-action' in html
+    assert '>+<' in html
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
+    assert 'window.__JOB_HUNTER_CAPABILITY_UI_LABELS__' in html
+    assert 'window.__JOB_HUNTER_SHARED_UI_LABELS__' in html
 
 
 def test_onboarding_flow_keyword_helper_uses_single_target_role():
@@ -83,7 +91,38 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
         {
             "files": [
                 {
-                    "filename": "cv.csv",
+                    "filename": "cv.txt",
+                    "content_base64": base64.b64encode(b"header,value\n").decode("ascii"),
+                }
+            ],
+            "search_preferences": {
+                "keywords": "business analyst",
+                "locations": ["Sydney"],
+                "engagement_type": ["permanent", "contract"],
+                "min_contract_months": 6,
+            },
+            "onboarding_settings": {
+                "capability_strength_preset": "balanced",
+            },
+        }
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["ok"] is True
+
+
+def test_api_onboarding_import_logs_selected_capability_strength_preset(monkeypatch, capsys):
+    monkeypatch.setattr(onboarding_api, "persist_uploaded_source_pack", lambda files: {"profile_sources": [], "cv_variants": []})
+    monkeypatch.setattr(onboarding_api, "run_onboarding", lambda materials, search_preferences=None, onboarding_settings=None: {"ok": True, "materials": materials})
+    monkeypatch.setattr(onboarding_api.srv, "_validate_onboarding_settings_inputs", lambda payload: None)
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
+
+    response = onboarding_api.api_onboarding_import(
+        {
+            "files": [
+                {
+                    "filename": "cv.txt",
                     "content_base64": base64.b64encode(b"header,value\n").decode("ascii"),
                 }
             ],
@@ -98,9 +137,12 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
         }
     )
 
+    output = capsys.readouterr().out
     assert response.status_code == 200
-    payload = json.loads(response.body.decode("utf-8"))
-    assert payload["ok"] is True
+    assert "[ONBOARDING] Capability strength selection" in output
+    assert "selected by user" in output
+    assert "resolved preset" in output
+    assert "using selected preset" in output
 
 
 def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
@@ -116,6 +158,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
             "search_keyword": "business analyst",
             "search_locations": ["Sydney"],
             "engagement_type": ["permanent", "contract"],
+            "min_contract_months": 6,
             "prefer_sector": "",
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
@@ -127,6 +170,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
     assert captured["patch"]["match_preferences"]["prefer_sector"] == profile_store.GovPref.ANY
+    assert captured["patch"]["match_preferences"]["min_contract_months"] == 6
 
 
 def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
@@ -154,6 +198,66 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
     assert captured["patch"]["match_preferences"]["work_mode_preference"] == ["remote", "hybrid"]
+
+
+def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
+    cv_path = tmp_path / "cv.txt"
+    cv_path.write_text("A" * 5000, encoding="utf-8")
+
+    monkeypatch.setattr(source_documents, "read_source_document", lambda path: "A" * 5000)
+    monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {"match_preferences": {}})
+    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"capability_profile_rules": []})
+    monkeypatch.setattr(source_documents, "extract_title_pattern_suggestions", lambda text, settings: {"target_roles": [], "also_consider_roles": []})
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {"capability_strength_preset": "balanced"}})
+    monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
+    monkeypatch.setattr(source_documents, "clear_capability_debug_log", lambda: None)
+
+    result = source_documents.run_onboarding(
+        {"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]},
+        search_preferences={
+            "keywords": "business analyst",
+            "locations": ["Sydney"],
+            "engagement_type": ["permanent"],
+        },
+        onboarding_settings={
+            "capability_strength_preset": "balanced",
+            "cv_max_pages": 5,
+        },
+    )
+
+    output = capsys.readouterr().out
+    assert result["ok"] is True
+    assert "[ONBOARDING] Extraction input" in output
+    assert "chars read" in output
+    assert "approx pages" in output
+    assert "[ONBOARDING] CV source read" in output
+    assert "[ONBOARDING] Extraction summary" in output
+
+
+def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_selected(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
+    monkeypatch.setattr(onboarding_api, "normalize_capability_rules", lambda rules, current_onboarding: [])
+
+    response = onboarding_api.api_onboarding_confirm(
+        {
+            "target_roles": ["Business Analyst"],
+            "also_consider_roles": [],
+            "search_keyword": "business analyst",
+            "search_locations": ["Sydney"],
+            "engagement_type": ["permanent"],
+            "min_contract_months": 6,
+            "prefer_sector": "",
+            "minimum_salary_yearly": 0,
+            "minimum_daily_rate": 0,
+            "capability_profile_rules": [],
+        }
+    )
+
+    assert response.status_code == 200
+    assert captured["patch"]["match_preferences"]["min_contract_months"] is None
 
 
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
@@ -501,11 +605,15 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
     monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
     monkeypatch.setattr(server_helpers, "AUTH_DISABLED", True)
     (tmp_path / "run_stats.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(server_helpers, "rebuild_workspace_results", lambda reason="": rebuilds.append(reason))
+    monkeypatch.setattr(
+        server_helpers,
+        "rebuild_workspace_results",
+        lambda reason="", user_id=None: rebuilds.append((reason, user_id)),
+    )
 
     server_helpers._rebuild_workspace_on_startup()
 
-    assert rebuilds == ["server startup rebuild"]
+    assert rebuilds == [("server startup rebuild", server_helpers.LOCAL_USER_ID)]
 
 
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):

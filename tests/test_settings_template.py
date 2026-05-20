@@ -16,7 +16,8 @@ def test_source_document_suffixes_are_rendered_read_only():
 
     assert 'id="source_document_allowed_suffixes"' in html
     assert 'readonly aria-readonly="true"' in html
-    assert "Read-only. One suffix per line" in html
+    assert "Allowed CV file suffixes" in html
+    assert "CV Files" in html
 
 
 def test_global_settings_page_renders_admin_partial(monkeypatch):
@@ -66,6 +67,10 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="choice-card choice-card--work-mode"' in html
     assert 'input type="checkbox" name="engagement_type"' in html
     assert 'select id="engagement_type"' not in html
+    assert 'Add capability' in html
+    assert 'Include SEEK in search' in html
+    assert 'Include LinkedIn in search' in html
+    assert '>Add<' not in html
     assert 'id="keywords"' in html
     assert 'data-chip-editor="keywords"' not in html
     assert 'Search keyword' in html

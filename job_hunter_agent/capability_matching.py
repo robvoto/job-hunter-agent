@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.description_trust import get_trusted_full_description
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
+from job_hunter_agent.io_utils import load_ui_labels
 
 
 from job_hunter_agent.profile_store import (
@@ -49,6 +50,12 @@ _REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset({
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
 })
 _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {CATEGORY_HARD_BLOCKER_PATTERN}
+
+
+@lru_cache(maxsize=1)
+def _capability_ui_labels() -> dict:
+    labels = load_ui_labels().get("workspace_card_labels", {})
+    return labels if isinstance(labels, dict) else {}
 
 
 def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
@@ -300,7 +307,8 @@ def build_risk_and_missing_evidence(
                 if alignment == "weak":
                     missing.append(f"{label} required but weakly evidenced")
                 else:
-                    risks.append(f"{label} required but only partially evidenced")
+                    partial_suffix = str(_capability_ui_labels().get("partial_evidence_risk_suffix") or "is only partially supported")
+                    risks.append(f"{label} {partial_suffix}")
 
     return dedupe_preserve_order(risks)[:4], dedupe_preserve_order(missing)[:4]
 

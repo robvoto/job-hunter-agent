@@ -1,3 +1,11 @@
+"""Role title normalisation and decomposition rules.
+
+This module handles the logic for cleaning job titles and breaking them 
+down into seniority modifiers and base role names. It manages the 
+abbreviation expansions and normalisation settings required to keep 
+job matching consistent across different sources and user profiles.
+"""
+
 from __future__ import annotations
 
 import json
@@ -121,7 +129,8 @@ def _clean_rule_token(value: Any) -> str:
 def _load_seniority_modifiers() -> frozenset[str]:
     try:
         payload = load_title_normalization_rules()
-    except Exception:
+    except Exception as exc:
+        print(f"[TITLE_NORM][WARN] Failed to load seniority modifiers: {exc}")
         return frozenset()
     modifiers = payload.get(RULES_SENIORITY_MODIFIERS_KEY)
     if not isinstance(modifiers, list):
@@ -154,7 +163,8 @@ def extract_seniority_modifiers(value: Any) -> list[str]:
 def _load_role_title_tokens() -> frozenset[str]:
     try:
         entries = load_role_title_knowledge()
-    except Exception:
+    except Exception as exc:
+        print(f"[TITLE_NORM][WARN] Failed to load role title tokens: {exc}")
         return frozenset()
 
     tokens: list[str] = []

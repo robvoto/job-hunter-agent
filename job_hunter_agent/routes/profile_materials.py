@@ -3,6 +3,7 @@ from fastapi import APIRouter, Body, Request
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.auth import auth_required_response, is_admin
 from job_hunter_agent.config import GLOBAL_SETTINGS_PATH
+from job_hunter_agent.global_settings import save_global_settings
 
 from job_hunter_agent.routes.responses import json_response
 
@@ -62,7 +63,7 @@ def api_global_settings_patch(request: Request, body: dict = Body(...)):  # type
     try:
         if not is_admin(request):
             return auth_required_response(GLOBAL_SETTINGS_PATH, False)
-        updated = srv.save_global_settings(body)
+        updated = save_global_settings(body)
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(updated)

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Query
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.review_history_service import (
     append_review_key,
+    get_job_description,
     record_job_view,
     remove_review_key,
     save_block_similar_feedback,
@@ -23,7 +24,7 @@ def api_rejection_suggestions(job_id: str = Query("")):  # type: ignore[no-untyp
     job_id = job_id.strip()
     if not job_id:
         return json_response({"error": "job_id is required"}, 400)
-    description = srv.get_job_description(job_id)
+    description = get_job_description(job_id)
     if not description:
         return json_response({})
     description_hash = hashlib.sha1(description.encode("utf-8")).hexdigest()

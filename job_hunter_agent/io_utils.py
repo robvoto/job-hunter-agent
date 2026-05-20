@@ -1,3 +1,10 @@
+"""Utility functions for file I/O operations, especially JSON.
+
+This module provides helpers for loading and saving JSON data,
+handling file paths, and normalizing text for consistent processing
+across the job hunter agent. It centralizes common I/O patterns
+to ensure data integrity and error handling.
+"""
 import json
 import re
 import sys
@@ -41,7 +48,8 @@ def load_json_dict(path: Path) -> Dict[str, dict]:
         data = json.loads(path.read_text(encoding=AUTH_ENCODING))
         if isinstance(data, dict):
             return data
-    except Exception:
+    except Exception as exc:
+        print(f"[IO_UTILS][WARN] Failed to load JSON dictionary from {path}: {exc}")
         pass
     return {}
 
@@ -53,7 +61,8 @@ def load_json_list(path: Path) -> List[dict]:
         data = json.loads(path.read_text(encoding=AUTH_ENCODING))
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
-    except Exception:
+    except Exception as exc:
+        print(f"[IO_UTILS][WARN] Failed to load JSON list from {path}: {exc}")
         pass
     return []
 

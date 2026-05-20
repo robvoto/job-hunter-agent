@@ -35,17 +35,28 @@ function hideRunWait() {
   waitUi?.hide();
 }
 
-function reviewOptionMarkup(selectedValue) {
-  const options = [
-    ['', 'Choose a strength'],
-    ['strong', capabilityStrengthMeta('strong')?.label || 'Strong'],
-    ['working', capabilityStrengthMeta('working')?.label || 'Working'],
-    ['basic', capabilityStrengthMeta('basic')?.label || 'Basic'],
-  ];
-  return options.map(([value, label]) => {
-    const selected = value === selectedValue ? ' selected' : '';
-    return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+function reviewStrengthChoicesMarkup(selectedValue, groupName) {
+  const levels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
+    ? capabilityUi.capabilityLevels
+    : Object.keys(capabilityUi.capabilityLevelMeta || {});
+  return levels.map((level) => {
+    const meta = capabilityUi.capabilityLevelMeta?.[level];
+    if (!meta || !meta.label) {
+      throw new Error(`Missing capability strength label for ${level}.`);
+    }
+    const inputId = `${groupName}_${level}`;
+    const checked = level === selectedValue ? ' checked' : '';
+    return `
+      <label class="choice-card choice-card--strength" for="${inputId}">
+        <input id="${inputId}" type="radio" name="${groupName}" value="${escapeHtml(level)}"${checked} aria-label="${escapeHtml(meta.label)}">
+        <span>${escapeHtml(meta.label)}</span>
+      </label>
+    `;
   }).join('');
+}
+
+function getSelectedReviewChoice(card) {
+  return String(card?.querySelector('input[type="radio"]:checked')?.value || '').trim();
 }
 
 function suggestionExamplesMarkup(items, emptyLabel) {
@@ -74,13 +85,15 @@ function renderSuggestedTuning(suggestions) {
       <h3>Capabilities from viable roles</h3>
       <p class="tuning-group-copy">Repeated skills from kept roles that need a decision before the engine can learn how to classify them consistently.</p>
       <div class="review-list">
-        ${capabilitySuggestions.map(item => `
+        ${capabilitySuggestions.map((item, index) => `
           <div class="review-card">
             <h3>${escapeHtml(item.skill || 'Capability')}</h3>
             <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
             <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
-            <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel || 'How strong is this capability for you?')}</label>
-            <select class="skill-choice" data-skill="${escapeHtml(item.skill || '')}">${reviewOptionMarkup(item.recommended_choice || '')}</select>
+            <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
+            <div class="choice-strip capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}">
+              ${reviewStrengthChoicesMarkup(item.recommended_choice || '', `skill-choice-${index}`)}
+            </div>
             <details class="review-choice-guide">
               <summary>What this choice means</summary>
               <div class="review-choice-guide-body">${renderReviewChoiceGuide(item.recommended_choice || '')}</div>
@@ -296,21 +309,20 @@ document.getElementById('refresh_review_data')?.addEventListener('click', async 
 
 const tuningPanel = document.getElementById('tuning_suggestions_panel');
 tuningPanel?.addEventListener('change', (e) => {
-  const select = e.target.closest('.skill-choice');
-  if (!select) return;
-  const card = select.closest('.review-card');
+  const input = e.target.closest('input[type="radio"]');
+  if (!input || !input.name?.startsWith('skill-choice-')) return;
+  const card = input.closest('.review-card');
   const guideBody = card?.querySelector('.review-choice-guide-body');
   if (!guideBody) return;
-  guideBody.innerHTML = renderReviewChoiceGuide(select.value || '');
+  guideBody.innerHTML = renderReviewChoiceGuide(input.value || '');
 });
 
 tuningPanel?.addEventListener('click', async (e) => {
   const btn = e.target.closest('.confirm-skill-btn');
   if (btn) {
     const card = btn.closest('.review-card');
-    const select = card?.querySelector('.skill-choice');
     const skill = btn.dataset.skill;
-    const choice = select?.value;
+    const choice = getSelectedReviewChoice(card);
     if (!skill || !choice) return;
     btn.disabled = true;
     btn.textContent = 'Saving…';

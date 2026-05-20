@@ -65,12 +65,12 @@
 
 .badge-new { background: var(--accent-soft); color: var(--accent); text-transform: none; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
 .badge-potential { background: var(--state-warning-bg); color: var(--state-warning-text); }
-.badge-archive { background: var(--state-neutral-bg); color: var(--state-neutral-text); }
+.badge-archive { background: transparent; color: var(--state-neutral-text); border: 1px solid var(--border-subtle); opacity: 0.5; font-size: 0.78rem; }
 .badge-hidden { background: var(--state-error-bg); color: var(--state-error-text); }
 .badge-stale { background: var(--state-neutral-bg); color: var(--state-neutral-text); }
-.badge-viewed { background: var(--state-warning-bg); color: var(--state-warning-text); }
-.badge-source-seek { background: var(--state-neutral-bg); color: var(--state-neutral-text); border: 1px solid var(--border-subtle); }
-.badge-source-linkedin { background: var(--state-neutral-bg); color: var(--state-neutral-text); border: 1px solid var(--border-subtle); }
+.badge-viewed { background: var(--state-viewed-bg); color: var(--state-viewed-text); border: 1px solid var(--state-viewed-border); }
+.badge-source-seek { background: var(--brand-seek-bg); color: var(--brand-seek-text); border: 1px solid var(--brand-seek-border); }
+.badge-source-linkedin { background: var(--brand-linkedin-bg); color: var(--brand-linkedin-text); border: 1px solid var(--brand-linkedin-border); }
 .badge-source-neutral { background: var(--state-success-bg); color: var(--state-success-text); }
 .badge-sector-public { background: var(--state-neutral-bg); color: var(--state-neutral-text); }
 .badge-fit-high { background: var(--state-success-bg); color: var(--state-success-text); }
@@ -79,17 +79,11 @@
 /* badge-warning covers amber/advisory signals: Posting evidence (fallback), Potential Duplicates, Description Issue */
 .badge-warning { background: var(--state-warning-bg); color: var(--state-warning-text); }
 
-/* Dark professional: badge-new uses token-driven orange-subtle; SEEK badge uses info-blue */
+/* Dark professional: badge-new uses token-driven orange-subtle; source badges use brand tokens */
 [data-theme="dark-professional"] .badge-new {
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
   color: var(--accent);
-}
-
-[data-theme="dark-professional"] .badge-source-seek {
-  background: var(--state-info-bg);
-  border-color: var(--state-info-border);
-  color: var(--state-info-text);
 }
 
 [data-theme="dark-professional"] .job-grid {

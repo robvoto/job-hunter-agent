@@ -1,3 +1,11 @@
+"""Australian location resolution and proximity helpers.
+
+This module manages the loading of canonical Australian states and capital 
+cities used by search pickers. It provides utilities for resolving 
+user-supplied location strings and calculating proximity to capital 
+cities using Haversine distance formulas.
+"""
+
 import json
 from typing import Dict, Optional
 
@@ -139,6 +147,7 @@ def find_nearest_location(latitude: float, longitude: float) -> str:
             key=lambda city: haversine_distance(latitude, longitude, city[1], city[2])
         )
         return str(nearest_city[0]).strip()
-    except Exception:
+    except Exception as exc:
+        print(f"[LOCATIONS][WARN] find_nearest_location failed: {exc}. Falling back to default.")
         # Fall back to Sydney if any error occurs
         return default_location_value()

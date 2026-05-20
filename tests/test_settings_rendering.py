@@ -14,4 +14,19 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
 
     assert "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__" not in html
     assert "Search keyword" in html
+    assert "Include SEEK in search" in html
+    assert "Include LinkedIn in search" in html
+    assert "Shared search inputs that apply across all enabled sources." in html
+    assert "Job board search" in html
+    assert '>Add<' not in html
     assert '<label for="locations">Location</label>' in html
+    assert 'id="min_contract_months"' in html
+    assert '6+ months' in html
+    assert 'job-hunter-account-bar' in html
+    assert 'account-bar-shortcut' in html
+    assert 'class="btn-add"' in html
+    assert 'capability-add-button' not in html
+    assert 'capability-grid' in html
+    assert '>+<' in html
+    assert 'window.__JOB_HUNTER_CAPABILITY_UI_LABELS__' in html
+    assert 'window.__JOB_HUNTER_SHARED_UI_LABELS__' in html

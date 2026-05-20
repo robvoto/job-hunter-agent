@@ -123,7 +123,10 @@ Target aesthetic: Linear / GitHub dark / Vercel dashboard. Enterprise dark SaaS.
 - `block-confirm` (Hide title words panel) uses warning tokens — amber accent, not red background
 - `.job-insights` (Fit breakdown) overrides `--insight-bg` to `var(--bg-muted)` — keeps it neutral, not blue
 - `.results-helper` gets left orange accent border in dark professional — info callout, not background panel
-- `badge-source-seek` gets dark-professional override to info-blue tokens
+- `badge-source-seek` uses `--brand-seek-*` tokens (SEEK navy #0d3880; dark-adjusted for dark surfaces)
+- `badge-source-linkedin` uses `--brand-linkedin-*` tokens (LinkedIn blue #0a66c2; dark-adjusted for dark surfaces)
+- `badge-viewed` uses `--state-viewed-*` tokens (sky-blue, distinct from amber `badge-warning`)
+- `badge-archive` is intentionally dim (opacity 0.5, smaller text) — low-priority informational chip
 - `badge-new` gets dark-professional override to clean orange-subtle (accent-soft alone is not clean enough in dark)
 
 **Token palette (dark professional) — defined in `themes.tokens.css`:**

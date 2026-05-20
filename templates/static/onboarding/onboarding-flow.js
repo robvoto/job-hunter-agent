@@ -1,3 +1,4 @@
+(() => {
 const { escapeHtml, normalizeReviewText, patternToLabel, normalizeWorkModePreferences, getWorkModePreferenceValues, setWorkModePreferenceValues, setEngagementTypeValues, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
 
 const onboardingFlowCurrencyUi = window.JobHunterCurrencyUi || {};
@@ -6,6 +7,8 @@ const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
 const onboardingLocationUi = window.JobHunterLocationUi || {};
 const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
+const capabilityUi = window.JobHunterCapabilityUi || {};
+const capabilityLabels = capabilityUi.labels || {};
 const onboardingUserId = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
 
 if (!onboardingFlowTitleTierLabels) {
@@ -13,6 +16,9 @@ if (!onboardingFlowTitleTierLabels) {
 }
 if (!onboardingImportSummaryLabels) {
   throw new Error('Missing onboarding import summary labels.');
+}
+if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
+  throw new Error('Missing capability UI labels.');
 }
 if (!onboardingUserId) {
   throw new Error('Missing user id.');
@@ -88,6 +94,7 @@ const flowRefs = Object.freeze({
   checkSearchTitle: document.getElementById('check_search_title'),
   checkLocations: document.getElementById('check_locations'),
   checkEngagementType: document.getElementById('check_engagement_type'),
+  checkMinContractMonths: document.getElementById('check_min_contract_months'),
   checkWorkModePreference: document.getElementById('check_work_mode_preference'),
   checkSectorPreference: document.getElementById('check_sector_preference'),
   checkSalaryYearly: document.getElementById('check_salary_yearly'),
@@ -259,6 +266,7 @@ function updateCheckStep() {
     ? searchPrefs.locations.map(locationLabel).join(' | ')
     : 'Not provided';
   flowRefs.checkEngagementType.textContent = engagementTypeLabel(searchPrefs.engagement_type);
+  flowRefs.checkMinContractMonths.textContent = minContractMonthLabel(searchPrefs.min_contract_months);
   flowRefs.checkWorkModePreference.textContent = workModePreferenceLabel(searchPrefs.work_mode_preference);
   flowRefs.checkSectorPreference.textContent = sectorPreferenceLabel(searchPrefs.prefer_sector);
   flowRefs.checkSalaryYearly.textContent = formatCurrencySummaryValue(searchPrefs.minimum_salary_yearly);
@@ -273,7 +281,7 @@ function setSelectedLocations(locations) {
   const resolved = onboardingLocationUi.resolveLocationValue ? onboardingLocationUi.resolveLocationValue(next) : next;
   selectedLocations = resolved ? [resolved] : [];
   if (select) select.value = resolved;
-  renderSelectedLocation();
+  renderLocationSelect();
 }
 
 function defaultSearchKeywordFromTargetRoles(profile) {
@@ -290,6 +298,7 @@ function hydrateSearchBasics(profile) {
   const currentKeywords = String(flowRefs.reviewSearchKeywords.value || '').trim();
   const savedKeywords = String(searchSettings.keywords || '').trim();
   flowRefs.reviewSearchKeywords.value = currentKeywords || savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
+  setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
   const currentSalaryYearly = String(flowRefs.reviewMinimumSalaryYearly.value || '').trim();
   const currentSalaryDaily = String(flowRefs.reviewMinimumDailyRate.value || '').trim();
   if (!currentSalaryYearly) {
@@ -322,12 +331,25 @@ function removeReviewCapability(index) {
   reviewCapabilityVisibleCount = Math.max(reviewCapabilityVisibleCount - 1, getReviewCapabilityPreviewCount());
 }
 
+function removeReviewCapabilityAlias(index, aliasValue) {
+  const rule = reviewCapabilityRules[index];
+  if (!rule) return;
+  const cleanedAlias = normalizeReviewAlias(aliasValue);
+  reviewCapabilityRules[index] = normalizeReviewCapability({
+    ...rule,
+    aliases: (rule.aliases || []).filter((alias) => alias !== cleanedAlias),
+  });
+  renderReviewCapabilities();
+  saveWizardState();
+}
+
 function applyReviewCapabilityAction(index, action) {
   if (!reviewCapabilityRules[index]) return;
   if (action === 'remove') {
     removeReviewCapability(index);
   }
   renderReviewStep();
+  saveWizardState();
 }
 
 function applyBulkReviewCapabilityAction(action) {
@@ -341,6 +363,7 @@ function applyBulkReviewCapabilityAction(action) {
     selectedReviewCapabilityIndexes.clear();
   }
   renderReviewStep();
+  saveWizardState();
 }
 
 function selectVisibleReviewCapabilities() {
@@ -376,7 +399,7 @@ function renderReviewCapabilities() {
       reviewCapabilityCountEl.textContent = '0 capabilities';
       reviewCapabilityCountEl.classList.remove('is-selected');
     }
-    container.innerHTML = '<div class="chip-empty">No capabilities found yet.</div>';
+    container.innerHTML = `<div class="chip-empty">${escapeHtml(capabilityLabels.onboarding_empty_text)}</div>`;
     return;
   }
   const filterTerm = String(flowRefs.reviewCapabilityFilter?.value || '').trim().toLowerCase();
@@ -401,13 +424,24 @@ function renderReviewCapabilities() {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     const aliasHtml = (() => {
       if (!rule.aliases.length) return '';
+      const previewAliases = rule.aliases.slice(0, 3);
+      const previewMoreCount = Math.max(rule.aliases.length - previewAliases.length, 0);
+      const previewHtml = previewAliases.map((alias) =>
+        `<span class="capability-summary-chip">${escapeHtml(patternToLabel(alias) || alias)}</span>`
+      ).join('') + (previewMoreCount > 0 ? `<span class="capability-summary-chip capability-summary-chip-more">+${previewMoreCount}</span>` : '');
       const aliasChips = rule.aliases.map((alias) =>
-        `<span class="review-capability-alias">${escapeHtml(patternToLabel(alias) || alias)}</span>`
+        `<span class="cap-alias-chip" title="${escapeHtml(patternToLabel(alias) || alias)}">
+          <span class="cap-alias-chip-label">${escapeHtml(patternToLabel(alias) || alias)}</span>
+          <button class="cap-alias-chip-remove" type="button" data-review-remove-capability-alias="${index}" data-review-capability-alias="${escapeHtml(alias)}" aria-label="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}" title="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}">&times;</button>
+        </span>`
       ).join('');
       return `
-        <details class="review-capability-alias-drawer">
-          <summary>Aliases (${rule.aliases.length})</summary>
-          <div class="review-capability-aliases" aria-label="Aliases">${aliasChips}</div>
+        <details class="capability-alias-drawer">
+          <summary class="cap-alias-summary">
+            <span class="capability-summary-label">${escapeHtml(capabilityLabels.related_skills_summary.replace('{count}', String(rule.aliases.length)))}</span>
+            <span class="capability-summary-preview" aria-hidden="true">${previewHtml}</span>
+          </summary>
+          <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
         </details>
       `;
     })();
@@ -430,11 +464,16 @@ function renderReviewCapabilities() {
         </div>
       </article>
     `;
-  }).join('') : '<div class="chip-empty">No matching capabilities found.</div>';
+    }).join('') : `<div class="chip-empty">${escapeHtml(capabilityLabels.onboarding_no_match_text)}</div>`;
   const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
+  const nextCount = Math.min(getReviewCapabilityPreviewCount(), hiddenCount);
   const footerHtml = hiddenCount > 0 ? `
     <div class="review-capability-footer">
-      <button class="btn btn-secondary" type="button" data-review-show-more="true">Show ${escapeHtml(String(Math.min(getReviewCapabilityPreviewCount(), hiddenCount)))} more</button>
+      <button class="btn-icon review-capability-footer-icon" type="button" data-review-show-more="true" aria-label="Show ${escapeHtml(String(nextCount))} more capabilities" title="Show ${escapeHtml(String(nextCount))} more capabilities">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-footer-icon-svg">
+          <path d="M12 5v14m-7-7h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        </svg>
+      </button>
       <button class="btn btn-secondary review-capability-footer-link" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))}</button>
     </div>
   ` : '';
@@ -460,6 +499,9 @@ function renderReviewCapabilities() {
 }
 
 function renderReviewStep() {
+  if (typeof hideStatus === 'function') {
+    hideStatus();
+  }
   selectedReviewCapabilityIndexes = new Set(
     [...selectedReviewCapabilityIndexes].filter((index) => index >= 0 && index < reviewCapabilityRules.length)
   );
@@ -511,6 +553,7 @@ function buildCompletionRedirectState(payload, searchPrefs) {
     target_titles: targets,
     search_keywords: String(searchPrefs?.keywords || '').trim(),
     search_locations: locations,
+    min_contract_months: searchPrefs?.min_contract_months ?? null,
     created_at: new Date().toISOString(),
   };
 }
@@ -539,7 +582,7 @@ function formatExtractionSummary(counts) {
     return '';
   }
   const joined = parts.length === 2 ? `${parts[0]}, and ${parts[1]}` : parts[0];
-  return `${onboardingImportSummaryLabels.lead_in} ${joined} ${onboardingImportSummaryLabels.source_suffix} ${onboardingImportSummaryLabels.privacy_note}`;
+  return `${onboardingImportSummaryLabels.lead_in} ${joined} ${onboardingImportSummaryLabels.source_suffix}`;
 }
 
 async function createProfile() {
@@ -576,13 +619,14 @@ async function createProfile() {
 
   lastImportPayload = payload;
   maxUnlockedStep = Math.max(maxUnlockedStep, REVIEW_STEP);
+  draftBuiltExplicitly = true;
   hydrateDraftStep(payload.profile || {});
   setStep(REVIEW_STEP);
   const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
   const extractionMessage = payload?.fresh_onboarding_run_started
     ? formatExtractionSummary(payload.extraction_counts || {})
     : 'Your draft profile is ready. Review the role direction before you continue.';
-  showStatus('', '');
+  hideStatus();
   if (extractionMessage && typeof showOnboardingImportHelper === 'function') {
     showOnboardingImportHelper(pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
   }
@@ -624,7 +668,8 @@ async function finishSetup() {
       body: JSON.stringify({
         search_keyword: searchPrefs.keywords,
         search_locations: searchPrefs.locations,
-      engagement_type: searchPrefs.engagement_type,
+        min_contract_months: searchPrefs.min_contract_months,
+       engagement_type: searchPrefs.engagement_type,
         work_mode_preference: searchPrefs.work_mode_preference,
         prefer_sector: searchPrefs.prefer_sector,
         minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
@@ -643,6 +688,7 @@ async function finishSetup() {
     ...(lastImportPayload?.profile?.search_settings || {}),
     keywords: searchPrefs.keywords || String(payload?.profile?.search_settings?.keywords || '').trim(),
     locations: searchPrefs.locations,
+    min_contract_months: searchPrefs.min_contract_months,
     engagement_type: searchPrefs.engagement_type,
     prefer_sector: searchPrefs.prefer_sector,
   };
@@ -812,6 +858,7 @@ flowRefs.reviewAddSecondaryTitle.addEventListener('click', () => {
 });
 
 flowRefs.reviewCapabilityFilter.addEventListener('input', () => {
+  hideStatus();
   renderReviewCapabilities();
   saveWizardState();
 });
@@ -847,6 +894,17 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
     );
     return;
   }
+  const aliasRemove = event.target.closest('[data-review-remove-capability-alias]');
+  if (aliasRemove) {
+    const aliasRow = aliasRemove.closest('[data-review-capability-index]');
+    if (aliasRow) {
+      removeReviewCapabilityAlias(
+        Number(aliasRow.dataset.reviewCapabilityIndex),
+        aliasRemove.dataset.reviewCapabilityAlias,
+      );
+    }
+    return;
+  }
   const bulkAction = event.target.closest('[data-review-bulk-action]');
   if (bulkAction) {
     applyBulkReviewCapabilityAction(bulkAction.dataset.reviewBulkAction);
@@ -875,12 +933,12 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
     saveWizardState();
     return;
   }
-  const capabilityRow = event.target.closest('[data-review-capability-index]');
-  if (
-    capabilityRow
-    && !event.target.closest('.review-capability-alias-drawer')
-    && !event.target.closest('button')
-  ) {
+    const capabilityRow = event.target.closest('[data-review-capability-index]');
+    if (
+      capabilityRow
+      && !event.target.closest('.capability-alias-drawer')
+      && !event.target.closest('button')
+    ) {
     const index = Number(capabilityRow.dataset.reviewCapabilityIndex);
     const nextChecked = !selectedReviewCapabilityIndexes.has(index);
     toggleSelectedReviewCapability(index, nextChecked);
@@ -894,12 +952,14 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
   ...document.querySelectorAll('input[name="engagement_type"]'),
 ].filter(Boolean).forEach((input) => {
   input.addEventListener('input', () => {
+    hideStatus();
     saveWizardState();
     if (typeof scheduleSearchBasicsPersistence === 'function') {
       scheduleSearchBasicsPersistence();
     }
   });
   input.addEventListener('change', () => {
+    hideStatus();
     saveWizardState();
     if (typeof scheduleSearchBasicsPersistence === 'function') {
       scheduleSearchBasicsPersistence();
@@ -913,6 +973,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
       const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
       if (!anyChecked) input.checked = true;
     }
+    hideStatus();
     updateCompensationVisibility();
   });
 });
@@ -935,6 +996,7 @@ flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
   onboardingFlowCurrencyUi.bindCurrencyInput?.(input);
 });
 flowRefs.sectorPreference?.addEventListener('change', () => {
+  hideStatus();
   saveWizardState();
   if (typeof scheduleSearchBasicsPersistence === 'function') {
     scheduleSearchBasicsPersistence();
@@ -946,6 +1008,7 @@ document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => 
       const anyChecked = document.querySelectorAll('input[name="work_mode_preference"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
+    hideStatus();
   });
 });
 const onboardingResumeStep = Number(window.__JOB_HUNTER_ONBOARDING_RESUME_STEP__ || 1);
@@ -1027,3 +1090,4 @@ if (primaryCvDropZone && primaryCvInput) {
     assignPrimaryCvFile(selectedFile);
   });
 }
+})();

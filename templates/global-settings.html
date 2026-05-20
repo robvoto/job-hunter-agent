@@ -10,46 +10,28 @@
   <script src="/static/common/csrf.js"></script>
   <script src="/static/common/console-bridge.js"></script>
   <script src="/static/theme/theme-switcher.js"></script>
+  <script src="/static/common/account-bar.js"></script>
   <script src="/static/common/wait-state.js"></script>
-  <style>
-    .sidebar-brand-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .sidebar-brand-icon {
-      width: 22px;
-      height: 22px;
-      object-fit: contain;
-      flex-shrink: 0;
-    }
-  </style>
 </head>
   <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="admin">
   <div class="job-hunter-wait-mount" id="job_hunter_wait_mount" hidden></div>
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Page sections">
       <div class="sidebar-brand">
-        <h1 class="sidebar-brand-title">
- <img src="/static/assets/job_hunter_img.png" alt="" class="sidebar-brand-icon">
-          <span>Job Hunter</span>
-        </h1>
-        <div class="sidebar-brand-actions">
-          <a href="/logout" class="nav-item nav-item-logout">Log out</a>
-        </div>
-        <a href="/" class="nav-item nav-item-workspace">← Workspace</a>
+        <h1>Job Hunter</h1>
+        <a href="/" class="nav-item nav-item-workspace">&#8592; Workspace</a>
       </div>
       <div class="sidebar-nav">
         <div class="sidebar-group-label sidebar-group-label-global">Global settings</div>
         <button class="nav-item is-active" type="button" data-section="section-admin" data-screen="admin">Global settings</button>
-        <button class="nav-item" type="button" data-section="section-learning" data-screen="admin">Learning</button>
+        <button class="nav-item" type="button" data-section="section-learning" data-screen="admin">Signals</button>
       </div>
     </nav>
 
     <main class="settings-main">
       <div class="settings-content-area">
         <section class="hero">
+          __JOB_HUNTER_TOP_UTILITY_BAR__
           <div class="hero-text">
             <h1>__JOB_HUNTER_PAGE_HEADING__</h1>
             <p>__JOB_HUNTER_PAGE_COPY__</p>

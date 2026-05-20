@@ -1,10 +1,10 @@
 """
 Workspace HTML rendering functions.
 
-This module follows an "App Shell + Fragment" architecture. 
-It processes 'results.html' as a template fragment to produce the data-heavy 
-content (job cards, filters, stats), which is then injected into the 
-'workspace.html' shell by the frontend. No scraping or pipeline logic belongs here.
+This module follows an "App Shell + Fragment" architecture. It processes
+'results.html' as a template fragment to produce the data-heavy content (job
+cards, filters, stats), which is then injected into the 'workspace.html' shell
+by the frontend. No scraping or pipeline logic belongs here.
 """
 
 import json
@@ -13,6 +13,7 @@ from functools import lru_cache
 from datetime import datetime
 from string import Template
 from typing import Dict, List, Optional
+from html import escape
 
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.capability_matching import (
@@ -62,7 +63,11 @@ from job_hunter_agent.signal_detection import (
     hard_block_reasons,
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
-from job_hunter_agent.record_schema import RECORD_DUPLICATE_LINKS_KEY, RECORD_POTENTIAL_DUPLICATE_LINKS_KEY
+from job_hunter_agent.record_schema import (
+    RECORD_DUPLICATE_LINKS_KEY,
+    RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
+)
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.work_mode_extraction import display_work_mode_label
 from job_hunter_agent.text_processing import (
@@ -78,6 +83,71 @@ from job_hunter_agent.work_mode_extraction import extract_from_text, WORK_MODE_U
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
 
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
+_WORKSPACE_PAGE_LABEL_KEYS = (
+    "hero_title",
+    "potential_jobs_tab",
+    "applied_jobs_tab",
+    "hidden_jobs_tab",
+    "match_controls_heading",
+    "reset_all_filters_button",
+    "sort_label",
+    "sort_option_best_match",
+    "sort_option_newest",
+    "sort_option_highest_salary",
+    "jobs_per_page_label",
+    "show_label",
+    "show_option_all_potential",
+    "show_option_matches_last_run",
+    "posted_label",
+    "type_label",
+    "work_mode_label",
+    "work_mode_option_any",
+    "work_mode_option_remote",
+    "work_mode_option_hybrid",
+    "work_mode_option_on_site",
+    "sector_label",
+    "sector_option_any",
+    "sector_option_public",
+    "sector_option_private",
+    "match_level_label",
+    "results_helper_copy",
+    "results_helper_dismiss_button",
+    "applied_jobs_heading",
+    "applied_jobs_copy",
+    "hidden_jobs_heading",
+    "hidden_jobs_copy",
+    "search_settings_heading",
+    "search_settings_helper",
+    "keywords_label",
+    "locations_label",
+    "work_type_sidebar_label",
+    "work_mode_sidebar_label",
+    "sector_sidebar_label",
+    "salary_min_label",
+    "date_range_label",
+    "last_run_heading",
+    "crawler_stats_heading",
+    "applications_heading",
+    "run_efficiency_summary",
+    "show_hide_hint",
+    "run_efficiency_intro",
+    "run_efficiency_separator",
+    "how_match_levels_work_summary",
+    "how_match_levels_work_copy",
+    "rejection_panel_title",
+    "rejection_panel_copy",
+    "rejection_how_this_works_summary",
+    "rejection_how_this_works_body",
+    "rejection_loading_suggestions",
+    "rejection_add_own_term_label",
+    "rejection_add_own_term_placeholder",
+    "rejection_add_button",
+    "rejection_save_button",
+    "rejection_skip_button",
+    "rejection_cancel_button",
+    "rejection_admin_tip_prefix",
+    "rejection_admin_tip_link_text",
+)
 ARCHIVE_LABEL = "Saved Earlier Searches"
 ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your workspace."
 ARCHIVE_CONTEXT_PREFIX = "Saved Earlier Searches"
@@ -86,6 +156,16 @@ ARCHIVE_CONTEXT_PREFIX = "Saved Earlier Searches"
 @lru_cache(maxsize=1)
 def _workspace_ui_labels() -> dict:
     return load_ui_labels()
+
+
+def load_workspace_page_labels() -> dict[str, str]:
+    labels = _workspace_ui_labels().get("workspace_page_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing workspace_page_labels")
+    missing = [key for key in _WORKSPACE_PAGE_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing workspace_page_labels values: {', '.join(missing)}")
+    return {f"LABEL_WS_{key.upper()}": escape(str(labels[key]).strip()) for key in _WORKSPACE_PAGE_LABEL_KEYS}
 
 
 def _workspace_label(group: str, key: str, default: str) -> str:
@@ -224,6 +304,7 @@ def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = 
 def score_filter_thresholds(
     scoring_profile: Optional[dict] = None,
     workspace_min_score: Optional[int] = None,
+    debug_mode: bool = WORKSPACE_DEBUG_MODE,
 ) -> List[int]:
     active_profile = scoring_profile or load_profile()
     match_levels = get_match_levels(active_profile)
@@ -232,6 +313,8 @@ def score_filter_thresholds(
         if workspace_min_score is not None
         else get_workspace_minimum_score()
     )
+    if debug_mode:
+        return [int(level.get("minimum_score", 0) or 0) for level in match_levels]
     return [
         int(level.get("minimum_score", 0) or 0)
         for level in match_levels
@@ -242,6 +325,7 @@ def score_filter_thresholds(
 def render_score_filter_options(
     scoring_profile: Optional[dict] = None,
     workspace_min_score: Optional[int] = None,
+    debug_mode: bool = WORKSPACE_DEBUG_MODE,
 ) -> str:
     active_profile = scoring_profile or load_profile()
     active_workspace_min_score = (
@@ -249,9 +333,13 @@ def render_score_filter_options(
         if workspace_min_score is not None
         else get_workspace_minimum_score()
     )
-    options = ['<option value="all">All match levels</option>']
-    for threshold in score_filter_thresholds(active_profile, active_workspace_min_score):
-        selected_attr = " selected" if active_workspace_min_score == threshold else ""
+    if debug_mode:
+        active_workspace_min_score = 0
+    options = ['<option value="all"{selected}>All match levels</option>'.format(
+        selected=" selected" if debug_mode else ""
+    )]
+    for threshold in score_filter_thresholds(active_profile, active_workspace_min_score, debug_mode=debug_mode):
+        selected_attr = " selected" if (not debug_mode and active_workspace_min_score == threshold) else ""
         options.append(
             f'<option value="{threshold}"{selected_attr}>'
             f'{safe_html(score_filter_option_label(threshold, active_profile))}</option>'
@@ -290,6 +378,20 @@ def render_work_type_filter_options() -> str:
             continue
         options.append(f'<option value="{safe_html(value)}">{safe_html(label)}</option>')
     return "".join(options)
+
+
+def _record_is_hard_blocked(record: dict) -> bool:
+    reject_reason = str(record.get("reject_reason") or record.get("content_reason") or "").strip()
+    if reject_reason.startswith("DESC_HARD_BLOCK_RULE"):
+        return True
+    hard_blocks = record.get("hard_block_reasons")
+    return isinstance(hard_blocks, list) and any(str(item).strip() for item in hard_blocks)
+
+
+def _record_debug_status(record: dict) -> str:
+    if str(record.get("decision") or "").strip().upper() != "REJECT":
+        return ""
+    return "hard-blocked" if _record_is_hard_blocked(record) else "debug-only"
 
 
 def humanize_reject_reason(reason: Optional[str]) -> str:
@@ -341,7 +443,9 @@ def render_job_card(
     scoring_profile: Optional[dict] = None,
     applied_pool: Optional[List[dict]] = None,
     history_clusters: Optional[Dict[str, dict]] = None,
+    debug_mode: Optional[bool] = None,
 ) -> str:
+    active_debug_mode = WORKSPACE_DEBUG_MODE if debug_mode is None else bool(debug_mode)
     default_country_suffix = get_default_country_suffix()
     active_profile = scoring_profile or load_profile()
     display_record = dict(record)
@@ -413,7 +517,7 @@ def render_job_card(
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
     score_breakdown = fit_score_breakdown(display_record, scoring_profile)
-    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=WORKSPACE_DEBUG_MODE)
+    visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=active_debug_mode)
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
     posted_age_days = current_posted_age_days(record)
@@ -427,6 +531,11 @@ def render_job_card(
     channel_signal = display_record.get("posting_channel_evidence")
     if not isinstance(channel_signal, dict):
         channel_signal = {}
+    job_requirements = [
+        compact_whitespace(item)
+        for item in (display_record.get(RECORD_JOB_REQUIREMENTS_KEY) or [])
+        if compact_whitespace(item)
+    ]
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
         duplicate_links = []
@@ -484,7 +593,15 @@ def render_job_card(
     elif channel_kind == "direct_employer" and channel_source == "metadata_first":
         badges.append(render_badge("Company", "badge-source-neutral", "Posted directly by the employer."))
     elif channel_signal.get("needs_review") and channel_kind not in ("agency_or_recruiter", "direct_employer"):
-        badges.append(render_badge("Posting evidence", "badge-warning", "Posting channel unconfirmed — may be via a recruiter or intermediary."))
+        badges.append(render_badge(
+            _workspace_label("workspace_card_labels", "posting_channel_unclear_badge", "Direct employer unclear"),
+            "badge-warning",
+            _workspace_label(
+                "workspace_card_labels",
+                "posting_channel_unclear_tooltip",
+                "No trusted employer metadata was found. This role may be via a recruiter or intermediary.",
+            ),
+        ))
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if history_warning_signals:
         badges.append(render_badge("Potential Red Flag", "badge-warning", history_warning_signals[0]))
@@ -550,12 +667,34 @@ def render_job_card(
     job_quality_signals = [s for s in (record.get("job_quality_signals") or []) if isinstance(s, dict)]
     for _sig in job_quality_signals:
         badges.append(render_badge(_sig.get("label", "Quality Concern"), "badge-warning", _sig.get("evidence", "")))
+    debug_status = _record_debug_status(record)
+    if active_debug_mode and debug_status:
+        if debug_status == "hard-blocked":
+            badges.append(render_badge(
+                _workspace_label("workspace_card_labels", "hard_blocked_badge", "Hard blocked"),
+                "badge-hidden",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "hard_blocked_tooltip",
+                    "This role hit a hard blocker and would normally be excluded.",
+                ),
+            ))
+        else:
+            badges.append(render_badge(
+                _workspace_label("workspace_card_labels", "debug_only_badge", "Debug only"),
+                "badge-source-neutral",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "debug_only_tooltip",
+                    "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
+                ),
+            ))
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
         f'<div class="match-tile {fit_tone_class}" style="--match-score: {score_percent}%;">'
         + (
             f'<span class="match-tile-number">{fit_points}</span>'
-            if WORKSPACE_DEBUG_MODE
+            if active_debug_mode
             else ""
         )
         + f'<span class="match-tile-label">{safe_html(fit_label)}</span>'
@@ -635,7 +774,7 @@ def render_job_card(
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["matched"])}</ul>'
             '</div>'
         )
-    if WORKSPACE_DEBUG_MODE and reviewed_signal_matches["unresolved"]:
+    if active_debug_mode and reviewed_signal_matches["unresolved"]:
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
             '<strong>Unresolved signals</strong>'
@@ -655,6 +794,39 @@ def render_job_card(
             '<strong>Ignored</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["ignored"])}</ul>'
             '</div>'
+        )
+    if active_debug_mode and debug_status:
+        debug_status_items = []
+        title_reason_text = str(record.get("title_reason") or "").strip()
+        content_reason_text = str(record.get("content_reason") or "").strip()
+        reject_reason_text = str(record.get("reject_reason") or "").strip()
+        if title_reason_text and title_reason_text.upper() != "OK":
+            debug_status_items.append(f"Title filter: {humanize_reject_reason(title_reason_text)}")
+        if content_reason_text and content_reason_text.upper() != "OK" and content_reason_text != title_reason_text:
+            debug_status_items.append(f"Content filter: {humanize_reject_reason(content_reason_text)}")
+        if reject_reason_text and reject_reason_text not in {title_reason_text, content_reason_text}:
+            debug_status_items.append(f"Reject reason: {humanize_reject_reason(reject_reason_text)}")
+        hard_block_items = [
+            str(item).strip()
+            for item in (record.get("hard_block_reasons") or [])
+            if str(item).strip()
+        ]
+        if hard_block_items:
+            debug_status_items.append(f"Hard blocker details: {'; '.join(hard_block_items)}")
+        if debug_status_items:
+            insight_sections.append(
+                '<div class="job-insight-group is-secondary">'
+                f'<strong>{safe_html(_workspace_label("workspace_card_labels", "debug_status_summary", "Filter status"))}</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in debug_status_items)}</ul>'
+                '</div>'
+            )
+    job_requirements_html = ""
+    if job_requirements:
+        job_requirements_html = (
+            '<details class="job-requirements">'
+            f'<summary>{safe_html(_workspace_label("workspace_card_labels", "job_requirements_summary", "Job requirements"))}</summary>'
+            f'<div class="job-insight-group is-secondary"><ul>{"".join(f"<li>{safe_html(item)}</li>" for item in job_requirements)}</ul></div>'
+            '</details>'
         )
     if duplicate_links:
         linked_items = []
@@ -714,7 +886,7 @@ def render_job_card(
             f'<ul>{"".join(f"<li>{item}</li>" for item in linked_items)}</ul>'
             '</div>'
         )
-    visible_penalties = negative_score_reasons(score_breakdown, include_values=WORKSPACE_DEBUG_MODE)
+    visible_penalties = negative_score_reasons(score_breakdown, include_values=active_debug_mode)
     if description_issue:
         visible_penalties = [
             item for item in visible_penalties
@@ -727,7 +899,7 @@ def render_job_card(
     ])[:6]
     if description_issue:
         description_issue_items = [DESCRIPTION_CAPTURE_ISSUE]
-        if WORKSPACE_DEBUG_MODE:
+        if active_debug_mode:
             capture_facts = []
             status = compact_whitespace(record.get("details_status") or "")
             source_name = compact_whitespace(record.get("description_source") or "")
@@ -770,14 +942,14 @@ def render_job_card(
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_items)}</ul>'
             '</div>'
         )
-    elif WORKSPACE_DEBUG_MODE:
+    elif active_debug_mode:
         insight_sections.append(
             '<div class="job-insight-group job-insight-muted">'
             '<strong>Watchouts</strong>'
             '<p class="insight-unavailable-note">No explicit risks detected from the captured description.</p>'
             '</div>'
         )
-    if WORKSPACE_DEBUG_MODE:
+    if active_debug_mode:
         negative_reasons = negative_score_reasons(score_breakdown)
         if negative_reasons:
             insight_sections.append(
@@ -794,7 +966,7 @@ def render_job_card(
                 f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in gap_reasons)}</ul>'
                 '</div>'
             )
-    if WORKSPACE_DEBUG_MODE and score_breakdown:
+    if active_debug_mode and score_breakdown:
         score_breakdown_html = "".join(
             f"<li>{safe_html(str(item['label']))}: {int(item['value']):+d}</li>"
             for item in score_breakdown
@@ -805,7 +977,7 @@ def render_job_card(
             f'<ul>{score_breakdown_html}</ul>'
             '</div>'
         )
-    if WORKSPACE_DEBUG_MODE and channel_signal:
+    if active_debug_mode and channel_signal:
         ch_kind = channel_signal.get("kind", "unknown")
         ch_source = channel_signal.get("source", "unknown")
         ch_trusted = [str(x) for x in channel_signal.get("trusted_metadata", []) if str(x).strip()]
@@ -910,6 +1082,7 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{note_html}"
         f"{insight_html}"
+        f"{job_requirements_html}"
         f"{context_html}"
         f"{actions_html}"
         "</article>"
@@ -928,6 +1101,7 @@ def render_section(
     scoring_profile: Optional[dict] = None,
     applied_pool: Optional[List[dict]] = None,
     history_clusters: Optional[Dict[str, dict]] = None,
+    debug_mode: Optional[bool] = None,
 ) -> str:
     if not records:
         return (
@@ -936,7 +1110,13 @@ def render_section(
         )
     dom_id = section_dom_id(title)
     cards = "".join(
-        render_job_card(record, scoring_profile, applied_pool=applied_pool, history_clusters=history_clusters)
+        render_job_card(
+            record,
+            scoring_profile,
+            applied_pool=applied_pool,
+            history_clusters=history_clusters,
+            debug_mode=debug_mode,
+        )
         for record in records
     )
     return (
@@ -958,7 +1138,16 @@ def render_results_fragment(context: dict) -> str:
     if not RESULTS_TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Missing template: {RESULTS_TEMPLATE_PATH}")
     template = Template(RESULTS_TEMPLATE_PATH.read_text(encoding="utf-8"))
-    return template.safe_substitute(context)
+    
+    # Perform initial substitution with workspace labels
+    workspace_labels = load_workspace_page_labels()
+    all_substitutions = {**workspace_labels, **context}
+    
+    rendered_html = template.safe_substitute(all_substitutions)
+    unresolved_labels = re.findall(r'\$LABEL_WS_[A-Z_]+', rendered_html)
+    if unresolved_labels:
+        raise ValueError(f"Unresolved workspace labels in template: {', '.join(set(unresolved_labels))}")
+    return rendered_html
 
 
 def render_match_level_guide_html(profile: Optional[dict] = None) -> str:

@@ -264,7 +264,11 @@ def resolve_llm_review_payload(
         raise RuntimeError("LLM review requested but OPENAI_API_KEY is missing")
 
     if learning_only:
-        payload = {"fit_review": None, "learning_candidates": llm_should_consider_learning_candidates(llm_input_text[:max_llm_chars])}
+        payload = {
+            "fit_review": None,
+            "learning_candidates": llm_should_consider_learning_candidates(llm_input_text[:max_llm_chars]),
+            "job_requirements": [],
+        }
     else:
         payload = llm_should_consider_with_learning(llm_input_text[:max_llm_chars])
 
@@ -276,6 +280,8 @@ def resolve_llm_review_payload(
             merged["learning_candidates"] = payload["learning_candidates"]
         if payload.get("contextual_capability_matches") is not None:
             merged["contextual_capability_matches"] = payload["contextual_capability_matches"]
+        if payload.get("job_requirements") is not None:
+            merged["job_requirements"] = payload["job_requirements"]
         merged["payload_source"] = "cache+llm"
         return merged
 

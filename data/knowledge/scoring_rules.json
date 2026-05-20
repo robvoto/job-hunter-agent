@@ -2,7 +2,7 @@
   "kind": "system_config",
   "name": "scoring_rules",
   "version": 4,
-  "updated_at": "2026-05-06",
+  "updated_at": "2026-05-19",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "fit_breakdown": {
     "description": "Core score components for title fit, content fit, review status, and hard-block penalties. Internal scoring logic.",
@@ -70,22 +70,22 @@
   },
   "freshness": {
     "description": "Bonuses for newer jobs. Used by the score engine, not the search filters.",
-    "last_hour": 10,
+    "last_6_hours": 10,
     "last_day": 8,
     "last_3_days": 5,
     "last_week": 2,
     "last_15_days": 1,
     "bucket_order": [
-      "last_hour",
+      "last_6_hours",
       "last_day",
       "last_3_days",
       "last_week",
       "last_15_days"
     ],
     "buckets": {
-      "last_hour": {
-        "max_days": 0.041666666666666664,
-        "label": "Posted within the last hour"
+      "last_6_hours": {
+        "max_days": 0.25,
+        "label": "Posted within the last 6 hours"
       },
       "last_day": {
         "max_days": 1,

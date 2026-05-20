@@ -1,4 +1,5 @@
-﻿const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+(function() {
+    const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
     const REVIEW_API_URL = `${API_BASE_URL}/api/review`;
     const JOB_HISTORY_API_URL = `${API_BASE_URL}/api/job-history`;
     const WORKSPACE_CONTEXT = window.__JOB_HUNTER_WORKSPACE__ || {};
@@ -745,7 +746,7 @@
         `Why isn\u2019t "${jobTitle}" a fit for you?`;
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body is-loading';
-      body.textContent = 'Loading suggestions\u2026';
+      body.textContent = WORKSPACE_CONTEXT.labels.rejectionLoadingSuggestions;
       document.getElementById('rejection-custom-list').innerHTML = '';
       document.getElementById('rejection-other-input').value = '';
       document.getElementById('rejection-panel').removeAttribute('hidden');
@@ -1110,4 +1111,4 @@
       document.getElementById('rejection-btn-cancel').click();
     });
     // end rejection-learning panel
-
+})();

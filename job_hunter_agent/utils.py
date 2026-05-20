@@ -1,4 +1,10 @@
-# utils.py
+"""Common utility functions for the job hunter agent.
+
+This module provides shared helper functions for recursive dictionary
+merging, safe type coercion, and URL parameter manipulation. It also 
+includes best-effort logic for extracting salary info and age data from
+scraped job text based on parsing rules.
+"""
 
 import copy
 import re
@@ -26,8 +32,9 @@ def coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     """Safe integer coercion with clamping."""
     try:
         resolved = int(value)
-    except Exception:
+    except Exception as exc:
         resolved = default
+        print(f"[UTILS][WARN] Failed to coerce {value!r} to int, using default {default}: {exc}")
     return max(minimum, min(maximum, resolved))
 
 
@@ -97,7 +104,8 @@ def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
             if value == str(label).strip().lower():
                 try:
                     return float(days)
-                except Exception:
+                except Exception as exc:
+                    print(f"[UTILS][WARN] Failed to parse seek age days from label '{label}': {exc}")
                     return None
 
     pattern = str(rules.get("relative_text_pattern") or "").strip()
@@ -115,5 +123,6 @@ def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
         return None
     try:
         return float(amount) * float(unit_days[unit])
-    except Exception:
+    except Exception as exc:
+        print(f"[UTILS][WARN] Failed to calculate seek age days from relative text '{posted_text}': {exc}")
         return None

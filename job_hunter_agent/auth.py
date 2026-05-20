@@ -211,7 +211,8 @@ def read_session_user(request: Request) -> dict | None:
         return None
     # Always re-derive role from env so admin_email changes take effect without re-login.
     role = "admin" if config.admin_email and email.lower() == config.admin_email.strip().lower() else "candidate"
-    return {"user_id": user_id, "email": email, "role": role}
+    name = str(payload.get("name") or "").strip()
+    return {"user_id": user_id, "email": email, "role": role, "name": name}
 
 
 def read_session_username(request: Request) -> str | None:

@@ -4,32 +4,32 @@
     <div class="workspace-layout">
       <div class="workspace-main">
         <section class="hero">
-          <h1>Jobs Workspace</h1>
+          <h1>$LABEL_WS_HERO_TITLE</h1>
         </section>
         <section class="section filter-panel">
           <div class="scope-tabs" aria-label="Top-level workspace views">
-            <button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs ($SHORTLIST_COUNT)</button>
-            <button class="scope-tab" type="button" data-workspace-target="applied">Applied ($APPLIED_COUNT)</button>
-            <button class="scope-tab" type="button" data-workspace-target="hidden">Hidden ($HIDDEN_COUNT)</button>
+            <button class="scope-tab is-active" type="button" data-workspace-target="potential">$LABEL_WS_POTENTIAL_JOBS_TAB ($SHORTLIST_COUNT)</button>
+            <button class="scope-tab" type="button" data-workspace-target="applied">$LABEL_WS_APPLIED_JOBS_TAB ($APPLIED_COUNT)</button>
+            <button class="scope-tab" type="button" data-workspace-target="hidden">$LABEL_WS_HIDDEN_JOBS_TAB ($HIDDEN_COUNT)</button>
           </div>
         </section>
         <div class="workspace-panel" data-workspace-panel="potential">
           <section class="section filter-panel">
             <div class="section-head">
-              <h2>Match Controls</h2>
-              <button class="mini-button" type="button" id="reset_workspace_filters">Reset All Filters</button>
+              <h2>$LABEL_WS_MATCH_CONTROLS_HEADING</h2>
+              <button class="mini-button" type="button" id="reset_workspace_filters">$LABEL_WS_RESET_ALL_FILTERS_BUTTON</button>
             </div>
             <div class="filter-grid">
               <label class="filter-field">
-                <span>Sort</span>
+                <span>$LABEL_WS_SORT_LABEL</span>
                 <select id="sort_select">
-                  <option value="fit">Best match first</option>
-                  <option value="newest">Newest posted first</option>
-                  <option value="salary">Highest salary first</option>
+                  <option value="fit">$LABEL_WS_SORT_OPTION_BEST_MATCH</option>
+                  <option value="newest">$LABEL_WS_SORT_OPTION_NEWEST</option>
+                  <option value="salary">$LABEL_WS_SORT_OPTION_HIGHEST_SALARY</option>
                 </select>
               </label>
               <label class="filter-field">
-                <span>Jobs Per page</span>
+                <span>$LABEL_WS_JOBS_PER_PAGE_LABEL</span>
                 <select id="page_size_select">
                   <option value="12">12</option>
                   <option value="24">24</option>
@@ -38,44 +38,44 @@
                 </select>
               </label>
               <label class="filter-field">
-                <span>Show</span>
+                <span>$LABEL_WS_SHOW_LABEL</span>
                 <select id="scope_filter">
-                  <option value="all" selected>All potential jobs</option>
-                  <option value="current">Matches last run</option>
+                  <option value="all" selected>$LABEL_WS_SHOW_OPTION_ALL_POTENTIAL</option>
+                  <option value="current">$LABEL_WS_SHOW_OPTION_MATCHES_LAST_RUN</option>
                   $SCOPE_SAVED_OPTION_HTML
                 </select>
               </label>
               <label class="filter-field">
-                <span>Posted</span>
+                <span>$LABEL_WS_POSTED_LABEL</span>
                 <select id="posted_filter">
                   $POSTED_FILTER_OPTIONS_HTML
                 </select>
               </label>
               <label class="filter-field">
-                <span>Type</span>
+                <span>$LABEL_WS_TYPE_LABEL</span>
                 <select id="work_type_filter">
                   $WORK_TYPE_FILTER_OPTIONS_HTML
                 </select>
               </label>
               <label class="filter-field">
-                <span>Work mode</span>
+                <span>$LABEL_WS_WORK_MODE_LABEL</span>
                 <select id="work_mode_filter">
-                  <option value="all">Any</option>
-                  <option value="remote">Remote</option>
-                  <option value="hybrid">Hybrid</option>
-                  <option value="on-site">On-site</option>
+                  <option value="all">$LABEL_WS_WORK_MODE_OPTION_ANY</option>
+                  <option value="remote">$LABEL_WS_WORK_MODE_OPTION_REMOTE</option>
+                  <option value="hybrid">$LABEL_WS_WORK_MODE_OPTION_HYBRID</option>
+                  <option value="on-site">$LABEL_WS_WORK_MODE_OPTION_ON_SITE</option>
                 </select>
               </label>
               <label class="filter-field">
-                <span>Sector</span>
+                <span>$LABEL_WS_SECTOR_LABEL</span>
                 <select id="sector_filter">
-                  <option value="all">Any sector</option>
-                  <option value="public">Public sector</option>
-                  <option value="private">Private sector</option>
+                  <option value="all">$LABEL_WS_SECTOR_OPTION_ANY</option>
+                  <option value="public">$LABEL_WS_SECTOR_OPTION_PUBLIC</option>
+                  <option value="private">$LABEL_WS_SECTOR_OPTION_PRIVATE</option>
                 </select>
               </label>
               <label class="filter-field">
-                <span>Match level</span>
+                <span>$LABEL_WS_MATCH_LEVEL_LABEL</span>
                 <select id="score_filter">
                   $SCORE_FILTER_OPTIONS_HTML
                 </select>
@@ -83,26 +83,26 @@
             </div>
           </section>
           <div class="results-helper" id="results_helper" hidden>
-            <p class="results-helper-copy">Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar titles directly from the title. This helps remove repeated noise from future results.</p>
-            <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">Dismiss</button>
+            <p class="results-helper-copy">$LABEL_WS_RESULTS_HELPER_COPY</p>
+            <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">$LABEL_WS_RESULTS_HELPER_DISMISS_BUTTON</button>
           </div>
           $CURRENT_SECTION_HTML
         </div>
         <div class="workspace-panel" data-workspace-panel="applied" hidden>
           <section class="section filter-panel">
             <div class="section-head">
-              <h2>Applied Jobs</h2>
+              <h2>$LABEL_WS_APPLIED_JOBS_HEADING</h2>
             </div>
-            <p class="section-copy">This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.</p>
+            <p class="section-copy">$LABEL_WS_APPLIED_JOBS_COPY</p>
           </section>
           $APPLIED_SECTION_HTML
         </div>
         <div class="workspace-panel" data-workspace-panel="hidden" hidden>
           <section class="section filter-panel">
             <div class="section-head">
-              <h2>Hidden Jobs</h2>
+              <h2>$LABEL_WS_HIDDEN_JOBS_HEADING</h2>
             </div>
-            <p class="section-copy">This area keeps roles you have intentionally pushed out of sight for now.</p>
+            <p class="section-copy">$LABEL_WS_HIDDEN_JOBS_COPY</p>
           </section>
           $HIDDEN_SECTION_HTML
         </div>
@@ -112,38 +112,38 @@
           <section class="snapshot-section">
             <div class="search-summary-head">
               <div>
-                <h3 class="snapshot-subheading">Search Settings</h3>
-                <p class="snapshot-helper">Shared search settings used across sources.</p>
+                <h3 class="snapshot-subheading">$LABEL_WS_SEARCH_SETTINGS_HEADING</h3>
+                <p class="snapshot-helper">$LABEL_WS_SEARCH_SETTINGS_HELPER</p>
               </div>
               <a class="settings-cog-link" href="/settings#section-search" aria-label="Open search settings" title="Open search settings">
                 <span aria-hidden="true">&#128393;</span>
               </a>
             </div>
             <div class="snapshot-meta snapshot-meta--common-search">
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Keywords</span><span class="snapshot-meta-value">$SEARCH_KEYWORDS_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Locations</span><span class="snapshot-meta-value">$SEARCH_LOCATIONS_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">$WORK_TYPE_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Work mode</span><span class="snapshot-meta-value">$WORK_MODE_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Sector</span><span class="snapshot-meta-value">$SECTOR_PREFERENCE_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Salary min</span><span class="snapshot-meta-value">$SALARY_MIN_LABEL</span></div>
-              <div class="snapshot-meta-row"><span class="snapshot-meta-label">Date range</span><span class="snapshot-meta-value">$DATE_RANGE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_KEYWORDS_LABEL</span><span class="snapshot-meta-value">$SEARCH_KEYWORDS_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_LOCATIONS_LABEL</span><span class="snapshot-meta-value">$SEARCH_LOCATIONS_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_WORK_TYPE_SIDEBAR_LABEL</span><span class="snapshot-meta-value">$WORK_TYPE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_WORK_MODE_SIDEBAR_LABEL</span><span class="snapshot-meta-value">$WORK_MODE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_SECTOR_SIDEBAR_LABEL</span><span class="snapshot-meta-value">$SECTOR_PREFERENCE_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_SALARY_MIN_LABEL</span><span class="snapshot-meta-value">$SALARY_MIN_LABEL</span></div>
+              <div class="snapshot-meta-row"><span class="snapshot-meta-label">$LABEL_WS_DATE_RANGE_LABEL</span><span class="snapshot-meta-value">$DATE_RANGE_LABEL</span></div>
             </div>
           </section>
 
           <section class="snapshot-section">
-            <h2 class="snapshot-heading">Last Run</h2>
+            <h2 class="snapshot-heading">$LABEL_WS_LAST_RUN_HEADING</h2>
             <div class="summary-grid">
               $THIS_RUN_CARDS_HTML
             </div>
           </section>
           <section class="snapshot-section">
-            <h2 class="snapshot-heading">Crawler Stats</h2>
+            <h2 class="snapshot-heading">$LABEL_WS_CRAWLER_STATS_HEADING</h2>
             <div class="summary-grid">
               $CRAWLER_CARDS_HTML
             </div>
           </section>
           <section class="snapshot-section">
-            <h2 class="snapshot-heading">Applications</h2>
+            <h2 class="snapshot-heading">$LABEL_WS_APPLICATIONS_HEADING</h2>
             <div class="summary-grid">
               $APPLICATION_CARDS_HTML
             </div>
@@ -151,11 +151,11 @@
         </section>
         <details class="side-panel">
           <summary>
-            <span>Run Efficiency</span>
-            <span class="side-toggle-hint">Show / hide</span>
+            <span>$LABEL_WS_RUN_EFFICIENCY_SUMMARY</span>
+            <span class="side-toggle-hint">$LABEL_WS_SHOW_HIDE_HINT</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Search targets this run: $TARGET_SUMMARIES. $SNAPSHOT_HELPER$TESTING_MODE_NOTE</p>
+            <p class="side-panel-copy">$LABEL_WS_RUN_EFFICIENCY_INTRO$TARGET_SUMMARIES$LABEL_WS_RUN_EFFICIENCY_SEPARATOR$SNAPSHOT_HELPER$TESTING_MODE_NOTE</p>
             <div class="job-meta">
               $TOP_REJECT_REASONS_HTML
             </div>
@@ -163,11 +163,11 @@
         </details>
         <details class="side-panel">
           <summary>
-            <span>How Match Levels Work</span>
-            <span class="side-toggle-hint">Show / hide</span>
+            <span>$LABEL_WS_HOW_MATCH_LEVELS_WORK_SUMMARY</span>
+            <span class="side-toggle-hint">$LABEL_WS_SHOW_HIDE_HINT</span>
           </summary>
           <div class="side-panel-body">
-            <p class="side-panel-copy">Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the workspace does not pretend to be more precise than it really is.</p>
+            <p class="side-panel-copy">$LABEL_WS_HOW_MATCH_LEVELS_WORK_COPY</p>
             <div class="job-meta">
               $MATCH_LEVEL_GUIDE_HTML
             </div>
@@ -180,34 +180,39 @@
   <div class="rejection-overlay" id="rejection-overlay" hidden></div>
   <div class="rejection-panel" id="rejection-panel" hidden>
     <div class="rejection-panel-header">
-      <h3 id="rejection-panel-title">Why isn&#39;t this a fit for you?</h3>
-      <p>Choose required terms you do not want the app to accept again.</p>
+      <h3 id="rejection-panel-title">$LABEL_WS_REJECTION_PANEL_TITLE</h3>
+      <p>$LABEL_WS_REJECTION_PANEL_COPY</p>
     </div>
     <details class="rejection-first-use" id="rejection-first-use" hidden>
-      <summary>How this works</summary>
-      <div class="rejection-first-use-body" id="rejection-first-use-body">If you save a term here, future jobs are filtered only when it looks required. To block any mention, use global description blockers in Settings.</div>
+      <summary>$LABEL_WS_REJECTION_HOW_THIS_WORKS_SUMMARY</summary>
+      <div class="rejection-first-use-body" id="rejection-first-use-body">$LABEL_WS_REJECTION_HOW_THIS_WORKS_BODY</div>
     </details>
-    <div class="rejection-panel-body is-loading" id="rejection-panel-body">Loading suggestions&#8230;</div>
+    <div class="rejection-panel-body is-loading" id="rejection-panel-body">$LABEL_WS_REJECTION_LOADING_SUGGESTIONS</div>
     <div class="rejection-other">
-      <div class="rejection-other-label">Add your own required term</div>
+      <div class="rejection-other-label">$LABEL_WS_REJECTION_ADD_OWN_TERM_LABEL</div>
       <div class="rejection-other-row">
-        <input type="text" id="rejection-other-input" placeholder="e.g. SAP, payroll, NV1 clearance" maxlength="80" />
-        <button type="button" id="rejection-other-add">Add</button>
+        <input type="text" id="rejection-other-input" placeholder="$LABEL_WS_REJECTION_ADD_OWN_TERM_PLACEHOLDER" maxlength="80" />
+        <button type="button" id="rejection-other-add">$LABEL_WS_REJECTION_ADD_BUTTON</button>
       </div>
       <div class="rejection-custom-list" id="rejection-custom-list"></div>
     </div>
     <div class="rejection-panel-footer">
-      <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">Save &amp; Continue</button>
-      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button" hidden>Continue Without Extra Blocks</button>
-      <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">Cancel</button>
-      <p class="block-admin-tip">View and edit saved rules in the <a href="/settings" target="_blank" rel="noopener">Settings panel</a>.</p>
+      <button class="rejection-btn-save" id="rejection-btn-save" disabled type="button">$LABEL_WS_REJECTION_SAVE_BUTTON</button>
+      <button class="rejection-btn-skip" id="rejection-btn-skip" type="button" hidden>$LABEL_WS_REJECTION_SKIP_BUTTON</button>
+      <button class="rejection-btn-cancel" id="rejection-btn-cancel" type="button">$LABEL_WS_REJECTION_CANCEL_BUTTON</button>
+      <p class="block-admin-tip">$LABEL_WS_REJECTION_ADMIN_TIP_PREFIX<a href="/settings" target="_blank" rel="noopener">$LABEL_WS_REJECTION_ADMIN_TIP_LINK_TEXT</a>.</p>
     </div>
   </div>
   <script>
     window.__JOB_HUNTER_WORKSPACE__ = {
       runId: $WORKSPACE_RUN_ID_JSON,
       defaultScoreFilterValue: $DEFAULT_SCORE_FILTER_MIN_JSON,
-      viewedBadgeHtml: $VIEWED_BADGE_HTML_JSON
-    };
+      viewedBadgeHtml: $VIEWED_BADGE_HTML_JSON,
+      labels: $WORKSPACE_LABELS_JSON
+};
   </script>
     <script src="/static/results/results-page.js" defer></script>
+
+
+
+

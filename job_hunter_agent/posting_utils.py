@@ -1,3 +1,11 @@
+"""Utilities for processing and formatting job posting timestamps and age.
+
+This module provides functions for parsing date strings, calculating the
+number of days since a post was created, and generating human-readable
+relative and absolute date labels for display on job cards. It centralises
+date logic to ensure consistent timing and age signals across the workspace.
+"""
+
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Set
@@ -11,7 +19,8 @@ def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
         return None
     try:
         return datetime.fromisoformat(value)
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to parse timestamp {value}: {exc}")
         return None
 
 
@@ -21,7 +30,8 @@ def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
         return None
     try:
         return max((reference - timestamp).days, 0)
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to calculate days_since: {exc}")
         return None
 
 def get_manual_skip_sets(profile: dict) -> tuple[Set[str], Set[str]]:
@@ -44,7 +54,8 @@ def format_timestamp_label(value: Optional[str]) -> str:
         return "N/A"
     try:
         return datetime.fromisoformat(value).strftime("%d %b %Y %I:%M %p")
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to format timestamp {value}: {exc}")
         return value
 
 
@@ -53,7 +64,8 @@ def posted_datetime_from_age(posted_age_days: Optional[float], reference_time: O
         return None
     try:
         return reference_time - timedelta(days=float(posted_age_days))
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to calculate posted_datetime_from_age: {exc}")
         return None
 
 
@@ -66,7 +78,8 @@ def format_posted_date_label(posted_text: Optional[str], posted_age_days: Option
         return "Unknown"
     try:
         return posted_at.strftime("%d %b %Y")
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to format posted date label: {exc}")
         return "Unknown"
 
 
@@ -77,7 +90,8 @@ def relative_posted_age_label(posted_at: Optional[datetime], now: Optional[datet
     try:
         local_posted = posted_at.astimezone(current.tzinfo) if posted_at.tzinfo and current.tzinfo else posted_at
         days_old = max((current.date() - local_posted.date()).days, 0)
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to calculate relative age label: {exc}")
         return ""
     if days_old == 0:
         return "today"
@@ -131,7 +145,8 @@ def current_posted_age_days(record: dict, now: Optional[datetime] = None) -> Opt
         return None
     try:
         raw_age_days = float(posted_age_days)
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to parse posted_age_days {posted_age_days}: {exc}")
         return None
 
     reference_time = posted_reference_time(record)
@@ -145,6 +160,7 @@ def current_posted_age_days(record: dict, now: Optional[datetime] = None) -> Opt
     current = now or datetime.now().astimezone()
     try:
         age_seconds = (current - posted_at).total_seconds()
-    except Exception:
+    except Exception as exc:
+        print(f"[POSTING_UTILS][WARN] Failed to calculate current_posted_age_days: {exc}")
         return max(raw_age_days, 0.0)
     return max(age_seconds / 86400, 0.0)

@@ -2,180 +2,220 @@
   "kind": "managed_knowledge",
   "name": "capability_knowledge",
   "version": 1,
-  "updated_at": "2026-05-01",
+  "updated_at": "2026-05-20",
   "description": "Approved global capability concepts used to improve CV parsing. Does not define candidate profiles.",
   "entries": [
     {
       "value": "ai solutions development",
-      "aliases": []
+      "aliases": ["artificial intelligence development", "ai development", "ml solutions", "machine learning solutions", "ai integration"]
     },
     {
       "value": "low-code development",
-      "aliases": []
+      "aliases": ["no-code development", "low code platforms", "no code platforms", "citizen development", "power platform development"]
     },
     {
       "value": "team leadership",
-      "aliases": []
+      "aliases": ["people leadership", "leading teams", "staff management", "team management", "managing teams"]
     },
     {
       "value": "quality assurance",
-      "aliases": []
+      "aliases": ["qa", "testing", "quality control", "qc", "software testing", "uat"]
     },
     {
       "value": "delivery planning",
-      "aliases": []
+      "aliases": ["release planning", "sprint planning", "delivery roadmap", "project delivery planning"]
     },
     {
       "value": "communication skills",
-      "aliases": []
+      "aliases": ["stakeholder communication", "written communication", "verbal communication", "presentation skills"]
     },
     {
       "value": "workflow improvement",
-      "aliases": []
+      "aliases": ["process optimisation", "process optimization", "workflow optimisation", "efficiency improvement", "process redesign"]
     },
     {
       "value": "infrastructure support",
-      "aliases": []
+      "aliases": ["it infrastructure", "infrastructure management", "systems support", "it support"]
     },
     {
       "value": "data entry",
-      "aliases": []
+      "aliases": ["data input", "data capture", "data keying"]
     },
     {
       "value": "invoice preparation",
-      "aliases": []
+      "aliases": ["invoicing", "billing preparation", "invoice processing", "accounts payable support"]
     },
     {
       "value": "workflow automation",
-      "aliases": []
+      "aliases": ["process automation", "robotic process automation", "rpa", "business automation", "automated workflows"]
     },
     {
       "value": "performance improvement",
-      "aliases": []
+      "aliases": ["performance enhancement", "efficiency gains", "continuous improvement", "productivity improvement"]
     },
     {
       "value": "data analysis",
-      "aliases": []
+      "aliases": ["data analytics", "analytics", "data interpretation", "data insights", "analytical reporting"]
     },
     {
       "value": "integration development",
-      "aliases": []
+      "aliases": ["api integration", "system integration development", "middleware development", "data integration"]
     },
     {
       "value": "cloud-based platform support",
-      "aliases": []
+      "aliases": ["cloud platform support", "saas support", "cloud application support", "cloud services support"]
     },
     {
       "value": "edge case resolution",
-      "aliases": []
+      "aliases": ["exception handling", "error resolution", "outlier resolution", "edge case management"]
     },
     {
       "value": "workflow design",
-      "aliases": []
+      "aliases": ["process design", "process mapping", "workflow mapping", "business process design"]
     },
     {
       "value": "system logic definition",
-      "aliases": []
+      "aliases": ["business rules definition", "system rules design", "logic configuration", "business logic"]
     },
     {
       "value": "quality assurance coordination",
-      "aliases": []
+      "aliases": ["qa coordination", "testing coordination", "uat coordination", "quality coordination"]
     },
     {
       "value": "cross-functional collaboration",
-      "aliases": []
+      "aliases": ["cross team collaboration", "multidisciplinary collaboration", "inter-team collaboration", "cross functional teamwork"]
     },
     {
       "value": "resource allocation",
-      "aliases": []
+      "aliases": ["resource management", "capacity planning", "workforce planning", "resource planning"]
     },
     {
       "value": "performance optimization",
-      "aliases": []
+      "aliases": ["performance tuning", "system optimization", "performance enhancement", "optimisation", "performance optimisation"]
     },
     {
       "value": "stakeholder engagement",
-      "aliases": []
+      "aliases": ["stakeholder management", "managing stakeholders", "stakeholder relations", "client engagement"]
     },
     {
       "value": "system integration",
-      "aliases": []
+      "aliases": ["systems integration", "application integration", "enterprise integration", "integration architecture"]
     },
     {
       "value": "project management",
-      "aliases": []
+      "aliases": ["project delivery", "programme management", "project coordination", "project oversight", "pmo"]
     },
     {
       "value": "budgeting and financial planning",
-      "aliases": []
+      "aliases": ["budget planning", "financial forecasting", "financial planning", "budget preparation", "cost planning"]
     },
     {
       "value": "process improvement",
-      "aliases": []
+      "aliases": ["business process improvement", "process optimisation", "continuous improvement", "process reengineering", "bpi"]
     },
     {
       "value": "budget management",
-      "aliases": []
+      "aliases": ["budget control", "financial management", "cost management", "budget oversight", "expenditure management"]
     },
     {
       "value": "strategic planning",
-      "aliases": []
+      "aliases": ["strategy development", "strategic direction", "strategic roadmap", "business strategy"]
     },
     {
       "value": "performance monitoring",
-      "aliases": []
+      "aliases": ["kpi monitoring", "performance tracking", "metrics monitoring", "performance reporting", "dashboard monitoring"]
     },
     {
       "value": "agile methodologies",
-      "aliases": []
+      "aliases": ["agile", "scrum", "kanban", "agile practices", "agile frameworks"]
     },
     {
       "value": "risk management",
-      "aliases": []
+      "aliases": ["risk assessment", "risk mitigation", "risk analysis", "risk governance", "risk identification"]
     },
     {
       "value": "technical architecture",
-      "aliases": []
+      "aliases": ["solution architecture", "enterprise architecture", "systems architecture", "it architecture", "architectural design"]
     },
     {
       "value": "mentoring",
-      "aliases": []
+      "aliases": ["coaching", "staff mentoring", "professional mentoring", "knowledge transfer", "capability development"]
     },
     {
       "value": "onboarding",
-      "aliases": []
+      "aliases": ["staff onboarding", "employee onboarding", "new starter induction", "induction", "user onboarding"]
     },
     {
       "value": "ai",
-      "aliases": []
+      "aliases": ["artificial intelligence", "machine learning", "ml", "generative ai", "gen ai", "llm", "large language models"]
     },
     {
       "value": "crm",
-      "aliases": []
+      "aliases": ["customer relationship management", "salesforce", "dynamics crm", "hubspot", "crm systems"]
     },
     {
       "value": "performance metrics",
-      "aliases": []
+      "aliases": ["kpis", "key performance indicators", "performance measures", "metrics", "okrs"]
     },
     {
       "value": "cloud deployment",
-      "aliases": []
+      "aliases": ["cloud provisioning", "cloud rollout", "saas deployment", "azure deployment", "aws deployment"]
     },
     {
       "value": "database optimization",
-      "aliases": []
+      "aliases": ["database tuning", "query optimization", "db optimization", "database performance", "sql optimization"]
     },
     {
       "value": "erp systems",
-      "aliases": []
+      "aliases": ["enterprise resource planning", "sap", "oracle erp", "netsuite", "erp implementation", "dynamics 365"]
     },
     {
       "value": "cloud solutions",
-      "aliases": []
+      "aliases": ["cloud computing", "cloud services", "cloud platforms", "saas solutions", "cloud infrastructure"]
     },
     {
       "value": "insurance",
-      "aliases": []
+      "aliases": ["general insurance", "life insurance", "insurance industry", "insurance domain", "underwriting"]
+    },
+    {
+      "value": "data issue resolution",
+      "aliases": ["data quality management", "data cleansing", "data correction", "data remediation", "data quality"]
+    },
+    {
+      "value": "report generation",
+      "aliases": ["reporting", "report creation", "report development", "report building", "automated reporting"]
+    },
+    {
+      "value": "transition planning",
+      "aliases": ["change transition", "migration planning", "cutover planning", "go-live planning", "rollout planning"]
+    },
+    {
+      "value": "legacy system transition",
+      "aliases": ["legacy migration", "system decommission", "legacy modernisation", "legacy replacement", "legacy modernization"]
+    },
+    {
+      "value": "technical documentation",
+      "aliases": ["system documentation", "technical writing", "user guides", "solution documentation", "technical specs"]
+    },
+    {
+      "value": "api testing",
+      "aliases": ["api validation", "endpoint testing", "rest api testing", "web service testing", "api qa"]
+    },
+    {
+      "value": "software development life cycle (sdlc)",
+      "aliases": ["sdlc", "software development lifecycle", "development lifecycle", "systems development lifecycle"]
+    },
+    {
+      "value": "validation rules configuration",
+      "aliases": ["validation configuration", "business rule configuration", "data validation rules", "field validation"]
+    },
+    {
+      "value": "agile delivery practices",
+      "aliases": ["agile delivery", "sprint delivery", "iterative delivery", "agile project delivery", "scrum delivery"]
+    },
+    {
+      "value": "data capture and reporting",
+      "aliases": ["data collection and reporting", "data reporting", "capture and report", "data capture reporting"]
     }
   ]
 }

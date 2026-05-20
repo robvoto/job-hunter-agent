@@ -130,6 +130,7 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
             "source": "CV parsing",
             "context": ["Skills: unknown platform"],
             "evidence": ["unknown platform", "mystery platform"],
+            "aliases": ["mystery platform"],
             "needs_review": True,
         }
     ]
@@ -179,12 +180,20 @@ def test_build_role_title_review_signals_routes_uncertain_titles_to_signals():
     ]
 
 
-def test_extract_title_pattern_suggestions_returns_llm_patterns():
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE):
-        result = extract_title_pattern_suggestions(SAMPLE_CV, {"extraction_lookback_years": 8})
+def test_extract_title_pattern_suggestions_returns_parser_titles():
+    result = extract_title_pattern_suggestions(
+        """
+# Professional Experience
+Project Manager
+Company Name
+2023 - Present
+- Managed end-to-end delivery.
+""",
+        {"extraction_lookback_years": 8},
+    )
 
-    assert any("delivery lead" in item for item in result["target_roles"])
-    assert any("delivery lead" in item for item in result["suggested_search_keywords"])
+    assert "project manager" in result["target_roles"]
+    assert result["suggested_search_keywords"][0] == "project manager"
 
 
 def test_extract_title_pattern_suggestions_respects_max_limits():
@@ -213,6 +222,36 @@ Business Analyst - Contoso (2016 - 2020)
     assert parsed
     assert "Business Analyst" in parsed[0]["header_lines"]
     assert "Contoso" in parsed[0]["header_lines"]
+
+
+def test_parse_role_entries_prefers_title_line_over_company_date_line():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Project Manager
+Company Name | 2023 - Present
+- Managed end-to-end delivery.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Project Manager"
+    assert parsed[0]["employer"] == "Company Name"
+
+
+def test_parse_role_entries_prefers_title_line_over_company_paren_date_line():
+    parsed = profile_learning._parse_role_entries(
+        """
+# Professional Experience
+Project Manager
+Company Name (2023 - Present)
+- Managed end-to-end delivery.
+"""
+    )
+
+    assert parsed
+    assert parsed[0]["title"] == "Project Manager"
+    assert parsed[0]["employer"] == "Company Name"
 
 
 def test_parse_role_entries_collects_bullets_for_inline_roles():
@@ -246,6 +285,20 @@ Business Analyst (2022 - 2024)
     assert parsed[0]["title"] == "Business Analyst"
     assert parsed[0]["employer"] == ""
     assert parsed[0]["bullets"] == ["Insurance platform delivery, UAT, backlog refinement."]
+
+
+def test_extract_title_pattern_suggestions_returns_job_title_for_company_date_layout():
+    result = extract_title_pattern_suggestions(
+        """
+# Professional Experience
+Project Manager
+Company Name | 2023 - Present
+- Managed end-to-end delivery.
+"""
+    )
+
+    assert "project manager" in result["target_roles"]
+    assert "company name" not in result["target_roles"]
 
 
 def test_parse_role_entries_accepts_project_manager_title():

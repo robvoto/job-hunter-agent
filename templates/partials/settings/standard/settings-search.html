@@ -3,53 +3,84 @@
           <div class="grid search-settings-grid">
             <section class="panel search-common-panel">
               <h2>Search Settings</h2>
-              <p class="panel-copy">Shared source-search inputs that apply across SEEK and LinkedIn.</p>
+              <p class="panel-copy">__JOB_HUNTER_SEARCH_SOURCE_SHARED_INPUTS_COPY__</p>
               <p class="panel-copy">Where sector, work type, or work mode cannot be determined from the ad, the job is always included for you to review.</p>
 
               <div class="common-search-grid">
                 <div class="common-search-field common-search-field--keywords">
-                  <label for="keywords">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__</label>
+                  <div class="field-label-row">
+                    <label for="keywords">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_HELP__</div>
+                    </details>
+                  </div>
                   <input id="keywords" type="text" autocomplete="off" placeholder="__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_EXAMPLE__">
-                  <div class="help">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="locations">Location</label>
+                  <div class="field-label-row">
+                    <label for="locations">Location</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">Choose one state or capital city. Job Hunter uses the same location for all job boards.</div>
+                    </details>
+                  </div>
                   <select id="locations"></select>
-                  <div class="help">Choose one state or capital city. Job Hunter uses the same location for all job boards.</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label id="engagement_type_label">Work type</label>
+                  <div class="field-label-row">
+                    <label id="engagement_type_label">Work type</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__</div>
+                    </details>
+                  </div>
                   __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
-                  <div class="help">__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__</div>
+                  <div id="contract_duration_row" class="contract-duration-row" hidden>
+                    <span class="contract-duration-label">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</span>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__</div>
+                    </details>
+                    <select id="min_contract_months" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
+                      <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
+                      __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
+                    </select>
+                  </div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="min_contract_months">Minimum contract length</label>
-                  <select id="min_contract_months">
-                    <option value="">No minimum</option>
-                    <option value="3">3+ months</option>
-                    <option value="6">6+ months</option>
-                    <option value="12">12+ months</option>
-                  </select>
-                  <div class="help">Contracts shorter than this are excluded before scoring. Only applies when the listing states a duration explicitly.</div>
-                </div>
-
-                <div class="common-search-field">
-                  <label id="work_mode_preference_label">Work mode</label>
+                  <div class="field-label-row">
+                    <label id="work_mode_preference_label">Work mode</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
+                    </details>
+                  </div>
                   __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
-                  <div class="help">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
-                <label id="prefer_sector_label">Sector preference</label>
+                  <div class="field-label-row">
+                    <label id="prefer_sector_label">Sector preference</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SECTOR_PREFERENCE_HELP__</div>
+                    </details>
+                  </div>
                   __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
-                  <div class="help">__JOB_HUNTER_SECTOR_PREFERENCE_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="search_date_window">How far back to search</label>
+                  <div class="field-label-row">
+                    <label for="search_date_window">How far back to search</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">How recently listings must have been posted.</div>
+                    </details>
+                  </div>
                   <select id="search_date_window">
                     <option value="0">Any time</option>
                     <option value="1">Last 24 hours</option>
@@ -58,97 +89,140 @@
                     <option value="15">Last 15 days</option>
                     <option value="30">Last 30 days</option>
                   </select>
-                  <div class="help">How recently listings must have been posted.</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                  <div class="field-label-row">
+                    <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
+                    </details>
+                  </div>
                   <div class="currency-input-wrap">
                     <span class="currency-prefix">$</span>
                     <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
                   </div>
-                  <div class="help">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
                 </div>
 
                 <div class="common-search-field">
-                  <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                  <div class="field-label-row">
+                    <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
+                    </details>
+                  </div>
                   <div class="currency-input-wrap">
                     <span class="currency-prefix">$</span>
                     <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
                   </div>
-                  <div class="help">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
                 </div>
               </div>
             </section>
 
-            <div class="search-source-panels">
-                <section class="search-source-panel">
-                  <h2>SEEK</h2>
+            <section class="panel search-source-panel-group">
+              <h2>__JOB_HUNTER_SEARCH_SOURCE_SECTION_TITLE__</h2>
+              <p class="panel-copy">__JOB_HUNTER_SEARCH_SOURCE_SECTION_COPY__</p>
+              <div class="search-source-panels">
+                  <section class="search-source-panel">
+                    <div class="field-label-row search-source-panel-head">
+                      <h3>SEEK</h3>
+                      <details class="field-info-drawer">
+                        <summary class="field-info" aria-label="Help">i</summary>
+                        <div class="field-info-panel">__JOB_HUNTER_SEARCH_SOURCE_SEEK_TOGGLE_HELP__</div>
+                      </details>
+                    </div>
                   <label class="toggle-switch" for="seek_enabled">
                     <span class="toggle-switch-copy">
-                      <span class="toggle-switch-title">Enable SEEK</span>
-                  </span>
-                  <span class="toggle-switch-control">
-                    <input id="seek_enabled" type="checkbox" role="switch" checked>
-                    <span class="toggle-switch-ui"></span>
-                  </span>
+                      <span class="toggle-switch-title">__JOB_HUNTER_SEARCH_SOURCE_SEEK_TOGGLE_LABEL__</span>
+                    </span>
+                    <span class="toggle-switch-control">
+                      <input id="seek_enabled" type="checkbox" role="switch" checked>
+                      <span class="toggle-switch-ui"></span>
+                    </span>
                   </label>
-                  <div class="help">When off, SEEK is skipped entirely during scrape runs.</div>
 
-                  <div hidden>
-                    <label for="classification_ids">Classification IDs</label>
-                    <textarea id="classification_ids" placeholder="One id per line"></textarea>
-                    <div class="help">Broad pre-filter before fit logic runs.</div>
+                    <div hidden>
+                      <div class="field-label-row">
+                        <label for="classification_ids">Classification IDs</label>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel">Broad pre-filter before fit logic runs.</div>
+                        </details>
+                      </div>
+                      <textarea id="classification_ids" placeholder="One id per line"></textarea>
+                    </div>
+
+                    <div class="field-label-row">
+                      <label id="seek_max_pages_label">Max pages to check</label>
+                      <details class="field-info-drawer">
+                        <summary class="field-info" aria-label="Help">i</summary>
+                        <div class="field-info-panel">Limit how many pages to scrap.</div>
+                      </details>
+                    </div>
+                    __JOB_HUNTER_SEEK_MAX_PAGES_CHOICES__
+
+                  </section>
+
+                <section class="search-source-panel">
+                  <div class="field-label-row search-source-panel-head">
+                    <h3>LinkedIn</h3>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_HELP__</div>
+                    </details>
                   </div>
+                  <label class="toggle-switch" for="linkedin_enabled">
+                    <span class="toggle-switch-copy">
+                      <span class="toggle-switch-title">__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_LABEL__</span>
+                    </span>
+                    <span class="toggle-switch-control">
+                      <input id="linkedin_enabled" type="checkbox" role="switch" checked>
+                      <span class="toggle-switch-ui"></span>
+                    </span>
+                  </label>
 
-                  <label id="seek_max_pages_label">Max pages to check</label>
-                  __JOB_HUNTER_SEEK_MAX_PAGES_CHOICES__
-                  <div class="help">Limit how many pages to scrap.</div>
+                  <div class="field-label-row">
+                    <label for="linkedin_results_per_search">Results per search</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">Max results per keyword and location pair.</div>
+                    </details>
+                  </div>
+                  <input id="linkedin_results_per_search" class="source-number-input" type="number" min="5" max="100">
 
+                  <label for="linkedin_easy_apply_only">Easy Apply filter</label>
+                  <select id="linkedin_easy_apply_only">
+                    <option value="">Both (no filter)</option>
+                    <option value="true">Easy Apply only</option>
+                    <option value="false">Non-Easy Apply only</option>
+                  </select>
                 </section>
-
-              <section class="search-source-panel">
-                <h2>LinkedIn</h2>
-                <label class="toggle-switch" for="linkedin_enabled">
-                  <span class="toggle-switch-copy">
-                    <span class="toggle-switch-title">Enable LinkedIn</span>
-                  </span>
-                  <span class="toggle-switch-control">
-                    <input id="linkedin_enabled" type="checkbox" role="switch" checked>
-                    <span class="toggle-switch-ui"></span>
-                  </span>
-                </label>
-                <div class="help">When off, LinkedIn is skipped entirely during scrape runs.</div>
-
-                <label for="linkedin_results_per_search">Results per search</label>
-                <input id="linkedin_results_per_search" class="source-number-input" type="number" min="5" max="100">
-                <div class="help">Max results per keyword and location pair.</div>
-
-                <label for="linkedin_easy_apply_only">Easy Apply filter</label>
-                <select id="linkedin_easy_apply_only">
-                  <option value="">Both (no filter)</option>
-                  <option value="true">Easy Apply only</option>
-                  <option value="false">Non-Easy Apply only</option>
-                </select>
-              </section>
-            </div>
+              </div>
+            </section>
 
             <section class="panel search-operations-panel" id="schedule-panel">
               <div class="search-operations-head">
-                <div>
-                  <div class="panel-kicker">Search operations</div>
-                  <h2>Run &amp; Schedule</h2>
-                  <p class="panel-copy">These controls use your current search settings.</p>
-                </div>
+                  <div>
+                    <div class="panel-kicker">Search operations</div>
+                    <h2>Run &amp; Schedule</h2>
+                    <p class="panel-copy">These controls use your current search settings.</p>
+                  </div>
               </div>
 
               <div class="search-operations-grid">
                 <section class="search-operation-card">
                   <h3>Daily schedule</h3>
                   <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
-                  <label for="schedule_daily_time_local">Run every day at</label>
+                  <div class="field-label-row">
+                    <label for="schedule_daily_time_local">Run every day at</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">This uses your local machine time.</div>
+                    </details>
+                  </div>
                   <input id="schedule_daily_time_local" type="time">
-                  <div class="help">This uses your local machine time.</div>
                   <div class="panel-actions search-operation-actions">
                     <button class="secondary" id="save_daily_schedule" type="button">Save Daily Schedule</button>
                   </div>

@@ -1,13 +1,21 @@
 """LLM fit-decision gateway.
 
-Main goals:
-- build the compact candidate context sent to the LLM
-- request a constrained decision plus graded description-fit tier
-- keep prompt structure and cache keys aligned with the current profile state
+This module provides a gateway for interacting with Large Language Models (LLMs)
+to perform various job-hunting related tasks. It handles the construction of
+LLM prompts, caching of LLM responses, and normalization of LLM outputs.
 
-Notes:
-- deterministic filters run before this in the main source connector flow
-- the AI fit brief is preferred over raw background text to reduce noise and cost
+Key functionalities include:
+- Building compact candidate context for LLM prompts.
+- Requesting constrained decisions and graded description-fit tiers from LLMs.
+- Maintaining prompt structure and cache keys aligned with the current profile state.
+- Extracting job requirements and suggesting rejection blockers.
+- Naming capability clusters and classifying CV section labels.
+
+It ensures that deterministic filters are applied before LLM processing and
+prioritizes AI fit briefs over raw background text to optimize cost and reduce noise.
+Error handling is implemented to catch and report exceptions during LLM interactions,
+preventing silent failures and aiding in debugging.
+
 """
 
 from __future__ import annotations
@@ -37,6 +45,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_DO_NOT_INVENT,
     LLM_PROMPT_DO_NOT_SAVE,
     LLM_PROMPT_JOB_DESCRIPTION_PREFIX,
+    LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
     LLM_PROMPT_JSON_ONLY,
     LLM_PROMPT_LEARNING_PENDING_ONLY,
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
@@ -46,8 +55,9 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
     LLM_PROMPT_USER_CAPABILITY_NAMING_GUIDANCE_HEADER,
-    LLM_PROMPT_USER_FIT_REVIEW_GUIDANCE_HEADER,
+
     LLM_FIT_REVIEW_PROMPT_SHAPE,
+    LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_REVIEW_GRADE_GUIDANCE,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
@@ -65,9 +75,11 @@ from job_hunter_agent.global_settings import (
     get_llm_capability_naming_max_output_tokens,
     get_llm_capability_rule_aliases_max_items,
     get_llm_capability_rules_max_items,
+    get_llm_contextual_matches_max_items,
     get_llm_fit_decision_max_output_tokens,
-    get_llm_fit_guidance_max_chars,
+
     get_llm_job_description_max_chars,
+    get_llm_job_requirements_max_items,
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
     get_llm_profile_brief_max_chars,
@@ -216,6 +228,10 @@ class _LLMContextualCapabilityMatch(BaseModel):
     reason: str
 
 
+class _LLMJobRequirementsPayload(BaseModel):
+    job_requirements: list[str] = Field(default_factory=list)
+
+
 class _LLMReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision | None = None
     learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
@@ -224,6 +240,7 @@ class _LLMReviewPayload(BaseModel):
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
     contextual_capability_matches: list[_LLMContextualCapabilityMatch] = Field(default_factory=list)
+    job_requirements: list[str] = Field(default_factory=list)
 
 
 _api_key = os.environ.get("OPENAI_API_KEY")
@@ -343,13 +360,8 @@ def build_profile_prompt_context() -> str:
 
 
 def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
-    active_profile = profile if isinstance(profile, dict) else load_profile()
     parts = [LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER]
     parts.extend(f"- {line}" for line in FIT_REVIEW_DEFAULT_LINES)
-    guidance = str(active_profile.get("llm_fit_review_guidance") or "").strip()
-    if guidance:
-        parts.append(LLM_PROMPT_USER_FIT_REVIEW_GUIDANCE_HEADER)
-        parts.append(guidance[:get_llm_fit_guidance_max_chars()])
     return "\n".join(parts)
 
 
@@ -496,6 +508,40 @@ def normalize_llm_contextual_capability_matches(
     return results
 
 
+def _clean_job_requirement_text(value: Any) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    cleaned = re.sub(r"^[•\-\u2013\u2014]+\s*", "", cleaned).strip()
+    cleaned = re.sub(r"^\d+[.)]\s*", "", cleaned).strip()
+    return cleaned
+
+
+def normalize_llm_job_requirements(value: Any, max_items: int | None = None) -> list[str]:
+    if max_items is None:
+        max_items = get_llm_job_requirements_max_items()
+    if isinstance(value, dict):
+        value = value.get("job_requirements") or value.get("requirements") or []
+    if isinstance(value, str):
+        try:
+            value = _json_mod.loads(_strip_json_fence(value))
+        except Exception:
+            return []
+    if not isinstance(value, list):
+        return []
+
+    requirements: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        cleaned = _clean_job_requirement_text(item)
+        key = cleaned.lower()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        requirements.append(cleaned)
+        if len(requirements) >= max_items:
+            break
+    return requirements
+
+
 def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
@@ -512,6 +558,7 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
                 "contextual_capability_matches": normalize_llm_contextual_capability_matches(
                     value.get("contextual_capability_matches")
                 ),
+                "job_requirements": normalize_llm_job_requirements(value.get("job_requirements")),
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
@@ -519,6 +566,7 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
                 "fit_review": None,
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
                 "contextual_capability_matches": [],
+                "job_requirements": [],
             }
 
         raise ValueError("LLM review payload is missing fit_review")
@@ -531,6 +579,7 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
                 "fit_review": _require_fit_review({"decision": decision, "grade": grade}),
                 "learning_candidates": [],
                 "contextual_capability_matches": [],
+                "job_requirements": [],
             }
         try:
             parsed = _json_mod.loads(_strip_json_fence(text))
@@ -650,10 +699,12 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
         labels = _json_mod.loads(raw)
-        if not isinstance(labels, list):
+        if not isinstance(labels, list): # Catches any exception during JSON loading
+            print(f"[LLM][CAPABILITY_NAMING][WARN] LLM returned non-list for capability naming: {raw[:200]}")
             return []
         return [str(label).strip().lower() for label in labels[: len(payload)]]
-    except Exception:
+    except Exception as exc:
+        print(f"[LLM][CAPABILITY_NAMING][ERROR] Failed to name capability clusters: {exc}")
         return []
 
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:
@@ -674,6 +725,8 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
         parts.extend([
             f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
             LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO,
+            LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+            f"Use at most {get_llm_contextual_matches_max_items()} contextual_capability_matches.",
         ])
     else:
         parts.extend([
@@ -717,6 +770,47 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         if payload.get("fit_review") is None:
             raise ValueError("LLM fit review payload is missing fit_review")
     return payload
+
+
+def llm_extract_job_requirements(job_description_text: str, llm_client: Any = None) -> list[str]:
+    active_client = llm_client or client
+    description = str(job_description_text or "").strip()
+    if active_client is None or not description:
+        return []
+
+    system_prompt = "\n".join([
+        "You extract only the explicit job requirements visible in the ad.",
+        LLM_PROMPT_JSON_ONLY,
+        LLM_PROMPT_DO_NOT_INVENT,
+        LLM_PROMPT_USE_VISIBLE_STRINGS,
+        LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+        f"Return exactly this shape: {LLM_JOB_REQUIREMENTS_PROMPT_SHAPE}",
+        f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
+    ])
+
+    try:
+        model = _log_llm_model_once()
+        resp = active_client.responses.parse(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + description},
+            ],
+            max_output_tokens=get_llm_learning_candidates_max_output_tokens(),
+            text_format=_LLMJobRequirementsPayload,
+        )
+        _log_llm_call(resp, "job_requirements", model)
+    except Exception as exc:
+        print(f"[LLM][JOB_REQUIREMENTS][ERROR] {exc}")
+        return []
+
+    parsed = getattr(resp, "output_parsed", None)
+    if parsed is None:
+        return []
+    raw_output = str(getattr(resp, "output_text", "") or "").strip()
+    if raw_output:
+        print(f"[LLM][JOB_REQUIREMENTS][RAW] {raw_output[:get_llm_raw_output_log_max_chars()]}")
+    return normalize_llm_job_requirements(parsed.model_dump())
 
 
 def llm_should_consider_with_learning(job_description_text: str) -> dict[str, Any]:

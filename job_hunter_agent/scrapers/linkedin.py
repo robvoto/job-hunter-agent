@@ -21,7 +21,7 @@ from job_hunter_agent.record_schema import (
     RECORD_CONTENT_REASON_KEY, RECORD_COMPETITIVE_SIGNALS_KEY, RECORD_SOURCE_METADATA_KEY,
     RECORD_POSTED_AGE_DAYS_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY,
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY, DETAILS_STATUS_OK, CONFIDENCE_HIGH,
-    CONFIDENCE_LOW, RECORD_JOB_QUALITY_SIGNALS_KEY,
+    CONFIDENCE_LOW, RECORD_JOB_QUALITY_SIGNALS_KEY, RECORD_JOB_REQUIREMENTS_KEY,
 )
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
@@ -117,6 +117,7 @@ class LinkedInScraper(BaseJobScraper):
             deterministic_review_outcome,
             register_hard_blocker_learning_from_rejection,
         )
+        from job_hunter_agent.llm_gate import llm_extract_job_requirements  # noqa: PLC0415
         from job_hunter_agent.text_processing import build_role_summary, compact_whitespace  # noqa: PLC0415
         min_trusted_description_length = get_min_trusted_description_length()
 
@@ -391,28 +392,48 @@ class LinkedInScraper(BaseJobScraper):
                     record, self.profile, record["fit_highlights"], missing_evidence, soft_risk_reasons
                 )
                 contextual_capability_matches: list = []
+                record[RECORD_JOB_REQUIREMENTS_KEY] = []
                 if deterministic_review is not None:
                     llm_review = deterministic_review
                     print(f"{target_tag} [LLM][SKIP] {llm_review['decision']}|{llm_review['grade']} {title} @ {company}")
                     if has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
+                        try:
+                            payload = resolve_llm_review_payload(
+                                record,
+                                self.llm_cache,
+                                learning_only=True,
+                            )
+                            record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+                            record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
+                        except Exception as llm_exc:
+                            print(f"{target_tag} [LLM][LEARNING_ERROR] {type(llm_exc).__name__}: {llm_exc} — {title} @ {company}")
+                    if not record[RECORD_JOB_REQUIREMENTS_KEY]:
+                        try:
+                            record[RECORD_JOB_REQUIREMENTS_KEY] = llm_extract_job_requirements(
+                                record.get("full_description") or record.get("fit_source_text") or ""
+                            )
+                        except Exception as llm_exc:
+                            print(f"{target_tag} [LLM][JOB_REQUIREMENTS_ERROR] {type(llm_exc).__name__}: {llm_exc} â€” {title} @ {company}")
+                else:
+                    try:
                         payload = resolve_llm_review_payload(
                             record,
                             self.llm_cache,
-                            learning_only=True,
                         )
-                        record["llm_learning_candidates"] = payload.get("learning_candidates") or []
-                else:
-                    payload = resolve_llm_review_payload(
-                        record,
-                        self.llm_cache,
-                    )
-                    llm_review = payload["fit_review"]
-                    contextual_capability_matches = payload.get("contextual_capability_matches") or []
-                    print(f"{target_tag} [LLM][{payload.get('payload_source', 'llm').upper()}] {llm_review['decision']}|{llm_review['grade']} {title}")
+                        llm_review = payload["fit_review"]
+                        contextual_capability_matches = payload.get("contextual_capability_matches") or []
+                        record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
+                        print(f"{target_tag} [LLM][{payload.get('payload_source', 'llm').upper()}] {llm_review['decision']}|{llm_review['grade']} {title}")
+                    except Exception as llm_exc:
+                        print(f"{target_tag} [LLM][ERROR] {type(llm_exc).__name__}: {llm_exc} — {title} @ {company}")
+                        record["reject_reason"] = "LLM_ERROR"
+                        finalize_record(self.job_history, audit_rows, record, self.run_iso)
+                        continue
 
                 record["llm_decision"] = llm_review["decision"]
                 record["llm_fit_grade"] = llm_review["grade"]
                 record["contextual_capability_matches"] = contextual_capability_matches
+                record[RECORD_JOB_REQUIREMENTS_KEY] = record.get(RECORD_JOB_REQUIREMENTS_KEY) or []
 
                 if llm_review["decision"] == "REJECT":
                     print(f"{target_tag} REJECTED (llm) {title} @ {company}")

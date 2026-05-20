@@ -10,9 +10,10 @@ from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.global_settings import get_archive_stale_after_days, get_hidden_review_days
 from job_hunter_agent.workspace_renderer import (
     ARCHIVE_LABEL,
+    _workspace_ui_labels,
     humanize_reject_reason,
     render_match_level_guide_html,
-    render_posted_filter_options,
+    render_posted_filter_options, 
     render_results_fragment,
     render_score_filter_options,
     render_section,
@@ -198,10 +199,14 @@ def build_workspace_record_sets(
     reference_time: datetime,
     scoring_profile: Optional[dict] = None,
     workspace_min_score: Optional[int] = None,
+    debug_mode: bool = WORKSPACE_DEBUG_MODE,
+    audit_rows: Optional[list[dict]] = None,
 ) -> dict[str, list[dict]]:
     profile = scoring_profile or load_profile()
     is_workspace_eligible_fn = is_workspace_eligible
-    if workspace_min_score is not None:
+    if debug_mode:
+        is_workspace_eligible_fn = lambda record, current_profile=None, workspace_min_score=None: True
+    elif workspace_min_score is not None:
         active_workspace_min_score = int(workspace_min_score)
         is_workspace_eligible_fn = (
             lambda record, current_profile=None: is_workspace_eligible(
@@ -225,6 +230,8 @@ def build_workspace_record_sets(
         build_archive_records_fn=build_archive_records,
         build_applied_records_fn=build_applied_records,
         build_hidden_records_fn=build_hidden_records,
+        debug_mode=debug_mode,
+        audit_rows=audit_rows,
     )
 
 
@@ -273,10 +280,16 @@ def render_html(
     applied_job_keys: set[str],
     hidden_job_keys: set[str],
     workspace_reference_at: Optional[datetime] = None,
+    audit_rows: Optional[list[dict]] = None,
+    debug_mode: bool = WORKSPACE_DEBUG_MODE,
 ) -> None:
     reference_time = workspace_reference_at or run_started_at
     scoring_profile = load_profile()
     workspace_min_score = get_workspace_minimum_score()
+    active_debug_mode = bool(debug_mode)
+    active_audit_rows = audit_rows
+    if active_debug_mode and active_audit_rows is None:
+        active_audit_rows = load_json_list(get_audit_records_path())
     workspace_records = build_workspace_record_sets(
         kept_records,
         job_history,
@@ -285,6 +298,8 @@ def render_html(
         reference_time,
         scoring_profile,
         workspace_min_score,
+        debug_mode=active_debug_mode,
+        audit_rows=active_audit_rows,
     )
     history_clusters = build_history_cluster_index(job_history)
     shortlist_records = workspace_records["shortlist_records"]
@@ -296,6 +311,7 @@ def render_html(
     score_filter_options_html = render_score_filter_options(
         scoring_profile,
         workspace_min_score,
+        debug_mode=active_debug_mode,
     )
     posted_filter_options_html = render_posted_filter_options(potential_records, reference_time)
     work_type_filter_options_html = render_work_type_filter_options()
@@ -311,11 +327,9 @@ def render_html(
         for location, pages in (run_stats.get("search_targets") or {}).items()
     ]
     testing_mode_notes = []
-    if WORKSPACE_DEBUG_MODE:
+    if active_debug_mode:
         testing_mode_notes.append(
-            "Workspace debug mode is on, showing scores and keeping roles at "
-            f"{score_to_match_label(workspace_min_score, get_match_levels(scoring_profile))} or better "
-            "without a fresh scrape."
+            "Workspace debug mode is on, showing the full current job set and keeping filtered rows visible for inspection."
         )
     if TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING:
         testing_mode_notes.append("Viewed history has been reset, so all roles are shown as unseen.")
@@ -339,7 +353,9 @@ def render_html(
         else "preserves your viewed history"
     )
     snapshot_helper = (
-        "Shortlist currently keeps roles at "
+        "Workspace debug mode keeps filtered rows visible for inspection."
+        if active_debug_mode
+        else "Shortlist currently keeps roles at "
         f"{score_to_match_label(workspace_min_score, get_match_levels(scoring_profile))} "
         f"or better and {view_history_text}."
     )
@@ -359,11 +375,16 @@ def render_html(
         (len(hidden_records), "Hidden"),
     ])
 
+    ws_page_labels = _workspace_ui_labels().get("workspace_page_labels", {})
+    workspace_config_labels = {
+        "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions")
+    }
+
     top_reject_reasons_html = "".join(
         f'<span class="chip" title="{safe_html(str(item.get("reason", "UNKNOWN")))}"><strong>{safe_html(humanize_reject_reason(str(item.get("reason", "UNKNOWN"))))}:</strong> {safe_html(str(item.get("count", 0)))}</span>'
         for item in run_stats.get("top_reject_reasons", [])
-    )
-    scope_saved_option_html = '<option value="saved">Saved Earlier Searches</option>' if WORKSPACE_DEBUG_MODE else ""
+    ) 
+    scope_saved_option_html = '<option value="saved">Saved Earlier Searches</option>' if active_debug_mode else ""
     html = render_results_fragment(
         {
             "SHORTLIST_COUNT": str(shortlist_count),
@@ -379,6 +400,7 @@ def render_html(
                 scoring_profile,
                 applied_pool=applied_records,
                 history_clusters=history_clusters,
+                debug_mode=active_debug_mode,
             ),
             "RECENT_SECTION_HTML": "",
             "ARCHIVE_LABEL": safe_html(ARCHIVE_LABEL),
@@ -388,6 +410,7 @@ def render_html(
                 "No applied jobs saved yet.",
                 scoring_profile,
                 history_clusters=history_clusters,
+                debug_mode=active_debug_mode,
             ),
             "HIDDEN_SECTION_HTML": render_section(
                 "Hidden Jobs",
@@ -395,6 +418,7 @@ def render_html(
                 "No hidden jobs right now.",
                 scoring_profile,
                 history_clusters=history_clusters,
+                debug_mode=active_debug_mode,
             ),
             "SEARCH_KEYWORDS_LABEL": safe_html(search_keywords_label),
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),
@@ -413,8 +437,9 @@ def render_html(
             "TOP_REJECT_REASONS_HTML": top_reject_reasons_html,
             "MATCH_LEVEL_GUIDE_HTML": render_match_level_guide_html(scoring_profile),
             "WORKSPACE_RUN_ID_JSON": json.dumps(workspace_run_id),
-            "DEFAULT_SCORE_FILTER_MIN_JSON": json.dumps(str(workspace_min_score)),
+            "DEFAULT_SCORE_FILTER_MIN_JSON": json.dumps("all" if active_debug_mode else str(workspace_min_score)),
             "VIEWED_BADGE_HTML_JSON": json.dumps(viewed_badge_html()),
+            "WORKSPACE_LABELS_JSON": json.dumps(workspace_config_labels),
         }
     )
     output_file = Path(output_path)

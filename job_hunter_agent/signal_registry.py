@@ -75,6 +75,7 @@ from job_hunter_agent.signal_schema import (
     LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_NORMALIZED_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
+    SIGNAL_ALIASES_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
     LEARNING_NOTES_KEY,
@@ -186,7 +187,8 @@ def _load_json_dict(path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         return payload if isinstance(payload, dict) else {}
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"[SIGNAL_REGISTRY][WARN] Failed to load JSON dictionary from {path}: {exc}")
         return {}
 
 
@@ -250,6 +252,10 @@ def _clean_context_payload(record: dict[str, Any]) -> dict[str, Any]:
     if source:
         cleaned[LEARNING_SOURCE_KEY] = source
 
+    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=record.get(LEARNING_SIGNAL_KEY) or "")
+    if aliases:
+        cleaned[SIGNAL_ALIASES_KEY] = aliases
+
     context = _clean_text_list(record.get(LEARNING_CONTEXT_KEY))
     if context:
         cleaned[LEARNING_CONTEXT_KEY] = context
@@ -312,6 +318,7 @@ def _make_pending_record(signal: str, category: str = "", metadata: dict[str, An
     cleaned_signal = _clean_text(signal)
     metadata = metadata or {}
     original_texts = _clean_text_list(metadata.get("original_texts"))
+    aliases = _clean_aliases(metadata.get(SIGNAL_ALIASES_KEY), canonical=cleaned_signal)
     if cleaned_signal:
         original_texts = [cleaned_signal, *original_texts]
     original_texts = _clean_text_list(original_texts)
@@ -327,6 +334,8 @@ def _make_pending_record(signal: str, category: str = "", metadata: dict[str, An
             }
         ],
     }
+    if aliases:
+        record[SIGNAL_ALIASES_KEY] = aliases
     record.update(_clean_context_payload(metadata or {}))
     return record
 
@@ -356,6 +365,7 @@ def _normalize_pending_record(key: str, record: Any) -> dict[str, Any] | None:
     category = _clean_term(record.get(LEARNING_CATEGORY_KEY))
     suggested_category = _clean_term(record.get(LEARNING_SUGGESTED_CATEGORY_KEY))
     context = _clean_context_payload(record)
+    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=signal)
 
     history = _clean_history(record.get(LEARNING_HISTORY_KEY))
     if not history:
@@ -374,6 +384,7 @@ def _normalize_pending_record(key: str, record: Any) -> dict[str, Any] | None:
         LEARNING_SUGGESTED_CATEGORY_KEY: suggested_category,
         LEARNING_HISTORY_KEY: history,
         **context,
+        **({SIGNAL_ALIASES_KEY: aliases} if aliases else {}),
     }
 
 
@@ -449,8 +460,9 @@ def _append_knowledge_entry(path, value: str, aliases: list[str]) -> None:
 def _append_title_normalization_expansion(path, abbreviation: str, expansion: str) -> None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
         payload = {}
+        print(f"[SIGNAL_REGISTRY][WARN] Failed to load title normalization rules from {path}: {exc}")
     if not isinstance(payload, dict):
         payload = {}
     payload.setdefault("kind", "rules")
@@ -472,7 +484,8 @@ def load_registry() -> dict[str, dict[str, Any]]:
     try:
         payload = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return {}
+        print(f"[SIGNAL_REGISTRY][WARN] Failed to load signal registry from {_REGISTRY_PATH}: {exc}")
+        return {} # Silently returns an empty dictionary
     return _normalize_registry(payload)
 
 
@@ -644,8 +657,9 @@ def upsert_profile_section_label(word: str, bucket: str) -> None:
     if not word or not list_key:
         return
     try:
-        payload = json.loads(PARSING_RULES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        payload = json.loads(PARSING_RULES_PATH.read_text(encoding="utf-8")) # Catches any exception during JSON loading
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"[SIGNAL_REGISTRY][WARN] Failed to load parsing rules from {PARSING_RULES_PATH}: {exc}") # Silently returns without reporting
         return
     routing = payload.get(KEY_P_ROUTING)
     if not isinstance(routing, dict):
@@ -676,8 +690,9 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
         raise ValueError(f"Invalid category '{category_key}'.")
 
     value = _clean_text(value) or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
+    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=value)
     if category_key == CATEGORY_CAPABILITY_CONCEPT:
-        upsert_capability_entry(value, [])
+        upsert_capability_entry(value, aliases)
     elif category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_job_type_entry(value, suggested[0] if suggested else value)
@@ -688,9 +703,9 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
     elif category_key == CATEGORY_GOVERNMENT_CONTEXT_PATTERN:
         upsert_government_context_pattern(value)
     elif category_key == CATEGORY_HARD_BLOCKER_PATTERN:
-        upsert_hard_blocker_rule(value, [])
+        upsert_hard_blocker_rule(value, aliases)
     elif category_key == CATEGORY_CV_FARMING_PATTERN:
-        upsert_cv_farming_rule(value, [])
+        upsert_cv_farming_rule(value, aliases)
     elif category_key == CATEGORY_PROFILE_SECTION_LABEL:
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_profile_section_label(value, suggested[0] if suggested else "primary")
@@ -701,7 +716,6 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
                 _CATEGORY_KNOWLEDGE_PATHS[category_key], value, suggested[0]
             )
     else:
-        aliases = _clean_aliases(record.get("original_texts"), canonical=value)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)
 
     approved_record = {
@@ -710,6 +724,8 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
         LEARNING_ORIGINAL_TEXTS_KEY: record.get(LEARNING_ORIGINAL_TEXTS_KEY) or [value],
         LEARNING_CATEGORY_KEY: category_key,
     }
+    if aliases:
+        approved_record[SIGNAL_ALIASES_KEY] = aliases
     registry.pop(key, None)
     save_registry(registry)
     return approved_record
@@ -769,8 +785,9 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
         if category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
             try:
                 payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError) as exc:
                 payload = {}
+                print(f"[SIGNAL_REGISTRY][WARN] Failed to load title normalization rules from {path}: {exc}")
             expansions = payload.get("abbreviation_expansions") if isinstance(payload, dict) else {}
             if isinstance(expansions, dict):
                 for abbrev, expansion in expansions.items():

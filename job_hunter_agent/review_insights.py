@@ -398,18 +398,23 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
     for item in decisions:
         skill = str(item.get("skill") or "").strip()
         choice = str(item.get("choice") or "").strip().lower()
+        incoming_aliases = [
+            str(alias).strip()
+            for alias in (item.get(KEY_ALIASES) or [])
+            if str(alias).strip()
+        ]
         normalized = _normalize_term(skill)
         if not normalized or not choice:
             continue
 
-        if choice not in {"strong", "working", "basic", "low"}:
+        if choice not in {"strong", "working", "basic"}:
             continue
         level = choice
 
         rule = {
             KEY_NAME: skill,
             KEY_LEVEL: level,
-            KEY_ALIASES: [],
+            KEY_ALIASES: incoming_aliases,
         }
 
         if normalized in existing_index:
@@ -419,6 +424,7 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             canonical_name_norm = _normalize_term(canonical_name)
 
             alias_candidates = [
+                *incoming_aliases,
                 *(existing_rule.get(KEY_ALIASES) or []),
             ]
 

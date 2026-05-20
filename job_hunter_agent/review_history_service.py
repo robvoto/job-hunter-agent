@@ -1,3 +1,11 @@
+"""Review history service.
+
+This module manages the persistence and retrieval of job-level review history and audit records.
+It provides services to track user feedback actions (such as hiding, applying, or blocking 
+jobs) and retrieves job descriptions from history or cached search results to support 
+consistent review signals across sessions.
+"""
+
 import json
 import re
 from datetime import datetime
@@ -44,7 +52,8 @@ def _load_audit_rows() -> list[dict[str, Any]]:
     try:
         data = json.loads(audit_records_path.read_text(encoding="utf-8"))
         return data if isinstance(data, list) else []
-    except Exception:
+    except Exception as exc:
+        print(f"[REVIEW_HISTORY][WARN] Failed to load audit records from {audit_records_path}: {exc}")
         return []
 
 
@@ -76,8 +85,8 @@ def get_job_description(job_id: str) -> str:
                 for row in rows:
                     if normalize_job_key(str(row.get(RECORD_JOB_KEY) or "")) == normalized_key:
                         return row.get(RECORD_FULL_DESCRIPTION_KEY) or row.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[REVIEW_HISTORY][WARN] Failed to read job description from seek_results: {exc}")
     return ""
 
 

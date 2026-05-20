@@ -1,11 +1,19 @@
 """Profile learning helpers.
 
-Main goals:
-- repair imported text
-- extract capabilities and title patterns from CV text via LLM
-- structural parsing (sections, dates, roles) shared with other pipeline modules
-"""
+This module provides utilities for processing and learning from candidate CV text.
+It focuses on extracting structured information, such as capabilities and role titles,
+and preparing this data for use in the job matching and profile building processes.
 
+Key functionalities include:
+- Repairing common text encoding and formatting issues in imported CV text.
+- Extracting capabilities and title patterns from CV text using LLMs.
+- Performing structural parsing of CVs to identify sections, dates, and roles.
+- Building learning signals for new capabilities and title normalization candidates.
+
+The module integrates with LLMs for advanced extraction tasks and includes
+mechanisms for caching LLM responses to improve efficiency. It also handles
+the normalization and validation of extracted data to ensure consistency.
+"""
 import hashlib
 import json
 import re
@@ -52,6 +60,7 @@ from job_hunter_agent.signal_schema import (
     LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
+    SIGNAL_ALIASES_KEY,
     SOURCE_CV_PARSING,
 )
 from job_hunter_agent.global_settings import (
@@ -165,7 +174,8 @@ def _load_generic_role_tokens() -> frozenset[str]:
     try:
         entries = load_role_title_knowledge()
     except Exception:
-        return frozenset()
+        print(f"[PROFILE_LEARNING][WARN] Failed to load role title knowledge for generic tokens.")
+        return frozenset() # Silently returns an empty set
 
     tokens: list[str] = []
     for entry in entries:
@@ -194,7 +204,8 @@ def _load_title_seniority_modifiers() -> frozenset[str]:
     try:
         rules = load_title_normalization_rules()
     except Exception:
-        return frozenset()
+        print(f"[PROFILE_LEARNING][WARN] Failed to load title normalization rules for seniority modifiers.")
+        return frozenset() # Silently returns an empty set
     modifiers = rules.get("seniority_modifiers")
     if not isinstance(modifiers, list):
         return frozenset()
@@ -410,6 +421,24 @@ def _select_role_title_and_employer(candidate_lines: list[str]) -> tuple[str, st
     return title, employer
 
 
+def _header_candidate_lines(*values: str) -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = _clean_line(value)
+        if not cleaned:
+            continue
+        if _extract_year_range(cleaned):
+            continue
+        if _is_heading_line(value) or _is_plain_section_label(value) or _is_bullet_line(value):
+            continue
+        if cleaned in seen:
+            continue
+        seen.add(cleaned)
+        candidates.append(cleaned)
+    return candidates
+
+
 def _strip_bullet_prefix(text: str) -> str:
     return _clean_line(_BULLET_PREFIX_RE.sub("", str(text or "").lstrip()))
 
@@ -493,13 +522,19 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             date_info = _extract_year_range(inline_match.group("dates"))
             bullets, j = collect_role_detail_lines(i + 1)
             if date_info:
-                inline_left = _clean_line(inline_match.group("employer"))
-                inline_right = _clean_line(inline_match.group("title"))
+                header_lines = _header_candidate_lines(
+                    inline_match.group("title"),
+                    inline_match.group("employer"),
+                )
+                title, employer = _select_role_title_and_employer(header_lines)
+                if not title:
+                    i = max(j, i + 1)
+                    continue
                 roles.append(
                     {
-                        "title": inline_right,
-                        "employer": inline_left if inline_left != inline_right else "",
-                        "header_lines": [item for item in [inline_left, inline_right] if item],
+                        "title": title,
+                        "employer": employer,
+                        "header_lines": header_lines or [title, employer],
                         "section": current_section,
                         "bullets": bullets,
                         **date_info,
@@ -513,30 +548,22 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             date_info = _extract_year_range(title_pipe_dates_match.group("dates"))
             if date_info:
                 bullets, j = collect_role_detail_lines(i + 1)
-                title = _clean_line(title_pipe_dates_match.group("title"))
-                employer = ""
-                if i > 0:
-                    previous_line = _clean_line(lines[i - 1].strip())
-                    if (
-                        previous_line
-                        and not _is_heading_line(lines[i - 1].strip())
-                        and not _extract_year_range(previous_line)
-                    ):
-                        employer = previous_line
-                if not employer and i + 1 < len(lines):
-                    next_line = _clean_line(lines[i + 1].strip())
-                    if (
-                        next_line
-                        and not _is_heading_line(lines[i + 1].strip())
-                        and not _extract_year_range(next_line)
-                        and not _looks_like_role_title_line(next_line)
-                    ):
-                        employer = next_line
+                previous_line = lines[i - 1].strip() if i > 0 else ""
+                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                header_lines = _header_candidate_lines(
+                    title_pipe_dates_match.group("title"),
+                    previous_line,
+                    next_line,
+                )
+                title, employer = _select_role_title_and_employer(header_lines)
+                if not title:
+                    i = max(j, i + 1)
+                    continue
                 roles.append(
                     {
                         "title": title,
                         "employer": employer,
-                        "header_lines": [item for item in [employer, title] if item],
+                        "header_lines": header_lines or [title, employer],
                         "section": current_section,
                         "bullets": bullets,
                         **date_info,
@@ -549,13 +576,23 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         if title_with_dates_match:
             date_info = _extract_year_range(title_with_dates_match.group("dates"))
             if date_info:
-                title = _clean_line(title_with_dates_match.group("title"))
                 bullets, j = collect_role_detail_lines(i + 1)
+                previous_line = lines[i - 1].strip() if i > 0 else ""
+                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                header_lines = _header_candidate_lines(
+                    title_with_dates_match.group("title"),
+                    previous_line,
+                    next_line,
+                )
+                title, employer = _select_role_title_and_employer(header_lines)
+                if not title:
+                    i = max(j, i + 1)
+                    continue
                 roles.append(
                     {
                         "title": title,
-                        "employer": "",
-                        "header_lines": [title],
+                        "employer": employer,
+                        "header_lines": header_lines or [title, employer],
                         "section": current_section,
                         "bullets": bullets,
                         **date_info,
@@ -733,7 +770,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         parsed = resp.output_parsed
         result = parsed.model_dump() if parsed is not None else {}
     except Exception:
-        result = {}
+        print(f"[PROFILE_LEARNING][ERROR] LLM CV extraction failed for cache key {cache_key}.")
+        result = {} # Silently returns an empty dictionary
 
     _cv_extraction_cache[cache_key] = result
     return result
@@ -916,6 +954,7 @@ def _split_learning_capabilities(
                 LEARNING_SOURCE_KEY: SOURCE_CV_PARSING,
                 LEARNING_CONTEXT_KEY: _capability_context_sections(name, aliases, source_sections),
                 LEARNING_EVIDENCE_KEY: [name, *aliases],
+                SIGNAL_ALIASES_KEY: aliases,
                 LEARNING_NEEDS_REVIEW_KEY: True,
             })
             continue

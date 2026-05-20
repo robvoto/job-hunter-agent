@@ -133,16 +133,26 @@ def upsert_cv_farming_rule(value: str, aliases: list[str] | None = None) -> dict
         raise ValueError("value is required")
 
     entries = list(load_cv_farming_rules())
+    incoming_aliases = _clean_aliases(aliases or [], canonical=cleaned_value)
     for entry in entries:
         if _clean_text(entry.get("value")).lower() != cleaned_value.lower():
             continue
+        existing_aliases = _clean_aliases(entry.get("aliases"), canonical=cleaned_value)
+        merged: list[str] = []
+        seen: set[str] = {cleaned_value.lower()}
+        for alias in [*existing_aliases, *incoming_aliases]:
+            alias_key = alias.lower()
+            if alias_key in seen:
+                continue
+            seen.add(alias_key)
+            merged.append(alias)
         entry["value"] = cleaned_value
-        entry["aliases"] = _clean_aliases(aliases or [], canonical=cleaned_value)
+        entry["aliases"] = merged
         return save_cv_farming_rules(entries)
 
     entries.append({
         "value": cleaned_value,
-        "aliases": _clean_aliases(aliases or [], canonical=cleaned_value),
+        "aliases": incoming_aliases,
     })
     return save_cv_farming_rules(entries)
 

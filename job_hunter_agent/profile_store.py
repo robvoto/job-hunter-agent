@@ -1,13 +1,13 @@
 """Profile persistence and defaults.
 
-Main goals:
-- define the runtime profile structure used by matching and review flows
-- create a safe default profile for first run
-- load, merge, patch, and save profile.json consistently
+This module defines the runtime profile structure used by matching and review flows.
+It provides logic for creating a safe default profile, loading/saving profile.json,
+and normalising user-specific settings, preferences, and scoring rules.
 
-Notes:
-- profile.json is the runtime source of truth
-- onboarding and imports may generate it, and admin refines it over time
+Key functionalities include:
+- Persistence management for the user profile (runtime source of truth).
+- Normalisation of search settings, salary preferences, and capability rules.
+- Evidence tier classification and weight management for fit scoring.
 """
 
 from __future__ import annotations
@@ -75,6 +75,17 @@ ENGAGEMENT_TYPE_OPTIONS = (
 )
 VALID_ENGAGEMENT_TYPES = frozenset({item["value"] for item in ENGAGEMENT_TYPE_OPTIONS})
 ENGAGEMENT_TYPE_DEFAULT_VALUES = [item["value"] for item in ENGAGEMENT_TYPE_OPTIONS]
+MIN_CONTRACT_MONTH_OPTIONS = (
+    {"value": "3", "label": "3+ months"},
+    {"value": "6", "label": "6+ months"},
+    {"value": "12", "label": "12+ months"},
+)
+MIN_CONTRACT_MONTH_LABEL = "Minimum contract length"
+MIN_CONTRACT_MONTH_NONE_LABEL = "All"
+MIN_CONTRACT_MONTH_HELP_TEXT = (
+    "Contracts shorter than this are excluded before scoring. "
+    "Only applies when the listing states a duration explicitly."
+)
 
 class WorkMode:
     NONE = ""
@@ -127,7 +138,6 @@ KEY_CV_MAX_PAGES = "cv_max_pages"
 
 KEY_BRIEF_MODE = "llm_profile_brief_mode"
 KEY_BRIEF = "llm_profile_brief"
-KEY_FIT_GUIDANCE = "llm_fit_review_guidance"
 KEY_CAP_GUIDANCE = "llm_capability_naming_guidance"
 KEY_STAR_EVIDENCE = "star_candidate_profile_text"
 KEY_CV_TEXT = "cv_text"
@@ -248,7 +258,6 @@ DEFAULT_PROFILE = {
     },
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
-    "llm_fit_review_guidance": "",
     "llm_capability_naming_guidance": "",
     "star_candidate_profile_text": "",
     "cv_text": "",
@@ -344,8 +353,9 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     # Falls back to code defaults if global settings are not yet initialised.
     try:
         global_onboarding = load_global_settings()[GLOBAL_KEY_ONBOARDING_SETTINGS]
-    except Exception:
+    except Exception as exc:
         global_onboarding = {}
+        print(f"[PROFILE_STORE][WARN] Failed to load global onboarding settings: {exc}")
     global_presets = global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
 
     # Preset resolution: source > global > code default.
@@ -458,8 +468,9 @@ def normalize_capability_rules(
     source_onboarding = onboarding_settings if isinstance(onboarding_settings, dict) else {}
     try:
         alias_limit = int(source_onboarding.get(KEY_CAPABILITY_ALIAS_LIMIT) or DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
-    except Exception:
+    except Exception as exc:
         alias_limit = int(DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
+        print(f"[PROFILE_STORE][WARN] Failed to normalise capability alias limit: {exc}")
 
     for rule in rules or []:
         if not isinstance(rule, dict):
@@ -536,9 +547,6 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
     merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
-    )
-    merged["llm_fit_review_guidance"] = normalize_llm_fit_review_guidance(
-        merged.get("llm_fit_review_guidance", "")
     )
     merged["llm_capability_naming_guidance"] = normalize_llm_capability_naming_guidance(
         merged.get("llm_capability_naming_guidance", "")
@@ -624,8 +632,9 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
                 search_limits[KEY_DATE_RANGE_DAYS]["max"],
             ),
         )
-    except Exception:
+    except Exception as exc:
         merged[KEY_DATE_RANGE_DAYS] = DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]
+        print(f"[PROFILE_STORE][WARN] Failed to normalise date_range_days: {exc}")
 
     try:
         merged[KEY_SEEK_MAX_PAGES] = max(
@@ -635,8 +644,9 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
                 search_limits[KEY_SEEK_MAX_PAGES]["max"],
             ),
         )
-    except Exception:
+    except Exception as exc:
         merged[KEY_SEEK_MAX_PAGES] = DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]
+        print(f"[PROFILE_STORE][WARN] Failed to normalise seek_max_pages: {exc}")
 
     try:
         merged[KEY_LINKEDIN_HOURS_OLD] = max(
@@ -646,8 +656,9 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
                 search_limits[KEY_LINKEDIN_HOURS_OLD]["max"],
             ),
         )
-    except Exception:
+    except Exception as exc:
         merged[KEY_LINKEDIN_HOURS_OLD] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+        print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_hours_old: {exc}")
 
     try:
         merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = max(
@@ -662,8 +673,9 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
                 search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["max"],
             ),
         )
-    except Exception:
+    except Exception as exc:
         merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
+        print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_results_per_search: {exc}")
 
     merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()
@@ -691,13 +703,15 @@ def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, in
     daily_cap = int(salary_limits.get(KEY_MIN_DAILY_RATE, {}).get("max", 0) or 0)
     try:
         minimum_salary_yearly = max(0, int(str(source.get("minimum_salary_yearly", 0)).replace(",", "").strip() or 0))
-    except Exception:
+    except Exception as exc:
         minimum_salary_yearly = 0
+        print(f"[PROFILE_STORE][WARN] Failed to parse minimum_salary_yearly: {exc}")
     minimum_salary_yearly = min(minimum_salary_yearly, yearly_cap) if yearly_cap > 0 else minimum_salary_yearly
     try:
         minimum_daily_rate = max(0, int(str(source.get("minimum_daily_rate", 0)).replace(",", "").strip() or 0))
-    except Exception:
+    except Exception as exc:
         minimum_daily_rate = 0
+        print(f"[PROFILE_STORE][WARN] Failed to parse minimum_daily_rate: {exc}")
     minimum_daily_rate = min(minimum_daily_rate, daily_cap) if daily_cap > 0 else minimum_daily_rate
     return {
         "minimum_salary_yearly": minimum_salary_yearly,
@@ -711,8 +725,9 @@ def normalize_preference_weights(payload: dict[str, Any] | None) -> dict[str, fl
     for key, default in DEFAULT_PREFERENCE_WEIGHTS.items():
         try:
             value = float(source.get(key, default) or default)
-        except Exception:
+        except Exception as exc:
             value = default
+            print(f"[PROFILE_STORE][WARN] Failed to normalise weight for {key}: {exc}")
         normalized[key] = max(min(value, 2.0), 0.0)
     return normalized
 
@@ -735,12 +750,14 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
         if isinstance(default_value, int) and not isinstance(default_value, bool):
             try:
                 return int(incoming_value)
-            except Exception:
+            except Exception as exc:
+                print(f"[PROFILE_STORE][WARN] Failed to merge int value: {exc}")
                 return int(default_value)
         if isinstance(default_value, float):
             try:
                 return float(incoming_value)
-            except Exception:
+            except Exception as exc:
+                print(f"[PROFILE_STORE][WARN] Failed to merge float value: {exc}")
                 return float(default_value)
         return copy.deepcopy(default_value if incoming_value in (None, "") else incoming_value)
 
@@ -759,10 +776,6 @@ def normalize_llm_profile_brief_mode(value: Any) -> str:
     if normalized == BriefMode.MANUAL:
         return BriefMode.MANUAL
     return DEFAULT_LLM_PROFILE_BRIEF_MODE
-
-
-def normalize_llm_fit_review_guidance(value: Any) -> str:
-    return str(value or "").strip()
 
 
 def normalize_llm_capability_naming_guidance(value: Any) -> str:
@@ -904,8 +917,9 @@ def normalize_candidate_profile_tier_weights(payload: dict[str, Any] | None) -> 
     for key, default in DEFAULT_EVIDENCE_TIER_WEIGHTS.items():
         try:
             value = float(source.get(key, default) or default)
-        except Exception:
+        except Exception as exc:
             value = default
+            print(f"[PROFILE_STORE][WARN] Failed to normalise tier weight for {key}: {exc}")
         normalized[key] = max(min(value, 1.0), 0.0)
     return normalized
 

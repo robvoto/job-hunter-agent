@@ -220,14 +220,14 @@
           </section>
 
           <section class="panel">
-            <h2>Source Documents</h2>
-            <p class="panel-copy">These file types are accepted during onboarding and source import. Keep them here so the app stays centrally managed.</p>
+            <h2>CV Files</h2>
+            <p class="panel-copy">These file types are accepted when you upload or rebuild a CV. Keep them here so the app stays centrally managed.</p>
 
-            <label for="source_document_allowed_suffixes">Allowed file suffixes</label>
+            <label for="source_document_allowed_suffixes">Allowed CV file suffixes</label>
             <textarea id="source_document_allowed_suffixes" rows="6" readonly aria-readonly="true" placeholder=".docx
 .md
 .txt"></textarea>
-            <div class="field-help">Read-only. One suffix per line, including the leading dot. Update this in the managed advance settings source, not from the UI.</div>
+            <div class="field-help">Read-only. One suffix per line, including the leading dot. Update this in the managed advanced settings source, not from the UI.</div>
           </section>
 
           <section class="panel">
@@ -299,7 +299,27 @@
 
             <label for="llm_prompt_settings">Prompt settings</label>
             <textarea id="llm_prompt_settings" rows="14" placeholder='{"match_preference_templates": {...}}'></textarea>
-            <div class="field-help">Managed prompt policy for LLM fit review context and normalization caps. Keep it as JSON.</div>
+            <div class="field-help">
+              Managed prompt policy stored as JSON. Setting a token limit too low truncates the LLM response mid-JSON and causes a CARD_EXCEPTION for that job. Setting it too high wastes API budget.
+              <ul class="field-help-list">
+                <li><code>fit_decision_max_output_tokens</code> — max output tokens for the per-job fit review (decision + contextual capability matches). Minimum needed: ~100. Default: 400. Hard limit: 2000.</li>
+                <li><code>learning_candidates_max_output_tokens</code> — max output tokens for the learning-candidate extraction pass. Default: 500. Hard limit: 2000.</li>
+                <li><code>rejection_blocker_suggestions_max_output_tokens</code> — max output tokens when the LLM suggests rejection blocker rules. Default: 300. Hard limit: 1000.</li>
+                <li><code>capability_naming_max_output_tokens</code> — max output tokens when the LLM generates capability names and aliases. Default: 500. Hard limit: 1500.</li>
+                <li><code>profile_extraction_max_output_tokens</code> — max output tokens for full CV profile extraction during onboarding. Default: 2000. Hard limit: 4000.</li>
+                <li><code>learning_candidates_max_items</code> — how many learning candidates the LLM is asked to return per job. Default: 6. Hard limit: 20.</li>
+                <li><code>rejection_blocker_suggestions_max_items</code> — how many blocker suggestions the LLM may return. Default: 6. Hard limit: 20.</li>
+                <li><code>job_description_max_chars</code> — characters of job text sent into each LLM review. Default: 5000. Hard limit: 20000.</li>
+                <li><code>cv_evidence_json_chars</code> — characters of structured CV evidence JSON included per review. Default: 12000. Hard limit: 30000.</li>
+                <li><code>cv_fallback_chars</code> — characters of plain CV text used when the JSON evidence is unavailable. Default: 3000. Hard limit: 10000.</li>
+                <li><code>profile_brief_max_chars</code> — characters of the profile brief injected into prompts. Default: 2500. Hard limit: 10000.</li>
+                <li><code>fit_guidance_max_chars</code> — characters of fit guidance included in the review prompt. Default: 1200. Hard limit: 5000.</li>
+                <li><code>capability_rules_max_items</code> — how many capability rules are injected into each review prompt. Default: 20. Hard limit: 50.</li>
+                <li><code>capability_rule_aliases_max_items</code> — how many aliases per rule are included. Default: 8. Hard limit: 20.</li>
+                <li><code>capability_naming_aliases_max_items</code> — how many aliases the LLM is asked to return per capability. Default: 6. Hard limit: 20.</li>
+                <li><code>raw_output_log_max_chars</code> — how many characters of raw LLM output are written to the log. Default: 1200. Hard limit: 5000.</li>
+              </ul>
+            </div>
           </section>
 
           <section class="panel">

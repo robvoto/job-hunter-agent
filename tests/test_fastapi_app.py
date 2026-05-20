@@ -47,12 +47,15 @@ def test_workspace_page_bootstrap_includes_user_id(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_fa, "read_session_username", lambda request: _FAKE_USER["email"])
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages.srv, "DEBUG_MODE", True)
     monkeypatch.setattr(_pages, "get_user_id_for_runtime", lambda: "test-user")
 
     client = TestClient(create_app())
     html = client.get("/").text
 
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
+    assert 'Reset learning' in html
+    assert 'Reset Signals' not in html
 
 
 def test_logout_redirects_to_login_and_clears_session_cookie():
