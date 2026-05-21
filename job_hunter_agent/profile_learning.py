@@ -45,7 +45,6 @@ KEY_NEEDS_REVIEW = "needs_review"
 
 from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
 from job_hunter_agent.title_normalization_rules import (
-    learn_title_normalization_candidates,
     load_title_normalization_rules,
     normalize_title_text,
 )
@@ -58,6 +57,7 @@ from job_hunter_agent.signal_schema import (
     LEARNING_EVIDENCE_KEY,
     LEARNING_KNOWLEDGE_MATCH_KEY,
     LEARNING_CONTEXT_KEY,
+    LEARNING_CONTEXT_TERMS_KEY,
     LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
@@ -235,6 +235,7 @@ class _CvExtractionResponse(BaseModel):
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
+    title_normalization_candidates: list[dict[str, Any]] = Field(default_factory=list)
     role_titles: list[str] = Field(default_factory=list)
 
 
@@ -502,6 +503,31 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             j += 1
         return details, j
 
+    def append_role(
+        title: str,
+        employer: str,
+        header_lines: list[str],
+        bullets: list[str],
+        date_info: dict[str, Any],
+    ) -> None:
+        resolved_title, resolved_employer = _select_role_title_and_employer(header_lines)
+        if not resolved_title:
+            resolved_title = _clean_line(title)
+        if not resolved_employer:
+            resolved_employer = _clean_line(employer)
+        if not resolved_title:
+            return
+        roles.append(
+            {
+                "title": resolved_title,
+                "employer": resolved_employer,
+                "header_lines": header_lines or [resolved_title, resolved_employer],
+                "section": current_section,
+                "bullets": bullets,
+                **date_info,
+            }
+        )
+
     while i < len(lines):
         raw_line = lines[i].strip()
         cleaned = _clean_line(raw_line)
@@ -523,20 +549,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     inline_match.group("title"),
                     inline_match.group("employer"),
                 )
-                title, employer = _select_role_title_and_employer(header_lines)
-                if not title:
-                    i = max(j, i + 1)
-                    continue
-                roles.append(
-                    {
-                        "title": title,
-                        "employer": employer,
-                        "header_lines": header_lines or [title, employer],
-                        "section": current_section,
-                        "bullets": bullets,
-                        **date_info,
-                    }
-                )
+                append_role(inline_match.group("title"), inline_match.group("employer"), header_lines, bullets, date_info)
             i = max(j, i + 1)
             continue
 
@@ -552,20 +565,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     previous_line,
                     next_line,
                 )
-                title, employer = _select_role_title_and_employer(header_lines)
-                if not title:
-                    i = max(j, i + 1)
-                    continue
-                roles.append(
-                    {
-                        "title": title,
-                        "employer": employer,
-                        "header_lines": header_lines or [title, employer],
-                        "section": current_section,
-                        "bullets": bullets,
-                        **date_info,
-                    }
-                )
+                append_role(title_pipe_dates_match.group("title"), previous_line, header_lines, bullets, date_info)
             i = max(j, i + 1)
             continue
 
@@ -581,20 +581,7 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     previous_line,
                     next_line,
                 )
-                title, employer = _select_role_title_and_employer(header_lines)
-                if not title:
-                    i = max(j, i + 1)
-                    continue
-                roles.append(
-                    {
-                        "title": title,
-                        "employer": employer,
-                        "header_lines": header_lines or [title, employer],
-                        "section": current_section,
-                        "bullets": bullets,
-                        **date_info,
-                    }
-                )
+                append_role(title_with_dates_match.group("title"), previous_line, header_lines, bullets, date_info)
             i = max(j, i + 1)
             continue
 
@@ -749,6 +736,9 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
         "- role_titles: list the job titles from the evidence roles exactly as they appear in the title field. One entry per role, no duplicates.\n"
+        "- title_normalization_candidates: list short title forms, acronyms, or compressed titles that are not safe to resolve from the CV alone. "
+        "If context clearly resolves the meaning, include the resolved title in suggested_values and the resolving words in context_terms. "
+        "If context does not resolve it, keep suggested_values empty and needs_review=true.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
         f"Evidence pack JSON:\n{evidence_json[:evidence_json_limit]}\n\n"
@@ -1168,15 +1158,46 @@ def build_learning_patch(
 
     patch: dict[str, Any] = {KEY_CV_TEXT: source_text}
 
-    role_titles = _split_compound_role_titles(
-        [str(t).strip() for t in (extracted.get("role_titles") or []) if str(t).strip()]
-    )
-    if role_titles:
-        learn_title_normalization_candidates(
-            role_titles,
-            source=SOURCE_CV_PARSING,
-            source_text=source_text,
-        )
+    title_normalization_candidates = [
+        item
+        for item in (extracted.get("title_normalization_candidates") or [])
+        if isinstance(item, dict)
+    ]
+    if title_normalization_candidates:
+        title_normalization_signals: list[dict[str, Any]] = []
+        seen_title_normalization: set[str] = set()
+        for candidate in title_normalization_candidates:
+            signal = str(candidate.get("signal") or "").strip()
+            if not signal or signal.lower() in seen_title_normalization:
+                continue
+            seen_title_normalization.add(signal.lower())
+            context_terms = [
+                str(value).strip()
+                for value in (candidate.get("context_terms") or [])
+                if str(value).strip()
+            ]
+            title_normalization_signals.append(
+                {
+                    "signal": signal,
+                    "suggested_category": CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+                    "original_texts": [
+                        str(text).strip()
+                        for text in (candidate.get("original_texts") or [signal])
+                        if str(text).strip()
+                    ],
+                    "suggested_values": [
+                        str(value).strip()
+                        for value in (candidate.get("suggested_values") or [])
+                        if str(value).strip()
+                    ],
+                    "confidence": str(candidate.get("confidence") or "ambiguous").strip(),
+                    "needs_review": bool(candidate.get("needs_review", True)),
+                }
+            )
+            if context_terms:
+                title_normalization_signals[-1][LEARNING_CONTEXT_TERMS_KEY] = context_terms
+        if title_normalization_signals:
+            register_signals(title_normalization_signals)
 
     raw_caps = extracted.get(KEY_CAPABILITIES, [])
     _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capabilities before validation")

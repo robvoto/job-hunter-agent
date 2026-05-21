@@ -346,6 +346,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
                 raw_chars,
                 approx_pages,
             )
+        print(f"[ONBOARDING] CV source read: {label} chars read={raw_chars} approx pages={approx_pages}")
         imported_sources.append({"label": label, "path": path, "characters": len(text)})
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
@@ -356,6 +357,10 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile CV files first.")
 
     combined_text = "\n\n".join(combined_sections).strip()
+    print(
+        f"[ONBOARDING] Extraction input: chars read={len(combined_text)} approx pages="
+        f"{max(1, (len(combined_text) + cv_chars_per_page - 1) // cv_chars_per_page)}"
+    )
     logger.info(
         "[ONBOARDING][SOURCE_READ] combined_chars=%s combined_approx_pages=%s page_limit_notice=%s",
         len(combined_text),
@@ -431,6 +436,10 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         patch[KEY_PRIMARY_PATTERNS] = suggestion.get(KEY_PRIMARY_PATTERNS) or []
         patch[KEY_SECONDARY_PATTERNS] = suggestion.get(KEY_SECONDARY_PATTERNS) or []
         print(f"[TITLE_PATTERNS] Extracted {len(patch[KEY_PRIMARY_PATTERNS])} target and {len(patch[KEY_SECONDARY_PATTERNS])} secondary patterns")
+        print(
+            f"[ONBOARDING] Extraction summary: target={len(patch[KEY_PRIMARY_PATTERNS])} "
+            f"secondary={len(patch[KEY_SECONDARY_PATTERNS])} capabilities={len(patch.get(KEY_CAPABILITY_PROFILE_RULES) or [])}"
+        )
         review_signals = build_role_title_review_signals(
             patch[KEY_SECONDARY_PATTERNS],
             source_sections=source_sections,

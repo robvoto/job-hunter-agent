@@ -510,14 +510,15 @@ def test_approve_signal_promotes_title_normalization_candidate(tmp_path, monkeyp
             "original_texts": ["Senior Business Analyst"],
             "category": "title_normalization_candidate",
             "suggested_values": ["senior"],
+            "context_terms": ["delivery", "project"],
             "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
         }
     })
 
-    updated = signal_registry.approve_signal("sr", "title_normalization_candidate")
+    updated = signal_registry.approve_signal("sr", "title_normalization_candidate", "project manager")
 
     assert updated == {
-        "signal": "sr",
+        "signal": "project manager",
         "normalized_key": "sr",
         "original_texts": ["sr", "Senior Business Analyst"],
         "category": "title_normalization_candidate",
@@ -527,7 +528,15 @@ def test_approve_signal_promotes_title_normalization_candidate(tmp_path, monkeyp
     assert saved_registry == {}
 
     rules = json.loads(rules_path.read_text(encoding="utf-8"))
-    assert rules["abbreviation_expansions"] == {"sr": "senior"}
+    assert rules.get("abbreviation_expansions", {}) == {}
+    assert rules["contextual_abbreviation_expansions"] == {
+        "sr": [
+            {
+                "expansion": "project manager",
+                "context_terms": ["delivery", "project"],
+            }
+        ]
+    }
 
 
 def test_approve_signal_title_normalization_candidate_no_suggested_values(tmp_path, monkeypatch):
@@ -553,28 +562,9 @@ def test_approve_signal_title_normalization_candidate_no_suggested_values(tmp_pa
 
     updated = signal_registry.approve_signal("pm", "title_normalization_candidate")
 
-    assert updated["category"] == "title_normalization_candidate"
+    assert updated is None
+    assert json.loads(registry_path.read_text(encoding="utf-8"))["pm"]["signal"] == "pm"
     assert not rules_path.exists()
-
-def test_learn_title_normalization_candidates_stores_suggested_values(tmp_path, monkeypatch):
-    registry_path = tmp_path / "signal_registry.json"
-    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
-    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
-    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
-    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
-    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
-    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_normalization_candidate", tmp_path / "title_normalization_rules.json")
-
-    result = title_normalization_rules.learn_title_normalization_candidates(["Sr BA"])
-
-    assert result["pending"] == 1
-    saved = json.loads(registry_path.read_text(encoding="utf-8"))
-    record = saved.get("sr")
-    assert record is not None
-    assert record["suggested_values"] == ["senior"]
-    assert record["suggested_category"] == "title_normalization_candidate"
-
 
 def test_signal_category_metadata_is_complete_and_user_facing():
     from job_hunter_agent.signal_registry import CATEGORY_METADATA, VALID_SIGNAL_CATEGORIES

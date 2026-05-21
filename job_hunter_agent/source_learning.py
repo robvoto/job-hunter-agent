@@ -38,6 +38,7 @@ from job_hunter_agent.signal_schema import (
     CATEGORY_ROLE_TITLE_TOKEN,
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
     LEARNING_CATEGORY_KEY,
+    LEARNING_CONTEXT_TERMS_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SUGGESTED_CATEGORY_KEY,
@@ -151,7 +152,12 @@ def build_ad_learning_signals(
     pending: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def _add(signal_val: str, suggested_cat: str, original_texts: list[str]) -> None:
+    def _add(
+        signal_val: str,
+        suggested_cat: str,
+        original_texts: list[str],
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         key = compact_whitespace(signal_val or "").lower()
         if not key or key in seen:
             return
@@ -164,6 +170,7 @@ def build_ad_learning_signals(
                 LEARNING_SIGNAL_KEY: compact_whitespace(signal_val),
                 LEARNING_SUGGESTED_CATEGORY_KEY: suggested_cat,
                 LEARNING_ORIGINAL_TEXTS_KEY: [compact_whitespace(t) for t in original_texts if compact_whitespace(t)],
+                **(metadata or {}),
             }
         )
 
@@ -202,7 +209,20 @@ def build_ad_learning_signals(
             if candidate:
                 cand_val = compact_whitespace(candidate.get("value") or "")
                 if cand_val:
-                    _add(cand_val, CATEGORY_TITLE_NORMALIZATION_CANDIDATE, candidate.get("evidence") or [title])
+                    metadata = {
+                        "suggested_values": candidate.get("suggested_values") or [],
+                        "confidence": candidate.get("confidence") or "ambiguous",
+                        "needs_review": bool(candidate.get("needs_review", True)),
+                    }
+                    context_terms = [term for term in (candidate.get("context_terms") or []) if compact_whitespace(term)]
+                    if context_terms:
+                        metadata[LEARNING_CONTEXT_TERMS_KEY] = context_terms
+                    _add(
+                        cand_val,
+                        CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
+                        candidate.get("evidence") or [title],
+                        metadata,
+                    )
 
     return pending
 

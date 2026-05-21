@@ -352,10 +352,22 @@ def passes_quick_card_filters(
     work_mode: str = "",
     work_type: str = "",
     salary: str = "",
-    ) -> Tuple[bool, str]:
+) -> Tuple[bool, str]:
     profile = load_profile()
-    normalized_title = normalize_title_text(title)
     teaser_lower = (teaser or "").strip().lower()
+    title_context = "\n".join(
+        part for part in [
+            (title or "").strip(),
+            teaser_lower,
+            (company or "").strip().lower(),
+            (location or "").strip().lower(),
+            (work_mode or "").strip().lower(),
+            (work_type or "").strip().lower(),
+            (salary or "").strip().lower(),
+        ]
+        if part
+    )
+    normalized_title = normalize_title_text(title, title_context)
     combined = "\n".join(
         part for part in [
             normalized_title,

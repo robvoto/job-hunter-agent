@@ -298,6 +298,10 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
             {
                 "signal": "platform engineer",
                 "suggested_category": "role_title_token",
+                "suggested_values": [],
+                "context_terms": [],
+                "confidence": "",
+                "needs_review": True,
                 "original_texts": ["platform engineer"],
             }
         ],

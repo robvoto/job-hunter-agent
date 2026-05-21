@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 from job_hunter_agent import filters
-from job_hunter_agent import signal_registry
 from job_hunter_agent import role_title_knowledge
 from job_hunter_agent import title_normalization_rules
 
@@ -36,6 +35,7 @@ def test_load_title_normalization_rules_returns_expected_structure(tmp_path, mon
     assert payload["kind"] == "rules"
     assert payload["name"] == "title_normalization_rules"
     assert payload["abbreviation_expansions"]["ba"] == "business analyst"
+    assert "learning_candidates" not in payload
     assert "title_candidate_leading_verb_blockers" not in payload
 
 
@@ -51,6 +51,12 @@ def test_normalize_title_text_expands_abbreviations(tmp_path, monkeypatch):
                 "updated_at": "2026-05-03",
                 "seniority_modifiers": ["junior", "senior", "lead"],
                 "abbreviation_expansions": {"sr": "senior", "jr": "junior", "ba": "business analyst", "po": "product owner"},
+                "contextual_abbreviation_expansions": {
+                    "pm": [
+                        {"expansion": "project manager", "context_terms": ["delivery", "project"]},
+                        {"expansion": "product manager", "context_terms": ["product", "roadmap"]},
+                    ]
+                },
                 "normalization": {
                     "collapse_spaces": True,
                     "strip_outer_punctuation": True,
@@ -65,6 +71,9 @@ def test_normalize_title_text_expands_abbreviations(tmp_path, monkeypatch):
 
     assert title_normalization_rules.normalize_title_text("Sr BA") == "senior business analyst"
     assert title_normalization_rules.normalize_title_text("PO") == "product owner"
+    assert title_normalization_rules.normalize_title_text("PM", "delivery project roadmap") == "project manager"
+    assert title_normalization_rules.normalize_title_text("PM", "product roadmap go-to-market") == "product manager"
+    assert title_normalization_rules.normalize_title_text("PM", "finance audit") == "pm"
 
 
 def test_decompose_title_text_extracts_base_role_and_variant_terms(tmp_path, monkeypatch):
@@ -116,9 +125,8 @@ def test_decompose_title_text_extracts_base_role_and_variant_terms(tmp_path, mon
     assert title_normalization_rules.derive_base_title_from_seniority("Senior Business Analyst AI Foundations") == "business analyst"
 
 
-def test_learn_title_normalization_candidates_promotes_safe_titles_and_reviews_ambiguous(tmp_path, monkeypatch):
+def test_classify_title_normalization_candidate_uses_llm_without_writing_rules(tmp_path, monkeypatch):
     rules_path = tmp_path / "title_normalization_rules.json"
-    registry_path = tmp_path / "signal_registry.json"
     rules_path.write_text(
         json.dumps(
             {
@@ -139,32 +147,115 @@ def test_learn_title_normalization_candidates_promotes_safe_titles_and_reviews_a
         encoding="utf-8",
     )
     monkeypatch.setattr(title_normalization_rules, "TITLE_NORMALIZATION_RULES_PATH", rules_path)
-    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", registry_path)
-    monkeypatch.setattr(signal_registry, "CAPABILITY_KNOWLEDGE_PATH", tmp_path / "capability_knowledge.json")
-    monkeypatch.setattr(signal_registry, "ROLE_TITLE_KNOWLEDGE_PATH", tmp_path / "role_title_knowledge.json")
-    monkeypatch.setattr(signal_registry, "HARD_BLOCKER_RULES_PATH", tmp_path / "hard_blocker_rules.json")
-    monkeypatch.setattr(signal_registry, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", tmp_path / "government_context_knowledge.json")
-    monkeypatch.setattr(signal_registry, "IGNORED_SIGNAL_ARCHIVE_PATH", tmp_path / "ignored_signal.json")
-    monkeypatch.setitem(signal_registry._CATEGORY_KNOWLEDGE_PATHS, "title_normalization_candidate", rules_path)
-
-    summary = title_normalization_rules.learn_title_normalization_candidates(
-        ["Sr", "GP", "PM"],
-        source="job title",
-        source_text="Community medical clinic",
+    monkeypatch.setattr(
+        title_normalization_rules,
+        "llm_should_consider_learning_candidates",
+        lambda text: [
+            {
+                "signal": "PM",
+                "suggested_category": "title_normalization_candidate",
+                "suggested_values": ["project manager"],
+                "context_terms": ["delivery", "project"],
+                "confidence": "high",
+                "original_texts": ["PM delivery project"],
+            }
+        ],
     )
 
-    saved_rules = json.loads(rules_path.read_text(encoding="utf-8"))
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    candidate = title_normalization_rules.classify_title_normalization_candidate("PM", "delivery project")
 
-    assert saved_rules["abbreviation_expansions"] == {}
-    assert set(registry) == {"sr", "gp", "pm"}
-    expected_originals = {"sr": "Sr", "gp": "GP", "pm": "PM"}
-    for key in ("sr", "gp", "pm"):
-        record = registry[key]
-        assert record["signal"] == key
-        assert record["normalized_key"] == key
-        assert record["original_texts"] == [expected_originals[key].lower()]
-        assert record["category"] == ""
-        assert record["suggested_category"] == "title_normalization_candidate"
-        assert record["history"][0]["action"] == "added"
-    assert summary == {"pending": 3}
+    assert candidate == {
+        "value": "pm",
+        "suggested_values": ["project manager"],
+        "context_terms": ["delivery", "project"],
+        "evidence": ["PM delivery project"],
+        "confidence": "high",
+        "needs_review": True,
+    }
+    assert json.loads(rules_path.read_text(encoding="utf-8"))["abbreviation_expansions"] == {}
+
+
+def test_classify_title_normalization_candidate_skips_already_approved_entries(tmp_path, monkeypatch):
+    rules_path = tmp_path / "title_normalization_rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "kind": "rules",
+                "name": "title_normalization_rules",
+                "version": 1,
+                "updated_at": "2026-05-03",
+                "seniority_modifiers": ["junior", "senior", "lead"],
+                "abbreviation_expansions": {"sr": "senior"},
+                "normalization": {
+                    "collapse_spaces": True,
+                    "strip_outer_punctuation": True,
+                    "lowercase_for_matching": True,
+                    "preserve_original_for_display": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(title_normalization_rules, "TITLE_NORMALIZATION_RULES_PATH", rules_path)
+    monkeypatch.setattr(
+        title_normalization_rules,
+        "llm_should_consider_learning_candidates",
+        lambda text: [
+            {
+                "signal": "SR",
+                "suggested_category": "title_normalization_candidate",
+                "suggested_values": ["senior"],
+                "confidence": "high",
+                "original_texts": ["SR"],
+            },
+            {
+                "signal": "PM",
+                "suggested_category": "title_normalization_candidate",
+                "suggested_values": ["project manager"],
+                "context_terms": ["delivery", "project"],
+                "confidence": "high",
+                "original_texts": ["PM delivery project"],
+            },
+        ],
+    )
+
+    candidate = title_normalization_rules.classify_title_normalization_candidate("PM", "delivery project")
+
+    assert candidate == {
+        "value": "pm",
+        "suggested_values": ["project manager"],
+        "context_terms": ["delivery", "project"],
+        "evidence": ["PM delivery project"],
+        "confidence": "high",
+        "needs_review": True,
+    }
+
+
+def test_find_approved_title_normalization_accepts_context_only_match(tmp_path, monkeypatch):
+    path = tmp_path / "title_normalization_rules.json"
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "rules",
+                "name": "title_normalization_rules",
+                "version": 1,
+                "updated_at": "2026-05-03",
+                "abbreviation_expansions": {},
+                "contextual_abbreviation_expansions": {
+                    "pm": [
+                        {"expansion": "project manager", "context_terms": ["delivery", "project"]},
+                    ]
+                },
+                "normalization": {
+                    "collapse_spaces": True,
+                    "strip_outer_punctuation": True,
+                    "lowercase_for_matching": True,
+                    "preserve_original_for_display": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(title_normalization_rules, "TITLE_NORMALIZATION_RULES_PATH", path)
+
+    assert title_normalization_rules.find_approved_title_normalization("PM", context_terms=["delivery", "project"]) == (True, "project manager")

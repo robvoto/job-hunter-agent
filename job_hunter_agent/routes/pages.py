@@ -344,6 +344,7 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
     if not srv._onboarding_complete():
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
     if SETTINGS_HTML_PATH.exists():
+        shared_labels = srv.load_shared_ui_labels()
         html = _render_template_with_locations(
             request,
             SETTINGS_HTML_PATH,
@@ -351,6 +352,9 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
             page_title="Settings - Job Hunter",
             page_heading="Settings",
             page_copy="Configure your candidate search and profile settings here.",
+            account_shortcut_href="/",
+            account_shortcut_label=shared_labels["account_menu_workspace_shortcut_label"],
+            account_shortcut_aria_label=shared_labels["account_menu_workspace_shortcut_aria_label"],
         )
         return html_response(html)
     return html_response("<h1>Template missing</h1><p>Missing templates/settings.html</p>")

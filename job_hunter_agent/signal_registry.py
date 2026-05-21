@@ -48,6 +48,7 @@ from job_hunter_agent.government_context_patterns import (
     save_government_context_patterns,
     upsert_government_context_pattern,
 )
+from job_hunter_agent.title_normalization_rules import find_approved_title_normalization
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
     KEY_P_ROUTING_PRIMARY,
@@ -69,6 +70,7 @@ from job_hunter_agent.signal_schema import (
     LEARNING_CATEGORY_KEY,
     LEARNING_CONFIDENCE_KEY,
     LEARNING_CONTEXT_KEY,
+    LEARNING_CONTEXT_TERMS_KEY,
     LEARNING_HISTORY_KEY,
     LEARNING_EVIDENCE_KEY,
     LEARNING_KNOWLEDGE_MATCH_KEY,
@@ -98,7 +100,7 @@ CATEGORY_LABELS = {
     CATEGORY_PROFILE_SECTION_LABEL: "Profile section label",
     CATEGORY_ROLE_TITLE_TOKEN: "Role title",
     CATEGORY_ROLE_TITLE_PATTERN: "Role title pattern",
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "Title abbreviation",
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "Role title normalization",
 }
 
 CATEGORY_METADATA = {
@@ -151,10 +153,10 @@ CATEGORY_METADATA = {
         "warning": None,
     },
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE: {
-        "label": "Title abbreviation",
-        "description": "Short title forms and abbreviations that normalize to standard titles. Helps match abbreviated roles to the right job title.",
+        "label": "Role title normalization",
+        "description": "Short role-title forms, abbreviations, and acronyms that normalize to approved role titles. Ambiguous cases stay pending until reviewed.",
         "examples": ["BA = Business Analyst", "PM = Project Manager", "QA = Quality Assurance", "SME = Subject Matter Expert"],
-        "warning": "⚠️ NOTE: Abbreviations can be ambiguous and may map to more than one title.",
+        "warning": "⚠️ NOTE: Ambiguous role abbreviations can map to more than one approved title.",
     },
     CATEGORY_PROFILE_SECTION_LABEL: {
         "label": "Profile section label",
@@ -259,6 +261,10 @@ def _clean_context_payload(record: dict[str, Any]) -> dict[str, Any]:
     context = _clean_text_list(record.get(LEARNING_CONTEXT_KEY))
     if context:
         cleaned[LEARNING_CONTEXT_KEY] = context
+
+    context_terms = _clean_text_list(record.get(LEARNING_CONTEXT_TERMS_KEY))
+    if context_terms:
+        cleaned[LEARNING_CONTEXT_TERMS_KEY] = context_terms
 
     evidence = _clean_text_list(record.get(LEARNING_EVIDENCE_KEY))
     if evidence:
@@ -457,7 +463,7 @@ def _append_knowledge_entry(path, value: str, aliases: list[str]) -> None:
     _save_approved_knowledge_payload(path, payload)
 
 
-def _append_title_normalization_expansion(path, abbreviation: str, expansion: str) -> None:
+def _append_title_normalization_expansion(path, abbreviation: str, expansion: str, context_terms: list[str] | None = None) -> None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     except (json.JSONDecodeError, OSError) as exc:
@@ -468,10 +474,45 @@ def _append_title_normalization_expansion(path, abbreviation: str, expansion: st
     payload.setdefault("kind", "rules")
     payload.setdefault("name", "title_normalization_rules")
     payload.setdefault("version", 1)
+    abbreviation_key = _clean_term(abbreviation)
+    expansion_value = _clean_text(expansion)
+    if not abbreviation_key or not expansion_value:
+        return
+
+    if context_terms:
+        contextual = payload.get("contextual_abbreviation_expansions")
+        if not isinstance(contextual, dict):
+            contextual = {}
+        entries = contextual.setdefault(abbreviation_key, [])
+        if not isinstance(entries, list):
+            entries = []
+        cleaned_context_terms = _clean_text_list(context_terms)
+        if cleaned_context_terms:
+            cleaned_context_set = set(cleaned_context_terms)
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if _clean_term(entry.get("expansion")) != _clean_term(expansion_value):
+                    continue
+                if set(_clean_text_list(entry.get(LEARNING_CONTEXT_TERMS_KEY))) == cleaned_context_set:
+                    payload["contextual_abbreviation_expansions"] = contextual
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                    return
+            entries.append({
+                "expansion": expansion_value,
+                LEARNING_CONTEXT_TERMS_KEY: cleaned_context_terms,
+            })
+            contextual[abbreviation_key] = entries
+            payload["contextual_abbreviation_expansions"] = contextual
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            return
+
     expansions = payload.get("abbreviation_expansions")
     if not isinstance(expansions, dict):
         expansions = {}
-    expansions[abbreviation] = expansion
+    expansions[abbreviation_key] = expansion_value
     payload["abbreviation_expansions"] = expansions
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -483,7 +524,7 @@ def load_registry() -> dict[str, dict[str, Any]]:
         return {}
     try:
         payload = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
         print(f"[SIGNAL_REGISTRY][WARN] Failed to load signal registry from {_REGISTRY_PATH}: {exc}")
         return {} # Silently returns an empty dictionary
     return _normalize_registry(payload)
@@ -494,11 +535,17 @@ def _approved_signal_keys() -> set[str]:
     for item in load_approved_signal_catalog():
         if not isinstance(item, dict):
             continue
+        if item.get(LEARNING_CATEGORY_KEY) == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
+            continue
         for term in item.get("terms", []) or []:
             term_key = _clean_term(term)
             if term_key:
                 keys.add(term_key)
     return keys
+
+
+def _title_normalization_is_approved(signal: str, aliases: list[str] | None = None, context_terms: list[str] | None = None) -> tuple[bool, str]:
+    return find_approved_title_normalization(signal, aliases, context_terms)
 
 
 def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> list[str | dict[str, Any]]:
@@ -510,14 +557,24 @@ def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> lis
     filtered: list[str | dict[str, Any]] = []
     seen: set[str] = set()
     for item in signal_names:
+        item_category = ""
+        suggested_values: list[str] | None = None
+        context_terms: list[str] | None = None
         if isinstance(item, dict):
             signal = _clean_text(item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name"))
+            item_category = _clean_term(item.get(LEARNING_CATEGORY_KEY) or item.get(LEARNING_SUGGESTED_CATEGORY_KEY) or "")
+            suggested_values = _clean_text_list(item.get(LEARNING_SUGGESTED_VALUES_KEY))
+            context_terms = _clean_text_list(item.get(LEARNING_CONTEXT_TERMS_KEY))
         else:
             signal = _clean_text(item)
         key = _signal_key(signal)
         if not key or key in seen:
             continue
-        if key in registry_keys or key in ignored_keys or key in approved_keys:
+        if item_category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
+            approved, _ = _title_normalization_is_approved(signal, suggested_values, context_terms)
+            if approved or key in registry_keys or key in ignored_keys:
+                continue
+        elif key in registry_keys or key in ignored_keys or key in approved_keys:
             continue
         seen.add(key)
         filtered.append(item)
@@ -532,7 +589,12 @@ def save_registry(registry: dict[str, dict[str, Any]]) -> None:
     )
 
 
-def signal_in_approved_knowledge(category: str, signal: str, aliases: list[str] | None = None) -> tuple[bool, str]:
+def signal_in_approved_knowledge(
+    category: str,
+    signal: str,
+    aliases: list[str] | None = None,
+    context_terms: list[str] | None = None,
+) -> tuple[bool, str]:
     category_key = _clean_term(category)
     if category_key not in _CATEGORY_KNOWLEDGE_PATHS and category_key != CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
         return False, ""
@@ -540,6 +602,9 @@ def signal_in_approved_knowledge(category: str, signal: str, aliases: list[str] 
     query_terms = _clean_text_list([signal, *(aliases or [])])
     if not query_terms:
         return False, ""
+
+    if category_key == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
+        return _title_normalization_is_approved(signal, aliases, context_terms)
 
     if category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
         query_keys = {_signal_key(term) for term in query_terms}
@@ -689,39 +754,52 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
     if category_key not in VALID_SIGNAL_CATEGORIES:
         raise ValueError(f"Invalid category '{category_key}'.")
 
-    value = _clean_text(value) or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
-    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=value)
+    explicit_value = _clean_text(value)
+    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key))
     if category_key == CATEGORY_CAPABILITY_CONCEPT:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_capability_entry(value, aliases)
     elif category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_job_type_entry(value, suggested[0] if suggested else value)
     elif category_key == CATEGORY_ROLE_TITLE_TOKEN:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_role_title_entry(value)
     elif category_key == CATEGORY_ROLE_TITLE_PATTERN:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_role_title_rule(value)
     elif category_key == CATEGORY_GOVERNMENT_CONTEXT_PATTERN:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_government_context_pattern(value)
     elif category_key == CATEGORY_HARD_BLOCKER_PATTERN:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_hard_blocker_rule(value, aliases)
     elif category_key == CATEGORY_CV_FARMING_PATTERN:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_cv_farming_rule(value, aliases)
     elif category_key == CATEGORY_PROFILE_SECTION_LABEL:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_profile_section_label(value, suggested[0] if suggested else "primary")
     elif category_key == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-        suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
-        if suggested:
+        if not explicit_value:
+            return None
+        context_terms = _clean_text_list(record.get(LEARNING_CONTEXT_TERMS_KEY))
+        if context_terms:
             _append_title_normalization_expansion(
-                _CATEGORY_KNOWLEDGE_PATHS[category_key], value, suggested[0]
+                _CATEGORY_KNOWLEDGE_PATHS[category_key], key, explicit_value, context_terms
             )
+        else:
+            _append_title_normalization_expansion(_CATEGORY_KNOWLEDGE_PATHS[category_key], key, explicit_value)
     else:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)
 
     approved_record = {
-        LEARNING_SIGNAL_KEY: value,
+        LEARNING_SIGNAL_KEY: explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key),
         LEARNING_NORMALIZED_KEY: key,
-        LEARNING_ORIGINAL_TEXTS_KEY: record.get(LEARNING_ORIGINAL_TEXTS_KEY) or [value],
+        LEARNING_ORIGINAL_TEXTS_KEY: record.get(LEARNING_ORIGINAL_TEXTS_KEY) or [explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)],
         LEARNING_CATEGORY_KEY: category_key,
     }
     if aliases:
@@ -771,6 +849,7 @@ def clear_signal_learning_state() -> None:
                     payload = {}
                 if isinstance(payload, dict):
                     payload["abbreviation_expansions"] = {}
+                    payload["contextual_abbreviation_expansions"] = {}
                     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
             continue
         _save_approved_knowledge_payload(path, {
@@ -798,7 +877,22 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                     expanded = _clean_text(expansion)
                     if expanded:
                         terms.append(expanded)
-                    catalog.append({"category": category, "label": abbrev, "terms": terms})
+                    catalog.append({"category": category, "label": expanded or abbrev, "terms": terms})
+            contextual = payload.get("contextual_abbreviation_expansions") if isinstance(payload, dict) else {}
+            if isinstance(contextual, dict):
+                for abbrev, entries in contextual.items():
+                    abbrev = _clean_text(abbrev)
+                    if not abbrev or not isinstance(entries, list):
+                        continue
+                    for entry in entries:
+                        if not isinstance(entry, dict):
+                            continue
+                        expanded = _clean_text(entry.get("expansion"))
+                        context_terms = _clean_text_list(entry.get(LEARNING_CONTEXT_TERMS_KEY))
+                        if not expanded or not context_terms:
+                            continue
+                        terms = [abbrev, expanded, *context_terms]
+                        catalog.append({"category": category, "label": expanded, "terms": terms})
             continue
         if category == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
             for raw_value, canonical_value in load_job_type().items():

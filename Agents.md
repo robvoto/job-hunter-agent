@@ -15,8 +15,7 @@ Runtime source of truth:
 Managed knowledge:
 - `data/knowledge/*.json`
 
-Main entry point:
-- `python -m job_hunter_agent.source_connector`
+Operational entry points and commands are owned by `docs/OPERATIONS.md`.
 
 ## Environment defaults
 
@@ -25,15 +24,9 @@ Main entry point:
 
 ## Commands
 
-| Task | Command |
-|---|---|
-| Scrape + build workspace | `python -m job_hunter_agent.source_connector` |
-| Rebuild workspace only | `python -m job_hunter_agent.source_connector --rebuild-workspace` |
-| Local web UI | `python -m job_hunter_agent.fastapi_app` |
-| Daily agent | `python -m job_hunter_agent.agent_runner` |
-| Tests | `python -m pytest` |
+Do not duplicate runtime command tables here.
 
-See `docs/OPERATIONS.md` for full runtime flags.
+Use `docs/OPERATIONS.md` for runtime commands, flags, rebuild flows, diagnostics, recovery, and validation commands.
 
 ## Skills
 

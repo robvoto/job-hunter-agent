@@ -71,28 +71,40 @@ def test_build_learning_patch_returns_empty_when_llm_unavailable():
     assert not patch_result.get("capability_profile_rules")
 
 
-def test_build_learning_patch_splits_compound_role_titles_before_learning():
-    captured_titles = {}
+def test_build_learning_patch_routes_title_normalization_candidates_to_signals():
+    captured = []
 
-    def fake_learn_title_normalization_candidates(titles, source="", source_text=""):
-        captured_titles["titles"] = list(titles)
-        captured_titles["source"] = source
-        return {"pending": 0}
+    def fake_register_signals(items):
+        captured.extend(items)
 
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={
         "capabilities": [],
         "match_preferences": {},
-        "role_titles": ["Senior Business Analyst and Scrum Master", "Product Owner / Delivery Manager"],
+        "title_normalization_candidates": [
+            {
+                "signal": "PM",
+                "suggested_category": "title_normalization_candidate",
+                "suggested_values": ["project manager"],
+                "context_terms": ["delivery", "project"],
+                "confidence": "high",
+                "original_texts": ["PM delivery project"],
+                "needs_review": True,
+            }
+        ],
     }), \
-         patch("job_hunter_agent.profile_learning.learn_title_normalization_candidates", side_effect=fake_learn_title_normalization_candidates):
+         patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
         build_learning_patch("CV text")
 
-    assert captured_titles["source"] == "CV parsing"
-    assert captured_titles["titles"] == [
-        "senior business analyst",
-        "scrum master",
-        "product owner",
-        "delivery manager",
+    assert captured == [
+        {
+            "signal": "PM",
+            "suggested_category": "title_normalization_candidate",
+            "original_texts": ["PM delivery project"],
+            "suggested_values": ["project manager"],
+            "context_terms": ["delivery", "project"],
+            "confidence": "high",
+            "needs_review": True,
+        }
     ]
 
 

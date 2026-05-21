@@ -23,7 +23,7 @@ Primary modules:
 
 - `job_hunter_agent/fastapi_app.py` / `job_hunter_agent/routes/`
   FastAPI application, route modules for the settings console, workspace, onboarding pages, and JSON APIs.
-  Entry point: `python -m job_hunter_agent.fastapi_app`.
+  Runtime startup commands live in `docs/OPERATIONS.md`.
 
   All routers are registered centrally in `routes/__init__.py` → `register_routes()`.
   Routes rarely change — only when a new feature adds an endpoint or a module is renamed.
@@ -45,7 +45,7 @@ Primary modules:
 
 Server logging:
 
-- `python -m job_hunter_agent.fastapi_app --debug` writes server output to `output/server.log`
+- debug-mode runtime logging writes server output to `output/server.log`; see `docs/OPERATIONS.md` for the command
 - logs are timestamped and still mirrored to the terminal
 - `/api/debug/browser-log` is for browser-side JS logs only
 
@@ -180,7 +180,4 @@ Do not accidentally commit:
 
 ## Testing Workflow
 
-```powershell
-python -m pytest
-python -m pytest tests/test_<name>.py -k "<selector>" -v
-```
+Use the smallest relevant validation for the change. Test execution commands live in `docs/OPERATIONS.md`.

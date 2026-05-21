@@ -18,93 +18,16 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 - local workspace at `http://127.0.0.1:8765/workspace`
 
 ## Quick Start
-Detailed instructions are in the User Guide and Operations.
 
-```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
-python -m playwright install chromium
-```
+Do not duplicate setup or runtime commands in this README.
 
-Run a fresh job collection and rebuild the workspace:
-
-```powershell
-python -m job_hunter_agent.source_connector
-```
-
-Useful flags:
-
-- `--no-llm` to stay deterministic and avoid live LLM review
-- `--debug` to show extra workspace scoring detail
+- For day-to-day use, follow [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
+- For setup, runtime execution, rebuild flows, flags, diagnostics, recovery, and validation commands, follow [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 Search design note:
 
 - keep search keywords broad enough to capture relevant roles
 - use title rules, metadata gates, content filters, capability logic, and optional AI review to tighten fit afterward
-
-Rebuild the workspace from saved local state only:
-
-```powershell
-python -m job_hunter_agent.source_connector --rebuild-workspace
-```
-
-Useful flags:
-  
-Run the local web UI:
-
-```powershell
-python -m job_hunter_agent.fastapi_app
-```
-
-Optional local web UI test mode:
-
-```powershell
-python -m job_hunter_agent.fastapi_app --debug
-```
-
-Run the daily local agent once:
-
-```powershell
-python -m job_hunter_agent.agent_runner
-```
-
-This is the orchestration layer. It can run the connector, rebuild the workspace, create a digest, and send notifications.
-
-Most users should think of it like this:
-
-- `python -m job_hunter_agent.source_connector` = canonical refresh command
-- `python -m job_hunter_agent.agent_runner` = optional automation wrapper around the refresh flow
-
-Useful daily-agent flags:
-
--- `--send-notification-no-scrape` to rebuild/send from current local state only
-- `--no-notify` to build the digest without email or Telegram delivery
-
-Run the daily local agent in loop mode:
-
-```powershell
-python -m job_hunter_agent.agent_runner --loop
-```
-
-Run the automated test suite:
-
-```powershell
-python -m job_hunter_agent.test_runner
-```
-
-You can pass normal pytest selectors through the runner, for example:
-
-```powershell
-python -m job_hunter_agent.test_runner -k profile_learning -v
-```
-
-Then open:
-
-- onboarding: `http://127.0.0.1:8765/start`
-- settings: `http://127.0.0.1:8765/settings`
-- workspace: `http://127.0.0.1:8765/workspace`
-- demo/showcase: `http://127.0.0.1:8765/demo`
 
 ## Architecture Note: Shell & Fragment
 
@@ -116,7 +39,7 @@ When you load the workspace, the Shell is served first, and the Fragment is fetc
 
 ## Tech Stack
 
-- **Core**: Python 3.11+
+- **Core**: Python 3.12+
 - **Automation**: Playwright (SEEK scraping)
 - **Multi-Source**: `python-jobspy` (LinkedIn)
 - **Intelligence**: OpenAI API (GPT-4o / GPT-4o-mini)
@@ -181,13 +104,7 @@ The first daily agent layer is now local-first:
 - Telegram messages arrive in the user's private chat with their bot, not from their personal Telegram identity
 - the digest is also written locally to `output/agent_last_summary.txt`
 
-Recommended beta setup:
-
-1. Copy `data/agent_settings.template.json` to local `data/agent_settings.json`
-2. Fill in email and/or Telegram settings
-3. Test with `python -m job_hunter_agent.agent_runner --no-notify`
-4. If the summary looks right, test live delivery with `python -m job_hunter_agent.agent_runner`
-5. Use Windows Task Scheduler for the real daily schedule
+Recommended beta setup is covered in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Docs
 

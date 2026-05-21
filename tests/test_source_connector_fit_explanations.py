@@ -236,7 +236,7 @@ def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch
 
 def test_build_ad_learning_signals_registers_pending_capability_and_title_tokens(monkeypatch):
     monkeypatch.setattr(
-        signal_detection,
+        source_learning,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )
@@ -270,7 +270,7 @@ def test_build_ad_learning_signals_registers_pending_capability_and_title_tokens
 
 def test_build_ad_learning_signals_registers_capability_from_structured_observation(monkeypatch):
     monkeypatch.setattr(
-        signal_detection,
+        source_learning,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )
@@ -340,9 +340,19 @@ def test_build_ad_learning_signals_registers_government_context_from_job_descrip
 
 def test_build_ad_learning_signals_registers_title_normalization_candidates(monkeypatch):
     monkeypatch.setattr(
-        signal_detection,
+        source_learning,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "classify_title_normalization_candidate",
+        lambda title: {
+            "value": "pm",
+            "suggested_values": ["project manager"],
+            "confidence": "high",
+            "needs_review": True,
+        },
     )
 
     signals = source_learning.build_ad_learning_signals(
@@ -359,13 +369,16 @@ def test_build_ad_learning_signals_registers_title_normalization_candidates(monk
             "signal": "pm",
             "suggested_category": "title_normalization_candidate",
             "original_texts": ["PM"],
+            "suggested_values": ["project manager"],
+            "confidence": "high",
+            "needs_review": True,
         }
     ]
 
 
 def test_build_ad_learning_signals_does_not_infer_hard_blockers_from_raw_text(monkeypatch):
     monkeypatch.setattr(
-        signal_detection,
+        source_learning,
         "signal_in_approved_knowledge",
         lambda category, signal, aliases=None: (False, ""),
     )

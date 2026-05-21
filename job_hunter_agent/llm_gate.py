@@ -101,8 +101,12 @@ from job_hunter_agent.runtime_helpers import (
 )
 from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
+    LEARNING_CONFIDENCE_KEY,
+    LEARNING_CONTEXT_TERMS_KEY,
     LEARNING_SIGNAL_KEY,
+    LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
     PATTERN_SIGNAL_CATEGORIES,
     VALID_SIGNAL_CATEGORIES,
@@ -211,6 +215,10 @@ def _log_llm_model_once() -> str:
 class _LLMLearningCandidate(BaseModel):
     signal: str
     suggested_category: str
+    suggested_values: list[str] = Field(default_factory=list)
+    context_terms: list[str] = Field(default_factory=list)
+    confidence: str = ""
+    needs_review: bool = True
     original_texts: list[str] = Field(default_factory=list)
 
 
@@ -431,6 +439,34 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
             continue
         signal = _clean_learning_candidate_text(item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name"))
         category = re.sub(r"[^a-z0-9_]+", "_", _clean_learning_candidate_text(item.get(LEARNING_SUGGESTED_CATEGORY_KEY))).strip("_").lower()
+        suggested_values = []
+        raw_suggested_values = item.get(LEARNING_SUGGESTED_VALUES_KEY) or item.get("suggested_values") or []
+        if isinstance(raw_suggested_values, str):
+            raw_suggested_values = [raw_suggested_values]
+        if isinstance(raw_suggested_values, list):
+            seen_suggested: set[str] = set()
+            for text in raw_suggested_values:
+                cleaned = _clean_learning_candidate_text(text)
+                lowered = cleaned.lower()
+                if not cleaned or lowered in seen_suggested:
+                    continue
+                seen_suggested.add(lowered)
+                suggested_values.append(cleaned)
+        context_terms = []
+        raw_context_terms = item.get(LEARNING_CONTEXT_TERMS_KEY) or item.get("context_terms") or []
+        if isinstance(raw_context_terms, str):
+            raw_context_terms = [raw_context_terms]
+        if isinstance(raw_context_terms, list):
+            seen_context_terms: set[str] = set()
+            for text in raw_context_terms:
+                cleaned = _clean_learning_candidate_text(text)
+                lowered = cleaned.lower()
+                if not cleaned or lowered in seen_context_terms:
+                    continue
+                seen_context_terms.add(lowered)
+                context_terms.append(cleaned)
+        confidence = re.sub(r"\s+", " ", str(item.get(LEARNING_CONFIDENCE_KEY) or item.get("confidence") or "")).strip().lower()
+        needs_review = bool(item.get(LEARNING_NEEDS_REVIEW_KEY, True))
         if not signal or category not in ALLOWED_LEARNING_CATEGORIES:
             continue
         if any(char in signal for char in "\r\n") or re.search(r"[.!?]", signal):
@@ -459,6 +495,10 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
             {
                 LEARNING_SIGNAL_KEY: signal,
                 LEARNING_SUGGESTED_CATEGORY_KEY: category,
+                LEARNING_SUGGESTED_VALUES_KEY: suggested_values,
+                LEARNING_CONTEXT_TERMS_KEY: context_terms,
+                LEARNING_CONFIDENCE_KEY: confidence,
+                LEARNING_NEEDS_REVIEW_KEY: needs_review,
                 LEARNING_ORIGINAL_TEXTS_KEY: original_texts or [signal],
             }
         )

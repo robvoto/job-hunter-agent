@@ -13,13 +13,7 @@ That is the current source connector, not the final limit of the product.
 
 ## First-Time Use
 
-1. Follow the **Environment Setup** in [OPERATIONS.md](OPERATIONS.md).
-2. Start the local web UI in test/debug mode (recommended for first run):
-
-```powershell
-python -m job_hunter_agent.fastapi_app --debug
-```
-
+1. Follow the **Environment Setup** and local web UI startup instructions in [OPERATIONS.md](OPERATIONS.md).
 2. Open:
 
 - `http://127.0.0.1:8765/start`
@@ -143,11 +137,7 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 ## Running A Job Review
 
-Run the current source connector:
-
-```powershell
-python -m job_hunter_agent.source_connector
-```
+Follow the standard refresh workflow in [OPERATIONS.md](OPERATIONS.md).
 
 The runtime profile controls which sources are active. If `LinkedIn` is not in `enabled_sources` for the current user profile, the run will skip it.
 

@@ -21,7 +21,8 @@ LLM_PROMPT_JOB_REQUIREMENTS_INTRO = (
 )
 
 LLM_LEARNING_ONLY_PROMPT_SHAPE = (
-    '{"learning_candidates":[{"signal":"...","suggested_category":"...","original_texts":["..."]}]}'
+    '{"learning_candidates":[{"signal":"...","suggested_category":"...","suggested_values":["..."],'
+    '"context_terms":["..."],"confidence":"high|medium|low|ambiguous","needs_review":true,"original_texts":["..."]}]}'
 )
 
 LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
@@ -59,6 +60,12 @@ LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE = (
     "Do not suggest a role_title_token for the same title if you suggest a role_title_pattern.\n"
     "role_title_token: use only for well-known generic role words (analyst, manager, coordinator). "
     "Never suggest a bare word that only makes sense as part of a phrase.\n"
+    "title_normalization_candidate: use for short role-title abbreviations, acronyms, or compressed forms that may "
+    "normalize to a standard role title. If context clearly resolves the meaning, include the resolved title in "
+    "suggested_values and the resolving words in context_terms. If context does not resolve it, leave suggested_values "
+    "empty and keep needs_review=true. "
+    "For example, PM may resolve to project manager when the text mentions delivery, implementation, project, "
+    "program, portfolio, roadmap, or go-to-market. Do not invent a mapping without context.\n"
     "government_context_pattern: use when a government/clearance term has a structural shape with an unknown variable part. "
     "Always use [*] as the wildcard placeholder. "
     "For example, 'Baseline Clearance' suggests 'Baseline [*] clearance' and 'NV1' suggests 'NV[*] clearance' — "

@@ -26,19 +26,9 @@ This applies to every task. Do not silently write second-best code.
 
 ## Commands
 
-| Task | Command |
-|---|---|
-| Scrape + build workspace | `python -m job_hunter_agent.source_connector` |
-| Rebuild workspace only | `python -m job_hunter_agent.source_connector --rebuild-workspace` |
-| Local web UI | `python -m job_hunter_agent.fastapi_app` |
-| Web UI (debug, no auth) | `python -m job_hunter_agent.fastapi_app --debug` |
-| Daily agent | `python -m job_hunter_agent.agent_runner` |
-| Run all tests | `python -m pytest` |
-| Run a single test | `python -m pytest tests/test_<name>.py -k "<selector>" -v` |
+Do not duplicate runtime command tables here.
 
-**Scraper CLI flags:** `--no-llm`, `--debug`, `--rebuild-workspace`, `--reset-new-to-you`  
-**Auth bypass:** `JOB_HUNTER_DISABLE_AUTH=true` env var (also set automatically by `--debug`)  
-**Full flag reference:** `docs/OPERATIONS.md`
+Use `docs/OPERATIONS.md` for runtime commands, CLI flags, rebuild flows, diagnostics, recovery, auth-bypass notes, and validation commands.
 
 ## Architecture
 
