@@ -1168,6 +1168,202 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
     assert "Alert: This looks like a role you already marked as applied at this company." in html
 
 
+def test_candidate_application_history_renders_warning_badges_without_changing_score():
+    base_record = {
+        "job_key": "test-candidate-history",
+        "title": "Business Analyst",
+        "company": "Acme",
+        "url": "https://example.com/job",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "full_description": "Requirements elicitation across delivery teams. " * 40,
+        "fit_highlights": [],
+        "source": "seek",
+    }
+    with_history = {
+        **base_record,
+        "candidate_application_history": {
+            "llm_application_status": "rejection",
+            "llm_confidence": "high",
+            "llm_needs_review": True,
+            "llm_company": "Acme",
+            "llm_role": "Business Analyst",
+            "run_date": "2025-01-15",
+            "llm_evidence": "We regret to inform you",
+            "llm_review_reason": "Company mismatch needs a manual check.",
+        },
+    }
+
+    plain_html = workspace_renderer.render_job_card(base_record, _test_profile())
+    history_html = workspace_renderer.render_job_card(with_history, _test_profile())
+
+    assert 'data-fit-score="' in plain_html
+    assert 'data-fit-score="' in history_html
+    assert plain_html.split('data-fit-score="', 1)[1].split('"', 1)[0] == history_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
+    assert "Rejected before" in history_html
+    assert "Needs review" in history_html
+    assert 'title="Company mismatch needs a manual check."' in history_html
+    assert "Company: Acme" in history_html
+    assert "Role: Business Analyst" in history_html
+    assert "Run date: 2025-01-15" in history_html
+    assert "Confidence: high" in history_html
+    assert "Evidence: We regret to inform you" in history_html
+
+
+def test_candidate_application_history_possible_rejection_uses_possible_previous_application_label():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-candidate-history-possible",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "candidate_application_history": {
+                "llm_application_status": "possible_rejection",
+                "llm_confidence": "medium",
+                "llm_needs_review": False,
+                "llm_company": "Acme",
+                "llm_role": "Business Analyst",
+                "run_date": "2025-01-15",
+                "llm_evidence": "Application mentioned",
+            },
+        },
+        _test_profile(),
+    )
+
+    assert "Possible previous application" in html
+    assert "Needs review" not in html
+
+
+def test_candidate_application_history_low_confidence_uses_possible_previous_application_label():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-candidate-history-low-confidence",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "candidate_application_history": {
+                "llm_application_status": "unknown",
+                "llm_confidence": "low",
+                "llm_needs_review": False,
+                "llm_company": "Acme",
+                "llm_role": "Business Analyst",
+                "run_date": "2025-01-15",
+                "llm_evidence": "Application mentioned",
+            },
+        },
+        _test_profile(),
+    )
+
+    assert "Possible previous application" in html
+    assert "Needs review" not in html
+
+
+def test_candidate_application_history_renders_expanded_details_section():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-candidate-history-details",
+            "title": "Technical Analyst",
+            "company": "MUFG Pension & Market Services",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "candidate_application_history": {
+                "llm_application_status": "rejection",
+                "llm_confidence": "high",
+                "llm_needs_review": True,
+                "llm_company": "MUFG Pension & Market Services",
+                "llm_role": "Technical Analyst",
+                "run_date": "2026-05-07",
+                "llm_evidence": "Thank you for your recent application for the Technical Analyst role within MUFG Pension & Market Services. "
+                "We appreciate your interest in the position and have completed our review. "
+                "This is a longer note so the workspace should trim it instead of showing the full text twice.",
+                "llm_review_reason": "Company mismatch needs a manual check.",
+            },
+        },
+        _test_profile(),
+    )
+
+    assert "Candidate application history" in html
+    assert "Status: Rejected before" in html
+    assert "7 May 2026 — Technical Analyst — MUFG Pension &amp; Market Services" in html
+    assert "Confidence: high" in html
+    assert "Evidence: Thank you for your recent application" in html
+    assert "..." in html
+    assert "Review reason: Company mismatch needs a manual check." in html
+
+
+def test_candidate_application_history_renders_escaped_values_safely():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-candidate-history-escape",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "candidate_application_history": {
+                "llm_application_status": "rejection",
+                "llm_confidence": "high",
+                "llm_needs_review": True,
+                "llm_company": "<Acme & Co>",
+                "llm_role": "Business Analyst <script>",
+                "run_date": "2026-05-07",
+                "llm_evidence": "Evidence with <tag> & more",
+                "llm_review_reason": "Needs <manual> review & approval",
+            },
+        },
+        _test_profile(),
+    )
+
+    assert "&lt;Acme &amp; Co&gt;" in html
+    assert "Business Analyst &lt;script&gt;" in html
+    assert "Evidence with &lt;tag&gt; &amp; more" in html
+    assert "Needs &lt;manual&gt; review &amp; approval" in html
+    assert "<Acme & Co>" not in html
+    assert "<script>" not in html
+
+
 def test_potential_duplicate_card_shows_visible_callout_and_help_text():
     html = workspace_renderer.render_job_card(
         {

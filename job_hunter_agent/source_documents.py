@@ -9,6 +9,7 @@ uploaded source packs and ensures clean resets for fresh onboarding runs.
 import base64
 import copy
 import json
+import logging
 import re
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +19,7 @@ from xml.etree import ElementTree as ET
 
 from job_hunter_agent.cv_pipeline import run_cv_pipeline
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_cv_chars_per_page
+from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.llm_gate import client as llm_client
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -51,6 +53,8 @@ from job_hunter_agent.profile_store import (
     patch_profile,
 )
 from job_hunter_agent.signal_registry import register_signals
+
+logger = logging.getLogger(__name__)
 
 
 ROOT_DIR = REPO_ROOT
@@ -279,6 +283,23 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     active_settings = onboarding_settings or {}
     cv_max_pages = max(1, int(active_settings.get(KEY_CV_MAX_PAGES) or DEFAULT_ONBOARDING_SETTINGS.get(KEY_CV_MAX_PAGES) or 5))
     cv_max_chars = cv_max_pages * get_cv_chars_per_page()
+    cv_chars_per_page = get_cv_chars_per_page()
+    logger.info(
+        format_log_block(
+            "ONBOARDING_SOURCE_READ",
+            {
+                "capability_strength_preset": str(
+                    active_settings.get("capability_strength_preset")
+                    or DEFAULT_ONBOARDING_SETTINGS.get("capability_strength_preset")
+                    or ""
+                ).strip(),
+                "cv_max_pages": cv_max_pages,
+                "cv_chars_per_page": cv_chars_per_page,
+                "cv_max_chars": cv_max_chars,
+                "import_sources": len(import_sources),
+            },
+        )
+    )
 
     imported_sources: list[dict[str, Any]] = []
     combined_sections: list[str] = []
@@ -300,10 +321,31 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         if not text:
             missing_sources.append(path)
             continue
+        raw_chars = len(text)
+        approx_pages = max(1, (raw_chars + cv_chars_per_page - 1) // cv_chars_per_page)
         if len(text) > cv_max_chars:
             text = text[:cv_max_chars]
             page_limit_notice = f"CV was truncated to approximately {cv_max_pages} page(s) for processing."
             print(f"[ONBOARDING] CV truncated to {cv_max_chars} chars ({cv_max_pages} pages) for {label}")
+            logger.info(
+                format_log_block(
+                    "ONBOARDING_SOURCE_READ",
+                    {
+                        "source": label,
+                        "read_chars": raw_chars,
+                        "approx_pages": approx_pages,
+                        "truncated_to_chars": len(text),
+                        "limit_pages": cv_max_pages,
+                    },
+                )
+            )
+        else:
+            logger.info(
+                "[ONBOARDING][SOURCE_READ] %s read_chars=%s approx_pages=%s",
+                label,
+                raw_chars,
+                approx_pages,
+            )
         imported_sources.append({"label": label, "path": path, "characters": len(text)})
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
@@ -314,6 +356,12 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile CV files first.")
 
     combined_text = "\n\n".join(combined_sections).strip()
+    logger.info(
+        "[ONBOARDING][SOURCE_READ] combined_chars=%s combined_approx_pages=%s page_limit_notice=%s",
+        len(combined_text),
+        max(1, (len(combined_text) + cv_chars_per_page - 1) // cv_chars_per_page),
+        page_limit_notice or "(none)",
+    )
 
     # Load current profile to preserve non-onboarding fields and read onboarding_settings.
     current_profile = load_profile()

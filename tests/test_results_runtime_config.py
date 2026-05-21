@@ -20,6 +20,23 @@ def test_results_page_uses_runtime_workspace_config():
     assert "search_settings_" not in results_js
     assert "Run Search Now" not in results_js
 
+
+def test_candidate_application_history_loader_failure_returns_original_records(capsys):
+    records = [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
+
+    with patch(
+        "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = workspace_service._enrich_records_with_candidate_application_history(records)
+
+    assert result is records
+    assert result == [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
+
+    output = capsys.readouterr().out
+    assert "[candidate_application_history] unavailable: boom" in output
+
+
 def test_rendered_workspace_html_content():
     mock_output_path = Path("mock_rendered_workspace.html")
     mock_run_started_at = datetime.now()

@@ -636,30 +636,7 @@
 }
 
 .rejection-other-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.rejection-other-row input[type=text] {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 7px;
-  font-size: 0.88rem;
-  background: var(--bg-page);
-}
-
-.rejection-other-row button {
-  padding: 8px 14px;
-  background: var(--accent);
-  color: var(--button-text);
-  border: none;
-  border-radius: 7px;
-  font-size: 0.84rem;
-  font-weight: 700;
-  cursor: pointer;
+  margin-top: 4px;
 }
 
 .rejection-custom-list {

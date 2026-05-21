@@ -184,7 +184,7 @@ def extract_seek_filter_panel_state(list_page) -> Optional[dict]:
         mode, evidence = modes[0]
         return _build_result(mode, "seek_filter_panel", evidence, False)  
     except Exception as exc:
-      print(f"[WORK_MODE][WARN] Failed to extract SEEK filter panel state: {exc}")
+      logger.warning("[work_mode] Failed to extract SEEK filter panel state (selectors may be out of date): %s", exc)
       return None
 
 # ---------------------------------------------------------------------------

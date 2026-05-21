@@ -1,9 +1,12 @@
 """Telegram bot delivery for the local job agent."""
 
 import json
+import logging
 from datetime import datetime
 from urllib.error import HTTPError
 from urllib import parse, request
+
+logger = logging.getLogger(__name__)
 
 
 def _telegram_api_request(bot_token: str, method: str, payload: dict | None = None, timeout: int = 30) -> dict:
@@ -24,6 +27,7 @@ def _telegram_api_request(bot_token: str, method: str, payload: dict | None = No
         with request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
             if not data.get("ok"):
+                logger.warning("[TELEGRAM][WARN] Telegram API returned a non-ok response for %s.", method)
                 raise ValueError(f"Telegram API error: {data}")
             return data
     except HTTPError as exc:
@@ -31,6 +35,10 @@ def _telegram_api_request(bot_token: str, method: str, payload: dict | None = No
         try:
             body = exc.read().decode("utf-8", errors="ignore")
         except Exception:
+            logger.warning(
+                "[TELEGRAM][WARN] Failed to read Telegram HTTP error body for %s; falling back to the exception text.",
+                method,
+            )
             body = str(exc)
         raise ValueError(f"Telegram HTTP error {exc.code}: {body}") from exc
 
@@ -39,7 +47,10 @@ def get_telegram_bot_profile(settings: dict) -> dict:
     bot_token = str(settings.get("bot_token") or "").strip()
     payload = _telegram_api_request(bot_token, "getMe")
     result = payload.get("result") or {}
-    return result if isinstance(result, dict) else {}
+    if isinstance(result, dict):
+        return result
+    logger.warning("[TELEGRAM][WARN] Telegram getMe returned a missing or non-dict result; returning an empty profile.")
+    return {}
 
 
 def build_telegram_connect_link(settings: dict) -> str:
@@ -76,6 +87,7 @@ def sync_telegram_subscribers(settings: dict) -> dict:
     )
     updates = payload.get("result") or []
     if not isinstance(updates, list):
+        logger.warning("[TELEGRAM][WARN] Telegram getUpdates returned a non-list result; returning an empty update list.")
         updates = []
 
     subscribers = {

@@ -28,6 +28,7 @@ The skill's owner list tells you which files to touch. A broad Grep hunt before 
 7. Ask the user before adding heuristic data or random-word filters.
 8. If something is unclear, ask before changing it.
 9. If the task touches workspace/results UI, load `.skills/dashboard-ui/SKILL.md` and `.skills/workspace-output-sync/SKILL.md`, then verify the generated per-user `workspace_results.html` as well as the source template.
+10. Before writing code, check whether the approach is a workaround, legacy pattern, anti-pattern, or unnecessary monolith. If so, say that explicitly before editing: name the pattern, explain why it is suboptimal, and state the professional alternative. Ask before using the weaker approach if a better one is feasible within scope.
 
 ## Editing Rules
 
@@ -35,6 +36,7 @@ The skill's owner list tells you which files to touch. A broad Grep hunt before 
 - Centralise reused values in the owning module or config.
 - Preserve common language across the app.
 - Use the smallest relevant validation, not a full test pass unless needed.
+- Prefer small, single-purpose modules over large monolithic files.
 
 ## When To Stop
 

@@ -58,6 +58,13 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'btn-add' in html
     assert 'btn-add token-input-action' in html
     assert '>+<' in html
+    assert 'Upload CV' in html
+    assert 'Review Draft' in html
+    assert 'Search Basics' in html
+    assert 'Check Setup' in html
+    assert '0 shown' in html
+    assert '__JOB_HUNTER_ONBOARDING_PAGE_' not in html
+    assert 'window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__' in html
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
     assert 'window.__JOB_HUNTER_CAPABILITY_UI_LABELS__' in html
     assert 'window.__JOB_HUNTER_SHARED_UI_LABELS__' in html

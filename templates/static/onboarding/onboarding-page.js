@@ -26,11 +26,6 @@ const refs = Object.freeze({
   createProfileButton: document.getElementById('create_profile'),
   continueToReview: document.getElementById('continue_to_review'),
   stepNavButtons: Array.from(document.querySelectorAll('[data-step-nav]')),
-  onbTestPanel: document.getElementById('onb_test_panel'),
-  onbTestTrigger: document.getElementById('onb_test_trigger'),
-  onbTestMenu: document.getElementById('onb_test_menu'),
-  onbResetUserBtn: document.getElementById('onb_reset_user_btn'),
-  onbResetLearningBtn: document.getElementById('onb_reset_learning_btn'),
   capabilityStrengthPreset: document.getElementById('os_capability_strength_preset'),
   reviewSearchKeywords: document.getElementById('review_search_keywords'),
   minContractMonths: document.getElementById('min_contract_months'),
@@ -67,11 +62,6 @@ const {
   createProfileButton,
   continueToReview: continueToReviewEl,
   stepNavButtons,
-  onbTestPanel,
-  onbTestTrigger,
-  onbTestMenu,
-  onbResetUserBtn,
-  onbResetLearningBtn,
   capabilityStrengthPreset: capabilityStrengthPresetEl,
   reviewSearchKeywords: reviewSearchKeywordsEl,
   reviewMinimumSalaryYearly: reviewMinimumSalaryYearlyEl,
@@ -142,6 +132,8 @@ const {
   setWorkModePreferenceValues: setOnboardingWorkModePreferenceValues,
   parseCurrencyValue: onboardingParseCurrencyValue,
   setCurrencyFieldValue: onboardingSetCurrencyFieldValue,
+  normalizeReviewTitleLists,
+  normalizeReviewCapability,
 } = onboardingSettingsUtils;
 const onboardingCopy = window.__JOB_HUNTER_ONBOARDING_COPY__;
 if (!onboardingCopy?.steps) {
@@ -171,9 +163,7 @@ if (primaryCvLimitHelpEl) {
     ` Use your most detailed CV, not the prettiest one.${pageClause}`;
 }
 if (workflowStep2El) {
-  workflowStep2El.textContent = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
-    ? `We extract likely job titles, capabilities, and a starter search direction from the first ${ONBOARDING_CV_PAGE_LIMIT} pages of your CV.`
-    : 'We extract likely job titles, capabilities, and a starter search direction from your CV.';
+  workflowStep2El.textContent = 'We extract likely job roles, skills, and a starter search direction from your CV.';
 }
 const PRIMARY_CV_COPY = {
   emptyTitle: 'Drop your CV here or click to browse',
@@ -292,39 +282,6 @@ function refreshStepNavigation() {
   });
 }
 
-function setTestMenuOpen(open) {
-  if (!onbTestMenu || !onbTestTrigger) {
-    return;
-  }
-  onbTestMenu.classList.toggle('is-open', Boolean(open));
-  onbTestTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-function clearOnboardingBrowserState() {
-  try {
-    window.sessionStorage.removeItem(WIZARD_STATE_KEY);
-    window.sessionStorage.removeItem(ONBOARDING_WELCOME_KEY);
-  } catch {}
-  try {
-    window.localStorage.removeItem(ONBOARDING_WELCOME_OPT_OUT_KEY);
-  } catch {}
-}
-
-async function postTestAction(path) {
-      const response = await jobHunterFetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || 'Request failed');
-  }
-  return payload;
-}
-
-
-
 function getOnboardingStepCopy(stepNumber, key, options = {}) {
   const { allowEmpty = false } = options;
   const value = onboardingStepCopy?.[String(stepNumber)]?.[key];
@@ -386,30 +343,9 @@ const getSalaryLimitMaximum = (key) => {
   return Number.isFinite(max) && max >= 0 ? max : Infinity;
 };
 
-function resetOnboardingWizardState() {
-  lastImportPayload = null;
-  reviewTargetTitles = [];
-  reviewSecondaryTitles = [];
-  reviewCapabilityRules = [];
-  selectedReviewCapabilityIndexes.clear();
-  reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
-  maxUnlockedStep = 1;
-  draftBuiltExplicitly = false;
-  savedPrimaryCvSourcePath = '';
-  savedPrimaryCvFileName = '';
-  window.sessionStorage.removeItem(WIZARD_STATE_KEY);
-  try {
-    window.localStorage.removeItem(ONBOARDING_IMPORT_HELPER_DISMISSED_KEY);
-  } catch {
-  }
-  if (reviewCapabilityFilterEl) reviewCapabilityFilterEl.value = '';
-  if (reviewCapabilityCardsEl) reviewCapabilityCardsEl.innerHTML = '';
-  refreshStepNavigation();
-}
-
 function saveWizardState() {
   if (currentStep < 2 && !hasDraftProfileState()) {
-    window.sessionStorage.removeItem(WIZARD_STATE_KEY);
+    window.localStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
   const primaryCvSource = String(
@@ -423,7 +359,7 @@ function saveWizardState() {
     || savedPrimaryCvFileName
     || ''
   ).trim();
-  window.sessionStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
+  window.localStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: currentStep,
     maxUnlockedStep,
     reviewTargetTitles,
@@ -454,7 +390,7 @@ async function restorePrimaryCvFromSourcePath() {
   }
   const state = (() => {
     try {
-      const raw = window.sessionStorage.getItem(WIZARD_STATE_KEY);
+      const raw = window.localStorage.getItem(WIZARD_STATE_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -539,10 +475,11 @@ async function flushSearchBasicsPersistence() {
 }
 
 function restoreWizardState() {
+  let state;
   try {
-    const raw = window.sessionStorage.getItem(WIZARD_STATE_KEY);
+    const raw = window.localStorage.getItem(WIZARD_STATE_KEY);
     if (!raw) return false;
-    const state = JSON.parse(raw);
+    state = JSON.parse(raw);
     const savedTargets = Array.isArray(state?.reviewTargetTitles) ? state.reviewTargetTitles : [];
     const savedSecondary = Array.isArray(state?.reviewSecondaryTitles) ? state.reviewSecondaryTitles : [];
     const savedCapabilities = Array.isArray(state?.reviewCapabilityRules) ? state.reviewCapabilityRules : [];
@@ -551,33 +488,42 @@ function restoreWizardState() {
     const normalizedTitles = normalizeReviewTitleLists(state.reviewTargetTitles || [], state.reviewSecondaryTitles || []);
     reviewTargetTitles = normalizedTitles.primary;
     reviewSecondaryTitles = normalizedTitles.secondary;
-    reviewCapabilityRules = state.reviewCapabilityRules || [];
+    reviewCapabilityRules = (Array.isArray(state.reviewCapabilityRules) ? state.reviewCapabilityRules : [])
+      .map(normalizeReviewCapability)
+      .filter((rule) => rule.name);
     maxUnlockedStep = Math.max(1, Math.min(STEP_COUNT, Number(state.maxUnlockedStep) || 1));
     reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0
       ? Number(state.reviewCapabilityVisibleCount)
       : getReviewCapabilityPreviewCount();
     savedPrimaryCvSourcePath = String(state.primaryCvSourcePath || '').trim();
     savedPrimaryCvFileName = String(state.primaryCvFileName || '').trim();
-    setStep(state.step, { scroll: false, persist: false });
-    setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '');
-    renderReviewStep();
-    const kwEl = reviewSearchKeywordsEl;
-    if (kwEl) kwEl.value = state.searchKeywords || '';
-    setMinContractMonthValue(state.minContractMonths || '');
-    const salaryEl = reviewMinimumSalaryYearlyEl;
-    if (salaryEl) onboardingSetCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
-    const dailyEl = reviewMinimumDailyRateEl;
-    if (dailyEl) onboardingSetCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
-    setOnboardingEngagementTypeValues(state.engagementType);
-    setOnboardingWorkModePreferenceValues(state.workModePreference || []);
-    setSectorPreferenceValue(state.preferSector || SECTOR_PREFERENCE_DEFAULT);
-    updateCompensationVisibility();
-    if (state.step >= CHECK_STEP) {
-      updateCheckStep();
+    setStep(Number(state.step) || REVIEW_STEP, { scroll: false, persist: false });
+    try {
+      setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '', { persist: false });
+    } catch (error) {
+      console.warn('Could not restore onboarding location state.', error);
     }
-    saveWizardState();
+    try {
+      const kwEl = reviewSearchKeywordsEl;
+      if (kwEl) kwEl.value = state.searchKeywords || '';
+      setMinContractMonthValue(state.minContractMonths || '');
+      const salaryEl = reviewMinimumSalaryYearlyEl;
+      if (salaryEl) onboardingSetCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
+      const dailyEl = reviewMinimumDailyRateEl;
+      if (dailyEl) onboardingSetCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
+      setOnboardingEngagementTypeValues(state.engagementType);
+      setOnboardingWorkModePreferenceValues(state.workModePreference || []);
+      setSectorPreferenceValue(state.preferSector || SECTOR_PREFERENCE_DEFAULT);
+      updateCompensationVisibility();
+      if (Number(state.step) >= CHECK_STEP) {
+        updateCheckStep();
+      }
+    } catch (error) {
+      console.warn('Could not restore onboarding search basics state.', error);
+    }
     return true;
-  } catch {
+  } catch (error) {
+    console.warn('Could not restore onboarding wizard state.', error);
     return false;
   }
 }
@@ -784,11 +730,11 @@ async function tryGeolocationDefault() {
             setSelectedLocation(data.location);
           }
         } catch (error) {
-          // Silently ignore geolocation API errors; user can still manually select
+          console.warn('Could not resolve onboarding location from geolocation.', error);
         }
       },
       () => {
-        // User denied geolocation or error occurred; silently continue with default
+        console.warn('Geolocation was denied or unavailable; using manual location selection.');
       },
       {
         timeout: 5000,
@@ -797,7 +743,7 @@ async function tryGeolocationDefault() {
       }
     );
   } catch (error) {
-    // Silently ignore any geolocation errors
+    console.warn('Could not request onboarding geolocation.', error);
   }
 }
 
@@ -811,11 +757,14 @@ function renderLocationSelect() {
   selectedLocations = current ? [current] : [];
 }
 
-function setSelectedLocation(value) {
+function setSelectedLocation(value, options = {}) {
+  const { persist = true } = options;
   const normalized = normalizeLocationValue(value);
   selectedLocations = normalized ? [normalized] : [];
   renderLocationSelect();
-  saveWizardState();
+  if (persist) {
+    saveWizardState();
+  }
 }
 
 async function fileToPayload(file, label) {
@@ -995,11 +944,7 @@ function applyProfileDefaults(profile) {
   if (!selectedLocations.length) {
     setSelectedLocation((searchSettings.locations || [])[0] || '');
   }
-  if (currentStep >= REVIEW_STEP && (reviewTargetTitles.length || reviewSecondaryTitles.length)) {
-    renderReviewStep();
-  } else {
-    refreshStepNavigation();
-  }
+  refreshStepNavigation();
 }
 
 function observeReviewCapabilityLayout() {

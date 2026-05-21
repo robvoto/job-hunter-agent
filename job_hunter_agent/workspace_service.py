@@ -114,6 +114,31 @@ def is_workspace_eligible(
     return fit_score(record, profile) >= active_workspace_min_score
 
 
+def _enrich_records_with_candidate_application_history(records: list[dict]) -> list[dict]:
+    enriched_records = records
+    enriched_count = 0
+    try:
+        from job_hunter_agent.candidate_application_history import (
+            load_candidate_job_rejection_history,
+            enrich_records_with_application_history,
+        )
+
+        candidate_history = load_candidate_job_rejection_history()
+        if candidate_history:
+            enriched_records = enrich_records_with_application_history(records, candidate_history)
+            enriched_count = sum(
+                1
+                for before, after in zip(records, enriched_records)
+                if "candidate_application_history" not in before
+                and "candidate_application_history" in after
+            )
+    except Exception as exc:
+        print(f"[candidate_application_history] unavailable: {exc}")
+        enriched_records = records
+    print(f"[candidate_application_history] records enriched: {enriched_count}")
+    return enriched_records
+
+
 def build_history_workspace_record(job_key: str, entry: dict, run_started_at: datetime) -> Optional[dict]:
     return workspace_data.build_history_workspace_record(
         job_key,
@@ -290,6 +315,9 @@ def render_html(
     active_audit_rows = audit_rows
     if active_debug_mode and active_audit_rows is None:
         active_audit_rows = load_json_list(get_audit_records_path())
+
+    kept_records = _enrich_records_with_candidate_application_history(kept_records)
+
     workspace_records = build_workspace_record_sets(
         kept_records,
         job_history,

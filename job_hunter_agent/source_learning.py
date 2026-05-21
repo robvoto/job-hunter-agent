@@ -6,6 +6,7 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches, generalize_hard_block_pattern
+from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.llm_gate import (
     build_llm_cache_key,
     llm_is_enabled,
@@ -66,19 +67,19 @@ def deterministic_review_outcome(
 
     def _log(rule: str, decision: str, grade: str) -> dict:
         logger.info(
-            "[det-review] %s/%s\n"
-            "  via=%s\n"
-            "  strong=%d high=%d medium=%d\n"
-            "  title_reason=%s\n"
-            "  %s",
-            decision,
-            grade,
-            rule,
-            strong_signal_count,
-            high_risks,
-            medium_risks,
-            title_reason,
-            title,
+            format_log_block(
+                "det-review",
+                {
+                    "decision": decision,
+                    "grade": grade,
+                    "via": rule,
+                    "strong": strong_signal_count,
+                    "high": high_risks,
+                    "medium": medium_risks,
+                    "title_reason": title_reason,
+                    "title": title,
+                },
+            )
         )
         return {"decision": decision, "grade": grade, "det_rule": rule}
 

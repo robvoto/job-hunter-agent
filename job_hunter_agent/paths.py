@@ -93,6 +93,10 @@ def get_source_materials_path() -> Path:
 
 def get_source_pack_dir() -> Path:
     return _active_user_dir() / "source_pack"
+
+def get_candidate_application_history_path() -> Path:
+    return RUNTIME_DIR / "candidate_application_history.json"
+
 GLOBAL_SETTINGS_PATH = CONFIG_DIR / "global_settings.json"
 DEFAULT_USER_SETTINGS_PATH = DEFAULTS_DIR / "user_settings.json"
 SCORING_RULES_PATH = KNOWLEDGE_DIR / "scoring_rules.json"
@@ -116,6 +120,7 @@ SIGNAL_DEFAULTS_PATH = SIGNALS_DIR / "signal_defaults.json"
 UI_LABELS_PATH = KNOWLEDGE_DIR / "ui_labels.json"
 WORK_MODE_RULES_PATH = KNOWLEDGE_DIR / "work_mode_rules.json"
 LLM_CACHE_PATH = RUNTIME_DIR / "llm_cache.json"
+CANDIDATE_APPLICATION_HISTORY_CACHE_PATH = RUNTIME_DIR / "candidate_application_history_cache.json"
 GOVERNMENT_CONTEXT_RULES_PATH = KNOWLEDGE_DIR / "government_context_rules.json"
 POSTING_CHANNEL_INDICATORS_PATH = KNOWLEDGE_DIR / "posting_channel_indicators.json"
 TITLE_NORMALIZATION_RULES_PATH = KNOWLEDGE_DIR / "title_normalization_rules.json"

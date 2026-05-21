@@ -12,6 +12,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import threading
@@ -49,6 +50,7 @@ OPEN_PATHS = {
 
 USERS_PATH = AUTH_DIR / "users.json"
 _users_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -102,12 +104,22 @@ def user_id_from_email(email: str) -> str:
 def load_user_store() -> dict:
     with _users_lock:
         if not USERS_PATH.exists():
+            logger.warning(
+                "[AUTH][WARN] Missing user store at %s; returning an empty store because this is treated as first-run user bootstrap.",
+                USERS_PATH,
+            )
             return {}
         try:
             payload = json.loads(USERS_PATH.read_text(encoding="utf-8"))
-            return payload if isinstance(payload, dict) else {}
+            if isinstance(payload, dict):
+                return payload
+            logger.warning(
+                "[AUTH][WARN] User store at %s was not a dict; returning an empty store.",
+                USERS_PATH,
+            )
+            return {}
         except Exception as exc:
-            print(f"[AUTH][WARN] Failed to load user store from {USERS_PATH}: {exc}")
+            logger.warning("[AUTH][WARN] Failed to load user store from %s: %s", USERS_PATH, exc)
             return {}
 
 
@@ -126,8 +138,26 @@ def get_or_create_user(email: str, admin_email: str | None) -> dict:
         if USERS_PATH.exists():
             try:
                 store = json.loads(USERS_PATH.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+                if not isinstance(store, dict):
+                    logger.warning(
+                        "[AUTH][WARN] Existing user store at %s was not a dict; creating a fresh store for %s.",
+                        USERS_PATH,
+                        email,
+                    )
+                    store = {}
+            except Exception as exc:
+                logger.warning(
+                    "[AUTH][WARN] Failed to read user store at %s while creating %s: %s",
+                    USERS_PATH,
+                    email,
+                    exc,
+                )
+        else:
+            logger.warning(
+                "[AUTH][WARN] Missing user store at %s while creating %s; bootstrapping a fresh store for a first-run user.",
+                USERS_PATH,
+                email,
+            )
         if user_id not in store:
             store[user_id] = build_user_record(user_id, email, role)
             _save_user_store_locked(store)
@@ -198,6 +228,7 @@ def read_session_user(request: Request) -> dict | None:
     try:
         payload_b64, signature = token.split(".", 1)
     except ValueError:
+        logger.warning("[AUTH][WARN] Rejected session cookie with invalid format; expected payload.signature.")
         return None
     expected = hmac.new(
         config.session_secret.encode(AUTH_ENCODING),
@@ -205,6 +236,7 @@ def read_session_user(request: Request) -> dict | None:
         AUTH_ALGO_SHA256,
     ).hexdigest()
     if not hmac.compare_digest(signature, expected):
+        logger.warning("[AUTH][WARN] Rejected session cookie with an invalid signature.")
         return None
     try:
         padding = "=" * (-len(payload_b64) % 4)
@@ -212,11 +244,12 @@ def read_session_user(request: Request) -> dict | None:
             base64.urlsafe_b64decode((payload_b64 + padding).encode(AUTH_ENCODING)).decode(AUTH_ENCODING)
         )
     except Exception as exc:
-        print(f"[AUTH][WARN] Failed to decode session cookie payload: {exc}")
+        logger.warning("[AUTH][WARN] Failed to decode session cookie payload: %s", exc)
         return None
     user_id = str(payload.get("user_id") or "").strip()
     email = str(payload.get("email") or "").strip()
     if not user_id or not email:
+        logger.warning("[AUTH][WARN] Rejected session cookie payload missing user_id or email.")
         return None
     # Always re-derive role from env so admin_email changes take effect without re-login.
     role = "admin" if config.admin_email and email.lower() == config.admin_email.strip().lower() else "candidate"

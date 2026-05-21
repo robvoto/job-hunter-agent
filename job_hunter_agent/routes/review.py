@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import re
 
 from fastapi import APIRouter, Body, Query
@@ -16,6 +17,7 @@ from job_hunter_agent.review_history_service import (
 
 from job_hunter_agent.routes.responses import json_response
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -147,7 +149,7 @@ def api_title_block_preview(body: dict = Body(...)):  # type: ignore[no-untyped-
                 if isinstance(rows, list):
                     titles = [str(r.get("title") or "").lower() for r in rows if r.get("title")]
             except Exception:
-                pass
+                logger.warning("[review] Failed to parse audit records for title-block preview")
         counts: dict[str, int] = {}
         for phrase in phrases:
             norm = re.sub(r"[^a-z0-9]+", " ", phrase.lower()).strip()

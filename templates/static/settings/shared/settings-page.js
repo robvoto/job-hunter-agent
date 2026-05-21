@@ -43,7 +43,7 @@ const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserS
 const sectorPreferenceDefault = String(SECTOR_PREFERENCE_DEFAULT || 'any').trim().toLowerCase();
 function readOnboardingWelcomeSearchKeywords() {
   try {
-    const raw = window.sessionStorage.getItem('jobHunter.onboardingWelcome');
+    const raw = window.localStorage.getItem('jobHunter.onboardingWelcome');
     if (!raw) return '';
     const parsed = JSON.parse(raw);
     return String(parsed?.search_keywords || '').trim();

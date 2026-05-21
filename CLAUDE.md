@@ -14,6 +14,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Never skip step 1.** `AGENTS.md` is the source of truth.  
 **Never read all skills upfront** — they are loaded on demand, one domain at a time, to save tokens.
 
+## Code quality standard
+
+Before writing any code, assess the approach:
+
+- If it is a workaround, legacy pattern, or known anti-pattern for the language/context — say so first. Name it, explain why it is suboptimal, and state the professional alternative.
+- If the better approach is feasible within the task scope, ask before defaulting to the weaker one.
+- If the constraint forces the weaker approach (e.g. migration scope, compatibility), say so explicitly so the decision is visible.
+
+This applies to every task. Do not silently write second-best code.
+
 ## Commands
 
 | Task | Command |

@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import OUTPUT_DIR, PARSING_RULES_PATH
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
@@ -171,11 +172,7 @@ def _load_generic_role_tokens() -> frozenset[str]:
     way, it only has to read the file and clean the words once. When it scans your CV, 
     it reuses that memory instead of doing the work over and over, making it much faster.
     """
-    try:
-        entries = load_role_title_knowledge()
-    except Exception:
-        print(f"[PROFILE_LEARNING][WARN] Failed to load role title knowledge for generic tokens.")
-        return frozenset() # Silently returns an empty set
+    entries = load_role_title_knowledge()
 
     tokens: list[str] = []
     for entry in entries:
@@ -1153,6 +1150,20 @@ def build_learning_patch(
 
     lookback_years = _resolve_extraction_lookback_years(onboarding_settings)
     alias_limit = _resolve_onboarding_int(onboarding_settings or {}, KEY_CAPABILITY_ALIAS_LIMIT)
+    preset_name = str((onboarding_settings or {}).get("capability_strength_preset") or "").strip() or "(default)"
+    _cap_log(
+        format_log_block(
+            "BUILD_LEARNING_PATCH",
+            {
+                "route": "onboarding",
+                "capability_strength_preset": preset_name,
+                "lookback_years": lookback_years,
+                "alias_limit": alias_limit,
+                "source_sections": len(source_sections or []),
+                "source_chars": len(source_text),
+            },
+        )
+    )
     extracted = _llm_extract_from_cv(source_text, lookback_years, alias_limit)
 
     patch: dict[str, Any] = {KEY_CV_TEXT: source_text}

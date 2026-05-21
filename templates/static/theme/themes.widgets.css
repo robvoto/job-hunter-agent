@@ -731,10 +731,10 @@
 }
 
 .capability-alias-drawer {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  padding: 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .capability-alias-drawer > summary,
@@ -751,54 +751,8 @@
   padding: 0;
 }
 
-.capability-alias-drawer > summary::before,
-.cap-alias-summary::before {
-  content: "▶";
-  display: inline-block;
-  flex: 0 0 auto;
-  font-size: 0.72rem;
-  line-height: 1;
-  transition: transform 150ms ease;
-}
-
-.capability-alias-drawer[open] > summary::before,
-.capability-alias-drawer[open] > .cap-alias-summary::before {
-  transform: rotate(90deg);
-}
-
 .capability-alias-drawer > summary::-webkit-details-marker {
   display: none;
-}
-
-.capability-alias-drawer[open] > summary {
-  margin-bottom: 8px;
-}
-
-.capability-summary-preview {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-}
-
-.capability-summary-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--selection-accent) 8%, var(--bg-chip-subtle));
-  border: 1px solid color-mix(in srgb, var(--selection-accent) 16%, var(--border-chip-subtle));
-  color: var(--text-primary);
-  font-size: 0.76rem;
-  font-weight: 600;
-  line-height: 1.15;
-}
-
-.capability-summary-chip-more {
-  color: var(--text-muted);
-  background: var(--bg-muted);
-  border-color: var(--border-subtle);
 }
 
 .cap-alias-chips {
@@ -889,7 +843,7 @@
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -902,7 +856,7 @@
 }
 
 .token-input-action {
-  min-width: 42px;
+  min-width: 56px;
   padding-inline: 0;
   border: 0;
   border-left: 1px solid var(--border-subtle);
@@ -917,9 +871,9 @@
 }
 
 .btn-add {
-  min-width: 42px;
-  min-height: 42px;
-  padding: 0 14px;
+  min-width: 56px;
+  min-height: 50px;
+  padding: 0 16px;
   width: auto;
   height: auto;
   display: inline-flex;
@@ -933,7 +887,7 @@
   appearance: none;
   -webkit-appearance: none;
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 1.6rem;
   font-weight: 800;
   line-height: 1;
   cursor: pointer;

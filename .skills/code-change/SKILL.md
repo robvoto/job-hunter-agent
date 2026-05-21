@@ -6,6 +6,9 @@ Use before modifying existing code.
 - Inspect the target file before editing.
 - Touch only files required for the task.
 - Keep changes small and scoped.
+- Prefer small, single-purpose modules over large monolithic files.
+- If the proposed approach is a workaround, legacy pattern, anti-pattern, or unnecessary monolith, say so before editing: name the pattern, explain why it is suboptimal, and state the professional alternative.
+- If a better approach is feasible within scope, ask before using the weaker one.
 - Do not refactor unrelated modules.
 - Do not introduce legacy/backward-compatibility code unless explicitly requested.
 - Do not change business judgement during mechanical cleanup.

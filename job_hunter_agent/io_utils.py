@@ -6,6 +6,7 @@ across the job hunter agent. It centralizes common I/O patterns
 to ensure data integrity and error handling.
 """
 import json
+import logging
 import re
 import sys
 from datetime import date, datetime
@@ -27,6 +28,7 @@ from job_hunter_agent.paths import (
 from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS, DEBUG_MODE
 
 DEBUG_CAPTURE_SOURCE_PAYLOADS = DEBUG_MODE
+logger = logging.getLogger(__name__)
 
 
 def normalize_posted_text(value: Optional[str]) -> str:
@@ -43,27 +45,47 @@ def configure_console_output() -> None:
 
 def load_json_dict(path: Path) -> Dict[str, dict]:
     if not path.exists():
+        logger.warning(
+            "[IO_UTILS][WARN] Missing JSON dictionary at %s; returning an empty dict because callers treat absent files as initial state.",
+            path,
+        )
         return {}
     try:
         data = json.loads(path.read_text(encoding=AUTH_ENCODING))
         if isinstance(data, dict):
             return data
+        logger.warning(
+            "[IO_UTILS][WARN] JSON dictionary at %s did not contain a dict; returning an empty dict.",
+            path,
+        )
     except Exception as exc:
-        print(f"[IO_UTILS][WARN] Failed to load JSON dictionary from {path}: {exc}")
-        pass
+        logger.warning("[IO_UTILS][WARN] Failed to load JSON dictionary from %s: %s", path, exc)
     return {}
 
 
 def load_json_list(path: Path) -> List[dict]:
     if not path.exists():
+        logger.warning(
+            "[IO_UTILS][WARN] Missing JSON list at %s; returning an empty list because callers treat absent files as initial state.",
+            path,
+        )
         return []
     try:
         data = json.loads(path.read_text(encoding=AUTH_ENCODING))
         if isinstance(data, list):
-            return [item for item in data if isinstance(item, dict)]
+            items = [item for item in data if isinstance(item, dict)]
+            if len(items) != len(data):
+                logger.warning(
+                    "[IO_UTILS][WARN] JSON list at %s contained non-dict entries; skipping them.",
+                    path,
+                )
+            return items
+        logger.warning(
+            "[IO_UTILS][WARN] JSON list at %s did not contain a list; returning an empty list.",
+            path,
+        )
     except Exception as exc:
-        print(f"[IO_UTILS][WARN] Failed to load JSON list from {path}: {exc}")
-        pass
+        logger.warning("[IO_UTILS][WARN] Failed to load JSON list from %s: %s", path, exc)
     return []
 
 
@@ -95,6 +117,10 @@ def _json_safe_payload(payload):
         json.dumps(payload)
         return payload
     except Exception:
+        logger.warning(
+            "[IO_UTILS][WARN] Falling back to string serialization for unsupported payload type %s.",
+            type(payload).__name__,
+        )
         return str(payload)
 
 
@@ -125,7 +151,13 @@ def load_work_mode_rules() -> Dict[str, Any]:
 def load_signal_defaults() -> Dict[str, Any]:
     payload = load_json_dict(SIGNAL_DEFAULTS_PATH)
     defaults = payload.get("signal_defaults")
-    return defaults if isinstance(defaults, dict) else {}
+    if isinstance(defaults, dict):
+        return defaults
+    logger.warning(
+        "[IO_UTILS][WARN] signal_defaults missing or invalid in %s; returning an empty dict.",
+        SIGNAL_DEFAULTS_PATH,
+    )
+    return {}
 
 
 def load_job_history() -> Dict[str, dict]:

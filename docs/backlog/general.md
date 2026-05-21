@@ -1,3 +1,17 @@
+-ES Module Migration — Onboarding JS
+
+Convert the onboarding JS files from the current non-module/IIFE pattern to ES modules. Do all files in one pass, not one at a time:
+
+onboarding-page.js — export state and shared helpers
+onboarding-flow.js — import from page.js, remove IIFE
+currency-input.js — export functions, remove IIFE and window assignment
+settings-utils.js — same
+Update all <script src> tags to type="module"
+Remove all window.JobHunterCurrencyUi, window.JobHunterSettingsUtils assignments once no non-module consumer remains
+Why: explicit imports replace silent global scope coupling. Dependency direction becomes readable at the top of each file.
+
+Precondition: do the onboarding JS file split first (flow-review / flow-search / flow-actions), so the module boundaries are already clean before adding import/export syntax.
+
 - if no resutls we should give tips to user 
 - we dont show the name of the person logged in- 
   

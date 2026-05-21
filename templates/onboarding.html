@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Set Up Job Hunter | Job Hunter</title>
+  <title>__JOB_HUNTER_ONBOARDING_PAGE_PAGE_TITLE__</title>
   <link rel="stylesheet" href="/static/theme/themes.css">
   <link rel="stylesheet" href="/static/onboarding/onboarding-page.css">
   __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
@@ -32,22 +32,22 @@
             <ol class="wizard-progress-steps">
               <li class="wizard-progress-step is-active">
                 <button class="wizard-progress-nav" type="button" data-step-nav="1">
-                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Upload CV</span>
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">__JOB_HUNTER_ONBOARDING_PAGE_PROGRESS_STEP_1_LABEL__</span>
                 </button>
               </li>
               <li class="wizard-progress-step">
                 <button class="wizard-progress-nav" type="button" data-step-nav="2">
-                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Review Draft</span>
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">__JOB_HUNTER_ONBOARDING_PAGE_PROGRESS_STEP_2_LABEL__</span>
                 </button>
               </li>
               <li class="wizard-progress-step">
                 <button class="wizard-progress-nav" type="button" data-step-nav="3">
-                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Search Basics</span>
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">__JOB_HUNTER_ONBOARDING_PAGE_PROGRESS_STEP_3_LABEL__</span>
                 </button>
               </li>
               <li class="wizard-progress-step">
                 <button class="wizard-progress-nav" type="button" data-step-nav="4">
-                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">Check Setup</span>
+                  <span class="wizard-progress-dot" aria-hidden="true"></span><span class="wizard-progress-label">__JOB_HUNTER_ONBOARDING_PAGE_PROGRESS_STEP_4_LABEL__</span>
                 </button>
               </li>
             </ol>
@@ -64,13 +64,13 @@
 
           <details class="support-note workflow-drawer" id="workflow_summary">
             <summary class="workflow-drawer-summary">
-              <span id="workflow_title">How this works</span>
+              <span id="workflow_title">__JOB_HUNTER_ONBOARDING_PAGE_WORKFLOW_TITLE__</span>
             </summary>
             <div class="workflow-drawer-body">
               <ol class="workflow-steps">
-                <li id="workflow_step_1">You upload one detailed CV.</li>
-                <li id="workflow_step_2">We extract likely job titles, capabilities, and a starter search direction.</li>
-                <li id="workflow_step_3">You review the draft, set search basics, and confirm it before matching starts.</li>
+                <li>__JOB_HUNTER_ONBOARDING_PAGE_WORKFLOW_STEP_1__</li>
+                <li id="workflow_step_2">__JOB_HUNTER_ONBOARDING_PAGE_WORKFLOW_STEP_2__</li>
+                <li>__JOB_HUNTER_ONBOARDING_PAGE_WORKFLOW_STEP_3__</li>
               </ol>
             </div>
           </details>
@@ -82,59 +82,56 @@
                 <input id="primary_cv" type="file" accept=".docx,.pdf,.md,.txt" required aria-label="Upload your CV" style="display: none;">
                 <div id="cv_drop_zone_content" class="drop-zone-content-shell">
                   <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                  <p>Drag & drop your CV here, or click to browse</p>
-                  <p class="drop-zone-hint">Supported formats: .docx, .pdf, .md, .txt</p>
+                  <p>__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_TITLE__</p>
+                  <p class="drop-zone-hint">__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_HINT__</p>
                 </div>
               </div>
-              <details class="field-info-drawer settings-help-drawer">
-                <summary class="field-info" aria-label="Help">i</summary>
-                <div class="field-info-panel" id="primary_cv_limit_help"></div>
-              </details>
+              <div class="help" id="primary_cv_limit_help"></div>
               <details class="support-note workflow-drawer">
                 <summary class="workflow-drawer-summary">
-                  <span>Privacy &amp; sensitive information</span>
+                  <span>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_TITLE__</span>
                 </summary>
                 <div class="workflow-drawer-body">
-                  <p>We take privacy seriously.</p>
-                  <p>Upload only the CV content needed for job matching.</p>
-                  <p>Avoid including sensitive personal identifiers such as:</p>
+                  <p>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_INTRO__</p>
+                  <p>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_UPLOAD_ONLY__</p>
+                  <p>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_SENSITIVE_INTRO__</p>
                   <ul>
-                    <li>passport numbers</li>
-                    <li>licence numbers</li>
-                    <li>street address</li>
-                    <li>date of birth</li>
-                    <li>national identity numbers</li>
+                    <li>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_SENSITIVE_ITEM_PASSPORT__</li>
+                    <li>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_SENSITIVE_ITEM_LICENCE__</li>
+                    <li>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_SENSITIVE_ITEM_ADDRESS__</li>
+                    <li>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_SENSITIVE_ITEM_BIRTH_DATE__</li>
+                    <li>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_SENSITIVE_ITEM_IDENTITY__</li>
                   </ul>
-                  <p>Your uploaded CV is not stored. We only extract temporary job-related information needed to match you with suitable roles.</p>
+                  <p>__JOB_HUNTER_ONBOARDING_PAGE_PRIVACY_FOOTER__</p>
                 </div>
               </details>
               <details class="support-note workflow-drawer">
                 <summary class="workflow-drawer-summary">
-                  <span>What makes a good CV for setup?</span>
+                  <span>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_TITLE__</span>
                 </summary>
                 <div class="workflow-drawer-body">
                   <div class="guidance-grid">
                     <section>
-                      <h3>Include</h3>
+                      <h3>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_INCLUDE_TITLE__</h3>
                       <ul class="guidance-list">
-                        <li>Recent and older roles with dates</li>
-                        <li>Clear job titles</li>
-                        <li>Employer names</li>
-                        <li>Bullet points describing what you did</li>
-                        <li>Skills, tools, domains, or platforms you actually used</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_INCLUDE_RECENT_ROLES__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_INCLUDE_TITLES__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_INCLUDE_EMPLOYERS__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_INCLUDE_BULLETS__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_INCLUDE_SKILLS__</li>
                       </ul>
                     </section>
                     <section>
-                      <h3>Avoid</h3>
+                      <h3>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_AVOID_TITLE__</h3>
                       <ul class="guidance-list">
-                        <li>One-page marketing CVs with very little detail</li>
-                        <li>Image-heavy layouts where the text is hard to extract</li>
-                        <li>CVs with missing dates or vague role names</li>
-                        <li>Multiple different target directions crammed into a short summary</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_AVOID_MARKETING_CVS__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_AVOID_IMAGE_LAYOUTS__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_AVOID_MISSING_DATES__</li>
+                        <li>__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_AVOID_MIXED_DIRECTIONS__</li>
                       </ul>
                     </section>
                   </div>
-                  <p class="guidance-note">Plain, detailed content beats pretty formatting.</p>
+                  <p class="guidance-note">__JOB_HUNTER_ONBOARDING_PAGE_GUIDANCE_NOTE__</p>
                 </div>
               </details>
             </div>
@@ -142,26 +139,26 @@
             <div class="setting-row">
               <div class="setting-copy">
                 <div class="field-label-row">
-                  <label for="os_capability_strength_preset">Prioritise recent or total experience?</label>
+                  <label for="os_capability_strength_preset">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_LABEL__</label>
                   <details class="field-info-drawer">
                     <summary class="field-info" aria-label="Help">i</summary>
-                    <div class="field-info-panel">Choose how much older experience should count when matching you to jobs.</div>
+                    <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_HELP__</div>
                   </details>
                 </div>
               </div>
               <div>
                 <select id="os_capability_strength_preset">
-                  <option value="recent_focus">Focus on recent experience</option>
-                  <option value="balanced">Balanced</option>
-                  <option value="include_older_experience">Include full career</option>
+                  <option value="recent_focus">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_OPTION_RECENT__</option>
+                  <option value="balanced">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_OPTION_BALANCED__</option>
+                  <option value="include_older_experience">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_OPTION_FULL__</option>
                 </select>
               </div>
             </div>
           </div>
 
           <div class="actions">
-            <button class="btn btn-primary" id="create_profile" type="button">Build Draft Profile</button>
-            <button class="btn btn-secondary" id="continue_to_review" type="button" hidden>Continue</button>
+            <button class="btn btn-primary" id="create_profile" type="button">__JOB_HUNTER_ONBOARDING_PAGE_BUILD_DRAFT_PROFILE_LABEL__</button>
+            <button class="btn btn-secondary" id="continue_to_review" type="button" hidden>__JOB_HUNTER_ONBOARDING_PAGE_CONTINUE_LABEL__</button>
           </div>
         </section>
 
@@ -176,11 +173,13 @@
 
           <div class="review-grid">
             <section class="review-block">
-              <h3>__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</h3>
-              <details class="field-info-drawer settings-help-drawer">
-                <summary class="field-info" aria-label="Help">i</summary>
-                <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__</div>
-              </details>
+              <div class="field-label-row">
+                <h3>__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</h3>
+                <details class="field-info-drawer settings-help-drawer">
+                  <summary class="field-info" aria-label="Help">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__</div>
+                </details>
+              </div>
               <div class="chip-list" id="review_target_titles_list"></div>
               <div class="chip-editor-row token-input-group">
                 <input id="review_target_titles_input" class="token-input-field" type="text" placeholder="__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_PLACEHOLDER__">
@@ -189,11 +188,13 @@
             </section>
 
             <section class="review-block">
-              <h3>__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</h3>
-              <details class="field-info-drawer settings-help-drawer">
-                <summary class="field-info" aria-label="Help">i</summary>
-                <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_HELP__</div>
-              </details>
+              <div class="field-label-row">
+                <h3>__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</h3>
+                <details class="field-info-drawer settings-help-drawer">
+                  <summary class="field-info" aria-label="Help">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_HELP__</div>
+                </details>
+              </div>
               <div class="chip-list" id="review_secondary_titles_list"></div>
               <div class="chip-editor-row token-input-group">
                 <input id="review_secondary_titles_input" class="token-input-field" type="text" placeholder="__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_PLACEHOLDER__">
@@ -203,19 +204,23 @@
           </div>
 
           <section class="review-block capability-shell">
-            <h3 id="review_capability_title"></h3>
-              <details class="field-info-drawer settings-help-drawer">
-                <summary class="field-info" aria-label="Help">i</summary>
-                <div class="field-info-panel" id="review_capability_help"></div>
-              </details>
+            <div class="review-capability-header">
+              <div class="review-capability-header-main">
+                <h3 id="review_capability_title"></h3>
+                <details class="field-info-drawer settings-help-drawer">
+                  <summary class="field-info" aria-label="Help">i</summary>
+                  <div class="field-info-panel" id="review_capability_help"></div>
+                </details>
+              </div>
+              <span id="review_capability_count" class="review-capability-count" aria-live="polite">__JOB_HUNTER_ONBOARDING_PAGE_REVIEW_CAPABILITY_COUNT_INITIAL_LABEL__</span>
+            </div>
             <div class="review-capability-topbar">
-              <span id="review_capability_count" class="review-capability-count" aria-live="polite">0 shown</span>
               <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="">
             </div>
             <div id="review_capability_cards" class="review-capability-list"></div>
             <div class="actions">
-              <button class="btn btn-secondary" id="back_to_upload_footer" type="button">Back</button>
-              <button class="btn btn-primary" id="continue_to_search_basics" type="button">Save and continue &rarr;</button>
+              <button class="btn btn-secondary" id="back_to_upload_footer" type="button">__JOB_HUNTER_ONBOARDING_PAGE_BACK_LABEL__</button>
+              <button class="btn btn-primary" id="continue_to_search_basics" type="button">__JOB_HUNTER_ONBOARDING_PAGE_SAVE_AND_CONTINUE_LABEL__</button>
             </div>
           </section>
         </section>
@@ -223,7 +228,7 @@
         <section class="wizard-step" data-step="3" hidden>
           <div class="step-header-row">
             <h2>__JOB_HUNTER_ONBOARDING_STEP_3_TITLE__</h2>
-            <a href="#" class="need-help-link">Need help?</a>
+            <a href="#" class="need-help-link">__JOB_HUNTER_ONBOARDING_PAGE_NEED_HELP_LABEL__</a>
           </div>
           <p class="section-copy">__JOB_HUNTER_ONBOARDING_STEP_3_SECTION_COPY__</p>
 
@@ -242,10 +247,10 @@
             <div class="search-basics-row search-basics-row--two">
               <div class="onb-field">
                 <div class="field-label-row">
-                  <label for="location_search">Location</label>
+                  <label for="location_search">__JOB_HUNTER_ONBOARDING_PAGE_LOCATION_LABEL__</label>
                   <details class="field-info-drawer">
                     <summary class="field-info" aria-label="Help for location">i</summary>
-                    <div class="field-info-panel">Choose one state or capital city.</div>
+                    <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_LOCATION_HELP__</div>
                   </details>
                 </div>
                 <div class="location-picker-shell">
@@ -255,10 +260,10 @@
 
               <div class="onb-field">
                 <div class="field-label-row">
-                  <label for="sector_preference">Sector preference</label>
+                  <label for="sector_preference">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</label>
                   <details class="field-info-drawer">
                     <summary class="field-info" aria-label="Help for sector preference">i</summary>
-                    <div class="field-info-panel">__JOB_HUNTER_SECTOR_PREFERENCE_HELP__</div>
+                    <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_HELP__</div>
                   </details>
                 </div>
                 <select id="sector_preference">
@@ -270,10 +275,10 @@
             <div class="search-basics-row search-basics-row--choices">
               <div class="onb-field">
                 <div class="field-label-row">
-                  <label id="engagement_type_label">Work type</label>
+                  <label id="engagement_type_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</label>
                   <details class="field-info-drawer">
                     <summary class="field-info" aria-label="Help for work type">i</summary>
-                    <div class="field-info-panel">__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__</div>
+                    <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_HELP__</div>
                   </details>
                 </div>
                 __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
@@ -287,10 +292,10 @@
 
               <div class="onb-field">
                 <div class="field-label-row">
-                  <label id="work_mode_preference_label">Work mode</label>
+                  <label id="work_mode_preference_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_LABEL__</label>
                   <details class="field-info-drawer">
                     <summary class="field-info" aria-label="Help for work mode">i</summary>
-                    <div class="field-info-panel">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
+                    <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_HELP__</div>
                   </details>
                 </div>
                 __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
@@ -299,10 +304,10 @@
 
             <div class="onb-field search-basics-compensation">
               <div class="field-label-row">
-                <label>Minimum compensation</label>
+                <label>__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__</label>
                 <details class="field-info-drawer">
                   <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
-                  <div class="field-info-panel">__JOB_HUNTER_SALARY_MIN_COMPENSATION_HELP__</div>
+                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
                 </details>
               </div>
               <div class="salary-pair">
@@ -325,22 +330,22 @@
           </div>
 
           <div class="actions search-basics-actions">
-            <button class="btn btn-secondary" id="back_to_review_footer" type="button">Back</button>
-            <button class="btn btn-primary" id="continue_to_check" type="button">Save and continue &rarr;</button>
+            <button class="btn btn-secondary" id="back_to_review_footer" type="button">__JOB_HUNTER_ONBOARDING_PAGE_BACK_LABEL__</button>
+            <button class="btn btn-primary" id="continue_to_check" type="button">__JOB_HUNTER_ONBOARDING_PAGE_SAVE_AND_CONTINUE_LABEL__</button>
           </div>
         </section>
 
         <section class="wizard-step" data-step="4" hidden>
           <div class="setup-review-header">
             <div class="setup-review-badge">✓ Draft profile ready</div>
-            <h2>Review your setup</h2>
-            <p class="section-copy">Review your draft profile and search direction before Job Hunter starts matching roles.</p>
+            <h2>__JOB_HUNTER_ONBOARDING_PAGE_REVIEW_SETUP_TITLE__</h2>
+            <p class="section-copy">__JOB_HUNTER_ONBOARDING_PAGE_REVIEW_SETUP_COPY__</p>
           </div>
 
           <div class="check-grid">
             <section class="check-card">
               <div class="check-card-head">
-                <h3>Draft profile</h3>
+                <h3>__JOB_HUNTER_ONBOARDING_PAGE_DRAFT_PROFILE_LABEL__</h3>
                 <button class="text-link text-link--edit" id="edit_draft_profile" type="button">✎ Edit</button>
               </div>
               <dl class="check-list">
@@ -361,7 +366,7 @@
 
             <section class="check-card">
               <div class="check-card-head">
-                <h3>Search basics</h3>
+                <h3>__JOB_HUNTER_ONBOARDING_PAGE_SEARCH_BASICS_LABEL__</h3>
                 <button class="text-link text-link--edit" id="edit_search_basics" type="button">✎ Edit</button>
               </div>
               <dl class="check-list">
@@ -370,11 +375,11 @@
                   <dd id="check_search_title"></dd>
                 </div>
                 <div>
-                  <dt>Locations</dt>
+                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_LOCATIONS_LABEL__</dt>
                   <dd id="check_locations"></dd>
                 </div>
                 <div>
-                  <dt>Work type</dt>
+                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</dt>
                   <dd id="check_engagement_type"></dd>
                 </div>
                 <div>
@@ -382,12 +387,12 @@
                   <dd id="check_min_contract_months"></dd>
                 </div>
                 <div>
-                  <dt>Work mode</dt>
+                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_LABEL__</dt>
                   <dd id="check_work_mode_preference"></dd>
                 </div>
                 <div>
-                  <dt>Sector preference</dt>
-                <dd id="check_sector_preference"></dd>
+                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</dt>
+                  <dd id="check_sector_preference"></dd>
                 </div>
                 <div>
                   <dt>__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</dt>
@@ -402,8 +407,8 @@
           </div>
 
           <div class="actions">
-            <button class="btn btn-secondary" id="back_to_search_basics_footer" type="button">Back</button>
-            <button class="btn btn-primary" id="confirm_review" type="button">Finish Setup</button>
+            <button class="btn btn-secondary" id="back_to_search_basics_footer" type="button">__JOB_HUNTER_ONBOARDING_PAGE_BACK_LABEL__</button>
+            <button class="btn btn-primary" id="confirm_review" type="button">__JOB_HUNTER_ONBOARDING_PAGE_FINISH_SETUP_LABEL__</button>
           </div>
         </section>
 

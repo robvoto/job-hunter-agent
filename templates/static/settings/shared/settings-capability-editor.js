@@ -104,10 +104,6 @@ window.JobHunterCapabilityEditor = (function () {
           const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
           const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
           const aliasCount = aliases.length;
-          const previewAliases = aliases.slice(0, 3);
-          const previewMoreCount = Math.max(aliasCount - previewAliases.length, 0);
-          const previewHtml = previewAliases.map(alias => `<span class="capability-summary-chip">${escapeHtml(alias)}</span>`).join('')
-            + (previewMoreCount > 0 ? `<span class="capability-summary-chip capability-summary-chip-more">+${previewMoreCount}</span>` : '');
           const aliasChips = aliases.map(alias => `
             <span class="cap-alias-chip" title="${escapeHtml(alias)}">
               <span class="cap-alias-chip-label">${escapeHtml(alias)}</span>
@@ -144,7 +140,6 @@ window.JobHunterCapabilityEditor = (function () {
                     <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
                       <summary class="cap-alias-summary">
                         <span class="capability-summary-label">${escapeHtml(capabilityLabels.related_skills_summary.replace('{count}', String(aliasCount)))}</span>
-                        <span class="capability-summary-preview" aria-hidden="true">${previewHtml}</span>
                       </summary>
                       <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
                     </details>

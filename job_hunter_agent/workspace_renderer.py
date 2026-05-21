@@ -689,6 +689,32 @@ def render_job_card(
                     "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
                 ),
             ))
+    _cand_hist = record.get("candidate_application_history")
+    _cand_hist_badge_label = ""
+    _cand_hist_needs_review = False
+    _cand_hist_review_reason = ""
+    _cand_hist_details: dict = {}
+    if isinstance(_cand_hist, dict):
+        _ch_status = str(_cand_hist.get("llm_application_status") or "").strip()
+        _ch_confidence = str(_cand_hist.get("llm_confidence") or "").strip().lower()
+        _cand_hist_needs_review = bool(_cand_hist.get("llm_needs_review"))
+        _cand_hist_review_reason = str(_cand_hist.get("llm_review_reason") or "").strip()
+        _cand_hist_badge_label = (
+            "Rejected before"
+            if _ch_status == "rejection" and _ch_confidence != "low"
+            else "Possible previous application"
+        )
+        _cand_hist_details = {
+            "company": str(_cand_hist.get("llm_company") or "").strip(),
+            "role": str(_cand_hist.get("llm_role") or "").strip(),
+            "run_date": str(_cand_hist.get("run_date") or "").strip(),
+            "confidence": _ch_confidence,
+            "evidence": str(_cand_hist.get("llm_evidence") or "").strip(),
+        }
+    if _cand_hist_badge_label:
+        badges.append(render_badge(_cand_hist_badge_label, "badge-warning", "A match was found in your candidate application history."))
+        if _cand_hist_needs_review:
+            badges.append(render_badge("Needs review", "badge-warning", _cand_hist_review_reason or "This match needs manual review."))
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
         f'<div class="match-tile {fit_tone_class}" style="--match-score: {score_percent}%;">'
@@ -1003,6 +1029,45 @@ def render_job_card(
         else ""
     )
 
+    candidate_history_html = ""
+    if _cand_hist_details:
+        _ch_company = _cand_hist_details["company"]
+        _ch_role = _cand_hist_details["role"]
+        _ch_run_date = _cand_hist_details["run_date"]
+        _ch_confidence = _cand_hist_details["confidence"]
+        _ch_evidence_raw = _cand_hist_details["evidence"]
+        _ch_evidence = _ch_evidence_raw[:100] + "..." if len(_ch_evidence_raw) > 100 else _ch_evidence_raw
+        _ch_formatted_date = _ch_run_date
+        try:
+            _dt = datetime.strptime(_ch_run_date, "%Y-%m-%d")
+            _ch_formatted_date = f"{_dt.day} {_dt.strftime('%B %Y')}"
+        except ValueError:
+            pass
+        _ch_items = []
+        if _cand_hist_badge_label:
+            _ch_items.append(f"Status: {_cand_hist_badge_label}")
+        _ch_summary_parts = [p for p in [_ch_formatted_date, _ch_role, _ch_company] if p]
+        if _ch_summary_parts:
+            _ch_items.append(" — ".join(_ch_summary_parts))
+        if _ch_company:
+            _ch_items.append(f"Company: {_ch_company}")
+        if _ch_role:
+            _ch_items.append(f"Role: {_ch_role}")
+        if _ch_run_date:
+            _ch_items.append(f"Run date: {_ch_run_date}")
+        if _ch_confidence:
+            _ch_items.append(f"Confidence: {_ch_confidence}")
+        if _ch_evidence:
+            _ch_items.append(f"Evidence: {_ch_evidence}")
+        if _cand_hist_review_reason:
+            _ch_items.append(f"Review reason: {_cand_hist_review_reason}")
+        candidate_history_html = (
+            '<details class="job-candidate-history">'
+            '<summary>Candidate application history</summary>'
+            f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in _ch_items)}</ul>'
+            '</details>'
+        )
+
     if applied_record:
         actions_html = (
             '<div class="job-actions">'
@@ -1083,6 +1148,7 @@ def render_job_card(
         f"{note_html}"
         f"{insight_html}"
         f"{job_requirements_html}"
+        f"{candidate_history_html}"
         f"{context_html}"
         f"{actions_html}"
         "</article>"
@@ -1143,10 +1209,17 @@ def render_results_fragment(context: dict) -> str:
     workspace_labels = load_workspace_page_labels()
     all_substitutions = {**workspace_labels, **context}
     
-    rendered_html = template.safe_substitute(all_substitutions)
+    # Using substitute() instead of safe_substitute() ensures we crash loudly 
+    # if the Python context is missing a key required by the HTML template.
+    try:
+        rendered_html = template.substitute(all_substitutions)
+    except KeyError as exc:
+        raise ValueError(f"Missing required context key for results template: {exc}") from exc
+
     unresolved_labels = re.findall(r'\$LABEL_WS_[A-Z_]+', rendered_html)
     if unresolved_labels:
         raise ValueError(f"Unresolved workspace labels in template: {', '.join(set(unresolved_labels))}")
+
     return rendered_html
 
 

@@ -22,6 +22,7 @@ Business judgement must not hide in feature code.
 - Do not add local fallback defaults for business values, decision labels, or display labels in feature code. If the owner does not provide the value, surface an explicit error or fix the owner.
 - If the same label or copy is reused across summary, tooltip, and debug views, put it in the owning JSON/data file once and read it from there.
 - Onboarding title-tier copy and validation messages must come from `data/knowledge/ui_labels.json` via the bootstrap label global; do not hardcode target/also-consider/search keyword text in templates or JS.
+- If the requested change would force a workaround, legacy pattern, anti-pattern, or unnecessary monolith, say so before editing: name the pattern, explain why it is suboptimal, and state the professional alternative. Ask before using the weaker approach if a better one is feasible within scope.
 
 ## Checklist
 - Search for `.get(..., fallback)`.

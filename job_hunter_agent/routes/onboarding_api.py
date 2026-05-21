@@ -1,11 +1,12 @@
 from pathlib import Path
+import logging
 
 from fastapi import APIRouter, Body
 
 from job_hunter_agent.locations import resolve_location, find_nearest_location
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.source_documents import log_onboarding_table, persist_uploaded_source_pack, run_onboarding, load_source_materials
+from job_hunter_agent.source_documents import persist_uploaded_source_pack, run_onboarding, load_source_materials
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ENGAGEMENT_TYPE,
@@ -29,9 +30,11 @@ from job_hunter_agent.profile_store import (
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.global_settings import get_salary_limits
+from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.routes.responses import json_response
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 REQUEST_FILES_KEY = "files"
 REQUEST_SEARCH_PREFERENCES_KEY = "search_preferences"
@@ -80,12 +83,17 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
         requested_preset = str(onboarding_settings.get("capability_strength_preset") or "").strip()
         preset_info = srv.describe_capability_strength_preset(requested_preset)
         resolved_preset = str(preset_info["capability_strength_preset"]).strip()
-        log_onboarding_table("Capability strength selection", [
-            ("selected by user", requested_preset or "(not set)"),
-            ("resolved preset", resolved_preset),
-            ("using selected preset", "yes" if requested_preset and requested_preset == resolved_preset else "no"),
-            ("preset values", preset_info["values"]),
-        ])
+        logger.info(
+            format_log_block(
+                "ONBOARDING_IMPORT",
+                {
+                    "requested_preset": requested_preset or "(empty)",
+                    "resolved": resolved_preset,
+                    "values": preset_info["values"],
+                    "files": len(files),
+                },
+            )
+        )
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
         result = run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
         result["materials"] = materials

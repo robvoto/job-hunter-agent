@@ -7,9 +7,12 @@ cities using Haversine distance formulas.
 """
 
 import json
+import logging
 from typing import Dict, Optional
 
 from job_hunter_agent.paths import KNOWLEDGE_DIR
+
+logger = logging.getLogger(__name__)
 
 _LOCATIONS_AU_PATH = KNOWLEDGE_DIR / "locations_au.json"
 LOCATION_GROUP_LABELS = {
@@ -148,6 +151,6 @@ def find_nearest_location(latitude: float, longitude: float) -> str:
         )
         return str(nearest_city[0]).strip()
     except Exception as exc:
-        print(f"[LOCATIONS][WARN] find_nearest_location failed: {exc}. Falling back to default.")
+        logger.warning("[locations] find_nearest_location failed: %s. Falling back to default.", exc)
         # Fall back to Sydney if any error occurs
         return default_location_value()

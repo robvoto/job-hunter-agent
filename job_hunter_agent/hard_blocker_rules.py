@@ -9,6 +9,7 @@ automatically identify dealbreakers using candidate-specific exclusion terms.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 from job_hunter_agent.io_utils import load_json_dict
@@ -32,6 +33,7 @@ from job_hunter_agent.signal_schema import (
 _TERM_PLACEHOLDER = "{term}"
 REJECTION_BLOCKER_MIN_LENGTH = 2
 REJECTION_BLOCKER_MAX_LENGTH = 80 
+logger = logging.getLogger(__name__)
 
 def _load_payload() -> dict[str, Any]:
     return load_json_dict(HARD_BLOCKER_RULES_PATH) or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
@@ -167,11 +169,20 @@ def normalize_rejection_blocker_suggestions(
         try:
             value = json.loads(value)
         except Exception as exc:
-            print(f"[HARD_BLOCKERS][WARN] Failed to parse blocker suggestions JSON: {exc}")
+            logger.warning("[HARD_BLOCKERS][WARN] Failed to parse blocker suggestions JSON: %s", exc)
             return []
     if isinstance(value, dict):
-        value = value.get("blockers") or value.get("suggestions") or []
+        blockers = value.get("blockers")
+        suggestions = value.get("suggestions")
+        if blockers is None and suggestions is None:
+            logger.warning(
+                "[HARD_BLOCKERS][WARN] Blocker suggestions payload did not include blockers or suggestions keys; returning an empty list.",
+            )
+        value = blockers or suggestions or []
     if not isinstance(value, list):
+        logger.warning(
+            "[HARD_BLOCKERS][WARN] Blocker suggestions were not a list after normalisation; returning an empty list.",
+        )
         return []
 
     suggestions: list[str] = []

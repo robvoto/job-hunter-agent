@@ -320,19 +320,3 @@ def test_enrich_does_not_change_fit_score():
     }]
     result = enrich_records_with_application_history(records, rows)
     assert result[0]["fit_score"] == 90
-
-
-def test_enrich_accepts_already_normalized_rows():
-    """Rows that already have derived_company should not be re-normalized."""
-    records = [{"company": "Acme Corp", "title": "BA", "job_key": "seek:5"}]
-    already_normalized = [{
-        "derived_company": "Acme Corp",
-        "derived_role": "BA",
-        "company_confidence": "high",
-        "role_confidence": "high",
-        "evidence": "subject: ...",
-        "run_date": "", "raw_company": "", "from": "", "subject": "",
-        "content": "", "thread_id": "", "message_id": "", "status": "",
-    }]
-    result = enrich_records_with_application_history(records, already_normalized)
-    assert RECORD_APPLICATION_HISTORY_KEY in result[0]

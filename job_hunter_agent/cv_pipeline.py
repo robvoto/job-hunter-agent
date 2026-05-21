@@ -65,6 +65,24 @@ def _is_quality_phrase(text: str) -> bool:
         return False
     return True 
 
+
+def _format_cv_pipeline_summary(
+    roles: int,
+    phrases: int,
+    clusters: int,
+    candidates: int,
+    dominant: int,
+) -> str:
+    lines = [
+        "[CV_PIPELINE]",
+        f"  roles: {roles}",
+        f"  phrases: {phrases}",
+        f"  clusters: {clusters}",
+        f"  candidates: {candidates}",
+        f"  dominant signal clusters: {dominant} (evidence/review only)",
+    ]
+    return "\n".join(lines)
+
 _TOOL_LINE_RE = re.compile(
     r"^(?:tools?|tools\s+and\s+platforms?|tools\s+and\s+practices)(?:\s+included|\s+include)?\s*:?\s*(?P<body>.+)$",
     flags=re.IGNORECASE,
@@ -488,9 +506,13 @@ def run_cv_pipeline(
 
     dominant = output.get("dominant_signal_clusters", [])
     _cap_log(
-        f"[CV_PIPELINE] {len(roles)} roles -> {len(phrase_items)} phrases -> "
-        f"{len(clusters)} clusters -> {len(candidates)} candidates -> "
-        f"{len(dominant)} dominant signal clusters (evidence/review only)"
+        _format_cv_pipeline_summary(
+            len(roles),
+            len(phrase_items),
+            len(clusters),
+            len(candidates),
+            len(dominant),
+        )
     )
     if dominant:
         _cap_log(f"[CV_PIPELINE] dominant signal names: {[r['name'] for r in dominant]}")

@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from typing import Dict, List, Optional
 
@@ -11,6 +12,7 @@ filter groups for UI presentation."""
 from job_hunter_agent.paths import KNOWLEDGE_DIR
 
 JOB_TYPE_STORE_PATH = KNOWLEDGE_DIR / "job_type.json"
+logger = logging.getLogger(__name__)
 
 _cached_mapping: Optional[Dict[str, str]] = None
 _cached_filter_groups: Optional[List[dict]] = None
@@ -26,12 +28,22 @@ def _normalize_key(value: object) -> str:
 
 def _load_raw() -> dict:
     if not JOB_TYPE_STORE_PATH.exists():
+        logger.warning(
+            "[JOB_TYPES][WARN] Missing job type rules at %s; returning empty mapping and filter groups because this file is optional initial knowledge.",
+            JOB_TYPE_STORE_PATH,
+        )
         return {}
     try:
         payload = json.loads(JOB_TYPE_STORE_PATH.read_text(encoding="utf-8"))
-        return payload if isinstance(payload, dict) else {}
+        if isinstance(payload, dict):
+            return payload
+        logger.warning(
+            "[JOB_TYPES][WARN] Job type rules at %s were not a dict; returning empty mapping and filter groups.",
+            JOB_TYPE_STORE_PATH,
+        )
+        return {}
     except Exception as exc:
-        print(f"[JOB_TYPES][WARN] Failed to load job type rules from {JOB_TYPE_STORE_PATH}: {exc}")
+        logger.warning("[JOB_TYPES][WARN] Failed to load job type rules from %s: %s", JOB_TYPE_STORE_PATH, exc)
         return {}
 
 
@@ -45,6 +57,13 @@ def load_job_type(force_reload: bool = False) -> dict:
     raw = _load_raw()
     # Support both old flat format and new {mapping, filter_groups} format.
     source = raw.get("mapping", raw) if "mapping" in raw else raw
+    if not isinstance(source, dict):
+        logger.warning(
+            "[JOB_TYPES][WARN] Job type mapping at %s was not a dict; returning an empty mapping.",
+            JOB_TYPE_STORE_PATH,
+        )
+        _cached_mapping = {}
+        return _cached_mapping
     _cached_mapping = {
         _normalize_key(key): _clean_text(value)
         for key, value in source.items()
@@ -62,7 +81,14 @@ def load_job_type_filter_groups(force_reload: bool = False) -> List[dict]:
 
     raw = _load_raw()
     groups = raw.get("filter_groups", [])
-    _cached_filter_groups = groups if isinstance(groups, list) else []
+    if isinstance(groups, list):
+        _cached_filter_groups = groups
+    else:
+        logger.warning(
+            "[JOB_TYPES][WARN] Filter groups in %s were not a list; returning an empty list.",
+            JOB_TYPE_STORE_PATH,
+        )
+        _cached_filter_groups = []
     return _cached_filter_groups
 
 

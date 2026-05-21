@@ -65,6 +65,17 @@ Load the relevant skill before editing that area.
 - Keep changes small and targeted.
 - Run the smallest relevant validation.
 
+## Design and code quality
+
+- Prefer small, single-purpose modules over large monolithic files.
+- If a change mixes unrelated responsibilities, split by ownership rather than adding more logic to one file.
+- Before writing code, check whether the approach is a workaround, legacy pattern, anti-pattern, or unnecessary monolith.
+- If it is, say so explicitly before editing files: name the pattern, explain why it is suboptimal, and state the professional alternative.
+- If a better approach is feasible within scope, ask before using the weaker one.
+- Do not add backward-compatibility code, duplicate implementations, or dead paths unless explicitly requested.
+- Remove unused code instead of preserving it.
+- If the task would require a workaround or weaker design, call that out before changing anything.
+
 ## Architecture
 
 ```text

@@ -97,18 +97,17 @@ def _build_top_utility_bar_html(
         '<div class="job-hunter-page-utility" id="job_hunter_top_utility_bar">'
         f'{brand_html}'
         '<div class="job-hunter-account-bar">'
-        '<div class="job-hunter-account-bar__cluster">'
-        f'<div class="theme-switcher-widget account-bar-theme-switcher">'
-        f'<span>{_html_escape(shared_labels["theme_label"])}</span>'
+        
+        
         f'<select id="theme_picker" aria-label="{_html_escape(shared_labels["select_theme_aria_label"])}">'
         '<option value="soft-professional">Soft Professional</option>'
         '<option value="bold-aggressive">Bold Aggressive</option>'
         '<option value="dark-professional">Dark Professional</option>'
         '</select>'
-        '</div>'
+       
         f'{shortcut_html}'
         f'{test_html}'
-        '</div>'
+        
         '<div class="job-hunter-account-bar__user" id="job_hunter_account_user_menu">'
         f'<button class="job-hunter-account-bar__avatar" id="job_hunter_account_avatar_btn" type="button"'
         f' aria-haspopup="true" aria-expanded="false" aria-label="{_html_escape(shared_labels["account_menu_aria_label"])}"'
@@ -132,6 +131,12 @@ SETTINGS_PARTIALS = {
     "__JOB_HUNTER_SETTINGS_SECTION_ADMIN__": SETTINGS_GLOBAL_PARTIALS_DIR / "settings-admin.html",
     "__JOB_HUNTER_SETTINGS_SECTION_LEARNING__": SETTINGS_GLOBAL_PARTIALS_DIR / "settings-learning.html",
 }
+
+
+def _replace_label_tokens(html: str, prefix: str, labels: dict[str, str]) -> str:
+    for key, value in labels.items():
+        html = html.replace(f"__JOB_HUNTER_{prefix}_{key.upper()}__", value)
+    return html
 
 
 def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, onboarding_copy: dict | None = None, global_settings: dict | None = None, resume_step: int | None = None, account_shortcut_href: str | None = None, account_shortcut_label: str | None = None, account_shortcut_aria_label: str | None = None) -> str:
@@ -199,13 +204,16 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         html = html.replace("__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_LABEL__", search_source_labels["linkedin_toggle_label"])
         html = html.replace("__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_HELP__", search_source_labels["linkedin_toggle_help"])
     if template_path == GLOBAL_SETTINGS_HTML_PATH:
+        global_settings_labels = srv.load_global_settings_labels()
         for token, partial_path in SETTINGS_PARTIALS.items():
             if token in {"__JOB_HUNTER_SETTINGS_SECTION_ADMIN__", "__JOB_HUNTER_SETTINGS_SECTION_LEARNING__"}:
                 html = html.replace(token, srv._render_template(partial_path))
             else:
                 html = html.replace(token, "")
+        html = _replace_label_tokens(html, "GLOBAL_SETTINGS", global_settings_labels)
     if template_path == ONBOARDING_HTML_PATH:
         title_tier_labels = srv.load_onboarding_title_tier_labels()
+        onboarding_page_labels = srv.load_onboarding_page_labels()
         onboarding_replacements = {
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__": title_tier_labels["target_roles_label"],
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__": title_tier_labels["target_roles_help"],
@@ -228,6 +236,9 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         }
         for token, value in onboarding_replacements.items():
             html = html.replace(token, value)
+        html = _replace_label_tokens(html, "ONBOARDING_PAGE", onboarding_page_labels)
+        html = html.replace("✓ Draft profile ready", onboarding_page_labels["draft_profile_ready_label"])
+        html = html.replace("✎ Edit", onboarding_page_labels["edit_label"])
     return (
         html
         .replace("__JOB_HUNTER_DEBUG_MODE_BOOL__", "true" if srv.DEBUG_MODE else "false")

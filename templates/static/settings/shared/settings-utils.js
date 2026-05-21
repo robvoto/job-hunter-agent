@@ -26,6 +26,55 @@ window.JobHunterSettingsUtils = (function () {
     );
   }
 
+  function normalizeReviewTitle(value) {
+    return patternToLabel(value) || normalizeReviewText(value);
+  }
+
+  function normalizeReviewTitleKey(value) {
+    return normalizeReviewTitle(value).toLowerCase();
+  }
+
+  function dedupeReviewList(values) {
+    const seen = new Set();
+    const output = [];
+    for (const value of values || []) {
+      const cleaned = normalizeReviewTitle(value);
+      const key = normalizeReviewTitleKey(cleaned);
+      if (!cleaned || seen.has(key)) continue;
+      seen.add(key);
+      output.push(cleaned);
+    }
+    return output;
+  }
+
+  function normalizeReviewTitleLists(primaryValues, secondaryValues) {
+    const primary = dedupeReviewList(primaryValues);
+    const primarySeen = new Set(primary.map(normalizeReviewTitleKey));
+    const secondary = [];
+    const seenSecondary = new Set();
+    for (const value of dedupeReviewList(secondaryValues)) {
+      const key = normalizeReviewTitleKey(value);
+      if (!key || primarySeen.has(key) || seenSecondary.has(key)) continue;
+      seenSecondary.add(key);
+      secondary.push(value);
+    }
+    return { primary, secondary };
+  }
+
+  function normalizeReviewCapability(rule) {
+    const name = normalizeReviewText(rule?.name || '');
+    const level = normalizeReviewText(rule?.level || '').toLowerCase();
+    const aliases = [];
+    const seen = new Set();
+    for (const alias of Array.isArray(rule?.aliases) ? rule.aliases : []) {
+      const cleaned = normalizeReviewText(alias).toLowerCase();
+      if (!cleaned || cleaned === name.toLowerCase() || seen.has(cleaned)) continue;
+      seen.add(cleaned);
+      aliases.push(cleaned);
+    }
+    return { name, level, aliases };
+  }
+
   function rulesToText(rules, key) {
     return (rules || []).map(rule => `${rule[key] || ''} || ${rule.reason || ''}`).join('\n');
   }
@@ -245,6 +294,8 @@ window.JobHunterSettingsUtils = (function () {
     toLines,
     normalizeReviewText,
     patternToLabel,
+    normalizeReviewTitleLists,
+    normalizeReviewCapability,
     rulesToText,
     textToRules,
     settingsField,

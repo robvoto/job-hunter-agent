@@ -1,12 +1,12 @@
-﻿/* Variables supplied by themes.css */
+/* Variables supplied by themes.css */
 
-/* â”€â”€ Animations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Animations ─────────────────────────────────────────────────────── */
 
 @keyframes workingSpin {
   to { transform: rotate(360deg); }
 }
 
-/* â”€â”€ Page-level reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Page-level reset ────────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
@@ -23,7 +23,7 @@ body {
   display: none;
 }
 
-/* â”€â”€ Page layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Page layout ─────────────────────────────────────────────────────── */
 
 .page {
   max-width: 980px;
@@ -41,9 +41,9 @@ body {
   padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
 }
 
-/* â”€â”€ Form defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Form defaults ───────────────────────────────────────────────────── */
 
-/* Generic baseline â€” scoped to .page so it doesn't bleed into choice-card labels */
+/* Generic baseline — scoped to .page so it doesn't bleed into choice-card labels */
 .page input,
 .page select,
 .page textarea {
@@ -100,7 +100,7 @@ body {
   border: 0;
 }
 
-/* â”€â”€ Hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Hero ────────────────────────────────────────────────────────────── */
 
 .hero {
   margin-bottom: var(--surface-gap-md);
@@ -144,9 +144,9 @@ body {
   gap: 8px;
 }
 
-/* â”€â”€ Test panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Test panel ──────────────────────────────────────────────────────── */
 
-/* â”€â”€ Wizard progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Wizard progress ─────────────────────────────────────────────────── */
 
 .wizard-progress {
   margin-bottom: 18px;
@@ -240,7 +240,7 @@ body {
   background: transparent;
 }
 
-/* â”€â”€ Wizard steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Wizard steps ────────────────────────────────────────────────────── */
 
 .wizard-step[hidden] {
   display: none !important;
@@ -258,7 +258,7 @@ body {
   line-height: var(--help-copy-line-height);
 }
 
-/* â”€â”€ Drop zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Drop zone ───────────────────────────────────────────────────────── */
 
 .drop-zone {
   border: 2px dashed var(--border-strong);
@@ -394,7 +394,7 @@ body {
   font-weight: 600;
 }
 
-/* â”€â”€ Field components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Field components ────────────────────────────────────────────────── */
 
 .field-stack {
   display: grid;
@@ -511,7 +511,7 @@ body {
   color: var(--text-primary);
 }
 
-/* â”€â”€ Actions & buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Actions & buttons ───────────────────────────────────────────────── */
 
 .actions {
   display: flex;
@@ -544,7 +544,7 @@ body {
   margin: 0 0 var(--surface-gap-sm);
 }
 
-/* â”€â”€ Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Status ──────────────────────────────────────────────────────────── */
 
 .status {
   margin-top: var(--surface-gap-md);
@@ -597,7 +597,7 @@ body {
   align-items: center;
 }
 
-/* â”€â”€ Review / check grids â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Review / check grids ────────────────────────────────────────────── */
 
 .review-grid,
 .check-grid {
@@ -609,6 +609,25 @@ body {
 
 .capability-shell {
   margin-top: 14px;
+}
+
+.review-capability-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+
+.review-capability-header-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.review-capability-header-main h3 {
+  margin: 0;
 }
 
 .check-list {
@@ -628,7 +647,7 @@ body {
   line-height: 1.5;
 }
 
-/* â”€â”€ Chip list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Chip list ───────────────────────────────────────────────────────── */
 
 .chip-list {
   display: flex;
@@ -653,7 +672,7 @@ body {
 
 /* .chip-button and .location-chip defined in themes.widgets.css */
 
-/* â”€â”€ Location picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Location picker ─────────────────────────────────────────────────── */
 
 .location-picker {
   margin-top: 10px;
@@ -680,17 +699,31 @@ body {
 }
 
 .review-capability-list {
-  display: grid;
-  gap: 12px;
+  display: block;
   margin-top: 14px;
+}
+
+.capability-shell .capability-alias-drawer {
+  width: 100%;
+}
+
+.capability-shell .cap-alias-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  width: 100%;
+  align-items: start;
+}
+
+.capability-shell .cap-alias-chips {
+  margin-top: 8px;
 }
 
 .review-capability-topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  flex-wrap: wrap;
   margin-top: 12px;
 }
 
@@ -759,7 +792,7 @@ body {
 
 .review-capability-row-list {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
   width: 100%;
 }
@@ -916,8 +949,8 @@ body {
 }
 
 .review-capability-footer-icon {
-  width: 34px;
-  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .review-capability-footer-icon-svg {
@@ -944,21 +977,25 @@ body {
   border-color: color-mix(in srgb, var(--selection-accent) 32%, var(--border-subtle));
 }
 
-.review-capability-footer-link {
-  background: transparent;
-  border: 0;
-  color: var(--selection-accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.review-capability-footer-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* â”€â”€ Experience weighting dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.review-capability-footer-action-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+/* ── Experience weighting dropdown ───────────────────────────────────── */
 
 #os_capability_strength_preset {
   min-width: 300px;
 }
 
-/* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 720px) {
   .hero-shell {

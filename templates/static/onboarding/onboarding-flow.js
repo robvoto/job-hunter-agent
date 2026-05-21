@@ -1,5 +1,5 @@
 (() => {
-const { escapeHtml, normalizeReviewText, patternToLabel, normalizeWorkModePreferences, getWorkModePreferenceValues, setWorkModePreferenceValues, setEngagementTypeValues, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
+const { escapeHtml, normalizeReviewText, normalizeReviewTitleLists, normalizeReviewCapability, patternToLabel, normalizeWorkModePreferences, getWorkModePreferenceValues, setWorkModePreferenceValues, setEngagementTypeValues, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
 
 const onboardingFlowCurrencyUi = window.JobHunterCurrencyUi || {};
 const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
@@ -7,6 +7,7 @@ const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
 const onboardingLocationUi = window.JobHunterLocationUi || {};
 const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
+const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
 const capabilityUi = window.JobHunterCapabilityUi || {};
 const capabilityLabels = capabilityUi.labels || {};
 const onboardingUserId = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
@@ -16,6 +17,9 @@ if (!onboardingFlowTitleTierLabels) {
 }
 if (!onboardingImportSummaryLabels) {
   throw new Error('Missing onboarding import summary labels.');
+}
+if (!onboardingFlowLabels) {
+  throw new Error('Missing onboarding flow labels.');
 }
 if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
   throw new Error('Missing capability UI labels.');
@@ -40,22 +44,17 @@ function normalizeReviewAlias(value) {
   return normalizeReviewText(value).toLowerCase();
 }
 
-function locationLabel(value) {
-  return onboardingLocationUi.getLocationLabel ? onboardingLocationUi.getLocationLabel(value) : normalizeReviewText(value);
+function formatLabel(template, values = {}) {
+  return String(template || '').replace(/\{(\w+)\}/g, (_, key) => {
+    if (Object.prototype.hasOwnProperty.call(values, key)) {
+      return String(values[key]);
+    }
+    return '';
+  });
 }
 
-function normalizeReviewCapability(rule) {
-  const name = normalizeReviewText(rule?.name || '');
-  const level = normalizeReviewText(rule?.level || '').toLowerCase();
-  const aliases = [];
-  const seen = new Set();
-  for (const alias of Array.isArray(rule?.aliases) ? rule.aliases : []) {
-    const cleaned = normalizeReviewAlias(alias);
-    if (!cleaned || cleaned === name.toLowerCase() || seen.has(cleaned)) continue;
-    seen.add(cleaned);
-    aliases.push(cleaned);
-  }
-  return { name, level, aliases };
+function locationLabel(value) {
+  return onboardingLocationUi.getLocationLabel ? onboardingLocationUi.getLocationLabel(value) : normalizeReviewText(value);
 }
 
 function dedupeReviewList(values) {
@@ -69,20 +68,6 @@ function dedupeReviewList(values) {
     output.push(cleaned);
   }
   return output;
-}
-
-function normalizeReviewTitleLists(primaryValues, secondaryValues) {
-  const primary = dedupeReviewList(primaryValues);
-  const primarySeen = new Set(primary.map(normalizeReviewTitleKey));
-  const secondary = [];
-  const seenSecondary = new Set();
-  for (const value of dedupeReviewList(secondaryValues)) {
-    const key = normalizeReviewTitleKey(value);
-    if (!key || primarySeen.has(key) || seenSecondary.has(key)) continue;
-    seenSecondary.add(key);
-    secondary.push(value);
-  }
-  return { primary, secondary };
 }
 
 const flowRefs = Object.freeze({
@@ -122,6 +107,45 @@ const flowRefs = Object.freeze({
   editDraftProfile: document.getElementById('edit_draft_profile'),
   editSearchBasics: document.getElementById('edit_search_basics'),
 });
+const testMenuRefs = Object.freeze({
+  testPanel: document.getElementById('job_hunter_account_test_panel'),
+  testTrigger: document.getElementById('job_hunter_account_test_trigger'),
+  testMenu: document.getElementById('job_hunter_account_test_menu'),
+  resetUserBtn: document.getElementById('job_hunter_reset_user_btn'),
+  resetLearningBtn: document.getElementById('job_hunter_reset_learning_btn'),
+});
+const ONBOARDING_WELCOME_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWelcome');
+const ONBOARDING_WIZARD_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWizard');
+
+function setTestMenuOpen(open) {
+  if (!testMenuRefs.testMenu || !testMenuRefs.testTrigger) {
+    return;
+  }
+  testMenuRefs.testMenu.classList.toggle('is-open', Boolean(open));
+  testMenuRefs.testTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function clearOnboardingBrowserState() {
+  try {
+    window.localStorage.removeItem(ONBOARDING_WELCOME_KEY);
+    window.localStorage.removeItem(ONBOARDING_WIZARD_KEY);
+  } catch (error) {
+    console.warn('Could not clear onboarding browser state.', error);
+  }
+}
+
+async function postTestAction(path) {
+  const response = await jobHunterFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'Request failed');
+  }
+  return payload;
+}
 
 const engagementTypeOptions = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
   ? window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
@@ -241,30 +265,32 @@ function renderReviewChipList(containerKey, values, emptyLabel, removeAttribute,
   container.innerHTML = values.map((value, index) => `
     <span class="chip-item">
       <span>${escapeHtml(value)}</span>
-      <button type="button" ${moveAttribute}="${index}" aria-label="${escapeHtml(moveAriaPrefix)} ${escapeHtml(value)}" title="${escapeHtml(moveAriaPrefix)}">${CHIP_MOVE_ICON}</button>
-      <button type="button" ${removeAttribute}="${index}" aria-label="Remove ${escapeHtml(value)}">&#215;</button>
+      <button type="button" ${moveAttribute}="${index}" aria-label="${escapeHtml(formatLabel(moveAriaPrefix, { name: value }))}" title="${escapeHtml(formatLabel(moveAriaPrefix, { name: value }))}">${CHIP_MOVE_ICON}</button>
+      <button type="button" ${removeAttribute}="${index}" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_remove_label, { name: value }))}">&#215;</button>
     </span>
   `).join('');
 }
 
 function formatCurrencySummaryValue(value) {
   const raw = String(value ?? '').trim();
-  if (!raw) return 'Not provided';
+  if (!raw) return onboardingFlowLabels.not_provided_label;
   const formatted = onboardingFlowCurrencyUi.formatCurrencyValue?.(raw) || '0';
   return `$${formatted}`;
 }
 
 function updateCheckStep() {
   const searchPrefs = searchPreferencesPayload();
-  flowRefs.checkTargetTitles.textContent = reviewTargetTitles.length ? reviewTargetTitles.join(' | ') : 'Not provided';
-  flowRefs.checkSecondaryTitles.textContent = reviewSecondaryTitles.length ? reviewSecondaryTitles.join(' | ') : 'Not provided';
+  flowRefs.checkTargetTitles.textContent = reviewTargetTitles.length ? reviewTargetTitles.join(' | ') : onboardingFlowLabels.not_provided_label;
+  flowRefs.checkSecondaryTitles.textContent = reviewSecondaryTitles.length ? reviewSecondaryTitles.join(' | ') : onboardingFlowLabels.not_provided_label;
   flowRefs.checkCapabilities.textContent = reviewCapabilityRules.length
-    ? `${reviewCapabilityRules.length} capability row${reviewCapabilityRules.length === 1 ? '' : 's'}`
-    : 'None';
-  flowRefs.checkSearchTitle.textContent = searchPrefs.keywords || 'Not provided';
+    ? (reviewCapabilityRules.length === 1
+      ? onboardingFlowLabels.capability_rows_label_one
+      : formatLabel(onboardingFlowLabels.capability_rows_label_many, { count: reviewCapabilityRules.length }))
+    : onboardingFlowLabels.capabilities_none_label;
+  flowRefs.checkSearchTitle.textContent = searchPrefs.keywords || onboardingFlowLabels.not_provided_label;
   flowRefs.checkLocations.textContent = searchPrefs.locations.length
     ? searchPrefs.locations.map(locationLabel).join(' | ')
-    : 'Not provided';
+    : onboardingFlowLabels.not_provided_label;
   flowRefs.checkEngagementType.textContent = engagementTypeLabel(searchPrefs.engagement_type);
   flowRefs.checkMinContractMonths.textContent = minContractMonthLabel(searchPrefs.min_contract_months);
   flowRefs.checkWorkModePreference.textContent = workModePreferenceLabel(searchPrefs.work_mode_preference);
@@ -396,7 +422,7 @@ function renderReviewCapabilities() {
   if (!container) return;
   if (!reviewCapabilityRules.length) {
     if (reviewCapabilityCountEl) {
-      reviewCapabilityCountEl.textContent = '0 capabilities';
+      reviewCapabilityCountEl.textContent = onboardingFlowLabels.capabilities_none_label;
       reviewCapabilityCountEl.classList.remove('is-selected');
     }
     container.innerHTML = `<div class="chip-empty">${escapeHtml(capabilityLabels.onboarding_empty_text)}</div>`;
@@ -416,19 +442,17 @@ function renderReviewCapabilities() {
   const selectedVisibleCount = visibleRules.filter(({ index }) => selectedReviewCapabilityIndexes.has(index)).length;
   if (reviewCapabilityCountEl) {
     reviewCapabilityCountEl.textContent = filterTerm
-      ? `${visibleRules.length} shown of ${orderedRules.length}`
-      : `${orderedRules.length} capabilities${selectedReviewCapabilityIndexes.size ? `, ${selectedReviewCapabilityIndexes.size} selected` : ''}`;
+      ? formatLabel(onboardingFlowLabels.capability_shown_of_label, { shown: visibleRules.length, total: orderedRules.length })
+      : (selectedReviewCapabilityIndexes.size
+        ? formatLabel(onboardingFlowLabels.capability_count_with_selection_label, { total: orderedRules.length, selected: selectedReviewCapabilityIndexes.size })
+        : formatLabel(onboardingFlowLabels.capability_count_label, { total: orderedRules.length }));
     reviewCapabilityCountEl.classList.toggle('is-selected', selectedReviewCapabilityIndexes.size > 0);
   }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    const displayName = titleCaseName || onboardingFlowLabels.capability_untitled_label;
     const aliasHtml = (() => {
       if (!rule.aliases.length) return '';
-      const previewAliases = rule.aliases.slice(0, 3);
-      const previewMoreCount = Math.max(rule.aliases.length - previewAliases.length, 0);
-      const previewHtml = previewAliases.map((alias) =>
-        `<span class="capability-summary-chip">${escapeHtml(patternToLabel(alias) || alias)}</span>`
-      ).join('') + (previewMoreCount > 0 ? `<span class="capability-summary-chip capability-summary-chip-more">+${previewMoreCount}</span>` : '');
       const aliasChips = rule.aliases.map((alias) =>
         `<span class="cap-alias-chip" title="${escapeHtml(patternToLabel(alias) || alias)}">
           <span class="cap-alias-chip-label">${escapeHtml(patternToLabel(alias) || alias)}</span>
@@ -439,7 +463,6 @@ function renderReviewCapabilities() {
         <details class="capability-alias-drawer">
           <summary class="cap-alias-summary">
             <span class="capability-summary-label">${escapeHtml(capabilityLabels.related_skills_summary.replace('{count}', String(rule.aliases.length)))}</span>
-            <span class="capability-summary-preview" aria-hidden="true">${previewHtml}</span>
           </summary>
           <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
         </details>
@@ -450,16 +473,16 @@ function renderReviewCapabilities() {
       <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
           <span class="review-capability-head">
-            <strong class="review-capability-title">${escapeHtml(titleCaseName || 'Untitled capability')}</strong>
+            <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
           </span>
           ${aliasHtml}
         </div>
-        <div class="review-capability-actions" role="group" aria-label="Actions for ${escapeHtml(titleCaseName || 'capability')}">
-          <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}" aria-label="Remove ${escapeHtml(titleCaseName || 'capability')}" title="Remove ${escapeHtml(titleCaseName || 'capability')}">
+        <div class="review-capability-actions" role="group" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_actions_for_label, { name: displayName }))}">
+          <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_remove_label, { name: displayName }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_remove_title, { name: displayName }))}">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-action-icon">
               <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 10h2v8H7v-8Zm1 11h8a2 2 0 0 0 2-2V8H6v11a2 2 0 0 0 2 2Z" fill="currentColor"/>
             </svg>
-            <span class="sr-only">Remove</span>
+            <span class="sr-only">${escapeHtml(onboardingFlowLabels.capability_remove_label.replace('{name}', displayName))}</span>
           </button>
         </div>
       </article>
@@ -467,24 +490,36 @@ function renderReviewCapabilities() {
     }).join('') : `<div class="chip-empty">${escapeHtml(capabilityLabels.onboarding_no_match_text)}</div>`;
   const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
   const nextCount = Math.min(getReviewCapabilityPreviewCount(), hiddenCount);
+  const showMoreIcon = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-footer-icon-svg">
+      <path d="M12 5v14m-7-7h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+    </svg>
+  `;
+  const showAllIcon = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-footer-icon-svg">
+      <path d="M5 7h14m-14 5h14m-14 5h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+    </svg>
+  `;
   const footerHtml = hiddenCount > 0 ? `
     <div class="review-capability-footer">
-      <button class="btn-icon review-capability-footer-icon" type="button" data-review-show-more="true" aria-label="Show ${escapeHtml(String(nextCount))} more capabilities" title="Show ${escapeHtml(String(nextCount))} more capabilities">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-footer-icon-svg">
-          <path d="M12 5v14m-7-7h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-        </svg>
+      <button class="btn btn-secondary review-capability-footer-action review-capability-footer-icon" type="button" data-review-show-more="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}">
+        ${showMoreIcon}
+        <span>${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}</span>
       </button>
-      <button class="btn btn-secondary review-capability-footer-link" type="button" data-review-show-all="true">Show all ${escapeHtml(String(orderedRules.length))}</button>
+      <button class="btn btn-secondary review-capability-footer-action" type="button" data-review-show-all="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}">
+        ${showAllIcon}
+        <span>${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}</span>
+      </button>
     </div>
   ` : '';
   const toolbarHtml = selectedReviewCapabilityIndexes.size ? `
     <div class="review-capability-toolbar">
       <div class="review-capability-toolbar-main">
-        <span class="review-capability-toolbar-copy">${selectedVisibleCount} shown selected</span>
+        <span class="review-capability-toolbar-copy">${escapeHtml(formatLabel(onboardingFlowLabels.capability_selected_copy, { count: selectedVisibleCount }))}</span>
         <div class="review-capability-bulk-actions">
-          <button class="btn btn-secondary" type="button" data-review-select-visible="true">Select shown</button>
-          <button class="btn btn-secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>Clear selection</button>
-          <button class="btn btn-secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>Remove selected</button>
+          <button class="btn btn-secondary" type="button" data-review-select-visible="true">${escapeHtml(onboardingFlowLabels.capability_select_shown_label)}</button>
+          <button class="btn btn-secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_clear_selection_label)}</button>
+          <button class="btn btn-secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_remove_selected_label)}</button>
         </div>
       </div>
     </div>
@@ -561,7 +596,7 @@ function buildCompletionRedirectState(payload, searchPrefs) {
 function storeCompletionRedirectState(payload, searchPrefs) {
   try {
     const redirectState = buildCompletionRedirectState(payload, searchPrefs);
-    window.sessionStorage.setItem(scopedOnboardingStorageKey('jobHunter.onboardingWelcome'), JSON.stringify(redirectState));
+    window.localStorage.setItem(ONBOARDING_WELCOME_KEY, JSON.stringify(redirectState));
   } catch (error) {
     console.warn('Could not store onboarding redirect state.', error);
   }
@@ -591,14 +626,13 @@ async function createProfile() {
 
   validatePrimaryFile(primary);
   validateOnboardingSettings(onboardingSettings);
-  resetOnboardingWizardState();
 
   if (isRebuildMode) {
-    const confirmed = window.confirm(
-      'Refresh your profile using this CV?\n\n'
-      + 'This will re-extract your summaries, capability rules, and evidence tiers from the document.\n\n'
-      + 'Your custom Decision Weights, Salary Preferences, and Search Settings will be preserved.'
-    );
+    const confirmed = window.confirm([
+      onboardingFlowLabels.refresh_profile_confirm_title,
+      onboardingFlowLabels.refresh_profile_confirm_body_1,
+      onboardingFlowLabels.refresh_profile_confirm_body_2,
+    ].filter(Boolean).join('\n\n'));
     if (!confirmed) return;
   }
 
@@ -614,7 +648,7 @@ async function createProfile() {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || 'Could not create profile');
+    throw new Error(payload.error || onboardingFlowLabels.create_profile_error);
   }
 
   lastImportPayload = payload;
@@ -625,7 +659,7 @@ async function createProfile() {
   const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
   const extractionMessage = payload?.fresh_onboarding_run_started
     ? formatExtractionSummary(payload.extraction_counts || {})
-    : 'Your draft profile is ready. Review the role direction before you continue.';
+    : onboardingFlowLabels.create_profile_ready_message;
   hideStatus();
   if (extractionMessage && typeof showOnboardingImportHelper === 'function') {
     showOnboardingImportHelper(pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
@@ -645,7 +679,7 @@ function continueFromReview() {
 async function continueFromSearchBasics() {
   if (typeof flushSearchBasicsPersistence === 'function') {
     await flushSearchBasicsPersistence().catch((error) => {
-      console.warn('Could not save onboarding search basics before continuing.', error);
+      console.warn(onboardingFlowLabels.continue_search_basics_error, error);
     });
   }
   const searchPrefs = searchPreferencesPayload();
@@ -681,7 +715,7 @@ async function finishSetup() {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || 'Could not finish onboarding');
+    throw new Error(payload.error || onboardingFlowLabels.finish_setup_error);
   }
 
   const finalSearchPrefs = {
@@ -703,17 +737,20 @@ async function loadProfileDefaults() {
   if (!response.ok) return;
   const profile = await response.json().catch(() => ({}));
   applyProfileDefaults(profile || {});
+  if (currentStep >= REVIEW_STEP && (reviewTargetTitles.length || reviewSecondaryTitles.length)) {
+    renderReviewStep();
+  }
 }
 
-if (isTestMode && onbTestPanel && onbTestTrigger && onbTestMenu) {
-  onbTestPanel.hidden = false;
+if (isTestMode && testMenuRefs.testPanel && testMenuRefs.testTrigger && testMenuRefs.testMenu) {
+  testMenuRefs.testPanel.hidden = false;
 
-  onbTestTrigger.addEventListener('click', () => {
-    setTestMenuOpen(!onbTestMenu.classList.contains('is-open'));
+  testMenuRefs.testTrigger.addEventListener('click', () => {
+    setTestMenuOpen(!testMenuRefs.testMenu.classList.contains('is-open'));
   });
 
   document.addEventListener('click', (event) => {
-    if (!onbTestPanel.contains(event.target)) {
+    if (!testMenuRefs.testPanel.contains(event.target)) {
       setTestMenuOpen(false);
     }
   });
@@ -724,12 +761,12 @@ if (isTestMode && onbTestPanel && onbTestTrigger && onbTestMenu) {
     }
   });
 
-  onbResetUserBtn?.addEventListener('click', async () => {
-    const confirmed = window.confirm(
-      'Reset current user?\n\n'
-      + 'This clears the current profile, onboarding state, uploaded CV state, local review feedback, and job history.\n\n'
-      + 'Shared learned signals will be preserved.'
-    );
+  testMenuRefs.resetUserBtn?.addEventListener('click', async () => {
+    const confirmed = window.confirm([
+      onboardingFlowLabels.reset_user_confirm_title,
+      onboardingFlowLabels.reset_user_confirm_body_1,
+      onboardingFlowLabels.reset_user_confirm_body_2,
+    ].filter(Boolean).join('\n\n'));
     if (!confirmed) {
       return;
     }
@@ -739,25 +776,25 @@ if (isTestMode && onbTestPanel && onbTestTrigger && onbTestMenu) {
       clearOnboardingBrowserState();
       window.location.href = payload.redirect_to || '/start';
     } catch (error) {
-      window.alert(error.message || 'Could not reset current user.');
+      window.alert(error.message || onboardingFlowLabels.reset_user_error);
     }
   });
 
-  onbResetLearningBtn?.addEventListener('click', async () => {
-    const confirmed = window.confirm(
-      'Reset global learning?\n\n'
-      + 'This wipes the shared learned signal memory for every test user.\n\n'
-      + 'This is dangerous and cannot be undone.'
-    );
+  testMenuRefs.resetLearningBtn?.addEventListener('click', async () => {
+    const confirmed = window.confirm([
+      onboardingFlowLabels.reset_learning_confirm_title,
+      onboardingFlowLabels.reset_learning_confirm_body_1,
+      onboardingFlowLabels.reset_learning_confirm_body_2,
+    ].filter(Boolean).join('\n\n'));
     if (!confirmed) {
       return;
     }
     try {
       setTestMenuOpen(false);
       const payload = await postTestAction('/api/test/reset-learning');
-      window.alert(payload.message || 'Global learning reset.');
+      window.alert(payload.message || onboardingFlowLabels.reset_learning_success_message);
     } catch (error) {
-      window.alert(error.message || 'Could not reset global learning.');
+      window.alert(error.message || onboardingFlowLabels.reset_learning_error);
     }
   });
 }
@@ -767,15 +804,15 @@ createProfileButton.addEventListener('click', async (event) => {
   const originalLabel = btn.textContent;
   btn.classList.add('is-working');
   btn.disabled = true;
-  btn.textContent = isRebuildMode ? 'Refreshing Draft...' : 'Building Draft...';
+  btn.textContent = isRebuildMode ? onboardingFlowLabels.create_profile_button_refreshing : onboardingFlowLabels.create_profile_button_building;
   startWorkingStatus([
-    'Fresh onboarding run started.',
+    onboardingFlowLabels.create_profile_status_started,
     Number.isFinite(onboardingCvPageLimit) && onboardingCvPageLimit > 0
-      ? `Reading the first ${onboardingCvPageLimit} pages of your CV...`
-      : (isRebuildMode ? 'Reading your updated CV...' : 'Reading your CV...'),
-    'Extracting titles and capabilities...',
-    'Reviewing role history and recency...',
-    'Building your draft profile...',
+      ? formatLabel(onboardingFlowLabels.create_profile_status_reading_pages, { count: onboardingCvPageLimit })
+      : (isRebuildMode ? onboardingFlowLabels.reading_updated_cv_label : onboardingFlowLabels.reading_cv_label),
+    onboardingFlowLabels.create_profile_status_extracting,
+    onboardingFlowLabels.create_profile_status_reviewing,
+    onboardingFlowLabels.create_profile_status_building,
   ]);
   try {
     await createProfile();
@@ -807,11 +844,11 @@ flowRefs.confirmReview.addEventListener('click', async (event) => {
   const originalLabel = btn.textContent;
   btn.classList.add('is-working');
   btn.disabled = true;
-  btn.textContent = isRebuildMode ? 'Saving Refresh...' : 'Finishing Setup...';
+  btn.textContent = isRebuildMode ? onboardingFlowLabels.finish_review_button_saving : onboardingFlowLabels.finish_review_button_finishing;
   startWorkingStatus([
-    'Saving your reviewed profile...',
-    'Applying search basics...',
-    'Finalising setup...',
+    onboardingFlowLabels.finish_review_status_saving,
+    onboardingFlowLabels.finish_review_status_applying,
+    onboardingFlowLabels.finish_review_status_finalising,
   ]);
   try {
     await finishSetup();
@@ -1021,12 +1058,16 @@ async function initWizard() {
     if (flowRefs.reviewSearchKeywords) flowRefs.reviewSearchKeywords.value = '';
     if (flowRefs.reviewMinimumSalaryYearly) flowRefs.reviewMinimumSalaryYearly.value = '';
     if (flowRefs.reviewMinimumDailyRate) flowRefs.reviewMinimumDailyRate.value = '';
-    await loadProfileDefaults().catch(() => {});
-    setStep(1, { scroll: false });
+    await loadProfileDefaults().catch((error) => {
+      console.warn('Could not load onboarding profile defaults.', error);
+    });
+    setStep(1, { scroll: false, persist: false });
   } else if (restoreWizardState()) {
-    loadProfileDefaults().catch(() => {});
+    loadProfileDefaults().catch((error) => {
+      console.warn('Could not load onboarding profile defaults.', error);
+    });
   } else if (onboardingResumeStep > 1) {
-    setStep(1, { scroll: false });
+    setStep(1, { scroll: false, persist: false });
     try {
       const resumeResponse = await jobHunterFetch('/api/profile');
       if (resumeResponse.ok) {
@@ -1034,14 +1075,18 @@ async function initWizard() {
         applyProfileDefaults(resumeProfile || {});
         hydrateDraftStep(resumeProfile || {});
       }
-    } catch {}
+    } catch (error) {
+      console.warn('Could not resume onboarding profile defaults.', error);
+    }
     if (hasDraftProfileState()) {
       maxUnlockedStep = Math.max(maxUnlockedStep, onboardingResumeStep);
-      setStep(onboardingResumeStep, { scroll: false });
+      setStep(onboardingResumeStep, { scroll: false, persist: false });
     }
   } else {
-    loadProfileDefaults().catch(() => {});
-    setStep(1, { scroll: false });
+    loadProfileDefaults().catch((error) => {
+      console.warn('Could not load onboarding profile defaults.', error);
+    });
+    setStep(1, { scroll: false, persist: false });
   }
   refreshStepNavigation();
   updatePrimaryCvStatus(primaryCvInput?.files?.[0] || preservedPrimaryCvFile || null);

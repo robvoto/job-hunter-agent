@@ -41,6 +41,19 @@ def build_llm_cost_entry(
     }
 
 
+def _format_llm_cost_log(prefix: str, entry: dict[str, Any]) -> str:
+    lines = [
+        f"{prefix}",
+        f"  purpose: {entry['purpose']}",
+        f"  model: {entry['model']}",
+        f"  input tokens: {entry['tok_in']}",
+        f"  output tokens: {entry['tok_out']}",
+        f"  cost: ${entry['cost_usd']:.6f}",
+        f"  session: ${entry['session_usd']:.6f}",
+    ]
+    return "\n".join(lines)
+
+
 def append_llm_cost_log(path: Path, entry: dict[str, Any], *, prefix: str = "[LLM]") -> None:
     try:
         with path.open("a", encoding="utf-8") as fh:
@@ -48,8 +61,4 @@ def append_llm_cost_log(path: Path, entry: dict[str, Any], *, prefix: str = "[LL
     except Exception as exc:
         print(f"[RUNTIME_HELPERS][WARN] Failed to write LLM cost log to {path}: {exc}")
         pass
-    print(
-        f"{prefix} {entry['purpose']} | {entry['model']} | "
-        f"in={entry['tok_in']} out={entry['tok_out']} | "
-        f"${entry['cost_usd']:.6f} | session=${entry['session_usd']:.6f}"
-    )
+    print(_format_llm_cost_log(prefix, entry))
