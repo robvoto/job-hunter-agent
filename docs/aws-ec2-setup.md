@@ -286,6 +286,61 @@ git status
 ls -la
 ```
 
+## Saving GitHub credentials on EC2
+
+The Windows command below does not work on Ubuntu EC2:
+
+```bash
+git config --global credential.helper manager
+```
+
+If this error appears:
+
+```text
+git: 'credential-manager' is not a git command. See 'git --help'.
+```
+
+Use the simple Ubuntu option instead:
+
+```bash
+git config --global credential.helper store
+```
+
+Then run:
+
+```bash
+git pull
+```
+
+Enter the GitHub username and token one more time:
+
+```text
+Username: robvoto
+Password: paste GitHub token
+```
+
+After that, Git should remember the token on the EC2 instance.
+
+Check the setting:
+
+```bash
+git config --global --get credential.helper
+```
+
+Expected output:
+
+```text
+store
+```
+
+Security note: `credential.helper store` saves the token in plain text in:
+
+```text
+~/.git-credentials
+```
+
+This is acceptable only as a short-term learning setup. Later, replace this with an SSH deploy key or another safer deployment method.
+
 ## Common errors and fixes
 
 ### `apt: command not found`
@@ -373,6 +428,7 @@ Git installed
 Python installed
 pip installed
 GitHub token created for private repo access
+Git credential helper configured on EC2 using store
 ```
 
 Next step:
@@ -382,6 +438,13 @@ cd ~
 git clone https://github.com/robvoto/job-hunter-agent.git
 cd ~/job-hunter-agent
 ls -la
+```
+
+If the repo is already cloned, update it instead:
+
+```bash
+cd ~/job-hunter-agent
+git pull
 ```
 
 After that, inspect the repository structure and identify the correct application entry point before installing/running dependencies.
