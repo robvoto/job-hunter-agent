@@ -191,7 +191,6 @@ _CAPABILITY_UI_LABEL_KEYS = (
     "review_strength_prompt_label",
 )
 _SHARED_UI_LABEL_KEYS = (
-    "theme_label",
     "select_theme_aria_label",
     "account_menu_aria_label",
     "account_menu_title",

@@ -1,5 +1,5 @@
 (() => {
-const { escapeHtml, normalizeReviewText, normalizeReviewTitleLists, normalizeReviewCapability, patternToLabel, normalizeWorkModePreferences, getWorkModePreferenceValues, setWorkModePreferenceValues, setEngagementTypeValues, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
+const { escapeHtml, normalizeReviewText, normalizeReviewTitleLists, normalizeReviewCapability, patternToLabel, normalizeWorkModePreferences, getWorkModePreferenceValues, setWorkModePreferenceValues, setEngagementTypeValues, getSectorPreferenceValues, setSectorPreferenceValues, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
 
 const onboardingFlowCurrencyUi = window.JobHunterCurrencyUi || {};
 const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
@@ -88,7 +88,6 @@ const flowRefs = Object.freeze({
   reviewSearchKeywords: document.getElementById('review_search_keywords'),
   reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
-  sectorPreference: document.getElementById('sector_preference'),
   reviewCapabilityFilter: document.getElementById('review_capability_filter'),
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
   reviewTargetTitlesList: document.getElementById('review_target_titles_list'),
@@ -341,8 +340,10 @@ function hydrateSearchBasics(profile) {
   if (!getWorkModePreferenceValues().length) {
     setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
-  if (flowRefs.sectorPreference && !String(flowRefs.sectorPreference.value || '').trim()) {
-    flowRefs.sectorPreference.value = String(matchPreferences.prefer_sector || sectorPreferenceDefault).trim().toLowerCase();
+  if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
+    if (typeof setSectorPreferenceValues === 'function') {
+      setSectorPreferenceValues(matchPreferences.prefer_sector || sectorPreferenceDefault);
+    }
   }
   updateCompensationVisibility();
 }
@@ -502,13 +503,11 @@ function renderReviewCapabilities() {
   `;
   const footerHtml = hiddenCount > 0 ? `
     <div class="review-capability-footer">
-      <button class="btn btn-secondary review-capability-footer-action review-capability-footer-icon" type="button" data-review-show-more="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}">
+      <button class="btn-icon review-capability-footer-action review-capability-footer-icon" type="button" data-review-show-more="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}">
         ${showMoreIcon}
-        <span>${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}</span>
       </button>
-      <button class="btn btn-secondary review-capability-footer-action" type="button" data-review-show-all="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}">
+      <button class="btn-icon review-capability-footer-action" type="button" data-review-show-all="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}">
         ${showAllIcon}
-        <span>${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}</span>
       </button>
     </div>
   ` : '';
@@ -744,16 +743,6 @@ async function loadProfileDefaults() {
 
 if (isTestMode && testMenuRefs.testPanel && testMenuRefs.testTrigger && testMenuRefs.testMenu) {
   testMenuRefs.testPanel.hidden = false;
-
-  testMenuRefs.testTrigger.addEventListener('click', () => {
-    setTestMenuOpen(!testMenuRefs.testMenu.classList.contains('is-open'));
-  });
-
-  document.addEventListener('click', (event) => {
-    if (!testMenuRefs.testPanel.contains(event.target)) {
-      setTestMenuOpen(false);
-    }
-  });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
@@ -1032,12 +1021,14 @@ flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
 ].filter(Boolean).forEach((input) => {
   onboardingFlowCurrencyUi.bindCurrencyInput?.(input);
 });
-flowRefs.sectorPreference?.addEventListener('change', () => {
-  hideStatus();
-  saveWizardState();
-  if (typeof scheduleSearchBasicsPersistence === 'function') {
-    scheduleSearchBasicsPersistence();
-  }
+document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    hideStatus();
+    saveWizardState();
+    if (typeof scheduleSearchBasicsPersistence === 'function') {
+      scheduleSearchBasicsPersistence();
+    }
+  });
 });
 document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => {
   cb.addEventListener('change', () => {
@@ -1104,15 +1095,11 @@ if (primaryCvDropZone && primaryCvInput) {
   primaryCvDropZone.addEventListener('dragenter', (event) => {
     event.preventDefault();
     primaryCvDropZone.classList.add('is-dragover');
-    primaryCvDropZone.style.borderColor = 'var(--accent)';
-    primaryCvDropZone.style.boxShadow = '0 0 12px color-mix(in srgb, var(--accent) 20%, transparent)';
   });
   primaryCvDropZone.addEventListener('dragover', (event) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
     primaryCvDropZone.classList.add('is-dragover');
-    primaryCvDropZone.style.borderColor = 'var(--accent)';
-    primaryCvDropZone.style.boxShadow = '0 0 12px color-mix(in srgb, var(--accent) 20%, transparent)';
   });
   primaryCvDropZone.addEventListener('dragleave', (event) => {
     if (event.target === primaryCvDropZone) {

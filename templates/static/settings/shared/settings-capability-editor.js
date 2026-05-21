@@ -134,6 +134,12 @@ window.JobHunterCapabilityEditor = (function () {
                     <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
                   </svg>
                 </button>
+              </div>
+                <div class="cap-strength">
+                  <span>Strength</span>
+                  <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
+                    ${strengthChoices}
+                  </div>
                 </div>
                 <div class="capability-card-meta">
                   ${aliasCount ? `
@@ -144,12 +150,6 @@ window.JobHunterCapabilityEditor = (function () {
                       <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
                     </details>
                   ` : ''}
-                </div>
-                <div class="cap-strength">
-                  <span>Strength</span>
-                  <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
-                    ${strengthChoices}
-                  </div>
                 </div>
               </article>
             `;

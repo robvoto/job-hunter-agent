@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import sys
+import io
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -30,6 +31,59 @@ from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS, DEBUG_MODE
 DEBUG_CAPTURE_SOURCE_PAYLOADS = DEBUG_MODE
 logger = logging.getLogger(__name__)
 
+_ANSI_RESET = "\x1b[0m"
+_ANSI_RED = "\x1b[31m"
+_ANSI_YELLOW = "\x1b[33m"
+
+
+def _color_for_line(line: str) -> str:
+    stripped = line.strip()
+    if not stripped:
+        return ""
+    if "[ERROR]" in stripped or stripped.startswith("ERROR") or " ERROR " in f" {stripped} ":
+        return _ANSI_RED
+    if "[WARN]" in stripped or stripped.startswith("WARN") or " WARNING " in f" {stripped} ":
+        return _ANSI_YELLOW
+    return ""
+
+
+class _ColorizingStream(io.TextIOBase):
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+        self._buffer = ""
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, text: str) -> int:
+        chunk = str(text or "")
+        if not chunk:
+            return 0
+        self._buffer += chunk
+        written = len(chunk)
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            self._wrapped.write(self._style_line(line) + "\n")
+        return written
+
+    def flush(self) -> None:
+        if self._buffer:
+            self._wrapped.write(self._style_line(self._buffer))
+            self._buffer = ""
+        self._wrapped.flush()
+
+    def isatty(self) -> bool:
+        return bool(getattr(self._wrapped, "isatty", lambda: False)())
+
+    def __getattr__(self, name: str):
+        return getattr(self._wrapped, name)
+
+    def _style_line(self, line: str) -> str:
+        color = _color_for_line(line)
+        if not color:
+            return line
+        return f"{color}{line}{_ANSI_RESET}"
+
 
 def normalize_posted_text(value: Optional[str]) -> str:
     text = str(value or "").strip()
@@ -41,6 +95,12 @@ def normalize_posted_text(value: Optional[str]) -> str:
 def configure_console_output() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding=AUTH_ENCODING, errors=DEFAULT_ERRORS)
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding=AUTH_ENCODING, errors=DEFAULT_ERRORS)
+    if sys.stdout.isatty() and not isinstance(sys.stdout, _ColorizingStream):
+        sys.stdout = _ColorizingStream(sys.stdout)
+    if sys.stderr.isatty() and not isinstance(sys.stderr, _ColorizingStream):
+        sys.stderr = _ColorizingStream(sys.stderr)
 
 
 def load_json_dict(path: Path) -> Dict[str, dict]:

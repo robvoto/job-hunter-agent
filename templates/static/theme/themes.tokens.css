@@ -2,6 +2,38 @@
    This file owns theme palettes and shared design tokens only.
 */
 
+:root {
+  /* Shared onboarding type scale */
+  --font-size-3xs: 0.72rem;
+  --font-size-2xs: 0.74rem;
+  --font-size-xs: 0.76rem;
+  --font-size-sm: 0.82rem;
+  --font-size-md: 0.84rem;
+  --font-size-lg: 0.88rem;
+  --font-size-1xl: 0.86rem;
+  --font-size-xl: 0.9rem;
+  --font-size-2xl: 0.92rem;
+  --font-size-3xl: 0.96rem;
+  --font-size-4xl: 0.98rem;
+  --font-size-5xl: 1rem;
+  --font-size-6xl: 1.02rem;
+  --font-size-7xl: 1.1rem;
+  --font-size-8xl: 1.22rem;
+  --font-size-9xl: 1.3rem;
+  --font-size-display: clamp(1.8rem, 3.2vw, 2.6rem);
+  --font-size-display-compact: clamp(1.8rem, 3.2vw, 2.55rem);
+  --font-size-display-lg: clamp(2rem, 2.3vw, 2.35rem);
+
+  /* Shared onboarding motion and imagery */
+  --onboarding-dropzone-drag-shadow: 0 0 12px color-mix(in srgb, var(--accent) 20%, transparent);
+  --onboarding-dropzone-success-shadow: 0 14px 36px color-mix(in srgb, var(--bg-page) 22%, transparent);
+  --onboarding-dropzone-empty-icon-size: 64px;
+  --onboarding-dropzone-loaded-icon-size: 48px;
+  --onboarding-dropzone-empty-icon-gap: 16px;
+  --onboarding-dropzone-empty-hint-gap: 8px;
+  --onboarding-progress-fill-width: 0%;
+}
+
 /* Theme: Soft Professional
    Default theme. Balanced surfaces with a green primary accent and blue support accent.
 */

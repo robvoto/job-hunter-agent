@@ -663,6 +663,7 @@
       display: flex;
       flex-direction: column;
       gap: 0;
+      margin-top: 8px;
     }
     .capability-alias-drawer {
       margin: 0;
@@ -675,15 +676,18 @@
       align-items: center;
       width: fit-content;
       cursor: pointer;
-      color: var(--accent-secondary);
-      font-size: 0.78rem;
-      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 0.74rem;
+      font-weight: 600;
       list-style: none;
       user-select: none;
       padding: 0;
     }
     .capability-alias-drawer > .cap-alias-summary {
       margin: 0;
+    }
+    .capability-summary-label {
+      color: inherit;
     }
     .cap-strength-row {
       display: grid;
@@ -870,9 +874,9 @@
       min-width: 0;
     }
     .cap-name-input {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-primary);
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
       border: none;
       outline: none;
       background: transparent;

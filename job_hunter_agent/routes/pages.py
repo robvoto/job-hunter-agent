@@ -39,7 +39,14 @@ from job_hunter_agent.user_context import get_user_id_for_runtime
 from job_hunter_agent.routes.responses import html_response
 
 router = APIRouter()
-JOB_HUNTER_LOGO_SRC = "/static/assets/job_hunter_img.png"
+JOB_HUNTER_BRAND_ICON_HTML = (
+    '<svg class="job-hunter-page-utility__brand-icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">'
+    '<rect x="1.5" y="1.5" width="37" height="37" rx="10" fill="var(--bg-muted)" stroke="var(--border-strong)" />'
+    '<path d="M13 16h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H13a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zm4-4h6a2 2 0 0 1 2 2v2H15v-2a2 2 0 0 1 2-2z" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" />'
+    '<path d="M14.5 23.5h11" stroke="var(--text-primary)" stroke-opacity="0.75" stroke-width="1.75" stroke-linecap="round" />'
+    '<path d="M20 19v6" stroke="var(--text-primary)" stroke-opacity="0.75" stroke-width="1.75" stroke-linecap="round" />'
+    '</svg>'
+)
 
 
 def _build_top_utility_bar_html(
@@ -61,7 +68,7 @@ def _build_top_utility_bar_html(
         user_initial = "?"
     brand_html = (
         '<div class="job-hunter-page-utility__brand" aria-label="Job Hunter">'
-        f'<img src="{JOB_HUNTER_LOGO_SRC}" alt="" class="job-hunter-page-utility__brand-icon">'
+        f'{JOB_HUNTER_BRAND_ICON_HTML}'
         '<span class="job-hunter-page-utility__brand-name">Job Hunter</span>'
         '</div>'
     )
@@ -97,17 +104,15 @@ def _build_top_utility_bar_html(
         '<div class="job-hunter-page-utility" id="job_hunter_top_utility_bar">'
         f'{brand_html}'
         '<div class="job-hunter-account-bar">'
-        
-        
+        '<div class="job-hunter-account-bar__cluster">'
         f'<select id="theme_picker" aria-label="{_html_escape(shared_labels["select_theme_aria_label"])}">'
         '<option value="soft-professional">Soft Professional</option>'
         '<option value="bold-aggressive">Bold Aggressive</option>'
         '<option value="dark-professional">Dark Professional</option>'
         '</select>'
-       
         f'{shortcut_html}'
         f'{test_html}'
-        
+        '</div>'
         '<div class="job-hunter-account-bar__user" id="job_hunter_account_user_menu">'
         f'<button class="job-hunter-account-bar__avatar" id="job_hunter_account_avatar_btn" type="button"'
         f' aria-haspopup="true" aria-expanded="false" aria-label="{_html_escape(shared_labels["account_menu_aria_label"])}"'

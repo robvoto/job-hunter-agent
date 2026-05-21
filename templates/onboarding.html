@@ -17,9 +17,9 @@
 </head>
 <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__">
   <main class="page">
+    <div class="page-utility-bar">__JOB_HUNTER_TOP_UTILITY_BAR__</div>
     <section class="hero">
       <div class="hero-shell">
-        __JOB_HUNTER_TOP_UTILITY_BAR__
         <div class="hero-copy-shell">
           <h1 id="hero_title">__JOB_HUNTER_ONBOARDING_HERO_TITLE__</h1>
           <p id="hero_copy">__JOB_HUNTER_ONBOARDING_HERO_COPY__</p>
@@ -211,8 +211,8 @@
                   <summary class="field-info" aria-label="Help">i</summary>
                   <div class="field-info-panel" id="review_capability_help"></div>
                 </details>
+                <span id="review_capability_count" class="review-capability-count" aria-live="polite">__JOB_HUNTER_ONBOARDING_PAGE_REVIEW_CAPABILITY_COUNT_INITIAL_LABEL__</span>
               </div>
-              <span id="review_capability_count" class="review-capability-count" aria-live="polite">__JOB_HUNTER_ONBOARDING_PAGE_REVIEW_CAPABILITY_COUNT_INITIAL_LABEL__</span>
             </div>
             <div class="review-capability-topbar">
               <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="">
@@ -260,15 +260,13 @@
 
               <div class="onb-field">
                 <div class="field-label-row">
-                  <label for="sector_preference">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</label>
+                  <label id="prefer_sector_label">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</label>
                   <details class="field-info-drawer">
                     <summary class="field-info" aria-label="Help for sector preference">i</summary>
                     <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_HELP__</div>
                   </details>
                 </div>
-                <select id="sector_preference">
-                  __JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__
-                </select>
+                __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
               </div>
             </div>
 

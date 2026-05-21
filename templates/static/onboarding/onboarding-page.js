@@ -130,6 +130,8 @@ const {
 const {
   getWorkModePreferenceValues: getOnboardingWorkModePreferenceValues,
   setWorkModePreferenceValues: setOnboardingWorkModePreferenceValues,
+  getSectorPreferenceValues: getOnboardingSectorPreferenceValues,
+  setSectorPreferenceValues: setOnboardingSectorPreferenceValues,
   parseCurrencyValue: onboardingParseCurrencyValue,
   setCurrencyFieldValue: onboardingSetCurrencyFieldValue,
   normalizeReviewTitleLists,
@@ -292,15 +294,17 @@ function getOnboardingStepCopy(stepNumber, key, options = {}) {
 }
 
 function getSectorPreferenceValue() {
-  return String(sectorPreferenceSelect?.value || SECTOR_PREFERENCE_DEFAULT).trim().toLowerCase();
+  const checked = getOnboardingSectorPreferenceValues();
+  const allValues = Array.from(document.querySelectorAll('input[name="prefer_sector"]'))
+    .map((input) => String(input.value || '').trim().toLowerCase()).filter(Boolean);
+  if (!checked.length || (allValues.length > 0 && checked.length === allValues.length)) {
+    return SECTOR_PREFERENCE_DEFAULT;
+  }
+  return checked[0];
 }
 
 function setSectorPreferenceValue(value) {
-  const selected = String(value || SECTOR_PREFERENCE_DEFAULT).trim().toLowerCase();
-  if (sectorPreferenceSelect) {
-    const validValue = SECTOR_PREFERENCE_LABELS[selected] ? selected : SECTOR_PREFERENCE_DEFAULT;
-    sectorPreferenceSelect.value = validValue;
-  }
+  setOnboardingSectorPreferenceValues(value || SECTOR_PREFERENCE_DEFAULT);
 }
 
 function getMinContractMonthValue() {
@@ -318,12 +322,30 @@ function minContractMonthLabel(value) {
   return selected ? (minContractMonthLabels[selected] || selected) : minContractMonthNoneLabel;
 }
 
+function updateContractChipLabel() {
+  const span = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label')?.querySelector('span');
+  if (!span) return;
+  const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
+  if (!contractEnabled) {
+    span.textContent = span.dataset.baseLabel || span.textContent;
+    return;
+  }
+  if (!span.dataset.baseLabel) span.dataset.baseLabel = span.textContent;
+  const months = String(refs.minContractMonths?.value || '').trim();
+  if (!months) {
+    span.textContent = `${span.dataset.baseLabel} (all)`;
+  } else {
+    span.textContent = `${span.dataset.baseLabel} (${months}+)`;
+  }
+}
+
 function updateMinContractMonthState() {
   if (!refs.minContractMonths) return;
   const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
   refs.minContractMonths.disabled = !contractEnabled;
   const contractRow = document.getElementById('contract_duration_row');
   if (contractRow) contractRow.hidden = !contractEnabled;
+  updateContractChipLabel();
 }
 
 function initFieldInfoToggles() {
@@ -595,9 +617,9 @@ function updatePrimaryCvStatus(file) {
     primaryCvDropZone?.classList.remove('has-file');
     primaryCvDropZoneContentEl.innerHTML = `
       <div class="drop-zone-content-shell">
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon" style="margin-bottom: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-        <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">${PRIMARY_CV_COPY.emptyTitle}</p>
-        <p class="drop-zone-hint" style="margin-top: 8px;">${PRIMARY_CV_COPY.emptyHint}</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon upload-icon--empty" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <p class="drop-zone-empty-title">${escapeHtml(PRIMARY_CV_COPY.emptyTitle)}</p>
+        <p class="drop-zone-hint drop-zone-empty-hint">${escapeHtml(PRIMARY_CV_COPY.emptyHint)}</p>
       </div>
     `;
     resetPrimaryCvDropZoneAppearance();
@@ -609,18 +631,15 @@ function updatePrimaryCvStatus(file) {
   hideStatus();
 
   primaryCvDropZoneContentEl.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-    <p class="file-loaded-label">File Loaded: ${file.name}</p>
-    <p class="drop-zone-hint">${PRIMARY_CV_COPY.loadedHint}</p>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon upload-icon--loaded" aria-hidden="true" focusable="false"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+    <p class="file-loaded-label">File Loaded: ${escapeHtml(file.name)}</p>
+    <p class="drop-zone-hint">${escapeHtml(PRIMARY_CV_COPY.loadedHint)}</p>
   `;
 }
 
 function resetPrimaryCvDropZoneAppearance() {
   if (!primaryCvDropZone) return;
   primaryCvDropZone.classList.remove('is-dragover');
-  primaryCvDropZone.style.backgroundColor = '';
-  primaryCvDropZone.style.border = '';
-  primaryCvDropZone.style.boxShadow = 'none';
 }
 
 function updateCreateProfileAvailability() {
@@ -657,7 +676,6 @@ function setStep(stepNumber, options = {}) {
   if (heroSectionEl) heroSectionEl.classList.toggle('is-compact', isDetailStep);
   if (workflowSummaryEl) {
     workflowSummaryEl.hidden = isDetailStep;
-    workflowSummaryEl.style.display = isDetailStep ? 'none' : '';
   }
 
   if (stepNumber === 1 && preservedPrimaryCvFile) {
@@ -675,7 +693,7 @@ function setStep(stepNumber, options = {}) {
   if (formTitleEl) formTitleEl.textContent = `Step ${stepNumber}. ${meta.title()}`;
   const percent = STEP_COUNT > 1 ? Math.round(((stepNumber - 1) / (STEP_COUNT - 1)) * 100) : 100;
   if (progressFillEl) {
-    progressFillEl.style.width = `${percent}%`;
+    progressFillEl.style.setProperty('--onboarding-progress-fill-width', `${percent}%`);
   }
   wizardProgressSteps.forEach((el, idx) => {
     const s = idx + 1;
@@ -751,7 +769,7 @@ function renderLocationSelect() {
   if (!locationSelect) return;
   const current = normalizeLocationValue(selectedLocations[0] || '');
   if (locationUi.renderLocationOptions) {
-    locationUi.renderLocationOptions(locationSelect, { excludedValues: current ? [current] : [] });
+    locationUi.renderLocationOptions(locationSelect);
   }
   locationSelect.value = current;
   selectedLocations = current ? [current] : [];
@@ -938,7 +956,7 @@ function applyProfileDefaults(profile) {
   if (!getOnboardingWorkModePreferenceValues().length) {
     setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
   }
-  if (sectorPreferenceSelect && !String(sectorPreferenceSelect.value || '').trim()) {
+  if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
     setSectorPreferenceValue(matchPreferences.prefer_sector || SECTOR_PREFERENCE_DEFAULT);
   }
   if (!selectedLocations.length) {
@@ -974,15 +992,18 @@ if (locationSelect) {
 if (dismissOnboardingImportHelperButtonEl) {
   dismissOnboardingImportHelperButtonEl.addEventListener('click', () => hideOnboardingImportHelper(true));
 }
-if (sectorPreferenceSelect) {
-  sectorPreferenceSelect.addEventListener('change', () => {
+document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
+  input.addEventListener('change', () => {
     hideStatus();
     saveWizardState();
     scheduleSearchBasicsPersistence();
   });
-}
+});
 if (refs.minContractMonths) {
   refs.minContractMonths.addEventListener('change', () => {
+    const contractRow = document.getElementById('contract_duration_row');
+    if (contractRow) contractRow.hidden = true;
+    updateContractChipLabel();
     hideStatus();
     saveWizardState();
     scheduleSearchBasicsPersistence();

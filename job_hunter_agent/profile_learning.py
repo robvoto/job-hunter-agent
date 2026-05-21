@@ -230,12 +230,24 @@ class _MatchPreferenceExtraction(BaseModel):
     home_location: str = ""
 
 
+class _TitleNormalizationCandidateExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    signal: str
+    suggested_category: Literal["title_normalization_candidate"]
+    suggested_values: list[str] = Field(default_factory=list)
+    context_terms: list[str] = Field(default_factory=list)
+    confidence: Literal["high", "medium", "low", "ambiguous"]
+    original_texts: list[str] = Field(default_factory=list)
+    needs_review: bool = True
+
+
 class _CvExtractionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
-    title_normalization_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    title_normalization_candidates: list[_TitleNormalizationCandidateExtraction] = Field(default_factory=list)
     role_titles: list[str] = Field(default_factory=list)
 
 
@@ -514,7 +526,9 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         if not resolved_title:
             resolved_title = _clean_line(title)
         if not resolved_employer:
-            resolved_employer = _clean_line(employer)
+            candidate_employer = _clean_line(employer)
+            if candidate_employer and not _is_heading_line(employer) and not _is_plain_section_label(employer):
+                resolved_employer = candidate_employer
         if not resolved_title:
             return
         roles.append(

@@ -114,13 +114,13 @@ body {
 
 .hero h1 {
   margin: 0 0 10px;
-  font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+  font-size: var(--font-size-display);
   letter-spacing: -0.04em;
 }
 
 .hero.is-compact h1 {
   margin-bottom: 6px;
-  font-size: clamp(1.8rem, 3.2vw, 2.55rem);
+  font-size: var(--font-size-display-compact);
 }
 
 .hero p {
@@ -164,6 +164,7 @@ body {
   display: block;
   height: 100%;
   min-width: 0;
+  width: var(--onboarding-progress-fill-width, 0%);
   background: color-mix(in srgb, var(--selection-accent) 82%, var(--bg-muted));
   border-radius: 999px;
   box-shadow: none;
@@ -194,7 +195,7 @@ body {
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 0.84rem;
+  font-size: var(--font-size-md);
   font-weight: 600;
   text-align: left;
 }
@@ -248,7 +249,7 @@ body {
 
 .wizard-step h2 {
   margin: 0 0 10px;
-  font-size: 1.3rem;
+  font-size: var(--font-size-9xl);
 }
 
 .section-copy {
@@ -271,6 +272,12 @@ body {
   margin-bottom: 14px;
 }
 
+.drop-zone.is-dragover {
+  border-color: var(--accent);
+  background-color: var(--bg-muted);
+  box-shadow: var(--onboarding-dropzone-drag-shadow);
+}
+
 .drop-zone:hover {
   border-color: var(--selection-accent);
   background-color: var(--bg-muted);
@@ -281,6 +288,7 @@ body {
   border-style: solid;
   border-color: var(--state-success-border);
   background: linear-gradient(180deg, var(--state-success-bg), var(--bg-surface));
+  box-shadow: var(--onboarding-dropzone-success-shadow);
 }
 
 .drop-zone.has-file p:first-of-type {
@@ -296,6 +304,17 @@ body {
   transition: color 0.2s ease;
 }
 
+.upload-icon--empty {
+  width: var(--onboarding-dropzone-empty-icon-size);
+  height: var(--onboarding-dropzone-empty-icon-size);
+  margin-bottom: var(--onboarding-dropzone-empty-icon-gap);
+}
+
+.upload-icon--loaded {
+  width: var(--onboarding-dropzone-loaded-icon-size);
+  height: var(--onboarding-dropzone-loaded-icon-size);
+}
+
 .drop-zone:hover .upload-icon {
   color: var(--selection-accent);
 }
@@ -307,7 +326,13 @@ body {
 .drop-zone p {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: var(--font-size-5xl);
+  font-weight: 500;
+}
+
+.drop-zone-empty-title {
+  margin: 0;
+  font-size: var(--font-size-7xl);
   font-weight: 500;
 }
 
@@ -315,6 +340,10 @@ body {
   font-size: var(--help-copy-font-size);
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+.drop-zone-empty-hint {
+  margin-top: var(--onboarding-dropzone-empty-hint-gap);
 }
 
 .file-loaded-label {
@@ -349,7 +378,7 @@ body {
 .review-block h3,
 .check-card h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--font-size-5xl);
 }
 
 .workflow-steps {
@@ -382,7 +411,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.82rem;
+  font-size: var(--font-size-sm);
   font-weight: 800;
 }
 
@@ -423,7 +452,7 @@ body {
 
 .salary-pair label {
   margin-top: 0;
-  font-size: 0.88rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -472,7 +501,7 @@ body {
 .number-input span {
   min-width: 0;
   color: var(--text-muted);
-  font-size: 0.92rem;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
   white-space: nowrap;
   text-align: left;
@@ -494,7 +523,7 @@ body {
 
 .guidance-grid h3 {
   margin: 0 0 8px;
-  font-size: 0.96rem;
+  font-size: var(--font-size-3xl);
 }
 
 .guidance-list {
@@ -602,9 +631,9 @@ body {
 .review-grid,
 .check-grid {
   display: grid;
-  gap: 10px;
+  gap: 18px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .capability-shell {
@@ -614,7 +643,7 @@ body {
 .review-capability-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   margin: 0 0 6px;
 }
@@ -636,7 +665,7 @@ body {
 
 .check-list dt {
   color: var(--text-muted);
-  font-size: 0.84rem;
+  font-size: var(--font-size-md);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -652,9 +681,10 @@ body {
 .chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  min-height: 32px;
-  margin-bottom: 12px;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 10px;
+  margin-bottom: 14px;
 }
 
 .chip-list-tight {
@@ -663,7 +693,7 @@ body {
 
 .chip-empty {
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: var(--font-size-lg);
 }
 
 .chip-editor-row {
@@ -722,7 +752,7 @@ body {
 .review-capability-topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 12px;
   margin-top: 12px;
 }
@@ -748,7 +778,7 @@ body {
 .review-capability-group-copy {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--font-size-xl);
   line-height: 1.5;
 }
 
@@ -775,7 +805,7 @@ body {
 
 .review-capability-toolbar-copy {
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: var(--font-size-1xl);
   font-weight: 600;
 }
 
@@ -839,7 +869,7 @@ body {
 
 .review-capability-title {
   display: block;
-  font-size: 0.98rem;
+  font-size: var(--font-size-4xl);
   line-height: 1.35;
   color: var(--text-primary);
   word-break: break-word;
@@ -853,7 +883,7 @@ body {
   border-radius: 999px;
   background: var(--selection-accent);
   color: var(--button-text);
-  font-size: 0.72rem;
+  font-size: var(--font-size-3xs);
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -873,7 +903,7 @@ body {
   border: 1px solid var(--border-chip-subtle);
   background: var(--bg-chip-subtle);
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--font-size-xs);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -887,7 +917,7 @@ body {
 .review-capability-copy {
   margin: 8px 0 0;
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: var(--font-size-lg);
   line-height: 1.5;
 }
 
@@ -949,8 +979,10 @@ body {
 }
 
 .review-capability-footer-icon {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 0;
+  padding: 0;
+  width: auto;
+  height: auto;
 }
 
 .review-capability-footer-icon-svg {
@@ -968,7 +1000,7 @@ body {
   border: 1px solid var(--border-subtle);
   background: var(--bg-muted);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--font-size-sm);
   font-weight: 700;
 }
 
@@ -1157,7 +1189,7 @@ body {
 }
 
 .search-basics-compensation .salary-pair label {
-  font-size: 0.82rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -1194,7 +1226,7 @@ body {
   flex: 1;
   max-width: 160px;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--font-size-1xl);
 }
 
 /* Help text: hidden when field has an info icon; revealed on click */
@@ -1243,7 +1275,7 @@ body {
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
-  font-size: 0.84rem;
+  font-size: var(--font-size-md);
   font-weight: 700;
 }
 
@@ -1263,7 +1295,7 @@ body {
 }
 
 .check-card-head h3 {
-  font-size: 1.02rem;
+  font-size: var(--font-size-6xl);
 }
 
 .text-link--edit {
@@ -1274,7 +1306,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--accent);
-  font-size: 0.88rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   text-decoration: none;
 }
@@ -1286,7 +1318,7 @@ body {
 .check-list dt {
   margin-bottom: 2px;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -1294,7 +1326,7 @@ body {
 
 .check-list dd {
   color: var(--text-primary);
-  font-size: 0.98rem;
+  font-size: var(--font-size-4xl);
   line-height: 1.45;
 }
 
@@ -1312,7 +1344,7 @@ body {
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent);
-  font-size: 0.84rem;
+  font-size: var(--font-size-md);
   font-weight: 600;
 }
 
@@ -1387,13 +1419,13 @@ body {
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
-  font-size: 0.9rem;
+  font-size: var(--font-size-xl);
   font-weight: 750;
 }
 
 .wizard-step[data-step="4"] .setup-review-header h2 {
   margin: 0 0 10px;
-  font-size: clamp(2rem, 2.3vw, 2.35rem);
+  font-size: var(--font-size-display-lg);
   line-height: 1.08;
   font-weight: 850;
   letter-spacing: -0.035em;
@@ -1403,7 +1435,7 @@ body {
 .wizard-step[data-step="4"] .setup-review-header .section-copy {
   max-width: 70ch;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--font-size-5xl);
   line-height: 1.6;
 }
 
@@ -1419,7 +1451,7 @@ body {
   padding: 22px 24px 20px;
   border-radius: 18px;
   background: color-mix(in srgb, var(--bg-surface) 94%, var(--bg-muted));
-  box-shadow: 0 14px 36px color-mix(in srgb, #000 22%, transparent);
+  box-shadow: var(--onboarding-dropzone-success-shadow);
 }
 
 .wizard-step[data-step="4"] .check-card-head {
@@ -1427,14 +1459,14 @@ body {
 }
 
 .wizard-step[data-step="4"] .check-card-head h3 {
-  font-size: 1.22rem;
+  font-size: var(--font-size-8xl);
   line-height: 1.2;
   font-weight: 800;
   letter-spacing: -0.015em;
 }
 
 .wizard-step[data-step="4"] .text-link--edit {
-  font-size: 0.92rem;
+  font-size: var(--font-size-2xl);
   font-weight: 700;
 }
 
@@ -1447,7 +1479,7 @@ body {
 .wizard-step[data-step="4"] .check-list dt {
   margin: 0 0 4px;
   color: color-mix(in srgb, var(--text-muted) 78%, var(--text-primary));
-  font-size: 0.82rem;
+  font-size: var(--font-size-sm);
   line-height: 1.25;
   font-weight: 750;
   letter-spacing: 0.01em;
@@ -1457,7 +1489,7 @@ body {
 .wizard-step[data-step="4"] .check-list dd {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: var(--font-size-5xl);
   line-height: 1.55;
   font-weight: 500;
 }

@@ -7,3 +7,4 @@ def test_build_capability_naming_guidance_uses_managed_defaults_only():
     assert "You are reviewing and labelling candidate professional capability clusters extracted from a CV." in prompt
     assert "Default capability naming guidance:" in prompt
     assert "Clusters:" in prompt
+    assert "skip" not in prompt

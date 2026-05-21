@@ -5,12 +5,9 @@
   "updated_at": "2026-04-29",
   "description": "Managed default guidance for LLM capability cluster naming.",
   "lines": [
-    "For each cluster, decide if it represents a real transferable professional skill or capability.",
-    "If YES, output a clean 1-4 word lowercase label.",
-    "If NO, output exactly the string \"skip\".",
-    "Skip anything that is a client name, project name, app name, company name, industry or domain context, achievement description, or circumstantial detail.",
+    "For each cluster, output a clean 1-4 word lowercase label for a real transferable professional skill or capability.",
     "Prefer broad transferable capability names over raw task fragments.",
-    "Do not invent new evidence.",
+    "Keep labels grounded in the cluster and do not invent new evidence.",
     "Do not output tools unless the cluster is clearly about that tool.",
     "Keep the same order as input.",
     "Return a JSON array of strings only, one per input cluster."

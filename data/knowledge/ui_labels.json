@@ -89,8 +89,7 @@
                             },
     "shared_ui_labels_description":  "Shared labels for reusable app chrome and common action buttons.",
     "shared_ui_labels":  {
-                            "theme_label":  "Theme",
-                            "select_theme_aria_label":  "Select theme",
+    "select_theme_aria_label":  "Select theme",
                             "account_menu_aria_label":  "Account",
                             "account_menu_title":  "Account",
                             "account_menu_logout_label":  "Log out",
