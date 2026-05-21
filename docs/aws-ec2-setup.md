@@ -1,32 +1,39 @@
-# AWS EC2 Setup Notes for Job Hunter
+# AWS EC2 Setup Guide for Job Hunter
 
-This document records the AWS setup path used for the Job Hunter learning deployment.
+This is the repeatable setup guide for running Job Hunter on AWS EC2 with Ubuntu.
 
-It is not a production runbook yet. It captures the exact practical steps taken so far, the problems encountered, and the fixes applied.
+It is not a chat log. It documents the intended setup path and the important lessons learned.
 
-## Current goal
-
-Deploy the latest `robvoto/job-hunter-agent` code from GitHub onto an AWS EC2 Ubuntu instance for learning and experimentation.
-
-## Repository
+## Target setup
 
 ```text
-https://github.com/robvoto/job-hunter-agent.git
+AWS EC2 Ubuntu server
+Python 3.12 installed with pyenv
+Project virtual environment in .venv
+Private GitHub repo cloned with GitHub token
+App tested locally on 127.0.0.1:8765
+Later: systemd + Nginx + HTTPS + database
 ```
 
-The repository is private, so EC2 needs GitHub authentication to clone it.
+## Important Python decision
 
-## AWS account setup
+Do not use Python 3.14 for this project yet.
 
-### 1. Created AWS account
+The EC2 image used in this setup came with Python 3.14.4. The project dependency stack is not ready for that version at the moment. During install, pip attempted to build NumPy from source and failed. We also saw pandas/numpy dependency resolution issues.
 
-A new AWS account was created for learning. The account has AWS credits available.
+Use Python 3.12 for now.
 
-### 2. Added a low budget alert
+## 1. AWS account safety
 
-A low AWS Budget was recommended first to avoid surprise costs.
+Create a budget before building services.
 
-Recommended starting budget:
+AWS Console:
+
+```text
+Billing and Cost Management → Budgets → Create budget
+```
+
+Recommended starter budget:
 
 ```text
 Budget type: Cost budget
@@ -36,213 +43,183 @@ Alert: 80% actual spend
 Optional alert: 100% forecasted spend
 ```
 
-Important: the budget does not block spending. It only warns early that something is generating AWS cost. The credits still pay for eligible AWS usage.
+A budget does not block spending. It only warns early.
 
-## Hosting choice discussion
+## 2. Create EC2 instance
 
-We compared:
-
-```text
-Render      = simple free-ish app hosting
-Lightsail  = simplified AWS VPS
-EC2         = full AWS virtual server
-Lambda      = serverless functions, not ideal for browser-based scraping
-RDS         = managed relational database
-```
-
-Decision for now:
+AWS Console:
 
 ```text
-Use EC2 for the learning deployment.
-Do not create a separate Lightsail instance.
-Use PostgreSQL/RDS later if needed.
-Avoid SQLite for this project because we want a proper database path.
+EC2 → Instances → Launch instance
 ```
 
-## EC2 instance
-
-An EC2 instance was created and confirmed as running.
-
-Confirmed details from the session:
+Recommended:
 
 ```text
-Instance state: running
-Public access: yes
-Operating system: Ubuntu
-SSH username: ubuntu
-Public DNS used: ec2-184-73-80-9.compute-1.amazonaws.com
-Private hostname seen after login: ip-172-31-9-76
+Name: job-hunter-ec2
+AMI: Ubuntu Server
+Instance type: t3.micro or free-tier equivalent
+Key pair: KeyPair-JobHunter
+Storage: default is fine for learning
 ```
 
-The instance was reachable over SSH from the local machine after fixing the `.pem` key permissions.
-
-## Security group access
-
-Inbound rules observed:
+Ubuntu SSH username:
 
 ```text
-SSH    TCP 22   source: user's public IP /32
-HTTP   TCP 80   source: 0.0.0.0/0
-HTTPS  TCP 443  source: 0.0.0.0/0
+ubuntu
 ```
 
-Important notes:
+Amazon Linux username, if using Amazon Linux instead:
 
-- SSH should stay restricted to `My IP` or a known `/32` IP.
-- HTTP and HTTPS can be public later when the app is ready.
-- Do not open SSH to `0.0.0.0/0` unless temporarily required and explicitly understood.
+```text
+ec2-user
+```
 
-## Connection methods tried
+## 3. Security group
+
+Use a tight security group.
+
+```text
+SSH    TCP 22   Source: your public IP /32 only
+HTTP   TCP 80   Source: 0.0.0.0/0 later, when Nginx is ready
+HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is ready
+```
+
+Do not expose the app port `8765` publicly for normal use. The app should later sit behind Nginx.
+
+Final direction:
+
+```text
+Internet → Nginx 80/443 → app on 127.0.0.1:8765
+```
+
+## 4. Connection options
 
 ### EC2 Instance Connect
 
-Tried first from AWS Console:
+AWS Console:
 
 ```text
 EC2 → Instances → select instance → Connect → EC2 Instance Connect
 ```
 
-This failed with an SSH connection error. The likely practical cause was the corporate/work network blocking direct SSH-style access.
+This can fail on corporate networks that block SSH-style access.
 
-### AWS Systems Manager Session Manager
+### Session Manager
 
-Session Manager was discussed as the better AWS-internal browser shell option when corporate networks block SSH.
+Use AWS Systems Manager Session Manager when company networks block SSH.
 
-Requirement:
+Requirement: attach an IAM role to the EC2 instance with:
 
 ```text
-EC2 IAM role with policy: AmazonSSMManagedInstanceCore
+AmazonSSMManagedInstanceCore
 ```
 
-AWS Console path:
+IAM role path:
+
+```text
+EC2 → Instances → select instance → Actions → Security → Modify IAM role
+```
+
+Connection path:
 
 ```text
 EC2 → Instances → select instance → Connect → Session Manager
 ```
 
-If disabled, attach/create an IAM role with `AmazonSSMManagedInstanceCore`, then wait a few minutes.
-
 ### Local SSH from Windows PowerShell
 
-A local script was used:
+Example:
 
 ```powershell
-.\connectAws.ps1
+ssh -i E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem ubuntu@ec2-public-dns.amazonaws.com
 ```
 
-First connection prompt:
-
-```text
-The authenticity of host ... can't be established.
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
-```
-
-Answer used:
+If prompted about host authenticity, type:
 
 ```text
 yes
 ```
 
-This adds the EC2 host fingerprint to the local `known_hosts` file.
+## 5. Fix Windows PEM permissions
 
-## Windows `.pem` private key permission fix
-
-SSH initially rejected the private key because the `.pem` file had overly broad permissions.
-
-Error seen:
-
-```text
-WARNING: UNPROTECTED PRIVATE KEY FILE!
-Bad permissions.
-```
-
-Fix attempted from PowerShell in the project directory:
+If SSH rejects the key with an unprotected private key warning, fix file permissions from PowerShell:
 
 ```powershell
 cd E:\Programming\job-hunter-agent
-
 icacls .\KeyPair-JobHunter.pem /inheritance:r
 icacls .\KeyPair-JobHunter.pem /remove:g "Users" "Authenticated Users" "Everyone"
 icacls .\KeyPair-JobHunter.pem /grant:r "$($env:USERNAME):R"
 ```
 
-If an unknown SID appears in the error, remove it explicitly:
-
-```powershell
-icacls .\KeyPair-JobHunter.pem /remove:g "*S-1-5-21-918216458-3027456311-2496836407-332114931"
-```
-
-Validate permissions:
+Check:
 
 ```powershell
 icacls .\KeyPair-JobHunter.pem
 ```
 
-Expected result: the current Windows user has read permission and broad groups are removed.
+Expected: the current Windows user has read permission and broad groups are removed.
 
-## SSH username issue
+## 6. Install base Ubuntu packages
 
-When testing SSH, this failed:
-
-```text
-ubuntu@ec2-184-73-80-9.compute-1.amazonaws.com: Permission denied (publickey)
-```
-
-We checked the OS assumption:
-
-- Amazon Linux usually uses `ec2-user`.
-- Ubuntu uses `ubuntu`.
-
-Final successful connection showed:
-
-```text
-ubuntu@ip-172-31-9-76:~$
-```
-
-So the instance is Ubuntu and `ubuntu` is the correct username.
-
-## Server package setup
-
-Once connected to EC2, package updates were checked and installed using `apt`, because the instance is Ubuntu.
-
-Commands:
+On the EC2 instance:
 
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y git python3 python3-venv python3-pip
+sudo apt install -y git curl wget build-essential
 ```
 
-Validated versions:
+Check:
 
 ```bash
 git --version
-python3 --version
-python3 -m pip --version
 ```
 
-Observed:
+## 7. Install Python 3.12 using pyenv
+
+The EC2 Ubuntu image may not provide Python 3.12 through apt. If this fails:
+
+```bash
+sudo apt install -y python3.12 python3.12-venv python3.12-dev
+```
+
+with package not found errors, use pyenv.
+
+Install build dependencies:
+
+```bash
+sudo apt update && sudo apt install -y build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev \
+libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+```
+
+Install pyenv runtime if available:
+
+```bash
+sudo apt install -y pyenv-runtime
+```
+
+Install Python 3.12.8:
+
+```bash
+pyenv install 3.12.8
+pyenv versions
+```
+
+Expected: `3.12.8` is listed.
+
+## 8. Clone the private GitHub repo
+
+Repo:
 
 ```text
-git version 2.53.0
-Python 3.14.4
-pip 25.1.1 from /usr/lib/python3/dist-packages/pip (python 3.14)
+https://github.com/robvoto/job-hunter-agent.git
 ```
 
-## GitHub token setup
+Create a GitHub personal access token with repository read access.
 
-Because the repository is private, cloning from EC2 requires GitHub authentication.
-
-A GitHub personal access token was created.
-
-Important security note:
-
-- A token was accidentally shown in a screenshot.
-- Any token shown in chat or screenshots must be treated as exposed.
-- Exposed tokens must be deleted/revoked immediately.
-- Never paste tokens into chat.
-
-Recommended fine-grained token setup:
+Recommended fine-grained token:
 
 ```text
 Repository access: Only selected repositories
@@ -250,213 +227,228 @@ Selected repository: job-hunter-agent
 Repository permissions:
   Contents: Read-only
   Metadata: Read-only
-Expiration: 90 days preferred for learning
+Expiration: 90 days for learning
 ```
 
-For classic token fallback:
-
-```text
-Scope: repo
-Expiration: 90 days
-```
-
-## Cloning the repository on EC2
-
-Run from the EC2 terminal:
+Clone:
 
 ```bash
 cd ~
 git clone https://github.com/robvoto/job-hunter-agent.git
+cd ~/job-hunter-agent
 ```
 
 When prompted:
 
 ```text
 Username: robvoto
-Password: paste the GitHub token
+Password: paste GitHub token
 ```
 
-The token should be pasted as one continuous string with no spaces.
+Never paste the token into chat or screenshots. If exposed, revoke it.
 
-After cloning:
+## 9. Git credential handling on EC2
 
-```bash
-cd ~/job-hunter-agent
-git status
-ls -la
-```
-
-## Saving GitHub credentials on EC2
-
-The Windows command below does not work on Ubuntu EC2:
+Windows Git Credential Manager is not available on Ubuntu EC2. This command does not work there:
 
 ```bash
 git config --global credential.helper manager
 ```
 
-If this error appears:
-
-```text
-git: 'credential-manager' is not a git command. See 'git --help'.
-```
-
-Use the simple Ubuntu option instead:
+For short-term learning on EC2:
 
 ```bash
 git config --global credential.helper store
 ```
 
-Then run:
+Then run a pull and enter the token once:
 
 ```bash
 git pull
 ```
 
-Enter the GitHub username and token one more time:
-
-```text
-Username: robvoto
-Password: paste GitHub token
-```
-
-After that, Git should remember the token on the EC2 instance.
-
-Check the setting:
+Check:
 
 ```bash
 git config --global --get credential.helper
 ```
 
-Expected output:
+Expected:
 
 ```text
 store
 ```
 
-Security note: `credential.helper store` saves the token in plain text in:
+Later, replace this with a deploy key or cleaner deployment process.
+
+## 10. Set project Python to 3.12
+
+Inside the repo:
+
+```bash
+cd ~/job-hunter-agent
+pyenv local 3.12.8
+python --version
+```
+
+Expected:
 
 ```text
-~/.git-credentials
+Python 3.12.8
 ```
 
-This is acceptable only as a short-term learning setup. Later, replace this with an SSH deploy key or another safer deployment method.
-
-## Common errors and fixes
-
-### `apt: command not found`
-
-This means the instance is probably not Ubuntu, likely Amazon Linux.
-
-Amazon Linux commands:
+Create the virtual environment:
 
 ```bash
-sudo dnf update -y
-sudo dnf install -y git python3 python3-pip
+rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate
+python --version
+which python
 ```
 
-Fallback:
+Expected Python path:
+
+```text
+/home/ubuntu/job-hunter-agent/.venv/bin/python
+```
+
+## 11. Install project dependencies
+
+With `.venv` active:
 
 ```bash
-sudo yum update -y
-sudo yum install -y git python3 python3-pip
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
 ```
 
-In our actual setup, the instance turned out to be Ubuntu, so `apt` was correct.
+If a dev requirements file exists and is needed:
 
-### `fatal: could not create work tree dir 'job-hunter-agent': Permission denied`
+```bash
+pip install -r requirements-dev.txt
+```
 
-This means the clone command was run from a directory where the current user cannot write.
+If you see `externally-managed-environment`, the virtual environment is not active.
 
 Fix:
 
 ```bash
-whoami
-pwd
-ls -ld .
-cd ~
-git clone https://github.com/robvoto/job-hunter-agent.git
+source .venv/bin/activate
+which pip
 ```
 
-Do not use `sudo git clone` unless absolutely necessary because it creates ownership problems later.
+Expected:
+
+```text
+/home/ubuntu/job-hunter-agent/.venv/bin/pip
+```
+
+## 12. Install Playwright browser
+
+With `.venv` active:
+
+```bash
+python -m playwright install chromium
+```
+
+If Linux libraries are missing:
+
+```bash
+sudo .venv/bin/python -m playwright install-deps chromium
+python -m playwright install chromium
+```
+
+If you see `No module named playwright`, dependencies were not installed into the active venv.
+
+## 13. Smoke test the app
+
+Manual run is only a smoke test.
+
+```bash
+cd ~/job-hunter-agent
+source .venv/bin/activate
+python -m job_hunter_agent.fastapi_app
+```
+
+In another SSH session:
+
+```bash
+curl http://127.0.0.1:8765/start
+```
+
+Expected: HTML response.
+
+## 14. Next production-style steps
+
+After the smoke test works:
+
+```text
+Create a systemd service
+Configure Nginx reverse proxy
+Expose only 80/443 publicly
+Keep the app bound to 127.0.0.1:8765
+Add environment variable handling
+Add logs
+Later: database/RDS
+Later: HTTPS/domain
+```
+
+## Common errors
+
+### `.venv/bin/activate: No such file or directory`
+
+The venv does not exist yet.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### `externally-managed-environment`
+
+You are using system pip, not venv pip.
+
+```bash
+source .venv/bin/activate
+which pip
+```
+
+### NumPy or pandas failure on Python 3.14
+
+Symptoms:
+
+```text
+NumPy builds from source
+c++ fatal error: Killed
+ResolutionImpossible
+No matching distributions for numpy/pandas
+```
+
+Fix: use Python 3.12 via pyenv.
 
 ### `Permission denied (publickey)`
 
-Possible causes:
+Check:
 
 ```text
-Wrong SSH username
-Wrong .pem key file
-.pem permissions too broad
-Instance was created with a different key pair
-```
-
-Checks:
-
-```text
-EC2 → Instances → select instance → Details → Key pair name
-```
-
-Usernames:
-
-```text
-Ubuntu: ubuntu
-Amazon Linux: ec2-user
+Correct username
+Correct key pair
+PEM file permissions
+EC2 key pair name
 ```
 
 ### GitHub password rejected
 
-GitHub does not accept account passwords for Git over HTTPS.
-
-Use:
-
-```text
-Username: robvoto
-Password: GitHub personal access token
-```
-
-## Current status
-
-Completed:
-
-```text
-AWS account created
-EC2 instance created
-Security group inspected
-SSH key permission issue fixed
-Connected to Ubuntu EC2 instance
-Git installed
-Python installed
-pip installed
-GitHub token created for private repo access
-Git credential helper configured on EC2 using store
-```
-
-Next step:
-
-```bash
-cd ~
-git clone https://github.com/robvoto/job-hunter-agent.git
-cd ~/job-hunter-agent
-ls -la
-```
-
-If the repo is already cloned, update it instead:
-
-```bash
-cd ~/job-hunter-agent
-git pull
-```
-
-After that, inspect the repository structure and identify the correct application entry point before installing/running dependencies.
+Use a GitHub token, not the GitHub account password.
 
 ## Do not do yet
 
-Avoid these until the basic app is understood:
+Until the app works locally:
 
 ```text
-Do not create RDS yet
-Do not create Lambda yet
-Do not create Lightsail now
-Do not expose app ports broadly before the app runs locally on EC2
-Do not run random install scripts without checking the repo structure
+Do not create RDS
+Do not create Lambda
+Do not create Lightsail
+Do not expose port 8765 publicly
+Do not configure Nginx before the local smoke test passes
 ```
