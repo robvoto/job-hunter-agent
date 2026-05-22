@@ -2,6 +2,22 @@
 
 This guide describes the clean test/staging setup for running Job Hunter on AWS EC2.
 
+It is a setup guide, not a chat log.
+
+## Current tested status
+
+This setup has been proven to run through this path:
+
+```text
+EC2 Ubuntu 24.04 LTS
+FastAPI app running under systemd
+Nginx reverse proxy on port 80
+EBS mounted at /var/lib/job-hunter
+server env stored under /etc/job-hunter/job-hunter.env
+ngrok HTTPS tunnel forwarding to EC2 localhost:80
+public ngrok URL reaches the Job Hunter site
+```
+
 ## Target setup
 
 ```text
@@ -13,13 +29,13 @@ Persistent app data on a separate EBS volume mounted at /var/lib/job-hunter
 SQLite database stored on the EBS data volume
 systemd runs the FastAPI app as a service
 Nginx exposes the app internally on HTTP port 80
-ngrok can expose the test site over temporary HTTPS for Google OAuth testing
+ngrok exposes the test site over temporary HTTPS for Google OAuth testing
 Later: real domain + HTTPS + package-based deployment + backups
 ```
 
 ## Required platform
 
-Use this platform for Job Hunter:
+Use:
 
 ```text
 Ubuntu Server 24.04 LTS
@@ -166,21 +182,11 @@ Format the new EBS disk once:
 sudo mkfs.ext4 /dev/nvme1n1
 ```
 
-Create the application data mount point:
+Create the application data mount point and mount it:
 
 ```bash
 sudo mkdir -p /var/lib/job-hunter
-```
-
-Mount the EBS volume:
-
-```bash
 sudo mount /dev/nvme1n1 /var/lib/job-hunter
-```
-
-Verify it is mounted correctly:
-
-```bash
 df -h /var/lib/job-hunter
 ```
 
@@ -228,8 +234,6 @@ Expected:
 `nofail` lets the instance boot even if the data volume is temporarily missing.
 
 ## 7. Create data and log folders
-
-Create the app data and log folders:
 
 ```bash
 sudo mkdir -p /var/lib/job-hunter/data
@@ -310,7 +314,7 @@ On the EC2 instance:
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip nginx
+sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip nginx tmux
 ```
 
 Check:
@@ -319,6 +323,7 @@ Check:
 git --version
 python3 --version
 nginx -v
+tmux -V
 ```
 
 Expected Python version on Ubuntu 24.04 LTS:
@@ -544,19 +549,19 @@ JOB_HUNTER_AUTH_SESSION_SECRET=***
 
 ## 18. View logs
 
-Live logs:
+Live app logs:
 
 ```bash
 sudo journalctl -u job-hunter -f
 ```
 
-Last 50 lines:
+Last 50 app log lines:
 
 ```bash
 sudo journalctl -u job-hunter -n 50 --no-pager
 ```
 
-Recent logs:
+Recent app logs:
 
 ```bash
 sudo journalctl -u job-hunter --since "10 minutes ago" --no-pager
@@ -661,16 +666,16 @@ ngrok config add-authtoken <token>
 
 Do not commit or share the token.
 
-Start the tunnel:
+Start the tunnel manually:
 
 ```bash
 ngrok http 80
 ```
 
-Copy the forwarding URL:
+Expected output includes:
 
 ```text
-https://<ngrok-host>
+Forwarding  https://<ngrok-host> -> http://localhost:80
 ```
 
 Set the server env file:
@@ -688,21 +693,114 @@ https://<ngrok-host>/api/auth/google/callback
 Restart the app after changing the env file:
 
 ```bash
-sudo systemctl daemon-reload
 sudo systemctl restart job-hunter
 ```
 
-Then open:
+Open:
 
 ```text
 https://<ngrok-host>
 ```
 
-Expected: login flow starts and redirects back to the ngrok callback URL.
+Expected: the site is online and the login flow uses the ngrok callback URL.
 
 Free ngrok URLs can change when the tunnel restarts. If the URL changes, update both `JOB_HUNTER_BASE_URL` and the Google OAuth redirect URI.
 
-## 21. Useful EC2 metadata checks
+## 21. Manage ngrok with tmux and helper scripts
+
+Run ngrok inside `tmux` so it keeps running after detaching from the terminal.
+
+Create helper scripts:
+
+```bash
+mkdir -p ~/job-hunter-agent/scripts/ec2
+
+cat > ~/job-hunter-agent/scripts/ec2/start-ngrok.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION_NAME="ngrok"
+PORT="80"
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  echo "ngrok tmux session already running: $SESSION_NAME"
+  echo "Attach with: tmux attach -t $SESSION_NAME"
+  exit 0
+fi
+tmux new-session -d -s "$SESSION_NAME" "ngrok http $PORT"
+echo "Started ngrok in tmux session: $SESSION_NAME"
+echo "Attach with: tmux attach -t $SESSION_NAME"
+echo "Detach with: Ctrl+B then D"
+EOF
+
+cat > ~/job-hunter-agent/scripts/ec2/stop-ngrok.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION_NAME="ngrok"
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  tmux kill-session -t "$SESSION_NAME"
+  echo "Stopped ngrok tmux session: $SESSION_NAME"
+else
+  echo "ngrok tmux session is not running."
+fi
+EOF
+
+cat > ~/job-hunter-agent/scripts/ec2/status-ngrok.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION_NAME="ngrok"
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  echo "ngrok is running in tmux session: $SESSION_NAME"
+  echo "Attach with: tmux attach -t $SESSION_NAME"
+else
+  echo "ngrok is not running."
+fi
+EOF
+
+chmod +x ~/job-hunter-agent/scripts/ec2/*.sh
+```
+
+Create short commands available from anywhere:
+
+```bash
+sudo ln -sf /home/ubuntu/job-hunter-agent/scripts/ec2/start-ngrok.sh /usr/local/bin/jh-ngrok-start
+sudo ln -sf /home/ubuntu/job-hunter-agent/scripts/ec2/status-ngrok.sh /usr/local/bin/jh-ngrok-status
+sudo ln -sf /home/ubuntu/job-hunter-agent/scripts/ec2/stop-ngrok.sh /usr/local/bin/jh-ngrok-stop
+```
+
+Use:
+
+```bash
+jh-ngrok-start
+jh-ngrok-status
+jh-ngrok-stop
+```
+
+To see the ngrok HTTPS URL:
+
+```bash
+tmux attach -t ngrok
+```
+
+Detach without stopping ngrok:
+
+```text
+Ctrl+B then D
+```
+
+Turn ngrok off later:
+
+```bash
+jh-ngrok-stop
+```
+
+If `jh-ngrok-status` appears to hang, use:
+
+```bash
+Ctrl+C
+tmux ls
+tmux attach -t ngrok
+```
+
+## 22. Useful EC2 metadata checks
 
 If IMDSv1 returns blank, use IMDSv2.
 
@@ -718,7 +816,7 @@ Get public IP:
 curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4
 ```
 
-## 22. Quick checks
+## 23. Quick checks
 
 Confirm OS:
 
@@ -759,11 +857,20 @@ sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/enviro
 
 Confirm ngrok tunnel:
 
+```bash
+jh-ngrok-status
+tmux attach -t ngrok
+```
+
+Expected: `Forwarding https://<ngrok-host> -> http://localhost:80`.
+
+Confirm public site:
+
 ```text
 Open https://<ngrok-host>
 ```
 
-Expected: login page or redirect to login.
+Expected: the Job Hunter site is online and redirects to login or shows the login page.
 
 ## Do not do yet
 
