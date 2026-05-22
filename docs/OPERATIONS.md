@@ -332,13 +332,28 @@ Run once on first deploy (or after a DB reset) to seed knowledge, config, and si
 python -m job_hunter_agent.db_seed
 ```
 
-After deploying a new app version that updates bundled JSON files, re-seed with overwrite to pick up the changes:
+### After deploying a new app version
+
+When bundled JSON files gain new baseline entries (new capability patterns, blocker rules, etc.):
+
+```bash
+python -m job_hunter_agent.db_seed --upgrade
+```
+
+`--upgrade` uses version-aware merge logic:
+- Files with no `version` field (pure reference data) — always replaced.
+- Files with `version` and an `entries` list (capability knowledge, blocker rules, etc.) — new entries appended; existing DB entries (including user-approved ones) are preserved.
+- Files with `version` but no `entries` list (scoring rules, ui_labels, etc.) — replaced only when the file version is newer than the DB version.
+
+### Hard reset (wipes user-approved additions)
 
 ```bash
 python -m job_hunter_agent.db_seed --overwrite
 ```
 
-`--overwrite` replaces all DB knowledge entries from the current files. The default (`INSERT OR IGNORE`) preserves any runtime modifications made through the UI.
+`--overwrite` replaces all DB knowledge entries from the current bundled files. Use only for a full DB reset or corruption recovery — it will wipe any user-approved signal additions.
+
+`--upgrade` and `--overwrite` are mutually exclusive.
 
 ---
 
