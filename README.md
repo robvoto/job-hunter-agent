@@ -2,6 +2,12 @@
 
 Local-first job discovery and fit-evaluation system.
 
+Deployment target:
+
+- AWS EC2 with a small EBS-backed root volume
+- production-style operation, not prototype-only handling
+- keep runtime state and deployment notes aligned with server operation
+
 The product goal is simple: a user gives the app strong source material about their experience, the app builds a working profile, reviews jobs against that profile, and keeps a meaningful shortlist instead of forcing the user to search manually every day.
 
 Current implemented job sources:

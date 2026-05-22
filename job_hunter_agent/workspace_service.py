@@ -26,10 +26,10 @@ from job_hunter_agent.history import (
     build_history_cluster_index,
     viewed_by_user,
 )
-from job_hunter_agent.io_utils import load_json_list
+from job_hunter_agent.io_utils import load_audit_rows
 from job_hunter_agent.job_identity import deduplicate_across_sources, normalize_job_key
 from job_hunter_agent.match_labels import score_to_match_label
-from job_hunter_agent.paths import REPO_ROOT, get_audit_records_path
+from job_hunter_agent.paths import REPO_ROOT
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
@@ -39,6 +39,7 @@ from job_hunter_agent.profile_store import (
     KEY_ENGAGEMENT_TYPE,
     KEY_WORK_MODE_PREFERENCE,
     normalize_engagement_type_preferences,
+    normalize_sector_preference_values,
     WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
     get_match_levels,
@@ -78,11 +79,13 @@ def _format_common_search_preferences(profile: dict[str, Any]) -> tuple[str, str
         for value in selected_work_modes
         if value in work_mode_lookup
     ) or WORK_MODE_PREFERENCE_NONE_LABEL
-    sector_label = _label_from_options(
-        SECTOR_PREFERENCE_OPTIONS,
-        match_preferences.get(KEY_PREFER_SECTOR),
-        _label_from_options(SECTOR_PREFERENCE_OPTIONS, GovPref.ANY, "No preference"),
-    )
+    sector_lookup = {str(item["value"]).strip().lower(): str(item["label"]).strip() for item in SECTOR_PREFERENCE_OPTIONS}
+    selected_sector_prefs = normalize_sector_preference_values(match_preferences.get(KEY_PREFER_SECTOR))
+    sector_label = " | ".join(
+        sector_lookup.get(value, value.title())
+        for value in selected_sector_prefs
+        if value in sector_lookup
+    ) or _label_from_options(SECTOR_PREFERENCE_OPTIONS, GovPref.ANY, "No preference")
     return work_type_label, work_mode_label, sector_label
 
 
@@ -262,7 +265,7 @@ def build_workspace_record_sets(
 
 def load_last_kept_records() -> list[dict]:
     return workspace_data.load_last_kept_records(
-        load_json_list(get_audit_records_path()),
+        load_audit_rows(),
         deduplicate_across_sources_fn=deduplicate_across_sources,
     )
 
@@ -314,7 +317,7 @@ def render_html(
     active_debug_mode = bool(debug_mode)
     active_audit_rows = audit_rows
     if active_debug_mode and active_audit_rows is None:
-        active_audit_rows = load_json_list(get_audit_records_path())
+        active_audit_rows = load_audit_rows()
 
     kept_records = _enrich_records_with_candidate_application_history(kept_records)
 

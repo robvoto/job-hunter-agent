@@ -14,7 +14,7 @@ from typing import Any
 from job_hunter_agent.filters import build_title_block_rule, normalize_title_block_phrase, suggest_title_block_phrase
 from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.paths import OUTPUT_DIR, get_audit_records_path
+from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import load_profile, save_profile
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
@@ -43,18 +43,6 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
 )
 from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
-
-
-def _load_audit_rows() -> list[dict[str, Any]]:
-    audit_records_path = get_audit_records_path()
-    if not audit_records_path.exists():
-        return []
-    try:
-        data = json.loads(audit_records_path.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except Exception as exc:
-        print(f"[REVIEW_HISTORY][WARN] Failed to load audit records from {audit_records_path}: {exc}")
-        return []
 
 
 def _normalize_requirement_blocker(value: str) -> str:

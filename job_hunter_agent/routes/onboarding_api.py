@@ -23,10 +23,11 @@ from job_hunter_agent.profile_store import (
     KEY_SECONDARY_PATTERNS,
     MIN_CONTRACT_MONTH_OPTIONS,
     VALID_ENGAGEMENT_TYPES,
-    VALID_SECTOR_PREFERENCES,
+    VALID_SECTOR_PREFERENCE_VALUES,
     VALID_WORK_MODE_PREFERENCES,
     normalize_capability_rules,
     normalize_engagement_type_preferences,
+    normalize_sector_preference_values,
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.global_settings import get_salary_limits
@@ -111,7 +112,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
         engagement_type = normalize_engagement_type_preferences(body.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
         work_mode_preference = normalize_work_mode_preferences(body.get(KEY_WORK_MODE_PREFERENCE))
-        prefer_sector = str(body.get(KEY_PREFER_SECTOR) or "").strip().lower()
+        prefer_sector = normalize_sector_preference_values(body.get(KEY_PREFER_SECTOR))
         raw_min_contract_months = body.get("min_contract_months")
         raw_minimum_salary_yearly = body.get(KEY_MIN_SALARY_YEARLY)
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
@@ -134,8 +135,10 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             raise ValueError("Please choose what type of work you are open to.")
         if any(value not in VALID_WORK_MODE_PREFERENCES for value in work_mode_preference):
             raise ValueError("Please choose only remote, hybrid, or on-site.")
-        if prefer_sector not in VALID_SECTOR_PREFERENCES:
-            prefer_sector = srv.GovPref.ANY
+        if not prefer_sector:
+            raise ValueError("Please choose at least one sector preference.")
+        if any(value not in VALID_SECTOR_PREFERENCE_VALUES for value in prefer_sector):
+            raise ValueError("Please choose only public sector or private sector.")
         min_contract_months = None
         if raw_min_contract_months not in (None, ""):
             try:

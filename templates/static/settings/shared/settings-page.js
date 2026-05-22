@@ -1,17 +1,10 @@
-var LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
-window.LINKEDIN_EASY_APPLY_ONLY = LINKEDIN_EASY_APPLY_ONLY;
-
-const statusEl = document.getElementById('status');
-const isTestMode = document.body?.dataset.testMode === 'true';
-
-// Module references
-const chipEditor = window.JobHunterChipEditor;
-const capabilityEditor = window.JobHunterCapabilityEditor;
-const adminSettings = window.JobHunterAdminSettings;
-const alertsSettings = window.JobHunterAlertsSettings;
-const capabilityUi = window.JobHunterCapabilityUi || {};
-const capabilityLabels = capabilityUi.labels || {};
-const {
+import { JobHunterChipEditor as chipEditor } from './settings-chip-editor.js';
+import { JobHunterCapabilityEditor as capabilityEditor } from './settings-capability-editor.js';
+import { JobHunterAdminSettings as adminSettings } from '../global/settings-admin.js';
+import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-alerts.js';
+import * as capabilityUi from '../../common/capability-ui.js';
+import * as locationUi from '../../common/location-options.js';
+import {
   escapeHtml,
   toLines,
   rulesToText,
@@ -30,8 +23,14 @@ const {
   getToggleChecked,
   setChoiceGroupValue,
   getChoiceGroupValue,
+  LINKEDIN_EASY_APPLY_ONLY,
   SECTOR_PREFERENCE_DEFAULT,
-} = window.JobHunterSettingsUtils;
+  ensureAtLeastOneChoiceSelected,
+} from './settings-utils.js';
+
+const statusEl = document.getElementById('status');
+const isTestMode = document.body?.dataset.testMode === 'true';
+const capabilityLabels = capabilityUi.labels || {};
 
 const capabilityMatrixNav = document.getElementById('settings_capability_matrix_nav');
 if (capabilityMatrixNav && capabilityLabels.settings_title) {
@@ -80,13 +79,13 @@ const ruleTextAreas = [
   ['reject_description_phrase_rules', 'phrase'],
 ];
 
-function hideStatus() {
+export function hideStatus() {
   if (!statusEl) return;
   statusEl.className = 'status';
   statusEl.textContent = '';
 }
 
-function showStatus(message, kind, options = {}) {
+export function showStatus(message, kind, options = {}) {
   if (!statusEl) return;
   window.clearTimeout(statusHideTimer);
   statusEl.textContent = message;
@@ -97,13 +96,13 @@ function showStatus(message, kind, options = {}) {
   }
 }
 
-function showInlineStatus(element, message, kind) {
+export function showInlineStatus(element, message, kind) {
   if (!element) return;
   element.textContent = message;
   element.className = `inline-status ${kind}`;
 }
 
-function markDirty() {
+export function markDirty() {
   if (suppressDirtyTracking) return;
   if (activeSaveButton) activeSaveButton.disabled = false;
   if (stickySaveBar) {
@@ -112,7 +111,7 @@ function markDirty() {
   }
 }
 
-function clearDirty() {
+export function clearDirty() {
   if (activeSaveButton) activeSaveButton.disabled = true;
   if (stickySaveBar) {
     stickySaveBar.hidden = true;
@@ -139,7 +138,6 @@ function renderLlmModelOptions() {
 }
 
 function renderLocationOptions() {
-  const locationUi = window.JobHunterLocationUi || {};
   const select = document.getElementById('locations');
   if (!select || !locationUi.renderLocationOptions) return;
   locationUi.renderLocationOptions(select);
@@ -289,7 +287,6 @@ function fillForm(profile) {
   renderLocationOptions();
   const locationSelect = document.getElementById('locations');
   if (locationSelect) {
-    const locationUi = window.JobHunterLocationUi || {};
     locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
   }
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
@@ -487,10 +484,7 @@ document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => 
 
 document.querySelectorAll('input[name="prefer_sector"]').forEach((cb) => {
   cb.addEventListener('change', () => {
-    if (!cb.checked) {
-      const anyChecked = document.querySelectorAll('input[name="prefer_sector"]:checked').length > 0;
-      if (!anyChecked) cb.checked = true;
-    }
+    ensureAtLeastOneChoiceSelected('prefer_sector', cb);
   });
 });
 

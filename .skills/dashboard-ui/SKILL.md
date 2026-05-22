@@ -27,11 +27,12 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Card data attributes store the lowercased canonical value, for example `data-work-type="contract"`. Never store display labels in data attributes.
 - Filter group definitions live in the relevant JSON data file, for example `data/job_type.json` `filter_groups` key, not in Python or JS.
 
-## Per-user data paths
-- All runtime data lives under `data/users/{uid}/` when a user is authenticated; path helpers such as `get_profile_path()` and `get_source_pack_dir()` return the per-user path automatically via `get_user_id()` ContextVar.
-- When `get_user_id()` returns `None` (unauthenticated or no Google auth configured), every path helper falls back to root `data/` files. That means operations that call helpers without an active user can read or write the wrong bucket.
+## Per-user data
+- All runtime state (profile, job history, run stats, audit records, review data, workspace pool, source materials, user settings) is stored in SQLite per-user tables. The active user is resolved via a `ContextVar` in `user_context.py`.
+- `get_active_user_id()` in `paths.py` is the single resolver. It raises `RuntimeError` if no user is set — there is no silent fallback to a root directory.
+- `get_workspace_results_path()` and `get_source_pack_dir()` are the only remaining filesystem path helpers for per-user data.
 - Workspace sidebar counts (`This Run`, `Crawler Stats`, `Applications`) are user-scoped. If they show zero after a successful scrape, verify the active request or run context resolved the same `user_id` before assuming the scrape found nothing.
-- Test reset tools (`_reset_current_user_state`) must wipe `USERS_DIR` subdirectories directly. Do not rely on path helpers, which are context-dependent. Also reset root fallback files explicitly. Preserve `data/users.json` (auth accounts).
+- Test reset tools (`_reset_current_user_state`) call `clear_job_history()`, `clear_review_data()`, `clear_run_stats()`, `clear_audit_rows()` from `io_utils.py` and wipe `USERS_DIR` filesystem subdirectories for source_pack and workspace_results.html.
 
 ## Onboarding / settings widget patterns
 
@@ -150,6 +151,22 @@ Target aesthetic: Linear / GitHub dark / Vercel dashboard. Enterprise dark SaaS.
 - `history.py`: viewed/applied/hidden state.
 - `profile_store.py`: profile/settings normalisation.
 - `data/parsing_rules.json`: display labels where already owned there.
+
+## JS debugging: "X is not defined" at a line where X IS defined
+
+This is always a version mismatch, not a code bug. Two causes:
+
+**Browser has cached old JS.** Hard-refresh (Ctrl+Shift+R) first. If the error disappears, it was stale cache.
+
+**Python and JS are out of sync.** The onboarding page JS relies on `window.__JOB_HUNTER_*` bootstrap globals injected by `build_bootstrap_script()` in `server_helpers.py`. If Python changed but the server hasn't restarted, or if JS changed to expect a new global that Python doesn't yet inject, the JS throws at module level. Function declarations are hoisted and still callable, but any `const`/`let` declared after the throw is in TDZ — so calling those hoisted functions produces misleading "X is not defined" errors on variables that look fine in the source.
+
+**Diagnosis steps (in order):**
+1. Hard-refresh the browser (Ctrl+Shift+R).
+2. Restart the server if any Python file changed since last start.
+3. Check that every `window.__JOB_HUNTER_*` the JS reads is actually injected by `build_bootstrap_script()`.
+4. Only after confirming fresh Python + fresh browser: read the actual JS source.
+
+**Never start with grep or static file analysis.** The error line and variable name will look wrong because the browser is running a different version than the file on disk.
 
 ## Checklist
 - Is this display logic, not business judgement?

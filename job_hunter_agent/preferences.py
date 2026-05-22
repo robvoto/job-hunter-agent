@@ -16,6 +16,7 @@ from job_hunter_agent.profile_store import (
     load_profile,
     normalize_engagement_type_preferences,
     normalize_match_preferences,
+    normalize_sector_preference_values,
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.io_utils import load_ui_labels
@@ -48,8 +49,8 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
     # Sector — exclude only when public-sector context is explicitly detected and user wants private only.
     # Public-sector-only preference does NOT hard-filter: absence of public-sector context ≠ confirmed private.
-    sector_pref = str(preferences.get(KEY_PREFER_SECTOR) or GovPref.ANY).strip().lower()
-    if sector_pref == GovPref.PRIVATE:
+    sector_prefs = set(normalize_sector_preference_values(preferences.get(KEY_PREFER_SECTOR)))
+    if sector_prefs == {GovPref.PRIVATE}:
         if has_government_context(_government_combined_text(record)):
             return False, "PREF_SECTOR_OUTSIDE_SELECTED"
 
@@ -223,17 +224,17 @@ def assess_sector_preference(record: dict, profile: Optional[dict] = None) -> Op
     label_unknown = str(labels.get("unknown_neutral") or "").strip()
     if not label_bonus or not label_multiple or not label_all or not label_unknown:
         raise ValueError("sector_score_labels are required in ui_labels")
-    preference = str(preferences[KEY_PREFER_SECTOR] or GovPref.ANY).strip().lower()
-    if preference == GovPref.ANY:
+    preference = set(normalize_sector_preference_values(preferences.get(KEY_PREFER_SECTOR)))
+    if not preference or len(preference) > 1:
         return {"label": label_all, "value": 0}
 
     combined = _government_combined_text(record)
-    if preference == GovPref.GOVERNMENT:
+    if preference == {GovPref.GOVERNMENT}:
         if has_government_context(combined):
             return {"label": f"{label_bonus}: Public sector", "value": abs(int(scoring_rules["government"]["match_bonus"]))}
         return {"label": label_unknown, "value": 0}
 
-    if preference == GovPref.PRIVATE:
+    if preference == {GovPref.PRIVATE}:
         if has_government_context(combined):
             return {"label": f"{label_bonus}: Public sector", "value": -abs(int(scoring_rules["government"]["match_bonus"]))}
         return {"label": label_unknown, "value": 0}

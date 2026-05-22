@@ -10,10 +10,13 @@ Local-first job discovery system:
 scrape → deterministic filters → optional LLM → fit score → workspace
 
 Runtime source of truth:
-- `data/users/<user_id>/profile.json`
+- SQLite DB (`JOB_HUNTER_DB_PATH`) — per-user profile, history, run outputs, settings
+- `data/users/<user_id>/workspace_results.html` — rendered workspace (filesystem)
 
-Managed knowledge:
-- `data/knowledge/*.json`
+Managed knowledge (seeded into DB via `db_seed.py`):
+- `data/knowledge/*.json` — approved business rules
+- `data/config/global_settings.json` — admin-controlled runtime settings seed
+- `data/signals/*.json` — signal registry and defaults (gitignored; created at runtime)
 
 Operational entry points and commands are owned by `docs/OPERATIONS.md`.
 
@@ -42,6 +45,7 @@ Load the relevant skill before editing that area.
 | `.skills/signal-registry/SKILL.md` | Learning and approval flow |
 | `.skills/preferences/SKILL.md` | Location/contract/government/salary |
 | `.skills/dashboard-ui/SKILL.md` | Workspace and FastAPI UI |
+| `.skills/onboarding-ui/SKILL.md` | Onboarding wizard, search basics, and onboarding page UI |
 | `.skills/workspace-output-sync/SKILL.md` | Live workspace HTML vs source template sync |
 | `.skills/scraping/SKILL.md` | SEEK/LinkedIn scraping |
 | `.skills/text-utilities/SKILL.md` | Text normalisation, matching helpers, description trust |

@@ -7,8 +7,8 @@ from job_hunter_agent.filters import (
     suggest_title_block_phrase,
 )
 from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.io_utils import load_audit_rows as _load_audit_rows
 from job_hunter_agent.review_history_service import (
-    _load_audit_rows,
     _normalize_description_block_phrase,
     _normalize_requirement_blocker,
     load_job_history,

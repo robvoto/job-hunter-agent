@@ -147,16 +147,15 @@ Purpose:
 
 Critical runtime files:
 
-| File                       | Purpose                      |
+| Location                   | Purpose                      |
 | -------------------------- | ---------------------------- |
-| per-user `profile.json` | runtime candidate profile |
-| per-user `job_history.json` | persistent job state |
-| `data/runtime/` | runtime cache, costs, and orchestration state |
-| `data/config/` | global runtime settings |
+| SQLite DB (`JOB_HUNTER_DB_PATH`) | runtime candidate profile, job history, run outputs, user settings |
+| `data/runtime/` | LLM cache, costs, and orchestration state |
+| `data/config/` | global settings seed (committed defaults) |
 | `data/knowledge/` | approved business knowledge |
 | `data/signals/` | signal registry and learning review state |
 
-These files should be preserved.
+The DB and `data/runtime/` should be preserved. Knowledge and config files are committed to git.
 
 ---
 
@@ -166,12 +165,12 @@ Rebuildable outputs:
 
 | File                        | Purpose             |
 | --------------------------- | ------------------- |
-| `output/workspace_results.html` | rendered workspace |
-| `output/run_stats.json`     | runtime diagnostics |
-| `output/review_data.json`   | review summaries    |
-| `output/audit_records.json` | audit output        |
+| `data/users/<uid>/workspace_results.html` | rendered workspace |
+| DB `run_stats` table        | runtime diagnostics |
+| DB `review_data` table      | review summaries    |
+| DB `audit_records` table    | audit output        |
 
-These files can be regenerated.
+These can be regenerated from the DB or by re-running a scrape.
 
 ---
 
@@ -324,6 +323,22 @@ py -3.11 -m venv .venv
 pip install -r requirements.txt
 python -m playwright install chromium
 ```
+
+## Database Bootstrap
+
+Run once on first deploy (or after a DB reset) to seed knowledge, config, and signal defaults:
+
+```bash
+python -m job_hunter_agent.db_seed
+```
+
+After deploying a new app version that updates bundled JSON files, re-seed with overwrite to pick up the changes:
+
+```bash
+python -m job_hunter_agent.db_seed --overwrite
+```
+
+`--overwrite` replaces all DB knowledge entries from the current files. The default (`INSERT OR IGNORE`) preserves any runtime modifications made through the UI.
 
 ---
 

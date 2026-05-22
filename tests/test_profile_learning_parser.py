@@ -437,7 +437,8 @@ Produced onboarding documentation.
 
 
 def test_role_title_knowledge_file_contains_enabled_entries():
-    payload = json.loads(role_title_knowledge.ROLE_TITLE_KNOWLEDGE_PATH.read_text(encoding="utf-8"))
+    from job_hunter_agent.knowledge_store import get_knowledge
+    payload = get_knowledge("role_title_knowledge")
 
     assert payload["kind"] == "managed_knowledge"
     assert any(entry.get("value") for entry in payload["entries"])

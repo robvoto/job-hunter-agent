@@ -12,11 +12,8 @@ import json
 from typing import Any
 
 from job_hunter_agent.match_labels import MATCH_LEVELS
-from job_hunter_agent.paths import DEFAULT_USER_SETTINGS_PATH, get_user_settings_path
+from job_hunter_agent.paths import DEFAULT_USER_SETTINGS_PATH
 from job_hunter_agent.utils import coerce_int, deep_merge
-
-
-USER_STATE_FILENAME = "agent_state.json"
 
 # Settings keys
 KEY_WORKSPACE = "workspace"
@@ -163,11 +160,20 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
     return settings
 
 
-def load_user_settings(user_id: str | None, create_if_missing: bool = False) -> dict[str, Any]:
-    settings_path = get_user_settings_path(user_id)
-    if settings_path.exists():
-        return normalize_user_settings(json.loads(settings_path.read_text(encoding="utf-8")))
+def _resolve_user_id(user_id: str | None) -> str:
+    if user_id is not None:
+        return user_id
+    from job_hunter_agent.paths import get_active_user_id
+    return get_active_user_id()
 
+
+def load_user_settings(user_id: str | None, create_if_missing: bool = False) -> dict[str, Any]:
+    from job_hunter_agent.database import db_conn
+    uid = _resolve_user_id(user_id)
+    with db_conn() as conn:
+        row = conn.execute("SELECT data FROM user_settings WHERE user_id = ?", (uid,)).fetchone()
+    if row is not None:
+        return normalize_user_settings(json.loads(row["data"]))
     settings = copy.deepcopy(DEFAULT_USER_SETTINGS)
     if create_if_missing:
         save_user_settings(user_id, settings)
@@ -175,13 +181,17 @@ def load_user_settings(user_id: str | None, create_if_missing: bool = False) -> 
 
 
 def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    uid = _resolve_user_id(user_id)
     normalized = normalize_user_settings(payload)
-    settings_path = get_user_settings_path(user_id)
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.write_text(
-        json.dumps(normalized, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    ensure_user_row(uid)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_settings (user_id, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
+            (uid, json.dumps(normalized, ensure_ascii=False)),
+        )
     return normalized
 
 
@@ -194,24 +204,26 @@ def get_workspace_minimum_score(settings: Any | None = None, *, user_id: str | N
 
 
 def load_agent_state(user_id: str | None = None) -> dict[str, Any]:
-    state_path = get_user_settings_path(user_id).parent / USER_STATE_FILENAME
-    if not state_path.exists():
+    from job_hunter_agent.database import db_conn
+    uid = _resolve_user_id(user_id)
+    with db_conn() as conn:
+        row = conn.execute("SELECT data FROM agent_state WHERE user_id = ?", (uid,)).fetchone()
+    if row is None:
         return {}
-    try:
-        payload = json.loads(state_path.read_text(encoding="utf-8"))
-        if isinstance(payload, dict):
-            return payload
-    except Exception as exc:
-        print(f"[USER_SETTINGS][WARN] Failed to load agent state from {state_path}: {exc}")
-        pass
-    return {}
+    payload = json.loads(row["data"])
+    return payload if isinstance(payload, dict) else {}
 
 
 def save_agent_state(payload: dict[str, Any], user_id: str | None = None) -> dict[str, Any]:
-    state_path = get_user_settings_path(user_id).parent / USER_STATE_FILENAME
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(
-        json.dumps(payload or {}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return payload
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    uid = _resolve_user_id(user_id)
+    data = payload or {}
+    ensure_user_row(uid)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO agent_state (user_id, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
+            (uid, json.dumps(data, ensure_ascii=False)),
+        )
+    return data

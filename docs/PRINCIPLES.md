@@ -4,10 +4,15 @@
 
 ## Product intent
 
+- The current deployment path is AWS EC2 with a small EBS-backed root volume.
+- Treat the app as a production-bound service from here on: keep the implementation clean, documented, and operationally predictable.
+- Do not add prototype-only shortcuts or casual wording to user-facing or operational docs.
+
 ## Security and reliability
 
 - **Data Integrity:** Local state (JSON files) is critical. Operations must be defensive against race conditions and corruption during concurrent background tasks.
 - **Network Safety:** The app is local-first but must be network-safe. Security defaults (like cookie attributes) must escalate automatically when the app is exposed to a network.
+- **Server Deployment Discipline:** When running on EC2, assume a real server environment with persistent disk, process supervision, and explicit recovery paths.
 
 This is a strict, explainable job-fit system, not a vague recommender.
 
@@ -46,7 +51,7 @@ The system should find roles worth human attention, hide obvious mismatches, and
 ## Profile truth model
 
 - Source documents are the human truth.
-- `data/profile.json` is the runtime machine truth.
+- The per-user profile in the DB (`user_profile` table, via `profile_store.load_profile()`) is the runtime machine truth.
 - Settings is the maintenance surface for the runtime truth.
 - Generated application outputs are derived artefacts, not primary sources.
 

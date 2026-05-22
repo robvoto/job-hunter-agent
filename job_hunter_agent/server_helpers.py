@@ -14,10 +14,6 @@ import shutil
 import threading
 from pathlib import Path
 from typing import Any
-from dotenv import load_dotenv
-
-load_dotenv()
-
 from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE, ALLOWED_DOC_REL_PATHS
 from job_hunter_agent.user_settings import (
     DEFAULT_USER_SETTINGS,
@@ -30,18 +26,22 @@ from job_hunter_agent.user_settings import (
 from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
-from job_hunter_agent.io_utils import load_job_history
-from job_hunter_agent.io_utils import load_ui_labels
+from job_hunter_agent.io_utils import (
+    clear_audit_rows,
+    clear_job_history,
+    clear_review_data,
+    clear_run_stats,
+    load_job_history,
+    load_run_stats,
+    load_ui_labels,
+    write_run_stats,
+)
 from job_hunter_agent.config import AUTH_DISABLED
 from job_hunter_agent.paths import (
     DATA_DIR,
     LOCAL_USER_ID,
     USERS_DIR,
     REPO_ROOT as ROOT_DIR,
-    get_audit_records_path,
-    get_job_history_path,
-    get_review_data_path,
-    get_run_stats_path,
     get_workspace_results_path,
     get_source_pack_dir,
 )
@@ -187,6 +187,7 @@ _SEARCH_SOURCE_LABEL_KEYS = (
 
 _ONBOARDING_PAGE_LABEL_KEYS = (
     "page_title",
+    "hero_title",
     "progress_step_1_label",
     "progress_step_2_label",
     "progress_step_3_label",
@@ -197,6 +198,8 @@ _ONBOARDING_PAGE_LABEL_KEYS = (
     "workflow_step_3",
     "cv_drop_zone_empty_title",
     "cv_drop_zone_empty_hint",
+    "cv_drop_zone_loaded_hint",
+    "cv_upload_help",
     "privacy_title",
     "privacy_intro",
     "privacy_upload_only",
@@ -234,8 +237,13 @@ _ONBOARDING_PAGE_LABEL_KEYS = (
     "sector_preference_help",
     "work_type_label",
     "work_type_help",
+    "work_type_summary_all_label",
+    "work_type_summary_contract_length_label",
+    "sector_preference_summary_all_label",
     "work_mode_label",
     "work_mode_help",
+    "work_mode_summary_all_label",
+    "summary_any_length_label",
     "minimum_compensation_label",
     "minimum_compensation_help",
     "back_label",
@@ -290,7 +298,7 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "capability_remove_title",
     "capability_untitled_label",
     "capability_show_more_label",
-    "capability_show_all_label",
+    "capability_show_fewer_label",
     "capability_shown_of_label",
     "capability_count_with_selection_label",
     "capability_count_label",
@@ -515,22 +523,6 @@ def load_global_settings_labels() -> dict[str, str]:
     return _load_required_ui_labels("global_settings_labels", _GLOBAL_SETTINGS_LABEL_KEYS)
 
 
-def load_onboarding_page_copy() -> dict:
-    raw = load_ui_labels().get("onboarding_page_copy", {})
-    if not isinstance(raw, dict):
-        raise ValueError("ui_labels.json is missing onboarding_page_copy")
-    steps = raw.get("steps", {})
-    if not isinstance(steps, dict):
-        raise ValueError("ui_labels.json onboarding_page_copy.steps must be a dict")
-    for step_num in ("1", "2", "3", "4"):
-        step = steps.get(step_num, {})
-        if not isinstance(step, dict):
-            raise ValueError(f"ui_labels.json onboarding_page_copy.steps.{step_num} must be a dict")
-        required = ["title", "section_copy", "hero_title"]
-        missing = [k for k in required if not str(step.get(k, "")).strip()]
-        if missing:
-            raise ValueError(f"ui_labels.json onboarding_page_copy.steps.{step_num} missing: {', '.join(missing)}")
-    return raw
 
 
 def get_docs() -> list[dict[str, str]]:
@@ -622,6 +614,9 @@ def build_bootstrap_script(
         )
     parts.append(
         f'<script>window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ = {json.dumps(load_onboarding_flow_labels(), ensure_ascii=True)};</script>'
+    )
+    parts.append(
+        f'<script>window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__ = {json.dumps(load_onboarding_page_labels(), ensure_ascii=True)};</script>'
     )
     if resume_step is not None:
         parts.append(
@@ -892,18 +887,16 @@ def _validate_required_onboarding_inputs(
 
 def _read_last_run_timestamp() -> str | None:
     try:
-        run_stats_path = get_run_stats_path()
-        if run_stats_path.exists():
-            payload = json.loads(run_stats_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                timestamp = str(
-                    payload.get("last_run_attempt_at")
-                    or payload.get("run_finished_at")
-                    or payload.get("run_started_at")
-                    or ""
-                ).strip()
-                if timestamp:
-                    return timestamp
+        payload = load_run_stats()
+        if isinstance(payload, dict) and payload:
+            timestamp = str(
+                payload.get("last_run_attempt_at")
+                or payload.get("run_finished_at")
+                or payload.get("run_started_at")
+                or ""
+            ).strip()
+            if timestamp:
+                return timestamp
         state = load_agent_state()
         return str(state.get("last_agent_run_at") or "").strip() or None
     except Exception as exc:
@@ -995,20 +988,11 @@ def _onboarding_resume_step(profile: dict[str, Any] | None = None) -> int:
 
 def _write_run_stats_field(key: str, value: object) -> None:
     try:
-        path = get_run_stats_path()
-        payload: dict = {}
-        if path.exists():
-            import json as _json
-            try:
-                payload = _json.loads(path.read_text(encoding="utf-8")) or {}
-            except Exception as exc:
-                print(f"[SERVER_HELPERS][WARN] Failed to load run_stats for field update: {exc}")
-                payload = {}
+        payload = load_run_stats() or {}
         if not isinstance(payload, dict):
             payload = {}
         payload[key] = value
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(_json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_run_stats(payload)
     except Exception as write_exc:
         print(f"[RUN][WARN] Could not write run_stats.{key}: {write_exc}")
 
@@ -1026,7 +1010,7 @@ def _run_scrape_job() -> None:
 
 
 def _rebuild_workspace_on_startup() -> None:
-    if not get_workspace_results_path().exists() and not get_run_stats_path().exists() and not get_audit_records_path().exists():
+    if not get_workspace_results_path().exists() and not load_run_stats():
         return
     if not AUTH_DISABLED:
         print("[WORKSPACE][INFO] Startup rebuild skipped: no request user context is available.")
@@ -1106,20 +1090,10 @@ class SettingsHandler:
         if source_pack_dir.exists():
             shutil.rmtree(source_pack_dir)
 
-        for path, empty_payload in [
-            (get_job_history_path(), {}),
-            (get_review_data_path(), {}),
-            (get_run_stats_path(), {}),
-            (get_audit_records_path(), []),
-        ]:
-            try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(json.dumps(empty_payload), encoding="utf-8")
-            except Exception:
-                try:
-                    path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+        clear_job_history()
+        clear_review_data()
+        clear_run_stats()
+        clear_audit_rows()
 
         for output_path in [get_workspace_results_path()]:
             try:

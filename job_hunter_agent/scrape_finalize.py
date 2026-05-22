@@ -4,16 +4,8 @@ from datetime import datetime
 
 from job_hunter_agent import workspace_service
 from job_hunter_agent.job_identity import deduplicate_across_sources
-from job_hunter_agent.paths import (
-    get_audit_records_path,
-    get_job_history_path,
-    get_review_data_path,
-    get_run_stats_path,
-    get_workspace_pool_path,
-    get_workspace_results_path,
-)
+from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.io_utils import (
-    load_json_list,
     save_job_history,
     save_llm_cache,
     write_debug_json,
@@ -26,17 +18,31 @@ from job_hunter_agent.posting_utils import parse_timestamp
 
 
 def _load_workspace_pool() -> list[dict]:
-    pool_path = get_workspace_pool_path()
-    if not pool_path.exists():
+    import json as _json
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        row = conn.execute("SELECT data FROM workspace_pool WHERE user_id = ?", (user_id,)).fetchone()
+    if row is None:
         return []
-    return load_json_list(pool_path)
+    data = _json.loads(row["data"])
+    return data if isinstance(data, list) else []
 
 
 def _save_workspace_pool(records: list[dict]) -> None:
-    import json
-    pool_path = get_workspace_pool_path()
-    pool_path.parent.mkdir(parents=True, exist_ok=True)
-    pool_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    import json as _json
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    ensure_user_row(user_id)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO workspace_pool (user_id, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
+            (user_id, _json.dumps(records, ensure_ascii=False)),
+        )
 
 
 def _merge_into_pool(pool: list[dict], new_records: list[dict]) -> list[dict]:
@@ -191,8 +197,8 @@ def finalize_scrape_run(
     _print_run_summary(run_stats)
     print(f"  workspace_visible={_format_workspace_counts(workspace_records, context.dashboard_min_score)}")
     print(f"\nSaved {len(kept_records)} jobs to {workspace_path}")
-    print(f"Saved {len(audit_rows)} audit rows to {get_audit_records_path()}")
-    print(f"Saved run stats to {get_run_stats_path()}")
-    print(f"Saved review data to {get_review_data_path()}")
-    print(f"Saved history for {len(context.job_history)} jobs to {get_job_history_path()}")
+    print(f"Saved {len(audit_rows)} audit rows to DB")
+    print("Saved run stats to DB")
+    print("Saved review data to DB")
+    print(f"Saved history for {len(context.job_history)} jobs to DB")
     return str(workspace_path)

@@ -4,32 +4,42 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
 
-from job_hunter_agent.paths import CONFIG_DIR, GLOBAL_SETTINGS_PATH
 from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
+
+
+_DB_KEY = "global_settings"
 
 
 class GlobalSettingsLoadError(RuntimeError):
     pass
 
 
-def ensure_global_settings_exists() -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    if GLOBAL_SETTINGS_PATH.exists():
-        return
-    save_global_settings(DEFAULT_GLOBAL_SETTINGS)
+def _db_load() -> dict[str, Any] | None:
+    from job_hunter_agent.database import db_conn
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT value FROM global_settings WHERE key = ?", (_DB_KEY,)
+        ).fetchone()
+    return json.loads(row["value"]) if row else None
 
 
-def _backup_invalid_global_settings() -> None:
-    if not GLOBAL_SETTINGS_PATH.exists():
-        return
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    backup_path = GLOBAL_SETTINGS_PATH.with_name(f"global_settings.invalid.{timestamp}.json")
-    backup_path.write_bytes(GLOBAL_SETTINGS_PATH.read_bytes())
+def _db_save(settings: dict[str, Any]) -> None:
+    from job_hunter_agent.database import db_conn
+    with db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO global_settings (key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE SET
+                value      = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            (_DB_KEY, json.dumps(settings, ensure_ascii=False)),
+        )
 
 
 def get_default_country_suffix() -> str:
@@ -199,6 +209,7 @@ def get_cv_chars_per_page() -> int:
     settings = load_global_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
     return int(settings.get("cv_chars_per_page", 3000))
 
+
 def get_candidate_application_history_settings() -> dict[str, Any]:
     """Return the full candidate_application_history config section."""
     return load_global_settings().get(KEY_CANDIDATE_APPLICATION_HISTORY, {})
@@ -223,15 +234,12 @@ def get_candidate_application_history_required_headers() -> list[str]:
 
 @lru_cache(maxsize=1)
 def load_global_settings() -> dict[str, Any]:
-    ensure_global_settings_exists()
-    try:
-        data = json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        _backup_invalid_global_settings()
-        raise GlobalSettingsLoadError(f"Failed to parse global_settings.json: {exc}") from exc
+    data = _db_load()
+    if data is None:
+        data = copy.deepcopy(DEFAULT_GLOBAL_SETTINGS)
+        _db_save(data)
     if not isinstance(data, dict):
-        _backup_invalid_global_settings()
-        raise GlobalSettingsLoadError("global_settings.json must contain a JSON object")
+        raise GlobalSettingsLoadError("global_settings in DB must contain a JSON object")
     return normalize_global_settings(data)
 
 
@@ -241,9 +249,6 @@ def get_review_settings() -> dict[str, Any]:
 
 def save_global_settings(settings: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_global_settings(settings)
-    GLOBAL_SETTINGS_PATH.write_text(
-        json.dumps(normalized, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _db_save(normalized)
     load_global_settings.cache_clear()
     return normalized

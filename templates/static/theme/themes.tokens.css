@@ -43,16 +43,9 @@
   --onboarding-hero-margin-bottom: var(--surface-gap-md);
   --onboarding-hero-padding-block: var(--surface-pad-block-lg);
   --onboarding-hero-padding-inline: var(--surface-pad-inline-lg);
-  --onboarding-hero-shell-gap: 18px;
   --onboarding-hero-title-margin-bottom: 10px;
-  --onboarding-hero-title-compact-margin-bottom: 6px;
   --onboarding-hero-progress-margin-top: 22px;
-  --onboarding-hero-progress-gap: 8px;
-  --onboarding-wizard-progress-margin-bottom: 18px;
-  --onboarding-wizard-progress-bar-height: 8px;
-  --onboarding-wizard-progress-steps-gap: 10px;
   --onboarding-wizard-progress-nav-gap: 8px;
-  --onboarding-wizard-progress-dot-size: 12px;
   --onboarding-input-padding-block: var(--control-pad-block-2xl);
   --onboarding-input-padding-inline: var(--control-pad-inline-lg);
   --onboarding-input-compact-padding-block: var(--control-pad-block-lg);
@@ -69,8 +62,8 @@
   --onboarding-step1-actions-margin-top: 28px;
   --onboarding-step1-upload-help-margin-block: 12px;
   --onboarding-top-surface-height: clamp(16rem, 18vw, 18rem);
-  --onboarding-top-surface-border: color-mix(in srgb, var(--border-subtle) 58%, transparent);
-  --onboarding-top-surface-bg: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, var(--bg-page)) 0%, color-mix(in srgb, var(--bg-surface) 86%, var(--bg-page)) 100%);
+  --onboarding-top-surface-border: transparent;
+  --onboarding-top-surface-bg: color-mix(in srgb, var(--bg-page) 90%, var(--bg-surface));
 
   /* Shared control sizing */
   --control-space-2xs: 4px;

@@ -1,6 +1,6 @@
 ---
 name: signal-review-map
-description: Understand capability alias flow in job_hunter_agent, especially dominant_signal_clusters vs capability_profile_rules, where aliases are created, where they are saved, and where they are dropped. Use when tracing why aliases appear, disappear, or look sparse in profile.json or onboarding review screens.
+description: Understand capability alias flow in job_hunter_agent, especially dominant_signal_clusters vs capability_profile_rules, where aliases are created, where they are saved, and where they are dropped. Use when tracing why aliases appear, disappear, or look sparse in the user profile (DB user_profile table) or onboarding review screens.
 ---
 
 # Signal Review Map

@@ -1,12 +1,8 @@
-import pytest
-
 from job_hunter_agent import global_settings
 from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 
 
-def test_save_global_settings_normalizes_values(tmp_path, monkeypatch):
-    settings_path = tmp_path / "global_settings.json"
-    monkeypatch.setattr(global_settings, "GLOBAL_SETTINGS_PATH", settings_path)
+def test_save_global_settings_normalizes_values(isolated_db):
     global_settings.load_global_settings.cache_clear()
 
     saved = global_settings.save_global_settings({
@@ -102,12 +98,9 @@ def test_save_global_settings_normalizes_values(tmp_path, monkeypatch):
         ".md",
         ".txt",
     ]
-    assert settings_path.exists()
 
 
-def test_save_global_settings_normalizes_source_document_suffixes(tmp_path, monkeypatch):
-    settings_path = tmp_path / "global_settings.json"
-    monkeypatch.setattr(global_settings, "GLOBAL_SETTINGS_PATH", settings_path)
+def test_save_global_settings_normalizes_source_document_suffixes(isolated_db):
     global_settings.load_global_settings.cache_clear()
 
     saved = global_settings.save_global_settings({
@@ -119,17 +112,3 @@ def test_save_global_settings_normalizes_source_document_suffixes(tmp_path, monk
     assert saved["source_document_settings"]["allowed_suffixes"] == [".docx", ".txt", ".md"]
     assert global_settings.get_allowed_source_document_suffixes() == frozenset({".docx", ".txt", ".md"})
     assert global_settings.get_allowed_source_document_suffixes_label() == ".docx, .md, .txt"
-
-
-def test_load_global_settings_backs_up_invalid_json(tmp_path, monkeypatch):
-    settings_path = tmp_path / "global_settings.json"
-    settings_path.write_text("{bad json", encoding="utf-8")
-    monkeypatch.setattr(global_settings, "GLOBAL_SETTINGS_PATH", settings_path)
-    global_settings.load_global_settings.cache_clear()
-
-    with pytest.raises(global_settings.GlobalSettingsLoadError):
-        global_settings.load_global_settings()
-
-    backups = sorted(tmp_path.glob("global_settings.invalid.*.json"))
-    assert len(backups) == 1
-    assert backups[0].read_text(encoding="utf-8") == "{bad json"

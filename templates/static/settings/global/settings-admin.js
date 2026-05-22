@@ -1,13 +1,15 @@
-window.JobHunterAdminSettings = (function () {
-  const {
-    escapeHtml,
-    toLines,
-    setCurrencyFieldValue,
-    readCurrencyFieldValue,
-    setToggleChecked,
-    setChoiceGroupValue,
-    getChoiceGroupValue,
-  } = window.JobHunterSettingsUtils;
+import {
+  escapeHtml,
+  toLines,
+  setCurrencyFieldValue,
+  readCurrencyFieldValue,
+  setToggleChecked,
+  setChoiceGroupValue,
+  getChoiceGroupValue,
+  LINKEDIN_EASY_APPLY_ONLY,
+} from '../shared/settings-utils.js';
+
+export const JobHunterAdminSettings = (function () {
 
   // Fills the admin/global-settings form. Caller is responsible for storing settings
   // in loadedGlobalSettings and calling renderLlmModelOptions() afterwards.
@@ -26,8 +28,6 @@ window.JobHunterAdminSettings = (function () {
     const onboarding = settings.onboarding_settings || {};
     const llmSettings = settings.llm_settings || {};
     const playwrightSettings = settings.playwright_settings || {};
-    const LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
-
     const setBounds = (id, bounds) => {
       const input = document.getElementById(id);
       if (!input || !bounds) return;
@@ -144,8 +144,6 @@ window.JobHunterAdminSettings = (function () {
     const currentReviewSettings = current.review_settings || {};
     const currentPlaywright = current.playwright_settings || {};
     const currentOnboarding = current.onboarding_settings || {};
-    const LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
-
     const readNumber = (id, fallback) => {
       const raw = Number(document.getElementById(id).value);
       return Number.isNaN(raw) ? fallback : raw;

@@ -2,25 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, timezone
 from typing import Any
 
-from job_hunter_agent.paths import (
-    GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
-    GOVERNMENT_CONTEXT_PATTERNS_PATH,
-    CV_FARMING_RULES_PATH,
-    HARD_BLOCKER_RULES_PATH,
-    IGNORED_SIGNAL_ARCHIVE_PATH,
-    PARSING_RULES_PATH,
-    ROLE_TITLE_KNOWLEDGE_PATH,
-    ROLE_TITLE_RULES_PATH,
-    SIGNAL_REGISTRY_PATH as _REGISTRY_PATH,
-    TITLE_NORMALIZATION_RULES_PATH,
-)
+from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
 
-from job_hunter_agent.job_types import JOB_TYPE_STORE_PATH, load_job_type, save_job_type, upsert_job_type_entry
+from job_hunter_agent.job_types import load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.hard_blocker_rules import (
     load_hard_blocker_rules,
     save_hard_blocker_rules,
@@ -28,7 +16,6 @@ from job_hunter_agent.hard_blocker_rules import (
 )
 from job_hunter_agent.job_quality import upsert_cv_farming_rule
 from job_hunter_agent.capability_knowledge import (
-    CAPABILITY_KNOWLEDGE_PATH,
     load_capability_knowledge,
     upsert_capability_entry,
     save_capability_knowledge,
@@ -166,37 +153,32 @@ CATEGORY_METADATA = {
     },
 }
 
+# Maps signal categories to knowledge store keys.
 _CATEGORY_KNOWLEDGE_PATHS = {
-    CATEGORY_CAPABILITY_CONCEPT: CAPABILITY_KNOWLEDGE_PATH,
-    CATEGORY_CV_FARMING_PATTERN: CV_FARMING_RULES_PATH,
-    CATEGORY_GOVERNMENT_CONTEXT: GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
-    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: GOVERNMENT_CONTEXT_PATTERNS_PATH,
-    CATEGORY_HARD_BLOCKER_PATTERN: HARD_BLOCKER_RULES_PATH,
-    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: JOB_TYPE_STORE_PATH,
-    CATEGORY_ROLE_TITLE_TOKEN: ROLE_TITLE_KNOWLEDGE_PATH,
-    CATEGORY_ROLE_TITLE_PATTERN: ROLE_TITLE_RULES_PATH,
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: TITLE_NORMALIZATION_RULES_PATH,
+    CATEGORY_CAPABILITY_CONCEPT: "capability_knowledge",
+    CATEGORY_CV_FARMING_PATTERN: "cv_farming_rules",
+    CATEGORY_GOVERNMENT_CONTEXT: "government_context_knowledge",
+    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: "government_context_patterns",
+    CATEGORY_HARD_BLOCKER_PATTERN: "hard_blocker_rules",
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "job_type",
+    CATEGORY_ROLE_TITLE_TOKEN: "role_title_knowledge",
+    CATEGORY_ROLE_TITLE_PATTERN: "role_title_rules",
+    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "title_normalization_rules",
+}
+
+# Categories handled by dedicated save functions in clear_signal_learning_state.
+_SPECIALIZED_CLEAR_CATEGORIES = {
+    CATEGORY_CAPABILITY_CONCEPT,
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+    CATEGORY_ROLE_TITLE_TOKEN,
+    CATEGORY_ROLE_TITLE_PATTERN,
+    CATEGORY_GOVERNMENT_CONTEXT_PATTERN,
+    CATEGORY_HARD_BLOCKER_PATTERN,
 }
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _load_json_dict(path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return payload if isinstance(payload, dict) else {}
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"[SIGNAL_REGISTRY][WARN] Failed to load JSON dictionary from {path}: {exc}")
-        return {}
-
-
-def _save_json_dict(path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _clean_text(value: Any) -> str:
@@ -407,14 +389,14 @@ def _normalize_registry(registry: Any) -> dict[str, dict[str, Any]]:
     return cleaned
 
 
-def _load_approved_knowledge_payload(path) -> dict[str, Any]:
-    payload = _load_json_dict(path)
+def _load_approved_knowledge_payload(knowledge_key: str) -> dict[str, Any]:
+    payload = get_knowledge(knowledge_key) or {}
     payload.setdefault("kind", "managed_knowledge")
     payload.setdefault("entries", [])
     return payload
 
 
-def _save_approved_knowledge_payload(path, payload: dict[str, Any]) -> None:
+def _save_approved_knowledge_payload(knowledge_key: str, payload: dict[str, Any]) -> None:
     payload = dict(payload or {})
     payload["kind"] = "managed_knowledge"
     payload.setdefault("entries", [])
@@ -423,7 +405,7 @@ def _save_approved_knowledge_payload(path, payload: dict[str, Any]) -> None:
         for entry in payload["entries"]
         if isinstance(entry, dict) and _clean_text(entry.get("value"))
     ]
-    _save_json_dict(path, payload)
+    set_knowledge(knowledge_key, payload)
 
 
 def _entry_terms(entry: dict[str, Any]) -> list[str]:
@@ -432,8 +414,8 @@ def _entry_terms(entry: dict[str, Any]) -> list[str]:
     return [value, *aliases] if value else []
 
 
-def _append_knowledge_entry(path, value: str, aliases: list[str]) -> None:
-    payload = _load_approved_knowledge_payload(path)
+def _append_knowledge_entry(knowledge_key: str, value: str, aliases: list[str]) -> None:
+    payload = _load_approved_knowledge_payload(knowledge_key)
     entries = payload.setdefault("entries", [])
     canonical = _clean_text(value)
     if not canonical:
@@ -454,21 +436,17 @@ def _append_knowledge_entry(path, value: str, aliases: list[str]) -> None:
                 merged.append(alias)
             entry["value"] = canonical
             entry["aliases"] = merged
-            _save_approved_knowledge_payload(path, payload)
+            _save_approved_knowledge_payload(knowledge_key, payload)
             return
     entries.append({
         "value": canonical,
         "aliases": aliases,
     })
-    _save_approved_knowledge_payload(path, payload)
+    _save_approved_knowledge_payload(knowledge_key, payload)
 
 
-def _append_title_normalization_expansion(path, abbreviation: str, expansion: str, context_terms: list[str] | None = None) -> None:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except (json.JSONDecodeError, OSError) as exc:
-        payload = {}
-        print(f"[SIGNAL_REGISTRY][WARN] Failed to load title normalization rules from {path}: {exc}")
+def _append_title_normalization_expansion(knowledge_key: str, abbreviation: str, expansion: str, context_terms: list[str] | None = None) -> None:
+    payload = get_knowledge(knowledge_key) or {}
     if not isinstance(payload, dict):
         payload = {}
     payload.setdefault("kind", "rules")
@@ -496,8 +474,7 @@ def _append_title_normalization_expansion(path, abbreviation: str, expansion: st
                     continue
                 if set(_clean_text_list(entry.get(LEARNING_CONTEXT_TERMS_KEY))) == cleaned_context_set:
                     payload["contextual_abbreviation_expansions"] = contextual
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                    set_knowledge(knowledge_key, payload)
                     return
             entries.append({
                 "expansion": expansion_value,
@@ -505,8 +482,7 @@ def _append_title_normalization_expansion(path, abbreviation: str, expansion: st
             })
             contextual[abbreviation_key] = entries
             payload["contextual_abbreviation_expansions"] = contextual
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            set_knowledge(knowledge_key, payload)
             return
 
     expansions = payload.get("abbreviation_expansions")
@@ -514,20 +490,11 @@ def _append_title_normalization_expansion(path, abbreviation: str, expansion: st
         expansions = {}
     expansions[abbreviation_key] = expansion_value
     payload["abbreviation_expansions"] = expansions
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
+    set_knowledge(knowledge_key, payload)
 
 
 def load_registry() -> dict[str, dict[str, Any]]:
-    if not _REGISTRY_PATH.exists():
-        return {}
-    try:
-        payload = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"[SIGNAL_REGISTRY][WARN] Failed to load signal registry from {_REGISTRY_PATH}: {exc}")
-        return {} # Silently returns an empty dictionary
-    return _normalize_registry(payload)
+    return _normalize_registry(get_knowledge("signal_registry") or {})
 
 
 def _approved_signal_keys() -> set[str]:
@@ -552,7 +519,7 @@ def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> lis
     if not signal_names:
         return []
     registry_keys = set(load_registry().keys())
-    ignored_keys = set(_load_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH).keys())
+    ignored_keys = set((get_knowledge("ignored_signal") or {}).keys())
     approved_keys = _approved_signal_keys()
     filtered: list[str | dict[str, Any]] = []
     seen: set[str] = set()
@@ -582,11 +549,7 @@ def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> lis
 
 
 def save_registry(registry: dict[str, dict[str, Any]]) -> None:
-    _REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _REGISTRY_PATH.write_text(
-        json.dumps(_normalize_registry(registry), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    set_knowledge("signal_registry", _normalize_registry(registry))
 
 
 def signal_in_approved_knowledge(
@@ -716,15 +679,13 @@ _BUCKET_TO_ROUTING_KEY = {
 
 
 def upsert_profile_section_label(word: str, bucket: str) -> None:
-    """Append word to the correct routing list in parsing_rules.json."""
+    """Append word to the correct routing list in parsing_rules."""
     word = _clean_term(word)
     list_key = _BUCKET_TO_ROUTING_KEY.get(bucket)
     if not word or not list_key:
         return
-    try:
-        payload = json.loads(PARSING_RULES_PATH.read_text(encoding="utf-8")) # Catches any exception during JSON loading
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"[SIGNAL_REGISTRY][WARN] Failed to load parsing rules from {PARSING_RULES_PATH}: {exc}") # Silently returns without reporting
+    payload = get_knowledge("parsing_rules")
+    if not payload:
         return
     routing = payload.get(KEY_P_ROUTING)
     if not isinstance(routing, dict):
@@ -737,7 +698,7 @@ def upsert_profile_section_label(word: str, bucket: str) -> None:
         return
     labels.append(word)
     payload["version"] = int(payload.get("version", 0)) + 1
-    PARSING_RULES_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    set_knowledge("parsing_rules", payload)
     print(f"[PROFILE_SECTION_LABEL] Auto-added '{word}' to {list_key}")
 
 
@@ -817,7 +778,7 @@ def ignore_signal(key: str) -> dict[str, Any] | None:
     record = registry.pop(key, None)
     if record is None:
         return None
-    ignored_archive = _load_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH)
+    ignored_archive = get_knowledge("ignored_signal") or {}
     record = dict(record)
     record.setdefault(LEARNING_HISTORY_KEY, []).append({
         "action": "ignored",
@@ -825,34 +786,30 @@ def ignore_signal(key: str) -> dict[str, Any] | None:
     })
     ignored_archive[key] = record
     save_registry(registry)
-    _save_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH, ignored_archive)
+    set_knowledge("ignored_signal", ignored_archive)
     return record
 
 
 def clear_signal_learning_state() -> None:
-    save_registry({})
-    _save_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH, {})
+    set_knowledge("signal_registry", {})
+    set_knowledge("ignored_signal", {})
     save_capability_knowledge([])
     save_job_type({})
     save_role_title_knowledge([])
     save_role_title_rules([])
     save_government_context_patterns([])
     save_hard_blocker_rules([])
-    for category, path in _CATEGORY_KNOWLEDGE_PATHS.items():
-        if path in {CAPABILITY_KNOWLEDGE_PATH, ROLE_TITLE_KNOWLEDGE_PATH, ROLE_TITLE_RULES_PATH, GOVERNMENT_CONTEXT_PATTERNS_PATH, HARD_BLOCKER_RULES_PATH}:
+    for category, knowledge_key in _CATEGORY_KNOWLEDGE_PATHS.items():
+        if category in _SPECIALIZED_CLEAR_CATEGORIES:
             continue
         if category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-            if path.exists():
-                try:
-                    payload = json.loads(path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    payload = {}
-                if isinstance(payload, dict):
-                    payload["abbreviation_expansions"] = {}
-                    payload["contextual_abbreviation_expansions"] = {}
-                    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            payload = get_knowledge(knowledge_key) or {}
+            if isinstance(payload, dict):
+                payload["abbreviation_expansions"] = {}
+                payload["contextual_abbreviation_expansions"] = {}
+                set_knowledge(knowledge_key, payload)
             continue
-        _save_approved_knowledge_payload(path, {
+        _save_approved_knowledge_payload(knowledge_key, {
             "kind": "managed_knowledge",
             "entries": [],
         })
@@ -860,13 +817,9 @@ def clear_signal_learning_state() -> None:
 
 def load_approved_signal_catalog() -> list[dict[str, Any]]:
     catalog: list[dict[str, Any]] = []
-    for category, path in _CATEGORY_KNOWLEDGE_PATHS.items():
+    for category, knowledge_key in _CATEGORY_KNOWLEDGE_PATHS.items():
         if category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            except (json.JSONDecodeError, OSError) as exc:
-                payload = {}
-                print(f"[SIGNAL_REGISTRY][WARN] Failed to load title normalization rules from {path}: {exc}")
+            payload = get_knowledge(knowledge_key) or {}
             expansions = payload.get("abbreviation_expansions") if isinstance(payload, dict) else {}
             if isinstance(expansions, dict):
                 for abbrev, expansion in expansions.items():
@@ -924,14 +877,14 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
         if category == CATEGORY_CAPABILITY_CONCEPT:
             entries = load_capability_knowledge()
         elif category == CATEGORY_CV_FARMING_PATTERN:
-            payload = _load_approved_knowledge_payload(path)
+            payload = _load_approved_knowledge_payload(knowledge_key)
             entries = payload.get("entries", [])
         elif category == CATEGORY_ROLE_TITLE_TOKEN:
             entries = load_role_title_knowledge()
         elif category == CATEGORY_HARD_BLOCKER_PATTERN:
             entries = load_hard_blocker_rules()
         else:
-            payload = _load_approved_knowledge_payload(path)
+            payload = _load_approved_knowledge_payload(knowledge_key)
             entries = payload.get("entries", [])
         for entry in entries:
             if not isinstance(entry, dict):
@@ -956,6 +909,6 @@ def get_learning_status(signal_name: str) -> str:
         return LEARNING_STATUS_PENDING
     if key in load_registry():
         return LEARNING_STATUS_PENDING
-    if key in _load_json_dict(IGNORED_SIGNAL_ARCHIVE_PATH):
+    if key in (get_knowledge("ignored_signal") or {}):
         return LEARNING_STATUS_IGNORED
     return LEARNING_STATUS_APPROVED

@@ -1,10 +1,9 @@
-import json
-
 from fastapi import APIRouter
 from starlette.responses import Response
 
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.paths import get_workspace_results_path, get_run_stats_path, get_review_data_path
+from job_hunter_agent.io_utils import load_review_data, load_run_stats
+from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 from job_hunter_agent.routes.responses import json_response
@@ -40,14 +39,9 @@ def api_health():  # type: ignore[no-untyped-def]
 
 @router.get("/api/run-stats")
 def api_run_stats():  # type: ignore[no-untyped-def]
-    stats_path = get_run_stats_path()
-    if stats_path.exists():
-        try:
-            payload = json.loads(stats_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                return json_response(payload)
-        except Exception:
-            pass
+    payload = load_run_stats()
+    if isinstance(payload, dict) and payload:
+        return json_response(payload)
     return json_response({})
 
 
@@ -66,18 +60,13 @@ def api_run_status():  # type: ignore[no-untyped-def]
 
 @router.get("/api/review-data")
 def api_review_data():  # type: ignore[no-untyped-def]
-    review_data_path = get_review_data_path()
-    if review_data_path.exists():
-        try:
-            payload = json.loads(review_data_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                payload["suggested_tuning"] = srv.build_suggested_tuning_from_saved_review(
-                    payload,
-                    srv.load_profile(),
-                )
-                return json_response(payload)
-        except Exception:
-            pass
+    payload = load_review_data()
+    if isinstance(payload, dict) and payload:
+        payload["suggested_tuning"] = srv.build_suggested_tuning_from_saved_review(
+            payload,
+            srv.load_profile(),
+        )
+        return json_response(payload)
     return json_response({})
 
 

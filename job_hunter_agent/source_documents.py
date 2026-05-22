@@ -25,9 +25,6 @@ from job_hunter_agent.paths import (
     DATA_DIR,
     OUTPUT_DIR,
     REPO_ROOT,
-    get_review_data_path,
-    get_run_stats_path,
-    get_source_materials_path,
     get_source_pack_dir,
 )
 from job_hunter_agent.profile_learning import (
@@ -133,13 +130,18 @@ def normalize_source_materials(payload: Any) -> dict[str, Any]:
 
 
 def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
-    source_materials_path = get_source_materials_path()
-    if source_materials_path.exists():
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM application_materials WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    if row is not None:
         try:
-            payload = json.loads(source_materials_path.read_text(encoding="utf-8"))
-            return normalize_source_materials(payload)
+            return normalize_source_materials(json.loads(row["data"]))
         except Exception as exc:
-            print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials: {exc}")
+            print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials from DB: {exc}")
             return dict(DEFAULT_SOURCE_MATERIALS)
 
     if create_if_missing and SOURCE_MATERIALS_TEMPLATE_PATH.exists():
@@ -155,13 +157,18 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
 
 
 def save_source_materials(payload: Any) -> dict[str, Any]:
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
     normalized = normalize_source_materials(payload)
-    source_materials_path = get_source_materials_path()
-    source_materials_path.parent.mkdir(parents=True, exist_ok=True)
-    source_materials_path.write_text(
-        json.dumps(normalized, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    ensure_user_row(user_id)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO application_materials (user_id, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
+            (user_id, json.dumps(normalized, ensure_ascii=False)),
+        )
     return normalized
 
 
@@ -254,14 +261,10 @@ def build_onboarding_reset_patch(onboarding_settings: dict[str, Any] | None = No
 
 
 def clear_onboarding_runtime_outputs() -> None:
-    reset_items = [
-        (get_review_data_path(), "review_data.json"),
-        (get_run_stats_path(), "run_stats.json"),
-    ]
-    for reset_path, label in reset_items:
+    from job_hunter_agent.io_utils import clear_review_data, clear_run_stats
+    for label, fn in [("review_data", clear_review_data), ("run_stats", clear_run_stats)]:
         try:
-            reset_path.parent.mkdir(parents=True, exist_ok=True)
-            reset_path.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
+            fn()
             print(f"[ONBOARDING] {label} reset")
         except Exception as exc:
             print(f"[ONBOARDING] Could not reset {label}: {exc}")

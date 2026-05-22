@@ -1,18 +1,16 @@
-const settingsReviewCurrencyUi = window.JobHunterCurrencyUi || {};
+import { escapeHtml } from './settings-utils.js';
+import { showStatus } from './settings-page.js';
+import * as capabilityUi from '../../common/capability-ui.js';
+import { createController, WORKSPACE_PATH, SEARCH_WAIT_COPY, RUN_COMPLETE_REDIRECT_DELAY_MS } from '../../common/wait-state.js';
+
 const waitMount = document.getElementById('job_hunter_wait_mount');
-const waitUi = window.JobHunterWaitUi?.createController
-  ? window.JobHunterWaitUi.createController(waitMount)
-  : null;
-const runUi = window.JobHunterRunUi || {};
-const WORKSPACE_PATH = runUi.workspacePath || '/workspace';
-const SEARCH_WAIT_COPY = runUi.searchWaitCopy || 'This search can take a while because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.';
-const RUN_COMPLETE_REDIRECT_DELAY_MS = runUi.redirectDelayMs || 600;
+const waitUi = createController(waitMount);
 let runStatusPollHandle = null;
 let runStatusWasRunning = false;
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };
-  return capabilityStrengthMeta(choice) || { label: 'Choose a strength' };
+  return capabilityUi.capabilityLevelMeta?.[choice] || { label: 'Choose a strength' };
 }
 
 function renderReviewChoiceGuide(choice) {

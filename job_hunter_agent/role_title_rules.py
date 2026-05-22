@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from job_hunter_agent.paths import ROLE_TITLE_RULES_PATH
+
 from job_hunter_agent.managed_knowledge_store import (
     load_managed_knowledge_payload,
     save_managed_knowledge_payload,
@@ -58,7 +58,7 @@ def _pattern_to_regex(pattern: str) -> re.Pattern[str]:
 
 
 def load_role_title_rules() -> list[dict[str, Any]]:
-    payload = load_managed_knowledge_payload(ROLE_TITLE_RULES_PATH, entries_key=MANAGED_KNOWLEDGE_ENTRIES_KEY)
+    payload = load_managed_knowledge_payload("role_title_rules", entries_key=MANAGED_KNOWLEDGE_ENTRIES_KEY)
     entries = payload.get(MANAGED_KNOWLEDGE_ENTRIES_KEY)
     if not isinstance(entries, list):
         raise ValueError("role_title_rules.json must contain an entries list")
@@ -69,14 +69,14 @@ def load_role_title_rules() -> list[dict[str, Any]]:
 
 
 def save_role_title_rules(entries: list[dict[str, Any]]) -> dict[str, Any]:
-    payload = load_managed_knowledge_payload(ROLE_TITLE_RULES_PATH, entries_key=MANAGED_KNOWLEDGE_ENTRIES_KEY)
+    payload = load_managed_knowledge_payload("role_title_rules", entries_key=MANAGED_KNOWLEDGE_ENTRIES_KEY)
     payload.setdefault(MANAGED_KNOWLEDGE_KIND_KEY, "managed_knowledge")
     payload.setdefault(MANAGED_KNOWLEDGE_NAME_KEY, "role_title_rules")
     payload.setdefault(MANAGED_KNOWLEDGE_VERSION_KEY, 1)
     payload.setdefault(MANAGED_KNOWLEDGE_UPDATED_AT_KEY, "")
     payload.setdefault(MANAGED_KNOWLEDGE_DESCRIPTION_KEY, "")
     payload[MANAGED_KNOWLEDGE_ENTRIES_KEY] = _merge_entries(entries)
-    return save_managed_knowledge_payload(ROLE_TITLE_RULES_PATH, payload)
+    return save_managed_knowledge_payload("role_title_rules", payload)
 
 
 def upsert_role_title_rule(pattern: str) -> dict[str, Any]:

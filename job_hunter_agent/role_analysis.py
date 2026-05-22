@@ -1,12 +1,7 @@
 import re
 from typing import Optional
 
-from job_hunter_agent.io_utils import load_json_dict
-from job_hunter_agent.paths import (
-    GOVERNMENT_CONTEXT_KNOWLEDGE_PATH,
-    GOVERNMENT_CONTEXT_RULES_PATH,
-    POSTING_CHANNEL_INDICATORS_PATH,
-)
+from job_hunter_agent.knowledge_store import get_knowledge
 from job_hunter_agent.text_processing import compact_whitespace
 
 
@@ -38,7 +33,7 @@ def text_contains_term(text: str, term: str) -> bool:
 
 
 def _load_government_context_rules() -> tuple[tuple[str, ...], tuple[str, ...]]:
-    payload = load_json_dict(GOVERNMENT_CONTEXT_RULES_PATH)
+    payload = get_knowledge("government_context_rules") or {}
     positive_patterns = payload.get("positive_patterns")
     false_positive_patterns = payload.get("false_positive_patterns")
     if not isinstance(positive_patterns, list) or not isinstance(false_positive_patterns, list):
@@ -57,7 +52,7 @@ def _load_government_context_rules() -> tuple[tuple[str, ...], tuple[str, ...]]:
 
 
 def _load_government_context_knowledge_patterns() -> tuple[str, ...]:
-    knowledge_payload = load_json_dict(GOVERNMENT_CONTEXT_KNOWLEDGE_PATH)
+    knowledge_payload = get_knowledge("government_context_knowledge") or {}
     knowledge_entries = knowledge_payload.get("entries") if isinstance(knowledge_payload, dict) else []
     if not isinstance(knowledge_entries, list):
         return tuple()
@@ -122,7 +117,7 @@ def _dedupe_strings(values: list[str]) -> list[str]:
 
 
 def _build_weak_text_matches(details_text: str) -> list[str]:
-    rules = load_json_dict(POSTING_CHANNEL_INDICATORS_PATH).get("posting_channel_indicators", {})
+    rules = (get_knowledge("posting_channel_indicators") or {}).get("posting_channel_indicators", {})
     recruiter_keywords = [str(value or "").strip() for value in rules.get("recruiter_keywords", []) if str(value or "").strip()]
     recruiter_copy_patterns = [str(value or "").strip() for value in rules.get("recruiter_copy_patterns", []) if str(value or "").strip()]
     description = compact_whitespace(details_text).lower()

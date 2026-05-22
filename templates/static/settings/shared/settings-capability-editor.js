@@ -1,6 +1,7 @@
-window.JobHunterCapabilityEditor = (function () {
-  const capabilityUi = window.JobHunterCapabilityUi || {};
-  const { escapeHtml, settingsField } = window.JobHunterSettingsUtils;
+import { escapeHtml, settingsField } from './settings-utils.js';
+import * as capabilityUi from '../../common/capability-ui.js';
+
+export const JobHunterCapabilityEditor = (function () {
   const capabilityLabels = capabilityUi.labels || {};
   const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
   const capabilityLevels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length

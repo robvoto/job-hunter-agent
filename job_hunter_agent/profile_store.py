@@ -15,8 +15,6 @@ from __future__ import annotations
 import copy
 import json
 import re
-import shutil
-from datetime import datetime, timezone
 from typing import Any
 
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
@@ -48,10 +46,6 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_PRIMARY,
     KEY_P_ROUTING_SECONDARY,
     KEY_P_ROUTING_SUPPLEMENTARY,
-)
-from job_hunter_agent.paths import (
-    SCORING_RULES_PATH,
-    get_profile_path,
 )
 from job_hunter_agent.utils import deep_merge, coerce_int
 
@@ -118,7 +112,7 @@ SECTOR_PREFERENCE_CHOICE_OPTIONS = (
     {"value": GovPref.GOVERNMENT, "label": "Public sector"},
     {"value": GovPref.PRIVATE, "label": "Private sector"},
 )
-VALID_SECTOR_PREFERENCES = frozenset({item["value"] for item in SECTOR_PREFERENCE_OPTIONS})
+VALID_SECTOR_PREFERENCE_VALUES = frozenset({item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS})
 SECTOR_PREFERENCE_DEFAULT_LABEL = next(
     (item["label"] for item in SECTOR_PREFERENCE_OPTIONS if item["value"] == GovPref.ANY), ""
 )
@@ -202,9 +196,12 @@ class ProfileLoadError(RuntimeError):
 
 
 def _load_default_scoring_rules() -> dict[str, Any]:
-    payload = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
+    from job_hunter_agent.knowledge_store import get_knowledge
+    payload = get_knowledge("scoring_rules")
+    if payload is None:
+        raise RuntimeError("scoring_rules not found in knowledge table — seed the DB first")
     if str(payload.get("kind") or "").strip() != "system_config" or str(payload.get("name") or "").strip() != "scoring_rules":
-        raise ValueError("scoring_rules.json must be managed knowledge")
+        raise ValueError("scoring_rules must be managed knowledge")
     return {
         "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
         KEY_LLM_GRADE_POINTS: dict(payload.get(KEY_LLM_GRADE_POINTS) or {}),
@@ -248,7 +245,7 @@ DEFAULT_PROFILE = {
         "home_location": "",
         "secondary_location": "",
         KEY_WORK_MODE_PREFERENCE: [],
-        KEY_PREFER_SECTOR: False,
+        KEY_PREFER_SECTOR: [],
         "prefer_permanent": False,
         "engagement_type": list(ENGAGEMENT_TYPE_DEFAULT_VALUES),
         "preferred_contract_months": 12,
@@ -327,23 +324,6 @@ def normalize_title_pattern_lists(
     return primary, cleaned_secondary
 
 
-def ensure_profile_exists() -> None:
-    profile_path = get_profile_path()
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    if profile_path.exists():
-        return
-    save_profile(DEFAULT_PROFILE)
-
-
-def _backup_invalid_profile() -> None:
-    profile_path = get_profile_path()
-    if not profile_path.exists():
-        return
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    backup_path = profile_path.with_name(f"profile.invalid.{timestamp}.json")
-    shutil.copy2(profile_path, backup_path)
-
-
 def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     source = settings if isinstance(settings, dict) else {}
 
@@ -386,14 +366,7 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
     merged = dict(DEFAULT_PROFILE["match_preferences"])
     merged.update({k: v for k, v in source.items() if v is not None})
 
-    raw_sector = merged.get(KEY_PREFER_SECTOR)
-    if isinstance(raw_sector, bool):
-        merged[KEY_PREFER_SECTOR] = GovPref.GOVERNMENT if raw_sector else GovPref.ANY
-    else:
-        normalized_sector = str(raw_sector or "").strip().lower()
-        if normalized_sector not in VALID_SECTOR_PREFERENCES:
-            normalized_sector = GovPref.ANY
-        merged[KEY_PREFER_SECTOR] = normalized_sector
+    merged[KEY_PREFER_SECTOR] = normalize_sector_preference_values(merged.get(KEY_PREFER_SECTOR))
 
     merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(merged.get(KEY_WORK_MODE_PREFERENCE))
 
@@ -418,6 +391,25 @@ def normalize_work_mode_preferences(values: Any) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
     for item in WORK_MODE_PREFERENCE_OPTIONS:
+        value = str(item["value"]).strip().lower()
+        if value in source_values and value not in seen:
+            seen.add(value)
+            selected.append(value)
+    return selected
+
+
+def normalize_sector_preference_values(values: Any) -> list[str]:
+    if isinstance(values, bool):
+        return [GovPref.GOVERNMENT] if values else []
+    if isinstance(values, str):
+        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+    elif isinstance(values, (list, tuple, set)):
+        source_values = [str(value).strip().lower() for value in values if str(value).strip()]
+    else:
+        source_values = []
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in SECTOR_PREFERENCE_CHOICE_OPTIONS:
         value = str(item["value"]).strip().lower()
         if value in source_values and value not in seen:
             seen.add(value)
@@ -584,29 +576,34 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_profile() -> dict[str, Any]:
-    ensure_profile_exists()
-    profile_path = get_profile_path()
-    try:
-        data = json.loads(profile_path.read_text(encoding="utf-8-sig"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        _backup_invalid_profile()
-        raise ProfileLoadError(f"Failed to parse profile.json: {exc}") from exc
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        row = conn.execute("SELECT data FROM user_profile WHERE user_id = ?", (user_id,)).fetchone()
+    if row is None:
+        return normalize_full_profile(copy.deepcopy(DEFAULT_PROFILE))
+    data = json.loads(row["data"])
     if not isinstance(data, dict):
-        _backup_invalid_profile()
-        raise ProfileLoadError("profile.json must contain a JSON object")
+        raise ProfileLoadError("user_profile in DB must contain a JSON object")
     return normalize_full_profile(data)
 
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
     normalized = normalize_full_profile(profile)
     persisted = dict(normalized)
     persisted.pop("scoring_rules", None)
-    profile_path = get_profile_path()
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_path.write_text(
-        json.dumps(persisted, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    ensure_user_row(user_id)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_profile (user_id, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
+            (user_id, json.dumps(persisted, ensure_ascii=False)),
+        )
     return normalized
 
 

@@ -28,9 +28,10 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 7px;
+  padding: 8px 15px;
   border-radius: var(--radius-md);
+  font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid transparent;
@@ -61,6 +62,24 @@ textarea {
 }
 
 .btn-secondary:hover:not(:disabled) { background: var(--bg-muted); }
+
+.btn-compact-action {
+  min-height: var(--control-height-sm);
+  padding: var(--control-pad-block-sm) var(--control-pad-inline-md);
+  border-radius: var(--control-radius-lg);
+  font-size: var(--font-size-sm);
+  line-height: 1.1;
+  gap: var(--control-space-2xs);
+  background: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-page));
+  color: var(--accent-secondary);
+  border-color: color-mix(in srgb, var(--border-subtle) 90%, var(--accent) 10%);
+  box-shadow: none;
+}
+
+.btn-compact-action:hover:not(:disabled) {
+  background: var(--bg-muted);
+  color: var(--accent);
+}
 
 .btn-danger {
   background: var(--state-error-bg);

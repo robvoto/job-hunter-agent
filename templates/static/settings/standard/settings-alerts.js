@@ -1,9 +1,10 @@
-window.JobHunterAlertsSettings = (function () {
-  const {
-    escapeHtml,
-    setToggleChecked,
-    getToggleChecked,
-  } = window.JobHunterSettingsUtils;
+import {
+  escapeHtml,
+  setToggleChecked,
+  getToggleChecked,
+} from '../shared/settings-utils.js';
+
+export const JobHunterAlertsSettings = (function () {
 
   let telegramConnectLink = '';
 

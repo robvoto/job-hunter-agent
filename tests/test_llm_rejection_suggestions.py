@@ -118,8 +118,9 @@ def test_normalize_rejection_blocker_suggestions_deduplicates_and_limits_words()
 
 
 def test_managed_llm_prompt_knowledge_files_contain_lines():
-    fit_payload = json.loads(llm_gate._FIT_REVIEW_DEFAULTS_PATH.read_text(encoding="utf-8"))
-    capability_payload = json.loads(llm_gate._CAPABILITY_NAMING_DEFAULTS_PATH.read_text(encoding="utf-8"))
+    from job_hunter_agent.knowledge_store import get_knowledge
+    fit_payload = get_knowledge("llm_fit_review_defaults")
+    capability_payload = get_knowledge("llm_capability_naming_defaults")
 
     assert fit_payload["kind"] == "system_config"
     assert capability_payload["kind"] == "system_config"

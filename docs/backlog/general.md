@@ -1,19 +1,145 @@
--ES Module Migration — Onboarding JS
+-Google
+add  I accept the terms of service and privacy policy
 
-Convert the onboarding JS files from the current non-module/IIFE pattern to ES modules. Do all files in one pass, not one at a time:
 
-onboarding-page.js — export state and shared helpers
-onboarding-flow.js — import from page.js, remove IIFE
-currency-input.js — export functions, remove IIFE and window assignment
-settings-utils.js — same
-Update all <script src> tags to type="module"
-Remove all window.JobHunterCurrencyUi, window.JobHunterSettingsUtils assignments once no non-module consumer remains
-Why: explicit imports replace silent global scope coupling. Dependency direction becomes readable at the top of each file.
 
-Precondition: do the onboarding JS file split first (flow-review / flow-search / flow-actions), so the module boundaries are already clean before adding import/export syntax.
+-also you made me thinkg, how big may job history grow? what are we saving? maybe we can start deleting job history after X time just saving the minimum for our hisory functionality
 
-- if no resutls we should give tips to user 
-- we dont show the name of the person logged in- 
+--mportant finding: this is not just a .env change. The current gateway is coupled to OpenAI’s Responses API and parsed-output behavior, so “support more keys” needs a provider abstraction.
+
+Called tool
+
+To support more AI keys/providers, don’t bolt provider logic into llm_gate.py. Create a small LLM adapter layer and keep the rest of the app provider-neutral.
+
+Current state:
+
+OPENAI_API_KEY=...
+
+Current settings:
+
+"llm": {
+  "model": "gpt-4o-mini"
+}
+
+Better target:
+
+"llm": {
+  "provider": "openai",
+  "model": "gpt-4o-mini"
+}
+
+And support env vars like:
+
+OPENAI_API_KEY=...
+GOOGLE_API_KEY=...
+ANTHROPIC_API_KEY=...
+OPENROUTER_API_KEY=...
+Recommended order
+
+Start with OpenAI + OpenRouter first.
+
+Why: OpenRouter is OpenAI-compatible, so you can support many models with less code change. Gemini/Claude direct APIs are more work because their response formats and structured output handling differ.
+
+Architecture change
+
+Create:
+
+job_hunter_agent/llm_client.py
+
+It should expose one internal interface:
+
+class LLMClient:
+    def is_enabled(self) -> bool:
+        ...
+
+    def create_text(self, *, model: str, messages: list[dict], max_output_tokens: int) -> str:
+        ...
+
+    def parse_json(self, *, model: str, messages: list[dict], max_output_tokens: int, schema_model: type) -> dict:
+        ...
+
+Then llm_gate.py stops importing OpenAI directly. It calls your internal client.
+
+Minimal implementation path
+1. Add provider to default settings
+
+Update:
+
+"llm": {
+  "provider": "openai",
+  "model": "gpt-4o-mini"
+}
+2. Normalize provider in user_settings.py
+
+Add default/allowed provider handling:
+
+DEFAULT_LLM_PROVIDER = str(DEFAULT_USER_SETTINGS[KEY_LLM].get("provider", "openai")).strip()
+
+Then in normalize_user_settings() add:
+
+llm = settings.get(KEY_LLM, {})
+settings[KEY_LLM] = {
+    "provider": str(llm.get("provider") or defaults[KEY_LLM].get("provider") or "openai").strip().lower(),
+    "model": str(llm.get("model") or defaults[KEY_LLM]["model"]).strip(),
+}
+3. Add adapter factory
+
+Codex-ready instruction:
+
+Create job_hunter_agent/llm_client.py.
+
+Implement provider selection from user settings:
+- openai uses OPENAI_API_KEY and base_url default.
+- openrouter uses OPENROUTER_API_KEY and base_url https://openrouter.ai/api/v1.
+- if key is missing, return disabled client.
+- expose get_llm_client(), get_llm_provider(), get_llm_model().
+- preserve current behavior for OpenAI.
+- for now, use OpenAI-compatible Responses API only for openai.
+- for openrouter, use chat.completions and JSON parsing fallback.
+4. Refactor llm_gate.py
+
+Replace:
+
+from openai import OpenAI
+
+_api_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key=_api_key) if (_api_key and not _NO_LLM_MODE) else None
+
+With:
+
+from job_hunter_agent.llm_client import get_llm_client
+
+client = None if _NO_LLM_MODE else get_llm_client()
+
+But don’t expose raw OpenAI clients everywhere. Better rename later:
+
+llm_client = None if _NO_LLM_MODE else get_llm_client()
+5. Do not add Gemini direct first
+
+Gemini direct support needs separate handling for:
+
+API SDK
+structured JSON output
+token/cost logging
+model naming
+error handling
+prompt format differences
+
+Support it after the adapter exists.
+
+Product wording after this change
+
+Once implemented, your tester post can say:
+
+To help me test the app, you will need:
+
+A Google account
+An AI API key, currently OpenAI or OpenRouter
+
+Later:
+
+Supported AI providers currently include OpenAI and OpenRouter, with more planned.
+
   
 # Task 2 UI harcoding
 These are HTML hardcodes UI options that need un-hardcoding and if logical, be managed from advance settings.
@@ -54,58 +180,6 @@ _PHRASE_BLOCKLIST.
 docs/HARD_CODED_JUDGEMENT_BACKLOG.md
 It lists many of the same hardcoded judgement risks.
  
-
-# Task 4 Fix title normalization learning and usage.
-
-1. title_normalization_rules.json is approved runtime knowledge only.
-   It may contain:
-   - seniority_modifiers
-   - one-to-one abbreviation_expansions
-   - contextual_abbreviation_expansions
-   - normalization settings
-
-2. Remove learning_candidates from title_normalization_rules.json.
-   Pending/unclear candidates must go to:
-   - output/title_normalization_review.json
-   or
-   - signal_registry as CATEGORY_TITLE_NORMALIZATION_CANDIDATE
-
-3. Do not store confidence/needs_review/pending suggestions in approved rules.
-
-4. Support ambiguous approved acronyms with contextual mappings.
-
-Example:
-PM may have multiple approved expansions:
-- project manager when context mentions delivery, implementation, project
-- product manager when context mentions roadmap, product, go-to-market
-- program manager when context mentions program, portfolio, governance
-
-If context resolves it, normalize using the matched expansion.
-If context does not resolve it, keep the token as-is and create a review candidate.
-
-5. Replace hardcoded sr/jr/gp/pm detection.
-   Detect unknown short uppercase/acronym title tokens from CV/job titles.
-   Clear safe mappings may auto-promote.
-   Ambiguous mappings require admin review.
-
-6. Usage must be end-to-end:
-   - CV/onboarding title extraction uses title normalization
-   - title-pattern generation uses title normalization
-   - runtime job title filtering uses title normalization
-   - quick card filtering uses title normalization
-   - scoring title metadata uses normalized/decomposed title info
-   - learning writes candidates to review, not approved rules
-
-7. Tests:
-   - title_normalization_rules.json has no learning_candidates
-   - PM candidate is written to review, not one-to-one rules
-   - contextual PM can resolve to different approved meanings
-   - unresolved PM remains PM and needs review
-   - uploaded CV with new acronym creates review candidate
-   - runtime matching uses approved one-to-one and contextual normalization
-   
-   
-   
 # Task 5 Title Normalisation Rule
 Support ambiguous approved acronyms with extensible contextual mappings.
 
@@ -212,6 +286,29 @@ Do not force ambiguous acronyms into one global meaning.
 	
  - Security
  One caveat: the app still has broad CORS headers in fastapi_app.py (line 134), which is a separate issue.
+
+## Production hardening — EC2 deployment (added 2026-05-22)
+
+The app is now deploying to AWS EC2 (Ubuntu 24.04 + EBS). The following gaps must be closed before the deployment is treated as stable. These are not optional.
+
+### Security
+- **CORS headers too broad** — `fastapi_app.py` allows all origins. Must be locked to the actual production domain once Nginx + HTTPS is in place.
+- **Session cookie `secure` flag** — confirm `JOB_HUNTER_SESSION_COOKIE_SECURE=true` is set in production env so cookies are HTTPS-only.
+- **Admin gate audit** — verify every admin-only route and API endpoint calls `is_admin()`. Any gap is a privilege escalation risk with real users on the system.
+
+### Config / data paths
+- **EBS data volume** — `JOB_HUNTER_DATA_DIR` and `JOB_HUNTER_OUTPUT_DIR` must point to the EBS mount path in the systemd unit file, not the repo root. Document this in `docs/aws-ec2-setup.md`.
+- **`.env` on EC2** — production env vars (session secret, OAuth keys, admin email) must live in a restricted file on the instance, not checked into git.
+
+### Ops
+- **systemd unit** — app must restart on failure (`Restart=always`). Log to a persistent path on EBS, not the repo.
+- **Nginx reverse proxy** — required before exposing any port publicly. Document config in `docs/aws-ec2-setup.md`.
+- **HTTPS** — Let's Encrypt / ACM required. No production traffic over plain HTTP.
+- **Backup** — EBS snapshot schedule for the data volume.
+
+### Observability
+- **Silent failures** — scraper and LLM errors must surface as visible admin alerts, not swallowed to logs only. This becomes critical when not sitting at the machine.
+- **CORS/security error logging** — rejected requests should be logged at WARN level with enough context to diagnose misconfiguration.
 
 
 4. Broken Path in job_types.py (Risk: Logic Failure)

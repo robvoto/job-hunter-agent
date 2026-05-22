@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-
 from pytest import MonkeyPatch
 
 from job_hunter_agent import server_helpers
@@ -35,7 +32,8 @@ def test_validate_llm_suggestion_approvals_accepts_matching_token():
     server_helpers.SettingsHandler._validate_llm_suggestion_approvals("job-1", ["sap"], tokens)
 
 
-def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(tmp_path: Path, monkeypatch: MonkeyPatch):
+def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_followup(isolated_db, monkeypatch: MonkeyPatch):
+    signal_registry.save_registry({})
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -45,7 +43,6 @@ def test_save_requirement_blockers_feedback_adds_blocker_and_suggests_title_foll
 
     monkeypatch.setattr(server_review, "load_profile", lambda: profile)
     monkeypatch.setattr(server_review, "save_profile", lambda payload: payload)
-    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", tmp_path / "signal_registry.json")
     monkeypatch.setattr(
         server_review,
         "_load_audit_rows",
@@ -247,7 +244,8 @@ def test_save_requirement_blockers_feedback_can_apply_description_block_in_same_
     assert "description phrase rule added for sap" in rebuilds[0]
 
 
-def test_save_requirement_blockers_feedback_applies_both_title_and_description_blocks_in_same_flow(tmp_path: Path, monkeypatch: MonkeyPatch):
+def test_save_requirement_blockers_feedback_applies_both_title_and_description_blocks_in_same_flow(isolated_db, monkeypatch: MonkeyPatch):
+    signal_registry.save_registry({})
     profile = {
         "must_not_require_skills": [],
         "reject_title_rules": [],
@@ -258,7 +256,6 @@ def test_save_requirement_blockers_feedback_applies_both_title_and_description_b
 
     monkeypatch.setattr(server_review, "load_profile", lambda: profile)
     monkeypatch.setattr(server_review, "save_profile", lambda payload: payload)
-    monkeypatch.setattr(signal_registry, "_REGISTRY_PATH", tmp_path / "signal_registry.json")
     monkeypatch.setattr(
         server_review,
         "_load_audit_rows",

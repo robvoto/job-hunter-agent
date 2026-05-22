@@ -23,6 +23,29 @@ body {
   display: none;
 }
 
+/* ── App header bar ──────────────────────────────────────────────────── */
+
+.onb-header {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.onb-header__inner {
+  max-width: var(--onboarding-shell-max-width);
+  margin: 0 auto;
+  padding: 10px var(--onboarding-shell-padding-inline);
+  display: flex;
+  align-items: center;
+}
+
+.onb-header__inner .job-hunter-page-utility {
+  width: 100%;
+  min-width: 0;
+}
+
 /* ── Page layout ─────────────────────────────────────────────────────── */
 
 .page {
@@ -43,7 +66,6 @@ body {
   border: 1px solid var(--onboarding-top-surface-border);
   border-radius: var(--radius-lg);
   background: var(--onboarding-top-surface-bg);
-  box-shadow: var(--shadow-soft);
   pointer-events: none;
   z-index: 0;
 }
@@ -127,86 +149,57 @@ body {
   margin-bottom: var(--onboarding-hero-margin-bottom);
   padding: var(--onboarding-hero-padding-block) var(--onboarding-hero-padding-inline);
   background: linear-gradient(135deg, color-mix(in srgb, var(--bg-surface) 96%, var(--bg-page)) 0%, color-mix(in srgb, var(--bg-muted) 80%, var(--bg-page)) 100%);
-}
-
-.hero.is-compact {
-  margin-bottom: var(--surface-gap-sm);
+  text-align: center;
 }
 
 .hero h1 {
   margin: 0 0 var(--onboarding-hero-title-margin-bottom);
-  font-size: var(--font-size-display);
+  font-size: calc(var(--font-size-display) * 0.8);
   letter-spacing: -0.04em;
-}
-
-.hero.is-compact h1 {
-  margin-bottom: var(--onboarding-hero-title-compact-margin-bottom);
-  font-size: var(--font-size-display-compact);
-}
-
-.hero p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.hero-shell {
-  display: grid;
-  gap: var(--onboarding-hero-shell-gap);
-}
-
-.hero-copy-shell {
-  min-width: 0;
 }
 
 .hero-progress {
   margin-top: var(--onboarding-hero-progress-margin-top);
-  display: grid;
-  gap: var(--onboarding-hero-progress-gap);
 }
 
 /* ── Test panel ──────────────────────────────────────────────────────── */
 
 /* ── Wizard progress ─────────────────────────────────────────────────── */
 
-.wizard-progress {
-  margin-bottom: var(--onboarding-wizard-progress-margin-bottom);
-}
-
-.wizard-progress-bar {
-  height: var(--onboarding-wizard-progress-bar-height);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--selection-accent) 14%, var(--bg-muted));
-  border: 1px solid color-mix(in srgb, var(--selection-accent) 18%, var(--border-subtle));
-  overflow: hidden;
-}
-
-.wizard-progress-bar span {
-  display: block;
-  height: 100%;
-  min-width: 0;
-  width: var(--onboarding-progress-fill-width, 0%);
-  background: color-mix(in srgb, var(--selection-accent) 82%, var(--bg-muted));
-  border-radius: 999px;
-  box-shadow: none;
-  transition: width 0.35s ease;
-}
-
 .wizard-progress-steps {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--onboarding-wizard-progress-steps-gap);
+  display: flex;
+  align-items: center;
 }
 
 .wizard-progress-step {
-  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Connector line — fills space between step items */
+.wizard-progress-step:not(:last-child) {
+  flex: 1;
+}
+
+.wizard-progress-step:not(:last-child)::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  min-width: 12px;
+  margin-inline: 10px;
+  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  transition: background 0.3s ease;
+}
+
+.wizard-progress-step.is-complete:not(:last-child)::after {
+  background: var(--selection-accent);
 }
 
 .wizard-progress-nav {
-  width: 100%;
   display: flex;
   align-items: center;
   gap: var(--onboarding-wizard-progress-nav-gap);
@@ -218,7 +211,8 @@ body {
   font: inherit;
   font-size: var(--font-size-md);
   font-weight: 600;
-  text-align: left;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .wizard-progress-nav:not(:disabled) { cursor: pointer; }
@@ -230,13 +224,20 @@ body {
   text-underline-offset: 2px;
 }
 
-.wizard-progress-dot {
-  width: var(--onboarding-wizard-progress-dot-size);
-  height: var(--onboarding-wizard-progress-dot-size);
+.wizard-progress-circle {
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: 50%;
   border: 2px solid color-mix(in srgb, var(--text-muted) 40%, transparent);
   background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .wizard-progress-step.is-active,
@@ -245,21 +246,20 @@ body {
 }
 
 .wizard-progress-step.is-active .wizard-progress-label {
-  font-weight: 800;
-  text-decoration: underline;
-  text-decoration-color: var(--selection-accent);
-  text-underline-offset: 3px;
+  font-weight: 700;
 }
 
-.wizard-progress-step.is-active .wizard-progress-dot {
-  border-color: var(--selection-accent);
+.wizard-progress-step.is-active .wizard-progress-circle {
   background: var(--selection-accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--selection-accent) 16%, transparent);
+  border-color: var(--selection-accent);
+  color: var(--button-text);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--selection-accent) 18%, transparent);
 }
 
-.wizard-progress-step.is-complete .wizard-progress-dot {
+.wizard-progress-step.is-complete .wizard-progress-circle {
+  background: var(--selection-accent);
   border-color: var(--selection-accent);
-  background: transparent;
+  color: var(--button-text);
 }
 
 /* ── Wizard steps ────────────────────────────────────────────────────── */
@@ -1012,22 +1012,13 @@ body {
 }
 
 .review-capability-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-muted);
   color: var(--text-muted);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .review-capability-count.is-selected {
   color: var(--selection-accent);
-  border-color: color-mix(in srgb, var(--selection-accent) 32%, var(--border-subtle));
 }
 
 .review-capability-footer-action {
@@ -1036,10 +1027,24 @@ body {
   gap: 8px;
 }
 
+.review-capability-footer-action--text {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  padding: 0;
+  min-height: 0;
+  width: auto;
+  height: auto;
+}
+
 .review-capability-footer-action-icon {
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
+}
+
+.review-capability-footer-label {
+  font-size: inherit;
+  line-height: 1;
 }
 
 /* ── Experience weighting dropdown ───────────────────────────────────── */
@@ -1051,12 +1056,13 @@ body {
 /* ── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 720px) {
-  .hero-shell {
-    gap: 16px;
+  .wizard-progress-label {
+    display: none;
   }
 
-  .wizard-progress-steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .wizard-progress-circle {
+    width: 28px;
+    height: 28px;
   }
 
   .review-grid,
@@ -1152,36 +1158,37 @@ body {
 }
 
 /* Search Basics: grouped composition instead of a long single-column form. */
-.search-basics-form {
+.search-basics-grid {
   display: grid;
-  gap: 22px;
-  margin-top: 18px;
-  max-width: 74rem;
-}
-
-.search-basics-form .onb-field {
-  margin-top: 0;
-}
-
-.search-basics-row {
-  display: grid;
-  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 16px;
   align-items: start;
 }
 
-.search-basics-row--two {
-  grid-template-columns: repeat(2, minmax(min(100%, 24rem), 1fr));
-  max-width: 58rem;
+.search-basics-card--target {
+  grid-column: 1 / -1;
 }
 
-.search-basics-row--choices {
-  grid-template-columns: repeat(2, minmax(min(100%, 24rem), 1fr));
-  max-width: 58rem;
+.search-basics-card-body {
+  display: grid;
+  gap: 18px;
+  margin-top: 14px;
 }
 
-.search-basics-keywords,
-.search-basics-compensation {
-  max-width: none;
+.search-basics-card .onb-field {
+  margin-top: 0;
+}
+
+.search-basics-summary {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.search-basics-summary[hidden] {
+  display: none;
 }
 
 #review_search_keywords,
@@ -1196,8 +1203,7 @@ body {
   max-width: none;
 }
 
-/* Compact salary: both inputs sit side-by-side in a natural-width row */
-.search-basics-compensation .salary-pair {
+.search-basics-card--compensation .salary-pair {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
@@ -1205,16 +1211,16 @@ body {
   grid-template-columns: unset;
 }
 
-.search-basics-compensation .salary-pair > div {
+.search-basics-card--compensation .salary-pair > div {
   flex: 0 0 auto;
 }
 
-.search-basics-compensation .salary-pair label {
+.search-basics-card--compensation .salary-pair label {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
-.search-basics-compensation .salary-pair .currency-input-wrap {
+.search-basics-card--compensation .salary-pair .currency-input-wrap {
   max-width: 190px;
 }
 
@@ -1231,15 +1237,15 @@ body {
   margin: 0 0 8px;
 }
 
-/* Contract duration: compact inline row shown below work-type chips when Contract is selected */
+/* Contract duration: compact popover shown below the Contract chip when selected */
 .contract-duration-row {
   position: absolute;
   z-index: 60;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  padding: 5px 6px;
 }
 
 .contract-duration-row[hidden] {
@@ -1247,9 +1253,10 @@ body {
 }
 
 .contract-duration-row select {
-  width: 160px;
+  width: 120px;
   margin: 0;
-  font-size: var(--font-size-1xl);
+  font-size: var(--font-size-sm);
+  padding-block: 3px;
 }
 
 /* Help text: hidden when field has an info icon; revealed on click */
@@ -1262,25 +1269,19 @@ body {
 }
 
 .search-basics-actions {
-  margin-top: 24px;
-  padding-top: 18px;
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
 }
 
 @media (max-width: 860px) {
-  .search-basics-row--two,
-  .search-basics-row--choices {
+  .search-basics-grid {
     grid-template-columns: 1fr;
     max-width: none;
   }
 
-  .search-basics-keywords,
-  .search-basics-compensation {
-    max-width: none;
-  }
-
-  .search-basics-compensation .salary-pair {
-    flex-direction: column;
+  .search-basics-card--target {
+    grid-column: auto;
   }
 }
 

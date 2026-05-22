@@ -1,17 +1,47 @@
-(() => {
-const { escapeHtml, normalizeReviewText, normalizeReviewTitleLists, normalizeReviewCapability, patternToLabel, normalizeWorkModePreferences, getWorkModePreferenceValues, setWorkModePreferenceValues, setEngagementTypeValues, getSectorPreferenceValues, setSectorPreferenceValues, setCurrencyFieldValue, readCurrencyFieldValue } = window.JobHunterSettingsUtils;
+import * as onboardingPage from './onboarding-page.js';
+import { setSelectedLocations, defaultSearchKeywordFromTargetRoles, hydrateSearchBasics } from './onboarding-search.js';
+import * as onboardingStorage from './onboarding-storage.js';
+import * as onboardingUpload from './onboarding-upload.js';
+import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
+import * as onboardingCurrencyUi from '../common/currency-input.js';
+import * as onboardingLocationUi from '../common/location-options.js';
+import * as onboardingCapabilityUi from '../common/capability-ui.js';
 
-const onboardingFlowCurrencyUi = window.JobHunterCurrencyUi || {};
+const {
+  getReviewCapabilityPreviewCount,
+  hasDraftProfileState,
+  hasSearchBasicsState,
+  refreshStepNavigation,
+  renderLocationSelect,
+  setMinContractMonthValue,
+  setStep,
+  showOnboardingImportHelper,
+  startWorkingStatus,
+  updateCompensationVisibility,
+} = onboardingPage;
+
+const {
+  escapeHtml,
+  normalizeReviewText,
+  normalizeReviewTitleLists,
+  normalizeReviewCapability,
+  patternToLabel,
+  normalizeWorkModePreferences,
+  getWorkModePreferenceValues,
+  setWorkModePreferenceValues,
+  setEngagementTypeValues,
+  getSectorPreferenceValues,
+  setSectorPreferenceValues,
+  setCurrencyFieldValue,
+  readCurrencyFieldValue,
+} = onboardingSettingsUtils;
+
 const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
-const onboardingLocationUi = window.JobHunterLocationUi || {};
 const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
-const capabilityUi = window.JobHunterCapabilityUi || {};
-const capabilityLabels = capabilityUi.labels || {};
-const onboardingUserId = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
-
+const capabilityLabels = onboardingCapabilityUi.labels || {};
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
 }
@@ -20,16 +50,6 @@ if (!onboardingImportSummaryLabels) {
 }
 if (!onboardingFlowLabels) {
   throw new Error('Missing onboarding flow labels.');
-}
-if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
-  throw new Error('Missing capability UI labels.');
-}
-if (!onboardingUserId) {
-  throw new Error('Missing user id.');
-}
-
-function scopedOnboardingStorageKey(baseKey) {
-  return `${baseKey}:${onboardingUserId}`;
 }
 
 function normalizeReviewTitle(value) {
@@ -113,8 +133,6 @@ const testMenuRefs = Object.freeze({
   resetUserBtn: document.getElementById('job_hunter_reset_user_btn'),
   resetLearningBtn: document.getElementById('job_hunter_reset_learning_btn'),
 });
-const ONBOARDING_WELCOME_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWelcome');
-const ONBOARDING_WIZARD_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWizard');
 
 function setTestMenuOpen(open) {
   if (!testMenuRefs.testMenu || !testMenuRefs.testTrigger) {
@@ -127,7 +145,7 @@ function setTestMenuOpen(open) {
 function clearOnboardingBrowserState() {
   try {
     window.localStorage.removeItem(ONBOARDING_WELCOME_KEY);
-    window.localStorage.removeItem(ONBOARDING_WIZARD_KEY);
+    window.localStorage.removeItem(WIZARD_STATE_KEY);
   } catch (error) {
     console.warn('Could not clear onboarding browser state.', error);
   }
@@ -161,6 +179,10 @@ const engagementTypeDefaultLabel = engagementTypeDefaultValues
   .map((value) => engagementTypeLabels[String(value || '').trim().toLowerCase()] || String(value || '').trim())
   .filter(Boolean)
   .join(' | ');
+const minContractMonthOptions = Array.isArray(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__)
+  ? window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
+  : [];
+const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ || 'All').trim();
 const sectorPreferenceOptions = Array.isArray(window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__
   : [];
@@ -199,6 +221,15 @@ function engagementTypeLabel(values) {
   return labels.length ? labels.join(' | ') : engagementTypeDefaultLabel;
 }
 
+function minContractMonthText(value) {
+  const selected = String(value || '').trim();
+  if (!selected) {
+    return minContractMonthNoneLabel;
+  }
+  const option = minContractMonthOptions.find((item) => String(item.value || '').trim() === selected);
+  return String(option?.label || selected).trim();
+}
+
 function workModePreferenceLabel(values) {
   const selected = normalizeWorkModePreferences(values);
   if (!selected.length) {
@@ -208,8 +239,20 @@ function workModePreferenceLabel(values) {
 }
 
 function sectorPreferenceLabel(value) {
-  const key = String(value || '').trim().toLowerCase();
-  return sectorPreferenceLabels[key] || sectorPreferenceDefaultLabel || sectorPreferenceLabels[sectorPreferenceDefault] || '';
+  const values = Array.isArray(value)
+    ? value
+    : String(value || '').split(/[,\n|/]+/);
+  const selected = [];
+  const seen = new Set();
+  for (const item of values) {
+    const key = String(item || '').trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    if (sectorPreferenceLabels[key]) {
+      seen.add(key);
+      selected.push(sectorPreferenceLabels[key]);
+    }
+  }
+  return selected.length ? selected.join(' | ') : sectorPreferenceDefaultLabel || sectorPreferenceLabels[sectorPreferenceDefault] || '';
 }
 
 function preventFileNavigation(event) {
@@ -217,8 +260,8 @@ function preventFileNavigation(event) {
 }
 
 function moveReviewTitle(sourceList, sourceIndex, targetList) {
-  const source = sourceList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
-  const target = targetList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
+  const source = sourceList === 'primary' ? onboardingPage.reviewTargetTitles : onboardingPage.reviewSecondaryTitles;
+  const target = targetList === 'primary' ? onboardingPage.reviewTargetTitles : onboardingPage.reviewSecondaryTitles;
   const item = source[sourceIndex];
   if (!item) return;
   const key = normalizeReviewTitleKey(item);
@@ -227,9 +270,9 @@ function moveReviewTitle(sourceList, sourceIndex, targetList) {
     target.push(item);
   }
   source.splice(sourceIndex, 1);
-  const normalized = normalizeReviewTitleLists(reviewTargetTitles, reviewSecondaryTitles);
-  reviewTargetTitles = normalized.primary;
-  reviewSecondaryTitles = normalized.secondary;
+  const normalized = normalizeReviewTitleLists(onboardingPage.reviewTargetTitles, onboardingPage.reviewSecondaryTitles);
+  onboardingPage.setReviewTargetTitles(normalized.primary);
+  onboardingPage.setReviewSecondaryTitles(normalized.secondary);
   renderReviewStep();
 }
 
@@ -237,8 +280,8 @@ function addReviewTitle(targetList, value) {
   const cleaned = normalizeReviewTitle(value);
   if (!cleaned) return;
   const key = normalizeReviewTitleKey(cleaned);
-  const target = targetList === 'primary' ? reviewTargetTitles : reviewSecondaryTitles;
-  const other = targetList === 'primary' ? reviewSecondaryTitles : reviewTargetTitles;
+  const target = targetList === 'primary' ? onboardingPage.reviewTargetTitles : onboardingPage.reviewSecondaryTitles;
+  const other = targetList === 'primary' ? onboardingPage.reviewSecondaryTitles : onboardingPage.reviewTargetTitles;
   const otherIndex = other.findIndex((item) => normalizeReviewTitleKey(item) === key);
   if (otherIndex >= 0) {
     other.splice(otherIndex, 1);
@@ -246,9 +289,9 @@ function addReviewTitle(targetList, value) {
   if (!target.some((item) => normalizeReviewTitleKey(item) === key)) {
     target.push(cleaned);
   }
-  const normalized = normalizeReviewTitleLists(reviewTargetTitles, reviewSecondaryTitles);
-  reviewTargetTitles = normalized.primary;
-  reviewSecondaryTitles = normalized.secondary;
+  const normalized = normalizeReviewTitleLists(onboardingPage.reviewTargetTitles, onboardingPage.reviewSecondaryTitles);
+  onboardingPage.setReviewTargetTitles(normalized.primary);
+  onboardingPage.setReviewSecondaryTitles(normalized.secondary);
   renderReviewStep();
 }
 
@@ -273,147 +316,99 @@ function renderReviewChipList(containerKey, values, emptyLabel, removeAttribute,
 function formatCurrencySummaryValue(value) {
   const raw = String(value ?? '').trim();
   if (!raw) return onboardingFlowLabels.not_provided_label;
-  const formatted = onboardingFlowCurrencyUi.formatCurrencyValue?.(raw) || '0';
+  const formatted = onboardingCurrencyUi.formatCurrencyValue?.(raw) || '0';
   return `$${formatted}`;
 }
 
 function updateCheckStep() {
   const searchPrefs = searchPreferencesPayload();
-  flowRefs.checkTargetTitles.textContent = reviewTargetTitles.length ? reviewTargetTitles.join(' | ') : onboardingFlowLabels.not_provided_label;
-  flowRefs.checkSecondaryTitles.textContent = reviewSecondaryTitles.length ? reviewSecondaryTitles.join(' | ') : onboardingFlowLabels.not_provided_label;
-  flowRefs.checkCapabilities.textContent = reviewCapabilityRules.length
-    ? (reviewCapabilityRules.length === 1
+  flowRefs.checkTargetTitles.textContent = onboardingPage.reviewTargetTitles.length ? onboardingPage.reviewTargetTitles.join(' | ') : onboardingFlowLabels.not_provided_label;
+  flowRefs.checkSecondaryTitles.textContent = onboardingPage.reviewSecondaryTitles.length ? onboardingPage.reviewSecondaryTitles.join(' | ') : onboardingFlowLabels.not_provided_label;
+  flowRefs.checkCapabilities.textContent = onboardingPage.reviewCapabilityRules.length
+    ? (onboardingPage.reviewCapabilityRules.length === 1
       ? onboardingFlowLabels.capability_rows_label_one
-      : formatLabel(onboardingFlowLabels.capability_rows_label_many, { count: reviewCapabilityRules.length }))
+      : formatLabel(onboardingFlowLabels.capability_rows_label_many, { count: onboardingPage.reviewCapabilityRules.length }))
     : onboardingFlowLabels.capabilities_none_label;
   flowRefs.checkSearchTitle.textContent = searchPrefs.keywords || onboardingFlowLabels.not_provided_label;
   flowRefs.checkLocations.textContent = searchPrefs.locations.length
     ? searchPrefs.locations.map(locationLabel).join(' | ')
     : onboardingFlowLabels.not_provided_label;
   flowRefs.checkEngagementType.textContent = engagementTypeLabel(searchPrefs.engagement_type);
-  flowRefs.checkMinContractMonths.textContent = minContractMonthLabel(searchPrefs.min_contract_months);
+  flowRefs.checkMinContractMonths.textContent = minContractMonthText(searchPrefs.min_contract_months);
   flowRefs.checkWorkModePreference.textContent = workModePreferenceLabel(searchPrefs.work_mode_preference);
   flowRefs.checkSectorPreference.textContent = sectorPreferenceLabel(searchPrefs.prefer_sector);
   flowRefs.checkSalaryYearly.textContent = formatCurrencySummaryValue(searchPrefs.minimum_salary_yearly);
   flowRefs.checkSalaryDaily.textContent = formatCurrencySummaryValue(searchPrefs.minimum_daily_rate);
 }
 
-function setSelectedLocations(locations) {
-  const select = flowRefs.locationSearch;
-  const value = String(Array.isArray(locations) && locations.length ? locations[0] : '').trim();
-  const current = String(select?.value || selectedLocations[0] || '').trim();
-  const next = value || current;
-  const resolved = onboardingLocationUi.resolveLocationValue ? onboardingLocationUi.resolveLocationValue(next) : next;
-  selectedLocations = resolved ? [resolved] : [];
-  if (select) select.value = resolved;
-  renderLocationSelect();
-}
-
-function defaultSearchKeywordFromTargetRoles(profile) {
-  const reviewedTitles = Array.isArray(reviewTargetTitles) ? reviewTargetTitles : [];
-  const profileTitles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
-  const allTitles = dedupeReviewList([...reviewedTitles, ...profileTitles]);
-  return allTitles.length ? allTitles[0] : '';
-}
-
-function hydrateSearchBasics(profile) {
-  const searchSettings = profile?.search_settings || {};
-  const matchPreferences = profile?.match_preferences || {};
-  const salaryPreferences = profile?.salary_preferences || {};
-  const currentKeywords = String(flowRefs.reviewSearchKeywords.value || '').trim();
-  const savedKeywords = String(searchSettings.keywords || '').trim();
-  flowRefs.reviewSearchKeywords.value = currentKeywords || savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
-  setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
-  const currentSalaryYearly = String(flowRefs.reviewMinimumSalaryYearly.value || '').trim();
-  const currentSalaryDaily = String(flowRefs.reviewMinimumDailyRate.value || '').trim();
-  if (!currentSalaryYearly) {
-    setCurrencyFieldValue(flowRefs.reviewMinimumSalaryYearly, salaryPreferences.minimum_salary_yearly ?? 0);
-  }
-  if (!currentSalaryDaily) {
-    setCurrencyFieldValue(flowRefs.reviewMinimumDailyRate, salaryPreferences.minimum_daily_rate ?? 0);
-  }
-  setSelectedLocations(searchSettings.locations || []);
-  const engagementType = Array.isArray(matchPreferences.engagement_type)
-    ? matchPreferences.engagement_type
-    : [];
-  setEngagementTypeValues(engagementType);
-  if (!getWorkModePreferenceValues().length) {
-    setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
-  }
-  if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
-    if (typeof setSectorPreferenceValues === 'function') {
-      setSectorPreferenceValues(matchPreferences.prefer_sector || sectorPreferenceDefault);
-    }
-  }
-  updateCompensationVisibility();
-}
-
 function removeReviewCapability(index) {
-  reviewCapabilityRules.splice(index, 1);
-  selectedReviewCapabilityIndexes = new Set(
-    [...selectedReviewCapabilityIndexes]
-      .filter((value) => value !== index)
-      .map((value) => (value > index ? value - 1 : value))
+  onboardingPage.reviewCapabilityRules.splice(index, 1);
+  onboardingPage.setSelectedReviewCapabilityIndexes(
+    new Set(
+      [...onboardingPage.selectedReviewCapabilityIndexes]
+        .filter((value) => value !== index)
+        .map((value) => (value > index ? value - 1 : value))
+    )
   );
-  reviewCapabilityVisibleCount = Math.max(reviewCapabilityVisibleCount - 1, getReviewCapabilityPreviewCount());
+  onboardingPage.setReviewCapabilityVisibleCount(Math.max(onboardingPage.reviewCapabilityVisibleCount - 1, getReviewCapabilityPreviewCount()));
 }
 
 function removeReviewCapabilityAlias(index, aliasValue) {
-  const rule = reviewCapabilityRules[index];
+  const rule = onboardingPage.reviewCapabilityRules[index];
   if (!rule) return;
   const cleanedAlias = normalizeReviewAlias(aliasValue);
-  reviewCapabilityRules[index] = normalizeReviewCapability({
+  onboardingPage.reviewCapabilityRules[index] = normalizeReviewCapability({
     ...rule,
     aliases: (rule.aliases || []).filter((alias) => alias !== cleanedAlias),
   });
   renderReviewCapabilities();
-  saveWizardState();
+  onboardingStorage.saveWizardState();
 }
 
 function applyReviewCapabilityAction(index, action) {
-  if (!reviewCapabilityRules[index]) return;
+  if (!onboardingPage.reviewCapabilityRules[index]) return;
   if (action === 'remove') {
     removeReviewCapability(index);
   }
   renderReviewStep();
-  saveWizardState();
+  onboardingStorage.saveWizardState();
 }
 
 function applyBulkReviewCapabilityAction(action) {
-  const selectedIndexes = [...selectedReviewCapabilityIndexes].sort((left, right) => right - left);
+  const selectedIndexes = [...onboardingPage.selectedReviewCapabilityIndexes].sort((left, right) => right - left);
   if (!selectedIndexes.length) return;
   for (const index of selectedIndexes) {
     if (action !== 'remove') continue;
     removeReviewCapability(index);
   }
   if (action === 'remove') {
-    selectedReviewCapabilityIndexes.clear();
+    onboardingPage.selectedReviewCapabilityIndexes.clear();
   }
   renderReviewStep();
-  saveWizardState();
+  onboardingStorage.saveWizardState();
 }
 
 function selectVisibleReviewCapabilities() {
   const filterTerm = String(flowRefs.reviewCapabilityFilter?.value || '').trim().toLowerCase();
-  const orderedRules = reviewCapabilityRules
+  const orderedRules = onboardingPage.reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
     .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
     .filter((item) => !filterTerm || item.rule.name.toLowerCase().includes(filterTerm));
-  const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, reviewCapabilityVisibleCount);
-  visibleRules.forEach(({ index }) => selectedReviewCapabilityIndexes.add(index));
+  const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, onboardingPage.reviewCapabilityVisibleCount);
+  visibleRules.forEach(({ index }) => onboardingPage.selectedReviewCapabilityIndexes.add(index));
   renderReviewCapabilities();
 }
 
 function clearSelectedReviewCapabilities() {
-  selectedReviewCapabilityIndexes.clear();
+  onboardingPage.selectedReviewCapabilityIndexes.clear();
   renderReviewCapabilities();
 }
 
 function toggleSelectedReviewCapability(index, checked) {
   if (checked) {
-    selectedReviewCapabilityIndexes.add(index);
+    onboardingPage.selectedReviewCapabilityIndexes.add(index);
   } else {
-    selectedReviewCapabilityIndexes.delete(index);
+    onboardingPage.selectedReviewCapabilityIndexes.delete(index);
   }
   renderReviewCapabilities();
 }
@@ -421,7 +416,7 @@ function toggleSelectedReviewCapability(index, checked) {
 function renderReviewCapabilities() {
   const container = flowRefs.reviewCapabilityCards;
   if (!container) return;
-  if (!reviewCapabilityRules.length) {
+  if (!onboardingPage.reviewCapabilityRules.length) {
     if (reviewCapabilityCountEl) {
       reviewCapabilityCountEl.textContent = onboardingFlowLabels.capabilities_none_label;
       reviewCapabilityCountEl.classList.remove('is-selected');
@@ -430,7 +425,7 @@ function renderReviewCapabilities() {
     return;
   }
   const filterTerm = String(flowRefs.reviewCapabilityFilter?.value || '').trim().toLowerCase();
-  const orderedRules = reviewCapabilityRules
+  const orderedRules = onboardingPage.reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
     .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
     .filter((item) => {
@@ -438,16 +433,18 @@ function renderReviewCapabilities() {
       return item.rule.name.toLowerCase().includes(filterTerm)
         || item.rule.aliases.some((alias) => alias.includes(filterTerm));
     });
-  const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, reviewCapabilityVisibleCount);
+  const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, onboardingPage.reviewCapabilityVisibleCount);
   const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
-  const selectedVisibleCount = visibleRules.filter(({ index }) => selectedReviewCapabilityIndexes.has(index)).length;
+  const previewCount = getReviewCapabilityPreviewCount();
+  const isExpanded = !filterTerm && orderedRules.length > previewCount && onboardingPage.reviewCapabilityVisibleCount >= orderedRules.length;
+  const selectedVisibleCount = visibleRules.filter(({ index }) => onboardingPage.selectedReviewCapabilityIndexes.has(index)).length;
   if (reviewCapabilityCountEl) {
     reviewCapabilityCountEl.textContent = filterTerm
       ? formatLabel(onboardingFlowLabels.capability_shown_of_label, { shown: visibleRules.length, total: orderedRules.length })
-      : (selectedReviewCapabilityIndexes.size
-        ? formatLabel(onboardingFlowLabels.capability_count_with_selection_label, { total: orderedRules.length, selected: selectedReviewCapabilityIndexes.size })
+      : (onboardingPage.selectedReviewCapabilityIndexes.size
+        ? formatLabel(onboardingFlowLabels.capability_count_with_selection_label, { total: orderedRules.length, selected: onboardingPage.selectedReviewCapabilityIndexes.size })
         : formatLabel(onboardingFlowLabels.capability_count_label, { total: orderedRules.length }));
-    reviewCapabilityCountEl.classList.toggle('is-selected', selectedReviewCapabilityIndexes.size > 0);
+    reviewCapabilityCountEl.classList.toggle('is-selected', onboardingPage.selectedReviewCapabilityIndexes.size > 0);
   }
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -469,7 +466,7 @@ function renderReviewCapabilities() {
         </details>
       `;
     })();
-    const selectedClass = selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
+    const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
     return `
       <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
@@ -489,36 +486,22 @@ function renderReviewCapabilities() {
       </article>
     `;
     }).join('') : `<div class="chip-empty">${escapeHtml(capabilityLabels.onboarding_no_match_text)}</div>`;
-  const bulkDisabled = selectedReviewCapabilityIndexes.size ? '' : ' disabled';
-  const nextCount = Math.min(getReviewCapabilityPreviewCount(), hiddenCount);
-  const showMoreIcon = `
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-footer-icon-svg">
-      <path d="M12 5v14m-7-7h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-    </svg>
-  `;
-  const showAllIcon = `
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-footer-icon-svg">
-      <path d="M5 7h14m-14 5h14m-14 5h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
-    </svg>
-  `;
-  const footerHtml = hiddenCount > 0 ? `
+  const bulkDisabled = onboardingPage.selectedReviewCapabilityIndexes.size ? '' : ' disabled';
+  const footerHtml = (!filterTerm && orderedRules.length > previewCount) ? `
     <div class="review-capability-footer">
-      <button class="btn-icon review-capability-footer-action review-capability-footer-icon" type="button" data-review-show-more="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_more_label, { count: nextCount }))}">
-        ${showMoreIcon}
-      </button>
-      <button class="btn-icon review-capability-footer-action" type="button" data-review-show-all="true" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_show_all_label, { count: orderedRules.length }))}">
-        ${showAllIcon}
+      <button class="btn-icon review-capability-footer-action review-capability-footer-action--text" type="button" data-review-toggle-capabilities="true" aria-label="${escapeHtml(isExpanded ? onboardingFlowLabels.capability_show_fewer_label : formatLabel(onboardingFlowLabels.capability_show_more_label, { count: hiddenCount }))}" title="${escapeHtml(isExpanded ? onboardingFlowLabels.capability_show_fewer_label : formatLabel(onboardingFlowLabels.capability_show_more_label, { count: hiddenCount }))}">
+        <span class="review-capability-footer-label">${escapeHtml(isExpanded ? onboardingFlowLabels.capability_show_fewer_label : formatLabel(onboardingFlowLabels.capability_show_more_label, { count: hiddenCount }))}</span>
       </button>
     </div>
   ` : '';
-  const toolbarHtml = selectedReviewCapabilityIndexes.size ? `
+  const toolbarHtml = onboardingPage.selectedReviewCapabilityIndexes.size ? `
     <div class="review-capability-toolbar">
       <div class="review-capability-toolbar-main">
         <span class="review-capability-toolbar-copy">${escapeHtml(formatLabel(onboardingFlowLabels.capability_selected_copy, { count: selectedVisibleCount }))}</span>
         <div class="review-capability-bulk-actions">
-          <button class="btn btn-secondary" type="button" data-review-select-visible="true">${escapeHtml(onboardingFlowLabels.capability_select_shown_label)}</button>
-          <button class="btn btn-secondary" type="button" data-review-clear-selection="true"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_clear_selection_label)}</button>
-          <button class="btn btn-secondary" type="button" data-review-bulk-action="remove"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_remove_selected_label)}</button>
+          <button class="btn btn-secondary btn-compact-action" type="button" data-review-select-visible="true">${escapeHtml(onboardingFlowLabels.capability_select_shown_label)}</button>
+          <button class="btn btn-secondary btn-compact-action" type="button" data-review-clear-selection="true"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_clear_selection_label)}</button>
+          <button class="btn btn-secondary btn-compact-action" type="button" data-review-bulk-action="remove"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_remove_selected_label)}</button>
         </div>
       </div>
     </div>
@@ -536,12 +519,12 @@ function renderReviewStep() {
   if (typeof hideStatus === 'function') {
     hideStatus();
   }
-  selectedReviewCapabilityIndexes = new Set(
-    [...selectedReviewCapabilityIndexes].filter((index) => index >= 0 && index < reviewCapabilityRules.length)
+  onboardingPage.setSelectedReviewCapabilityIndexes(
+    new Set([...onboardingPage.selectedReviewCapabilityIndexes].filter((index) => index >= 0 && index < onboardingPage.reviewCapabilityRules.length))
   );
   renderReviewChipList(
     'review_target_titles_list',
-    reviewTargetTitles,
+    onboardingPage.reviewTargetTitles,
     onboardingFlowTitleTierLabels.target_roles_empty_text,
     'data-remove-review-target',
     'data-move-review-target',
@@ -549,14 +532,14 @@ function renderReviewStep() {
   );
   renderReviewChipList(
     'review_secondary_titles_list',
-    reviewSecondaryTitles,
+    onboardingPage.reviewSecondaryTitles,
     onboardingFlowTitleTierLabels.also_consider_roles_empty_text,
     'data-remove-review-secondary',
     'data-move-review-secondary',
     onboardingFlowTitleTierLabels.move_to_target_roles_label,
   );
   renderReviewCapabilities();
-  saveWizardState();
+  onboardingStorage.saveWizardState();
 }
 
 function hydrateDraftStep(profile) {
@@ -564,11 +547,11 @@ function hydrateDraftStep(profile) {
     profile?.target_roles || [],
     profile?.also_consider_roles || [],
   );
-  reviewTargetTitles = normalizedTitles.primary;
-  reviewSecondaryTitles = normalizedTitles.secondary;
-  reviewCapabilityRules = (profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name);
-  selectedReviewCapabilityIndexes.clear();
-  reviewCapabilityVisibleCount = getReviewCapabilityPreviewCount();
+  onboardingPage.setReviewTargetTitles(normalizedTitles.primary);
+  onboardingPage.setReviewSecondaryTitles(normalizedTitles.secondary);
+  onboardingPage.setReviewCapabilityRules((profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name));
+  onboardingPage.selectedReviewCapabilityIndexes.clear();
+  onboardingPage.setReviewCapabilityVisibleCount(getReviewCapabilityPreviewCount());
   renderReviewStep();
 }
 
@@ -623,7 +606,7 @@ async function createProfile() {
   const primary = flowRefs.primaryCvInput.files[0];
   const onboardingSettings = onboardingSettingsPayload();
 
-  validatePrimaryFile(primary);
+  onboardingUpload.validatePrimaryFile(primary);
   validateOnboardingSettings(onboardingSettings);
 
   if (isRebuildMode) {
@@ -635,7 +618,7 @@ async function createProfile() {
     if (!confirmed) return;
   }
 
-  const files = [await fileToPayload(primary, 'Primary CV')];
+  const files = [await onboardingUpload.fileToPayload(primary, 'Primary CV')];
   const response = await jobHunterFetch('/api/onboarding/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -650,9 +633,9 @@ async function createProfile() {
     throw new Error(payload.error || onboardingFlowLabels.create_profile_error);
   }
 
-  lastImportPayload = payload;
-  maxUnlockedStep = Math.max(maxUnlockedStep, REVIEW_STEP);
-  draftBuiltExplicitly = true;
+  onboardingPage.setLastImportPayload(payload);
+  onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, REVIEW_STEP));
+  onboardingPage.setDraftBuiltExplicitly(true);
   hydrateDraftStep(payload.profile || {});
   setStep(REVIEW_STEP);
   const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
@@ -666,24 +649,24 @@ async function createProfile() {
 }
 
 function continueFromReview() {
-  if (!reviewTargetTitles.length) {
+  if (!onboardingPage.reviewTargetTitles.length) {
     throw new Error(onboardingFlowTitleTierLabels.keep_target_roles_continue_error);
   }
-  maxUnlockedStep = Math.max(maxUnlockedStep, SEARCH_STEP);
+  onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, SEARCH_STEP));
   renderReviewStep();
-  hydrateSearchBasics((lastImportPayload || {}).profile || {});
+  hydrateSearchBasics((onboardingPage.lastImportPayload || {}).profile || {});
   setStep(SEARCH_STEP);
 }
 
 async function continueFromSearchBasics() {
   if (typeof flushSearchBasicsPersistence === 'function') {
-    await flushSearchBasicsPersistence().catch((error) => {
+    await onboardingStorage.flushSearchBasicsPersistence().catch((error) => {
       console.warn(onboardingFlowLabels.continue_search_basics_error, error);
     });
   }
   const searchPrefs = searchPreferencesPayload();
   validateSearchPreferences(searchPrefs);
-  maxUnlockedStep = Math.max(maxUnlockedStep, CHECK_STEP);
+  onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, CHECK_STEP));
   updateCheckStep();
   setStep(CHECK_STEP);
 }
@@ -691,7 +674,7 @@ async function continueFromSearchBasics() {
 async function finishSetup() {
   const searchPrefs = searchPreferencesPayload();
   validateSearchPreferences(searchPrefs);
-  if (!reviewTargetTitles.length) {
+  if (!onboardingPage.reviewTargetTitles.length) {
     throw new Error(onboardingFlowTitleTierLabels.keep_target_roles_finish_error);
   }
 
@@ -707,9 +690,9 @@ async function finishSetup() {
         prefer_sector: searchPrefs.prefer_sector,
         minimum_salary_yearly: searchPrefs.minimum_salary_yearly,
         minimum_daily_rate: searchPrefs.minimum_daily_rate,
-      target_roles: reviewTargetTitles,
-      also_consider_roles: reviewSecondaryTitles,
-      capability_profile_rules: reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
+      target_roles: onboardingPage.reviewTargetTitles,
+      also_consider_roles: onboardingPage.reviewSecondaryTitles,
+      capability_profile_rules: onboardingPage.reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
     }),
   });
   const payload = await response.json().catch(() => ({}));
@@ -718,7 +701,7 @@ async function finishSetup() {
   }
 
   const finalSearchPrefs = {
-    ...(lastImportPayload?.profile?.search_settings || {}),
+    ...(onboardingPage.lastImportPayload?.profile?.search_settings || {}),
     keywords: searchPrefs.keywords || String(payload?.profile?.search_settings?.keywords || '').trim(),
     locations: searchPrefs.locations,
     min_contract_months: searchPrefs.min_contract_months,
@@ -736,7 +719,7 @@ async function loadProfileDefaults() {
   if (!response.ok) return;
   const profile = await response.json().catch(() => ({}));
   applyProfileDefaults(profile || {});
-  if (currentStep >= REVIEW_STEP && (reviewTargetTitles.length || reviewSecondaryTitles.length)) {
+  if (onboardingPage.currentStep >= REVIEW_STEP && (onboardingPage.reviewTargetTitles.length || onboardingPage.reviewSecondaryTitles.length)) {
     renderReviewStep();
   }
 }
@@ -809,7 +792,7 @@ createProfileButton.addEventListener('click', async (event) => {
     showStatus(error.message, 'error');
   } finally {
     btn.classList.remove('is-working');
-    updateCreateProfileAvailability();
+    onboardingUpload.updateCreateProfileAvailability();
     btn.textContent = originalLabel;
   }
 });
@@ -859,7 +842,7 @@ stepNavButtons.forEach((button) => {
   button.addEventListener('click', () => {
     if (button.disabled) return;
     const targetStep = Number(button.dataset.stepNav || 0);
-    if (!targetStep || targetStep === currentStep) return;
+    if (!targetStep || targetStep === onboardingPage.currentStep) return;
     setStep(targetStep);
   });
 });
@@ -867,7 +850,7 @@ flowRefs.wizardProgressSteps?.addEventListener('click', (event) => {
   const trigger = event.target.closest('[data-step-nav]');
   if (!trigger || trigger.disabled) return;
   const targetStep = Number(trigger.dataset.stepNav || 0);
-  if (!targetStep || targetStep === currentStep) return;
+  if (!targetStep || targetStep === onboardingPage.currentStep) return;
   setStep(targetStep);
 });
 
@@ -886,13 +869,13 @@ flowRefs.reviewAddSecondaryTitle.addEventListener('click', () => {
 flowRefs.reviewCapabilityFilter.addEventListener('input', () => {
   hideStatus();
   renderReviewCapabilities();
-  saveWizardState();
+  onboardingStorage.saveWizardState();
 });
 
 flowRefs.reviewStepRoot.addEventListener('click', (event) => {
   const removeTarget = event.target.closest('[data-remove-review-target]');
   if (removeTarget) {
-    reviewTargetTitles.splice(Number(removeTarget.dataset.removeReviewTarget), 1);
+    onboardingPage.reviewTargetTitles.splice(Number(removeTarget.dataset.removeReviewTarget), 1);
     renderReviewStep();
     return;
   }
@@ -903,7 +886,7 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
   }
   const removeSecondary = event.target.closest('[data-remove-review-secondary]');
   if (removeSecondary) {
-    reviewSecondaryTitles.splice(Number(removeSecondary.dataset.removeReviewSecondary), 1);
+    onboardingPage.reviewSecondaryTitles.splice(Number(removeSecondary.dataset.removeReviewSecondary), 1);
     renderReviewStep();
     return;
   }
@@ -944,19 +927,15 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
     clearSelectedReviewCapabilities();
     return;
   }
-  if (event.target.closest('[data-review-show-all]')) {
-    reviewCapabilityVisibleCount = reviewCapabilityRules.length;
-    renderReviewCapabilities();
-    saveWizardState();
-    return;
-  }
-  if (event.target.closest('[data-review-show-more]')) {
-    reviewCapabilityVisibleCount = Math.min(
-      reviewCapabilityVisibleCount + getReviewCapabilityPreviewCount(),
-      reviewCapabilityRules.length,
+  if (event.target.closest('[data-review-toggle-capabilities]')) {
+    const previewCount = getReviewCapabilityPreviewCount();
+    onboardingPage.setReviewCapabilityVisibleCount(
+      onboardingPage.reviewCapabilityVisibleCount >= onboardingPage.reviewCapabilityRules.length
+        ? previewCount
+        : onboardingPage.reviewCapabilityRules.length
     );
     renderReviewCapabilities();
-    saveWizardState();
+    onboardingStorage.saveWizardState();
     return;
   }
     const capabilityRow = event.target.closest('[data-review-capability-index]');
@@ -966,7 +945,7 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
       && !event.target.closest('button')
     ) {
     const index = Number(capabilityRow.dataset.reviewCapabilityIndex);
-    const nextChecked = !selectedReviewCapabilityIndexes.has(index);
+    const nextChecked = !onboardingPage.selectedReviewCapabilityIndexes.has(index);
     toggleSelectedReviewCapability(index, nextChecked);
   }
 });
@@ -979,16 +958,16 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
 ].filter(Boolean).forEach((input) => {
   input.addEventListener('input', () => {
     hideStatus();
-    saveWizardState();
+    onboardingStorage.saveWizardState();
     if (typeof scheduleSearchBasicsPersistence === 'function') {
-      scheduleSearchBasicsPersistence();
+      onboardingStorage.scheduleSearchBasicsPersistence();
     }
   });
   input.addEventListener('change', () => {
     hideStatus();
-    saveWizardState();
+    onboardingStorage.saveWizardState();
     if (typeof scheduleSearchBasicsPersistence === 'function') {
-      scheduleSearchBasicsPersistence();
+      onboardingStorage.scheduleSearchBasicsPersistence();
     }
   });
 });
@@ -1019,14 +998,14 @@ flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
   flowRefs.reviewMinimumSalaryYearly,
   flowRefs.reviewMinimumDailyRate,
 ].filter(Boolean).forEach((input) => {
-  onboardingFlowCurrencyUi.bindCurrencyInput?.(input);
+  onboardingCurrencyUi.bindCurrencyInput?.(input);
 });
 document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
   input.addEventListener('change', () => {
     hideStatus();
-    saveWizardState();
+    onboardingStorage.saveWizardState();
     if (typeof scheduleSearchBasicsPersistence === 'function') {
-      scheduleSearchBasicsPersistence();
+      onboardingStorage.scheduleSearchBasicsPersistence();
     }
   });
 });
@@ -1065,8 +1044,14 @@ async function initWizard() {
       });
       if (restoredCv) {
         setStep(Math.max(1, Math.min(STEP_COUNT, restoredStep)), { scroll: false, persist: false });
+        if (restoredStep >= REVIEW_STEP) {
+          renderReviewStep();
+        }
+        if (restoredStep >= CHECK_STEP) {
+          updateCheckStep();
+        }
       } else {
-        maxUnlockedStep = 1;
+        onboardingPage.setMaxUnlockedStep(1);
         setStep(1, { scroll: false, persist: false });
       }
     } else if (onboardingResumeStep > 1) {
@@ -1082,7 +1067,7 @@ async function initWizard() {
         console.warn('Could not resume onboarding profile defaults.', error);
       }
       if (hasDraftProfileState()) {
-        maxUnlockedStep = Math.max(maxUnlockedStep, onboardingResumeStep);
+        onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, onboardingResumeStep));
         setStep(onboardingResumeStep, { scroll: false, persist: false });
       }
     } else {
@@ -1093,8 +1078,8 @@ async function initWizard() {
     }
   }
   refreshStepNavigation();
-  updatePrimaryCvStatus(primaryCvInput?.files?.[0] || preservedPrimaryCvFile || null);
-  updateCreateProfileAvailability();
+  onboardingUpload.updatePrimaryCvStatus(primaryCvInput?.files?.[0] || onboardingPage.preservedPrimaryCvFile || null);
+  onboardingUpload.updateCreateProfileAvailability();
   updateCompensationVisibility();
 }
 
@@ -1119,20 +1104,20 @@ if (primaryCvDropZone && primaryCvInput) {
       resetPrimaryCvDropZoneAppearance();
     }
   });
-  primaryCvDropZone.addEventListener('drop', handlePrimaryCvDrop);
+  primaryCvDropZone.addEventListener('drop', onboardingUpload.handlePrimaryCvDrop);
   primaryCvInput.addEventListener('change', () => {
     const selectedFile = primaryCvInput.files?.[0] || null;
     if (!selectedFile) {
-      if (preservedPrimaryCvFile) {
-        restorePrimaryCvSelection(preservedPrimaryCvFile);
-        updatePrimaryCvStatus(preservedPrimaryCvFile);
+      if (onboardingPage.preservedPrimaryCvFile) {
+        onboardingUpload.restorePrimaryCvSelection(onboardingPage.preservedPrimaryCvFile);
+        onboardingUpload.updatePrimaryCvStatus(onboardingPage.preservedPrimaryCvFile);
       } else {
-        updatePrimaryCvStatus(null);
+        onboardingUpload.updatePrimaryCvStatus(null);
       }
-      updateCreateProfileAvailability();
+      onboardingUpload.updateCreateProfileAvailability();
       return;
     }
-    assignPrimaryCvFile(selectedFile);
+    onboardingUpload.assignPrimaryCvFile(selectedFile);
   });
 }
-})();
+

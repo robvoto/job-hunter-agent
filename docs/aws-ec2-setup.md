@@ -2,22 +2,21 @@
 
 This guide describes the clean first-time setup for running Job Hunter on AWS EC2.
 
+The deployment model assumes a small EBS-backed root volume and a production-style service lifecycle, so keep storage, logging, and recovery choices simple and explicit.
+
 It is a setup document, not a troubleshooting diary.
 
-## Target setup
+## Directory layout
 
 ```text
-AWS EC2 Ubuntu 24.04 LTS server
-Python 3.12
-Project virtual environment in .venv
-Private GitHub repo cloned with GitHub token
-App tested locally on 127.0.0.1:8765
-Later: systemd + Nginx + HTTPS + database
+/opt/job-hunter/app        application code and virtualenv
+/var/lib/job-hunter/data   persistent app data (EBS-backed)
+/var/log/job-hunter        application logs
 ```
 
-## Required platform
+These are the only three locations the app touches at runtime. Nothing lives in the home directory.
 
-Use this platform for Job Hunter:
+## Required platform
 
 ```text
 Ubuntu Server 24.04 LTS
@@ -26,7 +25,7 @@ pandas 2.x
 Playwright Chromium
 ```
 
-Do not choose preview/non-LTS Ubuntu releases for this setup. Use Ubuntu 24.04 LTS so Python and Playwright stay on a supported path.
+Do not choose preview/non-LTS Ubuntu releases. Use Ubuntu 24.04 LTS so Python and Playwright stay on a supported path.
 
 ## 1. AWS account safety
 
@@ -65,7 +64,7 @@ Name: job-hunter-ec2
 AMI: Ubuntu Server 24.04 LTS
 Instance type: t3.micro or free-tier equivalent
 Key pair: KeyPair-JobHunter
-Storage: default is fine for learning
+Storage: small EBS root volume is enough for the current workload
 ```
 
 Ubuntu SSH username:
@@ -84,7 +83,7 @@ HTTP   TCP 80   Source: 0.0.0.0/0 later, when Nginx is ready
 HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is ready
 ```
 
-Do not expose the app port `8765` publicly for normal use. The app should later sit behind Nginx.
+Do not expose the app port `8765` publicly. The app sits behind Nginx.
 
 Target public path:
 
@@ -172,7 +171,28 @@ Expected Python version on Ubuntu 24.04 LTS:
 Python 3.12.x
 ```
 
-## 8. Clone the private GitHub repo
+## 8. Create the directory layout
+
+Create all three directories and set ownership before cloning or creating data:
+
+```bash
+sudo mkdir -p /opt/job-hunter/app
+sudo mkdir -p /var/lib/job-hunter/data
+sudo mkdir -p /var/log/job-hunter
+sudo chown -R ubuntu:ubuntu /opt/job-hunter
+sudo chown -R ubuntu:ubuntu /var/lib/job-hunter
+sudo chown -R ubuntu:ubuntu /var/log/job-hunter
+```
+
+Check:
+
+```bash
+ls -ld /opt/job-hunter/app /var/lib/job-hunter/data /var/log/job-hunter
+```
+
+Expected: all three directories exist and are owned by `ubuntu`.
+
+## 9. Clone the private GitHub repo
 
 Repository:
 
@@ -193,12 +213,10 @@ Repository permissions:
 Expiration: 90 days for learning
 ```
 
-Clone:
+Clone directly into `/opt/job-hunter/app`:
 
 ```bash
-cd ~
-git clone https://github.com/robvoto/job-hunter-agent.git
-cd ~/job-hunter-agent
+git clone https://github.com/robvoto/job-hunter-agent.git /opt/job-hunter/app
 ```
 
 When prompted:
@@ -210,7 +228,7 @@ Password: paste GitHub token
 
 Never paste the token into chat or screenshots. If exposed, revoke it.
 
-## 9. Git credential handling on EC2
+## 10. Git credential handling on EC2
 
 Windows Git Credential Manager is not available on Ubuntu EC2.
 
@@ -223,6 +241,7 @@ git config --global credential.helper store
 Then run a pull and enter the token once:
 
 ```bash
+cd /opt/job-hunter/app
 git pull
 ```
 
@@ -240,11 +259,10 @@ store
 
 Later, replace this with a deploy key or cleaner deployment process.
 
-## 10. Create the project virtual environment
+## 11. Create the project virtual environment
 
 ```bash
-cd ~/job-hunter-agent
-rm -rf .venv
+cd /opt/job-hunter/app
 python3 -m venv .venv
 source .venv/bin/activate
 python --version
@@ -255,10 +273,10 @@ Expected:
 
 ```text
 Python 3.12.x
-/home/ubuntu/job-hunter-agent/.venv/bin/python
+/opt/job-hunter/app/.venv/bin/python
 ```
 
-## 11. Install project dependencies
+## 12. Install project dependencies
 
 With `.venv` active:
 
@@ -267,19 +285,25 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-For this project, `python-jobspy` requires pandas below version 3, so `requirements.txt` should use pandas 2.x:
+For this project, `python-jobspy` requires pandas below version 3, so `requirements.txt` uses pandas 2.x:
 
 ```text
 pandas>=2.0.0,<3
 ```
 
-If the virtual environment is active, `which pip` should return:
+Check:
 
-```text
-/home/ubuntu/job-hunter-agent/.venv/bin/pip
+```bash
+which pip
 ```
 
-## 12. Install Playwright browser
+Expected:
+
+```text
+/opt/job-hunter/app/.venv/bin/pip
+```
+
+## 13. Install Playwright browser
 
 With `.venv` active:
 
@@ -290,16 +314,20 @@ python -m playwright install chromium
 If Linux libraries are missing:
 
 ```bash
-sudo .venv/bin/python -m playwright install-deps chromium
+sudo /opt/job-hunter/app/.venv/bin/python -m playwright install-deps chromium
 python -m playwright install chromium
 ```
 
-## 13. Smoke test the app
+## 14. Smoke test the app
 
-Manual run is only a smoke test.
+The smoke test requires the environment variables to be set. Export them for this session only before running:
 
 ```bash
-cd ~/job-hunter-agent
+export JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+export JOB_HUNTER_OUTPUT_DIR=/var/log/job-hunter
+export JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db
+
+cd /opt/job-hunter/app
 source .venv/bin/activate
 python -m job_hunter_agent.fastapi_app
 ```
@@ -312,19 +340,80 @@ curl http://127.0.0.1:8765/start
 
 Expected: HTML response.
 
-## 14. Production-style next steps
+Do not use `export` in normal operation. Env vars belong in the systemd service file only.
 
-After the smoke test works:
+## 15. Create the systemd service
+
+This is how the app runs in production. All configuration lives here — never in Python files.
+
+Create the service unit file:
+
+```bash
+sudo nano /etc/systemd/system/job-hunter.service
+```
+
+Paste this content exactly:
+
+```ini
+[Unit]
+Description=Job Hunter Agent
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/job-hunter/app
+Environment=JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+Environment=JOB_HUNTER_OUTPUT_DIR=/var/log/job-hunter
+Environment=JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db
+ExecStart=/opt/job-hunter/app/.venv/bin/uvicorn job_hunter_agent.fastapi_app:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/job-hunter/app.log
+StandardError=append:/var/log/job-hunter/app.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable job-hunter
+sudo systemctl start job-hunter
+sudo systemctl status job-hunter
+```
+
+Expected: `active (running)`.
+
+### To change any configuration
+
+Edit the service file and reload. Never edit a Python file:
+
+```bash
+sudo nano /etc/systemd/system/job-hunter.service
+sudo systemctl daemon-reload
+sudo systemctl restart job-hunter
+```
+
+### Environment variables
+
+| Variable | Purpose | Value on EC2 |
+|---|---|---|
+| `JOB_HUNTER_DATA_DIR` | Persistent app data | `/var/lib/job-hunter/data` |
+| `JOB_HUNTER_OUTPUT_DIR` | Log output directory | `/var/log/job-hunter` |
+| `JOB_HUNTER_DB_PATH` | SQLite database file | `/var/lib/job-hunter/data/app.db` |
+
+All three must be set. The app raises an explicit error if `JOB_HUNTER_DB_PATH` is missing.
+
+## 16. Production-style next steps
+
+After the service is running:
 
 ```text
-Create a systemd service
 Configure Nginx reverse proxy
-Expose only 80/443 publicly
-Keep the app bound to 127.0.0.1:8765
-Add environment variable handling
-Add logs
-Later: database/RDS
-Later: HTTPS/domain
+Expose only 80/443 publicly (keep app bound to 127.0.0.1:8765)
+Add HTTPS / domain via Certbot
 ```
 
 ## Quick checks
@@ -356,7 +445,7 @@ Python 3.12.x
 Confirm venv Python:
 
 ```bash
-source ~/job-hunter-agent/.venv/bin/activate
+source /opt/job-hunter/app/.venv/bin/activate
 python --version
 which python
 ```
@@ -365,7 +454,13 @@ Expected:
 
 ```text
 Python 3.12.x
-/home/ubuntu/job-hunter-agent/.venv/bin/python
+/opt/job-hunter/app/.venv/bin/python
+```
+
+Check service logs:
+
+```bash
+tail -f /var/log/job-hunter/app.log
 ```
 
 ## Do not do yet

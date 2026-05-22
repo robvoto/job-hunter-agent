@@ -56,7 +56,7 @@ Server logging:
   - **Configuration:** Cookie names are configurable via `JOB_HUNTER_SESSION_COOKIE_NAME` env var.
 
 - `job_hunter_agent/source_documents.py`
-  Local source-pack persistence and source-document import into `profile.json`.
+  Local source-pack persistence and source-document import into the runtime profile (DB).
 
 - `job_hunter_agent/profile_store.py`
   Default profile model, load/save, and patch behavior.
@@ -114,12 +114,25 @@ Do not rename major files casually unless there is time to clean the whole proje
  1. User visits `/start`
  2. Uploads a detailed CV
   3. Uploaded documents are saved into a local source pack under ignored paths
-  4. The source pack is imported into `data/profile.json`
+  4. The source pack is imported into the DB profile (`user_profile` table)
   5. Review Draft, Search Basics, and Check Setup are completed inside the onboarding flow
   6. Settings is then used to refine the runtime profile
 
 - Onboarding copy for target roles, also-consider roles, and the search keyword comes from `data/knowledge/ui_labels.json` and is injected into the page as `window.__JOB_HUNTER_TITLE_TIER_LABELS__`.
 - The onboarding search keyword is a single term. Do not comma-join multiple title candidates in auto-fill logic.
+
+### Onboarding File Map
+
+| File | Responsibility |
+|---|---|
+| `templates/onboarding.html` | Onboarding page shell and section placement. |
+| `templates/static/onboarding/onboarding-page.js` | Search Basics state, summaries, and import summary wiring. |
+| `templates/static/onboarding/onboarding-flow.js` | Review Draft, Check Setup, capability review, and onboarding actions. |
+| `templates/static/onboarding/onboarding-page.css` | Onboarding-only layout exceptions and spacing. |
+| `job_hunter_agent/routes/pages.py` | Route rendering and bootstrap injection. |
+| `job_hunter_agent/server_helpers.py` | Onboarding label loading and injected globals. |
+| `job_hunter_agent/profile_store.py` | Runtime profile persistence and onboarding-imported state. |
+| `data/knowledge/ui_labels.json` | Shared onboarding copy source. |
 
 ## Score Presentation
 
@@ -127,7 +140,7 @@ Do not rename major files casually unless there is time to clean the whole proje
 
 All job records MUST include a `job_key` in the `source:id` format.
 
-- Never use raw URLs as keys in `job_history.json` or `profile.json`.
+- Never use raw URLs as keys in the job history or profile (DB-backed; use canonical `job_key` everywhere).
 - Always use `job_hunter_agent.job_identity.normalize_job_key(raw_value, source=...)` when creating records.
 - Use `RECORD_JOB_KEY` from `record_schema.py` instead of the string literal `"job_key"`.
 

@@ -63,6 +63,24 @@ Standard `<select id="...">` with hardcoded `<option>` elements or server-render
 
 ---
 
+## Onboarding component map
+
+Used for: onboarding wizard screens and their module owners.
+
+| Component | Owned by | Notes |
+|---|---|---|
+| CV import drop zone | `templates/static/onboarding/onboarding-upload.js` | File validation, drop handling, and create-profile availability. |
+| Wizard step shell / progress | `templates/static/onboarding/onboarding-page.js` and `templates/static/onboarding/onboarding-flow.js` | Step orchestration and navigation. |
+| Search basics fields | `templates/static/onboarding/onboarding-search.js` | Location, keywords, salary, engagement, and work-mode hydration. |
+| Wizard state persistence | `templates/static/onboarding/onboarding-storage.js` | Save/restore and search-basics persistence. |
+| Review draft capability UI | `templates/static/onboarding/onboarding-flow.js` | Review rendering, filtering, and action buttons. |
+| Import helper copy | `templates/static/onboarding/onboarding-page.js` and `templates/static/onboarding/onboarding-flow.js` | Page-level wiring plus action flow messages. |
+| Location selector | `templates/static/onboarding/onboarding-search.js` | Location options and selected location state. |
+| Salary inputs | `templates/static/onboarding/onboarding-search.js` and `templates/static/settings/shared/settings-utils.js` | Shared currency helper, page-specific hydration. |
+| Continue / create buttons | `templates/static/onboarding/onboarding-upload.js` and `templates/static/onboarding/onboarding-flow.js` | Enabled state and step transitions. |
+
+---
+
 ## Badge/chip editor
 
 Used for: Search keywords, title patterns, must-not-require skills
@@ -106,6 +124,9 @@ JS: `setCurrencyFieldValue(id, value)` / `readCurrencyFieldValue(id, fallback)`.
 | `__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__` | settings-utils.js |
 | `__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__` | settings-utils.js |
 | `__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__` | settings-utils.js |
+| `__JOB_HUNTER_ONBOARDING_FLOW_LABELS__` | onboarding-flow.js |
+| `__JOB_HUNTER_ONBOARDING_PAGE_LABELS__` | onboarding-page.js |
+| `__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__` | onboarding-page.js, onboarding-flow.js |
 | `__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__` | onboarding-flow.js, onboarding-page.js |
 | `__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__` | settings-utils.js, onboarding-flow.js |
 | `__JOB_HUNTER_TITLE_TIER_LABELS__` | onboarding-flow.js, onboarding-page.js |

@@ -63,7 +63,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'Search Basics' in html
     assert 'Check Setup' in html
     assert '0 shown' in html
-    assert '__JOB_HUNTER_ONBOARDING_PAGE_' not in html
+    assert 'window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__' in html
     assert 'window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__' in html
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
     assert 'window.__JOB_HUNTER_CAPABILITY_UI_LABELS__' in html
@@ -119,37 +119,36 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
     assert payload["ok"] is True
 
 
-def test_api_onboarding_import_logs_selected_capability_strength_preset(monkeypatch, capsys):
+def test_api_onboarding_import_logs_selected_capability_strength_preset(monkeypatch, caplog):
+    import logging
     monkeypatch.setattr(onboarding_api, "persist_uploaded_source_pack", lambda files: {"profile_sources": [], "cv_variants": []})
     monkeypatch.setattr(onboarding_api, "run_onboarding", lambda materials, search_preferences=None, onboarding_settings=None: {"ok": True, "materials": materials})
     monkeypatch.setattr(onboarding_api.srv, "_validate_onboarding_settings_inputs", lambda payload: None)
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
 
-    response = onboarding_api.api_onboarding_import(
-        {
-            "files": [
-                {
-                    "filename": "cv.txt",
-                    "content_base64": base64.b64encode(b"header,value\n").decode("ascii"),
-                }
-            ],
-            "search_preferences": {
-                "keywords": "business analyst",
-                "locations": ["Sydney"],
-                "engagement_type": ["permanent", "contract"],
-            },
-            "onboarding_settings": {
-                "capability_strength_preset": "balanced",
-            },
-        }
-    )
+    with caplog.at_level(logging.INFO):
+        response = onboarding_api.api_onboarding_import(
+            {
+                "files": [
+                    {
+                        "filename": "cv.txt",
+                        "content_base64": base64.b64encode(b"header,value\n").decode("ascii"),
+                    }
+                ],
+                "search_preferences": {
+                    "keywords": "business analyst",
+                    "locations": ["Sydney"],
+                    "engagement_type": ["permanent", "contract"],
+                },
+                "onboarding_settings": {
+                    "capability_strength_preset": "balanced",
+                },
+            }
+        )
 
-    output = capsys.readouterr().out
     assert response.status_code == 200
-    assert "[ONBOARDING] Capability strength selection" in output
-    assert "selected by user" in output
-    assert "resolved preset" in output
-    assert "using selected preset" in output
+    assert "ONBOARDING_IMPORT" in caplog.text
+    assert "balanced" in caplog.text
 
 
 def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
@@ -166,7 +165,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
             "search_locations": ["Sydney"],
             "engagement_type": ["permanent", "contract"],
             "min_contract_months": 6,
-            "prefer_sector": "",
+            "prefer_sector": ["government", "private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
             "capability_profile_rules": [],
@@ -176,7 +175,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
     assert response.status_code == 200
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
-    assert captured["patch"]["match_preferences"]["prefer_sector"] == profile_store.GovPref.ANY
+    assert captured["patch"]["match_preferences"]["prefer_sector"] == ["government", "private"]
     assert captured["patch"]["match_preferences"]["min_contract_months"] == 6
 
 
@@ -194,7 +193,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
             "search_locations": ["Sydney"],
             "engagement_type": ["permanent", "contract"],
             "work_mode_preference": ["remote", "hybrid"],
-            "prefer_sector": "",
+            "prefer_sector": ["government"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
             "capability_profile_rules": [],
@@ -256,7 +255,7 @@ def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_se
             "search_locations": ["Sydney"],
             "engagement_type": ["permanent"],
             "min_contract_months": 6,
-            "prefer_sector": "",
+            "prefer_sector": ["private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
             "capability_profile_rules": [],
@@ -592,8 +591,6 @@ def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp
                 self.target(*self.args)
 
     monkeypatch.setattr(workspace_refresh_service, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
-    monkeypatch.setattr(workspace_refresh_service, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
-    monkeypatch.setattr(workspace_refresh_service, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
     (tmp_path / "workspace.html").write_text("ok", encoding="utf-8")
     monkeypatch.setattr(workspace_refresh_service.threading, "Thread", FakeThread)
     monkeypatch.setattr(workspace_refresh_service, "rebuild_workspace_results", lambda reason="": rebuilds.append(reason))
@@ -608,10 +605,8 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
     rebuilds = []
 
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
-    monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: tmp_path / "run_stats.json")
-    monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: tmp_path / "audit_records.json")
+    monkeypatch.setattr(server_helpers, "load_run_stats", lambda: {"run_started_at": "2026-05-16T08:00:00"})
     monkeypatch.setattr(server_helpers, "AUTH_DISABLED", True)
-    (tmp_path / "run_stats.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(
         server_helpers,
         "rebuild_workspace_results",
@@ -626,26 +621,22 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):
     saved_profiles = []
     saved_materials = []
+    cleared = []
 
     fake_users_dir = tmp_path / "users"
     fake_local_dir = fake_users_dir / "_local"
     fake_local_dir.mkdir(parents=True, exist_ok=True)
-    (fake_local_dir / "profile.json").write_text('{"cv_text": "old"}', encoding="utf-8")
 
-    job_history_path = tmp_path / "job_history.json"
-    review_data_path = tmp_path / "review_data.json"
-    run_stats_path = tmp_path / "run_stats.json"
-    audit_records_path = tmp_path / "audit_records.json"
     workspace_path = tmp_path / "workspace.html"
     source_pack_dir = tmp_path / "source_pack"
 
     monkeypatch.setattr(server_helpers, "USERS_DIR", fake_users_dir)
     monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
     monkeypatch.setattr(server_helpers, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
-    monkeypatch.setattr(server_helpers, "get_job_history_path", lambda: job_history_path)
-    monkeypatch.setattr(server_helpers, "get_review_data_path", lambda: review_data_path)
-    monkeypatch.setattr(server_helpers, "get_run_stats_path", lambda: run_stats_path)
-    monkeypatch.setattr(server_helpers, "get_audit_records_path", lambda: audit_records_path)
+    monkeypatch.setattr(server_helpers, "clear_job_history", lambda: cleared.append("job_history"))
+    monkeypatch.setattr(server_helpers, "clear_review_data", lambda: cleared.append("review_data"))
+    monkeypatch.setattr(server_helpers, "clear_run_stats", lambda: cleared.append("run_stats"))
+    monkeypatch.setattr(server_helpers, "clear_audit_rows", lambda: cleared.append("audit_rows"))
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: workspace_path)
     monkeypatch.setattr(server_helpers, "get_source_pack_dir", lambda: source_pack_dir)
 
@@ -662,10 +653,10 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
     assert not source_pack_dir.exists()
     assert not workspace_path.exists()
-    assert job_history_path.read_text(encoding="utf-8").strip() == "{}"
-    assert review_data_path.read_text(encoding="utf-8").strip() == "{}"
-    assert run_stats_path.read_text(encoding="utf-8").strip() == "{}"
-    assert audit_records_path.read_text(encoding="utf-8").strip() == "[]"
+    assert "job_history" in cleared
+    assert "review_data" in cleared
+    assert "run_stats" in cleared
+    assert "audit_rows" in cleared
 
 
 def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):

@@ -1,22 +1,20 @@
 """Shared path helpers for package modules."""
 
+import os
 from pathlib import Path
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_DIR.parent
-DATA_DIR = REPO_ROOT / "data"
-CONFIG_DIR = DATA_DIR / "config"
+DATA_DIR = Path(os.environ.get("JOB_HUNTER_DATA_DIR", REPO_ROOT / "data")).expanduser().resolve()
 DEFAULTS_DIR = DATA_DIR / "defaults"
 AUTH_DIR = DATA_DIR / "auth"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
-SIGNALS_DIR = DATA_DIR / "signals"
 RUNTIME_DIR = DATA_DIR / "runtime"
-OUTPUT_DIR = REPO_ROOT / "output"
+OUTPUT_DIR = Path(os.environ.get("JOB_HUNTER_OUTPUT_DIR", REPO_ROOT / "output")).expanduser().resolve()
 TEMPLATES_DIR = REPO_ROOT / "templates"
 DOCS_DIR = REPO_ROOT / "docs"
 WORKSPACE_RESULTS_FILENAME = "workspace_results.html"
-USER_SETTINGS_FILENAME = "settings.json"
 LOCAL_USER_ID = "_local"
 
 # Per-user data lives under this directory.
@@ -37,58 +35,27 @@ SETTINGS_PARTIALS_DIR = TEMPLATES_DIR / "partials"
 SETTINGS_STANDARD_PARTIALS_DIR = SETTINGS_PARTIALS_DIR / "settings" / "standard"
 SETTINGS_GLOBAL_PARTIALS_DIR = SETTINGS_PARTIALS_DIR / "settings" / "global"
 ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
-SHOWCASE_PATH = DOCS_DIR / "SHOWCASE.html"
 
 
-def _active_user_dir() -> Path:
+def get_active_user_id() -> str:
     from job_hunter_agent.user_context import get_user_id
     from job_hunter_agent.config import AUTH_DISABLED
     uid = get_user_id()
     if uid:
-        return USERS_DIR / uid
+        return uid
     if AUTH_DISABLED:
-        return USERS_DIR / LOCAL_USER_ID
+        return LOCAL_USER_ID
     raise RuntimeError(
         "No active user id is set. Call set_user_id() before performing file operations."
     )
 
 
-def get_profile_path() -> Path:
-    return _active_user_dir() / "profile.json"
-
-
-def get_job_history_path() -> Path:
-    return _active_user_dir() / "job_history.json"
-
-
-def get_review_data_path() -> Path:
-    return _active_user_dir() / "review_data.json"
-
-
-def get_run_stats_path() -> Path:
-    return _active_user_dir() / "run_stats.json"
+def _active_user_dir() -> Path:
+    return USERS_DIR / get_active_user_id()
 
 
 def get_workspace_results_path() -> Path:
     return _active_user_dir() / WORKSPACE_RESULTS_FILENAME
-
-
-def get_audit_records_path() -> Path:
-    return _active_user_dir() / "audit_records.json"
-
-
-def get_workspace_pool_path() -> Path:
-    return _active_user_dir() / "workspace_pool.json"
-
-
-def get_user_settings_path(user_id: str | None = None) -> Path:
-    if user_id is not None:
-        return USERS_DIR / user_id / USER_SETTINGS_FILENAME
-    return _active_user_dir() / USER_SETTINGS_FILENAME
-
-
-def get_source_materials_path() -> Path:
-    return _active_user_dir() / "application_materials.json"
 
 
 def get_source_pack_dir() -> Path:
@@ -97,7 +64,16 @@ def get_source_pack_dir() -> Path:
 def get_candidate_application_history_path() -> Path:
     return RUNTIME_DIR / "candidate_application_history.json"
 
-GLOBAL_SETTINGS_PATH = CONFIG_DIR / "global_settings.json"
+def get_db_path() -> Path:
+    val = os.environ.get("JOB_HUNTER_DB_PATH")
+    if not val:
+        raise RuntimeError(
+            "JOB_HUNTER_DB_PATH is not set. "
+            "Set it in the systemd service file: Environment=JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db"
+        )
+    return Path(val).expanduser().resolve()
+
+GLOBAL_SETTINGS_PATH = DATA_DIR / "config" / "global_settings.json"
 DEFAULT_USER_SETTINGS_PATH = DEFAULTS_DIR / "user_settings.json"
 SCORING_RULES_PATH = KNOWLEDGE_DIR / "scoring_rules.json"
 MATCH_LEVEL_DEFAULTS_PATH = KNOWLEDGE_DIR / "match_level_defaults.json"
@@ -112,11 +88,8 @@ CV_FARMING_RULES_PATH = KNOWLEDGE_DIR / "cv_farming_rules.json"
 CV_FARMING_RULES_NAME = "cv_farming_rules"
 CV_FARMING_RULES_VERSION = 1
 CV_FARMING_RULES_DESCRIPTION = "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role."
-IGNORED_SIGNAL_ARCHIVE_PATH = SIGNALS_DIR / "ignored_signal.json"
 LLM_CAPABILITY_NAMING_DEFAULTS_PATH = KNOWLEDGE_DIR / "llm_capability_naming_defaults.json"
 LLM_COSTS_PATH = RUNTIME_DIR / "llm_costs.jsonl"
-SIGNAL_REGISTRY_PATH = SIGNALS_DIR / "signal_registry.json"
-SIGNAL_DEFAULTS_PATH = SIGNALS_DIR / "signal_defaults.json"
 UI_LABELS_PATH = KNOWLEDGE_DIR / "ui_labels.json"
 WORK_MODE_RULES_PATH = KNOWLEDGE_DIR / "work_mode_rules.json"
 LLM_CACHE_PATH = RUNTIME_DIR / "llm_cache.json"
