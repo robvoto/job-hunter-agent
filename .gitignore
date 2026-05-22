@@ -22,8 +22,7 @@ data/playwright_user_data/
 data/auth/
 data/runtime/
 data/users/
-data/capability_profile.txt
-data/application_inputs/
+
 data/signals/ignored_signal.json
 data/signals/signal_defaults.json
 data/signals/signal_registry.json
@@ -50,8 +49,8 @@ venv activate.ps1
 remove bad char.ps1
 Programming - Shortcut.lnk
 MAIN LOGOS IMG.png
-job_hunter_img.png
 templates/static/job_hunter_img2.png
 pytest.ini
 docs/job_hunter_learning_architecture_plan.txt
 *.pem
+docs/backlog/general.md
