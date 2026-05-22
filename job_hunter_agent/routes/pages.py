@@ -39,14 +39,7 @@ from job_hunter_agent.user_context import get_user_id_for_runtime
 from job_hunter_agent.routes.responses import html_response
 
 router = APIRouter()
-JOB_HUNTER_BRAND_ICON_HTML = (
-    '<svg class="job-hunter-page-utility__brand-icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">'
-    '<rect x="1.5" y="1.5" width="37" height="37" rx="10" fill="var(--bg-muted)" stroke="var(--border-strong)" />'
-    '<path d="M13 16h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H13a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zm4-4h6a2 2 0 0 1 2 2v2H15v-2a2 2 0 0 1 2-2z" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" />'
-    '<path d="M14.5 23.5h11" stroke="var(--text-primary)" stroke-opacity="0.75" stroke-width="1.75" stroke-linecap="round" />'
-    '<path d="M20 19v6" stroke="var(--text-primary)" stroke-opacity="0.75" stroke-width="1.75" stroke-linecap="round" />'
-    '</svg>'
-)
+JOB_HUNTER_LOGO_SRC = "/static/assets/job_hunter_img.png"
 
 
 def _build_top_utility_bar_html(
@@ -68,7 +61,7 @@ def _build_top_utility_bar_html(
         user_initial = "?"
     brand_html = (
         '<div class="job-hunter-page-utility__brand" aria-label="Job Hunter">'
-        f'{JOB_HUNTER_BRAND_ICON_HTML}'
+        f'<img src="{JOB_HUNTER_LOGO_SRC}" alt="" class="job-hunter-page-utility__brand-icon">'
         '<span class="job-hunter-page-utility__brand-name">Job Hunter</span>'
         '</div>'
     )
@@ -144,15 +137,16 @@ def _replace_label_tokens(html: str, prefix: str, labels: dict[str, str]) -> str
     return html
 
 
-def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, onboarding_copy: dict | None = None, global_settings: dict | None = None, resume_step: int | None = None, account_shortcut_href: str | None = None, account_shortcut_label: str | None = None, account_shortcut_aria_label: str | None = None) -> str:
+def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, global_settings: dict | None = None, resume_step: int | None = None, account_shortcut_href: str | None = None, account_shortcut_label: str | None = None, account_shortcut_aria_label: str | None = None) -> str:
     csrf_token = issue_csrf_token(request) or ""
     shared_labels = srv.load_shared_ui_labels()
+    page_copy_data = srv.load_onboarding_page_copy()
     bootstrap_script = srv.build_bootstrap_script(
         csrf_token=csrf_token,
         location_options=load_location_options(),
         default_location=default_location_value(),
         onboarding_defaults=onboarding_defaults,
-        onboarding_copy=onboarding_copy,
+        onboarding_copy=page_copy_data,
         global_settings=global_settings,
         resume_step=resume_step,
         user_id=get_user_id_for_runtime(),
@@ -277,16 +271,16 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         .replace("__JOB_HUNTER_SALARY_DAILY_HELP__", SETTINGS_SALARY_DAILY_HELP_TEXT)
         .replace("__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__", SETTINGS_SALARY_ANNUAL_HELP_TEXT)
         .replace("__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__", SETTINGS_SALARY_DAILY_HELP_TEXT)
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_1_TITLE__", srv.ONBOARDING_PAGE_COPY["steps"]["1"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_1_SECTION_COPY__", srv.ONBOARDING_PAGE_COPY["steps"]["1"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_2_TITLE__", srv.ONBOARDING_PAGE_COPY["steps"]["2"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_2_SECTION_COPY__", srv.ONBOARDING_PAGE_COPY["steps"]["2"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_3_TITLE__", srv.ONBOARDING_PAGE_COPY["steps"]["3"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_3_SECTION_COPY__", srv.ONBOARDING_PAGE_COPY["steps"]["3"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_4_TITLE__", srv.ONBOARDING_PAGE_COPY["steps"]["4"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_4_SECTION_COPY__", srv.ONBOARDING_PAGE_COPY["steps"]["4"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_HERO_TITLE__", srv.ONBOARDING_PAGE_COPY["steps"]["1"]["hero_title"])
-        .replace("__JOB_HUNTER_ONBOARDING_HERO_COPY__", srv.ONBOARDING_PAGE_COPY["steps"]["1"]["hero_copy"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_1_TITLE__", page_copy_data["steps"]["1"]["title"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_1_SECTION_COPY__", page_copy_data["steps"]["1"]["section_copy"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_2_TITLE__", page_copy_data["steps"]["2"]["title"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_2_SECTION_COPY__", page_copy_data["steps"]["2"]["section_copy"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_3_TITLE__", page_copy_data["steps"]["3"]["title"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_3_SECTION_COPY__", page_copy_data["steps"]["3"]["section_copy"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_4_TITLE__", page_copy_data["steps"]["4"]["title"])
+        .replace("__JOB_HUNTER_ONBOARDING_STEP_4_SECTION_COPY__", page_copy_data["steps"]["4"]["section_copy"])
+        .replace("__JOB_HUNTER_ONBOARDING_HERO_TITLE__", page_copy_data["steps"]["1"]["hero_title"])
+        .replace("__JOB_HUNTER_ONBOARDING_HERO_COPY__", page_copy_data["steps"]["1"]["hero_copy"])
         .replace("__JOB_HUNTER_PAGE_MODE__", page_mode)
         .replace("__JOB_HUNTER_PAGE_TITLE__", page_title)
         .replace("__JOB_HUNTER_PAGE_HEADING__", page_heading)
@@ -375,7 +369,6 @@ def page_onboarding(request: Request):  # type: ignore[no-untyped-def]
             request,
             ONBOARDING_HTML_PATH,
             onboarding_defaults=srv.DEFAULT_ONBOARDING_SETTINGS,
-            onboarding_copy=srv.ONBOARDING_PAGE_COPY,
             resume_step=srv._onboarding_resume_step(),
         )
         return html_response(html)

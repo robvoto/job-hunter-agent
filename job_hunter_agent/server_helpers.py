@@ -115,38 +115,6 @@ from job_hunter_agent.global_settings import (
     load_global_settings,
     get_salary_limits,
 )
-ONBOARDING_PAGE_COPY = {
-    "steps": {
-        "1": {
-            "title": "Upload Your CV",
-            "title_rebuild": "Upload Updated CV",
-            "hero_title": "Build Your Job Profile",
-            "hero_title_rebuild": "Refresh Your Profile",
-            "hero_copy": "",
-            "section_copy": "Start with the CV that best represents your real experience. We will use it to build your starting profile.",
-        },
-        "2": {
-            "title": "Review Draft Profile",
-            "hero_title": "Review Your Draft Profile",
-            "hero_title_rebuild": "Review Refreshed Draft",
-            "hero_copy": "",
-            "section_copy": "Move titles between Primary and Secondary if needed before you continue.",
-        },
-        "3": {
-            "title": "Set Search Basics",
-            "hero_title": "Set Your Search Basics",
-            "hero_copy": "",
-            "section_copy": "Set the minimum information Job Hunter needs to search safely and score roles in the right direction.",
-        },
-        "4": {
-            "title": "Check Your Setup",
-            "hero_title": "Confirm Your Setup",
-            "hero_title_rebuild": "Confirm Profile Refresh",
-            "hero_copy": "",
-            "section_copy": "Make sure this looks right. When you finish, onboarding is complete and Settings will unlock.",
-        },
-    },
-}
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -545,6 +513,24 @@ def load_onboarding_flow_labels() -> dict[str, str]:
 
 def load_global_settings_labels() -> dict[str, str]:
     return _load_required_ui_labels("global_settings_labels", _GLOBAL_SETTINGS_LABEL_KEYS)
+
+
+def load_onboarding_page_copy() -> dict:
+    raw = load_ui_labels().get("onboarding_page_copy", {})
+    if not isinstance(raw, dict):
+        raise ValueError("ui_labels.json is missing onboarding_page_copy")
+    steps = raw.get("steps", {})
+    if not isinstance(steps, dict):
+        raise ValueError("ui_labels.json onboarding_page_copy.steps must be a dict")
+    for step_num in ("1", "2", "3", "4"):
+        step = steps.get(step_num, {})
+        if not isinstance(step, dict):
+            raise ValueError(f"ui_labels.json onboarding_page_copy.steps.{step_num} must be a dict")
+        required = ["title", "section_copy", "hero_title"]
+        missing = [k for k in required if not str(step.get(k, "")).strip()]
+        if missing:
+            raise ValueError(f"ui_labels.json onboarding_page_copy.steps.{step_num} missing: {', '.join(missing)}")
+    return raw
 
 
 def get_docs() -> list[dict[str, str]]:

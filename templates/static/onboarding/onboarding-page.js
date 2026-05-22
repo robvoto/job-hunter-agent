@@ -80,6 +80,7 @@ const locationUi = window.JobHunterLocationUi || {};
 const capabilityUi = window.JobHunterCapabilityUi || {};
 const capabilityLabels = capabilityUi.labels || {};
 const onboardingSettingsUtils = window.JobHunterSettingsUtils || {};
+const escapeHtml = onboardingSettingsUtils.escapeHtml;
 const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
 const ONBOARDING_CV_PAGE_LIMIT = Number(ONBOARDING_DEFAULTS.cv_max_pages || 0);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
@@ -100,6 +101,9 @@ if (!onboardingPageTitleTierLabels) {
 }
 if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
   throw new Error('Missing capability UI labels.');
+}
+if (typeof escapeHtml !== 'function') {
+  throw new Error('Missing HTML escaping helper.');
 }
 
 function defaultSearchKeywordFromTargetRoles(profile) {
@@ -270,11 +274,12 @@ function hasSearchBasicsState() {
 }
 
 function refreshStepNavigation() {
+  const hasPrimaryCv = Boolean(primaryCvInput?.files?.[0] || preservedPrimaryCvFile);
   const unlockedStep = Math.max(
     1,
     maxUnlockedStep,
-    hasDraftProfileState() ? REVIEW_STEP : 1,
-    hasSearchBasicsState() ? SEARCH_STEP : 1,
+    hasPrimaryCv && hasDraftProfileState() ? REVIEW_STEP : 1,
+    hasPrimaryCv && hasSearchBasicsState() ? SEARCH_STEP : 1,
   );
   maxUnlockedStep = Math.min(STEP_COUNT, unlockedStep);
   stepNavButtons.forEach((button) => {
@@ -339,12 +344,33 @@ function updateContractChipLabel() {
   }
 }
 
-function updateMinContractMonthState() {
+function positionContractDurationRow() {
+  const contractRow = document.getElementById('contract_duration_row');
+  const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
+  if (!contractRow || !contractChip) return;
+  const parent = contractRow.parentElement;
+  if (parent && getComputedStyle(parent).position === 'static') {
+    parent.style.position = 'relative';
+  }
+  const chipRect = contractChip.getBoundingClientRect();
+  const parentRect = parent ? parent.getBoundingClientRect() : { left: 0, top: 0 };
+  contractRow.style.left = Math.round(chipRect.left - parentRect.left) + 'px';
+  contractRow.style.top = Math.round(chipRect.bottom - parentRect.top + 6) + 'px';
+}
+
+function updateMinContractMonthState({ showRow = false } = {}) {
   if (!refs.minContractMonths) return;
   const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
   refs.minContractMonths.disabled = !contractEnabled;
   const contractRow = document.getElementById('contract_duration_row');
-  if (contractRow) contractRow.hidden = !contractEnabled;
+  if (contractRow) {
+    if (!contractEnabled) {
+      contractRow.hidden = true;
+    } else if (showRow) {
+      positionContractDurationRow();
+      contractRow.hidden = false;
+    }
+  }
   updateContractChipLabel();
 }
 
@@ -402,7 +428,7 @@ function saveWizardState() {
 }
 
 function normalizePrimaryCvSourcePath(path) {
-  const value = String(path || '').trim().replace(/^\/+/, '');
+  const value = String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
   return value.startsWith(ROOT_DATA_PREFIX) ? value.slice(ROOT_DATA_PREFIX.length) : value;
 }
 
@@ -506,7 +532,7 @@ function restoreWizardState() {
     const savedSecondary = Array.isArray(state?.reviewSecondaryTitles) ? state.reviewSecondaryTitles : [];
     const savedCapabilities = Array.isArray(state?.reviewCapabilityRules) ? state.reviewCapabilityRules : [];
     const hasSavedDraft = Boolean(savedTargets.length || savedSecondary.length || savedCapabilities.length);
-    if (!state || (!hasSavedDraft && state.step < 2)) return false;
+    if (!state || (Number(state.step) >= 2 && !hasSavedDraft)) return false;
     const normalizedTitles = normalizeReviewTitleLists(state.reviewTargetTitles || [], state.reviewSecondaryTitles || []);
     reviewTargetTitles = normalizedTitles.primary;
     reviewSecondaryTitles = normalizedTitles.secondary;
@@ -519,7 +545,6 @@ function restoreWizardState() {
       : getReviewCapabilityPreviewCount();
     savedPrimaryCvSourcePath = String(state.primaryCvSourcePath || '').trim();
     savedPrimaryCvFileName = String(state.primaryCvFileName || '').trim();
-    setStep(Number(state.step) || REVIEW_STEP, { scroll: false, persist: false });
     try {
       setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '', { persist: false });
     } catch (error) {
@@ -543,7 +568,7 @@ function restoreWizardState() {
     } catch (error) {
       console.warn('Could not restore onboarding search basics state.', error);
     }
-    return true;
+    return Number(state.step) || REVIEW_STEP;
   } catch (error) {
     console.warn('Could not restore onboarding wizard state.', error);
     return false;
@@ -659,6 +684,10 @@ function restorePrimaryCvSelection(file) {
 
 function setStep(stepNumber, options = {}) {
   const { scroll = true, persist = true } = options;
+  const hasPrimaryCv = Boolean(primaryCvInput?.files?.[0] || preservedPrimaryCvFile);
+  if (stepNumber > 1 && !hasPrimaryCv) {
+    stepNumber = 1;
+  }
   currentStep = stepNumber;
   stepEls.forEach((el) => {
     const step = Number(el.dataset.step);
@@ -1016,7 +1045,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
       if (!anyChecked) input.checked = true;
     }
     hideStatus();
-    updateMinContractMonthState();
+    updateMinContractMonthState({ showRow: input.value === 'contract' && input.checked });
     updateCompensationVisibility();
     saveWizardState();
     scheduleSearchBasicsPersistence();

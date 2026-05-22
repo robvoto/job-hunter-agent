@@ -32,6 +32,77 @@
   --onboarding-dropzone-empty-icon-gap: 16px;
   --onboarding-dropzone-empty-hint-gap: 8px;
   --onboarding-progress-fill-width: 0%;
+
+  /* Shared onboarding layout sizing */
+  --onboarding-shell-max-width: 980px;
+  --onboarding-shell-padding-top: 24px;
+  --onboarding-shell-padding-inline: var(--surface-pad-inline-sm);
+  --onboarding-shell-padding-bottom: 44px;
+  --onboarding-panel-padding-block: var(--surface-pad-block-md);
+  --onboarding-panel-padding-inline: var(--surface-pad-inline-lg);
+  --onboarding-hero-margin-bottom: var(--surface-gap-md);
+  --onboarding-hero-padding-block: var(--surface-pad-block-lg);
+  --onboarding-hero-padding-inline: var(--surface-pad-inline-lg);
+  --onboarding-hero-shell-gap: 18px;
+  --onboarding-hero-title-margin-bottom: 10px;
+  --onboarding-hero-title-compact-margin-bottom: 6px;
+  --onboarding-hero-progress-margin-top: 22px;
+  --onboarding-hero-progress-gap: 8px;
+  --onboarding-wizard-progress-margin-bottom: 18px;
+  --onboarding-wizard-progress-bar-height: 8px;
+  --onboarding-wizard-progress-steps-gap: 10px;
+  --onboarding-wizard-progress-nav-gap: 8px;
+  --onboarding-wizard-progress-dot-size: 12px;
+  --onboarding-input-padding-block: var(--control-pad-block-2xl);
+  --onboarding-input-padding-inline: var(--control-pad-inline-lg);
+  --onboarding-input-compact-padding-block: var(--control-pad-block-lg);
+  --onboarding-step1-section-copy-margin-bottom: 24px;
+  --onboarding-step1-workflow-drawer-margin: 18px 0;
+  --onboarding-step1-workflow-drawer-body-gap: 8px;
+  --onboarding-step1-workflow-steps-gap: 12px;
+  --onboarding-step1-upload-dropzone-margin-block: 20px;
+  --onboarding-step1-accordion-margin-top: 18px;
+  --onboarding-step1-primary-cv-limit-help-margin-top: 16px;
+  --onboarding-step1-primary-cv-limit-help-margin-bottom: 26px;
+  --onboarding-step1-profile-priority-margin-top: 32px;
+  --onboarding-step1-profile-priority-padding-top: 24px;
+  --onboarding-step1-actions-margin-top: 28px;
+  --onboarding-step1-upload-help-margin-block: 12px;
+  --onboarding-top-surface-height: clamp(16rem, 18vw, 18rem);
+  --onboarding-top-surface-border: color-mix(in srgb, var(--border-subtle) 58%, transparent);
+  --onboarding-top-surface-bg: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, var(--bg-page)) 0%, color-mix(in srgb, var(--bg-surface) 86%, var(--bg-page)) 100%);
+
+  /* Shared control sizing */
+  --control-space-2xs: 4px;
+  --control-space-xs: 6px;
+  --control-space-sm: 8px;
+  --control-space-md: 10px;
+  --control-space-lg: 12px;
+  --control-pad-block-sm: 4px;
+  --control-pad-block-md: 7px;
+  --control-pad-block-lg: 8px;
+  --control-pad-block-xl: 9px;
+  --control-pad-block-2xl: 10px;
+  --control-pad-inline-sm: 10px;
+  --control-pad-inline-md: 11px;
+  --control-pad-inline-lg: 12px;
+  --control-pad-inline-xl: 14px;
+  --control-pad-inline-2xl: 18px;
+  --control-height-sm: 34px;
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --control-height-xl: 42px;
+  --control-height-2xl: 44px;
+  --control-height-3xl: 48px;
+  --control-knob-size: 18px;
+  --control-knob-offset: 3px;
+  --control-knob-shift: 18px;
+  --control-radius-sm: 4px;
+  --control-radius-md: 8px;
+  --control-radius-lg: 10px;
+  --control-radius-xl: 14px;
+  --control-radius-2xl: 16px;
+  --control-radius-pill: 999px;
 }
 
 /* Theme: Soft Professional

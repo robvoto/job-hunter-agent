@@ -1053,31 +1053,44 @@ async function initWizard() {
       console.warn('Could not load onboarding profile defaults.', error);
     });
     setStep(1, { scroll: false, persist: false });
-  } else if (restoreWizardState()) {
-    loadProfileDefaults().catch((error) => {
-      console.warn('Could not load onboarding profile defaults.', error);
-    });
-  } else if (onboardingResumeStep > 1) {
-    setStep(1, { scroll: false, persist: false });
-    try {
-      const resumeResponse = await jobHunterFetch('/api/profile');
-      if (resumeResponse.ok) {
-        const resumeProfile = await resumeResponse.json().catch(() => ({}));
-        applyProfileDefaults(resumeProfile || {});
-        hydrateDraftStep(resumeProfile || {});
-      }
-    } catch (error) {
-      console.warn('Could not resume onboarding profile defaults.', error);
-    }
-    if (hasDraftProfileState()) {
-      maxUnlockedStep = Math.max(maxUnlockedStep, onboardingResumeStep);
-      setStep(onboardingResumeStep, { scroll: false, persist: false });
-    }
   } else {
-    loadProfileDefaults().catch((error) => {
-      console.warn('Could not load onboarding profile defaults.', error);
-    });
-    setStep(1, { scroll: false, persist: false });
+    const restoredStep = restoreWizardState();
+    if (restoredStep) {
+      await loadProfileDefaults().catch((error) => {
+        console.warn('Could not load onboarding profile defaults.', error);
+      });
+      const restoredCv = await restorePrimaryCvFromSourcePath().catch((error) => {
+        console.warn('Could not restore onboarding CV file.', error);
+        return false;
+      });
+      if (restoredCv) {
+        setStep(Math.max(1, Math.min(STEP_COUNT, restoredStep)), { scroll: false, persist: false });
+      } else {
+        maxUnlockedStep = 1;
+        setStep(1, { scroll: false, persist: false });
+      }
+    } else if (onboardingResumeStep > 1) {
+      setStep(1, { scroll: false, persist: false });
+      try {
+        const resumeResponse = await jobHunterFetch('/api/profile');
+        if (resumeResponse.ok) {
+          const resumeProfile = await resumeResponse.json().catch(() => ({}));
+          applyProfileDefaults(resumeProfile || {});
+          hydrateDraftStep(resumeProfile || {});
+        }
+      } catch (error) {
+        console.warn('Could not resume onboarding profile defaults.', error);
+      }
+      if (hasDraftProfileState()) {
+        maxUnlockedStep = Math.max(maxUnlockedStep, onboardingResumeStep);
+        setStep(onboardingResumeStep, { scroll: false, persist: false });
+      }
+    } else {
+      loadProfileDefaults().catch((error) => {
+        console.warn('Could not load onboarding profile defaults.', error);
+      });
+      setStep(1, { scroll: false, persist: false });
+    }
   }
   refreshStepNavigation();
   updatePrimaryCvStatus(primaryCvInput?.files?.[0] || preservedPrimaryCvFile || null);

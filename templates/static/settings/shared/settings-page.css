@@ -230,8 +230,8 @@
     }
     .search-source-panel .toggle-switch {
       margin: 12px 0 6px;
-      padding: 14px 16px;
-      border-radius: 18px;
+      padding: var(--control-pad-block-2xl) var(--control-pad-inline-2xl);
+      border-radius: var(--control-radius-2xl);
     }
     .search-source-panel .toggle-switch-title {
       font-size: 1rem;
@@ -267,10 +267,10 @@
     #seek_max_pages_choices.choice-strip > .choice-card--seek-pages {
       flex: 0 0 auto;
       min-width: 2.7rem;
-      min-height: 36px;
-      padding: 7px 11px;
+      min-height: var(--control-height-sm);
+      padding: var(--control-pad-block-md) 11px;
       border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
-      border-radius: 10px;
+      border-radius: var(--control-radius-lg);
       background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
       box-shadow: none;
       color: var(--text-primary);
@@ -349,8 +349,8 @@
     input, select, textarea {
       width: 100%;
       border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 10px 12px;
+      border-radius: var(--control-radius-md);
+      padding: var(--control-pad-block-2xl) var(--control-pad-inline-lg);
       font: inherit;
       background: var(--bg-surface);
       color: var(--text-primary);
@@ -393,8 +393,8 @@
     .status-pill {
       display: inline-flex;
       align-items: center;
-      border-radius: 999px;
-      padding: 7px 12px;
+      border-radius: var(--control-radius-pill);
+      padding: var(--control-pad-block-md) var(--control-pad-inline-lg);
       font-size: 0.88rem;
       font-weight: 700;
       border: 1px solid var(--border-subtle);
@@ -420,8 +420,8 @@
     .status-pill.idle { background: var(--state-neutral-bg); border-color: var(--state-neutral-border); color: var(--state-neutral-text); }
     button {
       border: 0;
-      border-radius: 999px;
-      padding: 11px 18px;
+      border-radius: var(--control-radius-pill);
+      padding: 11px var(--control-pad-inline-2xl);
       font: inherit;
       font-weight: 700;
       cursor: pointer;
@@ -438,8 +438,8 @@
       top: 24px;
       right: 24px;
       max-width: min(420px, calc(100vw - 32px));
-      padding: 14px 16px;
-      border-radius: 14px;
+      padding: var(--control-pad-block-lg) var(--control-pad-inline-2xl);
+      border-radius: var(--control-radius-xl);
       border: 1px solid transparent;
       font-weight: 600;
       box-shadow: var(--shadow-soft);
@@ -465,7 +465,7 @@
       margin-top: 10px;
       padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
       background: color-mix(in srgb, var(--accent-secondary) 4%, transparent);
-      border-radius: 16px;
+      border-radius: var(--control-radius-2xl);
       border: 1px solid color-mix(in srgb, var(--accent-secondary) 12%, transparent);
     }
     .help-box p:first-child {

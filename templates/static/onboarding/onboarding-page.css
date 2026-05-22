@@ -26,9 +26,31 @@ body {
 /* ── Page layout ─────────────────────────────────────────────────────── */
 
 .page {
-  max-width: 980px;
+  position: relative;
+  isolation: isolate;
+  max-width: var(--onboarding-shell-max-width);
   margin: 0 auto;
-  padding: 24px var(--surface-pad-inline-sm) 44px;
+  padding: var(--onboarding-shell-padding-top) var(--onboarding-shell-padding-inline) var(--onboarding-shell-padding-bottom);
+}
+
+.page::before {
+  content: "";
+  position: absolute;
+  top: var(--onboarding-shell-padding-top);
+  left: var(--onboarding-shell-padding-inline);
+  right: var(--onboarding-shell-padding-inline);
+  height: var(--onboarding-top-surface-height);
+  border: 1px solid var(--onboarding-top-surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--onboarding-top-surface-bg);
+  box-shadow: var(--shadow-soft);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .grid {
@@ -38,7 +60,7 @@ body {
 }
 
 .panel {
-  padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
+  padding: var(--onboarding-panel-padding-block) var(--onboarding-panel-padding-inline);
 }
 
 /* ── Form defaults ───────────────────────────────────────────────────── */
@@ -50,7 +72,7 @@ body {
   width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: var(--onboarding-input-padding-block) var(--onboarding-input-padding-inline);
   font: inherit;
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -61,8 +83,7 @@ body {
 .page input[type="number"],
 .page input[type="search"] {
   border-radius: var(--radius-sm);
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-block: var(--onboarding-input-compact-padding-block);
 }
 
 .page input:focus,
@@ -103,9 +124,9 @@ body {
 /* ── Hero ────────────────────────────────────────────────────────────── */
 
 .hero {
-  margin-bottom: var(--surface-gap-md);
-  padding: var(--surface-pad-block-lg) var(--surface-pad-inline-lg);
-  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-muted) 100%);
+  margin-bottom: var(--onboarding-hero-margin-bottom);
+  padding: var(--onboarding-hero-padding-block) var(--onboarding-hero-padding-inline);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bg-surface) 96%, var(--bg-page)) 0%, color-mix(in srgb, var(--bg-muted) 80%, var(--bg-page)) 100%);
 }
 
 .hero.is-compact {
@@ -113,13 +134,13 @@ body {
 }
 
 .hero h1 {
-  margin: 0 0 10px;
+  margin: 0 0 var(--onboarding-hero-title-margin-bottom);
   font-size: var(--font-size-display);
   letter-spacing: -0.04em;
 }
 
 .hero.is-compact h1 {
-  margin-bottom: 6px;
+  margin-bottom: var(--onboarding-hero-title-compact-margin-bottom);
   font-size: var(--font-size-display-compact);
 }
 
@@ -131,7 +152,7 @@ body {
 
 .hero-shell {
   display: grid;
-  gap: 18px;
+  gap: var(--onboarding-hero-shell-gap);
 }
 
 .hero-copy-shell {
@@ -139,9 +160,9 @@ body {
 }
 
 .hero-progress {
-  margin-top: 22px;
+  margin-top: var(--onboarding-hero-progress-margin-top);
   display: grid;
-  gap: 8px;
+  gap: var(--onboarding-hero-progress-gap);
 }
 
 /* ── Test panel ──────────────────────────────────────────────────────── */
@@ -149,11 +170,11 @@ body {
 /* ── Wizard progress ─────────────────────────────────────────────────── */
 
 .wizard-progress {
-  margin-bottom: 18px;
+  margin-bottom: var(--onboarding-wizard-progress-margin-bottom);
 }
 
 .wizard-progress-bar {
-  height: 8px;
+  height: var(--onboarding-wizard-progress-bar-height);
   border-radius: 999px;
   background: color-mix(in srgb, var(--selection-accent) 14%, var(--bg-muted));
   border: 1px solid color-mix(in srgb, var(--selection-accent) 18%, var(--border-subtle));
@@ -177,7 +198,7 @@ body {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--onboarding-wizard-progress-steps-gap);
 }
 
 .wizard-progress-step {
@@ -188,7 +209,7 @@ body {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--onboarding-wizard-progress-nav-gap);
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -210,8 +231,8 @@ body {
 }
 
 .wizard-progress-dot {
-  width: 12px;
-  height: 12px;
+  width: var(--onboarding-wizard-progress-dot-size);
+  height: var(--onboarding-wizard-progress-dot-size);
   flex-shrink: 0;
   border-radius: 999px;
   border: 2px solid color-mix(in srgb, var(--text-muted) 40%, transparent);
@@ -1212,10 +1233,13 @@ body {
 
 /* Contract duration: compact inline row shown below work-type chips when Contract is selected */
 .contract-duration-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  position: absolute;
+  z-index: 60;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  padding: 8px 10px;
 }
 
 .contract-duration-row[hidden] {
@@ -1223,8 +1247,7 @@ body {
 }
 
 .contract-duration-row select {
-  flex: 1;
-  max-width: 160px;
+  width: 160px;
   margin: 0;
   font-size: var(--font-size-1xl);
 }
@@ -1354,15 +1377,15 @@ body {
 
 /* Restore breathing room specifically for Upload CV onboarding step. */
 .wizard-step[data-step="1"] .section-copy {
-  margin-bottom: 24px;
+  margin-bottom: var(--onboarding-step1-section-copy-margin-bottom);
 }
 
 .wizard-step[data-step="1"] .workflow-drawer {
-  margin: 18px 0;
+  margin: var(--onboarding-step1-workflow-drawer-margin);
 }
 
 .wizard-step[data-step="1"] .workflow-drawer-body {
-  gap: 8px;
+  gap: var(--onboarding-step1-workflow-drawer-body-gap);
   margin-top: 12px;
 }
 
@@ -1373,38 +1396,38 @@ body {
 }
 
 .wizard-step[data-step="1"] .workflow-steps {
-  gap: 12px;
+  gap: var(--onboarding-step1-workflow-steps-gap);
 }
 
 .wizard-step[data-step="1"] .upload-dropzone {
-  margin-top: 20px;
-  margin-bottom: 20px;
+  margin-top: var(--onboarding-step1-upload-dropzone-margin-block);
+  margin-bottom: var(--onboarding-step1-upload-dropzone-margin-block);
 }
 
 .wizard-step[data-step="1"] .accordion-trigger,
 .wizard-step[data-step="1"] .accordion-panel,
 .wizard-step[data-step="1"] .onboarding-accordion {
-  margin-top: 18px;
+  margin-top: var(--onboarding-step1-accordion-margin-top);
 }
 
 .wizard-step[data-step="1"] #primary_cv_limit_help {
-  margin-top: 16px;
-  margin-bottom: 26px;
+  margin-top: var(--onboarding-step1-primary-cv-limit-help-margin-top);
+  margin-bottom: var(--onboarding-step1-primary-cv-limit-help-margin-bottom);
 }
 
 .wizard-step[data-step="1"] .profile-priority-row {
-  margin-top: 32px;
-  padding-top: 24px;
+  margin-top: var(--onboarding-step1-profile-priority-margin-top);
+  padding-top: var(--onboarding-step1-profile-priority-padding-top);
 }
 
 .wizard-step[data-step="1"] .actions {
-  margin-top: 28px;
+  margin-top: var(--onboarding-step1-actions-margin-top);
 }
 
 .wizard-step[data-step="1"] .upload-help-copy,
 .wizard-step[data-step="1"] .upload-guidance-copy {
-  margin-top: 12px;
-  margin-bottom: 12px;
+  margin-top: var(--onboarding-step1-upload-help-margin-block);
+  margin-bottom: var(--onboarding-step1-upload-help-margin-block);
   line-height: 1.6;
 }
 
