@@ -7,21 +7,38 @@ It is not a chat log. It documents the intended setup path and the important les
 ## Target setup
 
 ```text
-AWS EC2 Ubuntu server
-Python 3.12 installed with pyenv
+AWS EC2 Ubuntu 24.04 LTS server
+Python 3.12
 Project virtual environment in .venv
 Private GitHub repo cloned with GitHub token
 App tested locally on 127.0.0.1:8765
 Later: systemd + Nginx + HTTPS + database
 ```
 
-## Important Python decision
+## Critical version decision
 
-Do not use Python 3.14 for this project yet.
+Use **Ubuntu 24.04 LTS** for the EC2 instance.
 
-The EC2 image used in this setup came with Python 3.14.4. The project dependency stack is not ready for that version at the moment. During install, pip attempted to build NumPy from source and failed. We also saw pandas/numpy dependency resolution issues.
+Do **not** use Ubuntu 26.04 for this project yet. Playwright failed on Ubuntu 26.04 with:
+
+```text
+Playwright does not support chromium on ubuntu26.04-x64
+```
+
+Do **not** clone/copy an Ubuntu 26.04 EC2 instance as an AMI for this project. That copies the same OS compatibility problem.
 
 Use Python 3.12 for now.
+
+The first EC2 image used in this setup came with Python 3.14.4. The project dependency stack is not ready for that version at the moment. During install, pip attempted to build NumPy from source and failed. pandas/numpy dependency resolution also failed with Python 3.14.
+
+Correct target:
+
+```text
+Ubuntu 24.04 LTS
+Python 3.12
+pandas 2.x
+Playwright Chromium supported
+```
 
 ## 1. AWS account safety
 
@@ -57,7 +74,7 @@ Recommended:
 
 ```text
 Name: job-hunter-ec2
-AMI: Ubuntu Server
+AMI: Ubuntu Server 24.04 LTS
 Instance type: t3.micro or free-tier equivalent
 Key pair: KeyPair-JobHunter
 Storage: default is fine for learning
@@ -73,6 +90,31 @@ Amazon Linux username, if using Amazon Linux instead:
 
 ```text
 ec2-user
+```
+
+### If the wrong instance was created
+
+If the current instance is Ubuntu 26.04, do not create an AMI from it.
+
+Create a new EC2 instance instead:
+
+```text
+AMI: Ubuntu Server 24.04 LTS
+Same key pair
+Same security group
+Same instance size
+```
+
+Keep the old instance stopped until the new one works. Terminate it only after confirming no local data is needed.
+
+Reuse these items from the old setup:
+
+```text
+GitHub repo
+GitHub token or new token
+Key pair
+Security group rules
+AWS setup guide
 ```
 
 ## 3. Security group
@@ -167,24 +209,21 @@ On the EC2 instance:
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y git curl wget build-essential
+sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip
 ```
 
 Check:
 
 ```bash
 git --version
+python3 --version
 ```
 
-## 7. Install Python 3.12 using pyenv
+On Ubuntu 24.04 LTS, Python should be 3.12.x.
 
-The EC2 Ubuntu image may not provide Python 3.12 through apt. If this fails:
+## 7. Optional pyenv path if Python 3.12 is missing
 
-```bash
-sudo apt install -y python3.12 python3.12-venv python3.12-dev
-```
-
-with package not found errors, use pyenv.
+On Ubuntu 24.04 this should normally not be needed. Use it only if Python 3.12 is not available.
 
 Install build dependencies:
 
@@ -207,7 +246,19 @@ pyenv install 3.12.8
 pyenv versions
 ```
 
-Expected: `3.12.8` is listed.
+If `/tmp` fills during compile:
+
+```bash
+rm -rf /tmp/python-build.*
+mkdir -p ~/tmp
+TMPDIR=~/tmp pyenv install 3.12.8
+```
+
+Some minimal pyenv installs do not support `pyenv local` or `pyenv global`. In that case, use the Python binary directly:
+
+```bash
+$(pyenv prefix 3.12.8)/bin/python --version
+```
 
 ## 8. Clone the private GitHub repo
 
@@ -281,13 +332,35 @@ store
 
 Later, replace this with a deploy key or cleaner deployment process.
 
-## 10. Set project Python to 3.12
+## 10. Create the project virtual environment
 
-Inside the repo:
+### Normal Ubuntu 24.04 path
 
 ```bash
 cd ~/job-hunter-agent
-pyenv local 3.12.8
+rm -rf .venv
+python3 -m venv .venv
+source .venv/bin/activate
+python --version
+which python
+```
+
+Expected:
+
+```text
+Python 3.12.x
+/home/ubuntu/job-hunter-agent/.venv/bin/python
+```
+
+### pyenv fallback path
+
+If using pyenv:
+
+```bash
+cd ~/job-hunter-agent
+rm -rf .venv
+$(pyenv prefix 3.12.8)/bin/python -m venv .venv
+source .venv/bin/activate
 python --version
 ```
 
@@ -295,22 +368,6 @@ Expected:
 
 ```text
 Python 3.12.8
-```
-
-Create the virtual environment:
-
-```bash
-rm -rf .venv
-python -m venv .venv
-source .venv/bin/activate
-python --version
-which python
-```
-
-Expected Python path:
-
-```text
-/home/ubuntu/job-hunter-agent/.venv/bin/python
 ```
 
 ## 11. Install project dependencies
@@ -322,10 +379,10 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-If a dev requirements file exists and is needed:
+For this project, `python-jobspy` requires pandas below version 3, so `requirements.txt` should use pandas 2.x:
 
-```bash
-pip install -r requirements-dev.txt
+```text
+pandas>=2.0.0,<3
 ```
 
 If you see `externally-managed-environment`, the virtual environment is not active.
@@ -345,7 +402,7 @@ Expected:
 
 ## 12. Install Playwright browser
 
-With `.venv` active:
+With `.venv` active on Ubuntu 24.04:
 
 ```bash
 python -m playwright install chromium
@@ -359,6 +416,14 @@ python -m playwright install chromium
 ```
 
 If you see `No module named playwright`, dependencies were not installed into the active venv.
+
+If you see this:
+
+```text
+Playwright does not support chromium on ubuntu26.04-x64
+```
+
+then the EC2 OS is too new. Create a new Ubuntu 24.04 LTS instance instead of trying to patch around it.
 
 ## 13. Smoke test the app
 
@@ -400,7 +465,7 @@ Later: HTTPS/domain
 The venv does not exist yet.
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -424,7 +489,17 @@ ResolutionImpossible
 No matching distributions for numpy/pandas
 ```
 
-Fix: use Python 3.12 via pyenv.
+Fix: use Python 3.12.
+
+### Playwright unsupported on Ubuntu 26.04
+
+Symptom:
+
+```text
+Playwright does not support chromium on ubuntu26.04-x64
+```
+
+Fix: create a new EC2 with Ubuntu 24.04 LTS.
 
 ### `Permission denied (publickey)`
 
