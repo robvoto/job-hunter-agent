@@ -12,9 +12,9 @@ Private GitHub repo cloned from GitHub
 Persistent app data on a separate EBS volume mounted at /var/lib/job-hunter
 SQLite database stored on the EBS data volume
 systemd runs the FastAPI app as a service
-Nginx exposes the app on public HTTP port 80
-Google OAuth provides login
-Later: HTTPS + domain + package-based deployment + backups
+Nginx exposes the app internally on HTTP port 80
+ngrok can expose the test site over temporary HTTPS for Google OAuth testing
+Later: real domain + HTTPS + package-based deployment + backups
 ```
 
 ## Required platform
@@ -78,8 +78,8 @@ Create or select a security group with these inbound rules:
 
 ```text
 SSH    TCP 22   Source: your public IP /32 only
-HTTP   TCP 80   Source: 0.0.0.0/0 for the test site
-HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is configured
+HTTP   TCP 80   Source: 0.0.0.0/0 for the test site or ngrok target
+HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is configured on the server
 ```
 
 Do not expose the app port `8765` publicly. The app should stay private behind Nginx.
@@ -87,12 +87,12 @@ Do not expose the app port `8765` publicly. The app should stay private behind N
 Target path:
 
 ```text
-Internet → Nginx 80/443 → app on 127.0.0.1:8765
+Internet/ngrok → Nginx 80/443 → app on 127.0.0.1:8765
 ```
 
 ## 4. Allocate a stable public address
 
-Do not rely on the default EC2 public IP for OAuth because it can change.
+Do not rely on the default EC2 public IP because it can change.
 
 For this test instance, allocate an Elastic IP:
 
@@ -106,14 +106,14 @@ Associate it with the EC2 instance:
 Select Elastic IP → Actions → Associate Elastic IP address → choose the Job Hunter EC2 instance
 ```
 
-Use this Elastic IP for:
+Use the Elastic IP for stable server access and DNS later.
+
+Important OAuth note: Google OAuth should not be configured permanently against a raw IP address. Use either:
 
 ```text
-JOB_HUNTER_BASE_URL=http://<elastic-ip>
-Google OAuth redirect URI=http://<elastic-ip>/api/auth/google/callback
+Temporary test path: ngrok HTTPS URL
+Proper public path: real domain + HTTPS
 ```
-
-Later, replace the Elastic IP URL with a real domain and HTTPS.
 
 ## 5. Create persistent EBS data volume
 
@@ -411,7 +411,7 @@ python -m playwright install chromium
 
 Do not commit `.env` to GitHub.
 
-For a test instance, either keep `.env` in the repo working directory or use a safer system path. Preferred server path:
+Use this server-only env file:
 
 ```text
 /etc/job-hunter/job-hunter.env
@@ -423,13 +423,15 @@ Create the folder:
 sudo mkdir -p /etc/job-hunter
 ```
 
+Copy values from the local/dev `.env` as needed, then remove any repo-local `.env` from EC2.
+
 The environment file should define these values:
 
 ```env
 JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
 JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
 JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
-JOB_HUNTER_BASE_URL=http://<elastic-ip-or-domain>
+JOB_HUNTER_BASE_URL=<public-ngrok-url-or-domain>
 JOB_HUNTER_GOOGLE_CLIENT_ID=<google-client-id>
 JOB_HUNTER_GOOGLE_CLIENT_SECRET=<google-client-secret>
 JOB_HUNTER_ADMIN_EMAIL=<admin-email>
@@ -449,25 +451,34 @@ sudo chown root:ubuntu /etc/job-hunter/job-hunter.env
 sudo chmod 640 /etc/job-hunter/job-hunter.env
 ```
 
-If using `/home/ubuntu/job-hunter-agent/.env` for testing, do not commit it and keep permissions restricted.
-
 ## 16. Configure Google OAuth
 
-In Google Cloud Console, create or update the OAuth client.
+Keep separate OAuth clients for local development and EC2/test if possible.
 
-Authorized redirect URI must match the app base URL:
-
-```text
-http://<elastic-ip-or-domain>/api/auth/google/callback
-```
-
-Do not use localhost for the EC2 deployment:
+Local VS Code development client:
 
 ```text
-http://localhost:8765/api/auth/google/callback
+Authorized JavaScript origin: http://localhost:8765
+Authorized redirect URI: http://localhost:8765/api/auth/google/callback
 ```
 
-`localhost` points to the user's own computer, not the EC2 instance.
+EC2/test with ngrok:
+
+```text
+JOB_HUNTER_BASE_URL=https://<ngrok-host>
+Authorized redirect URI: https://<ngrok-host>/api/auth/google/callback
+```
+
+EC2/proper public setup:
+
+```text
+JOB_HUNTER_BASE_URL=https://<real-domain>
+Authorized redirect URI: https://<real-domain>/api/auth/google/callback
+```
+
+Do not use localhost for EC2. `localhost` points to the user's own computer, not the EC2 instance.
+
+Do not rely on a raw IP address for Google OAuth. Use ngrok for temporary HTTPS testing, or a real domain for a stable deployment.
 
 ## 17. Run app with systemd
 
@@ -495,12 +506,6 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-```
-
-If using the temporary repo-local env file, use this instead:
-
-```ini
-EnvironmentFile=/home/ubuntu/job-hunter-agent/.env
 ```
 
 Start and enable the service:
@@ -632,15 +637,72 @@ curl -I http://127.0.0.1/
 
 Expected: response from Nginx and redirect or HTML from the app.
 
-Public test from browser:
+## 20. Expose test site with ngrok
+
+ngrok is the temporary no-domain path for Google OAuth testing. It creates a public HTTPS URL and forwards it to Nginx on EC2.
+
+Flow:
 
 ```text
-http://<elastic-ip-or-public-ip>/
+Google/browser → https://<ngrok-host> → EC2 localhost:80 → Nginx → 127.0.0.1:8765 app
 ```
 
-Expected: login page or redirect to login.
+Install or verify ngrok on EC2:
 
-## 20. Useful EC2 metadata checks
+```bash
+ngrok version
+```
+
+Register the EC2 ngrok install with your ngrok account. Copy the authtoken command from the ngrok dashboard and run it on EC2:
+
+```bash
+ngrok config add-authtoken <token>
+```
+
+Do not commit or share the token.
+
+Start the tunnel:
+
+```bash
+ngrok http 80
+```
+
+Copy the forwarding URL:
+
+```text
+https://<ngrok-host>
+```
+
+Set the server env file:
+
+```env
+JOB_HUNTER_BASE_URL=https://<ngrok-host>
+```
+
+Set Google OAuth redirect URI:
+
+```text
+https://<ngrok-host>/api/auth/google/callback
+```
+
+Restart the app after changing the env file:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart job-hunter
+```
+
+Then open:
+
+```text
+https://<ngrok-host>
+```
+
+Expected: login flow starts and redirects back to the ngrok callback URL.
+
+Free ngrok URLs can change when the tunnel restarts. If the URL changes, update both `JOB_HUNTER_BASE_URL` and the Google OAuth redirect URI.
+
+## 21. Useful EC2 metadata checks
 
 If IMDSv1 returns blank, use IMDSv2.
 
@@ -656,7 +718,7 @@ Get public IP:
 curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4
 ```
 
-## 21. Quick checks
+## 22. Quick checks
 
 Confirm OS:
 
@@ -695,6 +757,14 @@ Confirm app env names:
 sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
 ```
 
+Confirm ngrok tunnel:
+
+```text
+Open https://<ngrok-host>
+```
+
+Expected: login page or redirect to login.
+
 ## Do not do yet
 
 Until this test deployment is stable:
@@ -705,7 +775,8 @@ Do not create Lambda
 Do not create Lightsail
 Do not expose port 8765 publicly
 Do not commit .env or secrets to GitHub
-Do not rely on the default public EC2 IP for OAuth long term
+Do not use the local development Google OAuth client for EC2 public testing
+Do not rely on the default public EC2 IP for OAuth
 ```
 
 ## Later improvements
@@ -715,7 +786,8 @@ Move from repo clone to package/artifact deployment
 Use /opt/job-hunter/app for installed application code
 Keep /var/lib/job-hunter/data for persistent data
 Keep /var/log/job-hunter for logs
-Add HTTPS using a domain and certificate
+Add HTTPS using a real domain and certificate
+Replace ngrok with a real domain for stable deployment
 Add CloudWatch Logs
 Add EBS snapshots or S3 backups
 Consider RDS PostgreSQL when the data model stabilizes
