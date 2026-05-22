@@ -397,19 +397,31 @@ If the virtual environment is active, `which pip` should return:
 /home/ubuntu/job-hunter-agent/.venv/bin/pip
 ```
 
-## 14. Install Playwright browser
+## 14. Install Playwright browser and Linux dependencies
 
-With `.venv` active:
+With `.venv` active, install the Chromium browser:
 
 ```bash
 python -m playwright install chromium
 ```
 
-If Linux libraries are missing:
+Then install the required Ubuntu shared libraries for Chromium:
 
 ```bash
 sudo .venv/bin/python -m playwright install-deps chromium
-python -m playwright install chromium
+```
+
+This avoids runtime errors such as:
+
+```text
+error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory
+BrowserType.launch: Target page, context or browser has been closed
+```
+
+After installing browser dependencies, restart the app:
+
+```bash
+sudo systemctl restart job-hunter
 ```
 
 ## 15. Configure secrets and environment
@@ -847,6 +859,13 @@ Confirm Nginx:
 ```bash
 sudo nginx -t
 curl -I http://127.0.0.1/
+```
+
+Confirm Playwright dependencies:
+
+```bash
+python -m playwright install chromium
+sudo .venv/bin/python -m playwright install-deps chromium
 ```
 
 Confirm app env names:
