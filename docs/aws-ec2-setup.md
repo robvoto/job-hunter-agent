@@ -1,8 +1,8 @@
 # AWS EC2 Setup Guide for Job Hunter
 
-This is the repeatable setup guide for running Job Hunter on AWS EC2 with Ubuntu.
+This guide describes the clean first-time setup for running Job Hunter on AWS EC2.
 
-It is not a chat log. It documents the intended setup path and the important lessons learned.
+It is a setup document, not a troubleshooting diary.
 
 ## Target setup
 
@@ -15,30 +15,18 @@ App tested locally on 127.0.0.1:8765
 Later: systemd + Nginx + HTTPS + database
 ```
 
-## Critical version decision
+## Required platform
 
-Use **Ubuntu 24.04 LTS** for the EC2 instance.
-
-Do **not** use Ubuntu 26.04 for this project yet. Playwright failed on Ubuntu 26.04 with:
+Use this platform for Job Hunter:
 
 ```text
-Playwright does not support chromium on ubuntu26.04-x64
-```
-
-Do **not** clone/copy an Ubuntu 26.04 EC2 instance as an AMI for this project. That copies the same OS compatibility problem.
-
-Use Python 3.12 for now.
-
-The first EC2 image used in this setup came with Python 3.14.4. The project dependency stack is not ready for that version at the moment. During install, pip attempted to build NumPy from source and failed. pandas/numpy dependency resolution also failed with Python 3.14.
-
-Correct target:
-
-```text
-Ubuntu 24.04 LTS
+Ubuntu Server 24.04 LTS
 Python 3.12
 pandas 2.x
-Playwright Chromium supported
+Playwright Chromium
 ```
+
+Do not choose preview/non-LTS Ubuntu releases for this setup. Use Ubuntu 24.04 LTS so Python and Playwright stay on a supported path.
 
 ## 1. AWS account safety
 
@@ -70,7 +58,7 @@ AWS Console:
 EC2 → Instances → Launch instance
 ```
 
-Recommended:
+Recommended settings:
 
 ```text
 Name: job-hunter-ec2
@@ -86,40 +74,9 @@ Ubuntu SSH username:
 ubuntu
 ```
 
-Amazon Linux username, if using Amazon Linux instead:
-
-```text
-ec2-user
-```
-
-### If the wrong instance was created
-
-If the current instance is Ubuntu 26.04, do not create an AMI from it.
-
-Create a new EC2 instance instead:
-
-```text
-AMI: Ubuntu Server 24.04 LTS
-Same key pair
-Same security group
-Same instance size
-```
-
-Keep the old instance stopped until the new one works. Terminate it only after confirming no local data is needed.
-
-Reuse these items from the old setup:
-
-```text
-GitHub repo
-GitHub token or new token
-Key pair
-Security group rules
-AWS setup guide
-```
-
 ## 3. Security group
 
-Use a tight security group.
+Create or select a security group with these inbound rules:
 
 ```text
 SSH    TCP 22   Source: your public IP /32 only
@@ -129,47 +86,35 @@ HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is ready
 
 Do not expose the app port `8765` publicly for normal use. The app should later sit behind Nginx.
 
-Final direction:
+Target public path:
 
 ```text
 Internet → Nginx 80/443 → app on 127.0.0.1:8765
 ```
 
-## 4. Connection options
+## 4. Optional IAM role for Session Manager
 
-### EC2 Instance Connect
+Session Manager is useful when SSH is blocked by a corporate network.
 
-AWS Console:
-
-```text
-EC2 → Instances → select instance → Connect → EC2 Instance Connect
-```
-
-This can fail on corporate networks that block SSH-style access.
-
-### Session Manager
-
-Use AWS Systems Manager Session Manager when company networks block SSH.
-
-Requirement: attach an IAM role to the EC2 instance with:
+Create or attach an IAM role to the EC2 instance with this AWS managed policy:
 
 ```text
 AmazonSSMManagedInstanceCore
 ```
 
-IAM role path:
+Attach role path:
 
 ```text
 EC2 → Instances → select instance → Actions → Security → Modify IAM role
 ```
 
-Connection path:
+Connect path:
 
 ```text
 EC2 → Instances → select instance → Connect → Session Manager
 ```
 
-### Local SSH from Windows PowerShell
+## 5. Connect with SSH from Windows PowerShell
 
 Example:
 
@@ -183,7 +128,9 @@ If prompted about host authenticity, type:
 yes
 ```
 
-## 5. Fix Windows PEM permissions
+This stores the EC2 host fingerprint in the local `known_hosts` file.
+
+## 6. Fix Windows PEM permissions if SSH rejects the key
 
 If SSH rejects the key with an unprotected private key warning, fix file permissions from PowerShell:
 
@@ -202,7 +149,7 @@ icacls .\KeyPair-JobHunter.pem
 
 Expected: the current Windows user has read permission and broad groups are removed.
 
-## 6. Install base Ubuntu packages
+## 7. Install base Ubuntu packages
 
 On the EC2 instance:
 
@@ -219,50 +166,15 @@ git --version
 python3 --version
 ```
 
-On Ubuntu 24.04 LTS, Python should be 3.12.x.
+Expected Python version on Ubuntu 24.04 LTS:
 
-## 7. Optional pyenv path if Python 3.12 is missing
-
-On Ubuntu 24.04 this should normally not be needed. Use it only if Python 3.12 is not available.
-
-Install build dependencies:
-
-```bash
-sudo apt update && sudo apt install -y build-essential libssl-dev zlib1g-dev \
-libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev \
-libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
-```
-
-Install pyenv runtime if available:
-
-```bash
-sudo apt install -y pyenv-runtime
-```
-
-Install Python 3.12.8:
-
-```bash
-pyenv install 3.12.8
-pyenv versions
-```
-
-If `/tmp` fills during compile:
-
-```bash
-rm -rf /tmp/python-build.*
-mkdir -p ~/tmp
-TMPDIR=~/tmp pyenv install 3.12.8
-```
-
-Some minimal pyenv installs do not support `pyenv local` or `pyenv global`. In that case, use the Python binary directly:
-
-```bash
-$(pyenv prefix 3.12.8)/bin/python --version
+```text
+Python 3.12.x
 ```
 
 ## 8. Clone the private GitHub repo
 
-Repo:
+Repository:
 
 ```text
 https://github.com/robvoto/job-hunter-agent.git
@@ -300,11 +212,7 @@ Never paste the token into chat or screenshots. If exposed, revoke it.
 
 ## 9. Git credential handling on EC2
 
-Windows Git Credential Manager is not available on Ubuntu EC2. This command does not work there:
-
-```bash
-git config --global credential.helper manager
-```
+Windows Git Credential Manager is not available on Ubuntu EC2.
 
 For short-term learning on EC2:
 
@@ -334,8 +242,6 @@ Later, replace this with a deploy key or cleaner deployment process.
 
 ## 10. Create the project virtual environment
 
-### Normal Ubuntu 24.04 path
-
 ```bash
 cd ~/job-hunter-agent
 rm -rf .venv
@@ -350,24 +256,6 @@ Expected:
 ```text
 Python 3.12.x
 /home/ubuntu/job-hunter-agent/.venv/bin/python
-```
-
-### pyenv fallback path
-
-If using pyenv:
-
-```bash
-cd ~/job-hunter-agent
-rm -rf .venv
-$(pyenv prefix 3.12.8)/bin/python -m venv .venv
-source .venv/bin/activate
-python --version
-```
-
-Expected:
-
-```text
-Python 3.12.8
 ```
 
 ## 11. Install project dependencies
@@ -385,16 +273,7 @@ For this project, `python-jobspy` requires pandas below version 3, so `requireme
 pandas>=2.0.0,<3
 ```
 
-If you see `externally-managed-environment`, the virtual environment is not active.
-
-Fix:
-
-```bash
-source .venv/bin/activate
-which pip
-```
-
-Expected:
+If the virtual environment is active, `which pip` should return:
 
 ```text
 /home/ubuntu/job-hunter-agent/.venv/bin/pip
@@ -402,7 +281,7 @@ Expected:
 
 ## 12. Install Playwright browser
 
-With `.venv` active on Ubuntu 24.04:
+With `.venv` active:
 
 ```bash
 python -m playwright install chromium
@@ -414,16 +293,6 @@ If Linux libraries are missing:
 sudo .venv/bin/python -m playwright install-deps chromium
 python -m playwright install chromium
 ```
-
-If you see `No module named playwright`, dependencies were not installed into the active venv.
-
-If you see this:
-
-```text
-Playwright does not support chromium on ubuntu26.04-x64
-```
-
-then the EC2 OS is too new. Create a new Ubuntu 24.04 LTS instance instead of trying to patch around it.
 
 ## 13. Smoke test the app
 
@@ -443,7 +312,7 @@ curl http://127.0.0.1:8765/start
 
 Expected: HTML response.
 
-## 14. Next production-style steps
+## 14. Production-style next steps
 
 After the smoke test works:
 
@@ -458,63 +327,46 @@ Later: database/RDS
 Later: HTTPS/domain
 ```
 
-## Common errors
+## Quick checks
 
-### `.venv/bin/activate: No such file or directory`
-
-The venv does not exist yet.
+Confirm OS:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+lsb_release -a
 ```
 
-### `externally-managed-environment`
+Expected:
 
-You are using system pip, not venv pip.
+```text
+Ubuntu 24.04 LTS
+```
+
+Confirm Python:
 
 ```bash
-source .venv/bin/activate
-which pip
+python3 --version
 ```
 
-### NumPy or pandas failure on Python 3.14
-
-Symptoms:
+Expected:
 
 ```text
-NumPy builds from source
-c++ fatal error: Killed
-ResolutionImpossible
-No matching distributions for numpy/pandas
+Python 3.12.x
 ```
 
-Fix: use Python 3.12.
+Confirm venv Python:
 
-### Playwright unsupported on Ubuntu 26.04
+```bash
+source ~/job-hunter-agent/.venv/bin/activate
+python --version
+which python
+```
 
-Symptom:
+Expected:
 
 ```text
-Playwright does not support chromium on ubuntu26.04-x64
+Python 3.12.x
+/home/ubuntu/job-hunter-agent/.venv/bin/python
 ```
-
-Fix: create a new EC2 with Ubuntu 24.04 LTS.
-
-### `Permission denied (publickey)`
-
-Check:
-
-```text
-Correct username
-Correct key pair
-PEM file permissions
-EC2 key pair name
-```
-
-### GitHub password rejected
-
-Use a GitHub token, not the GitHub account password.
 
 ## Do not do yet
 
