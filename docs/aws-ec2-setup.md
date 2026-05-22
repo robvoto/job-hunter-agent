@@ -1,6 +1,6 @@
 # AWS EC2 Setup Guide for Job Hunter
 
-This guide describes the clean first-time setup for running Job Hunter on AWS EC2.
+This guide describes the clean test/staging setup for running Job Hunter on AWS EC2.
 
 ## Target setup
 
@@ -10,8 +10,11 @@ Python 3.12
 Project virtual environment in .venv
 Private GitHub repo cloned from GitHub
 Persistent app data on a separate EBS volume mounted at /var/lib/job-hunter
-App tested locally on 127.0.0.1:8765
-Later: systemd + Nginx + HTTPS + database
+SQLite database stored on the EBS data volume
+systemd runs the FastAPI app as a service
+Nginx exposes the app on public HTTP port 80
+Google OAuth provides login
+Later: HTTPS + domain + package-based deployment + backups
 ```
 
 ## Required platform
@@ -60,7 +63,7 @@ Name: job-hunter-ec2
 AMI: Ubuntu Server 24.04 LTS
 Instance type: t3.micro or free-tier equivalent
 Key pair: KeyPair-JobHunter
-Storage: default root disk is fine for code and OS
+Storage: default root disk is fine for OS and code
 ```
 
 Ubuntu SSH username:
@@ -75,19 +78,44 @@ Create or select a security group with these inbound rules:
 
 ```text
 SSH    TCP 22   Source: your public IP /32 only
-HTTP   TCP 80   Source: 0.0.0.0/0 later, when Nginx is ready
-HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is ready
+HTTP   TCP 80   Source: 0.0.0.0/0 for the test site
+HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is configured
 ```
 
-Do not expose the app port `8765` publicly for normal use. The app should later sit behind Nginx.
+Do not expose the app port `8765` publicly. The app should stay private behind Nginx.
 
-Target public path:
+Target path:
 
 ```text
 Internet → Nginx 80/443 → app on 127.0.0.1:8765
 ```
 
-## 4. Create persistent EBS data volume
+## 4. Allocate a stable public address
+
+Do not rely on the default EC2 public IP for OAuth because it can change.
+
+For this test instance, allocate an Elastic IP:
+
+```text
+EC2 → Network & Security → Elastic IPs → Allocate Elastic IP address
+```
+
+Associate it with the EC2 instance:
+
+```text
+Select Elastic IP → Actions → Associate Elastic IP address → choose the Job Hunter EC2 instance
+```
+
+Use this Elastic IP for:
+
+```text
+JOB_HUNTER_BASE_URL=http://<elastic-ip>
+Google OAuth redirect URI=http://<elastic-ip>/api/auth/google/callback
+```
+
+Later, replace the Elastic IP URL with a real domain and HTTPS.
+
+## 5. Create persistent EBS data volume
 
 The EC2 root disk is not the right place for application data. Use a separate EBS volume for persistent Job Hunter data.
 
@@ -101,7 +129,7 @@ Recommended settings:
 
 ```text
 Volume type: gp3
-Size: 10 GiB for learning
+Size: 10 GiB for learning/test
 IOPS: 3000 baseline
 Throughput: 125 MiB/s baseline
 Availability Zone: same as the EC2 instance
@@ -162,9 +190,75 @@ Expected: the filesystem should be `/dev/nvme1n1`, not `/dev/root`.
 /dev/nvme1n1   10G   ...   /var/lib/job-hunter
 ```
 
-The application still needs a code/config change to write persistent data to `/var/lib/job-hunter` instead of the repo `data/` folder.
+## 6. Make the EBS mount survive reboot
 
-## 5. Optional IAM role for Session Manager
+Get the EBS filesystem UUID:
+
+```bash
+sudo blkid /dev/nvme1n1
+```
+
+Example output:
+
+```text
+/dev/nvme1n1: UUID="8c180247-0d33-4769-89a9-84135a414f34" BLOCK_SIZE="4096" TYPE="ext4"
+```
+
+Add the mount to `/etc/fstab` using the actual UUID:
+
+```bash
+echo 'UUID=8c180247-0d33-4769-89a9-84135a414f34 /var/lib/job-hunter ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+```
+
+Test the mount entry:
+
+```bash
+sudo umount /var/lib/job-hunter
+sudo mount -a
+sudo systemctl daemon-reload
+df -h /var/lib/job-hunter
+```
+
+Expected:
+
+```text
+/dev/nvme1n1   10G   ...   /var/lib/job-hunter
+```
+
+`nofail` lets the instance boot even if the data volume is temporarily missing.
+
+## 7. Create data and log folders
+
+Create the app data and log folders:
+
+```bash
+sudo mkdir -p /var/lib/job-hunter/data
+sudo mkdir -p /var/lib/job-hunter/output
+sudo mkdir -p /var/log/job-hunter
+sudo chown -R ubuntu:ubuntu /var/lib/job-hunter /var/log/job-hunter
+```
+
+Verify permissions:
+
+```bash
+ls -ld /var/lib/job-hunter /var/lib/job-hunter/data /var/log/job-hunter
+```
+
+Expected owner:
+
+```text
+ubuntu ubuntu
+```
+
+Optional write test:
+
+```bash
+touch /var/lib/job-hunter/data/write-test.txt
+ls -l /var/lib/job-hunter/data/write-test.txt
+rm /var/lib/job-hunter/data/write-test.txt
+```
+
+## 8. Optional IAM role for Session Manager
 
 Session Manager is useful when SSH is blocked by a corporate network.
 
@@ -186,7 +280,7 @@ Connect path:
 EC2 → Instances → select instance → Connect → Session Manager
 ```
 
-## 6. Connect with SSH from Windows PowerShell
+## 9. Connect with SSH from Windows PowerShell
 
 Example:
 
@@ -200,9 +294,7 @@ If prompted about host authenticity, type:
 yes
 ```
 
-## 7. Fix Windows PEM permissions if SSH rejects the key
-
-If SSH rejects the key with an unprotected private key warning, fix file permissions from PowerShell:
+If SSH rejects the key with an unprotected private key warning, fix permissions from PowerShell:
 
 ```powershell
 cd E:\Programming\job-hunter-agent
@@ -211,20 +303,14 @@ icacls .\KeyPair-JobHunter.pem /remove:g "Users" "Authenticated Users" "Everyone
 icacls .\KeyPair-JobHunter.pem /grant:r "$($env:USERNAME):R"
 ```
 
-Check:
-
-```powershell
-icacls .\KeyPair-JobHunter.pem
-```
-
-## 8. Install base Ubuntu packages
+## 10. Install base Ubuntu packages
 
 On the EC2 instance:
 
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip
+sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip nginx
 ```
 
 Check:
@@ -232,6 +318,7 @@ Check:
 ```bash
 git --version
 python3 --version
+nginx -v
 ```
 
 Expected Python version on Ubuntu 24.04 LTS:
@@ -240,7 +327,7 @@ Expected Python version on Ubuntu 24.04 LTS:
 Python 3.12.x
 ```
 
-## 9. Clone the private GitHub repo
+## 11. Clone the private GitHub repo
 
 Repository:
 
@@ -258,37 +345,15 @@ cd ~/job-hunter-agent
 
 For a private repo, use a GitHub credential with read access when prompted.
 
-## 10. Git credential handling on EC2
-
-Windows Git Credential Manager is not available on Ubuntu EC2.
-
-For short-term learning on EC2:
+For short-term learning on EC2, Git can store the credential:
 
 ```bash
 git config --global credential.helper store
 ```
 
-Then run a pull and enter the GitHub credential once:
-
-```bash
-git pull
-```
-
-Check:
-
-```bash
-git config --global --get credential.helper
-```
-
-Expected:
-
-```text
-store
-```
-
 Later, replace this with a deploy key or cleaner deployment process.
 
-## 11. Create the project virtual environment
+## 12. Create the project virtual environment
 
 ```bash
 cd ~/job-hunter-agent
@@ -306,7 +371,7 @@ Python 3.12.x
 /home/ubuntu/job-hunter-agent/.venv/bin/python
 ```
 
-## 12. Install project dependencies
+## 13. Install project dependencies
 
 With `.venv` active:
 
@@ -327,7 +392,7 @@ If the virtual environment is active, `which pip` should return:
 /home/ubuntu/job-hunter-agent/.venv/bin/pip
 ```
 
-## 13. Install Playwright browser
+## 14. Install Playwright browser
 
 With `.venv` active:
 
@@ -342,41 +407,256 @@ sudo .venv/bin/python -m playwright install-deps chromium
 python -m playwright install chromium
 ```
 
-## 14. Smoke test the app
+## 15. Configure secrets and environment
 
-Manual run is only a smoke test.
+Do not commit `.env` to GitHub.
 
-```bash
-cd ~/job-hunter-agent
-source .venv/bin/activate
-python -m job_hunter_agent.fastapi_app
-```
-
-In another SSH session:
-
-```bash
-curl http://127.0.0.1:8765/start
-```
-
-Expected: HTML or redirect response from Uvicorn/FastAPI.
-
-## 15. Production-style next steps
-
-After the smoke test works:
+For a test instance, either keep `.env` in the repo working directory or use a safer system path. Preferred server path:
 
 ```text
-Create a systemd service
-Configure Nginx reverse proxy
-Expose only 80/443 publicly
-Keep the app bound to 127.0.0.1:8765
-Add environment variable handling
-Point app data to /var/lib/job-hunter
-Add logs
-Later: database/RDS
-Later: HTTPS/domain
+/etc/job-hunter/job-hunter.env
 ```
 
-## Quick checks
+Create the folder:
+
+```bash
+sudo mkdir -p /etc/job-hunter
+```
+
+The environment file should define these values:
+
+```env
+JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
+JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
+JOB_HUNTER_BASE_URL=http://<elastic-ip-or-domain>
+JOB_HUNTER_GOOGLE_CLIENT_ID=<google-client-id>
+JOB_HUNTER_GOOGLE_CLIENT_SECRET=<google-client-secret>
+JOB_HUNTER_ADMIN_EMAIL=<admin-email>
+JOB_HUNTER_AUTH_SESSION_SECRET=<random-secret>
+```
+
+Generate a session secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Protect the env file:
+
+```bash
+sudo chown root:ubuntu /etc/job-hunter/job-hunter.env
+sudo chmod 640 /etc/job-hunter/job-hunter.env
+```
+
+If using `/home/ubuntu/job-hunter-agent/.env` for testing, do not commit it and keep permissions restricted.
+
+## 16. Configure Google OAuth
+
+In Google Cloud Console, create or update the OAuth client.
+
+Authorized redirect URI must match the app base URL:
+
+```text
+http://<elastic-ip-or-domain>/api/auth/google/callback
+```
+
+Do not use localhost for the EC2 deployment:
+
+```text
+http://localhost:8765/api/auth/google/callback
+```
+
+`localhost` points to the user's own computer, not the EC2 instance.
+
+## 17. Run app with systemd
+
+Create the service file:
+
+```bash
+sudo nano /etc/systemd/system/job-hunter.service
+```
+
+Service file:
+
+```ini
+[Unit]
+Description=Job Hunter FastAPI App
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/job-hunter-agent
+EnvironmentFile=/etc/job-hunter/job-hunter.env
+Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin"
+ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+If using the temporary repo-local env file, use this instead:
+
+```ini
+EnvironmentFile=/home/ubuntu/job-hunter-agent/.env
+```
+
+Start and enable the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable job-hunter
+sudo systemctl start job-hunter
+sudo systemctl status job-hunter --no-pager
+```
+
+Expected:
+
+```text
+Active: active (running)
+```
+
+Check that environment variables reached the running app without printing values:
+
+```bash
+sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
+```
+
+Expected names include:
+
+```text
+JOB_HUNTER_DATA_DIR=***
+JOB_HUNTER_OUTPUT_DIR=***
+JOB_HUNTER_DB_PATH=***
+JOB_HUNTER_BASE_URL=***
+JOB_HUNTER_GOOGLE_CLIENT_ID=***
+JOB_HUNTER_GOOGLE_CLIENT_SECRET=***
+JOB_HUNTER_ADMIN_EMAIL=***
+JOB_HUNTER_AUTH_SESSION_SECRET=***
+```
+
+## 18. View logs
+
+Live logs:
+
+```bash
+sudo journalctl -u job-hunter -f
+```
+
+Last 50 lines:
+
+```bash
+sudo journalctl -u job-hunter -n 50 --no-pager
+```
+
+Recent logs:
+
+```bash
+sudo journalctl -u job-hunter --since "10 minutes ago" --no-pager
+```
+
+Nginx logs:
+
+```bash
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
+
+Later, production should send logs to CloudWatch Logs.
+
+## 19. Configure Nginx reverse proxy
+
+Create the Nginx site:
+
+```bash
+sudo nano /etc/nginx/sites-available/job-hunter
+```
+
+Config:
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/job-hunter /etc/nginx/sites-enabled/job-hunter
+```
+
+Remove the default site if Nginx warns about a conflicting `_` server name:
+
+```bash
+sudo rm /etc/nginx/sites-enabled/default
+```
+
+Test Nginx config:
+
+```bash
+sudo nginx -t
+```
+
+Expected:
+
+```text
+syntax is ok
+test is successful
+```
+
+Reload Nginx:
+
+```bash
+sudo systemctl reload nginx
+```
+
+Local test from EC2:
+
+```bash
+curl -I http://127.0.0.1/
+```
+
+Expected: response from Nginx and redirect or HTML from the app.
+
+Public test from browser:
+
+```text
+http://<elastic-ip-or-public-ip>/
+```
+
+Expected: login page or redirect to login.
+
+## 20. Useful EC2 metadata checks
+
+If IMDSv1 returns blank, use IMDSv2.
+
+Get token:
+
+```bash
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+```
+
+Get public IP:
+
+```bash
+curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4
+```
+
+## 21. Quick checks
 
 Confirm OS:
 
@@ -396,22 +676,47 @@ Confirm EBS mount:
 df -h /var/lib/job-hunter
 ```
 
-Confirm venv Python:
+Confirm service:
 
 ```bash
-source ~/job-hunter-agent/.venv/bin/activate
-python --version
-which python
+sudo systemctl status job-hunter --no-pager
+```
+
+Confirm Nginx:
+
+```bash
+sudo nginx -t
+curl -I http://127.0.0.1/
+```
+
+Confirm app env names:
+
+```bash
+sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
 ```
 
 ## Do not do yet
 
-Until the app works locally:
+Until this test deployment is stable:
 
 ```text
 Do not create RDS
 Do not create Lambda
 Do not create Lightsail
 Do not expose port 8765 publicly
-Do not configure Nginx before the local smoke test passes
+Do not commit .env or secrets to GitHub
+Do not rely on the default public EC2 IP for OAuth long term
+```
+
+## Later improvements
+
+```text
+Move from repo clone to package/artifact deployment
+Use /opt/job-hunter/app for installed application code
+Keep /var/lib/job-hunter/data for persistent data
+Keep /var/log/job-hunter for logs
+Add HTTPS using a domain and certificate
+Add CloudWatch Logs
+Add EBS snapshots or S3 backups
+Consider RDS PostgreSQL when the data model stabilizes
 ```
