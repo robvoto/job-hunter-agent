@@ -48,12 +48,11 @@ appData-dontupload.txt
 debug/
 tmp-fastapi.err.log
 tmp-fastapi.out.log
-venv activate.ps1
-remove bad char.ps1
-Programming - Shortcut.lnk
-MAIN LOGOS IMG.png
-templates/static/job_hunter_img2.png
+*.ps1
+*.lnk
 pytest.ini
 *.pem
 docs/backlog/
 debug.log
+test_tmp.db
+ignore/
