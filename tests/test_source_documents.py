@@ -82,7 +82,11 @@ def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch):
 
     assert result["ok"] is True
     assert result["profile"].get("capability_profile_rules") == []
+<<<<<<< HEAD
     assert result["profile"].get("cv_text")
+=======
+    assert "cv_text" not in result["profile"]
+>>>>>>> 8c60aa0 (fix)
     assert result["profile"].get("candidate_profile_tiers") == {
         "primary_candidate_profile_context": "# Professional Experience\nAcme - Platform Lead (2019 - 2024)",
         "secondary_candidate_profile_context": "",
@@ -135,7 +139,11 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch):
     assert result["profile"].get("capability_profile_rules") == [{"name": "delivery", "level": "working"}]
     assert result["profile"].get("match_preferences", {})["prefer_permanent"] is True
     assert result["profile"].get("match_preferences", {})["home_location"] == "Sydney"
+<<<<<<< HEAD
     assert result["profile"].get("cv_text")
+=======
+    assert "cv_text" not in result["profile"]
+>>>>>>> 8c60aa0 (fix)
     assert result["profile"].get("candidate_profile_tiers") == {
         "primary_candidate_profile_context": "# Professional Experience\nAcme - Platform Lead (2019 - 2024)",
         "secondary_candidate_profile_context": "",
@@ -190,10 +198,16 @@ def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch):
     ]
 
 
+<<<<<<< HEAD
 def test_merge_capability_rules_preserves_jira_confluence_cluster_for_review(monkeypatch):
     """Regression: multi-product clusters must not be lost or merged into the wrong product."""
     registered: list = []
     monkeypatch.setattr(source_documents, "register_signals", lambda items: registered.extend(items))
+=======
+def test_merge_capability_rules_preserves_jira_confluence_cluster(monkeypatch):
+    """Regression: 'jira confluence' in dominant_signal_clusters must not be lost."""
+    monkeypatch.setattr(source_documents, "register_signals", lambda items: None)
+>>>>>>> 8c60aa0 (fix)
 
     capability_rules = [{"name": "Jira", "level": "strong", "aliases": ["Jira Software"]}]
     dominant_signal_clusters = [
@@ -212,8 +226,12 @@ def test_merge_capability_rules_preserves_jira_confluence_cluster_for_review(mon
     assert len(result) == 1
     assert result[0]["name"] == "Jira"
     aliases_norm = [a.lower() for a in result[0]["aliases"]]
+<<<<<<< HEAD
     assert "confluence" not in aliases_norm
     assert any(r.get("signal") == "Jira Confluence" for r in registered)
+=======
+    assert "confluence" in aliases_norm
+>>>>>>> 8c60aa0 (fix)
 
 
 def test_merge_capability_rules_registers_unmatched_cluster(monkeypatch):

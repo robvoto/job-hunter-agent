@@ -36,17 +36,21 @@ def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monke
                 "title": "Business Analyst",
                 "company": "Example Co",
                 "search_location": "Sydney",
+<<<<<<< HEAD
                 "reviewed_signal_matches": {
                     "matched": ["Process mapping"],
                     "evidence_only": ["Stakeholder engagement"],
                     "ignored": ["Ignore me"],
                     "unresolved": ["Still unknown"],
                 },
+=======
+>>>>>>> 8c60aa0 (fix)
                 "competitive_signals": [
                     {
                         "fit_label": "Process mapping",
                         "adjustment": 2,
                         "alignment": "strong",
+<<<<<<< HEAD
                     },
                     {
                         "fit_label": "Stakeholder engagement",
@@ -65,6 +69,10 @@ def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monke
                     "Work mode: Remote",
                 ],
                 "role_snapshot": "Strong capability match: Process mapping",
+=======
+                    }
+                ],
+>>>>>>> 8c60aa0 (fix)
                 "reject_reason": "",
             }
         ],
@@ -79,6 +87,7 @@ def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monke
         ],
         profile={KEY_CAPABILITY_PROFILE_RULES: []},
     )
+<<<<<<< HEAD
 
     assert result["kept_job_urls"] == ["https://example.test/job-1"]
     assert [item["skill"] for item in result["skill_observations"]] == ["Process mapping", "Stakeholder engagement"]
@@ -171,6 +180,19 @@ def test_build_review_data_exposes_title_tuning_rules(monkeypatch):
 
 
 def test_build_review_data_turns_repeated_job_requirements_into_capability_tuning(monkeypatch):
+=======
+
+    assert result["kept_job_urls"] == ["https://example.test/job-1"]
+    assert result["skill_observations"][0]["skill"] == "Process mapping"
+    assert result["suggested_tuning"]["summary"] == {"capability_count": 1, "rule_count": 0}
+    capability = result["suggested_tuning"]["capability_suggestions"][0]
+    assert capability["skill"] == "Process mapping"
+    assert capability["count"] == 1
+    assert capability["examples"][0]["url"] == "https://example.test/job-1"
+
+
+def test_build_review_data_ignores_rejected_job_capabilities(monkeypatch):
+>>>>>>> 8c60aa0 (fix)
     monkeypatch.setattr(
         "job_hunter_agent.review_insights.get_review_settings",
         lambda: {
@@ -182,6 +204,7 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
             KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT: 2,
         },
     )
+<<<<<<< HEAD
 
     result = build_review_data(
         audit_rows=[
@@ -206,11 +229,31 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
                     "Chinese language proficiency required",
                 ],
             },
+=======
+    result = build_review_data(
+        audit_rows=[
+            {
+                "decision": "REJECT",
+                "reject_reason": "LLM_REJECT",
+                "url": "https://example.test/job-1",
+                "title": "Business Analyst",
+                "company": "Example Co",
+                "search_location": "Sydney",
+                "competitive_signals": [
+                    {
+                        "fit_label": "Process mapping",
+                        "adjustment": 2,
+                        "alignment": "strong",
+                    }
+                ],
+            }
+>>>>>>> 8c60aa0 (fix)
         ],
         skill_observations=[],
         profile={KEY_CAPABILITY_PROFILE_RULES: []},
     )
 
+<<<<<<< HEAD
     requirement_suggestions = result["suggested_tuning"]["requirement_suggestions"]
     assert result["suggested_tuning"]["summary"]["requirement_count"] == 2
     chinese = next(item for item in requirement_suggestions if item["skill"] == "Chinese language proficiency")
@@ -221,6 +264,11 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
         "Chinese language proficiency required",
     ]
     assert chinese["prompt"] == "Chinese language proficiency is required in several kept roles. Do you have this capability?"
+=======
+    assert result["skill_observations"] == []
+    assert result["suggested_tuning"]["capability_suggestions"] == []
+    assert result["suggested_tuning"]["summary"]["capability_count"] == 0
+>>>>>>> 8c60aa0 (fix)
 
 
 def test_apply_capability_tuning_decisions_adds_confirmed_capability():

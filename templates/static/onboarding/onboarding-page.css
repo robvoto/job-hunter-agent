@@ -528,7 +528,53 @@ body {
   line-height: 1.5;
 }
 
+<<<<<<< HEAD
 /* Chip editor layout is centralised in themes.widgets.css. */
+=======
+/* Chip list */
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: var(--title-help-gap);
+  margin-bottom: var(--field-summary-gap);
+}
+
+.chip-empty {
+  color: var(--text-muted);
+  font-size: var(--font-size-lg);
+}
+
+.chip-editor-row {
+  margin-top: var(--field-summary-gap);
+}
+
+.chip-editor-row.token-input-group {
+  border: 0;
+  background: transparent;
+  padding-inline-end: 0;
+  gap: 8px;
+}
+
+.chip-editor-row.token-input-group:focus-within {
+  box-shadow: none;
+}
+
+.chip-editor-row .token-input-field {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--control-radius-md);
+  background: var(--bg-surface);
+}
+
+.chip-editor-row .token-input-field:focus {
+  border-color: var(--selection-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
+}
+
+/* .chip-button and .location-chip defined in themes.widgets.css */
+>>>>>>> 8c60aa0 (fix)
 
 /* Location picker */
 

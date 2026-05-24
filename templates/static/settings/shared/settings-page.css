@@ -490,8 +490,44 @@
       margin-top: 12px;
     }
     .rule-chips { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+<<<<<<< HEAD
     .subpanel .settings-form-field + .settings-form-field {
       margin-top: var(--surface-gap-md);
+=======
+    .badge-editor-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 30px;
+      align-items: flex-start;
+    }
+    .badge-editor-empty {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 5px 0;
+    }
+    .subpanel .settings-form-field + .settings-form-field {
+      margin-top: var(--surface-gap-md);
+    }
+    .settings-form-field > .field-label-row {
+      margin-bottom: var(--surface-gap-sm);
+    }
+    .badge-editor-form.token-input-group {
+      margin-top: var(--surface-gap-sm);
+      border: 0;
+      background: transparent;
+      padding-inline-end: 0;
+    }
+    .badge-editor-form.token-input-group .token-input-field {
+      min-width: 0;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--control-radius-md);
+      background: var(--bg-surface);
+    }
+    .badge-editor-form.token-input-group .token-input-field:focus {
+      border-color: var(--selection-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
+>>>>>>> 8c60aa0 (fix)
     }
     .capability-editor {
       display: grid;
