@@ -1,35 +1,16 @@
 from fastapi.testclient import TestClient
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 87903c2 (fix)
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.fastapi_app import create_app
 from job_hunter_agent.io_utils import write_review_data
 import job_hunter_agent.routes.workspace_api as workspace_api
 from job_hunter_agent.paths import LOCAL_USER_ID
-<<<<<<< HEAD
-=======
-from job_hunter_agent.fastapi_app import create_app
-from job_hunter_agent.io_utils import write_review_data
->>>>>>> 8c60aa0 (fix)
-=======
->>>>>>> 87903c2 (fix)
 
 
 def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db):
     monkeypatch.setattr("job_hunter_agent.fastapi_app.is_auth_disabled", lambda: True)
-<<<<<<< HEAD
-<<<<<<< HEAD
     with db_conn() as conn:
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
-=======
->>>>>>> 8c60aa0 (fix)
-=======
-    with db_conn() as conn:
-        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
->>>>>>> 87903c2 (fix)
 
     write_review_data(
         {
@@ -79,10 +60,6 @@ def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db
     assert response.status_code == 200
     payload = response.json()
     assert payload["suggested_tuning"]["capability_suggestions"][0]["skill"] == "Process mapping"
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 87903c2 (fix)
 
 
 def test_api_results_html_surfaces_last_run_error(monkeypatch, tmp_path):
@@ -120,8 +97,3 @@ def test_api_results_html_rebuilds_when_no_error_and_file_missing(monkeypatch, t
 
     assert response.status_code == 200
     assert "workspace" in response.text
-<<<<<<< HEAD
-=======
->>>>>>> 8c60aa0 (fix)
-=======
->>>>>>> 87903c2 (fix)

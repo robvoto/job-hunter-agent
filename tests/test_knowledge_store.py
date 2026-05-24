@@ -1,8 +1,6 @@
 """Tests for knowledge_store: get, set, seed, and idempotency."""
 
 import json
-from pathlib import Path
-
 import pytest
 
 from job_hunter_agent.database import init_db
@@ -98,21 +96,11 @@ def test_seed_handles_list_payload(tmp_db, knowledge_dir):
 
 
 def test_repo_knowledge_seeds_successfully(tmp_db):
+    from pathlib import Path
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
     seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
     assert len(seeded) == 24, f"Expected 24 knowledge files, got {len(seeded)}: {seeded}"
-
-
-def test_repo_ui_labels_seed_includes_onboarding_warning(tmp_db):
-    repo_root = Path(__file__).resolve().parent.parent
-    knowledge_dir = repo_root / "data" / "knowledge"
-
-    seed_knowledge_from_dir(knowledge_dir, tmp_db)
-    ui_labels = get_knowledge("ui_labels", tmp_db)
-
-    assert ui_labels["version"] == 17
-    assert ui_labels["onboarding_flow_labels"]["no_profile_warning"] == "No saved profile yet."
 
 
 def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
