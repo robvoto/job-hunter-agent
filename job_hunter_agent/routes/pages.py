@@ -173,8 +173,9 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
             '<span class="sidebar-admin-badge">Admin</span>' if is_admin(request) else "",
         )
         html = html.replace(
-            "__JOB_HUNTER_ADMIN_NAV_LINK__",
+            "__JOB_HUNTER_ADMIN_NAV_GROUP__",
             (
+                '<div class="sidebar-group-label sidebar-group-label-global">Admin</div>'
                 f'<a href="{GLOBAL_SETTINGS_PATH}" class="nav-item nav-item-admin" data-admin-only="true">Global settings</a>'
                 if is_admin(request)
                 else ""
@@ -234,7 +235,6 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         for token, value in onboarding_replacements.items():
             html = html.replace(token, value)
         html = _replace_label_tokens(html, "ONBOARDING_PAGE", onboarding_page_labels)
-        html = html.replace("✓ Draft profile ready", onboarding_page_labels["draft_profile_ready_label"])
         html = html.replace("✎ Edit", onboarding_page_labels["edit_label"])
     return (
         html

@@ -1,7 +1,18 @@
 import { escapeHtml } from './settings-utils.js';
 import { showStatus } from './settings-page.js';
 import * as capabilityUi from '../../common/capability-ui.js';
-import { createController, WORKSPACE_PATH, SEARCH_WAIT_COPY, RUN_COMPLETE_REDIRECT_DELAY_MS } from '../../common/wait-state.js';
+import {
+  createController,
+  WORKSPACE_PATH,
+  SEARCH_WAIT_COPY,
+  SEARCH_RUNNING_TITLE,
+  SEARCH_RUNNING_COPY,
+  SEARCH_STARTING_TITLE,
+  SEARCH_STARTING_COPY,
+  SEARCH_REFRESHING_TITLE,
+  SEARCH_REFRESHING_COPY,
+  RUN_COMPLETE_REDIRECT_DELAY_MS,
+} from '../../common/wait-state.js';
 
 const waitMount = document.getElementById('job_hunter_wait_mount');
 const waitUi = createController(waitMount);
@@ -19,18 +30,6 @@ function renderReviewChoiceGuide(choice) {
     <strong>${escapeHtml(meta.label)}</strong>
     <p>This sets the capability strength used during matching.</p>
   `;
-}
-
-function showRunWait(title, copy, subcopy) {
-  waitUi?.show({ title, copy, subcopy });
-}
-
-function updateRunWait(patch) {
-  waitUi?.update(patch);
-}
-
-function hideRunWait() {
-  waitUi?.hide();
 }
 
 function reviewStrengthChoicesMarkup(selectedValue, groupName) {
@@ -193,18 +192,18 @@ async function syncRunStatus() {
     if (isRunning) {
       runStatusWasRunning = true;
       startRunStatusPolling();
-      showRunWait('Search in progress', 'Job Hunter is checking sources and ranking matches.', SEARCH_WAIT_COPY);
+      waitUi?.show({ title: SEARCH_RUNNING_TITLE, copy: SEARCH_RUNNING_COPY, subcopy: SEARCH_WAIT_COPY });
       return;
     }
     stopRunStatusPolling();
     if (runStatusWasRunning) {
       runStatusWasRunning = false;
-      updateRunWait({ title: 'Refreshing workspace', copy: 'Loading the latest workspace now.' });
-      showStatus('Search finished. Loading the workspace now.', 'ok');
+      waitUi?.update({ title: SEARCH_REFRESHING_TITLE, copy: SEARCH_REFRESHING_COPY });
+      showStatus('Search finished. Loading the workspace now.', 'success');
       window.setTimeout(() => window.location.replace(WORKSPACE_PATH), RUN_COMPLETE_REDIRECT_DELAY_MS);
       return;
     }
-    hideRunWait();
+    waitUi?.hide();
   } catch (error) {
   }
 }
@@ -221,7 +220,7 @@ async function patchProfile(payload, successMessage) {
   }
   const updated = await response.json();
   fillForm(updated);
-  showStatus(successMessage, 'ok');
+  showStatus(successMessage, 'success');
   return updated;
 }
 
@@ -240,7 +239,7 @@ async function runSearchNow() {
     { search_settings: profile.search_settings, salary_preferences: profile.salary_preferences },
     'Search settings saved to profile.json.'
   );
-  showRunWait('Starting search', 'Saving your settings and beginning the scrape.', SEARCH_WAIT_COPY);
+  waitUi?.show({ title: SEARCH_STARTING_TITLE, copy: SEARCH_STARTING_COPY, subcopy: SEARCH_WAIT_COPY });
   const response = await jobHunterFetch('/api/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -251,8 +250,8 @@ async function runSearchNow() {
   runStatusWasRunning = true;
   startRunStatusPolling();
   void syncRunStatus();
-  showRunWait('Search in progress', 'Job Hunter is checking sources and ranking matches.', SEARCH_WAIT_COPY);
-  showStatus('Search started. The workspace will open when it finishes.', 'ok');
+  waitUi?.show({ title: SEARCH_RUNNING_TITLE, copy: SEARCH_RUNNING_COPY, subcopy: SEARCH_WAIT_COPY });
+  showStatus('Search started. The workspace will open when it finishes.', 'success');
   return payload;
 }
 
@@ -272,12 +271,12 @@ async function applyOneSkipDecision(skill, choice) {
 const runNowButton = document.getElementById('run_now');
 const rebuildProfileButton = document.getElementById('rebuild_profile');
 
-if (runNowButton) {
+  if (runNowButton) {
   runNowButton.addEventListener('click', async () => {
     try {
       await runSearchNow();
     } catch (error) {
-      hideRunWait();
+      waitUi?.hide();
       showStatus(error.message, 'error');
     }
   });
@@ -296,7 +295,7 @@ document.getElementById('refresh_review_data')?.addEventListener('click', async 
   btn.textContent = 'Refreshing...';
   try {
     await loadReviewData();
-    showStatus('Suggested tuning refreshed.', 'ok', { autoHideMs: 3000 });
+    showStatus('Suggested tuning refreshed.', 'success', { autoHideMs: 3000 });
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {

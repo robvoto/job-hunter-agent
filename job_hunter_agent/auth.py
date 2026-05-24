@@ -15,10 +15,7 @@ import json
 import logging
 import os
 import secrets
-import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
 import requests as http_client
@@ -38,7 +35,6 @@ from job_hunter_agent.config import (
     SESSION_COOKIE_PATH,
     SESSION_COOKIE_DEFAULT_NAME,
 )
-from job_hunter_agent.paths import AUTH_DIR
 
 OPEN_PATHS = {
     LOGIN_PATH,
@@ -48,8 +44,6 @@ OPEN_PATHS = {
     GOOGLE_AUTH_CALLBACK_PATH,
 }
 
-USERS_PATH = AUTH_DIR / "users.json"
-_users_lock = threading.Lock()
 logger = logging.getLogger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -101,77 +95,14 @@ def user_id_from_email(email: str) -> str:
     return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()[:16]
 
 
-def load_user_store() -> dict:
-    with _users_lock:
-        if not USERS_PATH.exists():
-            logger.warning(
-                "[AUTH][WARN] Missing user store at %s; returning an empty store because this is treated as first-run user bootstrap.",
-                USERS_PATH,
-            )
-            return {}
-        try:
-            payload = json.loads(USERS_PATH.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                return payload
-            logger.warning(
-                "[AUTH][WARN] User store at %s was not a dict; returning an empty store.",
-                USERS_PATH,
-            )
-            return {}
-        except Exception as exc:
-            logger.warning("[AUTH][WARN] Failed to load user store from %s: %s", USERS_PATH, exc)
-            return {}
-
-
-def _save_user_store_locked(store: dict) -> None:
-    """Must be called while holding _users_lock."""
-    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    USERS_PATH.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def get_or_create_user(email: str, admin_email: str | None) -> dict:
+def get_or_create_user(email: str, admin_email: str | None, display_name: str | None = None) -> dict:
+    from job_hunter_agent.database import ensure_user_row
     email = email.strip().lower()
     user_id = user_id_from_email(email)
+    # Role is always re-derived from env — admin_email may change without a DB update.
     role = "admin" if admin_email and email == admin_email.strip().lower() else "candidate"
-    with _users_lock:
-        store: dict = {}
-        if USERS_PATH.exists():
-            try:
-                store = json.loads(USERS_PATH.read_text(encoding="utf-8"))
-                if not isinstance(store, dict):
-                    logger.warning(
-                        "[AUTH][WARN] Existing user store at %s was not a dict; creating a fresh store for %s.",
-                        USERS_PATH,
-                        email,
-                    )
-                    store = {}
-            except Exception as exc:
-                logger.warning(
-                    "[AUTH][WARN] Failed to read user store at %s while creating %s: %s",
-                    USERS_PATH,
-                    email,
-                    exc,
-                )
-        else:
-            logger.warning(
-                "[AUTH][WARN] Missing user store at %s while creating %s; bootstrapping a fresh store for a first-run user.",
-                USERS_PATH,
-                email,
-            )
-        if user_id not in store:
-            store[user_id] = build_user_record(user_id, email, role)
-            _save_user_store_locked(store)
-    # Always re-derive role from env — admin_email may change without a store update.
+    ensure_user_row(user_id, email=email, display_name=display_name or None)
     return {"user_id": user_id, "email": email, "role": role}
-
-
-def build_user_record(user_id: str, email: str, role: str) -> dict:
-    return {
-        "user_id": user_id,
-        "email": email,
-        "role": role,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
 
 
 def build_google_auth_url(config: GoogleOAuthConfig, state: str) -> str:
@@ -274,8 +205,6 @@ def is_authenticated(request: Request) -> bool:
 
 
 def is_admin(request: Request) -> bool:
-    if is_auth_disabled():
-        return True
     user = read_session_user(request)
     return user is not None and user.get("role") == "admin"
 

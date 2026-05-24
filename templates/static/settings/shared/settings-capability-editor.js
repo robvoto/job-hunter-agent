@@ -137,7 +137,6 @@ export const JobHunterCapabilityEditor = (function () {
                 </button>
               </div>
                 <div class="cap-strength">
-                  <span>Strength</span>
                   <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
                     ${strengthChoices}
                   </div>

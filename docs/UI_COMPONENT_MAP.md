@@ -71,12 +71,12 @@ Used for: onboarding wizard screens and their module owners.
 |---|---|---|
 | CV import drop zone | `templates/static/onboarding/onboarding-upload.js` | File validation, drop handling, and create-profile availability. |
 | Wizard step shell / progress | `templates/static/onboarding/onboarding-page.js` and `templates/static/onboarding/onboarding-flow.js` | Step orchestration and navigation. |
-| Search basics fields | `templates/static/onboarding/onboarding-search.js` | Location, keywords, salary, engagement, and work-mode hydration. |
-| Wizard state persistence | `templates/static/onboarding/onboarding-storage.js` | Save/restore and search-basics persistence. |
+| Search basics fields | `templates/static/onboarding/onboarding-storage.js` (event wiring) + `templates/static/onboarding/onboarding-search.js` (step-transition hydration) | Event handlers wired in storage.js; field hydration from DB profile in search.js. |
+| Wizard state persistence | `templates/static/onboarding/onboarding-storage.js` | Save/restore wizard draft (user-scoped localStorage key) and search-basics DB persistence. |
 | Review draft capability UI | `templates/static/onboarding/onboarding-flow.js` | Review rendering, filtering, and action buttons. |
 | Import helper copy | `templates/static/onboarding/onboarding-page.js` and `templates/static/onboarding/onboarding-flow.js` | Page-level wiring plus action flow messages. |
-| Location selector | `templates/static/onboarding/onboarding-search.js` | Location options and selected location state. |
-| Salary inputs | `templates/static/onboarding/onboarding-search.js` and `templates/static/settings/shared/settings-utils.js` | Shared currency helper, page-specific hydration. |
+| Location selector | `templates/static/onboarding/onboarding-storage.js` (change event) + `templates/static/onboarding/onboarding-search.js` (hydration) | Change event wired in storage.js; hydrated from DB profile by search.js. |
+| Salary inputs | `templates/static/onboarding/onboarding-search.js` and `templates/static/settings/shared/settings-utils.js` | Shared currency helper, page-specific hydration from DB profile. |
 | Continue / create buttons | `templates/static/onboarding/onboarding-upload.js` and `templates/static/onboarding/onboarding-flow.js` | Enabled state and step transitions. |
 
 ---

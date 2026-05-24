@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 from typing import Dict, List, Optional
@@ -9,9 +8,6 @@ This module loads, caches, and persists mappings for various job type
 strings (e.g., "contract", "permanent") to canonical forms, and defines
 filter groups for UI presentation."""
 
-from job_hunter_agent.paths import KNOWLEDGE_DIR
-
-JOB_TYPE_STORE_PATH = KNOWLEDGE_DIR / "job_type.json"
 logger = logging.getLogger(__name__)
 
 _cached_mapping: Optional[Dict[str, str]] = None
@@ -27,24 +23,14 @@ def _normalize_key(value: object) -> str:
 
 
 def _load_raw() -> dict:
-    if not JOB_TYPE_STORE_PATH.exists():
-        logger.warning(
-            "[JOB_TYPES][WARN] Missing job type rules at %s; returning empty mapping and filter groups because this file is optional initial knowledge.",
-            JOB_TYPE_STORE_PATH,
-        )
+    from job_hunter_agent.knowledge_store import get_knowledge
+    payload = get_knowledge("job_type")
+    if payload is None:
         return {}
-    try:
-        payload = json.loads(JOB_TYPE_STORE_PATH.read_text(encoding="utf-8"))
-        if isinstance(payload, dict):
-            return payload
-        logger.warning(
-            "[JOB_TYPES][WARN] Job type rules at %s were not a dict; returning empty mapping and filter groups.",
-            JOB_TYPE_STORE_PATH,
-        )
+    if not isinstance(payload, dict):
+        logger.warning("[JOB_TYPES][WARN] job_type knowledge was not a dict; returning empty.")
         return {}
-    except Exception as exc:
-        logger.warning("[JOB_TYPES][WARN] Failed to load job type rules from %s: %s", JOB_TYPE_STORE_PATH, exc)
-        return {}
+    return payload
 
 
 def load_job_type(force_reload: bool = False) -> dict:
@@ -55,13 +41,9 @@ def load_job_type(force_reload: bool = False) -> dict:
         return _cached_mapping
 
     raw = _load_raw()
-    # Support both old flat format and new {mapping, filter_groups} format.
     source = raw.get("mapping", raw) if "mapping" in raw else raw
     if not isinstance(source, dict):
-        logger.warning(
-            "[JOB_TYPES][WARN] Job type mapping at %s was not a dict; returning an empty mapping.",
-            JOB_TYPE_STORE_PATH,
-        )
+        logger.warning("[JOB_TYPES][WARN] Job type mapping was not a dict; returning an empty mapping.")
         _cached_mapping = {}
         return _cached_mapping
     _cached_mapping = {
@@ -84,15 +66,13 @@ def load_job_type_filter_groups(force_reload: bool = False) -> List[dict]:
     if isinstance(groups, list):
         _cached_filter_groups = groups
     else:
-        logger.warning(
-            "[JOB_TYPES][WARN] Filter groups in %s were not a list; returning an empty list.",
-            JOB_TYPE_STORE_PATH,
-        )
+        logger.warning("[JOB_TYPES][WARN] Filter groups were not a list; returning an empty list.")
         _cached_filter_groups = []
     return _cached_filter_groups
 
 
 def save_job_type(mapping: dict[str, str]) -> dict[str, str]:
+    from job_hunter_agent.knowledge_store import set_knowledge
     cleaned: dict[str, str] = {}
     for raw_key, raw_value in mapping.items():
         key = _normalize_key(raw_key)
@@ -102,8 +82,7 @@ def save_job_type(mapping: dict[str, str]) -> dict[str, str]:
 
     existing = _load_raw()
     payload = {"mapping": cleaned, "filter_groups": existing.get("filter_groups", [])}
-    JOB_TYPE_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    JOB_TYPE_STORE_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    set_knowledge("job_type", payload)
 
     global _cached_mapping, _cached_filter_groups
     _cached_mapping = cleaned

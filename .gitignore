@@ -19,10 +19,12 @@ ms-playwright/
 # ---- Generated output / local state ----
 output/
 data/playwright_user_data/
-data/auth/
 data/runtime/
 data/users/
 
+data/app.db
+data/app.db-shm
+data/app.db-wal
 data/signals/ignored_signal.json
 data/signals/signal_defaults.json
 data/signals/signal_registry.json

@@ -17,12 +17,49 @@ Use before editing the onboarding wizard, search-basics step, or any onboarding 
 - Centralise repeated copy in the owning label JSON or server copy source. Do not duplicate labels in renderer code.
 - Remove dead onboarding paths instead of leaving compatibility code behind.
 
+## Module ownership
+
+### `onboarding-page.js`
+Owns: all DOM refs (`refs`), page-level state (currentStep, reviewCapabilityRules, etc.), step navigation (`setStep`), location rendering, capability layout observation, `saveWizardState` (called from `setStep` and `setSelectedLocation`), and display helpers (`showStatus`, `hideStatus`, `updateSearchPreferenceSummaries`, `updateCompensationVisibility`, `applyProfileDefaults`).
+
+Does NOT own: event handler wiring for preference fields, search-basics DB persistence, or wizard state restore.
+
+### `onboarding-storage.js`
+Owns: wizard draft state save/restore (`saveWizardState`, `restoreWizardState`), search-basics DB persistence (`scheduleSearchBasicsPersistence`, `flushSearchBasicsPersistence`, `buildSearchBasicsProfilePatch`), AND event handler wiring for all search-basics preference fields (location, sector, minContractMonths, engagement type, work mode preference). Event handlers are wired at module-load time.
+
+Imports from page.js (one-way dependency only — page.js must not import storage.js). All page state is accessed via `onboardingPage.*`.
+
+### `onboarding-search.js`
+Owns: `setSelectedLocations` (sets location from an array, called by flow.js) and `hydrateSearchBasics` (populates all search-basics fields from a DB profile, called by flow.js when transitioning from review step to search step after a fresh CV import).
+
+### `onboarding-flow.js`
+Owns: review draft rendering, capability card rendering, check setup, all step-transition actions (continue buttons, upload submit, finalize), and `initWizard` (startup/restore orchestration).
+
+Capability state on page load comes from:
+1. `onboardingStorage.restoreWizardState()` — localStorage draft (user-scoped key)
+2. `hydrateDraftStep(profile)` — falls back to DB profile if localStorage draft has no capabilities
+
+There is no file-based CV restore path. `restorePrimaryCvFromSourcePath` was removed when the system migrated to SQLite.
+
+### `onboarding-upload.js`
+Owns: CV file validation, drop zone handling, and `create_profile` button availability.
+
+## Data persistence model
+
+| Layer | What is stored | When used |
+|---|---|---|
+| SQLite (DB) | Committed profile: capabilities, preferences, titles, salary | Authoritative; written on finalize or auto-sync |
+| localStorage (`WIZARD_STATE_KEY`) | In-progress wizard draft: form fields not yet committed | Survives page refresh during active onboarding session |
+| In-memory page state | Current step state while page is open | Lost on refresh; restored from localStorage or DB |
+
+`WIZARD_STATE_KEY` is always user-scoped: `jobHunter.onboardingWizard:<USER_ID>`. Both `onboarding-page.js` and `onboarding-storage.js` reference `onboardingPage.WIZARD_STATE_KEY` — never a bare string key.
+
 ## Main files
 - `templates/onboarding.html` - page shell and onboarding sections.
-- `templates/static/onboarding/onboarding-page.js` - onboarding state, shared refs, page wiring, and step orchestration.
-- `templates/static/onboarding/onboarding-flow.js` - review draft, check setup, capability review, and onboarding actions.
-- `templates/static/onboarding/onboarding-search.js` - search basics state and location/search hydration.
-- `templates/static/onboarding/onboarding-storage.js` - wizard state save/restore and search-basics persistence.
+- `templates/static/onboarding/onboarding-page.js` - state, refs, step navigation, display helpers, `saveWizardState`.
+- `templates/static/onboarding/onboarding-flow.js` - wizard orchestration, review/check step rendering, step-transition actions.
+- `templates/static/onboarding/onboarding-storage.js` - wizard state save/restore, search-basics DB persistence, preference field event handlers.
+- `templates/static/onboarding/onboarding-search.js` - `setSelectedLocations`, `hydrateSearchBasics` (called by flow.js for step transitions).
 - `templates/static/onboarding/onboarding-upload.js` - CV validation, drop handling, and create-profile availability.
 - `templates/static/onboarding/onboarding-page.css` - onboarding-only layout exceptions and spacing.
 - `job_hunter_agent/routes/pages.py` - route rendering and bootstrap injection.
@@ -33,9 +70,9 @@ Use before editing the onboarding wizard, search-basics step, or any onboarding 
 ## UI Component Map
 - `primary_cv`, `cv_drop_zone`, `cv_drop_zone_content` - CV import and file state, owned by `onboarding-upload.js`.
 - `wizard_step*`, `wizard_progress_fill`, `wizard_progress_step` - step navigation and progress, owned by `onboarding-page.js` and `onboarding-flow.js`.
-- `review_search_keywords`, `min_contract_months`, salary inputs - search basics and compensation, owned by `onboarding-search.js` with page orchestration.
+- `review_search_keywords`, `min_contract_months`, salary inputs - search basics fields; hydrated by `onboarding-search.js` on step transitions, event handlers wired by `onboarding-storage.js`.
 - `review_capability_*` - capability review rendering and filtering, owned by `onboarding-flow.js`.
-- `location_search` and location summaries - location preferences and hydration, owned by `onboarding-search.js`.
+- `location_search` and location summaries - location preferences; rendered by `onboarding-page.js`, hydrated by `onboarding-search.js`, change events wired by `onboarding-storage.js`.
 - `onboarding_import_helper` - import helper copy and visibility, owned by page wiring and flow actions.
 - `create_profile`, `continue_to_review`, and other continue buttons - action availability and transitions, owned by `onboarding-upload.js` plus flow handlers.
 
@@ -45,8 +82,11 @@ Use before editing the onboarding wizard, search-basics step, or any onboarding 
 - `__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__` - import summary copy and preview count.
 - `__JOB_HUNTER_TITLE_TIER_LABELS__` - title-tier onboarding copy.
 - `__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__` - onboarding sector select options.
+- `__JOB_HUNTER_ONBOARDING_RESUME_STEP__` - server-computed step to resume from DB profile (1 or 2+).
+- `__JOB_HUNTER_USER_ID__` - used to build scoped localStorage keys.
 
 ## Validation
 - Check the rendered onboarding page or the smallest relevant browser interaction for the changed screen.
 - Prefer targeted checks over full test runs unless the change crosses multiple owners.
 - Keep module boundaries explicit. Add new onboarding behavior to the smallest owning module instead of growing `onboarding-page.js`.
+- Never add a second `saveWizardState` function or a second persistence path — one in page.js (called from step/location changes), one in storage.js (called from preference field changes). Both write to the same scoped key.

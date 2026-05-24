@@ -25,7 +25,6 @@ from job_hunter_agent.paths import (
     DATA_DIR,
     OUTPUT_DIR,
     REPO_ROOT,
-    get_source_pack_dir,
 )
 from job_hunter_agent.profile_learning import (
     build_learning_patch,
@@ -55,7 +54,6 @@ logger = logging.getLogger(__name__)
 
 
 ROOT_DIR = REPO_ROOT
-SOURCE_MATERIALS_TEMPLATE_PATH = DATA_DIR / "application_materials.template.json"
 
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
 ONBOARDING_RESET_FIELDS = (
@@ -95,9 +93,10 @@ def _normalize_profile_sources(items: Any) -> list[dict[str, str]]:
         if not isinstance(item, dict):
             continue
         label = str(item.get("label") or "").strip()
-        path = str(item.get("path") or "").strip()
-        if label and path:
-            normalized.append({"label": label, "path": path})
+        content = str(item.get("content") or "").strip()
+        filename = str(item.get("filename") or "").strip()
+        if label and content:
+            normalized.append({"label": label, "filename": filename, "content": content})
     return normalized
 
 
@@ -108,13 +107,15 @@ def _normalize_cv_variants(items: Any) -> list[dict[str, Any]]:
             continue
         key = str(item.get("key") or "").strip()
         label = str(item.get("label") or "").strip()
-        path = str(item.get("path") or "").strip()
+        content = str(item.get("content") or "").strip()
+        filename = str(item.get("filename") or "").strip()
         use_for = [str(value).strip() for value in item.get("use_for", []) if str(value).strip()]
-        if key and label and path:
+        if key and label and content:
             normalized.append({
                 "key": key,
                 "label": label,
-                "path": path,
+                "filename": filename,
+                "content": content,
                 "use_for": use_for,
             })
     return normalized
@@ -135,24 +136,13 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
     user_id = get_active_user_id()
     with db_conn() as conn:
         row = conn.execute(
-            "SELECT data FROM application_materials WHERE user_id = ?", (user_id,)
+            "SELECT data FROM profile_documents WHERE user_id = ?", (user_id,)
         ).fetchone()
     if row is not None:
         try:
             return normalize_source_materials(json.loads(row["data"]))
         except Exception as exc:
             print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials from DB: {exc}")
-            return dict(DEFAULT_SOURCE_MATERIALS)
-
-    if create_if_missing and SOURCE_MATERIALS_TEMPLATE_PATH.exists():
-        try:
-            payload = json.loads(SOURCE_MATERIALS_TEMPLATE_PATH.read_text(encoding="utf-8"))
-            normalized = normalize_source_materials(payload)
-            save_source_materials(normalized)
-            return normalized
-        except Exception as exc:
-            print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials template: {exc}")
-            pass
     return dict(DEFAULT_SOURCE_MATERIALS)
 
 
@@ -164,7 +154,7 @@ def save_source_materials(payload: Any) -> dict[str, Any]:
     ensure_user_row(user_id)
     with db_conn() as conn:
         conn.execute(
-            """INSERT INTO application_materials (user_id, data, updated_at)
+            """INSERT INTO profile_documents (user_id, data, updated_at)
             VALUES (?, ?, datetime('now'))
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
             (user_id, json.dumps(normalized, ensure_ascii=False)),
@@ -172,14 +162,11 @@ def save_source_materials(payload: Any) -> dict[str, Any]:
     return normalized
 
 
-def _read_docx_text(path: Path) -> str:
+def _read_docx_text_from_bytes(raw_bytes: bytes) -> str:
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    with zipfile.ZipFile(path) as archive:
+    import io
+    with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
         document_xml = archive.read("word/document.xml")
-    return _extract_docx_xml_text(document_xml, ns)
-
-
-def _extract_docx_xml_text(document_xml: bytes, ns: dict[str, str]) -> str:
     root = ET.fromstring(document_xml)
     paragraphs: list[str] = []
     for paragraph in root.findall(".//w:p", ns):
@@ -190,28 +177,7 @@ def _extract_docx_xml_text(document_xml: bytes, ns: dict[str, str]) -> str:
     return "\n".join(paragraphs)
 
 
-def read_source_document(path_value: str) -> str:
-    path = Path(path_value).expanduser()
-    if not path.is_absolute():
-        path = ROOT_DIR / path
-    if not path.exists():
-        raise FileNotFoundError(f"Could not find source document: {path}")
-    suffix = path.suffix.lower()
-    if suffix == ".docx":
-        return repair_text(_read_docx_text(path))
-    if suffix in get_allowed_source_document_suffixes():
-        return repair_text(path.read_text(encoding="utf-8", errors="ignore"))
-    raise ValueError(f"Unsupported source document type: {path.suffix}")
-
-
-def _slugify_filename(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-    return slug or "source_document"
-
-
 def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:
-    SOURCE_PACK_DIR = get_source_pack_dir()
-    SOURCE_PACK_DIR.mkdir(parents=True, exist_ok=True)
     profile_sources: list[dict[str, str]] = []
 
     for index, item in enumerate(files_payload or [], start=1):
@@ -224,29 +190,26 @@ def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text
             continue
         try:
             raw_bytes = base64.b64decode(content_base64)
-            suffix = Path(filename).suffix.lower() or ".txt"
-            slot_name = UPLOAD_SLOT_MAP.get(label.lower(), _slugify_filename(label))
-            target_name = f"{slot_name}{suffix}"
-            target_path = SOURCE_PACK_DIR / target_name
-            target_path.write_bytes(raw_bytes)
+            suffix = Path(filename).suffix.lower()
+            if suffix == ".docx":
+                content = repair_text(_read_docx_text_from_bytes(raw_bytes))
+            else:
+                content = repair_text(raw_bytes.decode("utf-8", errors="ignore"))
         except Exception as exc:
-            print(f"[SOURCE_DOCUMENTS][WARN] Failed to save uploaded source file {filename}: {exc}")
+            print(f"[SOURCE_DOCUMENTS][WARN] Failed to extract text from {filename}: {exc}")
             continue
-        profile_sources.append({
-            "label": label,
-            "path": str(target_path.relative_to(ROOT_DIR)),
-        })
+        if not content.strip():
+            print(f"[SOURCE_DOCUMENTS][WARN] No text extracted from {filename}")
+            continue
+        profile_sources.append({"label": label, "filename": filename, "content": content})
 
-    materials = {
-        "profile_sources": profile_sources,
-        "cv_variants": [],
-    }
+    materials = {"profile_sources": profile_sources, "cv_variants": []}
     return save_source_materials(materials)
 
 
 def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     sources = list(materials.get("profile_sources", []))
-    return [item for item in sources if item.get("label") and item.get("path")]
+    return [item for item in sources if item.get("label") and item.get("content")]
 
 
 def build_onboarding_reset_patch(onboarding_settings: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -312,17 +275,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     for source in import_sources:
         label = str(source.get("label") or "").strip()
-        path = str(source.get("path") or "").strip()
-        if not label or not path:
-            continue
-        try:
-            text = read_source_document(path)
-        except Exception as exc:
-            print(f"[ONBOARDING][WARN] Failed to read source document {path}: {exc}")
-            missing_sources.append(path)
-            continue
-        if not text:
-            missing_sources.append(path)
+        text = str(source.get("content") or "").strip()
+        if not label or not text:
             continue
         raw_chars = len(text)
         approx_pages = max(1, (raw_chars + cv_chars_per_page - 1) // cv_chars_per_page)
@@ -350,7 +304,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
                 approx_pages,
             )
         print(f"[ONBOARDING] CV source read: {label} chars read={raw_chars} approx pages={approx_pages}")
-        imported_sources.append({"label": label, "path": path, "characters": len(text)})
+        imported_sources.append({"label": label, "filename": source.get("filename", ""), "characters": len(text)})
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
 

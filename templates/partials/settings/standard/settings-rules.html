@@ -1,7 +1,11 @@
         <section id="section-rules" class="settings-group" data-screen="settings">
-          <h2 class="section-title">Rules</h2>
-          <div class="advanced-grid">
-            <section class="subpanel">
+          <section class="panel rules-shell settings-section-shell">
+            <div class="settings-section-head">
+              <h2>Rules</h2>
+              <p class="panel-copy">Set the role-matching and rejection rules that shape filtering before ranking.</p>
+            </div>
+            <div class="advanced-grid">
+              <section class="subpanel">
               <h3>Role Matching</h3>
               <label for="target_roles_add">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</label>
               <div class="badge-editor" data-chip-editor="target_roles">
@@ -35,9 +39,9 @@
               </div>
               <textarea id="reject_title_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <div class="field-help">Jobs containing these titles or keywords are automatically rejected.</div>
-            </section>
+              </section>
 
-            <section class="subpanel">
+              <section class="subpanel">
               <h3>Requirement Exclusions</h3>
               <label for="must_not_require_skills_add">Mandatory skills to reject</label>
               <div class="badge-editor" data-chip-editor="must_not_require_skills">
@@ -60,6 +64,7 @@
               </div>
               <textarea id="reject_description_phrase_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               <div class="field-help">Reject jobs containing these keywords or phrases anywhere in the ad.</div>
-            </section>
-          </div>
+              </section>
+            </div>
+          </section>
         </section>

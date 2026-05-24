@@ -1,10 +1,14 @@
         <section id="section-alerts" class="settings-group" data-screen="settings">
-          <h2 class="section-title">Alerts &amp; AI</h2>
-          <div class="grid">
-            <section class="panel">
-              <div class="field-label-row">
-                <h2>Telegram Alerts</h2>
-                <details class="field-info-drawer">
+          <section class="panel alerts-shell settings-section-shell">
+            <div class="settings-section-head">
+              <h2>Alerts &amp; AI</h2>
+              <p class="panel-copy">Connect Telegram alerts and choose the model used for fit decisions.</p>
+            </div>
+            <div class="grid alerts-grid">
+              <section class="subpanel">
+                <div class="field-label-row">
+                  <h2>Telegram Alerts</h2>
+                  <details class="field-info-drawer">
                   <summary class="field-info" aria-label="Help">i</summary>
                   <div class="field-info-panel">Create a bot with <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">BotFather</a> and keep it private to your account.</div>
                 </details>
@@ -81,15 +85,15 @@
               </div>
               <div id="telegram_subscribers_panel" class="help" hidden></div>
 
-              <div class="panel-actions">
-                <button class="secondary" id="send_telegram_test" type="button">Send Test Alert</button>
-              </div>
-            </section>
+                <div class="panel-actions">
+                  <button class="secondary" id="send_telegram_test" type="button">Send Test Alert</button>
+                </div>
+              </section>
 
-            <section class="panel">
-              <div class="field-label-row">
-                <h2>AI / LLM</h2>
-                <details class="field-info-drawer">
+              <section class="subpanel">
+                <div class="field-label-row">
+                  <h2>AI / LLM</h2>
+                  <details class="field-info-drawer">
                   <summary class="field-info" aria-label="Help">i</summary>
                   <div class="field-info-panel">Used for fit decisions and CV extraction. The available models are managed in Global settings.</div>
                 </details>
@@ -97,9 +101,10 @@
               <div class="field-label-row">
                 <label for="llm_model">Model</label>
               </div>
-              <select id="llm_model">
-                <option value="">Select a model</option>
-              </select>
-            </section>
-          </div>
+                <select id="llm_model" class="jh-select">
+                  <option value="">Select a model</option>
+                </select>
+              </section>
+            </div>
+          </section>
         </section>

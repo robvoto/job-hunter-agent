@@ -114,17 +114,27 @@ export const JobHunterAdminSettings = (function () {
     const presetPanel = document.getElementById('capability_strength_presets_panel');
     const presetTable = onboarding.capability_strength_presets || {};
     if (presetPanel) {
-      const presetRows = Object.entries(presetTable).map(([presetName, presetValues]) => `
-        <tr>
-          <th scope="row">${escapeHtml(presetName)}</th>
-          <td>${escapeHtml(Object.entries(presetValues || {}).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No values')}</td>
-        </tr>
-      `).join('');
+      const presetRows = Object.entries(presetTable).map(([presetName, presetValues]) => {
+        const valueRows = Object.entries(presetValues || {}).map(([key, value]) => `
+          <div class="capability-preset-value-row">
+            <span class="capability-preset-key">${escapeHtml(key)}</span>
+            <span class="capability-preset-value">${escapeHtml(String(value))}</span>
+          </div>
+        `).join('');
+
+        return `
+          <article class="capability-preset-card">
+            <h3>${escapeHtml(presetName)}</h3>
+            <div class="capability-preset-values">
+              ${valueRows || '<span class="help">No values</span>'}
+            </div>
+          </article>
+        `;
+      }).join('');
       presetPanel.innerHTML = `
-        <table class="settings-table">
-          <thead><tr><th>Preset</th><th>Values</th></tr></thead>
-          <tbody>${presetRows || '<tr><td colspan="2">No capability presets loaded.</td></tr>'}</tbody>
-        </table>
+        <div class="capability-preset-grid">
+          ${presetRows || '<p class="help">No capability presets loaded.</p>'}
+        </div>
       `;
     }
   }

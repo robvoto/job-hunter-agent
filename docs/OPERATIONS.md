@@ -334,7 +334,9 @@ python -m job_hunter_agent.db_seed
 
 ### After deploying a new app version
 
-When bundled JSON files gain new baseline entries (new capability patterns, blocker rules, etc.):
+Knowledge upgrades run automatically on every startup (`fastapi_app`, `source_connector`, `agent_runner`). No manual step is needed after a normal `git pull`.
+
+`--upgrade` is available for manual runs or scripted deployments:
 
 ```bash
 python -m job_hunter_agent.db_seed --upgrade
@@ -361,17 +363,58 @@ python -m job_hunter_agent.db_seed --overwrite
 
 ## Full Test Suite
 
+Run the complete pytest test suite with the project virtual environment:
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-## Focused Runtime Validation
+This is the clearest command when you want to check the whole project before merging work into `main`.
+
+## Test Runner Wrapper
+
+`job_hunter_agent.test_runner` is a convenience wrapper around pytest. It does not run a separate test system.
 
 ```powershell
 python -m job_hunter_agent.test_runner
 ```
 
-Use focused tests when validating:
+Internally, it finds the repo virtual environment and runs pytest from the repository root.
+
+These are equivalent in purpose:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+python -m job_hunter_agent.test_runner
+```
+
+Use the wrapper only when its options make the command easier to read.
+
+Run only tests matching a word, such as onboarding:
+
+```powershell
+python -m job_hunter_agent.test_runner -k onboarding
+```
+
+Equivalent direct pytest command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -k onboarding
+```
+
+Run in verbose mode, showing more detail about individual tests:
+
+```powershell
+python -m job_hunter_agent.test_runner -v
+```
+
+Equivalent direct pytest command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+Use targeted tests when validating a specific area, such as:
 
 * filtering
 * onboarding
@@ -379,7 +422,7 @@ Use focused tests when validating:
 * workspace rendering
 * learning logic
 
-Avoid unnecessary full-suite execution during targeted changes.
+Run the full suite before merging into `main`.
 
 ---
 

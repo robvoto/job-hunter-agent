@@ -34,9 +34,9 @@ textarea {
   font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: var(--button-border-width) solid transparent;
   text-decoration: none;
-  transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  transition: var(--button-transition);
   white-space: nowrap;
   user-select: none;
 }
@@ -194,4 +194,47 @@ body.job-hunter-wait-active {
 .currency-input-wrap input[type="text"] {
   padding-left: 52px !important;
   font-variant-numeric: tabular-nums;
+}
+
+.jh-message {
+  display: flex;
+  align-items: center;
+  gap: var(--message-gap);
+  margin: var(--message-margin-block);
+  padding: var(--message-pad-block) var(--message-pad-inline);
+  border: var(--button-border-width) solid var(--border-subtle);
+  border-radius: var(--message-radius);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font-size: var(--message-font-size);
+  font-weight: var(--message-font-weight);
+  line-height: 1.35;
+}
+
+.jh-message.is-success,
+.status.ok {
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+  border-color: var(--state-success-border);
+}
+
+.jh-message.is-warning,
+.status.warning {
+  background: var(--state-warning-bg);
+  color: var(--state-warning-text);
+  border-color: var(--state-warning-border);
+}
+
+.jh-message.is-error,
+.status.error {
+  background: var(--state-error-bg);
+  color: var(--state-error-text);
+  border-color: var(--state-error-border);
+}
+
+.jh-message.is-info,
+.status.loading {
+  background: var(--state-info-bg);
+  color: var(--state-info-text);
+  border-color: var(--state-info-border);
 }

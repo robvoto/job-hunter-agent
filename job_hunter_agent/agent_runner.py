@@ -21,6 +21,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from job_hunter_agent.user_settings import (
     load_user_settings,
     load_agent_state,
@@ -422,6 +425,13 @@ def _set_admin_user_context() -> None:
 
 
 def main() -> None:
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
+    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+    init_db()
+    for _subdir in ("knowledge", "config", "signals"):
+        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
     _set_admin_user_context()
     configure_console_output()
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")

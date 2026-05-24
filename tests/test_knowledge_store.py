@@ -8,6 +8,7 @@ from job_hunter_agent.knowledge_store import (
     get_knowledge,
     seed_knowledge_from_dir,
     set_knowledge,
+    upgrade_knowledge_from_dir,
 )
 
 
@@ -100,6 +101,76 @@ def test_repo_knowledge_seeds_successfully(tmp_db):
     knowledge_dir = repo_root / "data" / "knowledge"
     seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
     assert len(seeded) == 24, f"Expected 24 knowledge files, got {len(seeded)}: {seeded}"
+
+
+def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
+    (knowledge_dir / "rules.json").write_text('{"version": 1, "entries": [{"value": "A"}]}', encoding="utf-8")
+    updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    assert updated == ["rules"]
+    assert get_knowledge("rules", tmp_db)["entries"][0]["value"] == "A"
+
+
+def test_upgrade_skips_when_version_current(tmp_db, knowledge_dir):
+    data = {"version": 2, "entries": [{"value": "A"}]}
+    set_knowledge("rules", data, tmp_db)
+    (knowledge_dir / "rules.json").write_text('{"version": 2, "entries": [{"value": "B"}]}', encoding="utf-8")
+    updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    assert updated == []
+    assert get_knowledge("rules", tmp_db)["entries"][0]["value"] == "A"
+
+
+def test_upgrade_skips_when_db_version_ahead(tmp_db, knowledge_dir):
+    set_knowledge("rules", {"version": 5, "entries": [{"value": "A"}]}, tmp_db)
+    (knowledge_dir / "rules.json").write_text('{"version": 3, "entries": [{"value": "B"}]}', encoding="utf-8")
+    updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    assert updated == []
+
+
+def test_upgrade_additive_appends_new_entries(tmp_db, knowledge_dir):
+    set_knowledge("rules", {"version": 1, "entries": [{"value": "A"}]}, tmp_db)
+    (knowledge_dir / "rules.json").write_text(
+        '{"version": 2, "entries": [{"value": "A"}, {"value": "B"}]}', encoding="utf-8"
+    )
+    upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    entries = get_knowledge("rules", tmp_db)["entries"]
+    assert len(entries) == 2
+    assert {e["value"] for e in entries} == {"A", "B"}
+
+
+def test_upgrade_additive_preserves_user_approved_entries(tmp_db, knowledge_dir):
+    set_knowledge("rules", {"version": 1, "entries": [{"value": "A"}, {"value": "UserApproved"}]}, tmp_db)
+    (knowledge_dir / "rules.json").write_text(
+        '{"version": 2, "entries": [{"value": "A"}, {"value": "B"}]}', encoding="utf-8"
+    )
+    upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    entries = get_knowledge("rules", tmp_db)["entries"]
+    values = {e["value"] for e in entries}
+    assert "UserApproved" in values
+    assert "B" in values
+
+
+def test_upgrade_config_replaces_wholesale_on_version_bump(tmp_db, knowledge_dir):
+    set_knowledge("config", {"version": 1, "threshold": 0.5}, tmp_db)
+    (knowledge_dir / "config.json").write_text('{"version": 2, "threshold": 0.8}', encoding="utf-8")
+    upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    assert get_knowledge("config", tmp_db)["threshold"] == 0.8
+
+
+def test_upgrade_no_version_always_replaces(tmp_db, knowledge_dir):
+    set_knowledge("ref", {"label": "old"}, tmp_db)
+    (knowledge_dir / "ref.json").write_text('{"label": "new"}', encoding="utf-8")
+    updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    assert updated == ["ref"]
+    assert get_knowledge("ref", tmp_db)["label"] == "new"
+
+
+def test_upgrade_bumps_version_after_additive_merge(tmp_db, knowledge_dir):
+    set_knowledge("rules", {"version": 1, "entries": [{"value": "A"}]}, tmp_db)
+    (knowledge_dir / "rules.json").write_text(
+        '{"version": 2, "entries": [{"value": "A"}, {"value": "B"}]}', encoding="utf-8"
+    )
+    upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+    assert get_knowledge("rules", tmp_db)["version"] == 2
 
 
 def test_match_level_defaults_loaded_from_db(tmp_db):

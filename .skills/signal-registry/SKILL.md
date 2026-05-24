@@ -38,6 +38,20 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - Managed knowledge modules: approved runtime knowledge after review.
 - `job_quality.py`: job-quality detection that emits pending review signals.
 
+## When learning signals are generated
+
+**Deterministic path** (scoring decides without LLM):
+- `build_ad_learning_signals()` in `source_learning.py` runs deterministically and produces `ad_learning_signals`
+- If high-value ambiguous candidates exist, a separate learning-only LLM call (`fit_review=False`) is made → `learning_candidates`
+- Both are merged and registered
+
+**Full LLM path** (LLM is called for fit decision):
+- Only `ad_learning_signals` (deterministic) are registered — no LLM learning candidates
+- The fit review LLM schema (`_LLMFitReviewPayload`) has no `learning_candidates` field
+- Do not add learning category guidance to the fit review prompt; it causes category names to leak into `contextual_capability_matches`
+
+**Consequence:** `government_context_pattern`, `role_title_pattern`, and similar signals are only generated for jobs decided by the deterministic path. Jobs decided by the full LLM review produce no LLM-proposed learning candidates.
+
 ## Checklist
 - Does the signal include original evidence?
 - Is it pending, not runtime-active?

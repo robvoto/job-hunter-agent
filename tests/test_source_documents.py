@@ -20,20 +20,12 @@ def test_build_llm_profile_brief_handles_non_list_input():
     assert source_documents.build_llm_profile_brief(capability_rules=None) == ""
 
 
-def test_read_source_document_supports_plain_text_formats(tmp_path):
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("header,value\nskills,delivery\n", encoding="utf-8")
-
-    text = source_documents.read_source_document(str(cv_path))
-
-    assert "skills,delivery" in text
+_CV_CONTENT = "# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n"
+_CV_SOURCE = {"label": "Primary CV", "filename": "cv.txt", "content": _CV_CONTENT}
 
 
-def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_path):
+def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch):
     captured: dict[str, object] = {}
-
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
@@ -51,7 +43,7 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
     monkeypatch.setattr(source_documents, "run_cv_pipeline", fake_run_cv_pipeline)
 
     result = source_documents.run_onboarding(
-        {"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]},
+        {"profile_sources": [_CV_SOURCE]},
         onboarding_settings={"extraction_lookback_years": 12, "title_extraction_min_months": 6},
     )
 
@@ -60,10 +52,7 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch, tmp_
     assert captured["onboarding_settings"]["title_extraction_min_months"] == 6
 
 
-def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch, tmp_path):
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
-
+def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch):
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(
@@ -82,16 +71,13 @@ def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch, tmp_path)
         lambda text, onboarding_settings=None, source_sections=None: {"cv_text": text},
     )
 
-    result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
+    result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
     assert result["profile"].get("capability_profile_rules") == []
 
 
-def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_returns_none(monkeypatch, tmp_path):
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
-
+def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_returns_none(monkeypatch):
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(
@@ -106,16 +92,13 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
         lambda text, onboarding_settings=None, source_sections=None: {"cv_text": text},
     )
 
-    result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
+    result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
     assert result["profile"].get("capability_profile_rules") == []
 
 
-def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, tmp_path):
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
-
+def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch):
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(
@@ -134,7 +117,7 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
         },
     )
 
-    result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
+    result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
     assert result["profile"].get("capability_profile_rules") == [{"name": "delivery", "level": "working"}]
@@ -142,11 +125,8 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch, t
     assert result["profile"].get("match_preferences", {})["home_location"] == "Sydney"
 
 
-def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch, tmp_path):
+def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch):
     captured: dict[str, object] = {}
-
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("# Professional Experience\nAcme - Platform Lead (2019 - 2024)\n", encoding="utf-8")
 
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
@@ -177,7 +157,7 @@ def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch, tmp
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
     monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings=None, source_sections=None: {"cv_text": text, "capability_profile_rules": []})
 
-    result = source_documents.run_onboarding({"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]})
+    result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
     assert captured["signals"] == [

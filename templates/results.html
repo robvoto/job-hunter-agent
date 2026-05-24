@@ -3,10 +3,8 @@
   <main class="page">
     <div class="workspace-layout">
       <div class="workspace-main">
-        <section class="hero">
-          <h1>$LABEL_WS_HERO_TITLE</h1>
-        </section>
-        <section class="section filter-panel">
+        <section class="section filter-panel ws-hero-panel">
+          <h1 class="ws-hero-title">$LABEL_WS_HERO_TITLE</h1>
           <div class="scope-tabs" aria-label="Top-level workspace views">
             <button class="scope-tab is-active" type="button" data-workspace-target="potential">$LABEL_WS_POTENTIAL_JOBS_TAB ($SHORTLIST_COUNT)</button>
             <button class="scope-tab" type="button" data-workspace-target="applied">$LABEL_WS_APPLIED_JOBS_TAB ($APPLIED_COUNT)</button>
@@ -14,72 +12,80 @@
           </div>
         </section>
         <div class="workspace-panel" data-workspace-panel="potential">
-          <section class="section filter-panel">
-            <div class="section-head">
+          <section class="section filter-panel workspace-controls-panel">
+            <div class="section-head workspace-controls-head">
               <h2>$LABEL_WS_MATCH_CONTROLS_HEADING</h2>
-              <button class="mini-button" type="button" id="reset_workspace_filters">$LABEL_WS_RESET_ALL_FILTERS_BUTTON</button>
+              <button class="btn btn-secondary btn-compact-action" type="button" id="reset_workspace_filters">$LABEL_WS_RESET_ALL_FILTERS_BUTTON</button>
             </div>
-            <div class="filter-grid">
-              <label class="filter-field">
-                <span>$LABEL_WS_SORT_LABEL</span>
-                <select id="sort_select">
-                  <option value="fit">$LABEL_WS_SORT_OPTION_BEST_MATCH</option>
-                  <option value="newest">$LABEL_WS_SORT_OPTION_NEWEST</option>
-                  <option value="salary">$LABEL_WS_SORT_OPTION_HIGHEST_SALARY</option>
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_JOBS_PER_PAGE_LABEL</span>
-                <select id="page_size_select">
-                  <option value="12">12</option>
-                  <option value="24">24</option>
-                  <option value="48">48</option>
-                  <option value="96">96</option>
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_SHOW_LABEL</span>
-                <select id="scope_filter">
-                  <option value="all" selected>$LABEL_WS_SHOW_OPTION_ALL_POTENTIAL</option>
-                  <option value="current">$LABEL_WS_SHOW_OPTION_MATCHES_LAST_RUN</option>
-                  $SCOPE_SAVED_OPTION_HTML
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_POSTED_LABEL</span>
-                <select id="posted_filter">
-                  $POSTED_FILTER_OPTIONS_HTML
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_TYPE_LABEL</span>
-                <select id="work_type_filter">
-                  $WORK_TYPE_FILTER_OPTIONS_HTML
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_WORK_MODE_LABEL</span>
-                <select id="work_mode_filter">
-                  <option value="all">$LABEL_WS_WORK_MODE_OPTION_ANY</option>
-                  <option value="remote">$LABEL_WS_WORK_MODE_OPTION_REMOTE</option>
-                  <option value="hybrid">$LABEL_WS_WORK_MODE_OPTION_HYBRID</option>
-                  <option value="on-site">$LABEL_WS_WORK_MODE_OPTION_ON_SITE</option>
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_SECTOR_LABEL</span>
-                <select id="sector_filter">
-                  <option value="all">$LABEL_WS_SECTOR_OPTION_ANY</option>
-                  <option value="public">$LABEL_WS_SECTOR_OPTION_PUBLIC</option>
-                  <option value="private">$LABEL_WS_SECTOR_OPTION_PRIVATE</option>
-                </select>
-              </label>
-              <label class="filter-field">
-                <span>$LABEL_WS_MATCH_LEVEL_LABEL</span>
-                <select id="score_filter">
-                  $SCORE_FILTER_OPTIONS_HTML
-                </select>
-              </label>
+            <div class="workspace-control-section workspace-control-section--sort">
+              <h3 class="workspace-control-section-title">Sort and display</h3>
+              <div class="filter-grid workspace-control-grid workspace-control-grid--sort">
+                <label class="filter-field">
+                  <span>$LABEL_WS_SORT_LABEL</span>
+                  <select id="sort_select" class="jh-select">
+                    <option value="fit">$LABEL_WS_SORT_OPTION_BEST_MATCH</option>
+                    <option value="newest">$LABEL_WS_SORT_OPTION_NEWEST</option>
+                    <option value="salary">$LABEL_WS_SORT_OPTION_HIGHEST_SALARY</option>
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>$LABEL_WS_JOBS_PER_PAGE_LABEL</span>
+                  <select id="page_size_select" class="jh-select">
+                    <option value="12">12</option>
+                    <option value="24">24</option>
+                    <option value="48">48</option>
+                    <option value="96">96</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="workspace-control-section workspace-control-section--filters">
+              <h3 class="workspace-control-section-title">Filters</h3>
+              <div class="filter-grid workspace-control-grid workspace-control-grid--filters">
+                <label class="filter-field">
+                  <span>$LABEL_WS_SHOW_LABEL</span>
+                  <select id="scope_filter" class="jh-select">
+                    <option value="all" selected>$LABEL_WS_SHOW_OPTION_ALL_POTENTIAL</option>
+                    <option value="current">$LABEL_WS_SHOW_OPTION_MATCHES_LAST_RUN</option>
+                    $SCOPE_SAVED_OPTION_HTML
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>$LABEL_WS_POSTED_LABEL</span>
+                  <select id="posted_filter" class="jh-select">
+                    $POSTED_FILTER_OPTIONS_HTML
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>$LABEL_WS_TYPE_LABEL</span>
+                  <select id="work_type_filter" class="jh-select">
+                    $WORK_TYPE_FILTER_OPTIONS_HTML
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>$LABEL_WS_WORK_MODE_LABEL</span>
+                  <select id="work_mode_filter" class="jh-select">
+                    <option value="all">$LABEL_WS_WORK_MODE_OPTION_ANY</option>
+                    <option value="remote">$LABEL_WS_WORK_MODE_OPTION_REMOTE</option>
+                    <option value="hybrid">$LABEL_WS_WORK_MODE_OPTION_HYBRID</option>
+                    <option value="on-site">$LABEL_WS_WORK_MODE_OPTION_ON_SITE</option>
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>$LABEL_WS_SECTOR_LABEL</span>
+                  <select id="sector_filter" class="jh-select">
+                    <option value="all">$LABEL_WS_SECTOR_OPTION_ANY</option>
+                    <option value="public">$LABEL_WS_SECTOR_OPTION_PUBLIC</option>
+                    <option value="private">$LABEL_WS_SECTOR_OPTION_PRIVATE</option>
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>$LABEL_WS_MATCH_LEVEL_LABEL</span>
+                  <select id="score_filter" class="jh-select">
+                    $SCORE_FILTER_OPTIONS_HTML
+                  </select>
+                </label>
+              </div>
             </div>
           </section>
           <div class="results-helper" id="results_helper" hidden>

@@ -1,14 +1,7 @@
 import * as onboardingPage from './onboarding-page.js';
 import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
 
-const WIZARD_STATE_KEY = 'jobHunter.onboardingWizard';
-const SOURCE_PACK_DATA_PREFIX = '/data/';
-const ROOT_DATA_PREFIX = 'data/';
-
-function normalizePrimaryCvSourcePath(path) {
-  const value = String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
-  return value.startsWith(ROOT_DATA_PREFIX) ? value.slice(ROOT_DATA_PREFIX.length) : value;
-}
+const WIZARD_STATE_KEY = onboardingPage.WIZARD_STATE_KEY;
 
 function getSearchBasicsState() {
   return {
@@ -63,17 +56,6 @@ export function saveWizardState() {
     window.localStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
-  const primaryCvSource = String(
-    onboardingPage.lastImportPayload?.materials?.profile_sources?.[0]?.path
-    || onboardingPage.savedPrimaryCvSourcePath
-    || ''
-  ).trim();
-  const primaryCvFileName = String(
-    onboardingPage.preservedPrimaryCvFile?.name
-    || onboardingPage.refs.primaryCvInput?.files?.[0]?.name
-    || onboardingPage.savedPrimaryCvFileName
-    || ''
-  ).trim();
   window.localStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: onboardingPage.currentStep,
     maxUnlockedStep: onboardingPage.maxUnlockedStep,
@@ -89,8 +71,6 @@ export function saveWizardState() {
     minimumDailyRate: onboardingPage.refs.reviewMinimumDailyRate?.value || '',
     engagementType: onboardingSettingsUtils.getEngagementTypeValues(),
     preferSector: onboardingSettingsUtils.getSectorPreferenceValues(),
-    primaryCvSourcePath: primaryCvSource,
-    primaryCvFileName,
   }));
 }
 
@@ -134,8 +114,6 @@ export function restoreWizardState() {
     onboardingPage.setReviewCapabilityVisibleCount(Number(state.reviewCapabilityVisibleCount) > 0
       ? Number(state.reviewCapabilityVisibleCount)
       : onboardingPage.getReviewCapabilityPreviewCount());
-    onboardingPage.setSavedPrimaryCvSourcePath(String(state.primaryCvSourcePath || '').trim());
-    onboardingPage.setSavedPrimaryCvFileName(String(state.primaryCvFileName || '').trim());
     try {
       onboardingPage.setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '', { persist: false });
     } catch (error) {
@@ -161,3 +139,59 @@ export function restoreWizardState() {
   }
 }
 
+// Event handlers for search-basics fields that need to persist wizard state and sync to DB.
+// Wired here (not in page.js) because this module owns save/persist logic.
+const { locationSelect, minContractMonths: minContractMonthsEl, workModePreferences } = onboardingPage.refs;
+
+if (locationSelect) {
+  locationSelect.addEventListener('change', () => {
+    onboardingPage.hideStatus();
+    onboardingPage.setSelectedLocation(locationSelect.value);
+    scheduleSearchBasicsPersistence();
+  });
+}
+
+document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    onboardingSettingsUtils.ensureAtLeastOneChoiceSelected?.('prefer_sector', input);
+    onboardingPage.hideStatus();
+    onboardingPage.updateSearchPreferenceSummaries();
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+});
+
+if (minContractMonthsEl) {
+  minContractMonthsEl.addEventListener('change', () => {
+    const contractRow = document.getElementById('contract_duration_row');
+    if (contractRow) contractRow.hidden = true;
+    onboardingPage.updateContractChipLabel();
+    onboardingPage.updateSearchPreferenceSummaries();
+    onboardingPage.hideStatus();
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+}
+
+document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    if (!input.checked) {
+      const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
+      if (!anyChecked) input.checked = true;
+    }
+    onboardingPage.hideStatus();
+    onboardingPage.updateMinContractMonthState({ showRow: input.value === 'contract' && input.checked });
+    onboardingPage.updateCompensationVisibility();
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  });
+});
+
+if (workModePreferences.length) {
+  workModePreferences.forEach((element) => element.addEventListener('change', () => {
+    onboardingPage.hideStatus();
+    onboardingPage.updateSearchPreferenceSummaries();
+    saveWizardState();
+    scheduleSearchBasicsPersistence();
+  }));
+}

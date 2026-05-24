@@ -20,15 +20,7 @@
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div class="job-hunter-wait-mount" id="ws_wait_mount" hidden></div>
   <div class="ws-run-info-mount" id="ws_run_info_mount"></div>
-  <div id="results-mount">
-    <div id="results-loading">
-      <div class="wait-state" role="status" aria-live="polite">
-        <span class="wait-state__spinner" aria-hidden="true"></span>
-        <p class="wait-state__title">Loading workspace</p>
-        <p class="wait-state__copy">Fetching the latest search results.</p>
-      </div>
-    </div>
-  </div>
+  <div id="results-mount"></div>
 
   <script>
     const wsFlashMount = document.getElementById('ws_flash_mount');
@@ -40,9 +32,22 @@
     const wsTestMenu = document.getElementById('job_hunter_account_test_menu');
     const wsResetUserBtn = document.getElementById('job_hunter_reset_user_btn');
     const wsResetLearningBtn = document.getElementById('job_hunter_reset_learning_btn');
+    const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
+    const SEARCH_WAIT_COPY = String(SHARED_UI_LABELS.search_wait_copy || '').trim();
+    const SEARCH_RUNNING_TITLE = String(SHARED_UI_LABELS.search_running_title || '').trim();
+    const SEARCH_RUNNING_COPY = String(SHARED_UI_LABELS.search_running_copy || '').trim();
+    const SEARCH_STARTING_TITLE = String(SHARED_UI_LABELS.search_starting_title || '').trim();
+    const SEARCH_STARTING_COPY = String(SHARED_UI_LABELS.search_starting_copy || '').trim();
+    const SEARCH_REFRESHING_TITLE = String(SHARED_UI_LABELS.search_refreshing_title || '').trim();
+    const SEARCH_REFRESHING_COPY = String(SHARED_UI_LABELS.search_refreshing_copy || '').trim();
+    const SEARCH_RUNNING_SUBCOPY = String(SHARED_UI_LABELS.search_running_subcopy || '').trim();
+    const SEARCH_STARTING_SUBCOPY = String(SHARED_UI_LABELS.search_starting_subcopy || '').trim();
     const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
     if (!ONBOARDING_USER_ID) {
       throw new Error('Missing user id.');
+    }
+    if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY) {
+      throw new Error('Missing shared search UI labels.');
     }
     function scopedOnboardingStorageKey(baseKey) {
       return `${baseKey}:${ONBOARDING_USER_ID}`;
@@ -61,6 +66,7 @@
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
     let workspaceWaitState = null;
+    let workspaceProfile = null;
 
     function setTestMenuOpen(open) {
       if (!wsTestMenu || !wsTestTrigger) {
@@ -118,6 +124,24 @@
       }
     }
 
+    async function loadWorkspaceProfile() {
+      if (workspaceProfile) {
+        return workspaceProfile;
+      }
+      try {
+        const response = await jobHunterFetch('/api/profile');
+        if (!response.ok) {
+          workspaceProfile = null;
+          return null;
+        }
+        const profile = await response.json().catch(() => ({}));
+        workspaceProfile = profile && typeof profile === 'object' ? profile : null;
+      } catch {
+        workspaceProfile = null;
+      }
+      return workspaceProfile;
+    }
+
     function escapeHtml(value) {
       return String(value || '')
         .replace(/&/g, '&amp;')
@@ -132,6 +156,7 @@
         return;
       }
       if (!state) {
+        workspaceWaitState = null;
         wsWaitMount.innerHTML = '';
         wsWaitMount.hidden = true;
         document.body.classList.remove('job-hunter-wait-active');
@@ -167,27 +192,6 @@
           </div>
         </div>
       `;
-    }
-
-    function showWorkspaceWait(state) {
-      if (!state || typeof state !== 'object') {
-        workspaceWaitState = null;
-        renderWorkspaceWait(null);
-        return;
-      }
-      renderWorkspaceWait(state);
-    }
-
-    function updateWorkspaceWait(patch) {
-      if (!workspaceWaitState) {
-        return;
-      }
-      renderWorkspaceWait({ ...workspaceWaitState, ...patch });
-    }
-
-    function hideWorkspaceWait() {
-      workspaceWaitState = null;
-      renderWorkspaceWait(null);
     }
 
     function setOnboardingOverlayVisible(visible) {
@@ -323,17 +327,17 @@
         }
         const payload = await response.json().catch(() => ({}));
         if (payload?.status === 'running') {
-          showWorkspaceWait({
-            title: 'Search in progress',
-            copy: 'Job Hunter is checking sources and ranking matches.',
-            subcopy: 'Keep this tab open. The workspace will refresh when the run finishes.',
+          renderWorkspaceWait({
+            title: SEARCH_RUNNING_TITLE,
+            copy: SEARCH_RUNNING_COPY,
+            subcopy: SEARCH_RUNNING_SUBCOPY,
           });
           startRunStatusPolling();
           return true;
         }
         stopRunStatusPolling();
         if (workspaceWaitState) {
-          hideWorkspaceWait();
+          renderWorkspaceWait(null);
           await loadResults();
         }
         return false;
@@ -343,10 +347,10 @@
     }
 
     async function startWorkspaceRunFromOverlay() {
-      showWorkspaceWait({
-        title: 'Starting search',
-        copy: 'Saving your settings and beginning the scrape.',
-        subcopy: 'The workspace will refresh automatically while the search runs.',
+      renderWorkspaceWait({
+        title: SEARCH_STARTING_TITLE,
+        copy: SEARCH_STARTING_COPY,
+        subcopy: SEARCH_STARTING_SUBCOPY,
       });
       try {
         const response = await jobHunterFetch('/api/run', {
@@ -358,16 +362,16 @@
         if (!response.ok) {
           throw new Error(payload.error || 'Could not start search.');
         }
-        showWorkspaceWait({
-          title: 'Search in progress',
-          copy: 'Job Hunter is checking sources and ranking matches.',
-          subcopy: 'Keep this tab open. The workspace will refresh when the run finishes.',
+        renderWorkspaceWait({
+          title: SEARCH_RUNNING_TITLE,
+          copy: SEARCH_RUNNING_COPY,
+          subcopy: SEARCH_RUNNING_SUBCOPY,
         });
         startRunStatusPolling();
         showRunInfoPopup();
         pollRunStatusAfterOverlayStart();
       } catch (error) {
-        hideWorkspaceWait();
+        renderWorkspaceWait(null);
         updateResultsLoadingMessage('Could not start search. Refresh the page and try again.');
         window.alert(error.message || 'Could not start search.');
       }
@@ -384,28 +388,35 @@
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
           return;
         }
-        updateWorkspaceWait({
-          title: 'Refreshing results',
-          copy: 'Loading the latest workspace now.',
+        renderWorkspaceWait({
+          ...(workspaceWaitState || {}),
+          title: SEARCH_REFRESHING_TITLE,
+          copy: SEARCH_REFRESHING_COPY,
         });
         await loadResults();
-        hideWorkspaceWait();
+        renderWorkspaceWait(null);
       } catch (error) {
         if (attempt < RUN_STATUS_MAX_ATTEMPTS) {
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
           return;
         }
-        hideWorkspaceWait();
+        renderWorkspaceWait(null);
         updateResultsLoadingMessage('Could not refresh results. Refresh the page if needed.');
       }
     }
 
-    function renderOnboardingWelcome() {
+    async function renderOnboardingWelcome() {
       if (!wsFlashMount) {
         return;
       }
       const state = peekOnboardingWelcomeState();
       if (!state) {
+        dismissOnboardingOverlay();
+        return;
+      }
+      const profile = await loadWorkspaceProfile();
+      const hasLoadedCv = Boolean(String(profile?.cv_text || '').trim());
+      if (!hasLoadedCv) {
         dismissOnboardingOverlay();
         return;
       }
@@ -555,9 +566,20 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
     });
 
     (async () => {
-      await syncWorkspaceRunStatus();
-      await loadResults();
-      renderOnboardingWelcome();
+      const isRunning = await syncWorkspaceRunStatus();
+      if (!isRunning) {
+        let overlayTimer = window.setTimeout(
+          () => renderWorkspaceWait({ title: 'Loading workspace', copy: 'Fetching the latest search results.' }),
+          500,
+        );
+        try {
+          await loadResults();
+        } finally {
+          window.clearTimeout(overlayTimer);
+          renderWorkspaceWait(null);
+        }
+      }
+      await renderOnboardingWelcome();
     })();
   </script>
 </body>

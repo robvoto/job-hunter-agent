@@ -21,6 +21,9 @@ Upgrade flags:
 import argparse
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from job_hunter_agent.database import init_db
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir, upgrade_knowledge_from_dir
 from job_hunter_agent.paths import REPO_ROOT

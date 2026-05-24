@@ -14,11 +14,9 @@ router = APIRouter()
 @router.get("/api/results-html")
 def api_results_html():  # type: ignore[no-untyped-def]
     results_path = get_workspace_results_path()
-    if srv.DEBUG_MODE or not results_path.exists():
+    if not results_path.exists():
         try:
-            rebuild_workspace_results(
-                reason="debug results request" if srv.DEBUG_MODE else "no results file — generating empty workspace"
-            )
+            rebuild_workspace_results(reason="no results file — generating empty workspace")
         except Exception:
             pass
     try:

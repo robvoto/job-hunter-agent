@@ -70,6 +70,23 @@ Server logging:
 - `job_hunter_agent/review_insights.py`
   Aggregates audit data and skill observations to suggest profile tuning.
 
+### Suggested Tuning Flow
+
+The Settings > Optimise > Suggested Tuning panel is a confirmation layer, not automatic learning.
+
+Runtime path:
+
+1. A scrape/review run writes saved review data.
+2. `GET /api/review-data` in `routes/workspace_api.py` loads that data.
+3. `build_suggested_tuning_from_saved_review()` in `review_insights.py` turns saved kept-job skill observations and repeated rejection reasons into suggestions.
+4. `templates/static/settings/shared/settings-review-panel.js` renders suggestions into `#tuning_suggestions_panel`.
+5. Confirmed capabilities are applied through `POST /api/tuning-decisions` and `apply_capability_tuning_decisions()`.
+6. Phrase exclusions are applied through `POST /api/rule/phrase`.
+
+The empty state is valid when no saved review data exists or no repeated signal meets the configured review thresholds. Do not treat the empty state as a UI failure without checking saved review data and thresholds first.
+
+For detailed maintenance rules, see `.skills/suggested-tuning/SKILL.md`.
+
 - `job_hunter_agent/capability_matrix.py`
   Logic for alias expansion and deterministic capability matching.
 
@@ -126,8 +143,11 @@ Do not rename major files casually unless there is time to clean the whole proje
 | File | Responsibility |
 |---|---|
 | `templates/onboarding.html` | Onboarding page shell and section placement. |
-| `templates/static/onboarding/onboarding-page.js` | Search Basics state, summaries, and import summary wiring. |
-| `templates/static/onboarding/onboarding-flow.js` | Review Draft, Check Setup, capability review, and onboarding actions. |
+| `templates/static/onboarding/onboarding-page.js` | DOM refs, page state, step navigation, display helpers (`saveWizardState` for step/location changes). |
+| `templates/static/onboarding/onboarding-flow.js` | Wizard orchestration, Review Draft, Check Setup, capability review, step-transition actions, `initWizard`. |
+| `templates/static/onboarding/onboarding-storage.js` | Wizard draft state save/restore, search-basics DB persistence, event handler wiring for all preference fields. |
+| `templates/static/onboarding/onboarding-search.js` | `setSelectedLocations`, `hydrateSearchBasics` (populates search-basics fields from a DB profile on step transition). |
+| `templates/static/onboarding/onboarding-upload.js` | CV file validation, drop zone handling, `create_profile` button availability. |
 | `templates/static/onboarding/onboarding-page.css` | Onboarding-only layout exceptions and spacing. |
 | `job_hunter_agent/routes/pages.py` | Route rendering and bootstrap injection. |
 | `job_hunter_agent/server_helpers.py` | Onboarding label loading and injected globals. |

@@ -589,6 +589,16 @@ def load_profile() -> dict[str, Any]:
     return normalize_full_profile(data)
 
 
+def profile_exists() -> bool:
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        row = conn.execute("SELECT 1 FROM user_profile WHERE user_id = ? LIMIT 1", (user_id,)).fetchone()
+    return row is not None
+
+
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id

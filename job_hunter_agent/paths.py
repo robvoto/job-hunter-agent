@@ -8,7 +8,6 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_DIR.parent
 DATA_DIR = Path(os.environ.get("JOB_HUNTER_DATA_DIR", REPO_ROOT / "data")).expanduser().resolve()
 DEFAULTS_DIR = DATA_DIR / "defaults"
-AUTH_DIR = DATA_DIR / "auth"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 RUNTIME_DIR = DATA_DIR / "runtime"
 OUTPUT_DIR = Path(os.environ.get("JOB_HUNTER_OUTPUT_DIR", REPO_ROOT / "output")).expanduser().resolve()
@@ -56,10 +55,6 @@ def _active_user_dir() -> Path:
 
 def get_workspace_results_path() -> Path:
     return _active_user_dir() / WORKSPACE_RESULTS_FILENAME
-
-
-def get_source_pack_dir() -> Path:
-    return _active_user_dir() / "source_pack"
 
 def get_candidate_application_history_path() -> Path:
     return RUNTIME_DIR / "candidate_application_history.json"

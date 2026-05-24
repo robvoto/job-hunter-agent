@@ -140,8 +140,8 @@ CREATE TABLE IF NOT EXISTS workspace_pool (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Per-user onboarding source materials (CV, cover letters, etc.)
-CREATE TABLE IF NOT EXISTS application_materials (
+-- Per-user CV and profile documents (content stored directly, not as filesystem paths)
+CREATE TABLE IF NOT EXISTS profile_documents (
     user_id    TEXT PRIMARY KEY REFERENCES users(user_id),
     data       TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -166,11 +166,19 @@ CREATE TABLE IF NOT EXISTS agent_state (
 """
 
 
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """One-time schema migrations applied in order on every startup (idempotent)."""
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "application_materials" in tables and "profile_documents" not in tables:
+        conn.execute("ALTER TABLE application_materials RENAME TO profile_documents")
+
+
 def init_db(db_path: Path | None = None) -> None:
     """Create all tables if they do not exist. Safe to call on every startup."""
     path = db_path or _default_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with db_conn(path) as conn:
+        _apply_migrations(conn)
         conn.executescript(_SCHEMA)
 
 
@@ -186,18 +194,30 @@ EXPECTED_TABLES = {
     "run_stats",
     "audit_records",
     "workspace_pool",
-    "application_materials",
+    "profile_documents",
     "candidate_application_history",
     "agent_state",
 }
 
 
-def ensure_user_row(user_id: str, db_path: "Path | None" = None) -> None:
-    """Upsert a user row so FK constraints on per-user tables are satisfied."""
+def ensure_user_row(
+    user_id: str,
+    email: str | None = None,
+    display_name: str | None = None,
+    db_path: "Path | None" = None,
+) -> None:
+    """Upsert a user row. Updates email, display_name, and last_seen_at when provided."""
     with db_conn(db_path) as conn:
         conn.execute(
-            "INSERT INTO users (user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
-            (user_id,),
+            """
+            INSERT INTO users (user_id, email, display_name, last_seen_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET
+                email         = COALESCE(excluded.email, email),
+                display_name  = COALESCE(excluded.display_name, display_name),
+                last_seen_at  = excluded.last_seen_at
+            """,
+            (user_id, email or None, display_name or None),
         )
 
 

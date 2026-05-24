@@ -15,6 +15,14 @@ def api_profile_get():  # type: ignore[no-untyped-def]
     return json_response(srv.load_profile())
 
 
+@router.get("/api/profile/status")
+def api_profile_status_get():  # type: ignore[no-untyped-def]
+    try:
+        return json_response({"has_profile": srv.profile_exists()})
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
 @router.patch("/api/profile")
 def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:

@@ -43,7 +43,6 @@ from job_hunter_agent.paths import (
     USERS_DIR,
     REPO_ROOT as ROOT_DIR,
     get_workspace_results_path,
-    get_source_pack_dir,
 )
 from job_hunter_agent.profile_store import (
     BriefMode,
@@ -66,6 +65,7 @@ from job_hunter_agent.profile_store import (
     normalize_onboarding_settings,
     normalize_search_settings,
     normalize_work_mode_preferences,
+    profile_exists,
     save_profile,
     KEY_KEYWORDS,
     KEY_LOCATIONS,
@@ -174,6 +174,15 @@ _SHARED_UI_LABEL_KEYS = (
     "add_button_label",
     "add_button_aria_label",
     "add_button_title",
+    "search_wait_copy",
+    "search_running_title",
+    "search_running_copy",
+    "search_starting_title",
+    "search_starting_copy",
+    "search_refreshing_title",
+    "search_refreshing_copy",
+    "search_running_subcopy",
+    "search_starting_subcopy",
 )
 _SEARCH_SOURCE_LABEL_KEYS = (
     "section_title",
@@ -282,6 +291,9 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "reset_learning_confirm_body_2",
     "reset_learning_error",
     "reset_learning_success_message",
+    "no_profile_warning",
+    "profile_status_error",
+    "load_profile_error",
     "create_profile_button_building",
     "create_profile_button_refreshing",
     "finish_review_button_saving",
@@ -1085,10 +1097,6 @@ class SettingsHandler:
 
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
-
-        source_pack_dir = get_source_pack_dir()
-        if source_pack_dir.exists():
-            shutil.rmtree(source_pack_dir)
 
         clear_job_history()
         clear_review_data()

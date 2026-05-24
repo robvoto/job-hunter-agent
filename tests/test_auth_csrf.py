@@ -1,5 +1,6 @@
 from http.cookies import SimpleCookie
 
+import pytest
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import Response
@@ -7,7 +8,9 @@ from starlette.responses import Response
 from job_hunter_agent.auth import (
     GoogleOAuthConfig,
     _get_session_cookie_params,
+    get_or_create_user,
     issue_csrf_token,
+    is_admin,
     set_session_cookie,
     verify_csrf_token,
 )
@@ -92,3 +95,71 @@ def test_session_cookie_secure_flag_tracks_request_scheme():
     assert "__Host-" not in http_cookie
     assert "Secure" in https_cookie
     assert "__Host-" in https_cookie
+
+
+# ── get_or_create_user (DB-backed) ──────────────────────────────────────────
+
+def test_get_or_create_user_returns_user_dict(isolated_db):
+    user = get_or_create_user("alice@example.com", admin_email=None)
+    assert user["email"] == "alice@example.com"
+    assert user["role"] == "candidate"
+    assert len(user["user_id"]) == 16
+
+
+def test_get_or_create_user_admin_role(isolated_db):
+    user = get_or_create_user("admin@example.com", admin_email="admin@example.com")
+    assert user["role"] == "admin"
+
+
+def test_get_or_create_user_candidate_when_not_admin(isolated_db):
+    user = get_or_create_user("other@example.com", admin_email="admin@example.com")
+    assert user["role"] == "candidate"
+
+
+def test_get_or_create_user_persists_to_db(isolated_db):
+    from job_hunter_agent.database import db_conn
+    get_or_create_user("alice@example.com", admin_email=None)
+    with db_conn(isolated_db) as conn:
+        row = conn.execute("SELECT email FROM users WHERE email = 'alice@example.com'").fetchone()
+    assert row is not None
+
+
+def test_get_or_create_user_persists_display_name(isolated_db):
+    from job_hunter_agent.database import db_conn
+    get_or_create_user("alice@example.com", admin_email=None, display_name="Alice Smith")
+    with db_conn(isolated_db) as conn:
+        row = conn.execute("SELECT display_name FROM users WHERE email = 'alice@example.com'").fetchone()
+    assert row["display_name"] == "Alice Smith"
+
+
+def test_get_or_create_user_is_idempotent(isolated_db):
+    from job_hunter_agent.database import db_conn
+    get_or_create_user("alice@example.com", admin_email=None)
+    get_or_create_user("alice@example.com", admin_email=None)
+    with db_conn(isolated_db) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM users WHERE email = 'alice@example.com'").fetchone()[0]
+    assert count == 1
+
+
+def test_get_or_create_user_role_re_derived_from_env(isolated_db):
+    # First login as candidate; second login with admin email must return admin role.
+    user1 = get_or_create_user("alice@example.com", admin_email=None)
+    user2 = get_or_create_user("alice@example.com", admin_email="alice@example.com")
+    assert user1["role"] == "candidate"
+    assert user2["role"] == "admin"
+
+
+def test_is_admin_uses_admin_role_only(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.auth.read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "candidate"},
+    )
+    monkeypatch.setattr("job_hunter_agent.auth.is_auth_disabled", lambda: True)
+
+    assert not is_admin(object())
+
+    monkeypatch.setattr(
+        "job_hunter_agent.auth.read_session_user",
+        lambda request: {"user_id": "test", "email": "admin@example.com", "role": "admin"},
+    )
+    assert is_admin(object())

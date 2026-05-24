@@ -6,6 +6,7 @@ import pytest
 from job_hunter_agent.database import (
     EXPECTED_TABLES,
     db_conn,
+    ensure_user_row,
     get_connection,
     get_table_names,
     init_db,
@@ -101,3 +102,42 @@ def test_init_creates_parent_dirs(tmp_path):
     db = tmp_path / "nested" / "dirs" / "app.db"
     init_db(db)
     assert db.exists()
+
+
+def test_ensure_user_row_creates_row(tmp_db):
+    ensure_user_row("u1", db_path=tmp_db)
+    with db_conn(tmp_db) as conn:
+        row = conn.execute("SELECT user_id FROM users WHERE user_id = 'u1'").fetchone()
+    assert row is not None
+
+
+def test_ensure_user_row_persists_email_and_display_name(tmp_db):
+    ensure_user_row("u1", email="alice@example.com", display_name="Alice", db_path=tmp_db)
+    with db_conn(tmp_db) as conn:
+        row = conn.execute("SELECT email, display_name FROM users WHERE user_id = 'u1'").fetchone()
+    assert row["email"] == "alice@example.com"
+    assert row["display_name"] == "Alice"
+
+
+def test_ensure_user_row_updates_on_repeat_login(tmp_db):
+    ensure_user_row("u1", email="alice@example.com", display_name="Alice", db_path=tmp_db)
+    ensure_user_row("u1", email="alice@example.com", display_name="Alice B", db_path=tmp_db)
+    with db_conn(tmp_db) as conn:
+        row = conn.execute("SELECT display_name FROM users WHERE user_id = 'u1'").fetchone()
+    assert row["display_name"] == "Alice B"
+
+
+def test_ensure_user_row_does_not_overwrite_email_with_none(tmp_db):
+    ensure_user_row("u1", email="alice@example.com", db_path=tmp_db)
+    ensure_user_row("u1", email=None, db_path=tmp_db)
+    with db_conn(tmp_db) as conn:
+        row = conn.execute("SELECT email FROM users WHERE user_id = 'u1'").fetchone()
+    assert row["email"] == "alice@example.com"
+
+
+def test_ensure_user_row_is_idempotent(tmp_db):
+    for _ in range(3):
+        ensure_user_row("u1", email="alice@example.com", db_path=tmp_db)
+    with db_conn(tmp_db) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM users WHERE user_id = 'u1'").fetchone()[0]
+    assert count == 1

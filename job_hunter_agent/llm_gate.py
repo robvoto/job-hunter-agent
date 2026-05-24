@@ -45,6 +45,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_DO_NOT_SAVE,
     LLM_PROMPT_JOB_DESCRIPTION_PREFIX,
     LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+    LLM_PROMPT_LEARNING_CANDIDATES_INTRO,
     LLM_PROMPT_JSON_ONLY,
     LLM_PROMPT_LEARNING_PENDING_ONLY,
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
@@ -244,6 +245,7 @@ class _LLMReviewPayload(BaseModel):
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
     contextual_capability_matches: list[_LLMContextualCapabilityMatch] = Field(default_factory=list)
+    learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
 
 
@@ -511,10 +513,7 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
 _ALLOWED_CONTEXTUAL_CONFIDENCES = frozenset({"high", "medium", "low"})
 
 
-def normalize_llm_contextual_capability_matches(
-    value: Any,
-    valid_capability_names: frozenset[str] | None = None,
-) -> list[dict[str, Any]]:
+def normalize_llm_contextual_capability_matches(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     results: list[dict[str, Any]] = []
@@ -526,9 +525,6 @@ def normalize_llm_contextual_capability_matches(
         matched_text = re.sub(r"\s+", " ", str(item.get("matched_text") or "")).strip()
         reason = re.sub(r"\s+", " ", str(item.get("reason") or "")).strip()
         if not cap_name or confidence not in _ALLOWED_CONTEXTUAL_CONFIDENCES:
-            continue
-        if valid_capability_names is not None and cap_name not in valid_capability_names:
-            print(f"[LLM][CONTEXTUAL_CAPABILITY] Unknown capability name ignored: {cap_name!r}")
             continue
         results.append({
             "capability_name": cap_name,
@@ -750,17 +746,20 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
         LLM_PROMPT_DO_NOT_INVENT,
         LLM_PROMPT_USE_VISIBLE_STRINGS,
         LLM_PROMPT_LEARNING_PENDING_ONLY,
-        LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
     ]
     if fit_review:
         parts.extend([
+            LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
             f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
             LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO,
+            LLM_PROMPT_LEARNING_CANDIDATES_INTRO,
             LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
             f"Use at most {get_llm_contextual_matches_max_items()} contextual_capability_matches.",
+            f"Use at most {get_llm_learning_candidates_max_items()} learning_candidates.",
         ])
     else:
         parts.extend([
+            LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
             f"Return exactly this shape: {LLM_LEARNING_ONLY_PROMPT_SHAPE}",
             LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
             f"Use at most {get_llm_learning_candidates_max_items()} learning candidates.",

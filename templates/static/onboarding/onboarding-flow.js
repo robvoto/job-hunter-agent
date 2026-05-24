@@ -1,5 +1,5 @@
 import * as onboardingPage from './onboarding-page.js';
-import { setSelectedLocations, defaultSearchKeywordFromTargetRoles, hydrateSearchBasics } from './onboarding-search.js';
+import { setSelectedLocations, hydrateSearchBasics } from './onboarding-search.js';
 import * as onboardingStorage from './onboarding-storage.js';
 import * as onboardingUpload from './onboarding-upload.js';
 import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
@@ -8,17 +8,40 @@ import * as onboardingLocationUi from '../common/location-options.js';
 import * as onboardingCapabilityUi from '../common/capability-ui.js';
 
 const {
+  applyProfileDefaults,
+  CHECK_STEP,
   getReviewCapabilityPreviewCount,
   hasDraftProfileState,
   hasSearchBasicsState,
+  hideStatus,
+  isRebuildMode,
+  isTestMode,
+  onboardingSettingsPayload,
+  ONBOARDING_WELCOME_KEY,
   refreshStepNavigation,
   renderLocationSelect,
+  resetPrimaryCvDropZoneAppearance,
+  REVIEW_STEP,
+  SEARCH_STEP,
+  searchPreferencesPayload,
   setMinContractMonthValue,
   setStep,
-  showOnboardingImportHelper,
+  showStatus,
   startWorkingStatus,
+  STEP_COUNT,
   updateCompensationVisibility,
+  validateOnboardingSettings,
+  validateSearchPreferences,
+  WIZARD_STATE_KEY,
+  setLastLoadedProfile,
 } = onboardingPage;
+const {
+  createProfileButton,
+  primaryCvDropZone,
+  primaryCvInput,
+  reviewCapabilityCount: reviewCapabilityCountEl,
+  stepNavButtons,
+} = onboardingPage.refs;
 
 const {
   escapeHtml,
@@ -36,12 +59,18 @@ const {
   readCurrencyFieldValue,
 } = onboardingSettingsUtils;
 
-const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
-const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages || 0);
+const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__;
+if (!onboardingDefaults) {
+  throw new Error('Missing onboarding defaults.');
+}
+const onboardingCvPageLimit = Number(onboardingDefaults.cv_max_pages);
+if (!Number.isInteger(onboardingCvPageLimit) || onboardingCvPageLimit < 1) {
+  throw new Error('Missing CV page limit.');
+}
 const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
-const capabilityLabels = onboardingCapabilityUi.labels || {};
+const capabilityLabels = onboardingCapabilityUi.labels;
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
 }
@@ -50,6 +79,9 @@ if (!onboardingImportSummaryLabels) {
 }
 if (!onboardingFlowLabels) {
   throw new Error('Missing onboarding flow labels.');
+}
+if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.onboarding_no_match_text) {
+  throw new Error('Missing capability UI labels.');
 }
 
 function normalizeReviewTitle(value) {
@@ -227,7 +259,10 @@ function minContractMonthText(value) {
     return minContractMonthNoneLabel;
   }
   const option = minContractMonthOptions.find((item) => String(item.value || '').trim() === selected);
-  return String(option?.label || selected).trim();
+  if (!option || !option.label) {
+    throw new Error(`Missing contract month label for value: ${selected}`);
+  }
+  return String(option.label).trim();
 }
 
 function workModePreferenceLabel(values) {
@@ -643,8 +678,8 @@ async function createProfile() {
     ? formatExtractionSummary(payload.extraction_counts || {})
     : onboardingFlowLabels.create_profile_ready_message;
   hideStatus();
-  if (extractionMessage && typeof showOnboardingImportHelper === 'function') {
-    showOnboardingImportHelper(pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
+  if (extractionMessage) {
+    console.info('[ONBOARDING] Draft profile extraction summary:', pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
   }
 }
 
@@ -654,7 +689,7 @@ function continueFromReview() {
   }
   onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, SEARCH_STEP));
   renderReviewStep();
-  hydrateSearchBasics((onboardingPage.lastImportPayload || {}).profile || {});
+  hydrateSearchBasics((onboardingPage.lastImportPayload || {}).profile || onboardingPage.lastLoadedProfile || {});
   setStep(SEARCH_STEP);
 }
 
@@ -716,11 +751,47 @@ async function finishSetup() {
 
 async function loadProfileDefaults() {
   const response = await jobHunterFetch('/api/profile');
-  if (!response.ok) return;
-  const profile = await response.json().catch(() => ({}));
-  applyProfileDefaults(profile || {});
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || onboardingFlowLabels.load_profile_error);
+  }
+  const profile = payload || {};
+  console.debug('[ONBOARDING] profile loaded:', { has_onboarding_settings: !!profile.onboarding_settings, has_search_settings: !!profile.search_settings, has_match_preferences: !!profile.match_preferences, has_salary_preferences: !!profile.salary_preferences });
+  applyProfileDefaults(profile);
+  setLastLoadedProfile(profile);
   if (onboardingPage.currentStep >= REVIEW_STEP && (onboardingPage.reviewTargetTitles.length || onboardingPage.reviewSecondaryTitles.length)) {
     renderReviewStep();
+  }
+  return profile;
+}
+
+async function loadProfileStatus() {
+  const response = await jobHunterFetch('/api/profile/status');
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || onboardingFlowLabels.profile_status_error);
+  }
+  if (typeof payload.has_profile !== 'boolean') {
+    throw new Error(onboardingFlowLabels.profile_status_error);
+  }
+  return payload.has_profile;
+}
+
+async function loadProfileDefaultsIfPresent(hasProfile) {
+  if (!hasProfile) {
+    showStatus(onboardingFlowLabels.no_profile_warning, 'warning');
+    return null;
+  }
+  return loadProfileDefaults();
+}
+
+async function loadProfileDefaultsForInit(hasProfile) {
+  try {
+    return await loadProfileDefaultsIfPresent(hasProfile);
+  } catch (error) {
+    console.error('[ONBOARDING] loadProfileDefaults failed:', error);
+    showStatus(error.message, 'error');
+    throw error;
   }
 }
 
@@ -789,6 +860,7 @@ createProfileButton.addEventListener('click', async (event) => {
   try {
     await createProfile();
   } catch (error) {
+    console.error('[ONBOARDING] createProfile failed:', error);
     showStatus(error.message, 'error');
   } finally {
     btn.classList.remove('is-working');
@@ -825,6 +897,7 @@ flowRefs.confirmReview.addEventListener('click', async (event) => {
   try {
     await finishSetup();
   } catch (error) {
+    console.error('[ONBOARDING] finishSetup failed:', error);
     showStatus(error.message, 'error');
   } finally {
     btn.classList.remove('is-working');
@@ -1022,59 +1095,59 @@ const onboardingResumeStep = Number(window.__JOB_HUNTER_ONBOARDING_RESUME_STEP__
 
 async function initWizard() {
   const urlParams = new URLSearchParams(window.location.search);
+  let hasProfile;
+  try {
+    hasProfile = await loadProfileStatus();
+  } catch (error) {
+    showStatus(error.message, 'error');
+    return;
+  }
   if (urlParams.has('fresh')) {
     clearOnboardingBrowserState();
     history.replaceState(null, '', window.location.pathname);
     if (flowRefs.reviewSearchKeywords) flowRefs.reviewSearchKeywords.value = '';
     if (flowRefs.reviewMinimumSalaryYearly) flowRefs.reviewMinimumSalaryYearly.value = '';
     if (flowRefs.reviewMinimumDailyRate) flowRefs.reviewMinimumDailyRate.value = '';
-    await loadProfileDefaults().catch((error) => {
-      console.warn('Could not load onboarding profile defaults.', error);
-    });
+    await loadProfileDefaultsForInit(hasProfile);
     setStep(1, { scroll: false, persist: false });
   } else {
-    const restoredStep = restoreWizardState();
+    const restoredStep = onboardingStorage.restoreWizardState();
     if (restoredStep) {
-      await loadProfileDefaults().catch((error) => {
-        console.warn('Could not load onboarding profile defaults.', error);
-      });
-      const restoredCv = await restorePrimaryCvFromSourcePath().catch((error) => {
-        console.warn('Could not restore onboarding CV file.', error);
-        return false;
-      });
-      if (restoredCv) {
-        setStep(Math.max(1, Math.min(STEP_COUNT, restoredStep)), { scroll: false, persist: false });
-        if (restoredStep >= REVIEW_STEP) {
-          renderReviewStep();
+      const stepToRestore = Math.max(1, Math.min(STEP_COUNT, restoredStep));
+      const needsDraftFallback = stepToRestore >= REVIEW_STEP && !onboardingPage.hasDraftProfileState();
+      const needsSearchFallback = stepToRestore >= SEARCH_STEP && !onboardingPage.hasSearchBasicsState();
+      const loadedProfile = (needsDraftFallback || needsSearchFallback)
+        ? await loadProfileDefaultsForInit(hasProfile)
+        : null;
+      if (loadedProfile) {
+        if (needsDraftFallback) {
+          hydrateDraftStep(loadedProfile);
         }
-        if (restoredStep >= CHECK_STEP) {
-          updateCheckStep();
+        if (needsSearchFallback) {
+          hydrateSearchBasics(loadedProfile);
         }
-      } else {
-        onboardingPage.setMaxUnlockedStep(1);
-        setStep(1, { scroll: false, persist: false });
+      }
+      setStep(stepToRestore, { scroll: false, persist: false });
+      if (stepToRestore >= REVIEW_STEP) {
+        renderReviewStep();
+      }
+      if (stepToRestore >= CHECK_STEP) {
+        updateCheckStep();
       }
     } else if (onboardingResumeStep > 1) {
       setStep(1, { scroll: false, persist: false });
-      try {
-        const resumeResponse = await jobHunterFetch('/api/profile');
-        if (resumeResponse.ok) {
-          const resumeProfile = await resumeResponse.json().catch(() => ({}));
-          applyProfileDefaults(resumeProfile || {});
-          hydrateDraftStep(resumeProfile || {});
-        }
-      } catch (error) {
-        console.warn('Could not resume onboarding profile defaults.', error);
+      const resumeProfile = await loadProfileDefaultsForInit(hasProfile);
+      if (resumeProfile) {
+        hydrateDraftStep(resumeProfile);
+        hydrateSearchBasics(resumeProfile);
       }
       if (hasDraftProfileState()) {
         onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, onboardingResumeStep));
         setStep(onboardingResumeStep, { scroll: false, persist: false });
       }
     } else {
-      loadProfileDefaults().catch((error) => {
-        console.warn('Could not load onboarding profile defaults.', error);
-      });
       setStep(1, { scroll: false, persist: false });
+      await loadProfileDefaultsForInit(hasProfile);
     }
   }
   refreshStepNavigation();
@@ -1083,7 +1156,7 @@ async function initWizard() {
   updateCompensationVisibility();
 }
 
-initWizard().catch(() => {});
+initWizard().catch((error) => { console.error('[ONBOARDING] initWizard failed:', error); });
 
 if (primaryCvDropZone && primaryCvInput) {
   resetPrimaryCvDropZoneAppearance();

@@ -27,19 +27,6 @@ function setEngagementTypeValues(values) {
   onboardingSettingsUtils.setEngagementTypeValues(values);
 }
 
-function dedupeSearchTitles(values) {
-  const seen = new Set();
-  const output = [];
-  for (const value of values || []) {
-    const cleaned = String(value || '').trim();
-    const key = cleaned.toLowerCase();
-    if (!cleaned || seen.has(key)) continue;
-    seen.add(key);
-    output.push(cleaned);
-  }
-  return output;
-}
-
 export function setSelectedLocations(locations) {
   const select = onboardingPage.refs.locationSelect;
   const value = String(Array.isArray(locations) && locations.length ? locations[0] : '').trim();
@@ -51,20 +38,16 @@ export function setSelectedLocations(locations) {
   onboardingPage.renderLocationSelect();
 }
 
-export function defaultSearchKeywordFromTargetRoles(profile) {
-  const reviewedTitles = Array.isArray(onboardingPage.reviewTargetTitles) ? onboardingPage.reviewTargetTitles : [];
-  const profileTitles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
-  const allTitles = dedupeSearchTitles(reviewedTitles.concat(profileTitles));
-  return allTitles.length ? allTitles[0] : '';
-}
-
 export function hydrateSearchBasics(profile) {
-  const searchSettings = profile?.search_settings || {};
-  const matchPreferences = profile?.match_preferences || {};
-  const salaryPreferences = profile?.salary_preferences || {};
+  if (!profile || !profile.search_settings || !profile.match_preferences || !profile.salary_preferences) {
+    throw new Error('Missing onboarding profile data.');
+  }
+  const searchSettings = profile.search_settings;
+  const matchPreferences = profile.match_preferences;
+  const salaryPreferences = profile.salary_preferences;
   const currentKeywords = String(reviewSearchKeywordsEl?.value || '').trim();
   const savedKeywords = String(searchSettings.keywords || '').trim();
-  reviewSearchKeywordsEl.value = currentKeywords || savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
+  reviewSearchKeywordsEl.value = currentKeywords || savedKeywords || onboardingPage.defaultSearchKeywordFromTargetRoles(profile);
   onboardingPage.setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
   const currentSalaryYearly = String(reviewMinimumSalaryYearlyEl.value || '').trim();
   const currentSalaryDaily = String(reviewMinimumDailyRateEl.value || '').trim();

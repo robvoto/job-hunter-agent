@@ -15,6 +15,7 @@ from job_hunter_agent.fastapi_app import create_app
 import job_hunter_agent.fastapi_app as _fa
 import job_hunter_agent.routes.pages as _pages
 from job_hunter_agent.routes import onboarding_api
+from job_hunter_agent.routes import profile_materials
 
 
 def test_normalize_onboarding_search_preferences_trims_and_normalizes():
@@ -68,15 +69,30 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
     assert 'window.__JOB_HUNTER_CAPABILITY_UI_LABELS__' in html
     assert 'window.__JOB_HUNTER_SHARED_UI_LABELS__' in html
+    assert '/static/onboarding/onboarding-page.css' in html
+    assert '/static/onboarding/onboarding-review.css' in html
 
 
-def test_onboarding_flow_keyword_helper_uses_single_target_role():
-    js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-page.js"
-    js_text = js_path.read_text(encoding="utf-8")
+def test_onboarding_flow_keyword_helper_is_owned_by_page_module():
+    page_js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    search_js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-search.js"
+    page_js_text = page_js_path.read_text(encoding="utf-8")
+    search_js_text = search_js_path.read_text(encoding="utf-8")
 
-    assert "defaultSearchKeywordFromTargetRoles" in js_text
-    assert "reviewTargetTitles.join(', ')" not in js_text
-    assert "defaultSearchKeywordsFromReviewedTitles" not in js_text
+    assert "defaultSearchKeywordFromTargetRoles" in page_js_text
+    assert "export function defaultSearchKeywordFromTargetRoles" not in search_js_text
+    assert "onboardingPage.defaultSearchKeywordFromTargetRoles(profile)" in search_js_text
+    assert "reviewTargetTitles.join(', ')" not in page_js_text
+    assert "defaultSearchKeywordsFromReviewedTitles" not in page_js_text
+
+
+def test_onboarding_template_uses_shared_primary_cv_copy_placeholders():
+    html_path = Path(__file__).resolve().parents[1] / "templates" / "onboarding.html"
+    html_text = html_path.read_text(encoding="utf-8")
+
+    assert '<div id="cv_drop_zone_content" class="drop-zone-content-shell">' in html_text
+    assert "__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_TITLE__" in html_text
+    assert "__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_HINT__" in html_text
 
 
 def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_output():
@@ -87,6 +103,22 @@ def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_outpu
     assert "onboardingImportSummaryLabels.lead_in" in js_text
     assert "if (!parts.length)" in js_text
     assert "extractionMessage && typeof showOnboardingImportHelper === 'function'" in js_text
+
+
+def test_api_profile_status_reports_presence(monkeypatch):
+    monkeypatch.setattr(profile_materials.srv, "profile_exists", lambda: False)
+
+    response = profile_materials.api_profile_status_get()
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8")) == {"has_profile": False}
+
+    monkeypatch.setattr(profile_materials.srv, "profile_exists", lambda: True)
+
+    response = profile_materials.api_profile_status_get()
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8")) == {"has_profile": True}
 
 
 def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
@@ -210,7 +242,6 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
     cv_path = tmp_path / "cv.txt"
     cv_path.write_text("A" * 5000, encoding="utf-8")
 
-    monkeypatch.setattr(source_documents, "read_source_document", lambda path: "A" * 5000)
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {"match_preferences": {}})
     monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"capability_profile_rules": []})
     monkeypatch.setattr(source_documents, "extract_title_pattern_suggestions", lambda text, settings: {"target_roles": [], "also_consider_roles": []})
@@ -220,7 +251,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(source_documents, "clear_capability_debug_log", lambda: None)
 
     result = source_documents.run_onboarding(
-        {"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]},
+        {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "A" * 5000}]},
         search_preferences={
             "keywords": "business analyst",
             "locations": ["Sydney"],
@@ -403,7 +434,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
     monkeypatch.setattr(source_documents, "run_cv_pipeline", fake_run_cv_pipeline)
 
     result = source_documents.run_onboarding(
-        {"profile_sources": [{"label": "Primary CV", "path": str(cv_path)}]}
+        {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "# Professional Experience\nAcme - Delivery Lead (2020 - 2024)\n"}]}
     )
 
     assert result["ok"] is True
@@ -628,7 +659,6 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     fake_local_dir.mkdir(parents=True, exist_ok=True)
 
     workspace_path = tmp_path / "workspace.html"
-    source_pack_dir = tmp_path / "source_pack"
 
     monkeypatch.setattr(server_helpers, "USERS_DIR", fake_users_dir)
     monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
@@ -638,10 +668,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     monkeypatch.setattr(server_helpers, "clear_run_stats", lambda: cleared.append("run_stats"))
     monkeypatch.setattr(server_helpers, "clear_audit_rows", lambda: cleared.append("audit_rows"))
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: workspace_path)
-    monkeypatch.setattr(server_helpers, "get_source_pack_dir", lambda: source_pack_dir)
 
-    source_pack_dir.mkdir(parents=True, exist_ok=True)
-    (source_pack_dir / "primary_cv.txt").write_text("cv", encoding="utf-8")
     workspace_path.write_text("old workspace", encoding="utf-8")
 
     result = server_helpers.SettingsHandler._reset_current_user_state()
@@ -651,7 +678,6 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert not fake_local_dir.exists()
     assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
-    assert not source_pack_dir.exists()
     assert not workspace_path.exists()
     assert "job_history" in cleared
     assert "review_data" in cleared

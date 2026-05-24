@@ -97,8 +97,8 @@ def google_callback(  # type: ignore[no-untyped-def]
     if user_info.get("email_verified") is False:
         return RedirectResponse(f"{LOGIN_PATH}?error=email_not_verified", status_code=302)
 
-    user = get_or_create_user(email, cfg.admin_email)
-    user["name"] = str(user_info.get("name") or "").strip()
+    display_name = str(user_info.get("name") or "").strip() or None
+    user = get_or_create_user(email, cfg.admin_email, display_name=display_name)
     next_path = _safe_next_path(request.query_params.get("next", "/"))
 
     response = RedirectResponse(next_path, status_code=302)

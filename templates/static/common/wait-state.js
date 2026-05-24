@@ -83,5 +83,17 @@ export function createController(mount) {
 }
 
 export const WORKSPACE_PATH = '/workspace';
-export const SEARCH_WAIT_COPY = 'This search can take a while because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.';
+const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
+export const SEARCH_WAIT_COPY = String(SHARED_UI_LABELS.search_wait_copy || '').trim();
+export const SEARCH_RUNNING_TITLE = String(SHARED_UI_LABELS.search_running_title || '').trim();
+export const SEARCH_RUNNING_COPY = String(SHARED_UI_LABELS.search_running_copy || '').trim();
+export const SEARCH_STARTING_TITLE = String(SHARED_UI_LABELS.search_starting_title || '').trim();
+export const SEARCH_STARTING_COPY = String(SHARED_UI_LABELS.search_starting_copy || '').trim();
+export const SEARCH_REFRESHING_TITLE = String(SHARED_UI_LABELS.search_refreshing_title || '').trim();
+export const SEARCH_REFRESHING_COPY = String(SHARED_UI_LABELS.search_refreshing_copy || '').trim();
+export const SEARCH_RUNNING_SUBCOPY = String(SHARED_UI_LABELS.search_running_subcopy || '').trim();
+export const SEARCH_STARTING_SUBCOPY = String(SHARED_UI_LABELS.search_starting_subcopy || '').trim();
+if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY) {
+  throw new Error('Missing shared UI labels for workspace wait copy.');
+}
 export const RUN_COMPLETE_REDIRECT_DELAY_MS = 600;
