@@ -214,7 +214,7 @@ Rules:
 * avoid hidden filtering shortcuts
 * avoid legacy compatibility layers unless explicitly required
 * managed knowledge is authored in JSON and then materialised into the database for runtime use
-* any fallback path must stay explicit and logged
+* any fallback path must be justified, explicit, and logged
 
 ---
 
