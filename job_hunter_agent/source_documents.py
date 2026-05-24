@@ -67,6 +67,7 @@ ONBOARDING_RESET_FIELDS = (
     KEY_SECONDARY_PATTERNS,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ONBOARDING_COMPLETE,
+    "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
@@ -274,16 +275,22 @@ def merge_capability_rules_with_dominant_signals(
         cluster_alias_norms = [_norm_term(a) for a in (cluster.get("aliases") or []) if a]
         cluster_terms = frozenset(t for t in [cluster_name_n, *cluster_alias_norms] if t)
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 87903c2 (fix)
         # Only exact cluster terms / aliases can merge into existing capability rules.
         # Do not match individual words from multi-product clusters; e.g.
         # "jira confluence" must not make Confluence an alias of Jira.
         cluster_lookup = cluster_terms
+<<<<<<< HEAD
 =======
         # Also check individual word tokens from multi-word names (len >= 4) so
         # "jira confluence" can match a capability named "jira".
         word_tokens = frozenset(w for w in cluster_name_n.split() if len(w) >= 4)
         cluster_lookup = cluster_terms | word_tokens
 >>>>>>> 8c60aa0 (fix)
+=======
+>>>>>>> 87903c2 (fix)
 
         logger.debug(
             "[MERGE_CAPABILITIES] Dominant signal: '%s' aliases=%s",
@@ -440,6 +447,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch = build_onboarding_reset_patch(active_onboarding_settings)
 
     # --- Extract fresh from combined_text ---
+    patch["cv_text"] = combined_text
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 

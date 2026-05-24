@@ -113,10 +113,14 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(mon
     assert ("save_job_history", context.job_history) in calls
     assert not any(name == "write_debug_json" for name, _ in calls)
 <<<<<<< HEAD
+<<<<<<< HEAD
     assert any(name == "write_run_stats" for name, _ in calls)
 =======
     assert not any(name == "write_run_stats" for name, _ in calls)
 >>>>>>> 8c60aa0 (fix)
+=======
+    assert any(name == "write_run_stats" for name, _ in calls)
+>>>>>>> 87903c2 (fix)
     assert any(name == "write_review_data" for name, _ in calls)
     assert any(name == "render_html" for name, _ in calls)
 

@@ -24,9 +24,12 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert '6+ months' in html
     assert 'job-hunter-account-bar' in html
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     assert 'account-bar-shortcut' not in html
 >>>>>>> 8c60aa0 (fix)
+=======
+>>>>>>> 87903c2 (fix)
     assert 'class="nav-item nav-item-workspace">Workspace</a>' in html
     assert '&#8592; Workspace' not in html
     assert 'class="btn-add"' in html

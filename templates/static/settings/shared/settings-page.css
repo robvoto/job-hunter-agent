@@ -491,6 +491,7 @@
     }
     .rule-chips { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 <<<<<<< HEAD
+<<<<<<< HEAD
     .subpanel .settings-form-field + .settings-form-field {
       margin-top: var(--surface-gap-md);
 =======
@@ -529,6 +530,11 @@
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
 >>>>>>> 8c60aa0 (fix)
     }
+=======
+    .subpanel .settings-form-field + .settings-form-field {
+      margin-top: var(--surface-gap-md);
+    }
+>>>>>>> 87903c2 (fix)
     .capability-editor {
       display: grid;
       gap: 14px;

@@ -107,14 +107,20 @@ def test_settings_review_panel_empty_state_copy_is_defined():
 
     assert "No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals." in js
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 87903c2 (fix)
     assert "No capability suggestions yet. We found kept jobs, but no new capability observations were extracted from them." in js
     assert "Requirements to address" in js
     assert "Do you have this capability?" in js
     assert "Search/title tuning" in js
     assert "Filters already working correctly" in js
+<<<<<<< HEAD
 =======
     assert "No capability suggestions yet. The capabilities found in kept jobs are either already in your profile or did not produce new capability signals." in js
 >>>>>>> 8c60aa0 (fix)
+=======
+>>>>>>> 87903c2 (fix)
 
 
 def test_settings_matrix_section_omits_outer_panel_wrapper(monkeypatch):

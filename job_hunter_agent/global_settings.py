@@ -208,10 +208,14 @@ def get_allowed_source_document_suffixes_label() -> str:
 
 def get_cv_chars_per_page() -> int:
 <<<<<<< HEAD
+<<<<<<< HEAD
     return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_CV_CHARS_PER_PAGE])
 =======
     return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS]["cv_chars_per_page"])
 >>>>>>> 8c60aa0 (fix)
+=======
+    return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_CV_CHARS_PER_PAGE])
+>>>>>>> 87903c2 (fix)
 
 
 def get_candidate_application_history_settings() -> dict[str, Any]:

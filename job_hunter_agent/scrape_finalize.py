@@ -148,9 +148,13 @@ def finalize_scrape_run(
         save_job_history(context.job_history)
         write_review_data(build_review_data(context.previous_audit_rows, [], context.profile))
 <<<<<<< HEAD
+<<<<<<< HEAD
         write_run_stats(run_stats)
 =======
 >>>>>>> 8c60aa0 (fix)
+=======
+        write_run_stats(run_stats)
+>>>>>>> 87903c2 (fix)
         workspace_path = get_workspace_results_path()
         print(f"\n[RUN][ERROR] {NO_FRESH_CARDS_ERROR}")
         print("The previous workspace state was preserved.")
