@@ -49,7 +49,6 @@
   --onboarding-wizard-circle-size: 26px;
   --onboarding-wizard-circle-font-size: var(--font-size-xs);
   --onboarding-wizard-active-ring-size: 3px;
-  --onboarding-field-label-font-size: var(--font-size-4xl);
   --onboarding-input-padding-block: var(--control-pad-block-2xl);
   --onboarding-input-padding-inline: var(--control-pad-inline-lg);
   --onboarding-input-compact-padding-block: var(--control-pad-block-lg);
@@ -71,9 +70,17 @@
   --field-stack-gap: 20px;
   --field-body-gap: 18px;
   --field-label-control-gap: var(--surface-gap-md);
+  --field-summary-gap: var(--control-space-2xs);
+  --field-label-font-size: 0.92rem;
+  --field-label-line-height: 1.25;
+  --field-label-font-weight: 700;
+  --title-help-gap: calc(var(--control-space-sm) / 8);
+  --settings-header-gap: var(--title-help-gap);
+  --settings-section-stack-gap: var(--surface-gap-lg);
+  --settings-subheader-gap: var(--title-help-gap);
   --settings-section-title-font-size: 1.5rem;
-  --settings-field-label-font-size: 0.92rem;
-  --settings-field-label-line-height: 1.25;
+  --settings-card-title-font-size: var(--font-size-6xl);
+  --settings-card-title-line-height: 1.2;
 
   /* Shared control sizing */
   --control-space-2xs: 4px;
@@ -160,7 +167,6 @@
   --message-font-weight: 700;
   --message-gap: var(--control-space-xs);
   --message-margin-block: 0 var(--surface-gap-md);
-  --workspace-control-section-gap: var(--surface-gap-md);
   --workspace-control-section-padding-top: var(--surface-gap-sm);
   --workspace-control-section-border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   --workspace-control-grid-gap: var(--surface-gap-sm);

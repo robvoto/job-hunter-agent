@@ -157,14 +157,9 @@ export const JobHunterCapabilityEditor = (function () {
       : `<div class="capability-editor-empty-group">${escapeHtml(capabilityLabels.settings_no_match_text)}</div>`;
 
     container.innerHTML = `
-      <section class="capability-group">
-        <div class="capability-group-head">
-          <span class="cap-count">${escapeHtml(String(rows.length))} shown</span>
-        </div>
-        <div class="capability-grid">
-          ${cardsHtml}
-        </div>
-      </section>
+      <div class="capability-grid">
+        ${cardsHtml}
+      </div>
     `;
   }
 

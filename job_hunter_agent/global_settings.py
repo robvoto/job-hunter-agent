@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import copy
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
+from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
 
 
 _DB_KEY = "global_settings"
@@ -18,18 +19,25 @@ class GlobalSettingsLoadError(RuntimeError):
     pass
 
 
-def _db_load() -> dict[str, Any] | None:
+def _load_managed_global_settings() -> dict[str, Any]:
+    data = json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
+    if not isinstance(data, dict):
+        raise GlobalSettingsLoadError("global_settings.json must contain a JSON object")
+    return data
+
+
+def _db_load(db_path: Path | None = None) -> dict[str, Any] | None:
     from job_hunter_agent.database import db_conn
-    with db_conn() as conn:
+    with db_conn(db_path) as conn:
         row = conn.execute(
             "SELECT value FROM global_settings WHERE key = ?", (_DB_KEY,)
         ).fetchone()
     return json.loads(row["value"]) if row else None
 
 
-def _db_save(settings: dict[str, Any]) -> None:
+def _db_save(settings: dict[str, Any], db_path: Path | None = None) -> None:
     from job_hunter_agent.database import db_conn
-    with db_conn() as conn:
+    with db_conn(db_path) as conn:
         conn.execute(
             """
             INSERT INTO global_settings (key, value, updated_at)
@@ -182,18 +190,15 @@ def get_min_trusted_description_length() -> int:
 
 
 def get_playwright_browser_mode() -> str:
-    settings = load_global_settings().get("playwright_settings", {})
-    return str(settings.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE)).strip().lower()
+    return str(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_BROWSER_MODE]).strip().lower()
 
 
 def get_salary_limits() -> dict[str, dict[str, int]]:
-    settings = load_global_settings().get(KEY_LIMITS, {}).get("salary", {})
-    return settings if isinstance(settings, dict) else copy.deepcopy(DEFAULT_SALARY_LIMITS)
+    return load_global_settings()[KEY_LIMITS]["salary"]
 
 
 def get_allowed_source_document_suffixes() -> frozenset[str]:
-    settings = load_global_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
-    suffixes = settings.get(KEY_SOURCE_DOCUMENT_SUFFIXES, []) if isinstance(settings, dict) else []
+    suffixes = load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_SOURCE_DOCUMENT_SUFFIXES]
     return frozenset(
         str(value).strip().lower()
         for value in suffixes
@@ -206,41 +211,49 @@ def get_allowed_source_document_suffixes_label() -> str:
 
 
 def get_cv_chars_per_page() -> int:
-    settings = load_global_settings().get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
-    return int(settings.get("cv_chars_per_page", 3000))
+    return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS]["cv_chars_per_page"])
 
 
 def get_candidate_application_history_settings() -> dict[str, Any]:
     """Return the full candidate_application_history config section."""
-    return load_global_settings().get(KEY_CANDIDATE_APPLICATION_HISTORY, {})
+    return load_global_settings()[KEY_CANDIDATE_APPLICATION_HISTORY]
 
 
 def is_candidate_application_history_enabled() -> bool:
-    return bool(get_candidate_application_history_settings().get("enabled", False))
+    return bool(get_candidate_application_history_settings()["enabled"])
 
 
 def get_candidate_application_history_spreadsheet_id() -> str:
-    return str(get_candidate_application_history_settings().get("spreadsheet_id", ""))
+    return str(get_candidate_application_history_settings()["spreadsheet_id"])
 
 
 def get_candidate_application_history_tab_name() -> str:
-    return str(get_candidate_application_history_settings().get("tab_name", ""))
+    return str(get_candidate_application_history_settings()["tab_name"])
 
 
 def get_candidate_application_history_required_headers() -> list[str]:
-    value = get_candidate_application_history_settings().get("required_headers", [])
-    return list(value) if isinstance(value, list) else []
+    return list(get_candidate_application_history_settings()["required_headers"])
 
 
 @lru_cache(maxsize=1)
 def load_global_settings() -> dict[str, Any]:
     data = _db_load()
     if data is None:
-        data = copy.deepcopy(DEFAULT_GLOBAL_SETTINGS)
-        _db_save(data)
+        raise GlobalSettingsLoadError(
+            "global_settings table is empty; seed the database from data/config/global_settings.json"
+        )
     if not isinstance(data, dict):
         raise GlobalSettingsLoadError("global_settings in DB must contain a JSON object")
     return normalize_global_settings(data)
+
+
+def seed_global_settings_from_file(db_path: Path | None = None, *, overwrite: bool = False) -> bool:
+    if not overwrite and _db_load(db_path) is not None:
+        return False
+    normalized = normalize_global_settings(_load_managed_global_settings())
+    _db_save(normalized, db_path)
+    load_global_settings.cache_clear()
+    return True
 
 
 def get_review_settings() -> dict[str, Any]:

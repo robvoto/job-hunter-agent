@@ -60,10 +60,6 @@ def api_run_status():  # type: ignore[no-untyped-def]
 def api_review_data():  # type: ignore[no-untyped-def]
     payload = load_review_data()
     if isinstance(payload, dict) and payload:
-        payload["suggested_tuning"] = srv.build_suggested_tuning_from_saved_review(
-            payload,
-            srv.load_profile(),
-        )
         return json_response(payload)
     return json_response({})
 

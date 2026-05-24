@@ -255,7 +255,6 @@ DEFAULT_PROFILE = {
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
     "star_candidate_profile_text": "",
-    "cv_text": "",
     KEY_EVIDENCE_TIERS : {
         **DEFAULT_CANDIDATE_PROFILE_TIERS ,
     },
@@ -271,6 +270,12 @@ DEFAULT_PROFILE = {
         **DEFAULT_ONBOARDING_SETTINGS,
     },
 }
+
+
+def strip_legacy_cv_text(profile: dict[str, Any] | None) -> dict[str, Any]:
+    cleaned = copy.deepcopy(profile if isinstance(profile, dict) else {})
+    cleaned.pop(KEY_CV_TEXT, None)
+    return cleaned
 
 
 def _decode_escaped_newlines(value: Any) -> str:
@@ -531,6 +536,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         raise TypeError("profile must be a dict")
     merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
     merged.pop("".join(["llm", "_capability_naming_guidance"]), None)
+    merged.pop(KEY_CV_TEXT, None)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
     merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
     merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
@@ -540,8 +546,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
     )
     merged[KEY_EVIDENCE_TIERS ] = normalize_candidate_profile_tiers(
-        merged.get(KEY_EVIDENCE_TIERS , {}),
-        merged.get("cv_text", ""),
+        merged.get(KEY_EVIDENCE_TIERS, {}),
     )
     merged["candidate_profile_tier_weights"] = normalize_candidate_profile_tier_weights(
         merged.get("candidate_profile_tier_weights", {})
@@ -586,7 +591,10 @@ def load_profile() -> dict[str, Any]:
     data = json.loads(row["data"])
     if not isinstance(data, dict):
         raise ProfileLoadError("user_profile in DB must contain a JSON object")
-    return normalize_full_profile(data)
+    migrated = strip_legacy_cv_text(data)
+    if migrated != data:
+        save_profile(migrated)
+    return normalize_full_profile(migrated)
 
 
 def profile_exists() -> bool:
@@ -875,40 +883,11 @@ def build_candidate_profile_tiers_from_sections(sections: list[dict[str, str]] |
     }
 
 
-def infer_candidate_profile_tiers_from_cv_text(cv_text: str) -> dict[str, str]:
-    text = str(cv_text or "").strip()
-    if not text:
-        return dict(DEFAULT_CANDIDATE_PROFILE_TIERS )
-
-    heading_matches = list(re.finditer(r"(?m)^##\s+(.+?)\s*$", text))
-    if heading_matches:
-        # Headings are the only routing signal here; no score or judgment is applied.
-        sections: list[dict[str, str]] = []
-        for index, match in enumerate(heading_matches):
-            label = match.group(1).strip()
-            start = match.end()
-            end = heading_matches[index + 1].start() if index + 1 < len(heading_matches) else len(text)
-            body = text[start:end].strip()
-            if body:
-                sections.append({"label": label, "text": body})
-        tiers = build_candidate_profile_tiers_from_sections(sections)
-        if any(tiers.values()):
-            return tiers
-
-    return {
-        KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: text,
-        KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: "",
-        KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
-    }
-
-
-def normalize_candidate_profile_tiers(payload: dict[str, Any] | None, cv_text: str = "") -> dict[str, str]:
+def normalize_candidate_profile_tiers(payload: dict[str, Any] | None) -> dict[str, str]:
     normalized = dict(DEFAULT_CANDIDATE_PROFILE_TIERS )
     source = payload if isinstance(payload, dict) else {}
-    inferred = infer_candidate_profile_tiers_from_cv_text(cv_text)
     for key in normalized:
-        value = str(source.get(key) or "").strip()
-        normalized[key] = value or inferred.get(key, "")
+        normalized[key] = str(source.get(key) or "").strip()
     return normalized
 
 
@@ -926,10 +905,7 @@ def normalize_candidate_profile_tier_weights(payload: dict[str, Any] | None) -> 
 
 
 def get_candidate_profile_tiers(profile: dict[str, Any]) -> dict[str, str]:
-    return normalize_candidate_profile_tiers(
-        profile.get(KEY_EVIDENCE_TIERS , {}),
-        str(profile.get("cv_text") or ""),
-    )
+    return normalize_candidate_profile_tiers(profile.get(KEY_EVIDENCE_TIERS, {}))
 
 
 def get_candidate_profile_tier_weights(profile: dict[str, Any]) -> dict[str, float]:

@@ -125,11 +125,12 @@ JS: `setCurrencyFieldValue(id, value)` / `readCurrencyFieldValue(id, fallback)`.
 | `__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__` | settings-utils.js |
 | `__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__` | settings-utils.js |
 | `__JOB_HUNTER_ONBOARDING_FLOW_LABELS__` | onboarding-flow.js |
-| `__JOB_HUNTER_ONBOARDING_PAGE_LABELS__` | onboarding-page.js |
+| `__JOB_HUNTER_ONBOARDING_PAGE_LABELS__` | onboarding-page.js, settings-page.js (choice-strip summary labels) |
 | `__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__` | onboarding-page.js, onboarding-flow.js |
 | `__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__` | onboarding-flow.js, onboarding-page.js |
 | `__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__` | settings-utils.js, onboarding-flow.js |
 | `__JOB_HUNTER_TITLE_TIER_LABELS__` | onboarding-flow.js, onboarding-page.js |
+| `__JOB_HUNTER_LLM_MODEL_OPTIONS__` | settings-page.js (LLM model dropdown fallback on non-admin page) |
 | `__JOB_HUNTER_SALARY_LIMITS__` | currency UI |
 | `__JOB_HUNTER_LOCATION_OPTIONS__` | location UI |
 | `__JOB_HUNTER_CSRF_TOKEN__` | fetch helpers |

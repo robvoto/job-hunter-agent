@@ -17,71 +17,55 @@
               <h2>$LABEL_WS_MATCH_CONTROLS_HEADING</h2>
               <button class="btn btn-secondary btn-compact-action" type="button" id="reset_workspace_filters">$LABEL_WS_RESET_ALL_FILTERS_BUTTON</button>
             </div>
-            <div class="workspace-control-section workspace-control-section--sort">
-              <h3 class="workspace-control-section-title">Sort and display</h3>
-              <div class="filter-grid workspace-control-grid workspace-control-grid--sort">
-                <label class="filter-field">
-                  <span>$LABEL_WS_SORT_LABEL</span>
-                  <select id="sort_select" class="jh-select">
+            <div class="workspace-control-group workspace-control-group--sort">
+              <h3 class="workspace-control-group-title">$LABEL_WS_SORT_LABEL</h3>
+              <div class="workspace-control-grid workspace-control-grid--sort">
+                <label class="workspace-control-field">
+                  <select id="sort_select" class="jh-select" aria-label="$LABEL_WS_SORT_LABEL">
                     <option value="fit">$LABEL_WS_SORT_OPTION_BEST_MATCH</option>
                     <option value="newest">$LABEL_WS_SORT_OPTION_NEWEST</option>
                     <option value="salary">$LABEL_WS_SORT_OPTION_HIGHEST_SALARY</option>
                   </select>
                 </label>
-                <label class="filter-field">
-                  <span>$LABEL_WS_JOBS_PER_PAGE_LABEL</span>
-                  <select id="page_size_select" class="jh-select">
-                    <option value="12">12</option>
-                    <option value="24">24</option>
-                    <option value="48">48</option>
-                    <option value="96">96</option>
-                  </select>
-                </label>
               </div>
             </div>
-            <div class="workspace-control-section workspace-control-section--filters">
-              <h3 class="workspace-control-section-title">Filters</h3>
-              <div class="filter-grid workspace-control-grid workspace-control-grid--filters">
-                <label class="filter-field">
-                  <span>$LABEL_WS_SHOW_LABEL</span>
-                  <select id="scope_filter" class="jh-select">
+            <div class="workspace-control-group workspace-control-group--filters">
+              <h3 class="workspace-control-group-title">$LABEL_WS_FILTERS_LABEL</h3>
+              <div class="workspace-control-grid workspace-control-grid--filters">
+                <label class="workspace-control-field">
+                  <select id="scope_filter" class="jh-select" aria-label="$LABEL_WS_SHOW_LABEL">
                     <option value="all" selected>$LABEL_WS_SHOW_OPTION_ALL_POTENTIAL</option>
                     <option value="current">$LABEL_WS_SHOW_OPTION_MATCHES_LAST_RUN</option>
                     $SCOPE_SAVED_OPTION_HTML
                   </select>
                 </label>
-                <label class="filter-field">
-                  <span>$LABEL_WS_POSTED_LABEL</span>
-                  <select id="posted_filter" class="jh-select">
+                <label class="workspace-control-field">
+                  <select id="posted_filter" class="jh-select" aria-label="$LABEL_WS_POSTED_LABEL">
                     $POSTED_FILTER_OPTIONS_HTML
                   </select>
                 </label>
-                <label class="filter-field">
-                  <span>$LABEL_WS_TYPE_LABEL</span>
-                  <select id="work_type_filter" class="jh-select">
+                <label class="workspace-control-field">
+                  <select id="work_type_filter" class="jh-select" aria-label="$LABEL_WS_TYPE_LABEL">
                     $WORK_TYPE_FILTER_OPTIONS_HTML
                   </select>
                 </label>
-                <label class="filter-field">
-                  <span>$LABEL_WS_WORK_MODE_LABEL</span>
-                  <select id="work_mode_filter" class="jh-select">
+                <label class="workspace-control-field">
+                  <select id="work_mode_filter" class="jh-select" aria-label="$LABEL_WS_WORK_MODE_LABEL">
                     <option value="all">$LABEL_WS_WORK_MODE_OPTION_ANY</option>
                     <option value="remote">$LABEL_WS_WORK_MODE_OPTION_REMOTE</option>
                     <option value="hybrid">$LABEL_WS_WORK_MODE_OPTION_HYBRID</option>
                     <option value="on-site">$LABEL_WS_WORK_MODE_OPTION_ON_SITE</option>
                   </select>
                 </label>
-                <label class="filter-field">
-                  <span>$LABEL_WS_SECTOR_LABEL</span>
-                  <select id="sector_filter" class="jh-select">
+                <label class="workspace-control-field">
+                  <select id="sector_filter" class="jh-select" aria-label="$LABEL_WS_SECTOR_LABEL">
                     <option value="all">$LABEL_WS_SECTOR_OPTION_ANY</option>
                     <option value="public">$LABEL_WS_SECTOR_OPTION_PUBLIC</option>
                     <option value="private">$LABEL_WS_SECTOR_OPTION_PRIVATE</option>
                   </select>
                 </label>
-                <label class="filter-field">
-                  <span>$LABEL_WS_MATCH_LEVEL_LABEL</span>
-                  <select id="score_filter" class="jh-select">
+                <label class="workspace-control-field">
+                  <select id="score_filter" class="jh-select" aria-label="$LABEL_WS_MATCH_LEVEL_LABEL">
                     $SCORE_FILTER_OPTIONS_HTML
                   </select>
                 </label>

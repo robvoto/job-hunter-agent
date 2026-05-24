@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -163,6 +164,7 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         title_tier_labels = srv.load_onboarding_title_tier_labels()
         capability_labels = srv.load_capability_ui_labels()
         search_source_labels = srv.load_search_source_labels()
+        settings_alerts_labels = srv.load_settings_alerts_labels()
         for token, partial_path in SETTINGS_PARTIALS.items():
             if token in {"__JOB_HUNTER_SETTINGS_SECTION_ADMIN__", "__JOB_HUNTER_SETTINGS_SECTION_LEARNING__"}:
                 html = html.replace(token, "")
@@ -201,6 +203,33 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         html = html.replace("__JOB_HUNTER_SEARCH_SOURCE_SEEK_TOGGLE_HELP__", search_source_labels["seek_toggle_help"])
         html = html.replace("__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_LABEL__", search_source_labels["linkedin_toggle_label"])
         html = html.replace("__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_HELP__", search_source_labels["linkedin_toggle_help"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_SECTION_TITLE__", settings_alerts_labels["section_title"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_SECTION_COPY__", settings_alerts_labels["section_copy"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_LABELS_JSON__", json.dumps(settings_alerts_labels, ensure_ascii=True))
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_HEADING__", settings_alerts_labels["telegram_heading"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_COPY__", settings_alerts_labels["telegram_copy"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_ENABLED_LABEL__", settings_alerts_labels["telegram_enabled_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_ENABLED_HELP__", settings_alerts_labels["telegram_enabled_help"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_TOKEN_LABEL__", settings_alerts_labels["telegram_bot_token_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_TOKEN_HELP__", settings_alerts_labels["telegram_bot_token_help"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_USERNAME_LABEL__", settings_alerts_labels["telegram_bot_username_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_USERNAME_HELP__", settings_alerts_labels["telegram_bot_username_help"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_DISABLE_LINK_PREVIEW_LABEL__", settings_alerts_labels["telegram_disable_link_preview_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_DISABLE_LINK_PREVIEW_HELP__", settings_alerts_labels["telegram_disable_link_preview_help"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_HEADING__", settings_alerts_labels["telegram_connect_heading"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_HELP__", settings_alerts_labels["telegram_connect_help"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_OPEN_LABEL__", settings_alerts_labels["telegram_connect_open_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_REFRESH_LABEL__", settings_alerts_labels["telegram_connect_refresh_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECTION_STATUS_LABEL__", settings_alerts_labels["telegram_connection_status_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECTION_STATUS_EMPTY__", settings_alerts_labels["telegram_connection_status_empty"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_TEST_LABEL__", settings_alerts_labels["telegram_test_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_SUBSCRIBERS_EMPTY__", settings_alerts_labels["telegram_subscribers_empty"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_SUBSCRIBERS_LABEL__", settings_alerts_labels["telegram_subscribers_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_USER_LABEL__", settings_alerts_labels["telegram_user_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_LLM_HEADING__", settings_alerts_labels["llm_heading"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_LLM_COPY__", settings_alerts_labels["llm_copy"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_LLM_MODEL_LABEL__", settings_alerts_labels["llm_model_label"])
+        html = html.replace("__JOB_HUNTER_SETTINGS_ALERTS_LLM_MODEL_PLACEHOLDER__", settings_alerts_labels["llm_model_placeholder"])
     if template_path == GLOBAL_SETTINGS_HTML_PATH:
         global_settings_labels = srv.load_global_settings_labels()
         for token, partial_path in SETTINGS_PARTIALS.items():

@@ -1672,6 +1672,7 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
     current_year = datetime.now().year
     profile = {
         **_test_profile(),
+        "cv_text": f"delivery leadership old from {current_year - 6}",
         KEY_EVIDENCE_TIERS: {
             KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: f"{current_year - 1} - present: delivery leadership",
             KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: "",

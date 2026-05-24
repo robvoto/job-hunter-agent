@@ -503,7 +503,7 @@ function renderReviewCapabilities() {
     })();
     const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
     return `
-      <article class="review-capability-row${selectedClass}" data-review-capability-index="${index}">
+      <article class="capability-card${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
           <span class="review-capability-head">
             <strong class="review-capability-title">${escapeHtml(displayName)}</strong>

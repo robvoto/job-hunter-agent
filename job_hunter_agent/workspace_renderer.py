@@ -104,6 +104,7 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "sort_option_newest",
     "sort_option_highest_salary",
     "jobs_per_page_label",
+    "filters_label",
     "show_label",
     "show_option_all_potential",
     "show_option_matches_last_run",
@@ -387,6 +388,24 @@ def render_work_type_filter_options() -> str:
             continue
         options.append(f'<option value="{safe_html(value)}">{safe_html(label)}</option>')
     return "".join(options)
+
+
+def render_page_size_options() -> str:
+    jobs_per_page_label = str(_workspace_ui_labels().get("workspace_page_labels", {}).get("jobs_per_page_label") or "Jobs per page").strip().lower()
+    options = []
+    for size in (12, 24, 48, 96):
+        selected = " selected" if size == 12 else ""
+        options.append(f'<option value="{size}"{selected}>{size} {safe_html(jobs_per_page_label)}</option>')
+    return "".join(options)
+
+
+def render_page_size_select_html() -> str:
+    labels = load_workspace_page_labels()
+    return (
+        f'<select id="page_size_select" class="jh-select" aria-label="{labels["LABEL_WS_JOBS_PER_PAGE_LABEL"]}">'
+        f"{render_page_size_options()}"
+        "</select>"
+    )
 
 
 def _record_is_hard_blocked(record: dict) -> bool:
@@ -1169,11 +1188,21 @@ def render_section(
     applied_pool: Optional[List[dict]] = None,
     history_clusters: Optional[Dict[str, dict]] = None,
     debug_mode: Optional[bool] = None,
+    header_tools_html: str = "",
 ) -> str:
     if not records:
+        header_tools = (
+            f'<div class="section-head-tools">{header_tools_html}</div>'
+            if header_tools_html
+            else ""
+        )
         return (
-            f'<section class="section"><h2>{safe_html(title)}</h2>'
-            f'<p class="empty-state">{safe_html(empty_message)}</p></section>'
+            f'<section class="section">'
+            f'<div class="section-head section-head--with-tools">'
+            f'<div class="section-head-title-row"><h2>{safe_html(title)}</h2>{header_tools}</div>'
+            f'</div>'
+            f'<p class="empty-state">{safe_html(empty_message)}</p>'
+            f'</section>'
         )
     dom_id = section_dom_id(title)
     cards = "".join(
@@ -1186,10 +1215,15 @@ def render_section(
         )
         for record in records
     )
+    header_tools = (
+        f'<div class="section-head-tools">{header_tools_html}</div>'
+        if header_tools_html
+        else ""
+    )
     return (
         f'<section class="section job-section" data-section-id="{safe_html(dom_id)}">'
-        '<div class="section-head">'
-        f'<h2>{safe_html(title)}</h2>'
+        '<div class="section-head section-head--with-tools">'
+        f'<div class="section-head-title-row"><h2>{safe_html(title)}</h2>{header_tools}</div>'
         '<div class="section-tools">'
         '<span class="pagination-label"></span>'
         '<button class="pagination-button" type="button" data-page-direction="prev">Prev</button>'

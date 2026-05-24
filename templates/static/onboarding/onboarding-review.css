@@ -57,17 +57,21 @@
 .search-basics-card--details .salary-pair {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--field-stack-gap);
+  column-gap: 28px;
+  row-gap: 14px;
   width: auto;
   grid-template-columns: unset;
 }
 
 .search-basics-card--details .salary-pair > div {
   flex: 0 0 auto;
+  display: grid;
+  gap: 7px;
 }
 
 .search-basics-card--details .salary-pair label {
   font-size: var(--font-size-sm);
+  line-height: 1.25;
   color: var(--text-muted);
 }
 

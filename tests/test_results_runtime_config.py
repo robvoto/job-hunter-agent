@@ -78,6 +78,7 @@ def test_rendered_workspace_html_content():
             "sort_option_newest": "Newest posted first",
             "sort_option_highest_salary": "Highest salary first",
             "jobs_per_page_label": "Jobs Per page",
+            "filters_label": "Filters",
             "show_label": "Show",
             "show_option_all_potential": "All potential jobs",
             "show_option_matches_last_run": "Matches last run",
@@ -133,18 +134,25 @@ def test_rendered_workspace_html_content():
         }
     }
 
+    captured_tools = {}
+
+    def fake_render_section(title, records, empty_message, scoring_profile=None, applied_pool=None, history_clusters=None, debug_mode=None, header_tools_html=""):
+        if title == "Job Results":
+            captured_tools["header_tools_html"] = header_tools_html
+        return "<section>Rendered Section</section>"
+
     with patch('job_hunter_agent.profile_store.load_profile', return_value=mock_profile), \
          patch('job_hunter_agent.user_settings.get_workspace_minimum_score', return_value=55), \
          patch('job_hunter_agent.workspace_data.build_workspace_record_sets', return_value={
-             "shortlist_records": [], "current_records": [], "archive_records": [],
-             "recent_archive_records": [], "stale_archive_records": [],
-             "applied_records": [], "hidden_records": []
-         }), \
+              "shortlist_records": [], "current_records": [], "archive_records": [],
+              "recent_archive_records": [], "stale_archive_records": [],
+              "applied_records": [], "hidden_records": []
+          }), \
          patch('job_hunter_agent.history.build_history_cluster_index', return_value={}), \
          patch('job_hunter_agent.workspace_renderer.render_score_filter_options', return_value="<option>Score Options</option>"), \
          patch('job_hunter_agent.workspace_renderer.render_posted_filter_options', return_value="<option>Posted Options</option>"), \
          patch('job_hunter_agent.workspace_renderer.render_work_type_filter_options', return_value="<option>Work Type Options</option>"), \
-         patch('job_hunter_agent.workspace_renderer.render_section', return_value="<section>Rendered Section</section>"), \
+         patch('job_hunter_agent.workspace_service.render_section', side_effect=fake_render_section), \
          patch('job_hunter_agent.workspace_renderer.render_match_level_guide_html', return_value="<div>Match Level Guide</div>"), \
          patch('job_hunter_agent.workspace_service._format_common_search_preferences', return_value=("Permanent", "Remote", "Any")), \
          patch('job_hunter_agent.workspace_service._format_salary_min_label', return_value="$100,000/yr"), \
@@ -174,6 +182,18 @@ def test_rendered_workspace_html_content():
         assert "<span class=\"snapshot-meta-label\">Work mode</span><span class=\"snapshot-meta-value\">Remote</span>" in rendered_html
         assert "<span class=\"snapshot-meta-label\">Sector</span><span class=\"snapshot-meta-value\">Any</span>" in rendered_html
         assert "<span class=\"snapshot-meta-label\">Salary min</span><span class=\"snapshot-meta-value\">$100,000/yr</span>" in rendered_html
+        assert "Sort and display" not in rendered_html
+        assert '<h3 class="workspace-control-group-title">Sort</h3>' in rendered_html
+        assert '<h3 class="workspace-control-group-title">Filters</h3>' in rendered_html
+        assert 'aria-label="Show"' in rendered_html
+        assert 'aria-label="Posted"' in rendered_html
+        assert 'aria-label="Type"' in rendered_html
+        assert 'aria-label="Work mode"' in rendered_html
+        assert 'aria-label="Sector"' in rendered_html
+        assert 'aria-label="Match level"' in rendered_html
+        assert 'id="page_size_select"' not in rendered_html
+        assert 'id="page_size_select"' in captured_tools["header_tools_html"]
+        assert "12 jobs per page" in captured_tools["header_tools_html"]
 
         # Assert runtime config injection structure
         assert "window.__JOB_HUNTER_WORKSPACE__" in rendered_html

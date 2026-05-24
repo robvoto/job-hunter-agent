@@ -4,14 +4,16 @@
               <h2 id="capability_matrix_title"></h2>
               <p class="panel-copy" id="capability_matrix_help"></p>
             </div>
-            <div class="capability-toolbar">
-              <div class="capability-toolbar-main">
-                <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="">
-                <span class="capability-toolbar-copy"></span>
+            <div class="capability-group">
+              <div class="capability-toolbar">
+                <div class="capability-toolbar-main">
+                  <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="">
+                  <span class="capability-toolbar-copy"></span>
+                </div>
+                <button class="btn-add" id="add_capability_rule" type="button" aria-label="__JOB_HUNTER_CAPABILITY_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
               </div>
-              <button class="btn-add" id="add_capability_rule" type="button" aria-label="__JOB_HUNTER_CAPABILITY_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
+              <div id="capability_matrix_editor" class="capability-editor"></div>
             </div>
-            <div id="capability_matrix_editor" class="capability-editor"></div>
             <textarea id="capability_profile_rules" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
           </section>
         </section>

@@ -1,5 +1,21 @@
-from job_hunter_agent.cv_pipeline import parse_roles, run_cv_pipeline, score_and_promote
+from job_hunter_agent.cv_pipeline import _tool_terms, parse_roles, run_cv_pipeline, score_and_promote
 from job_hunter_agent.profile_learning import _CURRENT_YEAR
+def test_tool_terms_preserves_slash_separated_tools_individually():
+    """Regression: 'Jira / Confluence' must produce individual terms, not only a combined phrase."""
+    terms = _tool_terms("Tools: Jira / Confluence")
+    terms_lower = [t.lower() for t in terms]
+    assert "jira" in terms_lower
+    assert "confluence" in terms_lower
+    assert terms_lower != ["jira confluence"]
+
+
+def test_tool_terms_preserves_slash_separated_tools_no_spaces():
+    terms = _tool_terms("Tools: Jira/Confluence")
+    terms_lower = [t.lower() for t in terms]
+    assert "jira" in terms_lower
+    assert "confluence" in terms_lower
+
+
 def test_parse_roles_uses_configured_lookback_years_for_recency():
     cv_text = f"""
 # Professional Experience

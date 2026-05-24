@@ -398,44 +398,13 @@ body {
   margin-top: 18px;
 }
 
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
-  gap: var(--workspace-control-grid-gap);
-}
-
 .workspace-controls-panel {
   display: grid;
-  gap: var(--workspace-control-section-gap);
+  gap: var(--surface-gap-md);
 }
 
 .workspace-controls-head {
   margin-bottom: 0;
-}
-
-.workspace-control-section {
-  display: grid;
-  gap: var(--workspace-control-grid-gap);
-}
-
-.workspace-control-section + .workspace-control-section {
-  padding-top: var(--workspace-control-section-padding-top);
-  border-top: var(--workspace-control-section-border);
-}
-
-.workspace-control-section-title {
-  margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: var(--workspace-control-title-font-size);
-  font-weight: 800;
-  letter-spacing: var(--workspace-control-title-letter-spacing);
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.workspace-control-grid--sort {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 280px));
 }
 
 .scope-tabs {
@@ -495,20 +464,6 @@ body {
   display: none !important;
 }
 
-.filter-field {
-  display: block;
-}
-
-.filter-field span {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--text-muted);
-  font-size: 0.83rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
 .section-head {
   display: flex;
   align-items: center;
@@ -522,11 +477,39 @@ body {
   margin: 0;
 }
 
+.section-head--with-tools {
+  display: grid;
+  gap: 10px;
+}
+
+.section-head-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.section-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.section-head-tools .jh-select {
+  min-width: 180px;
+}
+
 .section-tools {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.job-section .section-tools {
+  justify-content: flex-end;
 }
 
 .pagination-label {
@@ -661,17 +644,12 @@ body {
   padding: 9px 15px;
 }
 
-[data-theme="dark-professional"] .filter-grid {
-  gap: var(--workspace-control-grid-gap);
-}
-
-[data-theme="dark-professional"] .filter-field span {
-  margin-bottom: 5px;
-}
-
-
 [data-theme="dark-professional"] .section-head {
   margin-bottom: 10px;
+}
+
+[data-theme="dark-professional"] .section-head--with-tools {
+  gap: 8px;
 }
 
 [data-theme="dark-professional"] .section h2 {

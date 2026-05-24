@@ -44,23 +44,6 @@ def extract_contract_months(details_text: str) -> Optional[int]:
     return max(matches)
 
 
-def find_old_experience_year(profile: dict, aliases: List[str]) -> Optional[int]:
-    cv_text = compact_whitespace(profile.get("cv_text") or "").lower()
-    if not cv_text:
-        return None
-    for alias in aliases:
-        cleaned = str(alias).strip().lower()
-        if not cleaned:
-            continue
-        match = re.search(rf"{re.escape(cleaned)}.{{0,90}}old from (\d{{4}})", cv_text)
-        if match:
-            try:
-                return int(match.group(1))
-            except Exception:
-                return None
-    return None
-
-
 def _line_year_context(line: str, current_year: int) -> Optional[int]:
     lowered = compact_whitespace(line).lower()
     if not lowered:
@@ -109,16 +92,11 @@ def find_profile_experience_year_in_text(source_text: str, aliases: List[str]) -
 
 
 def find_profile_experience_year(profile: dict, aliases: List[str]) -> Optional[int]:
-    explicit_old_year = find_old_experience_year(profile, aliases)
-    if explicit_old_year:
-        return explicit_old_year
-
     evidence_tiers = get_candidate_profile_tiers(profile)
     candidate_years = [
         find_profile_experience_year_in_text(evidence_tiers.get(KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT, ""), aliases),
         find_profile_experience_year_in_text(evidence_tiers.get(KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT, ""), aliases),
         find_profile_experience_year_in_text(evidence_tiers.get(KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT, ""), aliases),
-        find_profile_experience_year_in_text(str(profile.get("cv_text") or ""), aliases),
     ]
     candidate_years = [year for year in candidate_years if year]
     if not candidate_years:

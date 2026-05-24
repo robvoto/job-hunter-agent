@@ -1,4 +1,7 @@
+import pytest
+
 from job_hunter_agent import global_settings
+from job_hunter_agent.database import init_db
 from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 
 
@@ -112,3 +115,13 @@ def test_save_global_settings_normalizes_source_document_suffixes(isolated_db):
     assert saved["source_document_settings"]["allowed_suffixes"] == [".docx", ".txt", ".md"]
     assert global_settings.get_allowed_source_document_suffixes() == frozenset({".docx", ".txt", ".md"})
     assert global_settings.get_allowed_source_document_suffixes_label() == ".docx, .md, .txt"
+
+
+def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
+    db = tmp_path / "empty.db"
+    init_db(db)
+    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(db))
+    global_settings.load_global_settings.cache_clear()
+
+    with pytest.raises(global_settings.GlobalSettingsLoadError, match="global_settings table is empty"):
+        global_settings.load_global_settings()

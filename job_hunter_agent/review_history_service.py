@@ -20,6 +20,7 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FIRST_APPLIED_AT_KEY,
     RECORD_FIRST_HIDDEN_AT_KEY,
+    RECORD_FIRST_SEEN_AT_KEY,
     RECORD_FIRST_VIEWED_AT_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
@@ -29,6 +30,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LAST_BLOCK_TITLE_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
     RECORD_LAST_NOT_FOR_ME_AT_KEY,
+    RECORD_LAST_SEEN_AT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
@@ -143,6 +145,9 @@ def persist_review_event(
     now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 
     entry[RECORD_JOB_KEY] = normalized
+    if not entry.get(RECORD_FIRST_SEEN_AT_KEY):
+        entry[RECORD_FIRST_SEEN_AT_KEY] = now_iso
+    entry[RECORD_LAST_SEEN_AT_KEY] = now_iso
     if title:
         entry[RECORD_TITLE_KEY] = title
     if company:
@@ -282,6 +287,9 @@ def record_job_view(job_key: str, url: str = "", title: str = "") -> dict:
     now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 
     entry[RECORD_JOB_KEY] = normalized
+    if not entry.get(RECORD_FIRST_SEEN_AT_KEY):
+        entry[RECORD_FIRST_SEEN_AT_KEY] = now_iso
+    entry[RECORD_LAST_SEEN_AT_KEY] = now_iso
     if title and not entry.get(RECORD_TITLE_KEY):
         entry[RECORD_TITLE_KEY] = title
     if url:

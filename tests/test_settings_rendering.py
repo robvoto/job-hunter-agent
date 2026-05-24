@@ -23,7 +23,9 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert 'id="min_contract_months"' in html
     assert '6+ months' in html
     assert 'job-hunter-account-bar' in html
-    assert 'account-bar-shortcut' in html
+    assert 'account-bar-shortcut' not in html
+    assert 'class="nav-item nav-item-workspace">Workspace</a>' in html
+    assert '&#8592; Workspace' not in html
     assert 'class="btn-add"' in html
     assert 'capability-add-button' not in html
     assert 'capability-editor' in html

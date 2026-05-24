@@ -51,11 +51,11 @@ _LLM_FIXTURE = {
 }
 
 
-def test_build_learning_patch_returns_capabilities_and_cv_text():
+def test_build_learning_patch_returns_capabilities_without_cv_text():
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE):
         patch_result = build_learning_patch(SAMPLE_CV)
 
-    assert patch_result.get("cv_text")
+    assert "cv_text" not in patch_result
     rules = patch_result.get("capability_profile_rules", [])
     assert rules
     names = {r["name"] for r in rules}
@@ -67,7 +67,7 @@ def test_build_learning_patch_returns_empty_when_llm_unavailable():
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={}):
         patch_result = build_learning_patch(SAMPLE_CV)
 
-    assert patch_result.get("cv_text")
+    assert "cv_text" not in patch_result
     assert not patch_result.get("capability_profile_rules")
 
 

@@ -67,16 +67,23 @@ function suggestionExamplesMarkup(items, emptyLabel) {
   `).join('')}</ul>`;
 }
 
-function renderSuggestedTuning(suggestions) {
+function renderSuggestedTuning(reviewData) {
   const panel = document.getElementById('tuning_suggestions_panel');
   if (!panel) return;
+  const hasReviewData = Boolean(reviewData && (
+    Array.isArray(reviewData.kept_job_urls)
+    || Array.isArray(reviewData.skill_observations)
+    || Array.isArray(reviewData.rejections_by_reason)
+    || reviewData.suggested_tuning
+  ));
+  if (!hasReviewData) {
+    panel.innerHTML = '<p>No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals.</p>';
+    return;
+  }
+  const suggestions = reviewData.suggested_tuning || {};
   const capabilitySuggestions = suggestions.capability_suggestions || [];
   const ruleSuggestions = suggestions.rule_suggestions || [];
   const summary = suggestions.summary || {};
-  if (!capabilitySuggestions.length && !ruleSuggestions.length) {
-    panel.innerHTML = '<p>No suggested tuning yet. After a scrape run, repeated useful capabilities and repeated exclusion patterns will show up here for confirmation.</p>';
-    return;
-  }
   const capabilityHtml = capabilitySuggestions.length ? `
     <div class="tuning-group">
       <h3>Capabilities from viable roles</h3>
@@ -106,7 +113,12 @@ function renderSuggestedTuning(suggestions) {
         `).join('')}
       </div>
     </div>
-  ` : '';
+  ` : `
+    <div class="tuning-group">
+      <h3>Capabilities from viable roles</h3>
+      <p>No capability suggestions yet. The capabilities found in kept jobs are either already in your profile or did not produce new capability signals.</p>
+    </div>
+  `;
 
   const actionableRules = ruleSuggestions.filter(item => !(item.reason || '').startsWith('TITLE_NOT_TARGET') && !(item.reason || '').startsWith('TITLE_BAD_KEYWORD'));
   const workingFilters = ruleSuggestions.filter(item => (item.reason || '').startsWith('TITLE_BAD_KEYWORD'));
@@ -166,9 +178,9 @@ function renderSuggestedTuning(suggestions) {
 
 async function loadReviewData() {
   const response = await jobHunterFetch('/api/review-data');
-  if (!response.ok) { renderSuggestedTuning({ capability_suggestions: [], rule_suggestions: [], summary: {} }); return; }
+  if (!response.ok) { renderSuggestedTuning(null); return; }
   const payload = await response.json();
-  renderSuggestedTuning(payload.suggested_tuning || { capability_suggestions: [], rule_suggestions: [], summary: {} });
+  renderSuggestedTuning(payload);
 }
 
 function stopRunStatusPolling() {

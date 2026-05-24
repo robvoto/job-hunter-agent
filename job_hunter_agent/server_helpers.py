@@ -59,7 +59,6 @@ from job_hunter_agent.profile_store import (
     VALID_ENGAGEMENT_TYPES,
     WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
-    build_candidate_profile_tiers_from_sections,
     load_profile,
     normalize_engagement_type_preferences,
     normalize_onboarding_settings,
@@ -80,7 +79,6 @@ from job_hunter_agent.profile_store import (
     KEY_BRIEF_MODE,
     KEY_BRIEF,
     KEY_STAR_EVIDENCE,
-    KEY_CV_TEXT,
     KEY_EVIDENCE_TIERS,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ONBOARDING_COMPLETE,
@@ -192,6 +190,38 @@ _SEARCH_SOURCE_LABEL_KEYS = (
     "seek_toggle_help",
     "linkedin_toggle_label",
     "linkedin_toggle_help",
+)
+
+_SETTINGS_ALERTS_LABEL_KEYS = (
+    "section_title",
+    "section_copy",
+    "telegram_heading",
+    "telegram_copy",
+    "telegram_enabled_label",
+    "telegram_enabled_help",
+    "telegram_bot_token_label",
+    "telegram_bot_token_help",
+    "telegram_bot_username_label",
+    "telegram_bot_username_help",
+    "telegram_disable_link_preview_label",
+    "telegram_disable_link_preview_help",
+    "telegram_connect_heading",
+    "telegram_connect_help",
+    "telegram_connect_help_missing",
+    "telegram_connect_help_ready",
+    "telegram_connect_link_label",
+    "telegram_connect_open_label",
+    "telegram_connect_refresh_label",
+    "telegram_connection_status_label",
+    "telegram_connection_status_empty",
+    "telegram_test_label",
+    "telegram_subscribers_empty",
+    "telegram_subscribers_label",
+    "telegram_user_label",
+    "llm_heading",
+    "llm_copy",
+    "llm_model_label",
+    "llm_model_placeholder",
 )
 
 _ONBOARDING_PAGE_LABEL_KEYS = (
@@ -523,6 +553,16 @@ def load_search_source_labels() -> dict[str, str]:
     return {key: str(labels[key]).strip() for key in _SEARCH_SOURCE_LABEL_KEYS}
 
 
+def load_settings_alerts_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("settings_alerts_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing settings_alerts_labels")
+    missing = [key for key in _SETTINGS_ALERTS_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"ui_labels.json is missing settings_alerts_labels values: {', '.join(missing)}")
+    return {key: str(labels[key]).strip() for key in _SETTINGS_ALERTS_LABEL_KEYS}
+
+
 def load_onboarding_page_labels() -> dict[str, str]:
     return _load_required_ui_labels("onboarding_page_labels", _ONBOARDING_PAGE_LABEL_KEYS)
 
@@ -660,6 +700,9 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_SHARED_UI_LABELS__ = {json.dumps(load_shared_ui_labels(), ensure_ascii=True)};</script>'
     )
     parts.append(
+        f'<script>window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__ = {json.dumps(load_settings_alerts_labels(), ensure_ascii=True)};</script>'
+    )
+    parts.append(
         f'<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>'
     )
     parts.append(
@@ -691,6 +734,11 @@ def build_bootstrap_script(
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ = {json.dumps(MIN_CONTRACT_MONTH_NONE_LABEL, ensure_ascii=True)};</script>'
+    )
+    _gs = load_global_settings()
+    _model_options = _gs.get(KEY_LLM_SETTINGS, {}).get(KEY_MODEL_OPTIONS, []) if isinstance(_gs, dict) else []
+    parts.append(
+        f'<script>window.__JOB_HUNTER_LLM_MODEL_OPTIONS__ = {json.dumps(_model_options, ensure_ascii=True)};</script>'
     )
     return "\n  ".join(parts)
 
@@ -1063,17 +1111,6 @@ class SettingsHandler:
 
         if KEY_STAR_EVIDENCE in normalized:
             normalized[KEY_STAR_EVIDENCE] = str(normalized.get(KEY_STAR_EVIDENCE) or "").strip()
-        if KEY_CV_TEXT in normalized:
-            new_cv = str(normalized.get(KEY_CV_TEXT) or "").strip()
-            current_cv = str(current.get(KEY_CV_TEXT) or "").strip()
-            cv_changed = new_cv != current_cv
-            if cv_changed and KEY_EVIDENCE_TIERS not in normalized:
-                inferred_tiers = build_candidate_profile_tiers_from_sections([{
-                    "label": "Primary CV",
-                    "text": new_cv,
-                }])
-                if any(inferred_tiers.values()):
-                    normalized[KEY_EVIDENCE_TIERS] = inferred_tiers
         return normalized
 
     @classmethod

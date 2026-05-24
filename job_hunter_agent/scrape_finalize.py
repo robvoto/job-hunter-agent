@@ -141,6 +141,7 @@ def finalize_scrape_run(
         )
         save_llm_cache(context.llm_cache)
         save_job_history(context.job_history)
+        write_review_data(build_review_data(context.previous_audit_rows, [], context.profile))
         workspace_path = get_workspace_results_path()
         print("\nNo fresh cards were captured in this run, so the previous workspace state was preserved.")
         print(f"Workspace results preserved at {workspace_path}")

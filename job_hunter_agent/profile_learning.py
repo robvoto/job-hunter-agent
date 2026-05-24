@@ -27,7 +27,6 @@ from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
-    KEY_CV_TEXT,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_MATCH_PREFS,
     KEY_PRIMARY_PATTERNS,
@@ -1165,7 +1164,7 @@ def build_learning_patch(
     )
     extracted = _llm_extract_from_cv(source_text, lookback_years, alias_limit)
 
-    patch: dict[str, Any] = {KEY_CV_TEXT: source_text}
+    patch: dict[str, Any] = {}
 
     title_normalization_candidates = [
         item

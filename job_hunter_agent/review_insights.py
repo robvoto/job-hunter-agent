@@ -11,6 +11,7 @@ from job_hunter_agent.global_settings import (
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
 )
+from job_hunter_agent.signal_detection import extract_skill_observations
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -347,34 +348,17 @@ def build_suggested_tuning(
     }
 
 
-def build_suggested_tuning_from_saved_review(payload: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
-    kept_job_urls = {
-        str(value).strip()
-        for value in payload.get("kept_job_urls", [])
-        if str(value).strip()
-    }
-    audit_rows = [{"url": url, "decision": "KEEP"} for url in sorted(kept_job_urls)]
-    skill_observations = [
-        item for item in payload.get("skill_observations", [])
-        if isinstance(item, dict)
-    ]
-    capability_suggestions = build_capability_tuning_suggestions(skill_observations, audit_rows, profile)
-    rule_reviews = [
-        item for item in payload.get("rejections_by_reason", [])
-        if isinstance(item, dict)
-    ]
-    rule_suggestions = _build_rule_tuning_suggestions_from_reviews(rule_reviews)
-    return {
-        "summary": {
-            "capability_count": len(capability_suggestions),
-            "rule_count": len(rule_suggestions),
-        },
-        "capability_suggestions": capability_suggestions,
-        "rule_suggestions": rule_suggestions,
-    }
+def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], profile: dict[str, Any]) -> list[dict]:
+    observations: list[dict] = []
+    for row in audit_rows:
+        if not isinstance(row, dict) or row.get("decision") != "KEEP":
+            continue
+        observations.extend(extract_skill_observations(row, profile))
+    return observations
 
 
 def build_review_data(audit_rows: list[dict], skill_observations: list[dict], profile: dict[str, Any]) -> dict:
+    kept_skill_observations = _kept_skill_observations_from_audit_rows(audit_rows, profile)
     kept_job_urls = sorted(
         {
             str(row.get("url") or "").strip()
@@ -383,10 +367,10 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
         }
     )
     return {
-        "suggested_tuning": build_suggested_tuning(audit_rows, skill_observations, profile),
+        "suggested_tuning": build_suggested_tuning(audit_rows, kept_skill_observations, profile),
         "kept_job_urls": kept_job_urls,
-        "skill_observations": skill_observations,
-        "unknown_skills": build_unknown_skill_review(skill_observations, profile),
+        "skill_observations": kept_skill_observations,
+        "unknown_skills": build_unknown_skill_review(kept_skill_observations, profile),
         "rejections_by_reason": build_rejection_review(audit_rows),
     }
 

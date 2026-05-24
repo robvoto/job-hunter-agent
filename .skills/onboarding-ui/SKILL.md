@@ -11,8 +11,9 @@ Use before editing the onboarding wizard, search-basics step, or any onboarding 
 - Keep canonical values in the owning server normaliser or bootstrap source. Do not invent defaults, labels, or fallback values in page code.
 - Treat onboarding and settings as different UI patterns when the repo already does so. Do not merge the onboarding sector select with the settings choice strip, or replace shared work-mode and engagement widgets with one-off controls.
 - Preserve the single-term search keyword rule. Do not auto-join title lists or create synthetic search phrases.
-- Keep reset flow behaviour intact: `?fresh=1` must clear onboarding browser state, blank the search and salary fields, then load fresh defaults.
+- Keep reset flow behaviour intact: `?fresh=1` must clear the user-scoped onboarding draft state, blank the search and salary fields, then load fresh defaults.
 - Reuse shared theme tokens, widgets, and helper functions first. Add page-level CSS only for onboarding-specific layout exceptions.
+- Shared field labels and spacing come from the theme layer. Do not add page-local `label` baselines when the field uses `.field-label-row`; use the shared field-label tokens and widget rules instead.
 - Keep common language stable across the app. Use the existing screen names and labels instead of introducing new jargon.
 - Centralise repeated copy in the owning label JSON or server copy source. Do not duplicate labels in renderer code.
 - Remove dead onboarding paths instead of leaving compatibility code behind.

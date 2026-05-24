@@ -4,23 +4,44 @@ import {
   getToggleChecked,
 } from '../shared/settings-utils.js';
 
+let alertsLabels = null;
+
+function loadAlertsLabels() {
+  if (alertsLabels) {
+    return alertsLabels;
+  }
+  const embedded = document.getElementById('settings_alerts_labels_json')?.textContent?.trim();
+  if (embedded) {
+    alertsLabels = JSON.parse(embedded);
+    return alertsLabels;
+  }
+  if (window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__) {
+    alertsLabels = window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__;
+    return alertsLabels;
+  }
+  return null;
+}
+
 export const JobHunterAlertsSettings = (function () {
 
   let telegramConnectLink = '';
 
   function renderTelegramSubscribers(subscribers) {
+    const labels = loadAlertsLabels();
+    if (!labels) return;
     const panel = document.getElementById('telegram_subscribers_panel');
     if (!panel) return;
+    panel.hidden = false;
     if (!subscribers || !subscribers.length) {
-      panel.innerHTML = '<p class="field-help">You haven\'t linked a Telegram account to receive alerts yet.</p>';
+      panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.telegram_subscribers_empty)}</p>`;
       return;
     }
     panel.innerHTML = `
-      <p><strong>Job alerts are currently being sent to:</strong></p>
-      <ul style="margin-top: 8px;">
+      <p class="panel-copy"><strong>${escapeHtml(labels.telegram_subscribers_label)}</strong></p>
+      <ul class="telegram-subscribers-list">
         ${subscribers.map(item => `
           <li>
-            ${escapeHtml(item.first_name || item.username || item.chat_id || 'Telegram user')}
+            ${escapeHtml(item.first_name || item.username || item.chat_id || labels.telegram_user_label)}
             ${item.username ? ` (@${escapeHtml(item.username)})` : ''}
           </li>
         `).join('')}
@@ -29,31 +50,27 @@ export const JobHunterAlertsSettings = (function () {
   }
 
   function renderTelegramConnectPanel(settings) {
+    const labels = loadAlertsLabels();
+    if (!labels) return;
     const panel = document.getElementById('telegram_connect_panel');
     if (!panel) return;
-    const renderConnectHelp = (bodyHtml) => `
-      <details class="help-drawer">
-        <summary>Connect your Telegram account</summary>
-        <div class="help-box">${bodyHtml}</div>
-      </details>
-    `;
+    panel.hidden = false;
     if (!settings?.telegram?.bot_token_present) {
       telegramConnectLink = '';
-      panel.innerHTML = renderConnectHelp(`
-        <p class="field-help">Save the bot token and username to unlock the connect link.</p>
-      `);
+      panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.telegram_connect_help_missing)}</p>`;
       return;
     }
     if (!telegramConnectLink) {
-      panel.innerHTML = renderConnectHelp(`
-        <p class="field-help">Open the connect link in Telegram, press <strong>Start</strong>, then refresh the connection here.</p>
-      `);
+      panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.telegram_connect_help_ready)}</p>`;
       return;
     }
-    panel.innerHTML = renderConnectHelp(`
-      <div class="help">Telegram link: <a href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer" style="word-break: break-all;">${escapeHtml(telegramConnectLink)}</a></div>
-      <p class="field-help" style="margin-top: 10px;">Open it in Telegram, press Start once, then use Refresh Telegram Connection.</p>
-    `);
+    panel.innerHTML = `
+      <p class="panel-copy">
+        ${escapeHtml(labels.telegram_connect_link_label)}:
+        <a class="telegram-connect-link" href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer">${escapeHtml(telegramConnectLink)}</a>
+      </p>
+      <p class="panel-copy">${escapeHtml(labels.telegram_connect_help_ready)}</p>
+    `;
   }
 
   // Fills the alerts/schedule/LLM form. Calls renderLlmModelOptions() from
@@ -72,7 +89,7 @@ export const JobHunterAlertsSettings = (function () {
     setToggleChecked('telegram_disable_link_preview', Boolean(telegram.disable_link_preview));
     telegramConnectLink = telegram.bot_username
       ? `https://t.me/${telegram.bot_username}?start=connect`
-      : telegramConnectLink;
+      : '';
     renderTelegramSubscribers(telegram.subscribers || []);
     renderTelegramConnectPanel(settings);
     // renderLlmModelOptions is defined in settings-page.js; resolved at call time.

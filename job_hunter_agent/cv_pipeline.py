@@ -140,7 +140,7 @@ def _tool_terms(text: str) -> list[str]:
             continue
         pieces = [
             piece.strip()
-            for piece in re.split(r"\s*&\s*|\s+and\s+", cleaned_part)
+            for piece in re.split(r"\s*[&/]\s*|\s+and\s+", cleaned_part)
             if piece.strip()
         ]
         for piece in pieces or [cleaned_part]:

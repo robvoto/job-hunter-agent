@@ -18,12 +18,13 @@ _test_db_path = Path(_test_db_dir) / "test.db"
 os.environ.setdefault("JOB_HUNTER_DB_PATH", str(_test_db_path))
 
 from job_hunter_agent.database import init_db  # noqa: E402
+from job_hunter_agent.global_settings import seed_global_settings_from_file  # noqa: E402
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir  # noqa: E402
 
 init_db(_test_db_path)
 seed_knowledge_from_dir(ROOT_DIR / "data" / "knowledge", _test_db_path)
-seed_knowledge_from_dir(ROOT_DIR / "data" / "config", _test_db_path)
 seed_knowledge_from_dir(ROOT_DIR / "data" / "signals", _test_db_path)
+seed_global_settings_from_file(_test_db_path, overwrite=True)
 
 
 @pytest.fixture(autouse=True)
@@ -44,10 +45,11 @@ def isolated_db(tmp_path, monkeypatch):
     """
     db = tmp_path / "isolated.db"
     from job_hunter_agent.database import init_db
+    from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import seed_knowledge_from_dir
     init_db(db)
     seed_knowledge_from_dir(ROOT_DIR / "data" / "knowledge", db)
-    seed_knowledge_from_dir(ROOT_DIR / "data" / "config", db)
     seed_knowledge_from_dir(ROOT_DIR / "data" / "signals", db)
+    seed_global_settings_from_file(db, overwrite=True)
     monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(db))
     return db

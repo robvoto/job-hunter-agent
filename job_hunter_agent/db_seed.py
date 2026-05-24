@@ -4,7 +4,7 @@ Run once on first deployment (or after a DB reset):
 
     python -m job_hunter_agent.db_seed
 
-The script is safe to run again — INSERT OR IGNORE means existing data is
+The script is safe to run again - INSERT OR IGNORE means existing data is
 never overwritten.
 
 Upgrade flags:
@@ -19,20 +19,21 @@ Upgrade flags:
 """
 
 import argparse
-from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from job_hunter_agent.database import init_db
+from job_hunter_agent.global_settings import seed_global_settings_from_file
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir, upgrade_knowledge_from_dir
 from job_hunter_agent.paths import REPO_ROOT
 
 
 def run(overwrite: bool = False, upgrade: bool = False) -> None:
     knowledge_dir = REPO_ROOT / "data" / "knowledge"
-    config_dir = REPO_ROOT / "data" / "config"
     signals_dir = REPO_ROOT / "data" / "signals"
+    global_settings_path = REPO_ROOT / "data" / "config" / "global_settings.json"
 
     print("Initialising database...")
     init_db()
@@ -40,27 +41,27 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
     if upgrade:
         print(f"Upgrading knowledge from {knowledge_dir} ...")
         updated = upgrade_knowledge_from_dir(knowledge_dir)
-        print(f"  {len(updated)} knowledge entries updated: {updated or '(none — all current)'}")
-
-        print(f"Upgrading config from {config_dir} ...")
-        updated = upgrade_knowledge_from_dir(config_dir)
-        print(f"  {len(updated)} config entries updated: {updated or '(none — all current)'}")
+        print(f"  {len(updated)} knowledge entries updated: {updated or '(none - all current)'}")
 
         print(f"Upgrading signals config from {signals_dir} ...")
         updated = upgrade_knowledge_from_dir(signals_dir)
-        print(f"  {len(updated)} signal config entries updated: {updated or '(none — all current)'}")
+        print(f"  {len(updated)} signal config entries updated: {updated or '(none - all current)'}")
+
+        print(f"Seeding global settings from {global_settings_path} ...")
+        written = seed_global_settings_from_file(overwrite=overwrite)
+        print(f"  {'updated' if written else 'already present'}")
     else:
         print(f"Seeding knowledge from {knowledge_dir} ...")
         seeded = seed_knowledge_from_dir(knowledge_dir, overwrite=overwrite)
-        print(f"  {len(seeded)} knowledge entries written: {seeded or '(none — all already present)'}")
-
-        print(f"Seeding config from {config_dir} ...")
-        seeded = seed_knowledge_from_dir(config_dir, overwrite=overwrite)
-        print(f"  {len(seeded)} config entries written: {seeded or '(none — all already present)'}")
+        print(f"  {len(seeded)} knowledge entries written: {seeded or '(none - all already present)'}")
 
         print(f"Seeding signals config from {signals_dir} ...")
         seeded = seed_knowledge_from_dir(signals_dir, overwrite=overwrite)
-        print(f"  {len(seeded)} signal config entries written: {seeded or '(none — all already present)'}")
+        print(f"  {len(seeded)} signal config entries written: {seeded or '(none - all already present)'}")
+
+        print(f"Seeding global settings from {global_settings_path} ...")
+        written = seed_global_settings_from_file(overwrite=overwrite)
+        print(f"  {'updated' if written else 'already present'}")
 
     print("Done.")
 

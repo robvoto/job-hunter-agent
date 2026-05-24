@@ -44,11 +44,17 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
+    KEY_SIGNAL_CLUSTERS,
     load_profile,
     normalize_engagement_type_preferences,
     patch_profile,
 )
 from job_hunter_agent.signal_registry import register_signals
+from job_hunter_agent.signal_schema import (
+    CATEGORY_CAPABILITY_CONCEPT,
+    LEARNING_CATEGORY_KEY,
+    LEARNING_SIGNAL_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +67,6 @@ ONBOARDING_RESET_FIELDS = (
     KEY_SECONDARY_PATTERNS,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ONBOARDING_COMPLETE,
-    "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
@@ -233,6 +238,96 @@ def clear_onboarding_runtime_outputs() -> None:
             print(f"[ONBOARDING] Could not reset {label}: {exc}")
 
 
+def _norm_term(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "").strip().lower())
+
+
+def merge_capability_rules_with_dominant_signals(
+    capability_rules: list[dict],
+    dominant_signal_clusters: list[dict],
+) -> list[dict]:
+    """Merge deterministic signal cluster aliases into matching LLM capability rules.
+
+    LLM capability rules are the source of truth for names and levels.
+    Clusters that clearly match an existing rule have their aliases merged in.
+    Clusters with no match are registered for user review.
+    """
+    if not dominant_signal_clusters:
+        return list(capability_rules)
+
+    llm_cap_names = [rule.get("name", "") for rule in capability_rules]
+    logger.debug("[MERGE_CAPABILITIES] LLM capabilities: %s", llm_cap_names)
+
+    # Build normalised term sets per capability rule.
+    cap_term_sets: list[frozenset[str]] = []
+    for rule in capability_rules:
+        name_n = _norm_term(rule.get("name", ""))
+        alias_norms = [_norm_term(a) for a in (rule.get("aliases") or []) if a]
+        cap_term_sets.append(frozenset(t for t in [name_n, *alias_norms] if t))
+
+    merged_rules = [dict(rule) for rule in capability_rules]
+    unmatched: list[dict] = []
+
+    for cluster in dominant_signal_clusters:
+        cluster_name = cluster.get("name", "")
+        cluster_name_n = _norm_term(cluster_name)
+        cluster_alias_norms = [_norm_term(a) for a in (cluster.get("aliases") or []) if a]
+        cluster_terms = frozenset(t for t in [cluster_name_n, *cluster_alias_norms] if t)
+        # Also check individual word tokens from multi-word names (len >= 4) so
+        # "jira confluence" can match a capability named "jira".
+        word_tokens = frozenset(w for w in cluster_name_n.split() if len(w) >= 4)
+        cluster_lookup = cluster_terms | word_tokens
+
+        logger.debug(
+            "[MERGE_CAPABILITIES] Dominant signal: '%s' aliases=%s",
+            cluster_name,
+            cluster.get("aliases"),
+        )
+
+        matched_idx: int | None = None
+        for idx, cap_terms in enumerate(cap_term_sets):
+            if cluster_lookup & cap_terms:
+                matched_idx = idx
+                break
+
+        if matched_idx is not None:
+            cap_rule = merged_rules[matched_idx]
+            existing_alias_norms = {_norm_term(a) for a in (cap_rule.get("aliases") or [])}
+            cap_name_n = _norm_term(cap_rule.get("name", ""))
+            new_aliases = list(cap_rule.get("aliases") or [])
+            added: list[str] = []
+            for alias in cluster.get("aliases") or []:
+                alias_n = _norm_term(alias)
+                if alias_n and alias_n != cap_name_n and alias_n not in existing_alias_norms:
+                    new_aliases.append(alias)
+                    existing_alias_norms.add(alias_n)
+                    added.append(alias)
+            if added:
+                cap_rule["aliases"] = new_aliases
+                logger.debug(
+                    "[MERGE_CAPABILITIES] Merged aliases %s into capability '%s'",
+                    added,
+                    cap_rule.get("name"),
+                )
+        else:
+            unmatched.append(cluster)
+            logger.debug(
+                "[MERGE_CAPABILITIES] Unmatched cluster '%s' → registering for review",
+                cluster_name,
+            )
+
+    if unmatched:
+        signals = [
+            {LEARNING_SIGNAL_KEY: c["name"], LEARNING_CATEGORY_KEY: CATEGORY_CAPABILITY_CONCEPT}
+            for c in unmatched
+            if c.get("name")
+        ]
+        logger.debug("[MERGE_CAPABILITIES] Registering %d unmatched signals", len(signals))
+        register_signals(signals)
+
+    return merged_rules
+
+
 def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | None = None, onboarding_settings: dict | None = None) -> dict[str, Any]:
     """Collect source documents, reset onboarding fields, re-extract everything, save.
 
@@ -338,7 +433,6 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch = build_onboarding_reset_patch(active_onboarding_settings)
 
     # --- Extract fresh from combined_text ---
-    patch["cv_text"] = combined_text
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
@@ -349,10 +443,14 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         learning_patch = learning_future.result()
     patch.update(pipeline_patch)
     for key, value in learning_patch.items():
-        if key in {"cv_text", KEY_CAPABILITY_PROFILE_RULES}:
+        if key == KEY_CAPABILITY_PROFILE_RULES:
             continue
         patch[key] = value
-    patch[KEY_CAPABILITY_PROFILE_RULES] = list(learning_patch.get(KEY_CAPABILITY_PROFILE_RULES, []))
+    capability_rules = list(learning_patch.get(KEY_CAPABILITY_PROFILE_RULES, []))
+    dominant_clusters = list(pipeline_patch.get(KEY_SIGNAL_CLUSTERS, []))
+    patch[KEY_CAPABILITY_PROFILE_RULES] = merge_capability_rules_with_dominant_signals(
+        capability_rules, dominant_clusters
+    )
 
     brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CAPABILITY_PROFILE_RULES) or [])
     if brief:

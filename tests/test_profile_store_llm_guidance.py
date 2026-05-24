@@ -50,6 +50,55 @@ def test_load_profile_drops_legacy_guidance_key(isolated_db):
     assert legacy_key not in loaded
 
 
+def test_load_profile_strips_legacy_cv_text_and_keeps_structured_fields(isolated_db):
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import LOCAL_USER_ID
+
+    ensure_user_row(LOCAL_USER_ID)
+    legacy_profile = {
+        "cv_text": "# Experience\nDelivery lead\n",
+        "candidate_profile_tiers": {
+            "primary_candidate_profile_context": "## Experience\nDelivery lead\n",
+            "secondary_candidate_profile_context": "",
+            "supplementary_candidate_profile_context": "",
+        },
+        "target_roles": ["delivery lead"],
+        "capability_profile_rules": [{"name": "stakeholder engagement", "level": "working"}],
+    }
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
+            (LOCAL_USER_ID, json.dumps(legacy_profile)),
+        )
+
+    loaded = profile_store.load_profile()
+
+    assert "cv_text" not in loaded
+    assert loaded["candidate_profile_tiers"] == {
+        "primary_candidate_profile_context": "## Experience\nDelivery lead",
+        "secondary_candidate_profile_context": "",
+        "supplementary_candidate_profile_context": "",
+    }
+    assert loaded["target_roles"] == legacy_profile["target_roles"]
+    assert loaded["capability_profile_rules"][0]["name"] == "stakeholder engagement"
+    assert loaded["capability_profile_rules"][0]["level"] == "working"
+
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM user_profile WHERE user_id = ?",
+            (LOCAL_USER_ID,),
+        ).fetchone()
+    persisted = json.loads(row["data"])
+    assert "cv_text" not in persisted
+    assert persisted["candidate_profile_tiers"] == {
+        "primary_candidate_profile_context": "## Experience\nDelivery lead",
+        "secondary_candidate_profile_context": "",
+        "supplementary_candidate_profile_context": "",
+    }
+    assert persisted["capability_profile_rules"][0]["name"] == "stakeholder engagement"
+
+
 def test_load_profile_raises_for_non_object_data(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import LOCAL_USER_ID

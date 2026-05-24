@@ -199,12 +199,6 @@
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
     }
-    .contract-duration-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-    }
     .contract-duration-row[hidden] {
       display: none;
     }
@@ -212,72 +206,6 @@
       font-size: 0.8rem;
       color: var(--text-muted);
       white-space: nowrap;
-    }
-    .contract-duration-row .jh-select {
-      flex: 1;
-      max-width: 160px;
-      margin: 0;
-    }
-    .search-source-panels {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--surface-gap-lg);
-    }
-    .search-source-panel {
-      display: grid;
-      gap: 0;
-      align-content: start;
-      padding: 0;
-    }
-    .search-source-panel .toggle-switch {
-      margin: 0;
-      padding: var(--control-pad-block-2xl) var(--control-pad-inline-2xl);
-      border-radius: var(--control-radius-2xl);
-    }
-    .search-source-panel .toggle-switch-title {
-      font-size: 1rem;
-      line-height: 1.2;
-    }
-    .search-source-panel h3 {
-      margin: 0;
-      font-size: 1rem;
-    }
-    #seek_max_pages_choices.choice-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 0;
-      border: 0;
-      border-radius: 0;
-      overflow: visible;
-      background: transparent;
-      box-shadow: none;
-      width: min(100%, 36rem);
-    }
-    #seek_max_pages_choices.choice-strip > .choice-card--seek-pages {
-      flex: 0 0 auto;
-      min-width: 2.7rem;
-      min-height: var(--control-height-sm);
-      padding: var(--control-pad-block-md) 11px;
-      border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
-      border-radius: var(--control-radius-lg);
-      background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
-      box-shadow: none;
-      color: var(--text-primary);
-      font-size: 0.9rem;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      justify-content: center;
-      text-align: center;
-    }
-    #seek_max_pages_choices.choice-strip > .choice-card--seek-pages:has(input:checked) {
-      background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
-      border-color: color-mix(in srgb, var(--accent) 46%, var(--border-subtle));
-      color: var(--accent);
-    }
-    #seek_max_pages_choices.choice-strip > .choice-card--seek-pages:hover {
-      background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
-      border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle));
     }
     .search-operations-panel {
       grid-column: 1 / -1;
@@ -317,9 +245,8 @@
     .panel,
     .subpanel {
       background: var(--bg-surface);
-      border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+      border: 1px solid var(--border-subtle);
       border-radius: 20px;
-      box-shadow: none;
     }
     .panel {
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-xl);
@@ -429,7 +356,7 @@
     .inline-status.loading { color: var(--text-muted); }
     .inline-status.success { color: var(--state-success-text); }
     .inline-status.error { color: var(--state-error-text); }
-    .panel-copy { margin: 4px 0 0; color: var(--text-muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
+    .panel-copy { margin: var(--title-help-gap) 0 0; color: var(--text-muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
     .help-box {
       margin-top: 10px;
       padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
@@ -442,11 +369,46 @@
       font-weight: 700;
       color: var(--text-primary);
     }
+    .help-box .help + .field-help {
+      margin-top: var(--surface-gap-sm);
+    }
+    .telegram-connect-panel,
+    .telegram-subscribers-panel {
+      display: grid;
+      gap: 8px;
+    }
+    .alerts-shell .subpanel > .panel-copy {
+      margin-bottom: var(--surface-gap-md);
+    }
+    .alerts-shell .subpanel > .panel-copy + .settings-form-field {
+      margin-top: var(--surface-gap-md);
+    }
+    .alerts-shell .settings-form-field + .settings-form-field {
+      margin-top: 12px;
+    }
+    .telegram-connect-link {
+      word-break: break-all;
+    }
+    .telegram-subscribers-list {
+      margin: 0 0 0 18px;
+      padding: 0;
+      color: var(--text-muted);
+    }
     .telegram-connect-shell {
       margin-top: 10px;
     }
     .telegram-connect-actions {
-      margin-top: 12px;
+      margin-top: 8px;
+      display: grid;
+      gap: 8px;
+      justify-items: start;
+    }
+    .alerts-shell .telegram-connect-actions > button,
+    .alerts-shell .panel-actions > button {
+      padding: 8px 14px;
+      font-size: 0.88rem;
+      line-height: 1.15;
+      min-height: 40px;
     }
     .panel-kicker {
       display: inline-block;
@@ -483,7 +445,6 @@
     }
     .field-block { min-width: 0; }
     .field-block.field-span-2 { grid-column: 1 / -1; }
-    .field-block label:first-child { display: block; margin: 0 0 var(--control-space-sm); }
     .settings-help-drawer {
       margin-top: 0;
     }
@@ -541,11 +502,27 @@
       font-size: 0.85rem;
       padding: 5px 0;
     }
+    .subpanel .settings-form-field + .settings-form-field {
+      margin-top: var(--surface-gap-md);
+    }
+    .settings-form-field > .field-label-row {
+      margin-bottom: var(--surface-gap-sm);
+    }
     .badge-editor-form.token-input-group {
-      margin-top: 8px;
+      margin-top: var(--surface-gap-sm);
+      border: 0;
+      background: transparent;
+      padding-inline-end: 0;
     }
     .badge-editor-form.token-input-group .token-input-field {
       min-width: 0;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--control-radius-md);
+      background: var(--bg-surface);
+    }
+    .badge-editor-form.token-input-group .token-input-field:focus {
+      border-color: var(--selection-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
     }
     .capability-editor {
       display: grid;
@@ -579,6 +556,7 @@
       grid-auto-flow: row;
     }
     .capability-card {
+      position: relative;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -590,19 +568,23 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
+      padding-right: 32px;
     }
     .capability-card-name {
       flex: 1 1 auto;
       min-width: 0;
     }
     .capability-remove-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
       flex: 0 0 auto;
-      width: 34px;
-      height: 34px;
+      width: 28px;
+      height: 28px;
       padding: 0;
-      border: 1px solid color-mix(in srgb, var(--state-error-text) 20%, var(--border-subtle));
+      border: 0;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--state-error-text) 8%, var(--bg-surface));
+      background: transparent;
       color: var(--state-error-text);
       cursor: pointer;
       display: inline-flex;
@@ -610,7 +592,6 @@
       justify-content: center;
     }
     .capability-remove-btn:hover {
-      border-color: var(--state-error-border);
       background: var(--state-error-bg);
       color: var(--state-error-text);
     }
@@ -944,19 +925,6 @@
       padding: 10px 8px;
       border-left: 1px solid var(--border-subtle);
     }
-    .cap-remove-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 1.1rem;
-      color: var(--state-error-text);
-      padding: 4px;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .cap-remove-btn:hover { color: color-mix(in srgb, var(--state-error-text) 80%, black); }
     @media (max-width: 1180px) {
       .profile-shell { grid-template-columns: 1fr; }
       .advanced-grid { grid-template-columns: 1fr; }
@@ -1533,37 +1501,4 @@
 .settings-sidebar .sidebar-group-label-global {
   margin-top: 16px;
   padding-top: 10px;
-}
-
-/* Reduce helper-copy fatigue inside standard settings forms. */
-.settings-panel .help,
-.settings-panel .field-help,
-.settings-panel .panel-copy {
-  font-size: 0.78rem;
-  line-height: 1.45;
-  max-width: 62ch;
-}
-
-.settings-panel .help {
-  margin-top: 4px;
-}
-
-/* Keep numeric/radio choice pills consistent with global inactive/selected states. */
-#seek_max_pages_choices.choice-strip > .choice-card--seek-pages {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
-  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
-  box-shadow: none;
-}
-
-#seek_max_pages_choices.choice-strip > .choice-card--seek-pages:hover {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-  border-color: color-mix(in srgb, var(--text-muted) 32%, var(--border-subtle));
-  color: var(--text-primary);
-}
-
-#seek_max_pages_choices.choice-strip > .choice-card--seek-pages:has(input:checked) {
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--border-subtle));
-  color: var(--accent);
 }

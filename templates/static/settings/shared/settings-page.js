@@ -123,7 +123,8 @@ export function clearDirty() {
 function renderLlmModelOptions() {
   const select = document.getElementById('llm_model');
   if (!select) return;
-  const modelOptions = loadedGlobalSettings?.llm_settings?.model_options;
+  const modelOptions = loadedGlobalSettings?.llm_settings?.model_options
+    ?? window.__JOB_HUNTER_LLM_MODEL_OPTIONS__;
   const options = Array.isArray(modelOptions)
     ? modelOptions.map(model => String(model || '').trim()).filter(Boolean)
     : [];
@@ -380,8 +381,18 @@ async function loadUserSettings() {
   const settings = await response.json();
   loadedUserSettings = settings;
   alertsSettings.fillUserSettings(settings);
+  renderLlmModelOptions();
 }
 
+function setSettingsHashWithoutScroll(sectionId) {
+  if (!sectionId) return;
+  const nextUrl = `${window.location.pathname}${window.location.search}#${sectionId}`;
+  window.history.replaceState(null, '', nextUrl);
+}
+
+function scrollSettingsToTop() {
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+}
 // -- Navigation --------------------------------------------
 document.querySelectorAll('.nav-item[data-section]').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -392,7 +403,8 @@ document.querySelectorAll('.nav-item[data-section]').forEach(btn => {
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.toggle('is-active', item === btn);
     });
-    window.location.hash = sectionId;
+    setSettingsHashWithoutScroll(sectionId);
+    scrollSettingsToTop();
   });
 });
 
@@ -409,7 +421,7 @@ if (!document.querySelector(`.settings-group.is-active[data-screen="${pageMode}"
   document.querySelectorAll('.nav-item[data-section]').forEach(item => {
     item.classList.toggle('is-active', item === firstVisibleNav);
   });
-  if (firstVisibleSection) window.location.hash = firstVisibleSection.id;
+  if (firstVisibleSection) setSettingsHashWithoutScroll(firstVisibleSection.id);
 }
 
 // -- Sliders -----------------------------------------------
@@ -460,6 +472,20 @@ function updateContractChipLabel() {
   }
 }
 
+function updateSearchPreferenceSummaries() {
+  const pageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__ || {};
+  const allChecked = (name) => Array.from(document.querySelectorAll(`input[name="${name}"]`)).every(i => i.checked);
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = !text;
+  };
+  set('engagement_type_summary', allChecked('engagement_type') ? (pageLabels.work_type_summary_all_label || '') : '');
+  set('work_mode_preference_summary', allChecked('work_mode_preference') ? (pageLabels.work_mode_summary_all_label || '') : '');
+  set('sector_preference_summary', allChecked('prefer_sector') ? (pageLabels.sector_preference_summary_all_label || '') : '');
+}
+
 function updateContractDurationRow() {
   const contractEnabled = getEngagementTypeValues().includes('contract');
   const minContractEl = document.getElementById('min_contract_months');
@@ -491,6 +517,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
       if (minContractEl) minContractEl.disabled = false;
       if (contractRow) contractRow.hidden = false;
     }
+    updateSearchPreferenceSummaries();
   });
 });
 
@@ -500,12 +527,14 @@ document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => 
       const anyChecked = document.querySelectorAll('input[name="work_mode_preference"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
+    updateSearchPreferenceSummaries();
   });
 });
 
 document.querySelectorAll('input[name="prefer_sector"]').forEach((cb) => {
   cb.addEventListener('change', () => {
     ensureAtLeastOneChoiceSelected('prefer_sector', cb);
+    updateSearchPreferenceSummaries();
   });
 });
 
@@ -686,6 +715,7 @@ const pageLoads = isAdminPage
   : [loadProfile(), loadUserSettings()];
 Promise.all(pageLoads).then(() => {
   initSliders();
+  updateSearchPreferenceSummaries();
   suppressDirtyTracking = false;
   clearDirty();
 }).catch(error => showStatus(error.message, 'error'));

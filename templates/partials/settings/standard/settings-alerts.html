@@ -1,109 +1,125 @@
         <section id="section-alerts" class="settings-group" data-screen="settings">
+          <script type="application/json" id="settings_alerts_labels_json">__JOB_HUNTER_SETTINGS_ALERTS_LABELS_JSON__</script>
           <section class="panel alerts-shell settings-section-shell">
             <div class="settings-section-head">
-              <h2>Alerts &amp; AI</h2>
-              <p class="panel-copy">Connect Telegram alerts and choose the model used for fit decisions.</p>
+              <h2>__JOB_HUNTER_SETTINGS_ALERTS_SECTION_TITLE__</h2>
+              <p class="panel-copy">__JOB_HUNTER_SETTINGS_ALERTS_SECTION_COPY__</p>
             </div>
+
             <div class="grid alerts-grid">
               <section class="subpanel">
-                <div class="field-label-row">
-                  <h2>Telegram Alerts</h2>
-                  <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">Create a bot with <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">BotFather</a> and keep it private to your account.</div>
-                </details>
-              </div>
-              <div class="field-label-row">
-                <label class="toggle-switch" for="telegram_enabled">
-                  <span class="toggle-switch-copy">
-                    <span class="toggle-switch-title">Telegram alerts enabled</span>
-                  </span>
-                  <span class="toggle-switch-control">
-                    <input id="telegram_enabled" type="checkbox" role="switch">
-                    <span class="toggle-switch-ui"></span>
-                  </span>
-                </label>
-                <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">Enable this to let Job Hunter send Telegram alerts from your own bot.</div>
-                </details>
-              </div>
+                <h3>__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_HEADING__</h3>
+                <p class="panel-copy">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_COPY__</p>
 
-              <div class="field-label-row">
-                <label for="telegram_bot_token">Bot token</label>
-                <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">Paste the bot token from BotFather.</div>
-                </details>
-              </div>
-              <input id="telegram_bot_token" type="password" placeholder="123456:ABC...">
-
-              <div class="field-label-row">
-                <label for="telegram_bot_username">Bot username</label>
-                <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">Used to build the connect link. Leave off the @ symbol.</div>
-                </details>
-              </div>
-              <input id="telegram_bot_username" type="text" placeholder="JobNotifierBot">
-
-              <div class="field-label-row">
-                <label class="toggle-switch" for="telegram_disable_link_preview">
-                  <span class="toggle-switch-copy">
-                    <span class="toggle-switch-title">Disable workspace link preview</span>
-                  </span>
-                  <span class="toggle-switch-control">
-                    <input id="telegram_disable_link_preview" type="checkbox" role="switch">
-                    <span class="toggle-switch-ui"></span>
-                  </span>
-                </label>
-                <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">If enabled, Telegram sends the workspace link without a preview card.</div>
-                </details>
-              </div>
-
-              <div class="telegram-connect-shell">
-                <div class="field-label-row" style="margin-top: 10px;">
-                  <strong>Connect your Telegram account</strong>
-                  <details class="field-info-drawer">
-                    <summary class="field-info" aria-label="Help">i</summary>
-                    <div class="field-info-panel">Save the bot token and username first. Then open the connect link in Telegram and press Start once.</div>
-                  </details>
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="telegram_enabled">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_ENABLED_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_ENABLED_HELP__</div>
+                    </details>
+                  </div>
+                  <label class="toggle-switch" for="telegram_enabled">
+                    <span class="toggle-switch-copy">
+                      <span class="toggle-switch-title">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_ENABLED_LABEL__</span>
+                    </span>
+                    <span class="toggle-switch-control">
+                      <input id="telegram_enabled" type="checkbox" role="switch">
+                      <span class="toggle-switch-ui"></span>
+                    </span>
+                  </label>
                 </div>
-                <div class="panel-actions telegram-connect-actions">
-                  <button class="secondary" id="open_telegram_connect" type="button">Open Telegram Link</button>
-                  <button class="secondary" id="sync_telegram_subscribers" type="button">Refresh Telegram Connection</button>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="telegram_bot_token">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_TOKEN_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_TOKEN_HELP__</div>
+                    </details>
+                  </div>
+                  <div class="field-control-shell">
+                    <input id="telegram_bot_token" type="password" placeholder="123456:ABC...">
+                  </div>
                 </div>
-              </div>
-              <div class="field-label-row" style="margin-top: 10px;">
-                <strong>Connection status</strong>
-                <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">No receiving Telegram account connected yet.</div>
-                </details>
-              </div>
-              <div id="telegram_subscribers_panel" class="help" hidden></div>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="telegram_bot_username">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_USERNAME_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_BOT_USERNAME_HELP__</div>
+                    </details>
+                  </div>
+                  <div class="field-control-shell">
+                    <input id="telegram_bot_username" type="text" placeholder="JobNotifierBot">
+                  </div>
+                </div>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="telegram_disable_link_preview">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_DISABLE_LINK_PREVIEW_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_DISABLE_LINK_PREVIEW_HELP__</div>
+                    </details>
+                  </div>
+                  <label class="toggle-switch" for="telegram_disable_link_preview">
+                    <span class="toggle-switch-copy">
+                      <span class="toggle-switch-title">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_DISABLE_LINK_PREVIEW_LABEL__</span>
+                    </span>
+                    <span class="toggle-switch-control">
+                      <input id="telegram_disable_link_preview" type="checkbox" role="switch">
+                      <span class="toggle-switch-ui"></span>
+                    </span>
+                  </label>
+                </div>
+
+                <div class="settings-form-field telegram-connect-shell">
+                  <div class="field-label-row">
+                    <strong>__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_HEADING__</strong>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_HELP__</div>
+                    </details>
+                  </div>
+                  <div id="telegram_connect_panel" class="help telegram-connect-panel" aria-live="polite"></div>
+                  <div class="panel-actions telegram-connect-actions">
+                    <button class="secondary" id="open_telegram_connect" type="button">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_OPEN_LABEL__</button>
+                    <button class="secondary" id="sync_telegram_subscribers" type="button">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECT_REFRESH_LABEL__</button>
+                  </div>
+                </div>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <strong>__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECTION_STATUS_LABEL__</strong>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_CONNECTION_STATUS_EMPTY__</div>
+                    </details>
+                  </div>
+                  <div id="telegram_subscribers_panel" class="help telegram-subscribers-panel" hidden aria-live="polite"></div>
+                </div>
 
                 <div class="panel-actions">
-                  <button class="secondary" id="send_telegram_test" type="button">Send Test Alert</button>
+                  <button class="secondary" id="send_telegram_test" type="button">__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_TEST_LABEL__</button>
                 </div>
               </section>
 
               <section class="subpanel">
-                <div class="field-label-row">
-                  <h2>AI / LLM</h2>
-                  <details class="field-info-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">Used for fit decisions and CV extraction. The available models are managed in Global settings.</div>
-                </details>
-              </div>
-              <div class="field-label-row">
-                <label for="llm_model">Model</label>
-              </div>
-                <select id="llm_model" class="jh-select">
-                  <option value="">Select a model</option>
-                </select>
+                <h3>__JOB_HUNTER_SETTINGS_ALERTS_LLM_HEADING__</h3>
+                <p class="panel-copy">__JOB_HUNTER_SETTINGS_ALERTS_LLM_COPY__</p>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="llm_model">__JOB_HUNTER_SETTINGS_ALERTS_LLM_MODEL_LABEL__</label>
+                  </div>
+                  <div class="field-control-shell">
+                    <select id="llm_model" class="jh-select">
+                      <option value="">__JOB_HUNTER_SETTINGS_ALERTS_LLM_MODEL_PLACEHOLDER__</option>
+                    </select>
+                  </div>
+                </div>
               </section>
             </div>
           </section>

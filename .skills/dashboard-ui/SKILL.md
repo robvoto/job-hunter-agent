@@ -76,6 +76,17 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - `window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__`, `__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT__`, and related globals are injected by `build_bootstrap_script()` in `<head>`. They must be available before `onboarding-page.js` runs.
 - Client-side validators (`validateSearchPreferences`) should guard `Set.size > 0` before treating an absent value as an error, to tolerate any edge case where globals are not yet set.
 
+### LLM model dropdown (`#llm_model`)
+- Options come from `global_settings.json → llm_settings.model_options`. On the admin page these are loaded via `GET /api/global-settings` into `loadedGlobalSettings`. On the standard settings page that fetch never runs (non-admin), so `window.__JOB_HUNTER_LLM_MODEL_OPTIONS__` is the source — injected by `build_bootstrap_script()` from the same file at page render.
+- `renderLlmModelOptions()` in `settings-page.js` reads `loadedGlobalSettings?.llm_settings?.model_options ?? window.__JOB_HUNTER_LLM_MODEL_OPTIONS__`. The currently saved model (`loadedUserSettings?.llm?.model`) is prepended if it is not already in the list.
+- `renderLlmModelOptions()` is called from `loadUserSettings()` (standard page) and `loadGlobalSettings()` (admin page). It is a module-private function — not exported and not on `window`. The `typeof renderLlmModelOptions === 'function'` guard in `settings-alerts.js` is a dead code path; it never fires because the function is not in module scope from that file.
+- Do not remove the `window.__JOB_HUNTER_LLM_MODEL_OPTIONS__` bootstrap injection — it is the only model-options source for non-admin users.
+
+### Choice-strip summaries (engagement type, work mode, sector preference)
+- Each choice strip (`input[name="engagement_type"]`, `input[name="work_mode_preference"]`, `input[name="prefer_sector"]`) has a sibling `<p id="*_summary" class="search-basics-summary">` that shows an "all selected" label when every option is checked.
+- `updateSearchPreferenceSummaries()` in `settings-page.js` drives this. Label strings come from `window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__` keys: `work_type_summary_all_label`, `work_mode_summary_all_label`, `sector_preference_summary_all_label`. Do not hardcode these strings in JS — they are owned by `ui_labels.json`.
+- Called on every change event for those inputs and once after `Promise.all(pageLoads)` on initial load.
+
 ## Reset User flow
 
 - The reset redirects to `/start?fresh=1`. `initWizard()` in `onboarding-flow.js` detects `?fresh=1`, calls `clearOnboardingBrowserState()`, strips the param from the URL, explicitly clears the search-keyword and salary fields to `''`, awaits `loadProfileDefaults()`, then sets step 1. Do not change this without preserving all five steps.
