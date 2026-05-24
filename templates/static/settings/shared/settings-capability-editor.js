@@ -1,6 +1,7 @@
-window.JobHunterCapabilityEditor = (function () {
-  const capabilityUi = window.JobHunterCapabilityUi || {};
-  const { escapeHtml, settingsField } = window.JobHunterSettingsUtils;
+import { escapeHtml, settingsField } from './settings-utils.js';
+import * as capabilityUi from '../../common/capability-ui.js';
+
+export const JobHunterCapabilityEditor = (function () {
   const capabilityLabels = capabilityUi.labels || {};
   const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
   const capabilityLevels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
@@ -136,7 +137,6 @@ window.JobHunterCapabilityEditor = (function () {
                 </button>
               </div>
                 <div class="cap-strength">
-                  <span>Strength</span>
                   <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
                     ${strengthChoices}
                   </div>

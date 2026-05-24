@@ -601,6 +601,10 @@ def seek_scrape_to_records(
                             if record[rs.RECORD_DECISION_KEY] == "REJECT":
                                 print(f"{page_tag} REJECTED ({record['review_source']}) {title} @ {company}")
                                 apply_reject_result(record, "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT")
+                                register_pending_learning_signals(merge_pending_learning_signals(
+                                    record.get("ad_learning_signals") or [],
+                                    record.get("llm_learning_candidates") or [],
+                                ))
                                 finalize_record(job_history, audit_rows, record, run_iso)
                                 continue
 

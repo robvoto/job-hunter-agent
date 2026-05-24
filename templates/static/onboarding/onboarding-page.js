@@ -1,18 +1,17 @@
+import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
+import * as onboardingCurrencyUi from '../common/currency-input.js';
+import * as onboardingLocationUi from '../common/location-options.js';
+import * as onboardingCapabilityUi from '../common/capability-ui.js';
+import { createController as createMessageBannerController } from '../common/message-banner.js';
+import * as onboardingUpload from './onboarding-upload.js';
+
 const urlParams = new URLSearchParams(window.location.search);
-const isRebuildMode = urlParams.get('mode') === 'rebuild';
-const refs = Object.freeze({
+export const isRebuildMode = urlParams.get('mode') === 'rebuild';
+export const refs = Object.freeze({
   status: document.getElementById('status'),
-  onboardingImportHelper: document.getElementById('onboarding_import_helper'),
-  onboardingImportHelperCopy: document.getElementById('onboarding_import_helper_copy'),
-  dismissOnboardingImportHelperButton: document.getElementById('dismiss_onboarding_import_helper'),
   stepEls: Array.from(document.querySelectorAll('.wizard-step')),
   wizardProgressSteps: Array.from(document.querySelectorAll('.wizard-progress-step')),
-  heroSection: document.querySelector('.hero'),
-  heroTitle: document.getElementById('hero_title'),
-  heroCopy: document.getElementById('hero_copy'),
-  formTitle: document.getElementById('form_title'),
   workflowSummary: document.getElementById('workflow_summary'),
-  workflowStep2: document.getElementById('workflow_step_2'),
   progressFill: document.getElementById('wizard_progress_fill'),
   primaryCvInput: document.getElementById('primary_cv'),
   primaryCvDropZone: document.getElementById('cv_drop_zone'),
@@ -20,6 +19,9 @@ const refs = Object.freeze({
   locationSelect: document.getElementById('location_search'),
   workModePreferences: Array.from(document.querySelectorAll('input[name="work_mode_preference"]')),
   sectorPreferenceSelect: document.getElementById('sector_preference'),
+  sectorPreferenceSummary: document.getElementById('sector_preference_summary'),
+  engagementTypeSummary: document.getElementById('engagement_type_summary'),
+  workModePreferenceSummary: document.getElementById('work_mode_preference_summary'),
   reviewCapabilityCount: document.getElementById('review_capability_count'),
   salaryYearlyBlock: document.getElementById('salary_yearly_block'),
   salaryDailyBlock: document.getElementById('salary_daily_block'),
@@ -35,27 +37,21 @@ const refs = Object.freeze({
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
   reviewCapabilityTitle: document.getElementById('review_capability_title'),
   reviewCapabilityHelp: document.getElementById('review_capability_help'),
-  primaryCvLimitHelp: document.getElementById('primary_cv_limit_help'),
 });
 const {
   status: statusEl,
-  onboardingImportHelper: onboardingImportHelperEl,
-  onboardingImportHelperCopy: onboardingImportHelperCopyEl,
-  dismissOnboardingImportHelperButton: dismissOnboardingImportHelperButtonEl,
   stepEls,
   wizardProgressSteps,
-  heroSection: heroSectionEl,
-  heroTitle: heroTitleEl,
-  heroCopy: heroCopyEl,
-  formTitle: formTitleEl,
   workflowSummary: workflowSummaryEl,
-  workflowStep2: workflowStep2El,
   progressFill: progressFillEl,
   primaryCvInput,
   primaryCvDropZone,
   cvDropZoneContent: primaryCvDropZoneContentEl,
   locationSelect,
   sectorPreferenceSelect,
+  sectorPreferenceSummary,
+  engagementTypeSummary,
+  workModePreferenceSummary,
   reviewCapabilityCount: reviewCapabilityCountEl,
   salaryYearlyBlock,
   salaryDailyBlock,
@@ -70,61 +66,54 @@ const {
   reviewCapabilityCards: reviewCapabilityCardsEl,
   reviewCapabilityTitle: reviewCapabilityTitleEl,
   reviewCapabilityHelp: reviewCapabilityHelpEl,
-  primaryCvLimitHelp: primaryCvLimitHelpEl,
 } = refs;
-const STEP_COUNT = 4;
-const REVIEW_STEP = 2;
-const SEARCH_STEP = 3;
-const CHECK_STEP = 4;
-const locationUi = window.JobHunterLocationUi || {};
-const capabilityUi = window.JobHunterCapabilityUi || {};
-const capabilityLabels = capabilityUi.labels || {};
-const onboardingSettingsUtils = window.JobHunterSettingsUtils || {};
+const statusUi = createMessageBannerController(statusEl);
+export const STEP_COUNT = 4;
+export const REVIEW_STEP = 2;
+export const SEARCH_STEP = 3;
+export const CHECK_STEP = 4;
+const capabilityLabels = onboardingCapabilityUi.labels;
 const escapeHtml = onboardingSettingsUtils.escapeHtml;
-const ONBOARDING_DEFAULTS = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ || {};
-const ONBOARDING_CV_PAGE_LIMIT = Number(ONBOARDING_DEFAULTS.cv_max_pages || 0);
-const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__ || {};
-const minContractMonthOptions = Array.isArray(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__)
-  ? window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
-  : [];
-const minContractMonthLabels = Object.fromEntries(
-  minContractMonthOptions
-    .map((option) => [String(option.value || '').trim(), String(option.label || '').trim()])
-    .filter(([value]) => Boolean(value))
-);
-const minContractMonthValues = new Set(minContractMonthOptions.map((option) => String(option.value || '').trim()));
-const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ || 'No minimum').trim();
+const ONBOARDING_CV_PAGE_LIMIT = Number(window.__JOB_HUNTER_ONBOARDING_DEFAULTS__.cv_max_pages);
+const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__;
+const minContractMonthOptions = window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__;
+const minContractMonthValues = new Set(minContractMonthOptions.map((option) => String(option.value).trim()));
+const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__).trim();
 const onboardingPageTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
-
 if (!onboardingPageTitleTierLabels) {
   throw new Error('Missing title tier labels.');
 }
-if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
+if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.filter_placeholder) {
   throw new Error('Missing capability UI labels.');
 }
 if (typeof escapeHtml !== 'function') {
   throw new Error('Missing HTML escaping helper.');
 }
 
-function defaultSearchKeywordFromTargetRoles(profile) {
-  const reviewedTitles = Array.isArray(reviewTargetTitles) ? reviewTargetTitles : [];
-  const profileTitles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
-  const allTitles = reviewedTitles.concat(profileTitles).filter(Boolean);
-  return allTitles.length ? allTitles[0] : '';
+function dedupeSearchTitles(values) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const cleaned = String(value).trim();
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(cleaned);
+  }
+  return output;
 }
-const SECTOR_PREFERENCE_OPTIONS = Array.isArray(window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__)
-  ? window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__
-  : [];
-const SECTOR_PREFERENCE_DEFAULT = String(
-  window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__
-  || SECTOR_PREFERENCE_OPTIONS?.[0]?.value
-  || 'any'
-).trim().toLowerCase();
-const SECTOR_PREFERENCE_LABELS = Object.fromEntries(
-  SECTOR_PREFERENCE_OPTIONS
-    .map((option) => [String(option.value || '').trim().toLowerCase(), String(option.label || '').trim()])
-    .filter(([value]) => Boolean(value))
-);
+
+export function defaultSearchKeywordFromTargetRoles(profile) {
+  if (!profile || !Array.isArray(profile.target_roles)) {
+    throw new Error('Missing target roles.');
+  }
+  const allTitles = dedupeSearchTitles(reviewTargetTitles.concat(profile.target_roles));
+  if (!allTitles.length) {
+    throw new Error('Missing target role keywords.');
+  }
+  return allTitles[0];
+}
 const {
   WORK_MODE_PREFERENCE_VALUES: ONBOARDING_WORK_MODE_PREFERENCE_VALUES,
   ENGAGEMENT_TYPE_VALUES,
@@ -141,12 +130,6 @@ const {
   normalizeReviewTitleLists,
   normalizeReviewCapability,
 } = onboardingSettingsUtils;
-const onboardingCopy = window.__JOB_HUNTER_ONBOARDING_COPY__;
-if (!onboardingCopy?.steps) {
-  throw new Error('Missing onboarding copy.');
-}
-const onboardingStepCopy = onboardingCopy.steps;
-
 if (reviewCapabilityTitleEl) {
   reviewCapabilityTitleEl.textContent = capabilityLabels.onboarding_title;
 }
@@ -161,21 +144,25 @@ if (reviewCapabilityFilterEl) {
   reviewCapabilityFilterEl.placeholder = capabilityLabels.filter_placeholder;
   reviewCapabilityFilterEl.setAttribute('aria-label', capabilityLabels.filter_placeholder);
 }
-if (primaryCvLimitHelpEl) {
-  const pageClause = Number.isFinite(ONBOARDING_CV_PAGE_LIMIT) && ONBOARDING_CV_PAGE_LIMIT > 0
-    ? ` We currently read the first ${ONBOARDING_CV_PAGE_LIMIT} pages during setup, so place your most relevant experience early in the document.`
-    : '';
-  primaryCvLimitHelpEl.innerHTML =
-    ` Use your most detailed CV, not the prettiest one.${pageClause}`;
+const onboardingPageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__;
+if (!onboardingPageLabels) {
+  throw new Error('Missing onboarding page labels.');
 }
-if (workflowStep2El) {
-  workflowStep2El.textContent = 'We extract likely job roles, skills, and a starter search direction from your CV.';
-}
-const PRIMARY_CV_COPY = {
-  emptyTitle: 'Drop your CV here or click to browse',
-  emptyHint: 'Formats: .docx, .pdf, .md, .txt',
-  loadedHint: 'Drop another file or click to replace',
-};
+export const PRIMARY_CV_COPY = Object.freeze({
+  emptyTitle: onboardingPageLabels.cv_drop_zone_empty_title,
+  emptyHint: onboardingPageLabels.cv_drop_zone_empty_hint,
+  loadedHint: onboardingPageLabels.cv_drop_zone_loaded_hint,
+});
+onboardingUpload.configureOnboardingUpload({
+  refs,
+  primaryCvCopy: PRIMARY_CV_COPY,
+  getPreservedPrimaryCvFile: () => preservedPrimaryCvFile,
+  setPreservedPrimaryCvFile,
+  getDraftBuiltExplicitly: () => draftBuiltExplicitly,
+  hideStatus,
+  showStatus,
+  refreshStepNavigation,
+});
 const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
 if (!ONBOARDING_USER_ID) {
   throw new Error('Missing user id.');
@@ -183,33 +170,93 @@ if (!ONBOARDING_USER_ID) {
 function buildScopedStorageKey(baseKey) {
   return `${baseKey}:${ONBOARDING_USER_ID}`;
 }
-const WIZARD_STATE_KEY = buildScopedStorageKey('jobHunter.onboardingWizard');
-const ONBOARDING_WELCOME_KEY = buildScopedStorageKey('jobHunter.onboardingWelcome');
+export const WIZARD_STATE_KEY = buildScopedStorageKey('jobHunter.onboardingWizard');
+export const ONBOARDING_WELCOME_KEY = buildScopedStorageKey('jobHunter.onboardingWelcome');
 const ONBOARDING_WELCOME_OPT_OUT_KEY = buildScopedStorageKey('jobHunter.onboardingWelcomeOptOut');
 const ONBOARDING_IMPORT_HELPER_DISMISSED_KEY = buildScopedStorageKey('jobHunter.onboardingImportHelperDismissed');
-const SOURCE_PACK_DATA_PREFIX = '/data/';
-const ROOT_DATA_PREFIX = 'data/';
-const REVIEW_CAPABILITY_PREVIEW_ROWS = (window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ || {}).capability_preview_rows || 1;
-const isTestMode = document.body.dataset.testMode === 'true';
+const REVIEW_CAPABILITY_PREVIEW_ROWS = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__.capability_preview_rows;
+if (!Number.isInteger(REVIEW_CAPABILITY_PREVIEW_ROWS) || REVIEW_CAPABILITY_PREVIEW_ROWS < 1) {
+  throw new Error('Missing review capability preview row count.');
+}
+export const isTestMode = document.body.dataset.testMode === 'true';
 
-let currentStep = 1;
-let workingStatusTimer = null;
-let preservedPrimaryCvFile = null;
-let lastImportPayload = null;
-let reviewTargetTitles = [];
-let reviewSecondaryTitles = [];
-let reviewCapabilityRules = [];
-let selectedLocations = [];
-let selectedReviewCapabilityIndexes = new Set();
-let reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
-let maxUnlockedStep = 1;
-let draftBuiltExplicitly = false;
-let searchBasicsPersistTimer = null;
-let savedPrimaryCvSourcePath = '';
-let savedPrimaryCvFileName = '';
-let reviewCapabilityResizeObserver = null;
+export let currentStep = 1;
+export let workingStatusTimer = null;
+export let preservedPrimaryCvFile = null;
+export let lastImportPayload = null;
+export let lastLoadedProfile = null;
+export let reviewTargetTitles = [];
+export let reviewSecondaryTitles = [];
+export let reviewCapabilityRules = [];
+export let selectedLocations = [];
+export let selectedReviewCapabilityIndexes = new Set();
+export let reviewCapabilityVisibleCount = REVIEW_CAPABILITY_PREVIEW_ROWS;
+export let maxUnlockedStep = 1;
+export let draftBuiltExplicitly = false;
+export let searchBasicsPersistTimer = null;
+export let reviewCapabilityResizeObserver = null;
 
-function getReviewCapabilityPreviewCount() {
+export function setCurrentStep(value) {
+  currentStep = Number(value) || 1;
+}
+
+export function setWorkingStatusTimer(value) {
+  workingStatusTimer = value;
+}
+
+export function setPreservedPrimaryCvFile(value) {
+  preservedPrimaryCvFile = value;
+}
+
+export function setLastImportPayload(value) {
+  lastImportPayload = value;
+}
+
+export function setLastLoadedProfile(value) {
+  lastLoadedProfile = value;
+}
+
+export function setReviewTargetTitles(value) {
+  reviewTargetTitles = Array.isArray(value) ? value : [];
+}
+
+export function setReviewSecondaryTitles(value) {
+  reviewSecondaryTitles = Array.isArray(value) ? value : [];
+}
+
+export function setReviewCapabilityRules(value) {
+  reviewCapabilityRules = Array.isArray(value) ? value : [];
+}
+
+export function setSelectedLocations(value) {
+  selectedLocations = Array.isArray(value) ? value : [];
+}
+
+export function setSelectedReviewCapabilityIndexes(value) {
+  selectedReviewCapabilityIndexes = value instanceof Set ? value : new Set();
+}
+
+export function setReviewCapabilityVisibleCount(value) {
+  reviewCapabilityVisibleCount = Number(value) || 0;
+}
+
+export function setMaxUnlockedStep(value) {
+  maxUnlockedStep = Number(value) || 1;
+}
+
+export function setDraftBuiltExplicitly(value) {
+  draftBuiltExplicitly = Boolean(value);
+}
+
+export function setSearchBasicsPersistTimer(value) {
+  searchBasicsPersistTimer = value;
+}
+
+export function setReviewCapabilityResizeObserver(value) {
+  reviewCapabilityResizeObserver = value;
+}
+
+export function getReviewCapabilityPreviewCount() {
   return REVIEW_CAPABILITY_PREVIEW_ROWS;
 }
 
@@ -225,36 +272,7 @@ function syncReviewCapabilityVisibleCount(forceRender = false) {
   return true;
 }
 
-function onboardingImportHelperDismissed() {
-  try {
-    return window.localStorage.getItem(ONBOARDING_IMPORT_HELPER_DISMISSED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function showOnboardingImportHelper(message) {
-  if (!onboardingImportHelperEl || !onboardingImportHelperCopyEl) {
-    return;
-  }
-  onboardingImportHelperCopyEl.textContent = String(message || '').trim();
-  onboardingImportHelperEl.hidden = false;
-}
-
-function hideOnboardingImportHelper(markDismissed = false) {
-  if (onboardingImportHelperEl) {
-    onboardingImportHelperEl.hidden = true;
-  }
-  if (!markDismissed) {
-    return;
-  }
-  try {
-    window.localStorage.setItem(ONBOARDING_IMPORT_HELPER_DISMISSED_KEY, '1');
-  } catch {
-  }
-}
-
-function hasDraftProfileState() {
+export function hasDraftProfileState() {
   return Boolean(
     lastImportPayload
     || reviewTargetTitles.length
@@ -263,7 +281,7 @@ function hasDraftProfileState() {
   );
 }
 
-function hasSearchBasicsState() {
+export function hasSearchBasicsState() {
   return Boolean(
     hasDraftProfileState()
     && (
@@ -273,7 +291,7 @@ function hasSearchBasicsState() {
   );
 }
 
-function refreshStepNavigation() {
+export function refreshStepNavigation() {
   const hasPrimaryCv = Boolean(primaryCvInput?.files?.[0] || preservedPrimaryCvFile);
   const unlockedStep = Math.max(
     1,
@@ -289,54 +307,82 @@ function refreshStepNavigation() {
   });
 }
 
-function getOnboardingStepCopy(stepNumber, key, options = {}) {
-  const { allowEmpty = false } = options;
-  const value = onboardingStepCopy?.[String(stepNumber)]?.[key];
-  if (typeof value !== 'string' || (!allowEmpty && !value.trim())) {
-    throw new Error(`Missing onboarding copy: steps.${stepNumber}.${key}`);
-  }
-  return value;
+function getSectorPreferenceValues() {
+  return getOnboardingSectorPreferenceValues();
 }
 
-function getSectorPreferenceValue() {
-  const checked = getOnboardingSectorPreferenceValues();
-  const allValues = Array.from(document.querySelectorAll('input[name="prefer_sector"]'))
-    .map((input) => String(input.value || '').trim().toLowerCase()).filter(Boolean);
-  if (!checked.length || (allValues.length > 0 && checked.length === allValues.length)) {
-    return SECTOR_PREFERENCE_DEFAULT;
-  }
-  return checked[0];
-}
-
-function setSectorPreferenceValue(value) {
-  setOnboardingSectorPreferenceValues(value || SECTOR_PREFERENCE_DEFAULT);
+function setSectorPreferenceValues(values) {
+  setOnboardingSectorPreferenceValues(values);
 }
 
 function getMinContractMonthValue() {
-  return String(refs.minContractMonths?.value || '').trim();
+  return String(refs.minContractMonths.value).trim();
 }
 
-function setMinContractMonthValue(value) {
+export function setMinContractMonthValue(value) {
   if (refs.minContractMonths) {
-    refs.minContractMonths.value = String(value || '').trim();
+    refs.minContractMonths.value = String(value).trim();
   }
 }
 
-function minContractMonthLabel(value) {
-  const selected = String(value || '').trim();
-  return selected ? (minContractMonthLabels[selected] || selected) : minContractMonthNoneLabel;
+export function getResolvedMinContractMonthValue() {
+  const current = getMinContractMonthValue();
+  if (!current) return '';
+  if (!minContractMonthValues.has(current)) {
+    throw new Error(`Invalid minimum contract month value: ${current}`);
+  }
+  return current;
 }
 
-function updateContractChipLabel() {
+function minContractMonthSummaryText(value) {
+  const selected = String(value).trim();
+  if (!selected) {
+    return minContractMonthNoneLabel;
+  }
+  const option = minContractMonthOptions.find((item) => String(item.value).trim() === selected);
+  if (!option || !option.label) {
+    throw new Error(`Missing contract month label for value: ${selected}`);
+  }
+  return String(option.label).trim();
+}
+
+function allChoiceValuesSelected(name) {
+  const inputs = Array.from(document.querySelectorAll(`input[name="${name}"]`));
+  if (!inputs.length) return false;
+  return inputs.every((input) => input.checked);
+}
+
+export function updateSearchPreferenceSummaries() {
+  const contractMonths = getResolvedMinContractMonthValue();
+  if (refs.engagementTypeSummary) {
+    const allSelected = allChoiceValuesSelected('engagement_type');
+    refs.engagementTypeSummary.textContent = allSelected
+      ? `${onboardingPageLabels.work_type_summary_all_label} · ${onboardingPageLabels.work_type_summary_contract_length_label}: ${contractMonths ? minContractMonthSummaryText(contractMonths) : onboardingPageLabels.summary_any_length_label}`
+      : '';
+    refs.engagementTypeSummary.hidden = !allSelected;
+  }
+  if (refs.sectorPreferenceSummary) {
+    const allSelected = allChoiceValuesSelected('prefer_sector');
+    refs.sectorPreferenceSummary.textContent = allSelected ? onboardingPageLabels.sector_preference_summary_all_label : '';
+    refs.sectorPreferenceSummary.hidden = !allSelected;
+  }
+  if (refs.workModePreferenceSummary) {
+    const allSelected = allChoiceValuesSelected('work_mode_preference');
+    refs.workModePreferenceSummary.textContent = allSelected ? onboardingPageLabels.work_mode_summary_all_label : '';
+    refs.workModePreferenceSummary.hidden = !allSelected;
+  }
+}
+
+export function updateContractChipLabel() {
   const span = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label')?.querySelector('span');
   if (!span) return;
   const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
+  if (!span.dataset.baseLabel) span.dataset.baseLabel = span.textContent;
   if (!contractEnabled) {
-    span.textContent = span.dataset.baseLabel || span.textContent;
+    span.textContent = span.dataset.baseLabel;
     return;
   }
-  if (!span.dataset.baseLabel) span.dataset.baseLabel = span.textContent;
-  const months = String(refs.minContractMonths?.value || '').trim();
+  const months = String(refs.minContractMonths.value).trim();
   if (!months) {
     span.textContent = `${span.dataset.baseLabel} (all)`;
   } else {
@@ -344,7 +390,7 @@ function updateContractChipLabel() {
   }
 }
 
-function positionContractDurationRow() {
+export function positionContractDurationRow() {
   const contractRow = document.getElementById('contract_duration_row');
   const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
   if (!contractRow || !contractChip) return;
@@ -358,7 +404,7 @@ function positionContractDurationRow() {
   contractRow.style.top = Math.round(chipRect.bottom - parentRect.top + 6) + 'px';
 }
 
-function updateMinContractMonthState({ showRow = false } = {}) {
+export function updateMinContractMonthState({ showRow = false } = {}) {
   if (!refs.minContractMonths) return;
   const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
   refs.minContractMonths.disabled = !contractEnabled;
@@ -367,14 +413,18 @@ function updateMinContractMonthState({ showRow = false } = {}) {
     if (!contractEnabled) {
       contractRow.hidden = true;
     } else if (showRow) {
+      if (!getMinContractMonthValue()) {
+        setMinContractMonthValue(getResolvedMinContractMonthValue());
+      }
       positionContractDurationRow();
       contractRow.hidden = false;
     }
   }
   updateContractChipLabel();
+  updateSearchPreferenceSummaries();
 }
 
-function initFieldInfoToggles() {
+export function initFieldInfoToggles() {
   document.querySelectorAll('button.field-info').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -387,26 +437,21 @@ function initFieldInfoToggles() {
 }
 
 const getSalaryLimitMaximum = (key) => {
-  const max = Number(salaryLimits?.[key]?.max);
-  return Number.isFinite(max) && max >= 0 ? max : Infinity;
+  if (!salaryLimits || !salaryLimits[key]) {
+    throw new Error(`Missing salary limit for ${key}.`);
+  }
+  const max = Number(salaryLimits[key].max);
+  if (!Number.isFinite(max) || max < 0) {
+    throw new Error(`Invalid salary limit for ${key}.`);
+  }
+  return max;
 };
 
-function saveWizardState() {
+export function saveWizardState() {
   if (currentStep < 2 && !hasDraftProfileState()) {
     window.localStorage.removeItem(WIZARD_STATE_KEY);
     return;
   }
-  const primaryCvSource = String(
-    lastImportPayload?.materials?.profile_sources?.[0]?.path
-    || savedPrimaryCvSourcePath
-    || ''
-  ).trim();
-  const primaryCvFileName = String(
-    preservedPrimaryCvFile?.name
-    || primaryCvInput?.files?.[0]?.name
-    || savedPrimaryCvFileName
-    || ''
-  ).trim();
   window.localStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({
     step: currentStep,
     maxUnlockedStep,
@@ -417,208 +462,34 @@ function saveWizardState() {
     selectedLocations,
     workModePreference: getOnboardingWorkModePreferenceValues(),
     searchKeywords: reviewSearchKeywordsEl?.value || '',
-    minContractMonths: getMinContractMonthValue(),
+    minContractMonths: getResolvedMinContractMonthValue(),
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
     engagementType: getOnboardingEngagementTypeValues(),
-    preferSector: getSectorPreferenceValue(),
-    primaryCvSourcePath: primaryCvSource,
-    primaryCvFileName,
+    preferSector: getSectorPreferenceValues(),
   }));
 }
 
-function normalizePrimaryCvSourcePath(path) {
-  const value = String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
-  return value.startsWith(ROOT_DATA_PREFIX) ? value.slice(ROOT_DATA_PREFIX.length) : value;
-}
 
-async function restorePrimaryCvFromSourcePath() {
-  if (!primaryCvInput || primaryCvInput.files?.[0] || preservedPrimaryCvFile) {
-    return false;
-  }
-  const state = (() => {
-    try {
-      const raw = window.localStorage.getItem(WIZARD_STATE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  })();
-  const sourcePath = String(state?.primaryCvSourcePath || savedPrimaryCvSourcePath || '').trim();
-  if (!sourcePath) {
-    return false;
-  }
-  const dataPath = normalizePrimaryCvSourcePath(sourcePath);
-  const response = await fetch(`${SOURCE_PACK_DATA_PREFIX}${encodeURI(dataPath)}`, {
-    cache: 'no-store',
-  });
-  if (!response.ok) {
-    return false;
-  }
-  const blob = await response.blob();
-  const fileName = String(state?.primaryCvFileName || savedPrimaryCvFileName || dataPath.split('/').pop() || 'cv').trim();
-  const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
-  assignPrimaryCvFile(file);
-  return true;
-}
 
-function buildSearchBasicsProfilePatch() {
-  const location = String(selectedLocations[0] || locationSelect?.value || '').trim();
-  const keywords = String(reviewSearchKeywordsEl?.value || '').trim();
-  const minimumSalaryYearly = onboardingParseCurrencyValue(reviewMinimumSalaryYearlyEl?.value || '');
-  const minimumDailyRate = onboardingParseCurrencyValue(reviewMinimumDailyRateEl?.value || '');
-  const engagementType = getOnboardingEngagementTypeValues();
-  const minContractMonths = engagementType.includes('contract') ? (getMinContractMonthValue() || null) : null;
-  const preferSector = getSectorPreferenceValue();
 
-  return {
-    search_settings: {
-      keywords,
-      locations: location ? [location] : [],
-    },
-    match_preferences: {
-      engagement_type: engagementType,
-      min_contract_months: minContractMonths,
-      work_mode_preference: getOnboardingWorkModePreferenceValues(),
-      prefer_sector: preferSector,
-    },
-    salary_preferences: {
-      minimum_salary_yearly: Number(minimumSalaryYearly || 0),
-      minimum_daily_rate: Number(minimumDailyRate || 0),
-    },
-  };
-}
-
-async function persistSearchBasicsToProfile() {
-  const response = await jobHunterFetch('/api/profile', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildSearchBasicsProfilePatch()),
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error || 'Could not save search basics');
-  }
-  return response.json().catch(() => ({}));
-}
-
-function scheduleSearchBasicsPersistence() {
-  if (searchBasicsPersistTimer) {
-    window.clearTimeout(searchBasicsPersistTimer);
-  }
-  searchBasicsPersistTimer = window.setTimeout(() => {
-    searchBasicsPersistTimer = null;
-    persistSearchBasicsToProfile().catch((error) => {
-      console.warn('Could not persist onboarding search basics.', error);
-    });
-  }, 500);
-}
-
-async function flushSearchBasicsPersistence() {
-  if (searchBasicsPersistTimer) {
-    window.clearTimeout(searchBasicsPersistTimer);
-    searchBasicsPersistTimer = null;
-  }
-  await persistSearchBasicsToProfile();
-}
-
-function restoreWizardState() {
-  let state;
-  try {
-    const raw = window.localStorage.getItem(WIZARD_STATE_KEY);
-    if (!raw) return false;
-    state = JSON.parse(raw);
-    const savedTargets = Array.isArray(state?.reviewTargetTitles) ? state.reviewTargetTitles : [];
-    const savedSecondary = Array.isArray(state?.reviewSecondaryTitles) ? state.reviewSecondaryTitles : [];
-    const savedCapabilities = Array.isArray(state?.reviewCapabilityRules) ? state.reviewCapabilityRules : [];
-    const hasSavedDraft = Boolean(savedTargets.length || savedSecondary.length || savedCapabilities.length);
-    if (!state || (Number(state.step) >= 2 && !hasSavedDraft)) return false;
-    const normalizedTitles = normalizeReviewTitleLists(state.reviewTargetTitles || [], state.reviewSecondaryTitles || []);
-    reviewTargetTitles = normalizedTitles.primary;
-    reviewSecondaryTitles = normalizedTitles.secondary;
-    reviewCapabilityRules = (Array.isArray(state.reviewCapabilityRules) ? state.reviewCapabilityRules : [])
-      .map(normalizeReviewCapability)
-      .filter((rule) => rule.name);
-    maxUnlockedStep = Math.max(1, Math.min(STEP_COUNT, Number(state.maxUnlockedStep) || 1));
-    reviewCapabilityVisibleCount = Number(state.reviewCapabilityVisibleCount) > 0
-      ? Number(state.reviewCapabilityVisibleCount)
-      : getReviewCapabilityPreviewCount();
-    savedPrimaryCvSourcePath = String(state.primaryCvSourcePath || '').trim();
-    savedPrimaryCvFileName = String(state.primaryCvFileName || '').trim();
-    try {
-      setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '', { persist: false });
-    } catch (error) {
-      console.warn('Could not restore onboarding location state.', error);
-    }
-    try {
-      const kwEl = reviewSearchKeywordsEl;
-      if (kwEl) kwEl.value = state.searchKeywords || '';
-      setMinContractMonthValue(state.minContractMonths || '');
-      const salaryEl = reviewMinimumSalaryYearlyEl;
-      if (salaryEl) onboardingSetCurrencyFieldValue(salaryEl, state.minimumSalaryYearly || 0);
-      const dailyEl = reviewMinimumDailyRateEl;
-      if (dailyEl) onboardingSetCurrencyFieldValue(dailyEl, state.minimumDailyRate || 0);
-      setOnboardingEngagementTypeValues(state.engagementType);
-      setOnboardingWorkModePreferenceValues(state.workModePreference || []);
-      setSectorPreferenceValue(state.preferSector || SECTOR_PREFERENCE_DEFAULT);
-      updateCompensationVisibility();
-      if (Number(state.step) >= CHECK_STEP) {
-        updateCheckStep();
-      }
-    } catch (error) {
-      console.warn('Could not restore onboarding search basics state.', error);
-    }
-    return Number(state.step) || REVIEW_STEP;
-  } catch (error) {
-    console.warn('Could not restore onboarding wizard state.', error);
-    return false;
-  }
-}
- 
-const stepMeta = {
-  1: {
-    title: () => isRebuildMode ? getOnboardingStepCopy(1, 'title_rebuild') : getOnboardingStepCopy(1, 'title'),
-    heroTitle: () => isRebuildMode ? getOnboardingStepCopy(1, 'hero_title_rebuild') : getOnboardingStepCopy(1, 'hero_title'),
-    heroCopy: () => isRebuildMode
-      ? getOnboardingStepCopy(1, 'hero_copy_rebuild', { allowEmpty: true })
-      : getOnboardingStepCopy(1, 'hero_copy', { allowEmpty: true }),
-  },
-  2: {
-    title: () => getOnboardingStepCopy(2, 'title'),
-    heroTitle: () => isRebuildMode ? getOnboardingStepCopy(2, 'hero_title_rebuild') : getOnboardingStepCopy(2, 'hero_title'),
-    heroCopy: () => getOnboardingStepCopy(2, 'hero_copy', { allowEmpty: true }),
-  },
-  3: {
-    title: () => getOnboardingStepCopy(3, 'title'),
-    heroTitle: () => getOnboardingStepCopy(3, 'hero_title'),
-    heroCopy: () => getOnboardingStepCopy(3, 'hero_copy', { allowEmpty: true }),
-  },
-  4: {
-    title: () => getOnboardingStepCopy(4, 'title'),
-    heroTitle: () => isRebuildMode ? getOnboardingStepCopy(4, 'hero_title_rebuild') : getOnboardingStepCopy(4, 'hero_title'),
-    heroCopy: () => getOnboardingStepCopy(4, 'hero_copy', { allowEmpty: true }),
-  },
-};
-
-function showStatus(message, kind) {
+export function showStatus(message, kind) {
   if (workingStatusTimer && kind !== 'loading') {
     window.clearInterval(workingStatusTimer);
     workingStatusTimer = null;
   }
-  statusEl.textContent = message;
-  statusEl.className = message ? `status ${kind}` : 'status';
+  statusUi.show(message, kind);
 }
 
-function hideStatus() {
+export function hideStatus() {
   if (workingStatusTimer) {
     window.clearInterval(workingStatusTimer);
     workingStatusTimer = null;
   }
-  statusEl.textContent = '';
-  statusEl.className = 'status';
+  statusUi.hide();
 }
 
-function startWorkingStatus(messages, stepMs = 1400) {
+export function startWorkingStatus(messages, stepMs = 1400) {
   const items = Array.isArray(messages) ? messages.filter(Boolean) : [];
   if (!items.length) return;
   if (workingStatusTimer) {
@@ -630,64 +501,22 @@ function startWorkingStatus(messages, stepMs = 1400) {
   if (items.length === 1) return;
   workingStatusTimer = window.setInterval(() => {
     index = (index + 1) % items.length;
-    statusEl.textContent = items[index];
-    statusEl.className = 'status loading';
+    statusUi.show(items[index], 'loading');
   }, stepMs);
 }
 
-function updatePrimaryCvStatus(file) {
-  if (!primaryCvDropZoneContentEl) return;
-
-  if (!file) {
-    primaryCvDropZone?.classList.remove('has-file');
-    primaryCvDropZoneContentEl.innerHTML = `
-      <div class="drop-zone-content-shell">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon upload-icon--empty" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-        <p class="drop-zone-empty-title">${escapeHtml(PRIMARY_CV_COPY.emptyTitle)}</p>
-        <p class="drop-zone-hint drop-zone-empty-hint">${escapeHtml(PRIMARY_CV_COPY.emptyHint)}</p>
-      </div>
-    `;
-    resetPrimaryCvDropZoneAppearance();
-    return;
-  }
-
-  primaryCvDropZone?.classList.add('has-file');
-  resetPrimaryCvDropZoneAppearance();
-  hideStatus();
-
-  primaryCvDropZoneContentEl.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon upload-icon--loaded" aria-hidden="true" focusable="false"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-    <p class="file-loaded-label">File Loaded: ${escapeHtml(file.name)}</p>
-    <p class="drop-zone-hint">${escapeHtml(PRIMARY_CV_COPY.loadedHint)}</p>
-  `;
-}
-
-function resetPrimaryCvDropZoneAppearance() {
+export function resetPrimaryCvDropZoneAppearance() {
   if (!primaryCvDropZone) return;
   primaryCvDropZone.classList.remove('is-dragover');
 }
 
-function updateCreateProfileAvailability() {
-  if (!createProfileButton) return;
-  createProfileButton.disabled = !primaryCvInput?.files?.[0];
-  if (continueToReviewEl) {
-    continueToReviewEl.hidden = !draftBuiltExplicitly || !primaryCvInput?.files?.[0];
-  }
-}
-
-function restorePrimaryCvSelection(file) {
-  if (!primaryCvInput || !file) return;
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  primaryCvInput.files = transfer.files;
-}
-
-function setStep(stepNumber, options = {}) {
+export function setStep(stepNumber, options = {}) {
   const { scroll = true, persist = true } = options;
   const hasPrimaryCv = Boolean(primaryCvInput?.files?.[0] || preservedPrimaryCvFile);
-  if (stepNumber > 1 && !hasPrimaryCv) {
+  if (stepNumber > 1 && !hasPrimaryCv && !hasDraftProfileState()) {
     stepNumber = 1;
   }
+  const isDetailStep = stepNumber > 1;
   currentStep = stepNumber;
   stepEls.forEach((el) => {
     const step = Number(el.dataset.step);
@@ -696,22 +525,13 @@ function setStep(stepNumber, options = {}) {
     el.classList.toggle('is-active', active);
   });
 
-  const meta = stepMeta[stepNumber];
-  heroTitleEl.textContent = meta.heroTitle();
-  const heroCopy = meta.heroCopy();
-  heroCopyEl.textContent = heroCopy;
-  heroCopyEl.hidden = !String(heroCopy || '').trim();
-  const isDetailStep = stepNumber > 1;
-  if (heroSectionEl) heroSectionEl.classList.toggle('is-compact', isDetailStep);
   if (workflowSummaryEl) {
     workflowSummaryEl.hidden = isDetailStep;
   }
 
   if (stepNumber === 1 && preservedPrimaryCvFile) {
-    restorePrimaryCvSelection(preservedPrimaryCvFile);
-    updatePrimaryCvStatus(preservedPrimaryCvFile);
-  } else if (stepNumber === 1) {
-    void restorePrimaryCvFromSourcePath();
+    onboardingUpload.restorePrimaryCvSelection(preservedPrimaryCvFile);
+    onboardingUpload.updatePrimaryCvStatus(preservedPrimaryCvFile);
   }
 
   if (stepNumber === SEARCH_STEP) {
@@ -719,7 +539,6 @@ function setStep(stepNumber, options = {}) {
     tryGeolocationDefault();
   }
 
-  if (formTitleEl) formTitleEl.textContent = `Step ${stepNumber}. ${meta.title()}`;
   const percent = STEP_COUNT > 1 ? Math.round(((stepNumber - 1) / (STEP_COUNT - 1)) * 100) : 100;
   if (progressFillEl) {
     progressFillEl.style.setProperty('--onboarding-progress-fill-width', `${percent}%`);
@@ -730,7 +549,7 @@ function setStep(stepNumber, options = {}) {
     el.classList.toggle('is-complete', s < stepNumber);
   });
   refreshStepNavigation();
-  updateCreateProfileAvailability();
+  onboardingUpload.updateCreateProfileAvailability();
 
   if (persist) {
     saveWizardState();
@@ -744,9 +563,9 @@ function setStep(stepNumber, options = {}) {
   }
 }
 
-function normalizeLocationValue(value) {
-  return locationUi.resolveLocationValue
-    ? locationUi.resolveLocationValue(value)
+export function normalizeLocationValue(value) {
+  return onboardingLocationUi.resolveLocationValue
+    ? onboardingLocationUi.resolveLocationValue(value)
     : String(value || '').replace(/\s+/g, ' ').trim();
 }
 
@@ -794,17 +613,17 @@ async function tryGeolocationDefault() {
   }
 }
 
-function renderLocationSelect() {
+export function renderLocationSelect() {
   if (!locationSelect) return;
   const current = normalizeLocationValue(selectedLocations[0] || '');
-  if (locationUi.renderLocationOptions) {
-    locationUi.renderLocationOptions(locationSelect);
+  if (onboardingLocationUi.renderLocationOptions) {
+    onboardingLocationUi.renderLocationOptions(locationSelect);
   }
   locationSelect.value = current;
   selectedLocations = current ? [current] : [];
 }
 
-function setSelectedLocation(value, options = {}) {
+export function setSelectedLocation(value, options = {}) {
   const { persist = true } = options;
   const normalized = normalizeLocationValue(value);
   selectedLocations = normalized ? [normalized] : [];
@@ -814,56 +633,41 @@ function setSelectedLocation(value, options = {}) {
   }
 }
 
-async function fileToPayload(file, label) {
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-  const parts = dataUrl.split(',', 2);
-  return {
-    label,
-    filename: file.name,
-    content_base64: parts[1] || '',
-  };
-}
-
-function onboardingSettingsPayload() {
+export function onboardingSettingsPayload() {
   const capabilityStrengthPreset = capabilityStrengthPresetEl?.value.trim() || '';
   return {
     capability_strength_preset: capabilityStrengthPreset || 'balanced',
   };
 }
 
-function searchPreferencesPayload() {
+export function searchPreferencesPayload() {
   const engagementType = getOnboardingEngagementTypeValues();
   return {
     keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
     engagement_type: engagementType,
-    min_contract_months: engagementType.includes('contract') ? (getMinContractMonthValue() || null) : null,
+    min_contract_months: engagementType.includes('contract') ? (getResolvedMinContractMonthValue() || null) : null,
     work_mode_preference: getOnboardingWorkModePreferenceValues(),
-    prefer_sector: getSectorPreferenceValue(),
+    prefer_sector: getSectorPreferenceValues(),
     minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
     minimum_daily_rate: reviewMinimumDailyRateEl?.value.trim() || '',
   };
 }
 
-function updateCompensationVisibility() {
+export function updateCompensationVisibility() {
   const engagementType = new Set(getOnboardingEngagementTypeValues());
   if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType.size === 1 && engagementType.has('contract');
   if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType.size === 1 && engagementType.has('permanent');
 }
 
-function validateOnboardingSettings(settings) {
-  const preset = String(settings.capability_strength_preset || '').trim();
+export function validateOnboardingSettings(settings) {
+  const preset = String(settings.capability_strength_preset).trim();
   if (!['recent_focus', 'balanced', 'include_older_experience'].includes(preset)) {
     throw new Error('Please choose how older experience should be treated.');
   }
 }
 
-function validateSearchPreferences(searchPrefs) {
+export function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.keywords && (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120)) {
     throw new Error(`Please keep the ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()} between 2 and 120 characters.`);
   }
@@ -912,89 +716,84 @@ function validateSearchPreferences(searchPrefs) {
   }
 }
 
-function validatePrimaryFile(file) {
-  if (!file) {
-    throw new Error('Choose your detailed CV first.');
+export function applyProfileDefaults(profile) {
+  if (!profile || !profile.onboarding_settings || !profile.search_settings || !profile.match_preferences || !profile.salary_preferences) {
+    throw new Error('Missing onboarding profile data.');
   }
-  const name = String(file.name || '').toLowerCase();
-  if (!name.endsWith('.docx') && !name.endsWith('.pdf') && !name.endsWith('.md') && !name.endsWith('.txt')) {
-    throw new Error('Please upload a .docx, .pdf, .md, or .txt CV file.');
+  const onboarding = profile.onboarding_settings;
+  const preset = onboarding.capability_strength_preset;
+  if (!preset) {
+    throw new Error('Missing capability strength preset.');
   }
-}
-
-function assignPrimaryCvFile(file) {
-  if (!primaryCvInput || !file) return;
-  restorePrimaryCvSelection(file);
-  preservedPrimaryCvFile = file;
-  updatePrimaryCvStatus(file);
-  hideStatus();
-  updateCreateProfileAvailability();
-  refreshStepNavigation();
-}
-
-function handlePrimaryCvDrop(event) {
-  event.preventDefault();
-  event.stopPropagation();
-  if (!primaryCvDropZone) return;
-  primaryCvDropZone.classList.remove('is-dragover');
-  const file = event.dataTransfer?.files?.[0];
-  if (!file) return;
-  try {
-    validatePrimaryFile(file);
-  } catch (error) {
-    showStatus(error.message, 'error');
-    updatePrimaryCvStatus(null);
-    return;
-  }
-  assignPrimaryCvFile(file);
-  hideStatus();
-}
-
-function applyProfileDefaults(profile) {
-  const onboarding = profile?.onboarding_settings || {};
-  const preset = onboarding.capability_strength_preset || ONBOARDING_DEFAULTS.capability_strength_preset;
-  const searchSettings = profile?.search_settings || {};
-  const matchPreferences = profile?.match_preferences || {};
-  const salaryPreferences = profile?.salary_preferences || {};
+  const searchSettings = profile.search_settings;
+  const matchPreferences = profile.match_preferences;
+  const salaryPreferences = profile.salary_preferences;
 
   if (capabilityStrengthPresetEl) capabilityStrengthPresetEl.value = String(preset);
   if (!reviewTargetTitles.length && !reviewSecondaryTitles.length) {
+    if (!Array.isArray(profile.target_roles) || !Array.isArray(profile.also_consider_roles)) {
+      throw new Error('Missing target role lists.');
+    }
     const normalizedTitles = normalizeReviewTitleLists(
-      profile?.target_roles || [],
-      profile?.also_consider_roles || [],
+      profile.target_roles,
+      profile.also_consider_roles,
     );
     reviewTargetTitles = normalizedTitles.primary;
     reviewSecondaryTitles = normalizedTitles.secondary;
   }
   if (reviewSearchKeywordsEl && !String(reviewSearchKeywordsEl.value || '').trim()) {
     const savedKeywords = String(searchSettings.keywords || '').trim();
-    reviewSearchKeywordsEl.value = savedKeywords || defaultSearchKeywordFromTargetRoles(profile);
+    if (savedKeywords) {
+      reviewSearchKeywordsEl.value = savedKeywords;
+    } else if (Array.isArray(profile.target_roles) && profile.target_roles.length) {
+      reviewSearchKeywordsEl.value = defaultSearchKeywordFromTargetRoles(profile);
+    }
   }
   if (refs.minContractMonths && !String(refs.minContractMonths.value || '').trim()) {
+    if (matchPreferences.min_contract_months === undefined) {
+      throw new Error('Missing minimum contract length.');
+    }
     setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
   }
   updateMinContractMonthState();
   if (reviewMinimumSalaryYearlyEl && !String(reviewMinimumSalaryYearlyEl.value || '').trim()) {
-    onboardingSetCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly ?? 0);
+    if (salaryPreferences.minimum_salary_yearly === undefined || salaryPreferences.minimum_salary_yearly === null) {
+      throw new Error('Missing minimum permanent salary.');
+    }
+    onboardingSetCurrencyFieldValue(reviewMinimumSalaryYearlyEl, salaryPreferences.minimum_salary_yearly);
   }
   if (reviewMinimumDailyRateEl && !String(reviewMinimumDailyRateEl.value || '').trim()) {
-    onboardingSetCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate ?? 0);
+    if (salaryPreferences.minimum_daily_rate === undefined || salaryPreferences.minimum_daily_rate === null) {
+      throw new Error('Missing minimum contract daily rate.');
+    }
+    onboardingSetCurrencyFieldValue(reviewMinimumDailyRateEl, salaryPreferences.minimum_daily_rate);
   }
-  setOnboardingEngagementTypeValues(matchPreferences.engagement_type || []);
+  if (!Array.isArray(matchPreferences.engagement_type)) {
+    throw new Error('Missing engagement type preferences.');
+  }
+  setOnboardingEngagementTypeValues(matchPreferences.engagement_type);
   updateMinContractMonthState();
   if (!getOnboardingWorkModePreferenceValues().length) {
-    setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
+    if (!Array.isArray(matchPreferences.work_mode_preference)) {
+      throw new Error('Missing work mode preferences.');
+    }
+    setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference);
+    updateSearchPreferenceSummaries();
   }
   if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
-    setSectorPreferenceValue(matchPreferences.prefer_sector || SECTOR_PREFERENCE_DEFAULT);
+    if (!Array.isArray(matchPreferences.prefer_sector)) {
+      throw new Error('Missing sector preferences.');
+    }
+    setSectorPreferenceValues(matchPreferences.prefer_sector);
+    updateSearchPreferenceSummaries();
   }
-  if (!selectedLocations.length) {
-    setSelectedLocation((searchSettings.locations || [])[0] || '');
+  if (!selectedLocations.length && Array.isArray(searchSettings.locations) && searchSettings.locations.length) {
+    setSelectedLocation(searchSettings.locations[0]);
   }
   refreshStepNavigation();
 }
 
-function observeReviewCapabilityLayout() {
+export function observeReviewCapabilityLayout() {
   if (reviewCapabilityResizeObserver || !window.ResizeObserver) {
     return;
   }
@@ -1011,59 +810,13 @@ function observeReviewCapabilityLayout() {
 if (continueToReviewEl) {
   continueToReviewEl.addEventListener('click', () => setStep(REVIEW_STEP));
 }
-if (locationSelect) {
-  locationSelect.addEventListener('change', () => {
-    hideStatus();
-    setSelectedLocation(locationSelect.value);
-    scheduleSearchBasicsPersistence();
-  });
-}
-if (dismissOnboardingImportHelperButtonEl) {
-  dismissOnboardingImportHelperButtonEl.addEventListener('click', () => hideOnboardingImportHelper(true));
-}
-document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
-  input.addEventListener('change', () => {
-    hideStatus();
-    saveWizardState();
-    scheduleSearchBasicsPersistence();
-  });
-});
-if (refs.minContractMonths) {
-  refs.minContractMonths.addEventListener('change', () => {
-    const contractRow = document.getElementById('contract_duration_row');
-    if (contractRow) contractRow.hidden = true;
-    updateContractChipLabel();
-    hideStatus();
-    saveWizardState();
-    scheduleSearchBasicsPersistence();
-  });
-}
-document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
-  input.addEventListener('change', () => {
-    if (!input.checked) {
-      const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
-      if (!anyChecked) input.checked = true;
-    }
-    hideStatus();
-    updateMinContractMonthState({ showRow: input.value === 'contract' && input.checked });
-    updateCompensationVisibility();
-    saveWizardState();
-    scheduleSearchBasicsPersistence();
-  });
-});
-if (refs.workModePreferences.length) {
-  refs.workModePreferences.forEach((element) => element.addEventListener('change', () => {
-    hideStatus();
-    saveWizardState();
-    scheduleSearchBasicsPersistence();
-  }));
-}
 [
   reviewMinimumSalaryYearlyEl,
   reviewMinimumDailyRateEl,
 ].filter(Boolean).forEach((input) => {
-    window.JobHunterCurrencyUi?.bindCurrencyInput?.(input);
+  onboardingCurrencyUi.bindCurrencyInput?.(input);
 });
 renderLocationSelect();
 observeReviewCapabilityLayout();
 initFieldInfoToggles();
+updateSearchPreferenceSummaries();

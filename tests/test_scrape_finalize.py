@@ -37,18 +37,10 @@ def _build_context() -> ScrapeRunContext:
 def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys):
     context = _build_context()
     workspace_path = tmp_path / "workspace.html"
-    audit_path = tmp_path / "audit.json"
-    run_stats_path = tmp_path / "run_stats.json"
-    review_path = tmp_path / "review_data.json"
-    history_path = tmp_path / "history.json"
 
     calls: list[tuple[str, object]] = []
 
     monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
-    monkeypatch.setattr(scrape_finalize, "get_audit_records_path", lambda: audit_path)
-    monkeypatch.setattr(scrape_finalize, "get_run_stats_path", lambda: run_stats_path)
-    monkeypatch.setattr(scrape_finalize, "get_review_data_path", lambda: review_path)
-    monkeypatch.setattr(scrape_finalize, "get_job_history_path", lambda: history_path)
     monkeypatch.setattr(scrape_finalize, "deduplicate_across_sources", lambda records: [*records, {"job_key": "deduped"}])
     monkeypatch.setattr(scrape_finalize.workspace_service, "build_run_stats", lambda *args: {"run_started_at": "2026-05-16T08:12:40", "cards_seen": 1})
     monkeypatch.setattr(scrape_finalize.workspace_service, "render_html", lambda *args: calls.append(("render_html", args)))

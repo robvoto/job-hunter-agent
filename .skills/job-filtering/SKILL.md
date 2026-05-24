@@ -48,9 +48,9 @@ The hard gates in the title filter are:
 If keywords and title patterns diverge (e.g. keywords say "software developer" but pattern says "accounts officer"), every scraped job will still pass the title gate, but the LLM and scoring will correctly assess fit.
 
 **Debugging zero-results:**
-1. Check `last_run_error` in `run_stats.json` for scraper-level failures
-2. Check audit_records.json for reject_reason distribution by source
-3. Check `primary_job_title_pattern` in user's `profile.json` vs `search_settings.keywords` for keyword/pattern divergence
+1. Check `last_run_error` via `io_utils.load_run_stats()` for scraper-level failures (stored in DB `run_stats` table)
+2. Check `io_utils.load_audit_rows()` for reject_reason distribution by source (stored in DB `audit_records` table)
+3. Check `primary_job_title_pattern` in user's profile (DB `user_profile` table via `profile_store.load_profile()`) vs `search_settings.keywords` for keyword/pattern divergence
 4. Run `analyze_title_filters(title, profile)` directly — pass the user profile explicitly (not `load_profile()` which reads the current user context; use `get_user_id_for_runtime()` or set the user with `set_user_id()` first)
 
 **Onboarding reset:**

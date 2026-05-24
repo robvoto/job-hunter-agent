@@ -2,7 +2,7 @@
 
 This guide describes the clean test/staging setup for running Job Hunter on AWS EC2.
 
-It is a setup guide, not a chat log.
+The deployment model assumes a small EBS-backed root volume and a production-style service lifecycle, so keep storage, logging, and recovery choices simple and explicit.
 
 ## Current tested status
 
@@ -18,9 +18,12 @@ ngrok HTTPS tunnel forwarding to EC2 localhost:80
 public ngrok URL reaches the Job Hunter site
 ```
 
-## Target setup
+## Directory layout
 
 ```text
+/opt/job-hunter/app        application code and virtualenv
+/var/lib/job-hunter/data   persistent app data (EBS-backed)
+/var/log/job-hunter        application logs
 AWS EC2 Ubuntu 24.04 LTS server
 Python 3.12
 Project virtual environment in .venv
@@ -33,8 +36,9 @@ ngrok exposes the test site over temporary HTTPS for Google OAuth testing
 Later: real domain + HTTPS + package-based deployment + backups
 ```
 
-## Required platform
+These are the only three locations the app touches at runtime. Nothing lives in the home directory.
 
+## Required platform
 Use:
 
 ```text
@@ -44,7 +48,7 @@ pandas 2.x
 Playwright Chromium
 ```
 
-Do not choose preview/non-LTS Ubuntu releases for this setup. Use Ubuntu 24.04 LTS so Python and Playwright stay on a supported path.
+Do not choose preview/non-LTS Ubuntu releases. Use Ubuntu 24.04 LTS so Python and Playwright stay on a supported path.
 
 ## 1. AWS account safety
 
@@ -79,7 +83,8 @@ Name: job-hunter-ec2
 AMI: Ubuntu Server 24.04 LTS
 Instance type: t3.micro or free-tier equivalent
 Key pair: KeyPair-JobHunter
-Storage: default root disk is fine for OS and code
+Storage: small EBS root volume is enough for the current workload
+
 ```
 
 Ubuntu SSH username:
@@ -332,7 +337,28 @@ Expected Python version on Ubuntu 24.04 LTS:
 Python 3.12.x
 ```
 
-## 11. Clone the private GitHub repo
+## 8. Create the directory layout
+
+Create all three directories and set ownership before cloning or creating data:
+
+```bash
+sudo mkdir -p /opt/job-hunter/app
+sudo mkdir -p /var/lib/job-hunter/data
+sudo mkdir -p /var/log/job-hunter
+sudo chown -R ubuntu:ubuntu /opt/job-hunter
+sudo chown -R ubuntu:ubuntu /var/lib/job-hunter
+sudo chown -R ubuntu:ubuntu /var/log/job-hunter
+```
+
+Check:
+
+```bash
+ls -ld /opt/job-hunter/app /var/lib/job-hunter/data /var/log/job-hunter
+```
+
+Expected: all three directories exist and are owned by `ubuntu`.
+
+## 9. Clone the private GitHub repo
 
 Repository:
 
@@ -340,29 +366,72 @@ Repository:
 https://github.com/robvoto/job-hunter-agent.git
 ```
 
-Clone:
+Create a GitHub personal access token with repository read access.
+
+Recommended fine-grained token:
+
+```text
+Repository access: Only selected repositories
+Selected repository: job-hunter-agent
+Repository permissions:
+  Contents: Read-only
+  Metadata: Read-only
+Expiration: 90 days for learning
+```
+
+Clone directly into `/opt/job-hunter/app`:
 
 ```bash
-cd ~
-git clone https://github.com/robvoto/job-hunter-agent.git
-cd ~/job-hunter-agent
+git clone https://github.com/robvoto/job-hunter-agent.git /opt/job-hunter/app
 ```
 
 For a private repo, use a GitHub credential with read access when prompted.
 
-For short-term learning on EC2, Git can store the credential:
+```text
+Username: robvoto
+Password: paste GitHub token
+```
+
+Never paste the token into chat or screenshots. If exposed, revoke it.
+
+## 10. Git credential handling on EC2
+
+Windows Git Credential Manager is not available on Ubuntu EC2.
+
+For short-term learning on EC2:
 
 ```bash
 git config --global credential.helper store
 ```
 
+Then run a pull and enter the token once:
+
+```bash
+cd /opt/job-hunter/app
+git pull
+```
+
+Check:
+
+```bash
+git config --global --get credential.helper
+```
+
+Expected:
+
+```text
+store
+```
+
+Later, replace this with a deploy key or cleaner deployment process.
+
+## 11. Create the project virtual environment
 Later, replace this with a deploy key or cleaner deployment process.
 
 ## 12. Create the project virtual environment
 
 ```bash
-cd ~/job-hunter-agent
-rm -rf .venv
+cd /opt/job-hunter/app
 python3 -m venv .venv
 source .venv/bin/activate
 python --version
@@ -373,10 +442,10 @@ Expected:
 
 ```text
 Python 3.12.x
-/home/ubuntu/job-hunter-agent/.venv/bin/python
+/opt/job-hunter/app/.venv/bin/python
 ```
-
-## 13. Install project dependencies
+ 
+## 12. Install project dependencies
 
 With `.venv` active:
 
@@ -385,20 +454,25 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-For this project, `python-jobspy` requires pandas below version 3, so `requirements.txt` should use pandas 2.x:
+For this project, `python-jobspy` requires pandas below version 3, so `requirements.txt` uses pandas 2.x:
 
 ```text
 pandas>=2.0.0,<3
 ```
 
-If the virtual environment is active, `which pip` should return:
+Check:
 
-```text
-/home/ubuntu/job-hunter-agent/.venv/bin/pip
+```bash
+which pip
 ```
 
-## 14. Install Playwright browser and Linux dependencies
+Expected:
 
+```text
+/opt/job-hunter/app/.venv/bin/pip
+```
+
+## 13. Install Playwright browser 
 With `.venv` active, install the Chromium browser:
 
 ```bash
@@ -408,14 +482,106 @@ python -m playwright install chromium
 Then install the required Ubuntu shared libraries for Chromium:
 
 ```bash
-sudo .venv/bin/python -m playwright install-deps chromium
+sudo /opt/job-hunter/app/.venv/bin/python -m playwright install-deps chromium
+python -m playwright install chromium
 ```
 
-This avoids runtime errors such as:
+## 14. Smoke test the app
+
+The smoke test requires the environment variables to be set. Export them for this session only before running:
+
+```bash
+export JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+export JOB_HUNTER_OUTPUT_DIR=/var/log/job-hunter
+export JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db
+
+cd /opt/job-hunter/app
+source .venv/bin/activate
+python -m job_hunter_agent.fastapi_app
+```
+
+In another SSH session:
+
+```bash
+curl http://127.0.0.1:8765/start
+```
+
+Expected: HTML response.
+
+Do not use `export` in normal operation. Env vars belong in the systemd service file only.
+
+## 15. Create the systemd service
+
+This is how the app runs in production. All configuration lives here — never in Python files.
+
+Create the service unit file:
+
+```bash
+sudo nano /etc/systemd/system/job-hunter.service
+```
+
+Paste this content exactly:
+
+```ini
+[Unit]
+Description=Job Hunter Agent
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/job-hunter/app
+Environment=JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+Environment=JOB_HUNTER_OUTPUT_DIR=/var/log/job-hunter
+Environment=JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db
+ExecStart=/opt/job-hunter/app/.venv/bin/uvicorn job_hunter_agent.fastapi_app:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/job-hunter/app.log
+StandardError=append:/var/log/job-hunter/app.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable job-hunter
+sudo systemctl start job-hunter
+sudo systemctl status job-hunter
+```
+
+Expected: `active (running)`.
+
+### To change any configuration
+
+Edit the service file and reload. Never edit a Python file:
+
+```bash
+sudo nano /etc/systemd/system/job-hunter.service
+sudo systemctl daemon-reload
+sudo systemctl restart job-hunter
+```
+
+### Environment variables
+
+| Variable | Purpose | Value on EC2 |
+|---|---|---|
+| `JOB_HUNTER_DATA_DIR` | Persistent app data | `/var/lib/job-hunter/data` |
+| `JOB_HUNTER_OUTPUT_DIR` | Log output directory | `/var/log/job-hunter` |
+| `JOB_HUNTER_DB_PATH` | SQLite database file | `/var/lib/job-hunter/data/app.db` |
+
+All three must be set. The app raises an explicit error if `JOB_HUNTER_DB_PATH` is missing.
+
+## 16. Production-style next steps
+
+After the service is running:
 
 ```text
-error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory
-BrowserType.launch: Target page, context or browser has been closed
+Configure Nginx reverse proxy
+Expose only 80/443 publicly (keep app bound to 127.0.0.1:8765)
+Add HTTPS / domain via Certbot
 ```
 
 After installing browser dependencies, restart the app:
@@ -845,7 +1011,9 @@ python3 --version
 Confirm EBS mount:
 
 ```bash
-df -h /var/lib/job-hunter
+source /opt/job-hunter/app/.venv/bin/activate
+python --version
+which python
 ```
 
 Confirm service:
@@ -886,7 +1054,14 @@ Expected: `Forwarding https://<ngrok-host> -> http://localhost:80`.
 Confirm public site:
 
 ```text
-Open https://<ngrok-host>
+Python 3.12.x
+/opt/job-hunter/app/.venv/bin/python
+```
+
+Check service logs:
+
+```bash
+tail -f /var/log/job-hunter/app.log
 ```
 
 Expected: the Job Hunter site is online and redirects to login or shows the login page.

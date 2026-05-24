@@ -1,9 +1,10 @@
-window.JobHunterAlertsSettings = (function () {
-  const {
-    escapeHtml,
-    setToggleChecked,
-    getToggleChecked,
-  } = window.JobHunterSettingsUtils;
+import {
+  escapeHtml,
+  setToggleChecked,
+  getToggleChecked,
+} from '../shared/settings-utils.js';
+
+export const JobHunterAlertsSettings = (function () {
 
   let telegramConnectLink = '';
 
@@ -124,7 +125,7 @@ window.JobHunterAlertsSettings = (function () {
       telegramConnectLink = `https://t.me/${payload.result.bot_username}?start=connect`;
     }
     renderTelegramConnectPanel(payload.settings || {});
-    showStatus(payload.message || 'Connected Telegram account refreshed.', 'ok');
+    showStatus(payload.message || 'Connected Telegram account refreshed.', 'success');
     return payload;
   }
 
@@ -136,7 +137,7 @@ window.JobHunterAlertsSettings = (function () {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'Could not send Telegram test message');
-    showStatus(payload.message || 'Telegram test message sent.', 'ok');
+    showStatus(payload.message || 'Telegram test message sent.', 'success');
     return payload;
   }
 

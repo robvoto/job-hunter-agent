@@ -47,10 +47,15 @@ def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):
     admin_html = client.get("/settings").text
     assert 'class="sidebar-admin-badge"' in admin_html
     assert 'href="/global-settings"' in admin_html
+    assert 'sidebar-group-label-global' in admin_html
+    assert '__JOB_HUNTER_ADMIN_NAV_GROUP__' not in admin_html
 
     monkeypatch.setattr(_pages, "is_admin", lambda request: False)
     candidate_html = client.get("/settings").text
     assert 'class="sidebar-admin-badge"' not in candidate_html
+    assert 'href="/global-settings"' not in candidate_html
+    assert 'sidebar-group-label-global' not in candidate_html
+    assert '__JOB_HUNTER_ADMIN_NAV_GROUP__' not in candidate_html
 
 
 def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
@@ -62,7 +67,22 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     client = TestClient(create_app())
     html = client.get("/settings").text
 
-    assert 'id="engagement_type_label"' in html
+    assert 'class="section-title"' not in html
+    assert 'id="settings_page_title"' not in html
+    assert 'id="settings_page_copy"' not in html
+    assert '<section class="hero">' not in html
+    assert 'data-settings-hero-title=' not in html
+    assert 'data-settings-hero-copy=' not in html
+    assert 'class="panel search-settings-shell settings-section-shell"' in html
+    assert 'class="settings-section-head"' in html
+    assert 'Search Settings' in html
+    assert 'Job board search' in html
+    assert 'search-common-panel' not in html
+    assert 'common-search-grid' not in html
+    assert 'common-search-field' not in html
+    assert 'common-search-field--keywords' not in html
+    assert 'settings-form-grid--three-col' not in html
+    assert 'settings-form-field--span-2' not in html
     assert 'class="choice-strip"' in html
     assert 'class="choice-card choice-card--work-mode"' in html
     assert 'input type="checkbox" name="engagement_type"' in html
@@ -77,3 +97,25 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'id="prefer_sector_choices"' in html
     assert 'class="choice-card choice-card--work-mode"' in html
     assert 'select id="sector_preference"' not in html
+
+
+def test_settings_matrix_section_omits_outer_panel_wrapper(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(_fa, "read_session_username", lambda request: "test@example.com")
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
+
+    client = TestClient(create_app())
+    html = client.get("/settings").text
+
+    assert '<h2 class="section-title" id="capability_matrix_section_title"></h2>' not in html
+    assert 'class="panel advanced-shell settings-section-shell"' in html
+    assert 'data-settings-hero-title=' not in html
+    assert 'data-settings-hero-copy=' not in html
+    assert 'Decision Weights' in html
+    assert 'Capability Matrix' in html
+    assert 'Rules' in html
+    assert 'Alerts &amp; AI' in html
+    assert 'Optimise' in html
+    assert 'id="schedule-panel"' in html
+    assert 'id="capability_matrix_editor"' in html

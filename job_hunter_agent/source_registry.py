@@ -3,8 +3,6 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from job_hunter_agent.paths import SOURCE_REGISTRY_PATH
-from job_hunter_agent.io_utils import load_json_dict
 
 SOURCE_SEEK = "seek"
 SOURCE_LINKEDIN = "linkedin"
@@ -46,9 +44,10 @@ def _normalize_source_registry(payload: dict[str, Any]) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def load_source_registry() -> dict[str, Any]:
-    payload = load_json_dict(SOURCE_REGISTRY_PATH)
+    from job_hunter_agent.knowledge_store import get_knowledge
+    payload = get_knowledge("source_registry")
     if not payload:
-        raise ValueError("source_registry.json must contain a registry object")
+        raise RuntimeError("source_registry not found in knowledge table — seed the DB first")
     return _normalize_source_registry(payload)
 
 

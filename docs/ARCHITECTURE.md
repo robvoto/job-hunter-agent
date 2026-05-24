@@ -4,6 +4,8 @@
 
 Job Hunter is a local-first agentic job filtering system.
 
+The current deployment target is AWS EC2 with a small EBS-backed root volume, so the runtime, storage, and operational choices should be treated as server deployment concerns rather than desktop-only shortcuts.
+
 The system:
 
 * scrapes jobs from multiple sources
@@ -15,6 +17,8 @@ The system:
 * avoids hidden rejection logic
 
 The system is designed as a strict filtering engine, not a generic recommender.
+
+The implementation should remain production-oriented: keep ownership boundaries clear, avoid prototype shortcuts, and prefer explicit runtime contracts over ad hoc behavior.
 
 ---
 
@@ -72,12 +76,13 @@ The scraper layer does not make business-fit decisions.
 
 ## Candidate Profile Runtime
 
-Primary files:
+Primary modules:
 
-* `data/users/<user_id>/profile.json`
 * `profile_store.py`
 * `profile_learning.py`
 * `cv_pipeline.py`
+
+Storage: SQLite `user_profile` table (per user). Accessed via `profile_store.load_profile()` / `save_profile()`.
 
 Responsibilities:
 
@@ -86,7 +91,6 @@ Responsibilities:
 * maintain preference weights
 * preserve learning state
 * provide scoring context
-* ensure data integrity during concurrent background updates (atomic writes/locking)
 
 The runtime profile is authoritative system state.
 
@@ -291,9 +295,10 @@ It is not intended for normal end-user preferences.
 
 | Data Type                     | Authority Level                     |
 | ----------------------------- | ----------------------------------- |
-| `data/users/<user_id>/profile.json` | Runtime candidate truth             |
-| `data/users/<user_id>/job_history.json` | Persistent job state and dedup     |
-| `data/users/<user_id>/workspace_results.html` | Rendered workspace output      |
+| DB `user_profile` table       | Runtime candidate truth             |
+| DB `job_history` table        | Persistent job state and dedup      |
+| DB `run_stats`, `audit_records`, `review_data`, `workspace_pool` tables | Scrape run outputs (disposable) |
+| `data/users/<user_id>/workspace_results.html` | Rendered workspace output |
 | Knowledge JSON files          | Approved runtime business knowledge |
 | Signal registry pending items | Review-only                         |
 | `data/runtime/` files         | Disposable runtime output (costs, cache) |
@@ -309,7 +314,7 @@ The system must:
 * preserve inspectability
 * prefer review over deletion
 * remain locally operable
-* protect local state (JSON) from write corruption during concurrent operations
+* protect DB state from write corruption during concurrent operations (SQLite WAL mode)
 * separate runtime truth from onboarding evidence
 * enforce secure session management (HTTPS) when exposed to a network
 
@@ -332,7 +337,8 @@ The system must not:
 | Playwright         | SEEK scraping                   |
 | python-jobspy      | LinkedIn ingestion              |
 | OpenAI API         | Optional constrained LLM review |
-| JSON runtime files | State and knowledge persistence |
+| SQLite (WAL mode) | Per-user state and run output persistence |
+| JSON files (`data/knowledge/`, `data/config/`) | Approved business knowledge and seed defaults |
 | HTML/CSS/JS        | Workspace and settings UI       |
 
 ---

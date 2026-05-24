@@ -2,22 +2,14 @@ from __future__ import annotations
 
 """Company name normalization and weak matching helpers."""
 
-import json
 import re
 from functools import lru_cache
 from typing import Any
 
-from job_hunter_agent.paths import COMPANY_NAME_NORMALIZATION_PATH
-
 
 def _load_payload() -> dict[str, Any]:
-    if not COMPANY_NAME_NORMALIZATION_PATH.exists():
-        return {}
-    try:
-        payload = json.loads(COMPANY_NAME_NORMALIZATION_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    from job_hunter_agent.knowledge_store import get_knowledge
+    return get_knowledge("company_name_normalization") or {}
 
 
 def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
@@ -51,8 +43,8 @@ def save_company_name_normalization(payload: dict[str, Any]) -> dict[str, Any]:
     config.setdefault("kind", "system_config")
     config.setdefault("name", "company_name_normalization")
     config.setdefault("version", 1)
-    COMPANY_NAME_NORMALIZATION_PATH.parent.mkdir(parents=True, exist_ok=True)
-    COMPANY_NAME_NORMALIZATION_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    from job_hunter_agent.knowledge_store import set_knowledge
+    set_knowledge("company_name_normalization", config)
     return config
 
 

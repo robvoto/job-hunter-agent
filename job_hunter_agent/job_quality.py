@@ -20,13 +20,10 @@ from typing import Optional
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from job_hunter_agent.io_utils import load_json_dict
 from job_hunter_agent.paths import (
     CV_FARMING_RULES_DESCRIPTION,
     CV_FARMING_RULES_NAME,
-    CV_FARMING_RULES_PATH,
     CV_FARMING_RULES_VERSION,
-    DODGY_JOB_RULES_PATH,
 )
 from job_hunter_agent.signal_schema import CATEGORY_CV_FARMING_PATTERN
 
@@ -111,7 +108,8 @@ def _merge_entries(entries: list[dict[str, object]]) -> list[dict[str, object]]:
 
 def load_cv_farming_rules() -> list[dict[str, object]]:
     """Load approved CV-farming patterns from managed knowledge."""
-    payload = load_json_dict(CV_FARMING_RULES_PATH)
+    from job_hunter_agent.knowledge_store import get_knowledge
+    payload = get_knowledge("cv_farming_rules") or {}
     entries = payload.get("entries")
     if not isinstance(entries, list):
         return []
@@ -127,8 +125,8 @@ def save_cv_farming_rules(entries: list[dict[str, object]]) -> dict[str, object]
         "description": CV_FARMING_RULES_DESCRIPTION,
         "entries": _merge_entries(entries),
     }
-    CV_FARMING_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CV_FARMING_RULES_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    from job_hunter_agent.knowledge_store import set_knowledge
+    set_knowledge("cv_farming_rules", payload)
     return payload
 
 
@@ -165,7 +163,8 @@ def upsert_cv_farming_rule(value: str, aliases: list[str] | None = None) -> dict
 
 def load_dodgy_job_rules() -> dict:
     """Load the quality rules used for closed-job and CV-farming detection."""
-    base_rules = load_json_dict(DODGY_JOB_RULES_PATH)
+    from job_hunter_agent.knowledge_store import get_knowledge
+    base_rules = get_knowledge("dodgy_job_rules") or {}
     if "external_date_mismatch_flag_days" not in base_rules:
         raise ValueError("dodgy_job_rules.json must define external_date_mismatch_flag_days")
     try:

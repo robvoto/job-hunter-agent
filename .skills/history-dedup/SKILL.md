@@ -3,9 +3,9 @@
 Use before editing job history, viewed/applied/hidden state, posting timestamps, or deduplication.
 
 ## Rules
-- History is valuable local state; do not discard it.
+- History is valuable persistent state stored in the DB; do not discard it.
 - Rebuilds must preserve viewed/applied/hidden state.
-- Output files are disposable; data/history files are not.
+- Scrape run outputs (run_stats, audit_records, review_data, workspace_pool) are disposable; job history is not.
 - Deduplication should be stable across SEEK and LinkedIn where possible.
 - Job keys must not depend on unstable UI-only text when stronger identifiers exist.
 - Posting timestamps should be normalised consistently before ranking/filtering.
@@ -15,7 +15,7 @@ Use before editing job history, viewed/applied/hidden state, posting timestamps,
 - `job_identity.py`: stable job keys and cross-source dedup.
 - `posting_utils.py`: posting dates and age.
 - `workspace_data.py`: historical workspace records.
-- `data/job_history.json`: local review history.
+- `io_utils.py`: `load_job_history()` / `save_job_history()` — DB-backed; `job_history` table per user.
 
 ## Checklist
 - Does this preserve applied/hidden/viewed state?

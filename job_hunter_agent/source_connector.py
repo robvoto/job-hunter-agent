@@ -15,6 +15,9 @@ import argparse
 import sys
 from typing import Any
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.runtime_helpers import (
@@ -120,6 +123,13 @@ def scrape_jobs_direct(headless: bool = False) -> str:
 
 
 if __name__ == "__main__":
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
+    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+    init_db()
+    for _subdir in ("knowledge", "config", "signals"):
+        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
     parser = argparse.ArgumentParser(description="Job Hunter Agent source connector")
     parser.add_argument(
         "--user-id",

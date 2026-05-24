@@ -21,6 +21,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from job_hunter_agent.user_settings import (
     load_user_settings,
     load_agent_state,
@@ -39,7 +42,7 @@ from job_hunter_agent.notifiers.email_notifier import send_email_notification
 from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.fit_scoring import fit_score
 from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
-from job_hunter_agent.io_utils import load_json_dict, load_job_history, configure_console_output
+from job_hunter_agent.io_utils import load_job_history, load_run_stats, configure_console_output
 from job_hunter_agent.history import viewed_by_user
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.profile_store import load_profile
@@ -60,7 +63,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
 )
-from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path, get_run_stats_path
+from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
 
@@ -106,7 +109,7 @@ def build_workspace_reference(settings: dict[str, Any]) -> str:
 
 
 def load_latest_run_stats() -> dict[str, Any]:
-    payload = load_json_dict(get_run_stats_path())
+    payload = load_run_stats()
     return payload if isinstance(payload, dict) else {}
 
 
@@ -422,6 +425,13 @@ def _set_admin_user_context() -> None:
 
 
 def main() -> None:
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
+    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+    init_db()
+    for _subdir in ("knowledge", "config", "signals"):
+        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
     _set_admin_user_context()
     configure_console_output()
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")

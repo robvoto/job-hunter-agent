@@ -34,3 +34,33 @@ For LLM review data:
 - return an explicit degraded state instead
 - log or expose the degraded state in audit output
 - add/adjust tests for the degraded path
+
+## LLM call paths — two schemas, two purposes
+
+There are two separate LLM calls with different schemas. Do not conflate them.
+
+**Fit review** (`_LLMFitReviewPayload`, `fit_review=True`):
+- Returns: `fit_review` (decision + grade), `contextual_capability_matches`, `job_requirements`
+- No `learning_candidates` field exists in this schema
+- `contextual_capability_matches` entries must only use names from the profile capability rules list
+- Do NOT include learning category guidance (`LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE`) in this prompt — the model will leak category names into capability matches
+
+**Learning-only** (`_LLMReviewPayload`, `fit_review=False`):
+- Returns: `learning_candidates` only
+- Called only when deterministic scoring fires AND high-value ambiguous learning candidates exist
+- This is where `role_title_pattern`, `government_context_pattern`, etc. belong
+
+**Consequence for `contextual_capability_matches` in scoring:**
+- `fit_scoring.py` is a consumer only — it reads stored LLM output from the record, never calls the LLM
+- Entries in `contextual_capability_matches` that do not match a profile capability rule name are skipped for scoring (logged at WARNING with full context)
+- The learning pipeline handles signal routing via `build_ad_learning_signals` and the learning-only LLM call — do not route from `fit_scoring.py`
+
+## Government context scoring
+
+Three separate knowledge sources, each with a distinct role:
+
+- `government_context_rules` (DB key) — regex patterns for APS grades, EL levels, NV/baseline clearances. Used by `has_government_context()` in `role_analysis.py`. Hard detection.
+- `government_context_knowledge` (DB key) — approved concept terms ("government", "public sector", etc.). Also used by `has_government_context()` via word-boundary regex. Populated via signal approval.
+- `government_context_patterns` (DB key) — approved structural wildcard patterns ("NV[*] clearance"). Populated via signal approval of `government_context_pattern` learning candidates. Currently empty until patterns are approved.
+
+`has_government_context()` → feeds `assess_sector_preference()` → affects fit score bonus/penalty based on user's sector preference setting.

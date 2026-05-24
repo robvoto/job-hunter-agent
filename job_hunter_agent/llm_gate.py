@@ -27,7 +27,6 @@ import re
 import sys
 from typing import Any, Dict
 
-from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -46,6 +45,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_DO_NOT_SAVE,
     LLM_PROMPT_JOB_DESCRIPTION_PREFIX,
     LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+    LLM_PROMPT_LEARNING_CANDIDATES_INTRO,
     LLM_PROMPT_JSON_ONLY,
     LLM_PROMPT_LEARNING_PENDING_ONLY,
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
@@ -87,12 +87,7 @@ from job_hunter_agent.global_settings import (
     get_llm_rejection_blocker_suggestions_max_words,
     load_global_settings,
 )
-from job_hunter_agent.paths import (
-    FIT_REVIEW_DEFAULTS_PATH as _FIT_REVIEW_DEFAULTS_PATH,
-    LLM_CAPABILITY_NAMING_DEFAULTS_PATH as _CAPABILITY_NAMING_DEFAULTS_PATH,
-    LLM_COSTS_PATH as _LLM_COSTS_PATH,
-    get_profile_path as _get_profile_path,
-)
+from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_NO_LLM,
     append_llm_cost_log,
@@ -117,8 +112,6 @@ from job_hunter_agent.profile_store import (
     get_candidate_profile_tiers,
     load_profile,
 )
-
-load_dotenv()
 
 _NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 
@@ -178,7 +171,7 @@ def reset_session_cost() -> None:
 
 
 def _profile_fingerprint() -> str:
-    """Cheap fingerprint of the profile file - mtime + size, no read/parse.
+    """Cheap fingerprint of the profile row - updated_at from DB.
     Cached for the lifetime of the process so repeated cache-key lookups in a
     single scraping run are O(1) after the first call.
     """
@@ -186,9 +179,15 @@ def _profile_fingerprint() -> str:
     if _profile_fingerprint_cache is not None:
         return _profile_fingerprint_cache
     try:
-        st = _get_profile_path().stat()
-        raw = f"{st.st_mtime_ns}:{st.st_size}"
-    except OSError:
+        from job_hunter_agent.database import db_conn
+        from job_hunter_agent.paths import get_active_user_id
+        user_id = get_active_user_id()
+        with db_conn() as conn:
+            row = conn.execute(
+                "SELECT updated_at FROM user_profile WHERE user_id = ?", (user_id,)
+            ).fetchone()
+        raw = row["updated_at"] if row else "no-profile"
+    except Exception:
         raw = "no-profile"
     _profile_fingerprint_cache = hashlib.sha256(raw.encode()).hexdigest()[:16]
     return _profile_fingerprint_cache
@@ -246,6 +245,7 @@ class _LLMReviewPayload(BaseModel):
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
     contextual_capability_matches: list[_LLMContextualCapabilityMatch] = Field(default_factory=list)
+    learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
 
 
@@ -254,19 +254,22 @@ client = OpenAI(api_key=_api_key) if (_api_key and not _NO_LLM_MODE) else None
 ALLOWED_LEARNING_CATEGORIES = frozenset(VALID_SIGNAL_CATEGORIES - {CATEGORY_HARD_BLOCKER_PATTERN})
 
 
-def _load_managed_prompt_lines(path, filename: str) -> tuple[str, ...]:
-    payload = _json_mod.loads(path.read_text(encoding="utf-8"))
+def _load_managed_prompt_lines(key: str) -> tuple[str, ...]:
+    from job_hunter_agent.knowledge_store import get_knowledge
+    payload = get_knowledge(key)
+    if payload is None:
+        raise RuntimeError(f"Knowledge '{key}' not found in knowledge table — seed the DB first")
     lines = payload.get("lines")
     if not isinstance(lines, list):
-        raise ValueError(f"{filename} must contain a lines list")
+        raise ValueError(f"Knowledge '{key}' must contain a lines list")
     cleaned = tuple(str(line).strip() for line in lines if str(line).strip())
     if not cleaned:
-        raise ValueError(f"{filename} must define at least one prompt line")
+        raise ValueError(f"Knowledge '{key}' must define at least one prompt line")
     return cleaned
 
 
-FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines(_FIT_REVIEW_DEFAULTS_PATH, "llm_fit_review_defaults.json")
-CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines(_CAPABILITY_NAMING_DEFAULTS_PATH, "llm_capability_naming_defaults.json")
+FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_defaults")
+CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines("llm_capability_naming_defaults")
 
 
 def llm_is_enabled() -> bool:
@@ -510,10 +513,7 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
 _ALLOWED_CONTEXTUAL_CONFIDENCES = frozenset({"high", "medium", "low"})
 
 
-def normalize_llm_contextual_capability_matches(
-    value: Any,
-    valid_capability_names: frozenset[str] | None = None,
-) -> list[dict[str, Any]]:
+def normalize_llm_contextual_capability_matches(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     results: list[dict[str, Any]] = []
@@ -525,9 +525,6 @@ def normalize_llm_contextual_capability_matches(
         matched_text = re.sub(r"\s+", " ", str(item.get("matched_text") or "")).strip()
         reason = re.sub(r"\s+", " ", str(item.get("reason") or "")).strip()
         if not cap_name or confidence not in _ALLOWED_CONTEXTUAL_CONFIDENCES:
-            continue
-        if valid_capability_names is not None and cap_name not in valid_capability_names:
-            print(f"[LLM][CONTEXTUAL_CAPABILITY] Unknown capability name ignored: {cap_name!r}")
             continue
         results.append({
             "capability_name": cap_name,
@@ -749,17 +746,20 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
         LLM_PROMPT_DO_NOT_INVENT,
         LLM_PROMPT_USE_VISIBLE_STRINGS,
         LLM_PROMPT_LEARNING_PENDING_ONLY,
-        LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
     ]
     if fit_review:
         parts.extend([
+            LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
             f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
             LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO,
+            LLM_PROMPT_LEARNING_CANDIDATES_INTRO,
             LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
             f"Use at most {get_llm_contextual_matches_max_items()} contextual_capability_matches.",
+            f"Use at most {get_llm_learning_candidates_max_items()} learning_candidates.",
         ])
     else:
         parts.extend([
+            LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
             f"Return exactly this shape: {LLM_LEARNING_ONLY_PROMPT_SHAPE}",
             LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
             f"Use at most {get_llm_learning_candidates_max_items()} learning candidates.",

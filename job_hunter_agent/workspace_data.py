@@ -298,12 +298,23 @@ def build_workspace_record_sets(
     debug_mode: bool = False,
     audit_rows: list[dict] | None = None,
 ) -> dict[str, list[dict]]:
-    curated_kept_records = [record for record in kept_records if is_workspace_eligible_fn(record, profile)]
+    _score_cache: dict[str, int] = {}
+
+    def _cached_score(record: dict) -> int:
+        key = str(record.get("job_key") or id(record))
+        if key not in _score_cache:
+            _score_cache[key] = fit_score_fn(record, profile)
+        return _score_cache[key]
+
+    def _is_eligible(record: dict) -> bool:
+        return is_workspace_eligible_fn(record, profile)
+
+    curated_kept_records = [record for record in kept_records if _is_eligible(record)]
 
     def _rank_by_fit(record: dict) -> tuple:
         timestamp = parse_timestamp_fn(record.get("last_kept_at") or record.get("last_seen_at"))
         return (
-            -fit_score_fn(record, profile),
+            -_cached_score(record),
             -(1 if not viewed_by_user_fn(record) else 0),
             record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
             -(timestamp or datetime.min).timestamp() if timestamp else float("-inf"),
@@ -312,7 +323,7 @@ def build_workspace_record_sets(
     def _rank_archive_by_fit(record: dict) -> tuple:
         timestamp = parse_timestamp_fn(record.get("last_kept_at"))
         return (
-            -fit_score_fn(record, profile),
+            -_cached_score(record),
             record.get("posted_age_days") if record.get("posted_age_days") is not None else 9999,
             -(timestamp or datetime.min).timestamp() if timestamp else float("-inf"),
         )
@@ -350,11 +361,11 @@ def build_workspace_record_sets(
     applied_records = build_applied_records_fn(applied_job_keys, job_history, reference_time)
     hidden_records = build_hidden_records_fn(hidden_job_keys, job_history, reference_time)
     recent_archive_records = sorted(
-        [record for record in archive_records if not record.get("is_stale") and is_workspace_eligible_fn(record, profile)],
+        [record for record in archive_records if not record.get("is_stale") and _is_eligible(record)],
         key=_rank_archive_by_fit,
     )
     stale_archive_records = sorted(
-        [record for record in archive_records if record.get("is_stale") and is_workspace_eligible_fn(record, profile)],
+        [record for record in archive_records if record.get("is_stale") and _is_eligible(record)],
         key=_rank_archive_by_fit,
     )
     shortlist_records = sorted(

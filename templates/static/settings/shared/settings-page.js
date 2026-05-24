@@ -1,17 +1,11 @@
-var LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
-window.LINKEDIN_EASY_APPLY_ONLY = LINKEDIN_EASY_APPLY_ONLY;
-
-const statusEl = document.getElementById('status');
-const isTestMode = document.body?.dataset.testMode === 'true';
-
-// Module references
-const chipEditor = window.JobHunterChipEditor;
-const capabilityEditor = window.JobHunterCapabilityEditor;
-const adminSettings = window.JobHunterAdminSettings;
-const alertsSettings = window.JobHunterAlertsSettings;
-const capabilityUi = window.JobHunterCapabilityUi || {};
-const capabilityLabels = capabilityUi.labels || {};
-const {
+import { JobHunterChipEditor as chipEditor } from './settings-chip-editor.js';
+import { JobHunterCapabilityEditor as capabilityEditor } from './settings-capability-editor.js';
+import { JobHunterAdminSettings as adminSettings } from '../global/settings-admin.js';
+import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-alerts.js';
+import * as capabilityUi from '../../common/capability-ui.js';
+import * as locationUi from '../../common/location-options.js';
+import { createController as createMessageBannerController } from '../../common/message-banner.js';
+import {
   escapeHtml,
   toLines,
   rulesToText,
@@ -30,8 +24,23 @@ const {
   getToggleChecked,
   setChoiceGroupValue,
   getChoiceGroupValue,
+  LINKEDIN_EASY_APPLY_ONLY,
   SECTOR_PREFERENCE_DEFAULT,
-} = window.JobHunterSettingsUtils;
+  ensureAtLeastOneChoiceSelected,
+} from './settings-utils.js';
+
+const statusEl = document.getElementById('status');
+const statusUi = createMessageBannerController(statusEl);
+const isTestMode = document.body?.dataset.testMode === 'true';
+const capabilityLabels = capabilityUi.labels || {};
+const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ || {};
+const testMenuRefs = Object.freeze({
+  testPanel: document.getElementById('job_hunter_account_test_panel'),
+  testTrigger: document.getElementById('job_hunter_account_test_trigger'),
+  testMenu: document.getElementById('job_hunter_account_test_menu'),
+  resetUserBtn: document.getElementById('job_hunter_reset_user_btn'),
+  resetLearningBtn: document.getElementById('job_hunter_reset_learning_btn'),
+});
 
 const capabilityMatrixNav = document.getElementById('settings_capability_matrix_nav');
 if (capabilityMatrixNav && capabilityLabels.settings_title) {
@@ -56,7 +65,6 @@ let loadedUserSettings = null;
 let loadedProfile = null;
 let loadedGlobalSettings = null;
 let suppressDirtyTracking = true;
-let statusHideTimer = null;
 const pageMode = document.body?.dataset.pageMode === 'admin' ? 'admin' : 'settings';
 const isAdminPage = pageMode === 'admin';
 const isUserAdmin = isAdminPage || !!document.querySelector('.sidebar-brand-actions .nav-item-admin') || !!document.querySelector('.sidebar-brand-actions a[href*="admin"]');
@@ -80,30 +88,21 @@ const ruleTextAreas = [
   ['reject_description_phrase_rules', 'phrase'],
 ];
 
-function hideStatus() {
-  if (!statusEl) return;
-  statusEl.className = 'status';
-  statusEl.textContent = '';
+export function hideStatus() {
+  statusUi.hide();
 }
 
-function showStatus(message, kind, options = {}) {
-  if (!statusEl) return;
-  window.clearTimeout(statusHideTimer);
-  statusEl.textContent = message;
-  statusEl.className = `status is-visible ${kind}`;
-  const autoHideMs = Number(options.autoHideMs || 0);
-  if (autoHideMs > 0) {
-    statusHideTimer = window.setTimeout(hideStatus, autoHideMs);
-  }
+export function showStatus(message, kind, options = {}) {
+  statusUi.show(message, kind, options);
 }
 
-function showInlineStatus(element, message, kind) {
+export function showInlineStatus(element, message, kind) {
   if (!element) return;
   element.textContent = message;
   element.className = `inline-status ${kind}`;
 }
 
-function markDirty() {
+export function markDirty() {
   if (suppressDirtyTracking) return;
   if (activeSaveButton) activeSaveButton.disabled = false;
   if (stickySaveBar) {
@@ -112,7 +111,7 @@ function markDirty() {
   }
 }
 
-function clearDirty() {
+export function clearDirty() {
   if (activeSaveButton) activeSaveButton.disabled = true;
   if (stickySaveBar) {
     stickySaveBar.hidden = true;
@@ -139,12 +138,32 @@ function renderLlmModelOptions() {
 }
 
 function renderLocationOptions() {
-  const locationUi = window.JobHunterLocationUi || {};
   const select = document.getElementById('locations');
   if (!select || !locationUi.renderLocationOptions) return;
   locationUi.renderLocationOptions(select);
   const preferred = String(loadedProfile?.search_settings?.locations?.[0] || locationUi.defaultLocation || select.value || '').trim();
   if (preferred) select.value = preferred;
+}
+
+function setTestMenuOpen(open) {
+  if (!testMenuRefs.testMenu || !testMenuRefs.testTrigger) {
+    return;
+  }
+  testMenuRefs.testMenu.classList.toggle('is-open', Boolean(open));
+  testMenuRefs.testTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+async function postTestAction(path, fallbackErrorMessage) {
+  const response = await jobHunterFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || fallbackErrorMessage || '');
+  }
+  return payload;
 }
 
 function buildSettingsHelpDrawer(bodyHtml, extraClass = '') {
@@ -289,7 +308,6 @@ function fillForm(profile) {
   renderLocationOptions();
   const locationSelect = document.getElementById('locations');
   if (locationSelect) {
-    const locationUi = window.JobHunterLocationUi || {};
     locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
   }
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
@@ -344,7 +362,7 @@ async function loadProfile() {
   const profile = await response.json();
   loadedProfile = profile;
   fillForm(profile);
-  showStatus('Profile loaded.', 'ok', { autoHideMs: 2600 });
+  showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
 }
 
 async function loadGlobalSettings() {
@@ -487,10 +505,7 @@ document.querySelectorAll('input[name="work_mode_preference"]').forEach((cb) => 
 
 document.querySelectorAll('input[name="prefer_sector"]').forEach((cb) => {
   cb.addEventListener('change', () => {
-    if (!cb.checked) {
-      const anyChecked = document.querySelectorAll('input[name="prefer_sector"]:checked').length > 0;
-      if (!anyChecked) cb.checked = true;
-    }
+    ensureAtLeastOneChoiceSelected('prefer_sector', cb);
   });
 });
 
@@ -505,7 +520,7 @@ document.getElementById('reload')?.addEventListener('click', async (e) => {
     await loadProfile();
     initSliders();
     clearDirty();
-    showStatus('Profile reloaded from disk.', 'ok', { autoHideMs: 2600 });
+    showStatus('Profile reloaded from disk.', 'success', { autoHideMs: 2600 });
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {
@@ -523,7 +538,7 @@ document.getElementById('open_telegram_connect')?.addEventListener('click', asyn
     let link = alertsSettings.getTelegramConnectLink();
     if (!link) link = (await alertsSettings.loadTelegramConnectLink()).connect_link || '';
     if (!link) throw new Error('No Telegram connect link available yet.');
-    showStatus('Opening Telegram... If it fails to open, copy the link from the panel below.', 'ok', { autoHideMs: 5000 });
+    showStatus('Opening Telegram... If it fails to open, copy the link from the panel below.', 'success', { autoHideMs: 5000 });
     window.open(link, '_blank', 'noopener');
   } catch (error) {
     showStatus(error.message, 'error');
@@ -563,6 +578,42 @@ document.getElementById('send_telegram_test')?.addEventListener('click', async (
   }
 });
 
+testMenuRefs.resetUserBtn?.addEventListener('click', async () => {
+  const confirmed = window.confirm([
+    onboardingFlowLabels.reset_user_confirm_title,
+    onboardingFlowLabels.reset_user_confirm_body_1,
+    onboardingFlowLabels.reset_user_confirm_body_2,
+  ].filter(Boolean).join('\n\n'));
+  if (!confirmed) {
+    return;
+  }
+  try {
+    setTestMenuOpen(false);
+    const payload = await postTestAction('/api/test/reset-user', onboardingFlowLabels.reset_user_error);
+    window.location.href = payload.redirect_to || '/start';
+  } catch (error) {
+    window.alert(error.message || onboardingFlowLabels.reset_user_error);
+  }
+});
+
+testMenuRefs.resetLearningBtn?.addEventListener('click', async () => {
+  const confirmed = window.confirm([
+    onboardingFlowLabels.reset_learning_confirm_title,
+    onboardingFlowLabels.reset_learning_confirm_body_1,
+    onboardingFlowLabels.reset_learning_confirm_body_2,
+  ].filter(Boolean).join('\n\n'));
+  if (!confirmed) {
+    return;
+  }
+  try {
+    setTestMenuOpen(false);
+    const payload = await postTestAction('/api/test/reset-learning', onboardingFlowLabels.reset_learning_error);
+    window.alert(payload.message || onboardingFlowLabels.reset_learning_success_message);
+  } catch (error) {
+    window.alert(error.message || onboardingFlowLabels.reset_learning_error);
+  }
+});
+
 async function saveActivePage() {
   if (!activeSaveButton) return;
   const originalLabel = activeSaveButton.textContent;
@@ -583,8 +634,8 @@ async function saveActivePage() {
       loadedGlobalSettings = globalPayload;
       adminSettings.fillGlobalForm(globalPayload);
       renderLlmModelOptions();
-      showInlineStatus(globalStatus, 'Global settings saved.', 'ok');
-      showStatus('Global settings saved successfully.', 'ok');
+      showInlineStatus(globalStatus, 'Global settings saved.', 'success');
+      showStatus('Global settings saved successfully.', 'success');
     } else {
       const profile = collectProfile();
       const userSettingsPayload = alertsSettings.collectUserSettings(loadedUserSettings);
@@ -606,8 +657,8 @@ async function saveActivePage() {
       loadedUserSettings = userPayload;
       alertsSettings.fillUserSettings(userPayload);
       initSliders();
-      showInlineStatus(globalStatus, 'Settings saved.', 'ok');
-      showStatus('Settings saved successfully.', 'ok', { autoHideMs: 2500 });
+      showInlineStatus(globalStatus, 'Settings saved.', 'success');
+      showStatus('Settings saved successfully.', 'success', { autoHideMs: 2500 });
     }
     clearDirty();
   } catch (err) {

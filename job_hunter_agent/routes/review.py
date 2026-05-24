@@ -142,14 +142,9 @@ def api_rejection_feedback_mandatory_blockers(body: dict = Body(...)):  # type: 
 def api_title_block_preview(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:
         phrases = [str(p).strip() for p in (body.get("phrases") or []) if str(p).strip()]
-        titles: list[str] = []
-        if srv.AUDIT_RECORDS_PATH.exists():
-            try:
-                rows = json.loads(srv.AUDIT_RECORDS_PATH.read_text(encoding="utf-8"))
-                if isinstance(rows, list):
-                    titles = [str(r.get("title") or "").lower() for r in rows if r.get("title")]
-            except Exception:
-                logger.warning("[review] Failed to parse audit records for title-block preview")
+        from job_hunter_agent.io_utils import load_audit_rows
+        rows = load_audit_rows()
+        titles = [str(r.get("title") or "").lower() for r in rows if r.get("title")]
         counts: dict[str, int] = {}
         for phrase in phrases:
             norm = re.sub(r"[^a-z0-9]+", " ", phrase.lower()).strip()

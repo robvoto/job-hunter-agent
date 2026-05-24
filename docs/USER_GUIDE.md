@@ -31,7 +31,7 @@ If you open the app from another device on your local network, the login session
 
 - `http://127.0.0.1:8765/settings`
 
-The app will create or enrich `data/profile.json`, which becomes your working profile for job matching.
+The app will create or enrich your runtime profile (stored in the SQLite DB), which becomes your working profile for job matching.
 
 ## What Onboarding Creates
 
@@ -197,15 +197,14 @@ Current behavior:
 
 - deterministic filters run first
 - only surviving job descriptions reach the LLM
-- the LLM reads from `data/profile.json`
+- the LLM reads from your runtime profile (DB)
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
 - you can tune AI fit review guidance and AI capability naming guidance in **Settings**
 
 To enable:
-1. Create a `.env` file in the project root.
-2. Add `OPENAI_API_KEY=sk-your-actual-key`
+- Set `OPENAI_API_KEY=sk-your-actual-key` in the environment (e.g. via the systemd service file `Environment=` directive for server deployments, or exported in your shell for local use).
 
-If the variable is not found in the environment or the `.env` file, the app runs without live LLM review.
+If the variable is not set, the app runs without live LLM review.
 
 ## Security and Network Access
 
@@ -216,9 +215,8 @@ For detailed CLI flags, automation setup, and troubleshooting, refer to OPERATIO
 
 ## Local Files To Keep
 
-- `data/profile.json`
-- `data/job_history.json`
-- `data/llm_cache.json`
+- The SQLite DB (path set by `JOB_HUNTER_DB_PATH` — contains profile, history, settings, run data)
+- `data/runtime/llm_cache.json`
 - `TODO.txt`
 
 These are also local-only if used:

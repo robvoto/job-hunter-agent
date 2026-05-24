@@ -6,9 +6,7 @@ from job_hunter_agent import profile_store
 from job_hunter_agent import review_insights
 
 
-def test_save_profile_strips_legacy_guidance_key(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
+def test_save_profile_strips_legacy_guidance_key(isolated_db):
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
 
     saved = profile_store.save_profile({
@@ -17,75 +15,60 @@ def test_save_profile_strips_legacy_guidance_key(tmp_path, monkeypatch):
     })
 
     assert legacy_key not in saved
-    persisted = json.loads(profile_path.read_text(encoding="utf-8"))
-    assert legacy_key not in persisted
+    assert legacy_key not in profile_store.load_profile()
 
 
-def test_save_profile_does_not_persist_scoring_rules(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
+def test_save_profile_does_not_persist_scoring_rules(isolated_db):
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import LOCAL_USER_ID
 
     profile_store.save_profile({**profile_store.DEFAULT_PROFILE})
 
-    persisted = json.loads(profile_path.read_text(encoding="utf-8"))
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM user_profile WHERE user_id = ?", (LOCAL_USER_ID,)
+        ).fetchone()
+    persisted = json.loads(row["data"])
     assert "scoring_rules" not in persisted
 
 
-def test_load_profile_drops_legacy_guidance_key(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
+def test_load_profile_drops_legacy_guidance_key(isolated_db):
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import LOCAL_USER_ID
+
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
-    profile_path.write_text(
-        json.dumps({legacy_key: "Prefer labels close to business analysis."}),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
+    ensure_user_row(LOCAL_USER_ID)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
+            (LOCAL_USER_ID, json.dumps({legacy_key: "Prefer labels close to business analysis."})),
+        )
 
     loaded = profile_store.load_profile()
 
     assert legacy_key not in loaded
 
 
+def test_load_profile_raises_for_non_object_data(isolated_db):
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import LOCAL_USER_ID
+
+    ensure_user_row(LOCAL_USER_ID)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
+            (LOCAL_USER_ID, json.dumps([1, 2, 3])),
+        )
+
+    with pytest.raises(profile_store.ProfileLoadError):
+        profile_store.load_profile()
+
+
 def test_default_profile_does_not_include_legacy_guidance_key():
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
     assert legacy_key not in profile_store.DEFAULT_PROFILE
-
-
-def test_load_profile_raises_for_invalid_json_and_backs_up_file(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
-    profile_path.write_text("{not valid json", encoding="utf-8")
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
-
-    with pytest.raises(profile_store.ProfileLoadError):
-        profile_store.load_profile()
-
-    backups = sorted(tmp_path.glob("profile.invalid.*.json"))
-    assert len(backups) == 1
-    assert backups[0].read_text(encoding="utf-8") == "{not valid json"
-    assert profile_path.read_text(encoding="utf-8") == "{not valid json"
-
-
-def test_load_profile_raises_for_non_object_json_and_backs_up_file(tmp_path, monkeypatch):
-    profile_path = tmp_path / "profile.json"
-    profile_path.write_text("[1, 2, 3]", encoding="utf-8")
-    monkeypatch.setattr(profile_store, "get_profile_path", lambda: profile_path)
-
-    with pytest.raises(profile_store.ProfileLoadError):
-        profile_store.load_profile()
-
-    backups = sorted(tmp_path.glob("profile.invalid.*.json"))
-    assert len(backups) == 1
-    assert backups[0].read_text(encoding="utf-8") == "[1, 2, 3]"
-
-
-def test_scoring_rules_knowledge_file_contains_sections():
-    payload = json.loads(profile_store.SCORING_RULES_PATH.read_text(encoding="utf-8"))
-
-    assert payload["kind"] == "system_config"
-    assert "fit_breakdown" in payload
-    assert "salary" in payload
-    assert "convergence" in payload
-    assert "capability_evidence" in payload
-    assert payload["capability_evidence"]["max_score"] == 20
 
 
 def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():

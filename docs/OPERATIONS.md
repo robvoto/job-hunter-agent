@@ -147,16 +147,15 @@ Purpose:
 
 Critical runtime files:
 
-| File                       | Purpose                      |
+| Location                   | Purpose                      |
 | -------------------------- | ---------------------------- |
-| per-user `profile.json` | runtime candidate profile |
-| per-user `job_history.json` | persistent job state |
-| `data/runtime/` | runtime cache, costs, and orchestration state |
-| `data/config/` | global runtime settings |
+| SQLite DB (`JOB_HUNTER_DB_PATH`) | runtime candidate profile, job history, run outputs, user settings |
+| `data/runtime/` | LLM cache, costs, and orchestration state |
+| `data/config/` | global settings seed (committed defaults) |
 | `data/knowledge/` | approved business knowledge |
 | `data/signals/` | signal registry and learning review state |
 
-These files should be preserved.
+The DB and `data/runtime/` should be preserved. Knowledge and config files are committed to git.
 
 ---
 
@@ -166,12 +165,12 @@ Rebuildable outputs:
 
 | File                        | Purpose             |
 | --------------------------- | ------------------- |
-| `output/workspace_results.html` | rendered workspace |
-| `output/run_stats.json`     | runtime diagnostics |
-| `output/review_data.json`   | review summaries    |
-| `output/audit_records.json` | audit output        |
+| `data/users/<uid>/workspace_results.html` | rendered workspace |
+| DB `run_stats` table        | runtime diagnostics |
+| DB `review_data` table      | review summaries    |
+| DB `audit_records` table    | audit output        |
 
-These files can be regenerated.
+These can be regenerated from the DB or by re-running a scrape.
 
 ---
 
@@ -325,23 +324,97 @@ pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
+## Database Bootstrap
+
+Run once on first deploy (or after a DB reset) to seed knowledge, config, and signal defaults:
+
+```bash
+python -m job_hunter_agent.db_seed
+```
+
+### After deploying a new app version
+
+Knowledge upgrades run automatically on every startup (`fastapi_app`, `source_connector`, `agent_runner`). No manual step is needed after a normal `git pull`.
+
+`--upgrade` is available for manual runs or scripted deployments:
+
+```bash
+python -m job_hunter_agent.db_seed --upgrade
+```
+
+`--upgrade` uses version-aware merge logic:
+- Files with no `version` field (pure reference data) — always replaced.
+- Files with `version` and an `entries` list (capability knowledge, blocker rules, etc.) — new entries appended; existing DB entries (including user-approved ones) are preserved.
+- Files with `version` but no `entries` list (scoring rules, ui_labels, etc.) — replaced only when the file version is newer than the DB version.
+
+### Hard reset (wipes user-approved additions)
+
+```bash
+python -m job_hunter_agent.db_seed --overwrite
+```
+
+`--overwrite` replaces all DB knowledge entries from the current bundled files. Use only for a full DB reset or corruption recovery — it will wipe any user-approved signal additions.
+
+`--upgrade` and `--overwrite` are mutually exclusive.
+
 ---
 
 # Testing Operations
 
 ## Full Test Suite
 
+Run the complete pytest test suite with the project virtual environment:
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-## Focused Runtime Validation
+This is the clearest command when you want to check the whole project before merging work into `main`.
+
+## Test Runner Wrapper
+
+`job_hunter_agent.test_runner` is a convenience wrapper around pytest. It does not run a separate test system.
 
 ```powershell
 python -m job_hunter_agent.test_runner
 ```
 
-Use focused tests when validating:
+Internally, it finds the repo virtual environment and runs pytest from the repository root.
+
+These are equivalent in purpose:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+python -m job_hunter_agent.test_runner
+```
+
+Use the wrapper only when its options make the command easier to read.
+
+Run only tests matching a word, such as onboarding:
+
+```powershell
+python -m job_hunter_agent.test_runner -k onboarding
+```
+
+Equivalent direct pytest command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -k onboarding
+```
+
+Run in verbose mode, showing more detail about individual tests:
+
+```powershell
+python -m job_hunter_agent.test_runner -v
+```
+
+Equivalent direct pytest command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+Use targeted tests when validating a specific area, such as:
 
 * filtering
 * onboarding
@@ -349,7 +422,7 @@ Use focused tests when validating:
 * workspace rendering
 * learning logic
 
-Avoid unnecessary full-suite execution during targeted changes.
+Run the full suite before merging into `main`.
 
 ---
 

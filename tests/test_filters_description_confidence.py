@@ -1,7 +1,7 @@
 from job_hunter_agent import filters
 from job_hunter_agent import hard_blocker_rules
 from job_hunter_agent import signal_registry
-from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH, SIGNAL_REGISTRY_PATH
+from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH
 
 
 REQUIREMENTS_ELICITATION_RULE = {
@@ -41,22 +41,10 @@ def _hard_blocker_rules_path(tmp_path):
     return tmp_path / HARD_BLOCKER_RULES_PATH.name
 
 
-def _signal_registry_path(tmp_path):
-    return tmp_path / SIGNAL_REGISTRY_PATH.name
-
-
 def _write_hard_blocker_rules(path, entries):
     path.parent.mkdir(parents=True, exist_ok=True)
     hard_blocker_rules.HARD_BLOCKER_RULES_PATH = path
     return hard_blocker_rules.save_hard_blocker_rules(entries)
-
-
-def _write_signal_registry(path, registry):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    signal_registry._REGISTRY_PATH = path
-    signal_registry.save_registry(registry)
-
-
 
 
 def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeypatch):
@@ -118,11 +106,9 @@ def test_approved_hard_blocker_rules_does_not_reject_desirable_only_text(tmp_pat
     assert reason == "OK"
 
 
-def test_pending_hard_blocker_pattern_does_not_affect_filtering(tmp_path, monkeypatch):
-    registry_path = _signal_registry_path(tmp_path)
+def test_pending_hard_blocker_pattern_does_not_affect_filtering(isolated_db, tmp_path, monkeypatch):
     rules_path = _hard_blocker_rules_path(tmp_path)
-    _write_signal_registry(
-        registry_path,
+    signal_registry.save_registry(
         {
             "must have sap": {
                 "signal": "must have sap",
@@ -132,7 +118,7 @@ def test_pending_hard_blocker_pattern_does_not_affect_filtering(tmp_path, monkey
                 "suggested_category": "hard_blocker_pattern",
                 "history": [{"action": "added", "timestamp": "2026-05-05T00:00:00+00:00"}],
             }
-        },
+        }
     )
     _write_hard_blocker_rules(rules_path, [])
     monkeypatch.setattr(

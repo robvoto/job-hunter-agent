@@ -1,13 +1,15 @@
-window.JobHunterAdminSettings = (function () {
-  const {
-    escapeHtml,
-    toLines,
-    setCurrencyFieldValue,
-    readCurrencyFieldValue,
-    setToggleChecked,
-    setChoiceGroupValue,
-    getChoiceGroupValue,
-  } = window.JobHunterSettingsUtils;
+import {
+  escapeHtml,
+  toLines,
+  setCurrencyFieldValue,
+  readCurrencyFieldValue,
+  setToggleChecked,
+  setChoiceGroupValue,
+  getChoiceGroupValue,
+  LINKEDIN_EASY_APPLY_ONLY,
+} from '../shared/settings-utils.js';
+
+export const JobHunterAdminSettings = (function () {
 
   // Fills the admin/global-settings form. Caller is responsible for storing settings
   // in loadedGlobalSettings and calling renderLlmModelOptions() afterwards.
@@ -26,8 +28,6 @@ window.JobHunterAdminSettings = (function () {
     const onboarding = settings.onboarding_settings || {};
     const llmSettings = settings.llm_settings || {};
     const playwrightSettings = settings.playwright_settings || {};
-    const LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
-
     const setBounds = (id, bounds) => {
       const input = document.getElementById(id);
       if (!input || !bounds) return;
@@ -114,17 +114,27 @@ window.JobHunterAdminSettings = (function () {
     const presetPanel = document.getElementById('capability_strength_presets_panel');
     const presetTable = onboarding.capability_strength_presets || {};
     if (presetPanel) {
-      const presetRows = Object.entries(presetTable).map(([presetName, presetValues]) => `
-        <tr>
-          <th scope="row">${escapeHtml(presetName)}</th>
-          <td>${escapeHtml(Object.entries(presetValues || {}).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No values')}</td>
-        </tr>
-      `).join('');
+      const presetRows = Object.entries(presetTable).map(([presetName, presetValues]) => {
+        const valueRows = Object.entries(presetValues || {}).map(([key, value]) => `
+          <div class="capability-preset-value-row">
+            <span class="capability-preset-key">${escapeHtml(key)}</span>
+            <span class="capability-preset-value">${escapeHtml(String(value))}</span>
+          </div>
+        `).join('');
+
+        return `
+          <article class="capability-preset-card">
+            <h3>${escapeHtml(presetName)}</h3>
+            <div class="capability-preset-values">
+              ${valueRows || '<span class="help">No values</span>'}
+            </div>
+          </article>
+        `;
+      }).join('');
       presetPanel.innerHTML = `
-        <table class="settings-table">
-          <thead><tr><th>Preset</th><th>Values</th></tr></thead>
-          <tbody>${presetRows || '<tr><td colspan="2">No capability presets loaded.</td></tr>'}</tbody>
-        </table>
+        <div class="capability-preset-grid">
+          ${presetRows || '<p class="help">No capability presets loaded.</p>'}
+        </div>
       `;
     }
   }
@@ -144,8 +154,6 @@ window.JobHunterAdminSettings = (function () {
     const currentReviewSettings = current.review_settings || {};
     const currentPlaywright = current.playwright_settings || {};
     const currentOnboarding = current.onboarding_settings || {};
-    const LINKEDIN_EASY_APPLY_ONLY = window.LINKEDIN_EASY_APPLY_ONLY || 'linkedin_easy_apply_only';
-
     const readNumber = (id, fallback) => {
       const raw = Number(document.getElementById(id).value);
       return Number.isNaN(raw) ? fallback : raw;

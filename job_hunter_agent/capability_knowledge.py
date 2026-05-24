@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from job_hunter_agent.paths import CAPABILITY_KNOWLEDGE_PATH
 from job_hunter_agent.signal_schema import (
     MANAGED_KNOWLEDGE_ALIASES_KEY,
     MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
@@ -21,8 +19,8 @@ from job_hunter_agent.managed_knowledge_store import (
 )
 
 def _load_payload() -> dict[str, Any]:
-    from job_hunter_agent.io_utils import load_json_dict
-    return load_json_dict(CAPABILITY_KNOWLEDGE_PATH) or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
+    from job_hunter_agent.knowledge_store import get_knowledge
+    return get_knowledge("capability_knowledge") or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
 
 
 def load_capability_knowledge() -> list[dict[str, Any]]:
@@ -56,8 +54,8 @@ def save_capability_knowledge(entries: list[dict[str, Any]]) -> dict[str, Any]:
         aliases_key=MANAGED_KNOWLEDGE_ALIASES_KEY,
     )
     payload[MANAGED_KNOWLEDGE_ENTRIES_KEY] = cleaned_entries
-    CAPABILITY_KNOWLEDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CAPABILITY_KNOWLEDGE_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    from job_hunter_agent.knowledge_store import set_knowledge
+    set_knowledge("capability_knowledge", payload)
     return payload
 
 

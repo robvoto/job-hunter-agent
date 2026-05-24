@@ -9,8 +9,8 @@ from job_hunter_agent.global_settings import (
     KEY_SORT_NEWEST_FIRST,
 )
 from job_hunter_agent.history import TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING
-from job_hunter_agent.io_utils import configure_console_output, load_json_dict, load_job_history
-from job_hunter_agent.paths import get_run_stats_path, get_workspace_results_path
+from job_hunter_agent.io_utils import configure_console_output, load_job_history, load_run_stats
+from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
 from job_hunter_agent.profile_store import get_search_settings, load_profile
 from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
@@ -42,7 +42,7 @@ def rebuild_workspace_results(
     search_settings = get_search_settings(profile)
     configured_date_range = int(search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]) or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
     sort_newest_first = bool(search_settings.get(KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]))
-    run_stats = load_json_dict(get_run_stats_path())
+    run_stats = load_run_stats()
     run_started_at = parse_timestamp(run_stats.get("run_started_at")) or datetime.now().astimezone()
     reference_time = datetime.now().astimezone()
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)

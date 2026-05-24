@@ -12,14 +12,12 @@ import json
 import logging
 import re
 from typing import Any
-from job_hunter_agent.io_utils import load_json_dict
 from job_hunter_agent.managed_knowledge_store import (
     clean_knowledge_aliases,
     clean_knowledge_text,
     merge_knowledge_entries,
 )
 
-from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH
 from job_hunter_agent.signal_schema import (
     MANAGED_KNOWLEDGE_ALIASES_KEY,
     MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
@@ -36,7 +34,8 @@ REJECTION_BLOCKER_MAX_LENGTH = 80
 logger = logging.getLogger(__name__)
 
 def _load_payload() -> dict[str, Any]:
-    return load_json_dict(HARD_BLOCKER_RULES_PATH) or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
+    from job_hunter_agent.knowledge_store import get_knowledge
+    return get_knowledge("hard_blocker_rules") or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
 
 
 def _normalize_entry(entry: Any) -> dict[str, Any] | None:
@@ -93,8 +92,8 @@ def save_hard_blocker_rules(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "description": "Sentence patterns that detect when a term is a non-negotiable requirement in a job ad. Each entry must contain a {term} placeholder — the engine substitutes candidate-specific rejected skills from profile.must_not_require_skills. These are detection grammar, not a blocklist.",
         MANAGED_KNOWLEDGE_ENTRIES_KEY: _merge_entries(entries),
     }
-    HARD_BLOCKER_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    HARD_BLOCKER_RULES_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    from job_hunter_agent.knowledge_store import set_knowledge
+    set_knowledge("hard_blocker_rules", payload)
     return payload
 
 

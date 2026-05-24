@@ -529,81 +529,50 @@ class TestEdgeCases:
 
 
 class TestManagedKnowledgeLoading:
-    def test_load_dodgy_job_rules_requires_explicit_threshold(self, tmp_path, monkeypatch):
-        dodgy_rules_path = tmp_path / "dodgy_job_rules.json"
-        dodgy_rules_path.write_text(
-            json.dumps({
-                "kind": "managed_knowledge",
-                "name": "dodgy_job_rules",
-                "version": 1,
-                "job_closed_indicators": ["job is no longer available"],
-            }),
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(job_quality, "DODGY_JOB_RULES_PATH", dodgy_rules_path)
+    def test_load_dodgy_job_rules_requires_explicit_threshold(self, isolated_db):
+        from job_hunter_agent.knowledge_store import set_knowledge
+        set_knowledge("dodgy_job_rules", {
+            "kind": "managed_knowledge",
+            "name": "dodgy_job_rules",
+            "version": 1,
+            "job_closed_indicators": ["job is no longer available"],
+        }, isolated_db)
 
         with pytest.raises(ValueError, match="external_date_mismatch_flag_days"):
             load_dodgy_job_rules()
 
-    def test_load_dodgy_job_rules_uses_learned_cv_farming_patterns(self, tmp_path, monkeypatch):
-        dodgy_rules_path = tmp_path / "dodgy_job_rules.json"
-        cv_rules_path = tmp_path / "cv_farming_rules.json"
-        dodgy_rules_path.write_text(
-            json.dumps({
-                "kind": "managed_knowledge",
-                "name": "dodgy_job_rules",
-                "version": 1,
-                "job_closed_indicators": ["job is no longer available"],
-                "external_date_mismatch_flag_days": 14,
-            }),
-            encoding="utf-8",
-        )
-        cv_rules_path.write_text(
-            json.dumps({
-                "kind": "managed_knowledge",
-                "name": "cv_farming_rules",
-                "version": 1,
-                "description": "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role.",
-                "entries": [
-                    {
-                        "value": "send (?:us |your )?(?:cv|resume)",
-                        "aliases": ["send your resume", "Send your resume"],
-                    },
-                    {
-                        "value": "send (?:us |your )?(?:cv|resume)",
-                        "aliases": ["send your cv"],
-                    },
-                ],
-            }),
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(job_quality, "DODGY_JOB_RULES_PATH", dodgy_rules_path)
-        monkeypatch.setattr(job_quality, "CV_FARMING_RULES_PATH", cv_rules_path)
+    def test_load_dodgy_job_rules_uses_learned_cv_farming_patterns(self, isolated_db):
+        from job_hunter_agent.knowledge_store import set_knowledge
+        set_knowledge("dodgy_job_rules", {
+            "kind": "managed_knowledge",
+            "name": "dodgy_job_rules",
+            "version": 1,
+            "job_closed_indicators": ["job is no longer available"],
+            "external_date_mismatch_flag_days": 14,
+        }, isolated_db)
+        set_knowledge("cv_farming_rules", {
+            "kind": "managed_knowledge",
+            "name": "cv_farming_rules",
+            "version": 1,
+            "description": "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role.",
+            "entries": [
+                {
+                    "value": "send (?:us |your )?(?:cv|resume)",
+                    "aliases": ["send your resume", "Send your resume"],
+                },
+                {
+                    "value": "send (?:us |your )?(?:cv|resume)",
+                    "aliases": ["send your cv"],
+                },
+            ],
+        }, isolated_db)
 
         rules = load_dodgy_job_rules()
 
         assert rules["cv_farming_patterns"] == ["send (?:us |your )?(?:cv|resume)"]
         assert detect_cv_farming_signals("Please send your resume to apply.", rules)[0]["signal"] == "send (?:us |your )?(?:cv|resume)"
 
-    def test_detect_cv_farming_signal_preserves_learned_regex_and_example_text(self, tmp_path, monkeypatch):
-        cv_rules_path = tmp_path / "cv_farming_rules.json"
-        cv_rules_path.write_text(
-            json.dumps({
-                "kind": "managed_knowledge",
-                "name": "cv_farming_rules",
-                "version": 1,
-                "description": "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role.",
-                "entries": [
-                    {
-                        "value": "email (?:your )?(?:cv|resume|application) to",
-                        "aliases": ["email your resume to"],
-                    }
-                ],
-            }),
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(job_quality, "CV_FARMING_RULES_PATH", cv_rules_path)
-
+    def test_detect_cv_farming_signal_preserves_learned_regex_and_example_text(self):
         rules = {
             "cv_farming_patterns": ["email (?:your )?(?:cv|resume|application) to"],
             "job_closed_indicators": [],

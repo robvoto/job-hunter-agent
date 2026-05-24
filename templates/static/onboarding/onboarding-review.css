@@ -1,0 +1,273 @@
+/* Keep currency values clear of the visual currency prefix on onboarding forms. */
+.currency-input-wrap input,
+.currency-input-wrap input[type='text'] {
+  padding-left: 52px !important;
+}
+
+/* Search Basics: keyword card on top, details card below with 2-column field layout. */
+.search-basics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--field-stack-gap);
+  margin-top: 16px;
+  align-items: start;
+}
+
+.search-basics-card-body {
+  display: grid;
+  gap: var(--field-body-gap);
+  margin-top: 0;
+}
+
+.search-basics-card--details .search-basics-card-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.search-basics-card--details .onb-field--full {
+  grid-column: 1 / -1;
+}
+
+.search-basics-card .onb-field {
+  margin-top: 0;
+}
+
+.search-basics-summary {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.search-basics-summary[hidden] {
+  display: none;
+}
+
+#review_search_keywords,
+#location_search,
+#sector_preference {
+  width: 100%;
+}
+
+#review_search_keywords + .help,
+#location_search + .help,
+#sector_preference + .help {
+  max-width: none;
+}
+
+.search-basics-card--details .salary-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--field-stack-gap);
+  width: auto;
+  grid-template-columns: unset;
+}
+
+.search-basics-card--details .salary-pair > div {
+  flex: 0 0 auto;
+}
+
+.search-basics-card--details .salary-pair label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.search-basics-card--details .salary-pair .currency-input-wrap {
+  max-width: 190px;
+}
+
+/* Contract duration: compact popover shown below the Contract chip when selected */
+.contract-duration-row {
+  position: absolute;
+  z-index: 60;
+  width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  padding: 5px 6px;
+}
+
+.contract-duration-row[hidden] {
+  display: none;
+}
+
+/* Help text: hidden when field has an info icon; revealed on click */
+.onb-field:has(.field-info):not(.is-help-visible) .help {
+  display: none;
+}
+
+.onb-field.is-help-visible .help {
+  display: block;
+}
+
+.search-basics-actions {
+  margin-top: var(--onboarding-actions-margin-top);
+  padding-top: var(--onboarding-actions-padding-top);
+  border-top: var(--onboarding-actions-border);
+}
+
+
+.check-card {
+  height: auto;
+  min-height: 0;
+}
+
+.check-card-head {
+  margin-bottom: 14px;
+}
+
+.check-card-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-6xl);
+}
+
+.text-link--edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.check-list {
+  gap: 12px;
+}
+
+.check-list dt {
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.check-list dd {
+  color: var(--text-primary);
+  font-size: var(--font-size-4xl);
+  line-height: 1.45;
+}
+
+.check-list dd:empty::after {
+  content: 'Not provided';
+  color: var(--text-muted);
+}
+
+.check-list .choice-chip,
+.check-list .summary-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 6px 2px 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+}
+
+.actions {
+  margin-top: var(--onboarding-actions-margin-top);
+}
+
+.wizard-step[data-step="1"] .workflow-drawer {
+  margin: var(--onboarding-step1-workflow-drawer-margin);
+}
+
+.wizard-step[data-step="1"] .workflow-drawer-body {
+  gap: var(--onboarding-step1-workflow-drawer-body-gap);
+  margin-top: 12px;
+}
+
+.wizard-step[data-step="1"] .workflow-drawer-body > p,
+.wizard-step[data-step="1"] .workflow-drawer-body > ul,
+.wizard-step[data-step="1"] .workflow-drawer-body > ol {
+  line-height: 1.7;
+}
+
+.wizard-step[data-step="1"] .workflow-steps {
+  gap: var(--onboarding-step1-workflow-steps-gap);
+}
+
+.wizard-step[data-step="1"] .actions {
+  margin-top: var(--onboarding-actions-margin-top);
+}
+
+.wizard-step[data-step="4"] .check-grid {
+  gap: 22px;
+  margin-top: 0;
+  align-items: start;
+}
+
+.wizard-step[data-step="4"] .check-card {
+  min-height: 0;
+  height: auto;
+  padding: 22px 24px 20px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 96%, var(--bg-muted)), var(--bg-surface));
+  border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  box-shadow:
+    0 18px 38px color-mix(in srgb, #000 28%, transparent),
+    0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset;
+}
+
+.wizard-step[data-step="4"] .check-card-head {
+  margin-bottom: 18px;
+}
+
+.wizard-step[data-step="4"] .check-card-head h3 {
+  margin: 0;
+  font-size: var(--font-size-8xl);
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.wizard-step[data-step="4"] .text-link--edit {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+}
+
+.wizard-step[data-step="4"] .check-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.wizard-step[data-step="4"] .check-list dt {
+  margin: 0 0 4px;
+  color: color-mix(in srgb, var(--text-muted) 78%, var(--text-primary));
+  font-size: var(--font-size-sm);
+  line-height: 1.25;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.wizard-step[data-step="4"] .check-list dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-5xl);
+  line-height: 1.55;
+  font-weight: 500;
+}
+
+.wizard-step[data-step="4"] .actions {
+  margin-top: var(--onboarding-actions-margin-top);
+  padding-top: var(--onboarding-actions-padding-top);
+  border-top: var(--onboarding-actions-border);
+}
+
+@media (max-width: 900px) {
+  .wizard-step[data-step="4"] .check-card {
+    padding: 20px;
+  }
+}
+
+

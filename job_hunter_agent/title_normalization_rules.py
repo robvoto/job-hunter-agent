@@ -8,7 +8,6 @@ from functools import lru_cache
 from typing import Any
 
 from job_hunter_agent.llm_gate import llm_should_consider_learning_candidates
-from job_hunter_agent.paths import TITLE_NORMALIZATION_RULES_PATH
 from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
 from job_hunter_agent.signal_schema import (
     CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
@@ -58,13 +57,8 @@ def _clean_text(value: Any) -> str:
 
 
 def _load_payload() -> dict[str, Any]:
-    if not TITLE_NORMALIZATION_RULES_PATH.exists():
-        return {}
-    try:
-        payload = json.loads(TITLE_NORMALIZATION_RULES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    from job_hunter_agent.knowledge_store import get_knowledge
+    return get_knowledge("title_normalization_rules") or {}
 
 
 def load_title_normalization_rules() -> dict[str, Any]:

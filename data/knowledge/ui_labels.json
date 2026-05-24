@@ -1,8 +1,8 @@
 {
     "kind":  "ui_labels",
     "name":  "ui_labels",
-    "version": 9,
-    "updated_at":  "2026-05-20",
+    "version": 13,
+    "updated_at":  "2026-05-23",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {
                              "remote_label":  "Remote",
@@ -75,7 +75,7 @@
     "capability_ui_labels":  {
                                 "settings_title":  "Capability Matrix",
                                 "onboarding_title":  "Capabilities",
-                                "help_text":  "Related skills are the main capabilities Job Hunter uses to find jobs.",
+                                "help_text":  "Capabilities are the proven work strengths the agent found in your CV that help it match you to the right jobs. Related skills are alternate names for the same capability, so the agent can recognise it even when job ads use different wording.",
                                 "add_button_aria_label":  "Add capability",
                                 "related_skills_label":  "Related skills",
                                 "related_skills_summary":  "Related skills ({count})",
@@ -103,7 +103,16 @@
                             "account_menu_reset_learning_warning_label":  "Reset learning",
                             "add_button_label":  "+",
                             "add_button_aria_label":  "Add item",
-                            "add_button_title":  "+"
+                            "add_button_title":  "+",
+                            "search_wait_copy":  "This search can take a while because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.",
+                            "search_running_title":  "Search in progress",
+                            "search_running_copy":  "Job Hunter is checking sources and ranking matches. This process may take several minutes.",
+                            "search_starting_title":  "Starting search",
+                            "search_starting_copy":  "Saving your settings and beginning the scrape.",
+                            "search_refreshing_title":  "Refreshing workspace",
+                            "search_refreshing_copy":  "Loading the latest workspace now.",
+                            "search_running_subcopy":  "Keep this tab open. The workspace will refresh when the run finishes.",
+                            "search_starting_subcopy":  "The workspace will refresh automatically while the search runs."
                         },
     "onboarding_import_summary_labels_description":  "Display labels for the onboarding import helper summary.",
     "onboarding_import_summary_labels":  {
@@ -118,16 +127,19 @@
     "onboarding_page_labels_description":  "Display labels and copy for the onboarding page shell.",
     "onboarding_page_labels":  {
                                     "page_title":  "Set Up Job Hunter | Job Hunter",
+                                    "hero_title":  "Build your job profile",
                                     "progress_step_1_label":  "Upload CV",
                                     "progress_step_2_label":  "Review Draft",
                                     "progress_step_3_label":  "Search Basics",
                                     "progress_step_4_label":  "Check Setup",
                                     "workflow_title":  "How this works",
                                     "workflow_step_1":  "You upload your more recent detailed CV.",
-                                    "workflow_step_2":  "We extract likely job roles, skills, and a starter search direction from your CV.",
+                                    "workflow_step_2":  "We extract likely roles, skills, and a starter search direction from your CV, using up to the first 5 pages during setup.",
                                     "workflow_step_3":  "You review the draft, set search basics, and confirm it before matching starts.",
                                     "cv_drop_zone_empty_title":  "Drag & drop your CV here, or click to browse",
                                     "cv_drop_zone_empty_hint":  "Supported formats: .docx, .pdf, .md, .txt",
+                                    "cv_drop_zone_loaded_hint":  "Drop another file or click to replace",
+                                    "cv_upload_help":  "Upload the CV that best represents your real experience. Job Hunter will use it to build your starting profile.",
                                     "privacy_title":  "Privacy & sensitive information",
                                     "privacy_intro":  "We take privacy seriously.",
                                     "privacy_upload_only":  "Upload only the CV content needed for job matching.",
@@ -162,19 +174,24 @@
                                     "location_label":  "Location",
                                     "location_help":  "Choose one state or capital city.",
                                     "sector_preference_label":  "Sector preference",
-                                    "sector_preference_help":  "Choose the sector you want Job Hunter to favour.",
+                                    "sector_preference_help":  "Choose if you have a sector preference you want Job Hunter to favour.",
                                     "work_type_label":  "Work type",
-                                    "work_type_help":  "Choose the employment type you want Job Hunter to search for.",
+                                    "work_type_help":  "Choose if you have an employment type preference you want Job Hunter to favour.",
+                                    "work_type_summary_all_label":  "All work types selected",
+                                    "work_type_summary_contract_length_label":  "Min contract length",
+                                    "sector_preference_summary_all_label":  "All sectors selected",
                                     "work_mode_label":  "Work mode",
-                                    "work_mode_help":  "Choose the work arrangement you want Job Hunter to search for.",
+                                    "work_mode_help":  "Choose if you have a work mode preference you want Job Hunter to favour.",
+                                    "work_mode_summary_all_label":  "All work modes selected",
+                                    "summary_any_length_label":  "Any length",
                                     "minimum_compensation_label":  "Minimum compensation",
                                     "minimum_compensation_help":  "Set the lowest salary or rate you want Job Hunter to consider.",
                                     "back_label":  "Back",
                                     "save_and_continue_label":  "Save and continue →",
-                                    "draft_profile_ready_label":  "✓ Draft profile ready",
                                     "review_setup_title":  "Review your setup",
                                     "review_setup_copy":  "Review your draft profile and search direction before Job Hunter starts matching roles.",
                                     "draft_profile_label":  "Draft profile",
+                                    "draft_profile_ready_label":  "Draft profile ready",
                                     "edit_label":  "✎ Edit",
                                     "search_basics_label":  "Search basics",
                                     "locations_label":  "Locations",
@@ -196,6 +213,9 @@
                                     "create_profile_status_building":  "Building your draft profile...",
                                     "continue_search_basics_error":  "Could not save onboarding search basics before continuing.",
                                     "finish_setup_error":  "Could not finish onboarding",
+                                    "no_profile_warning":  "No saved profile yet.",
+                                    "profile_status_error":  "Could not check whether a saved profile exists.",
+                                    "load_profile_error":  "Could not load saved profile.",
                                     "reset_user_confirm_title":  "Reset current user?",
                                     "reset_user_confirm_body_1":  "This clears the current profile, onboarding state, uploaded CV state, local review feedback, and job history.",
                                     "reset_user_confirm_body_2":  "Shared learned signals will be preserved.",
@@ -220,8 +240,8 @@
                                     "capability_remove_label":  "Remove {name}",
                                     "capability_remove_title":  "Remove {name}",
                                     "capability_untitled_label":  "Untitled capability",
-                                    "capability_show_more_label":  "Show {count} more capabilities",
-                                    "capability_show_all_label":  "Show all {count}",
+                                    "capability_show_more_label":  "Show {count} more ˅",
+                                    "capability_show_fewer_label":  "Show fewer ˄",
                                     "capability_shown_of_label":  "{shown} shown of {total}",
                                     "capability_count_with_selection_label":  "{total} capabilities, {selected} selected",
                                     "capability_count_label":  "{total} capabilities",
@@ -549,39 +569,6 @@
         "capability_presets_heading": "Capability Presets",
         "capability_presets_copy": "These presets define how the shared capability strength options behave.",
         "capability_presets_empty_help": "Load Global settings to view the preset tables."
-    },
-    "onboarding_page_copy_description": "Step titles, hero headings, and section copy for the onboarding wizard.",
-    "onboarding_page_copy": {
-        "steps": {
-            "1": {
-                "title": "Upload Your CV",
-                "title_rebuild": "Upload Updated CV",
-                "hero_title": "Build Your Job Profile",
-                "hero_title_rebuild": "Refresh Your Profile",
-                "hero_copy": "",
-                "section_copy": "Start with the CV that best represents your real experience. We will use it to build your starting profile."
-            },
-            "2": {
-                "title": "Review Draft Profile",
-                "hero_title": "Review Your Draft Profile",
-                "hero_title_rebuild": "Review Refreshed Draft",
-                "hero_copy": "",
-                "section_copy": "Move titles between Primary and Secondary if needed before you continue."
-            },
-            "3": {
-                "title": "Set Search Basics",
-                "hero_title": "Set Your Search Basics",
-                "hero_copy": "",
-                "section_copy": "Set the minimum information Job Hunter needs to search and score roles in the right direction."
-            },
-            "4": {
-                "title": "Check Your Setup",
-                "hero_title": "Confirm Your Setup",
-                "hero_title_rebuild": "Confirm Profile Refresh",
-                "hero_copy": "",
-                "section_copy": "Make sure this looks right. When you finish, onboarding is complete and Settings will unlock."
-            }
-        }
     },
     "search_source_labels_description": "Display labels and helper copy for search source controls.",
     "search_source_labels": {

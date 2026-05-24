@@ -1,5 +1,8 @@
-window.JobHunterChipEditor = (function () {
-  const { escapeHtml, toLines, rulesToText, textToRules, settingsField } = window.JobHunterSettingsUtils;
+import { escapeHtml, toLines, rulesToText, textToRules, settingsField } from './settings-utils.js';
+
+const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
+
+export const JobHunterChipEditor = (function () {
   const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
 
   const chipEditors = {

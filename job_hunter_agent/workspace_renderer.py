@@ -83,6 +83,15 @@ from job_hunter_agent.work_mode_extraction import extract_from_text, WORK_MODE_U
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
 
 DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
+TITLE_BLOCK_GUIDANCE_COPY = (
+    "Job sites often return broad results even when the search is correct. "
+    "If a title clearly does not match what you want, you can block similar titles directly from the title. "
+    "This helps remove repeated noise from future results."
+)
+TITLE_BLOCK_PROMPT_COPY = "Block future titles before description review."
+TITLE_BLOCK_HELP_SUMMARY = "Learn more"
+TITLE_BLOCK_MANUAL_HELP = "Adds to the checked words above. Use commas to add more than one."
+TITLE_BLOCK_STRONG_FILTER_COPY = "This is a strong filter. Matching titles will be hidden before description review."
 _WORKSPACE_PAGE_LABEL_KEYS = (
     "hero_title",
     "potential_jobs_tab",
@@ -354,7 +363,7 @@ def posted_filter_option_label(threshold: int) -> str:
 
 
 def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:
-    options = [f'<option value="all">Any posted date ({len(records)})</option>']
+    options = [f'<option value="all" selected>Any posted date ({len(records)})</option>']
     for threshold in [1, 3, 7, 14, 30]:
         count = sum(
             1
@@ -363,7 +372,7 @@ def render_posted_filter_options(records: List[dict], now: Optional[datetime] = 
             and age_days <= threshold
         )
         options.append(
-            f'<option {"selected" if threshold == 1 else ""} value="{threshold}">'
+            f'<option value="{threshold}">'
             f'{safe_html(posted_filter_option_label(threshold))} ({count})</option>'
         )
     return "".join(options)
@@ -1106,19 +1115,11 @@ def render_job_card(
         + (
             f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Hide future roles whose titles contain the selected words, before description review.">Hide similar titles</button>'
             '<div class="block-confirm" data-block-confirm hidden>'
-            '<div class="feature-guide-note">'
-            'Job sites often return broad results even when the search is correct. '
-            'If a title clearly doesn’t match what you want, you can block similar titles directly from the title. '
-            'This helps remove repeated noise from future results.'
-            '</div>'
-            '<p class="block-confirm-copy">Block future titles before description review.</p>'
+            f'<div class="feature-guide-note">{safe_html(TITLE_BLOCK_GUIDANCE_COPY)}</div>'
+            f'<p class="block-confirm-copy">{safe_html(TITLE_BLOCK_PROMPT_COPY)}</p>'
             '<details class="block-confirm-help">'
-            '<summary>Learn more</summary>'
-            '<p>'
-            'Job sites often return broad results even when the search is correct. '
-            'If a title clearly does not match what you want, you can block similar titles directly from the title. '
-            'This helps remove repeated noise from future results.'
-            '</p>'
+            f'<summary>{safe_html(TITLE_BLOCK_HELP_SUMMARY)}</summary>'
+            f'<p>{safe_html(TITLE_BLOCK_GUIDANCE_COPY)}</p>'
             '</details>'
             '<p class="block-confirm-copy">Block future titles with:</p>'
             '<div class="block-phrase-checks" data-block-phrase-checks></div>'
@@ -1126,10 +1127,10 @@ def render_job_card(
             '<div class="block-manual-row">'
             '<span class="block-manual-label">Add title words</span>'
             '<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. project manager, payroll">'
-            '<span class="block-manual-help">Adds to the checked words above. Use commas to add more than one.</span>'
+            f'<span class="block-manual-help">{safe_html(TITLE_BLOCK_MANUAL_HELP)}</span>'
             '</div>'
             '<p class="block-impact" data-block-impact></p>'
-            '<p class="block-confirm-sub">This is a strong filter. Matching titles will be hidden before description review.</p>'
+            f'<p class="block-confirm-sub">{safe_html(TITLE_BLOCK_STRONG_FILTER_COPY)}</p>'
             '<div class="block-confirm-actions">'
             '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Block Selected Titles</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'

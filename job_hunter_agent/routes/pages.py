@@ -140,13 +140,11 @@ def _replace_label_tokens(html: str, prefix: str, labels: dict[str, str]) -> str
 def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, global_settings: dict | None = None, resume_step: int | None = None, account_shortcut_href: str | None = None, account_shortcut_label: str | None = None, account_shortcut_aria_label: str | None = None) -> str:
     csrf_token = issue_csrf_token(request) or ""
     shared_labels = srv.load_shared_ui_labels()
-    page_copy_data = srv.load_onboarding_page_copy()
     bootstrap_script = srv.build_bootstrap_script(
         csrf_token=csrf_token,
         location_options=load_location_options(),
         default_location=default_location_value(),
         onboarding_defaults=onboarding_defaults,
-        onboarding_copy=page_copy_data,
         global_settings=global_settings,
         resume_step=resume_step,
         user_id=get_user_id_for_runtime(),
@@ -175,8 +173,9 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
             '<span class="sidebar-admin-badge">Admin</span>' if is_admin(request) else "",
         )
         html = html.replace(
-            "__JOB_HUNTER_ADMIN_NAV_LINK__",
+            "__JOB_HUNTER_ADMIN_NAV_GROUP__",
             (
+                '<div class="sidebar-group-label sidebar-group-label-global">Admin</div>'
                 f'<a href="{GLOBAL_SETTINGS_PATH}" class="nav-item nav-item-admin" data-admin-only="true">Global settings</a>'
                 if is_admin(request)
                 else ""
@@ -236,7 +235,6 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         for token, value in onboarding_replacements.items():
             html = html.replace(token, value)
         html = _replace_label_tokens(html, "ONBOARDING_PAGE", onboarding_page_labels)
-        html = html.replace("✓ Draft profile ready", onboarding_page_labels["draft_profile_ready_label"])
         html = html.replace("✎ Edit", onboarding_page_labels["edit_label"])
     return (
         html
@@ -271,16 +269,6 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
         .replace("__JOB_HUNTER_SALARY_DAILY_HELP__", SETTINGS_SALARY_DAILY_HELP_TEXT)
         .replace("__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__", SETTINGS_SALARY_ANNUAL_HELP_TEXT)
         .replace("__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__", SETTINGS_SALARY_DAILY_HELP_TEXT)
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_1_TITLE__", page_copy_data["steps"]["1"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_1_SECTION_COPY__", page_copy_data["steps"]["1"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_2_TITLE__", page_copy_data["steps"]["2"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_2_SECTION_COPY__", page_copy_data["steps"]["2"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_3_TITLE__", page_copy_data["steps"]["3"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_3_SECTION_COPY__", page_copy_data["steps"]["3"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_4_TITLE__", page_copy_data["steps"]["4"]["title"])
-        .replace("__JOB_HUNTER_ONBOARDING_STEP_4_SECTION_COPY__", page_copy_data["steps"]["4"]["section_copy"])
-        .replace("__JOB_HUNTER_ONBOARDING_HERO_TITLE__", page_copy_data["steps"]["1"]["hero_title"])
-        .replace("__JOB_HUNTER_ONBOARDING_HERO_COPY__", page_copy_data["steps"]["1"]["hero_copy"])
         .replace("__JOB_HUNTER_PAGE_MODE__", page_mode)
         .replace("__JOB_HUNTER_PAGE_TITLE__", page_title)
         .replace("__JOB_HUNTER_PAGE_HEADING__", page_heading)

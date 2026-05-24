@@ -25,6 +25,9 @@ import sys
 
 from urllib.parse import quote
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -224,6 +227,13 @@ if __name__ == "__main__":
 
     from job_hunter_agent import server_helpers as srv
     from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
+    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+
+    init_db()
+    for _subdir in ("knowledge", "config", "signals"):
+        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
 
     parser = argparse.ArgumentParser(description="Job Hunter Agent local server")
     parser.add_argument(

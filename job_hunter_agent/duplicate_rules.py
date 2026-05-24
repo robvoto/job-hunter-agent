@@ -6,21 +6,12 @@ This module loads, normalizes, and persists configuration for how job records
 are deduplicated, including defining source priority for resolving conflicts 
 between duplicate entries from different job boards.
 """
-import json
 from typing import Any
-
-from job_hunter_agent.paths import DUPLICATE_RULES_PATH
 
 
 def _load_payload() -> dict[str, Any]:
-    if not DUPLICATE_RULES_PATH.exists():
-        return {}
-    try:
-        payload = json.loads(DUPLICATE_RULES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"[DUPLICATE_RULES][WARN] Failed to load duplicate rules from {DUPLICATE_RULES_PATH}: {exc}")
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    from job_hunter_agent.knowledge_store import get_knowledge
+    return get_knowledge("duplicate_rules") or {}
 
 
 def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
@@ -52,6 +43,6 @@ def save_duplicate_rules(payload: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault("kind", "system_config")
     normalized.setdefault("name", "duplicate_rules")
     normalized.setdefault("version", 1)
-    DUPLICATE_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DUPLICATE_RULES_PATH.write_text(json.dumps(normalized, indent=2, ensure_ascii=False), encoding="utf-8")
+    from job_hunter_agent.knowledge_store import set_knowledge
+    set_knowledge("duplicate_rules", normalized)
     return normalized

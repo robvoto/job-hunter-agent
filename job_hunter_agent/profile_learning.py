@@ -24,7 +24,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from job_hunter_agent.logging_utils import format_log_block
-from job_hunter_agent.paths import OUTPUT_DIR, PARSING_RULES_PATH
+from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     KEY_CV_TEXT,
@@ -335,13 +335,8 @@ def _is_plain_section_label(text: str) -> bool:
 
 @lru_cache(maxsize=1)
 def _load_parsing_rules() -> dict[str, Any]:
-    """Load parsing heuristics from JSON."""
-    if not PARSING_RULES_PATH.exists():
-        return {}
-    try:
-        return json.loads(PARSING_RULES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+    from job_hunter_agent.knowledge_store import get_knowledge
+    return get_knowledge("parsing_rules") or {}
 
 def get_parsing_rule_set(key: str) -> set[str]:
     rules = _load_parsing_rules()

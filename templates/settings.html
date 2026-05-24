@@ -11,42 +11,33 @@
   <script src="/static/common/console-bridge.js"></script>
   <script src="/static/theme/theme-switcher.js"></script>
   <script src="/static/common/account-bar.js"></script>
-  <script src="/static/common/wait-state.js"></script>
 </head>
   <body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="__JOB_HUNTER_PAGE_MODE__">
+  <header class="settings-header">
+    <div class="settings-header__inner">__JOB_HUNTER_TOP_UTILITY_BAR__</div>
+  </header>
   <div class="job-hunter-wait-mount" id="job_hunter_wait_mount" hidden></div>
   <div class="settings-container">
     <nav class="settings-sidebar" aria-label="Page sections">
       <div class="sidebar-brand">
-        <h1>Job Hunter</h1>
         __JOB_HUNTER_ADMIN_BADGE__
         <a href="/" class="nav-item nav-item-workspace">&#8592; Workspace</a>
       </div>
       <div class="sidebar-nav">
-        <div class="sidebar-group-label">Standard settings</div>
+        <div class="sidebar-group-label">Settings</div>
         <button class="nav-item is-active" type="button" data-section="section-search" data-screen="settings">Search</button>
         <button class="nav-item" type="button" data-section="section-profile" data-screen="settings">Profile</button>
         <button class="nav-item" id="settings_capability_matrix_nav" type="button" data-section="section-matrix" data-screen="settings"></button>
         <button class="nav-item" type="button" data-section="section-rules" data-screen="settings">Rules</button>
         <button class="nav-item" type="button" data-section="section-alerts" data-screen="settings">Alerts &amp; AI</button>
         <button class="nav-item nav-item-optimise" type="button" data-section="section-optimise" data-screen="settings">Optimise</button>
-        <div class="sidebar-group-label sidebar-group-label-global">Admin</div>
-        <a href="/global-settings" class="nav-item nav-item-admin">Global Settings</a>
+        __JOB_HUNTER_ADMIN_NAV_GROUP__
       </div>
     </nav>
 
     <main class="settings-main">
       <div class="settings-content-area">
-        <div class="page-utility-bar">__JOB_HUNTER_TOP_UTILITY_BAR__</div>
-        <section class="hero">
-          <div class="hero-text">
-            <h1>__JOB_HUNTER_PAGE_HEADING__</h1>
-            <p>__JOB_HUNTER_PAGE_COPY__</p>
-          </div>
-        </section>
-
-        <div class="status" id="status"></div>
-
+        <div class="jh-message-banner" id="status" hidden aria-live="polite"></div>
         __JOB_HUNTER_SETTINGS_SECTION_SEARCH__
 
         __JOB_HUNTER_SETTINGS_SECTION_PROFILE__
@@ -74,16 +65,8 @@
     </footer>
   </div>
 
-  <script src="/static/common/capability-ui.js"></script>
-  <script src="/static/common/currency-input.js"></script>
-  <script src="/static/common/location-options.js"></script>
-  <script src="/static/settings/shared/settings-utils.js"></script>
-  <script src="/static/settings/shared/settings-chip-editor.js"></script>
-  <script src="/static/settings/shared/settings-capability-editor.js"></script>
-  <script src="/static/settings/global/settings-admin.js"></script>
-  <script src="/static/settings/standard/settings-alerts.js"></script>
-  <script src="/static/settings/shared/settings-page.js"></script>
-  <script src="/static/settings/shared/settings-review-panel.js"></script>
+  <script type="module" src="/static/settings/shared/settings-page.js"></script>
+  <script type="module" src="/static/settings/shared/settings-review-panel.js"></script>
   <script type="module" src="/static/settings/learning/signal-registry.js"></script>
 </body>
 </html>

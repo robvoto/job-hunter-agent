@@ -200,36 +200,24 @@ def test_government_context_knowledge_file_contains_approved_terms():
     ]
 
 
-def test_has_government_context_matches_approved_knowledge(tmp_path, monkeypatch):
-    rules_path = tmp_path / "government_context_rules.json"
-    knowledge_path = tmp_path / "government_context_knowledge.json"
-    rules_path.write_text(
-        json.dumps(
-            {
-                "kind": "rules",
-                "name": "government_context_rules",
-                "positive_patterns": ["\\bgovernment\\b"],
-                "false_positive_patterns": [
-                    "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    knowledge_path.write_text(
-        json.dumps(
-            {
-                "kind": "managed_knowledge",
-                "name": "government_context_knowledge",
-                "entries": [
-                    {"value": "NSW Health", "aliases": ["state health department"]},
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(role_analysis, "GOVERNMENT_CONTEXT_RULES_PATH", rules_path)
-    monkeypatch.setattr(role_analysis, "GOVERNMENT_CONTEXT_KNOWLEDGE_PATH", knowledge_path)
+def test_has_government_context_matches_approved_knowledge(isolated_db):
+    from job_hunter_agent.knowledge_store import set_knowledge
+
+    set_knowledge("government_context_rules", {
+        "kind": "rules",
+        "name": "government_context_rules",
+        "positive_patterns": ["\\bgovernment\\b"],
+        "false_positive_patterns": [
+            "\\bgovernment\\s+id(?:entification)?\\s+(?:number|numbers|document|documents)?\\b",
+        ],
+    }, isolated_db)
+    set_knowledge("government_context_knowledge", {
+        "kind": "managed_knowledge",
+        "name": "government_context_knowledge",
+        "entries": [
+            {"value": "NSW Health", "aliases": ["state health department"]},
+        ],
+    }, isolated_db)
 
     assert role_analysis.has_government_context("Role in NSW Health digital delivery program")
 

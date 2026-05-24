@@ -422,6 +422,7 @@ class LinkedInScraper(BaseJobScraper):
                         )
                         llm_review = payload["fit_review"]
                         contextual_capability_matches = payload.get("contextual_capability_matches") or []
+                        record["llm_learning_candidates"] = payload.get("learning_candidates") or []
                         record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
                         print(f"{target_tag} [LLM][{payload.get('payload_source', 'llm').upper()}] {llm_review['decision']}|{llm_review['grade']} {title}")
                     except Exception as llm_exc:
@@ -438,6 +439,10 @@ class LinkedInScraper(BaseJobScraper):
                 if llm_review["decision"] == "REJECT":
                     print(f"{target_tag} REJECTED (llm) {title} @ {company}")
                     record["reject_reason"] = "LLM_REJECT"
+                    register_pending_learning_signals(merge_pending_learning_signals(
+                        record.get("ad_learning_signals") or [],
+                        record.get("llm_learning_candidates") or [],
+                    ))
                     finalize_record(self.job_history, audit_rows, record, self.run_iso)
                     continue
 

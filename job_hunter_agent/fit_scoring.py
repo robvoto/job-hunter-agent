@@ -153,7 +153,23 @@ def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> t
             continue
         rule = profile_rules_by_name.get(cap_name)
         if rule is None:
-            logger.warning("[CAPABILITY_CONTEXTUAL] Unknown capability from LLM ignored: %r", cap_name)
+            job_key = record.get("job_key", "<unknown>")
+            job_title = str(record.get("title") or "").strip()
+            logger.warning(
+                "[CAPABILITY_CONTEXTUAL] Skipped for scoring — capability name not in profile rules.\n"
+                "  job        : %s (%s)\n"
+                "  capability : %r\n"
+                "  confidence : %s\n"
+                "  matched_text: %s\n"
+                "  reason     : %s\n"
+                "  known rules: %s",
+                job_key, job_title,
+                cap_name,
+                confidence,
+                matched_text or "(none)",
+                reason or "(none)",
+                ", ".join(sorted(profile_rules_by_name.keys())),
+            )
             continue
         level = str(rule.get("level") or "").strip().lower()
         if level not in VALID_CAPABILITY_RULE_LEVELS:

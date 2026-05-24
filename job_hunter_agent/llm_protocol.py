@@ -6,6 +6,8 @@ LLM_ALLOWED_GRADES = frozenset({"EXCELLENT", "STRONG", "SOLID", "WEAK", "POOR", 
 LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
     '"contextual_capability_matches":[{"capability_name":"...","confidence":"high|medium|low","matched_text":"...","reason":"..."}],'
+    '"learning_candidates":[{"signal":"...","suggested_category":"...","suggested_values":["..."],'
+    '"context_terms":["..."],"confidence":"high|medium|low|ambiguous","needs_review":true,"original_texts":["..."]}],'
     '"job_requirements":["..."]}'
 )
 LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO = (
@@ -18,6 +20,13 @@ LLM_PROMPT_JOB_REQUIREMENTS_INTRO = (
     "For job_requirements: extract the job's explicit requirements as concise bullet-style phrases. "
     "Use only visible ad text, prefer the employer's own wording, keep each item short, and do not invent anything. "
     "Capture the requirements the user would want to read before opening the ad."
+)
+LLM_PROMPT_LEARNING_CANDIDATES_INTRO = (
+    "For learning_candidates: actively identify new signals visible in this ad that are not yet captured "
+    "in the candidate profile or approved knowledge — role title patterns, government/clearance context patterns, "
+    "title normalization candidates, and capability concepts not already listed above. "
+    "Use only visible ad text. Follow the category guidance above for each signal type. "
+    "Set needs_review=true for all entries. Leave the list empty only if nothing new is found."
 )
 
 LLM_LEARNING_ONLY_PROMPT_SHAPE = (

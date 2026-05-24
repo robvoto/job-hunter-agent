@@ -50,12 +50,12 @@ def test_unknown_job_type_is_preserved_and_registered(monkeypatch):
     assert captured["signals"][0]["suggested_values"] == ["Fixed term"]
 
 
-def test_upsert_job_type_entry_writes_normalized_mapping(tmp_path, monkeypatch):
-    store = tmp_path / "job_type.json"
-    monkeypatch.setattr(job_types, "JOB_TYPE_STORE_PATH", store)
+def test_upsert_job_type_entry_writes_normalized_mapping(isolated_db, monkeypatch):
+    from job_hunter_agent.knowledge_store import set_knowledge
+    set_knowledge("job_type", {"mapping": {}, "filter_groups": []}, isolated_db)
     monkeypatch.setattr(job_types, "_cached_mapping", None)
+    monkeypatch.setattr(job_types, "_cached_filter_groups", None)
 
     job_types.upsert_job_type_entry("Fixed term")
 
-    assert store.exists()
     assert job_types.load_job_type(force_reload=True) == {"fixedterm": "Fixed term"}

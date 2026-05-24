@@ -3,7 +3,7 @@
 Use before editing CV/onboarding/profile extraction, capability clustering, or profile updates.
 
 ## Rules
-- Source documents are human truth; `data/profile.json` is runtime machine truth.
+- Source documents are human truth; the per-user profile in the DB (`user_profile` table, via `profile_store.load_profile()`) is runtime machine truth.
 - Do not silently delete extracted signals.
 - Preserve questionable signals with `needs_review: true` where relevant.
 - Do not invent capabilities, domains, or evidence not present in source material.

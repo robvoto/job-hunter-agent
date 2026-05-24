@@ -26,7 +26,7 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert 'account-bar-shortcut' in html
     assert 'class="btn-add"' in html
     assert 'capability-add-button' not in html
-    assert 'capability-grid' in html
+    assert 'capability-editor' in html
     assert '>+<' in html
     assert 'window.__JOB_HUNTER_CAPABILITY_UI_LABELS__' in html
     assert 'window.__JOB_HUNTER_SHARED_UI_LABELS__' in html
