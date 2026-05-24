@@ -508,11 +508,13 @@
       max-width: 1240px;
       margin: 0 auto;
     }
+    .advanced-shell > .settings-section-head {
+      margin-bottom: var(--field-stack-gap);
+    }
     .advanced-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
       gap: var(--surface-gap-md);
-      margin-top: var(--surface-gap-md);
       align-items: start;
     }
     .advanced-grid > .subpanel:first-child {

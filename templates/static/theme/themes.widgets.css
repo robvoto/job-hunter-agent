@@ -723,16 +723,16 @@
 .field-label-row > h4,
 .field-label-row > strong {
   margin: 0;
-  font-size: var(--font-size-6xl);
+  font-size: var(--settings-field-label-font-size);
   font-weight: 700;
-  line-height: 1.2;
+  line-height: var(--settings-field-label-line-height);
 }
 
 .field-label-row > label {
   margin: 0;
-  font-size: var(--control-font-size);
+  font-size: var(--settings-field-label-font-size);
   font-weight: 700;
-  line-height: var(--control-line-height);
+  line-height: var(--settings-field-label-line-height);
 }
 
 .field-label-row + .field-label-row,
@@ -777,7 +777,7 @@
 }
 
 .settings-section-head > h2 {
-  font-size: var(--font-size-8xl);
+  font-size: var(--settings-section-title-font-size);
   line-height: 1.15;
 }
 

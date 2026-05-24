@@ -71,6 +71,9 @@
   --field-stack-gap: 20px;
   --field-body-gap: 18px;
   --field-label-control-gap: var(--surface-gap-md);
+  --settings-section-title-font-size: 1.5rem;
+  --settings-field-label-font-size: 0.92rem;
+  --settings-field-label-line-height: 1.25;
 
   /* Shared control sizing */
   --control-space-2xs: 4px;
