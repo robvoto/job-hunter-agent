@@ -751,6 +751,9 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
                 return list(default_value)
             return [str(item).strip().upper() for item in incoming_value if str(item).strip()]
         if isinstance(default_value, int) and not isinstance(default_value, bool):
+            if incoming_value in (None, ""):
+                print(f"[PROFILE_STORE][WARN] Missing int value for merge; using default {default_value}.")
+                return int(default_value)
             try:
                 return int(incoming_value)
             except Exception as exc:

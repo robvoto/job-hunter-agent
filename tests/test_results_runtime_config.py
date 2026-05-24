@@ -168,7 +168,7 @@ def test_rendered_workspace_html_content():
 
         rendered_html = mock_output_path.read_text(encoding="utf-8")
 
-        assert "<h1>Jobs Workspace</h1>" in rendered_html
+        assert '<h1 class="ws-hero-title">Jobs Workspace</h1>' in rendered_html
         assert "<button class=\"scope-tab is-active\" type=\"button\" data-workspace-target=\"potential\">Potential Jobs (0)</button>" in rendered_html
         assert "<span class=\"snapshot-meta-label\">Work type</span><span class=\"snapshot-meta-value\">Permanent</span>" in rendered_html
         assert "<span class=\"snapshot-meta-label\">Work mode</span><span class=\"snapshot-meta-value\">Remote</span>" in rendered_html

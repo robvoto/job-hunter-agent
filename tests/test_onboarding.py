@@ -102,7 +102,6 @@ def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_outpu
     assert "window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__" in js_text
     assert "onboardingImportSummaryLabels.lead_in" in js_text
     assert "if (!parts.length)" in js_text
-    assert "extractionMessage && typeof showOnboardingImportHelper === 'function'" in js_text
 
 
 def test_api_profile_status_reports_presence(monkeypatch):

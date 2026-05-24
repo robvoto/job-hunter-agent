@@ -156,7 +156,7 @@ def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> t
             job_key = record.get("job_key", "<unknown>")
             job_title = str(record.get("title") or "").strip()
             logger.warning(
-                "[CAPABILITY_CONTEXTUAL] Skipped for scoring — capability name not in profile rules.\n"
+                "[CAPABILITY_CONTEXTUAL] Unknown capability skipped for scoring.\n"
                 "  job        : %s (%s)\n"
                 "  capability : %r\n"
                 "  confidence : %s\n"

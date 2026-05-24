@@ -513,10 +513,18 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
 _ALLOWED_CONTEXTUAL_CONFIDENCES = frozenset({"high", "medium", "low"})
 
 
-def normalize_llm_contextual_capability_matches(value: Any) -> list[dict[str, Any]]:
+def normalize_llm_contextual_capability_matches(
+    value: Any,
+    valid_capability_names: set[str] | frozenset[str] | None = None,
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     results: list[dict[str, Any]] = []
+    valid_names = {
+        re.sub(r"\s+", " ", str(name or "")).strip().lower()
+        for name in (valid_capability_names or [])
+        if str(name or "").strip()
+    }
     for item in value:
         if not isinstance(item, dict):
             continue
@@ -525,6 +533,8 @@ def normalize_llm_contextual_capability_matches(value: Any) -> list[dict[str, An
         matched_text = re.sub(r"\s+", " ", str(item.get("matched_text") or "")).strip()
         reason = re.sub(r"\s+", " ", str(item.get("reason") or "")).strip()
         if not cap_name or confidence not in _ALLOWED_CONTEXTUAL_CONFIDENCES:
+            continue
+        if valid_capability_names is not None and cap_name not in valid_names:
             continue
         results.append({
             "capability_name": cap_name,
