@@ -13,6 +13,9 @@ lib/
 bin/
 include/
 
+# Ignore temporary onboarding CV text files
+.tmp_onboarding_cv*.txt
+
 # ---- Playwright ----
 ms-playwright/
 

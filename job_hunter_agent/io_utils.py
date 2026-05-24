@@ -266,6 +266,30 @@ def clear_job_history() -> None:
         conn.execute("DELETE FROM job_history WHERE user_id = ?", (user_id,))
 
 
+def clear_user_settings() -> None:
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        conn.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
+
+
+def clear_workspace_pool() -> None:
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        conn.execute("DELETE FROM workspace_pool WHERE user_id = ?", (user_id,))
+
+
+def clear_agent_state() -> None:
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        conn.execute("DELETE FROM agent_state WHERE user_id = ?", (user_id,))
+
+
 def load_audit_rows() -> List[dict]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id

@@ -67,6 +67,7 @@ ONBOARDING_RESET_FIELDS = (
     KEY_SECONDARY_PATTERNS,
     KEY_CAPABILITY_PROFILE_RULES,
     KEY_ONBOARDING_COMPLETE,
+    "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
@@ -273,10 +274,10 @@ def merge_capability_rules_with_dominant_signals(
         cluster_name_n = _norm_term(cluster_name)
         cluster_alias_norms = [_norm_term(a) for a in (cluster.get("aliases") or []) if a]
         cluster_terms = frozenset(t for t in [cluster_name_n, *cluster_alias_norms] if t)
-        # Also check individual word tokens from multi-word names (len >= 4) so
-        # "jira confluence" can match a capability named "jira".
-        word_tokens = frozenset(w for w in cluster_name_n.split() if len(w) >= 4)
-        cluster_lookup = cluster_terms | word_tokens
+        # Only exact cluster terms / aliases can merge into existing capability rules.
+        # Do not match individual words from multi-product clusters; e.g.
+        # "jira confluence" must not make Confluence an alias of Jira.
+        cluster_lookup = cluster_terms
 
         logger.debug(
             "[MERGE_CAPABILITIES] Dominant signal: '%s' aliases=%s",
@@ -433,6 +434,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch = build_onboarding_reset_patch(active_onboarding_settings)
 
     # --- Extract fresh from combined_text ---
+    patch["cv_text"] = combined_text
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
@@ -505,8 +507,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         if target_roles:
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
-                from job_hunter_agent.title_normalization_rules import derive_base_title_from_seniority
-                base = derive_base_title_from_seniority(target_roles[0])
+                from job_hunter_agent.title_normalization_rules import derive_search_keyword
+                base = derive_search_keyword(target_roles[0])
                 patch["search_settings"]["keywords"] = base or target_roles[0]
                 print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
     except Exception as exc:

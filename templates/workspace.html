@@ -27,11 +27,6 @@
     const wsWaitMount = document.getElementById('ws_wait_mount');
     const wsRunInfoMount = document.getElementById('ws_run_info_mount');
     const resultsMount = document.getElementById('results-mount');
-    const wsTestPanel = document.getElementById('job_hunter_account_test_panel');
-    const wsTestTrigger = document.getElementById('job_hunter_account_test_trigger');
-    const wsTestMenu = document.getElementById('job_hunter_account_test_menu');
-    const wsResetUserBtn = document.getElementById('job_hunter_reset_user_btn');
-    const wsResetLearningBtn = document.getElementById('job_hunter_reset_learning_btn');
     const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
     const SEARCH_WAIT_COPY = String(SHARED_UI_LABELS.search_wait_copy || '').trim();
     const SEARCH_RUNNING_TITLE = String(SHARED_UI_LABELS.search_running_title || '').trim();
@@ -63,37 +58,19 @@
     ];
     const RUN_STATUS_POLL_INTERVAL_MS = 1000;
     const RUN_STATUS_MAX_ATTEMPTS = 60;
+    const RESULTS_REFRESH_RETRY_DELAY_MS = 250;
+    const RESULTS_REFRESH_MAX_ATTEMPTS = 4;
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
     let workspaceWaitState = null;
     let workspaceProfile = null;
-
-    function setTestMenuOpen(open) {
-      if (!wsTestMenu || !wsTestTrigger) {
-        return;
-      }
-      wsTestMenu.classList.toggle('is-open', Boolean(open));
-      wsTestTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
+    let workspaceResultsLoadToken = 0;
 
     function clearOnboardingBrowserState() {
       try {
         window.localStorage.removeItem(ONBOARDING_WELCOME_KEY);
         window.localStorage.removeItem(ONBOARDING_WIZARD_KEY);
       } catch {}
-    }
-
-    async function postTestAction(path) {
-      const response = await jobHunterFetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || 'Request failed');
-      }
-      return payload;
     }
 
     function peekOnboardingWelcomeState() {
@@ -107,6 +84,20 @@
       } catch {
         return null;
       }
+    }
+
+    function extractWorkspaceRunId(html) {
+      try {
+        const documentFragment = new DOMParser().parseFromString(html, 'text/html');
+        for (const script of documentFragment.querySelectorAll('script')) {
+          const scriptText = String(script.textContent || '');
+          const match = scriptText.match(/runId:\s*(["'`])([^"'`]+)\1/);
+          if (match?.[2]) {
+            return match[2].trim();
+          }
+        }
+      } catch {}
+      return '';
     }
 
     function consumeOnboardingWelcomeState() {
@@ -338,7 +329,7 @@
         stopRunStatusPolling();
         if (workspaceWaitState) {
           renderWorkspaceWait(null);
-          await loadResults();
+          await loadResults(String(payload?.last_run_at || '').trim());
         }
         return false;
       } catch {
@@ -393,7 +384,7 @@
           title: SEARCH_REFRESHING_TITLE,
           copy: SEARCH_REFRESHING_COPY,
         });
-        await loadResults();
+        await loadResults(String(payload?.last_run_at || '').trim());
         renderWorkspaceWait(null);
       } catch (error) {
         if (attempt < RUN_STATUS_MAX_ATTEMPTS) {
@@ -529,9 +520,13 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
       });
     }
 
-    async function loadResults() {
+    async function loadResults(expectedRunId = '', attempt = 0) {
+      const requestToken = ++workspaceResultsLoadToken;
       try {
-        const resp = await jobHunterFetch('/api/results-html');
+        const resultsUrl = expectedRunId
+          ? `/api/results-html?run_id=${encodeURIComponent(expectedRunId)}`
+          : '/api/results-html';
+        const resp = await jobHunterFetch(resultsUrl, { cache: 'no-store' });
         if (!resp.ok) {
           const runStats = await jobHunterFetch('/api/run-stats').then(r => r.ok ? r.json() : {}).catch(() => ({}));
           const lastError = runStats.last_run_error;
@@ -550,13 +545,32 @@ if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
           return;
         }
         const html = await resp.text();
+        const renderedRunId = extractWorkspaceRunId(html);
+        if (expectedRunId && renderedRunId && renderedRunId !== expectedRunId) {
+          if (attempt < RESULTS_REFRESH_MAX_ATTEMPTS) {
+            window.setTimeout(() => loadResults(expectedRunId, attempt + 1), RESULTS_REFRESH_RETRY_DELAY_MS);
+            return;
+          }
+          throw new Error('Workspace results are still reflecting the previous run.');
+        }
+        if (requestToken !== workspaceResultsLoadToken) {
+          return;
+        }
         resultsMount.innerHTML = '';
         const range = document.createRange();
         const frag = range.createContextualFragment(html);
         resultsMount.appendChild(frag);
         ensureSidebarRunButton();
-      } catch {
-        resultsMount.innerHTML = '<div class="workspace-status-message"><div class="workspace-status-message__hint">Could not load results. Try refreshing the page.</div></div>';
+      } catch (error) {
+        if (requestToken !== workspaceResultsLoadToken) {
+          return;
+        }
+        if (expectedRunId && attempt < RESULTS_REFRESH_MAX_ATTEMPTS) {
+          window.setTimeout(() => loadResults(expectedRunId, attempt + 1), RESULTS_REFRESH_RETRY_DELAY_MS);
+          return;
+        }
+        const message = escapeHtml(String(error?.message || 'Could not load results. Try refreshing the page.'));
+        resultsMount.innerHTML = `<div class="workspace-status-message"><div class="workspace-status-message__hint">${message}</div></div>`;
       }
     }
     document.addEventListener('click', (event) => {

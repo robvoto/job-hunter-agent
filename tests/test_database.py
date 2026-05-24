@@ -141,3 +141,11 @@ def test_ensure_user_row_is_idempotent(tmp_db):
     with db_conn(tmp_db) as conn:
         count = conn.execute("SELECT COUNT(*) FROM users WHERE user_id = 'u1'").fetchone()[0]
     assert count == 1
+
+
+def test_ensure_user_row_skips_local_debug_user(tmp_db):
+    # init_db seeds the _local row (no email); ensure_user_row must not write to it
+    ensure_user_row("_local", email="local@example.com", db_path=tmp_db)
+    with db_conn(tmp_db) as conn:
+        row = conn.execute("SELECT email FROM users WHERE user_id = '_local'").fetchone()
+    assert row is None or row["email"] is None

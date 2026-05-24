@@ -11,7 +11,12 @@ from job_hunter_agent.global_settings import (
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
 )
-from job_hunter_agent.signal_detection import extract_skill_observations
+from job_hunter_agent.record_schema import (
+    RECORD_COMPANY_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+)
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -20,6 +25,7 @@ from job_hunter_agent.profile_store import (
     KEY_NAME,
     KEY_LEVEL,
 )
+from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 
 def _normalize_term(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
@@ -152,6 +158,209 @@ def _current_rule_label(rule: dict[str, Any] | None) -> str:
     if not level:
         return _choice_label("unclassified")
     return _choice_label(level)
+
+
+_CAPABILITY_HIGHLIGHT_PREFIXES = (
+    "strong capability match:",
+    "capability match:",
+)
+
+
+def _skill_label_from_highlight(text: Any) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"\s*\u2713\s*$", "", cleaned).strip()
+    lowered = cleaned.lower()
+    for prefix in _CAPABILITY_HIGHLIGHT_PREFIXES:
+        if lowered.startswith(prefix):
+            return str(cleaned[len(prefix):]).strip()
+    return ""
+
+
+def _collect_positive_skill_labels(row: dict[str, Any]) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: Any) -> None:
+        label = str(value or "").strip()
+        normalized = _normalize_term(label)
+        if not label or not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        labels.append(label)
+
+    reviewed_matches = row.get("reviewed_signal_matches")
+    if isinstance(reviewed_matches, dict):
+        for bucket_name in ("matched", "evidence_only"):
+            for item in reviewed_matches.get(bucket_name) or []:
+                add(item)
+
+    for signal in row.get("competitive_signals") or []:
+        if not isinstance(signal, dict):
+            continue
+        if int(signal.get("adjustment", 0) or 0) <= 0:
+            continue
+        add(signal.get("fit_label") or signal.get("label"))
+
+    for highlight in row.get("fit_highlights") or []:
+        add(_skill_label_from_highlight(highlight))
+
+    role_snapshot = row.get("role_snapshot")
+    if isinstance(role_snapshot, str):
+        add(_skill_label_from_highlight(role_snapshot))
+    elif isinstance(role_snapshot, (list, tuple, set)):
+        for item in role_snapshot:
+            add(_skill_label_from_highlight(item))
+    elif isinstance(role_snapshot, dict):
+        for value in role_snapshot.values():
+            add(_skill_label_from_highlight(value))
+
+    return labels
+
+
+def _observations_from_kept_row(row: dict[str, Any]) -> list[dict]:
+    observations: list[dict] = []
+    for skill in _collect_positive_skill_labels(row):
+        observations.append(
+            {
+                "skill": skill,
+                "title": row.get(RECORD_TITLE_KEY),
+                "company": row.get(RECORD_COMPANY_KEY),
+                "url": row.get(RECORD_URL_KEY),
+                "search_location": row.get(RECORD_SEARCH_LOCATION_KEY),
+            }
+        )
+    return observations
+
+
+_REQUIREMENT_LABEL_PREFIXES = (
+    "native or near-native level ",
+    "native-level ",
+    "minimum ",
+    "at least ",
+    "proven ",
+    "strong ",
+    "excellent ",
+    "demonstrated ",
+    "solid ",
+    "practical ",
+    "hands-on ",
+    "working knowledge of ",
+)
+
+_REQUIREMENT_LABEL_SUFFIXES = (
+    " required",
+    " preferred",
+    " preferred but not essential",
+    " mandatory",
+    " essential",
+    " desired",
+)
+
+
+def _canonical_requirement_label(value: Any) -> str:
+    cleaned = compact_whitespace(value)
+    if not cleaned:
+        return ""
+    lowered = cleaned.lower()
+    for suffix in _REQUIREMENT_LABEL_SUFFIXES:
+        if lowered.endswith(suffix):
+            cleaned = compact_whitespace(cleaned[: -len(suffix)])
+            lowered = cleaned.lower()
+            break
+    for prefix in _REQUIREMENT_LABEL_PREFIXES:
+        if lowered.startswith(prefix):
+            cleaned = compact_whitespace(cleaned[len(prefix):])
+            lowered = cleaned.lower()
+            break
+
+    language_match = re.search(r"(?i)\b([a-z0-9&/+\- ]+? language proficiency)\b", cleaned)
+    if language_match:
+        cleaned = compact_whitespace(language_match.group(1))
+
+    cleaned = re.sub(r"(?i)^\d+(?:-\d+)?\s+years?\s+of\s+", "", cleaned)
+    cleaned = re.sub(r"(?i)^\d+(?:\.\d+)?\s+years?\s+of\s+", "", cleaned)
+    cleaned = re.sub(r"(?i)^\d+(?:-\d+)?\s+years?\s+", "", cleaned)
+    cleaned = compact_whitespace(cleaned.strip(" ,.;:-"))
+    return cleaned
+
+
+def _requirement_entry_from_label(label: str, source_requirement: str) -> tuple[str, str]:
+    canonical = _canonical_requirement_label(label)
+    if not canonical:
+        return "", ""
+    alias = compact_whitespace(source_requirement)
+    return canonical, alias
+
+
+def build_requirement_tuning_suggestions(audit_rows: list[dict], profile: dict[str, Any]) -> list[dict]:
+    settings = get_review_settings()
+    min_count = settings[KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT]
+    working_min_count = settings[KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT]
+    max_examples = settings[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL]
+    known_terms = _collect_known_terms(profile)
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in audit_rows:
+        if not isinstance(row, dict) or row.get("decision") != "KEEP":
+            continue
+        row_seen: set[str] = set()
+        for requirement in row.get("job_requirements") or []:
+            label, alias = _requirement_entry_from_label(requirement, requirement)
+            normalized = _normalize_term(label)
+            if not label or not normalized or normalized in known_terms or normalized in row_seen:
+                continue
+            row_seen.add(normalized)
+            entry = grouped.setdefault(
+                normalized,
+                {
+                    "skill": label,
+                    "count": 0,
+                    "aliases": [],
+                    "examples": [],
+                },
+            )
+            entry["count"] += 1
+            if alias:
+                entry["aliases"].append(alias)
+            if len(entry["examples"]) < max_examples:
+                entry["examples"].append(
+                    {
+                        "title": row.get("title"),
+                        "company": row.get("company"),
+                        "url": row.get("url"),
+                        "search_location": row.get("search_location"),
+                    }
+                )
+
+    suggestions: list[dict[str, Any]] = []
+    for normalized, entry in grouped.items():
+        count = int(entry["count"] or 0)
+        if count < min_count:
+            continue
+        skill = str(entry["skill"] or normalized).strip()
+        recommended_choice = "working" if count >= working_min_count else "basic"
+        suggestions.append(
+            {
+                "kind": "requirement",
+                "skill": skill,
+                "count": count,
+                "headline": f"{skill} appears repeatedly in kept roles",
+                "detail": f"Seen in {count} kept role(s) as an explicit requirement.",
+                "target": "Capability matrix",
+                "recommended_choice": recommended_choice,
+                "recommended_label": _choice_label(recommended_choice),
+                "prompt": f"{skill} is required in several kept roles. Do you have this capability?",
+                "aliases": dedupe_preserve_order(entry["aliases"]),
+                "examples": entry["examples"],
+            }
+        )
+
+    return sorted(
+        suggestions,
+        key=lambda item: (-int(item["count"]), str(item["skill"]).lower()),
+    )
 
 
 def build_capability_tuning_suggestions(
@@ -337,23 +546,26 @@ def build_suggested_tuning(
     profile: dict[str, Any],
 ) -> dict[str, Any]:
     capability_suggestions = build_capability_tuning_suggestions(skill_observations, audit_rows, profile)
+    requirement_suggestions = build_requirement_tuning_suggestions(audit_rows, profile)
     rule_suggestions = build_rule_tuning_suggestions(audit_rows)
     return {
         "summary": {
             "capability_count": len(capability_suggestions),
+            "requirement_count": len(requirement_suggestions),
             "rule_count": len(rule_suggestions),
         },
         "capability_suggestions": capability_suggestions,
+        "requirement_suggestions": requirement_suggestions,
         "rule_suggestions": rule_suggestions,
     }
 
 
-def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], profile: dict[str, Any]) -> list[dict]:
+def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], _profile: dict[str, Any]) -> list[dict]:
     observations: list[dict] = []
     for row in audit_rows:
         if not isinstance(row, dict) or row.get("decision") != "KEEP":
             continue
-        observations.extend(extract_skill_observations(row, profile))
+        observations.extend(_observations_from_kept_row(row))
     return observations
 
 

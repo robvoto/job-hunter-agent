@@ -39,15 +39,14 @@ export function setSelectedLocations(locations) {
 }
 
 export function hydrateSearchBasics(profile) {
-  if (!profile || !profile.search_settings || !profile.match_preferences || !profile.salary_preferences) {
-    throw new Error('Missing onboarding profile data.');
-  }
-  const searchSettings = profile.search_settings;
-  const matchPreferences = profile.match_preferences;
-  const salaryPreferences = profile.salary_preferences;
+  const searchSettings = profile?.search_settings || {};
+  const matchPreferences = profile?.match_preferences || {};
+  const salaryPreferences = profile?.salary_preferences || {};
   const currentKeywords = String(reviewSearchKeywordsEl?.value || '').trim();
   const savedKeywords = String(searchSettings.keywords || '').trim();
-  reviewSearchKeywordsEl.value = currentKeywords || savedKeywords || onboardingPage.defaultSearchKeywordFromTargetRoles(profile);
+  const profileTargetRoles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
+  const fallbackKeyword = profileTargetRoles.length ? onboardingPage.defaultSearchKeywordFromTargetRoles(profile) : '';
+  reviewSearchKeywordsEl.value = currentKeywords || savedKeywords || fallbackKeyword;
   onboardingPage.setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
   const currentSalaryYearly = String(reviewMinimumSalaryYearlyEl.value || '').trim();
   const currentSalaryDaily = String(reviewMinimumDailyRateEl.value || '').trim();

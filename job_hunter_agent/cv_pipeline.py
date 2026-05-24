@@ -86,8 +86,20 @@ def _format_cv_pipeline_summary(
 _TOOL_LINE_RE = re.compile(
     r"^(?:tools?|tools\s+and\s+platforms?|tools\s+and\s+practices)(?:\s+included|\s+include)?\s*:?\s*(?P<body>.+)$",
     flags=re.IGNORECASE,
-) 
- 
+)
+
+
+def _compute_role_experience(roles: list[dict[str, Any]]) -> dict[str, int]:
+    """Sum duration_months per normalized title. Returns {lowercase_title: total_months}."""
+    totals: dict[str, int] = defaultdict(int)
+    for role in roles:
+        title = re.sub(r"\s+", " ", str(role.get("title") or "").strip()).lower()
+        if not title:
+            continue
+        months = int(role.get("duration_months") or 0)
+        totals[title] += months
+    return dict(totals)
+
 
 def parse_roles(
     cv_text: str,
@@ -503,6 +515,7 @@ def run_cv_pipeline(
     candidates = score_and_promote(clusters, onboarding_settings=onboarding_settings)
     candidates = _rename_top_clusters(candidates, llm_client=llm_client)
     output = _build_output(candidates, total_roles=len(roles), onboarding_settings=onboarding_settings)
+    output["role_experience"] = _compute_role_experience(roles)
 
     dominant = output.get("dominant_signal_clusters", [])
     _cap_log(

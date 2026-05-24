@@ -74,7 +74,6 @@ export const JobHunterAdminSettings = (function () {
     document.getElementById('preference_government_weight').value = String(preferenceWeights.government ?? '');
     document.getElementById('preference_freshness_weight').value = String(preferenceWeights.freshness ?? '');
 
-    document.getElementById('history_max_history_sightings').value = String(historySettings.max_history_sightings ?? '');
     document.getElementById('history_repeated_listing_min_times_seen').value = String(historySettings.repeated_listing_min_times_seen ?? '');
     document.getElementById('history_repeated_listing_min_span_days').value = String(historySettings.repeated_listing_min_span_days ?? '');
     document.getElementById('history_multi_listing_red_flag_min_listings').value = String(historySettings.multi_listing_red_flag_min_listings ?? '');
@@ -227,7 +226,6 @@ export const JobHunterAdminSettings = (function () {
           ...currentHistory,
           archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
           hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
-          max_history_sightings: readNumber('history_max_history_sightings', currentHistory.max_history_sightings),
           repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
           repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
           multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),

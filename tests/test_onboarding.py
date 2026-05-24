@@ -663,6 +663,9 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     monkeypatch.setattr(server_helpers, "save_profile", lambda profile: saved_profiles.append(profile) or profile)
     monkeypatch.setattr(server_helpers, "save_source_materials", lambda payload: saved_materials.append(payload) or payload)
     monkeypatch.setattr(server_helpers, "clear_job_history", lambda: cleared.append("job_history"))
+    monkeypatch.setattr(server_helpers, "clear_user_settings", lambda: cleared.append("user_settings"))
+    monkeypatch.setattr(server_helpers, "clear_workspace_pool", lambda: cleared.append("workspace_pool"))
+    monkeypatch.setattr(server_helpers, "clear_agent_state", lambda: cleared.append("agent_state"))
     monkeypatch.setattr(server_helpers, "clear_review_data", lambda: cleared.append("review_data"))
     monkeypatch.setattr(server_helpers, "clear_run_stats", lambda: cleared.append("run_stats"))
     monkeypatch.setattr(server_helpers, "clear_audit_rows", lambda: cleared.append("audit_rows"))
@@ -679,6 +682,9 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
     assert not workspace_path.exists()
     assert "job_history" in cleared
+    assert "user_settings" in cleared
+    assert "workspace_pool" in cleared
+    assert "agent_state" in cleared
     assert "review_data" in cleared
     assert "run_stats" in cleared
     assert "audit_rows" in cleared

@@ -452,6 +452,47 @@ def test_role_title_detection_uses_managed_generic_role_tokens():
     assert profile_learning._looks_like_role_title_line("TechCorp Ltd") is False
 
 
+def test_company_name_with_dates_not_promoted_as_target_role():
+    # Regression: CV lines like "Company Name (2020 - 2023)" matched the date-range
+    # regex, and the append_role fallback used the raw capture without re-checking
+    # _looks_like_role_title_line, causing "company name" to appear as a preferred role.
+    result = extract_title_pattern_suggestions(
+        """
+# Professional Experience
+Company Name (2018 - 2020)
+- Did some work there.
+Business Analyst (2020 - Present)
+- Analysed requirements and produced specifications.
+"""
+    )
+
+    assert "company name" not in result["target_roles"]
+    assert "business analyst" in result["target_roles"]
+
+
+def test_update_job_history_does_not_write_sightings():
+    from job_hunter_agent.history import update_job_history
+
+    history: dict = {}
+    record = {
+        "job_key": "seek:999",
+        "title": "Business Analyst",
+        "company": "Acme",
+        "url": "https://seek.com/job/999",
+        "source": "seek",
+        "decision": "KEEP",
+        "posted": "3 days ago",
+        "posted_age_days": 3,
+    }
+    update_job_history(history, record, "2026-01-01T00:00:00+10:00")
+
+    entry = history["seek:999"]
+    assert "sightings" not in entry
+    assert entry["times_seen"] == 1
+    assert entry["first_seen_at"] == "2026-01-01T00:00:00+10:00"
+    assert entry["last_seen_at"] == "2026-01-01T00:00:00+10:00"
+
+
 @pytest.mark.parametrize(
     "line,expected",
     [

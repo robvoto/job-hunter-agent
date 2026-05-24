@@ -6,6 +6,7 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Workspace UI displays canonical data; it must not recreate filtering, scoring, or preference logic.
 - Keep admin/user display policy configurable when it is tunable behaviour.
 - Do not hardcode display counts, labels, thresholds, or fallback text in templates or feature code.
+- Do not use silent fallbacks in UI routes or templates. Missing or invalid UI data should fail clearly or be fixed at the owning source.
 - Settings UI must save/load through the same profile/settings normalisers as runtime code.
 - Missing required settings or labels should fail clearly, not be invented in UI code.
 - Route aliases such as `/workspace` and `/` must stay intentional and documented.

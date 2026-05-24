@@ -124,10 +124,6 @@
       }
     },
     "history": {
-      "max_history_sightings": {
-        "min": 1,
-        "max": 100
-      },
       "repeated_listing_min_times_seen": {
         "min": 1,
         "max": 100
@@ -163,7 +159,6 @@
   "history_settings": {
     "archive_stale_after_days": 15,
     "hidden_review_days": 30,
-    "max_history_sightings": 24,
     "repeated_listing_min_times_seen": 4,
     "repeated_listing_min_span_days": 21,
     "multi_listing_red_flag_min_listings": 3,

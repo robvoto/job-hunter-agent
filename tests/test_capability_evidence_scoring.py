@@ -206,7 +206,7 @@ def test_unknown_capability_name_from_llm_is_ignored(caplog):
         score, matches = capability_evidence_score(record, profile)
 
     assert score == 0
-    assert "Unknown capability" in caplog.text
+    assert "capability name not in profile rules" in caplog.text
 
 
 # ---------------------------------------------------------------------------

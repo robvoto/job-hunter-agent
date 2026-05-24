@@ -1129,13 +1129,16 @@
 
 .cap-alias-chip {
   max-width: 100%;
+  align-items: flex-start;
   font-size: 0.8rem;
   line-height: 1.2;
-  overflow-wrap: anywhere;
 }
 
 .cap-alias-chip-label {
+  flex: 1 1 auto;
   min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .cap-alias-chip-remove {
@@ -1641,4 +1644,66 @@
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 62%, var(--border-subtle));
   color: var(--accent);
+}
+
+/* Shared chip editor layout for onboarding role review and settings rule editors.
+   Keep the add row outside the chip display box; do not create an extra parent card. */
+.review-block > .field-label-row + .chip-list,
+.settings-form-field > .field-label-row + .badge-editor {
+  margin-top: 12px;
+}
+
+.chip-list,
+.badge-editor-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  margin: 0;
+}
+
+.chip-empty,
+.badge-editor-empty {
+  display: block;
+  padding-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1.45;
+}
+
+.badge-editor-form.token-input-group,
+.chip-editor-row.token-input-group {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin-top: var(--surface-gap-sm);
+  border: 0;
+  background: transparent;
+  padding-inline-end: 0;
+  gap: 8px;
+}
+
+.badge-editor-form.token-input-group:focus-within,
+.chip-editor-row.token-input-group:focus-within {
+  box-shadow: none;
+}
+
+.badge-editor-form.token-input-group .token-input-field,
+.chip-editor-row.token-input-group .token-input-field {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--control-radius-md);
+  background: var(--bg-surface);
+}
+
+.badge-editor-form.token-input-group .token-input-field:focus,
+.chip-editor-row.token-input-group .token-input-field:focus {
+  border-color: var(--selection-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
+}
+
+.badge-editor-form.token-input-group .token-input-action,
+.chip-editor-row.token-input-group .token-input-action {
+  align-self: center;
+  justify-self: center;
 }

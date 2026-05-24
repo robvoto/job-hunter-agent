@@ -16,6 +16,8 @@ from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.posting_utils import parse_timestamp
 
+NO_FRESH_CARDS_ERROR = "No fresh cards were captured in this run."
+
 
 def _load_workspace_pool() -> list[dict]:
     import json as _json
@@ -109,8 +111,9 @@ def finalize_scrape_run(
     kept_records = deduplicate_across_sources(kept_records)
     pool = _load_workspace_pool()
     pool_was_empty = len(pool) == 0
+    no_fresh_cards = not audit_rows
 
-    if not audit_rows and context.previous_audit_rows:
+    if no_fresh_cards and context.previous_audit_rows:
         run_stats = {
             "page_count": 0,
             "cards_seen": 0,
@@ -120,6 +123,8 @@ def finalize_scrape_run(
             "cards_with_flags_count": 0,
             "issue_flag_summary": [],
             "llm_total_cost_usd": round(get_session_cost_usd(), 6),
+            "last_run_attempt_at": context.run_iso,
+            "last_run_error": NO_FRESH_CARDS_ERROR,
         }
         _print_run_summary(run_stats)
         workspace_service.render_html(
@@ -142,8 +147,10 @@ def finalize_scrape_run(
         save_llm_cache(context.llm_cache)
         save_job_history(context.job_history)
         write_review_data(build_review_data(context.previous_audit_rows, [], context.profile))
+        write_run_stats(run_stats)
         workspace_path = get_workspace_results_path()
-        print("\nNo fresh cards were captured in this run, so the previous workspace state was preserved.")
+        print(f"\n[RUN][ERROR] {NO_FRESH_CARDS_ERROR}")
+        print("The previous workspace state was preserved.")
         print(f"Workspace results preserved at {workspace_path}")
         return str(workspace_path)
 
@@ -165,6 +172,8 @@ def finalize_scrape_run(
     run_stats["last_run_attempt_at"] = context.run_iso
     run_stats["llm_total_cost_usd"] = round(get_session_cost_usd(), 6)
     run_stats["pool_was_empty_before_run"] = pool_was_empty
+    if no_fresh_cards:
+        run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,
         context.job_history,
@@ -196,6 +205,8 @@ def finalize_scrape_run(
     write_run_stats(run_stats)
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
     _print_run_summary(run_stats)
+    if no_fresh_cards:
+        print(f"\n[RUN][ERROR] {NO_FRESH_CARDS_ERROR}")
     print(f"  workspace_visible={_format_workspace_counts(workspace_records, context.dashboard_min_score)}")
     print(f"\nSaved {len(kept_records)} jobs to {workspace_path}")
     print(f"Saved {len(audit_rows)} audit rows to DB")

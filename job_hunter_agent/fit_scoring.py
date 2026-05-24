@@ -4,8 +4,6 @@ from typing import Dict, List, Optional
 from job_hunter_agent.capability_matching import (
     evidence_tier_alignment_score,
     find_profile_capability_matches,
-    reviewed_signal_match_summary,
-    reviewed_signal_matches_for_text,
 )
 from job_hunter_agent.capability_matrix import canonical_capability_term, expand_capability_terms
 
@@ -269,15 +267,6 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     for prefix, area in matched_profile_areas:
         label = friendly_capability_label(area)
         entry = f"{prefix}: {label}" if label else ""
-        if entry and entry not in highlights:
-            highlights.append(entry)
-
-    reviewed = reviewed_signal_match_summary(
-        {**record, "reviewed_signal_matches": record.get("reviewed_signal_matches") or reviewed_signal_matches_for_text(role_bundle)}
-    )
-    for signal in reviewed["matched"][:hl_config["reviewed_signal_count"]]:
-        label = friendly_capability_label(signal)
-        entry = f"{highlight_labels['matched_signal']}: {label}" if label else ""
         if entry and entry not in highlights:
             highlights.append(entry)
 

@@ -295,6 +295,35 @@ def derive_base_title_from_seniority(value: Any, source_text: Any = "") -> str:
     return str(decompose_title_text(value, source_text).get(BASE_ROLE_KEY) or "").strip()
 
 
+def _load_search_qualifier_prefix_strip() -> frozenset[str]:
+    try:
+        payload = load_title_normalization_rules()
+    except Exception:
+        return frozenset()
+    tokens = payload.get("search_qualifier_prefix_strip")
+    if not isinstance(tokens, list):
+        return frozenset()
+    return frozenset(
+        token
+        for token in (_clean_rule_token(value) for value in tokens)
+        if token
+    )
+
+
+def derive_search_keyword(value: Any, source_text: Any = "") -> str:
+    """Derive a SEEK search keyword: strip seniority then leading qualifier prefixes."""
+    base = derive_base_title_from_seniority(value, source_text)
+    if not base:
+        return ""
+    qualifier_prefixes = _load_search_qualifier_prefix_strip()
+    if not qualifier_prefixes:
+        return base
+    tokens = base.split()
+    while tokens and tokens[0] in qualifier_prefixes:
+        tokens = tokens[1:]
+    return " ".join(tokens) if tokens else base
+
+
 def classify_title_normalization_candidate(title: Any, source_text: Any = "") -> dict[str, Any] | None:
     raw_title = _clean_text(title)
     if not raw_title:

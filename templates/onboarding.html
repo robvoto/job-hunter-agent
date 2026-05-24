@@ -151,35 +151,39 @@
 
         <section class="wizard-step" data-step="2" hidden>
           <div class="review-grid">
-            <section class="review-block">
-              <div class="field-label-row">
-                <label>__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</label>
-                <details class="field-info-drawer settings-help-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__</div>
-                </details>
-              </div>
-              <div class="chip-list" id="review_target_titles_list"></div>
+            <div class="review-grid-col">
+              <section class="review-block">
+                <div class="field-label-row">
+                  <label>__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</label>
+                  <details class="field-info-drawer settings-help-drawer">
+                    <summary class="field-info" aria-label="Help">i</summary>
+                    <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__</div>
+                  </details>
+                </div>
+                <div class="chip-list" id="review_target_titles_list"></div>
+              </section>
               <div class="chip-editor-row token-input-group">
                 <input id="review_target_titles_input" class="token-input-field" type="text" placeholder="__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_PLACEHOLDER__">
                 <button class="btn-add token-input-action" id="review_add_target_title" type="button" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
               </div>
-            </section>
+            </div>
 
-            <section class="review-block">
-              <div class="field-label-row">
-                <label>__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</label>
-                <details class="field-info-drawer settings-help-drawer">
-                  <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_HELP__</div>
-                </details>
-              </div>
-              <div class="chip-list" id="review_secondary_titles_list"></div>
+            <div class="review-grid-col">
+              <section class="review-block">
+                <div class="field-label-row">
+                  <label>__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</label>
+                  <details class="field-info-drawer settings-help-drawer">
+                    <summary class="field-info" aria-label="Help">i</summary>
+                    <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_HELP__</div>
+                  </details>
+                </div>
+                <div class="chip-list" id="review_secondary_titles_list"></div>
+              </section>
               <div class="chip-editor-row token-input-group">
                 <input id="review_secondary_titles_input" class="token-input-field" type="text" placeholder="__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_PLACEHOLDER__">
                 <button class="btn-add token-input-action" id="review_add_secondary_title" type="button" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
               </div>
-            </section>
+            </div>
           </div>
 
           <section class="review-block capability-shell">

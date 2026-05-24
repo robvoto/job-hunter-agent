@@ -388,8 +388,9 @@ def _looks_like_role_title_line(text: str) -> bool:
     # Multi-word lines that contain no recognised role token are almost always
     # company names (e.g. "TechCorp (contract)", "Digital Solutions Group") or
     # description fragments — not job titles.  Weakening this check causes
-    # company names to be promoted to title patterns, which breaks extraction
-    # every time the test CV is re-processed.  See TITLE_SELECTION_RATIONALE.md.
+    # company names to be promoted to title patterns.  The append_role fallback
+    # in _parse_role_entries also gates on this function, so any bypass there
+    # would reintroduce the same regression.
     return False
 
 
@@ -518,7 +519,9 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
     ) -> None:
         resolved_title, resolved_employer = _select_role_title_and_employer(header_lines)
         if not resolved_title:
-            resolved_title = _clean_line(title)
+            cleaned = _clean_line(title)
+            if cleaned and _looks_like_role_title_line(cleaned):
+                resolved_title = cleaned
         if not resolved_employer:
             candidate_employer = _clean_line(employer)
             if candidate_employer and not _is_heading_line(employer) and not _is_plain_section_label(employer):
@@ -1263,10 +1266,14 @@ def extract_title_pattern_suggestions(
         for pattern in secondary_patterns
         if pattern not in primary_set
     ][:max_secondary]
-    suggested_search_keywords = target_patterns[:4]
+    from job_hunter_agent.title_normalization_rules import derive_search_keyword
+    suggested_search_keywords = list(dict.fromkeys(
+        kw for pattern in target_patterns[:4]
+        if (kw := derive_search_keyword(pattern))
+    ))
 
     return {
         KEY_PRIMARY_PATTERNS: list(dict.fromkeys(target_patterns)),
         KEY_SECONDARY_PATTERNS: list(dict.fromkeys(secondary_patterns)),
-        KEY_SUGGESTED_KEYWORDS: list(dict.fromkeys(suggested_search_keywords))[:4],
+        KEY_SUGGESTED_KEYWORDS: suggested_search_keywords[:4],
     }

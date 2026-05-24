@@ -4,6 +4,7 @@ Use before adding/changing thresholds, mappings, defaults, labels, scoring value
 
 ## Core rule
 Business judgement must not hide in feature code.
+Silent fallbacks are not acceptable. If required data is missing, surface an explicit error or fix the owner.
 
 ## Forbidden
 - Inline scoring maps, e.g. `{ "strong": 4, "working": 3 }`

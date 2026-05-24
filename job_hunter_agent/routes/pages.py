@@ -81,8 +81,6 @@ def _build_top_utility_bar_html(
     if srv.DEBUG_MODE:
         test_html = (
             '<div class="account-bar-test" id="job_hunter_account_test_panel">'
-            f'<button class="account-bar-test-trigger" id="job_hunter_account_test_trigger" type="button"'
-            f' aria-haspopup="true" aria-expanded="false">{_html_escape(shared_labels["account_menu_test_label"])}</button>'
             f'<div class="account-bar-test-menu" id="job_hunter_account_test_menu" role="menu"'
             f' aria-label="{_html_escape(shared_labels["account_menu_test_actions_label"])}">'
             f'<div class="account-bar-test-menu-title">{_html_escape(shared_labels["account_menu_test_actions_label"])}</div>'

@@ -14,6 +14,11 @@ router = APIRouter()
 @router.get("/api/results-html")
 def api_results_html():  # type: ignore[no-untyped-def]
     results_path = get_workspace_results_path()
+    run_stats = load_run_stats()
+    last_error = str((run_stats or {}).get("last_run_error") or "").strip()
+    if last_error:
+        print(f"[WORKSPACE][WARN] Last run error: {last_error}")
+        return json_response({"error": last_error}, 503)
     if not results_path.exists():
         try:
             rebuild_workspace_results(reason="no results file — generating empty workspace")

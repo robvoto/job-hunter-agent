@@ -615,19 +615,28 @@ def render_job_card(
     if sector_signal.get("kind") == "government":
         badges.append(render_badge("Public sector", "badge-sector-public", "Public-sector context detected from the captured job text."))
     channel_kind = channel_signal.get("kind", "unknown")
-    channel_source = channel_signal.get("source", "")
-    if channel_kind == "agency_or_recruiter" and channel_source == "metadata_first":
+    if channel_kind == "agency_or_recruiter":
         badges.append(render_badge("Recruiter", "badge-source-neutral", "Posted via a recruitment agency or third-party recruiter."))
-    elif channel_kind == "direct_employer" and channel_source == "metadata_first":
+    elif channel_kind == "direct_employer":
         badges.append(render_badge("Company", "badge-source-neutral", "Posted directly by the employer."))
-    elif channel_signal.get("needs_review") and channel_kind not in ("agency_or_recruiter", "direct_employer"):
+    elif channel_signal.get("needs_review"):
         badges.append(render_badge(
-            _workspace_label("workspace_card_labels", "posting_channel_unclear_badge", "Direct employer unclear"),
+            _workspace_label("workspace_card_labels", "posting_channel_likely_recruiter_badge", "Likely recruiter"),
             "badge-warning",
             _workspace_label(
                 "workspace_card_labels",
-                "posting_channel_unclear_tooltip",
-                "No trusted employer metadata was found. This role may be via a recruiter or intermediary.",
+                "posting_channel_likely_recruiter_tooltip",
+                "Recruiter language detected in the description. This may be posted on behalf of an employer.",
+            ),
+        ))
+    else:
+        badges.append(render_badge(
+            _workspace_label("workspace_card_labels", "posting_channel_unknown_badge", "Source unclear"),
+            "badge-archive",
+            _workspace_label(
+                "workspace_card_labels",
+                "posting_channel_unknown_tooltip",
+                "Couldn't determine whether this was posted by the employer directly or via a recruiter.",
             ),
         ))
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
@@ -824,28 +833,28 @@ def render_job_card(
     if reviewed_signal_matches["matched"]:
         insight_sections.append(
             '<div class="job-insight-group">'
-            '<strong>Matched signals</strong>'
+            '<strong>Related terms</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["matched"])}</ul>'
             '</div>'
         )
     if active_debug_mode and reviewed_signal_matches["unresolved"]:
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
-            '<strong>Unresolved signals</strong>'
+            '<strong>Terms needing review</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["unresolved"])}</ul>'
             '</div>'
         )
     if reviewed_signal_matches["evidence_only"]:
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
-            '<strong>Evidence only</strong>'
+            '<strong>Found, not scored</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["evidence_only"])}</ul>'
             '</div>'
         )
     if reviewed_signal_matches["ignored"]:
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
-            '<strong>Ignored</strong>'
+            '<strong>Filtered out</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["ignored"])}</ul>'
             '</div>'
         )
@@ -877,7 +886,7 @@ def render_job_card(
     job_requirements_html = ""
     if job_requirements:
         job_requirements_html = (
-            '<details class="job-requirements">'
+            '<details class="job-insights">'
             f'<summary>{safe_html(_workspace_label("workspace_card_labels", "job_requirements_summary", "Job requirements"))}</summary>'
             f'<div class="job-insight-group is-secondary"><ul>{"".join(f"<li>{safe_html(item)}</li>" for item in job_requirements)}</ul></div>'
             '</details>'
@@ -968,7 +977,7 @@ def render_job_card(
                 description_issue_items.append("; ".join(capture_facts))
         insight_sections.append(
             '<div class="job-insight-group job-insight-warning">'
-            '<strong>Description issue</strong>'
+            '<strong>Incomplete description</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in description_issue_items)}</ul>'
             '</div>'
         )
@@ -996,19 +1005,12 @@ def render_job_card(
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_items)}</ul>'
             '</div>'
         )
-    elif active_debug_mode:
-        insight_sections.append(
-            '<div class="job-insight-group job-insight-muted">'
-            '<strong>Watchouts</strong>'
-            '<p class="insight-unavailable-note">No explicit risks detected from the captured description.</p>'
-            '</div>'
-        )
     if active_debug_mode:
         negative_reasons = negative_score_reasons(score_breakdown)
         if negative_reasons:
             insight_sections.append(
                 '<div class="job-insight-group job-insight-warning">'
-                '<strong>Score penalties</strong>'
+                '<strong>What brought it down</strong>'
                 f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_reasons)}</ul>'
                 '</div>'
             )
@@ -1016,36 +1018,19 @@ def render_job_card(
         if gap_reasons:
             insight_sections.append(
                 '<div class="job-insight-group is-secondary">'
-                '<strong>Score gaps</strong>'
+                '<strong>What we couldn\'t score</strong>'
                 f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in gap_reasons)}</ul>'
                 '</div>'
             )
     if active_debug_mode and score_breakdown:
         score_breakdown_html = "".join(
-            f"<li>{safe_html(str(item['label']))}: {int(item['value']):+d}</li>"
+            f"<li>{safe_html(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip())}: {int(item['value']):+d}</li>"
             for item in score_breakdown
         )
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
             '<strong>Score details</strong>'
             f'<ul>{score_breakdown_html}</ul>'
-            '</div>'
-        )
-    if active_debug_mode and channel_signal:
-        ch_kind = channel_signal.get("kind", "unknown")
-        ch_source = channel_signal.get("source", "unknown")
-        ch_trusted = [str(x) for x in channel_signal.get("trusted_metadata", []) if str(x).strip()]
-        ch_weak = [str(x) for x in channel_signal.get("weak_text_matches", []) if str(x).strip()]
-        ch_needs_review = channel_signal.get("needs_review", False)
-        ch_lines = [f"kind={safe_html(ch_kind)}", f"source={safe_html(ch_source)}", f"needs_review={ch_needs_review}"]
-        if ch_trusted:
-            ch_lines.append(f"trusted: {safe_html(', '.join(ch_trusted))}")
-        if ch_weak:
-            ch_lines.append(f"weak text: {safe_html(', '.join(ch_weak))}")
-        insight_sections.append(
-            '<div class="job-insight-group is-secondary">'
-            '<strong>Posting channel</strong>'
-            f'<ul>{"".join(f"<li>{line}</li>" for line in ch_lines)}</ul>'
             '</div>'
         )
     insight_html = (

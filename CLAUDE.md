@@ -26,9 +26,28 @@ This applies to every task. Do not silently write second-best code.
 
 ## Commands
 
-Do not duplicate runtime command tables here.
+Full operational reference is in `docs/OPERATIONS.md`. The most common dev commands:
 
-Use `docs/OPERATIONS.md` for runtime commands, CLI flags, rebuild flows, diagnostics, recovery, auth-bypass notes, and validation commands.
+```powershell
+# Run tests
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pytest -k onboarding   # single area
+.\.venv\Scripts\python.exe -m pytest -v               # verbose
+
+# Start server (debug bypasses auth/CSRF)
+python -m job_hunter_agent.fastapi_app --debug
+
+# Run full pipeline
+python -m job_hunter_agent.source_connector
+python -m job_hunter_agent.source_connector --no-llm           # deterministic only
+python -m job_hunter_agent.source_connector --rebuild-workspace # rebuild HTML, no scrape
+
+# DB bootstrap (once on first deploy or after a DB reset)
+python -m job_hunter_agent.db_seed
+python -m job_hunter_agent.db_seed --upgrade   # merge-safe knowledge update
+```
+
+Local server: `http://localhost:8765/`. Key routes: `/start` (onboarding), `/settings`, `/workspace`, `/swagger-ui`.
 
 ## Architecture
 
@@ -50,18 +69,24 @@ Entry point: `source_connector.py` → `source_runner.py` → individual scraper
 
 ### User context and data paths
 
-All per-user data lives under `data/users/<user_id>/`. The active user is resolved per HTTP request via a `ContextVar` in `user_context.py`, which all path helpers in `paths.py` read from. CLI/agent code must call `set_user_id()` explicitly before file operations.
+Active user is resolved per HTTP request via a `ContextVar` in `user_context.py`; all path helpers in `paths.py` read from it. CLI/agent code must call `set_user_id()` before file operations. Calling any path helper without a user set raises `RuntimeError` — there is no silent fallback.
 
-When auth is disabled (debug mode), the active user is explicitly set to `_local` (`LOCAL_USER_ID`). There is no silent fallback — calling any path helper without a user set raises a `RuntimeError`. Key per-user files:
-- `profile.json` — runtime candidate truth (capabilities, preferences, learning state)
-- `job_history.json` — viewed/applied/hidden state and dedup history
-- `settings.json` — per-user workspace settings
-- `workspace_results.html` — rendered job shortlist
+When auth is disabled (debug mode), the active user is explicitly set to `_local` (`LOCAL_USER_ID`).
 
-Global (non-user) data:
-- `data/config/global_settings.json` — admin-controlled runtime settings
-- `data/knowledge/*.json` — approved business rules (capability knowledge, hard blockers, scoring rules, etc.)
-- `data/signals/signal_registry.json` — pending signals awaiting user review/approval
+**Per-user runtime state lives in SQLite** (`JOB_HUNTER_DB_PATH`):
+- `user_profile` table — runtime candidate truth (capabilities, preferences, learning state); accessed via `profile_store.load_profile()` / `save_profile()`
+- `job_history` table — viewed/applied/hidden state and dedup history
+- `workspace_pool` / `run_stats` / `audit_records` / `review_data` tables — scrape run outputs (disposable, rebuildable)
+
+**Filesystem outputs** (per-user):
+- `data/users/<user_id>/workspace_results.html` — rendered job shortlist
+
+**Global (non-user) state**:
+- `data/config/global_settings.json` — admin-controlled runtime settings seed (committed to git)
+- `data/knowledge/*.json` — approved business rules; seeded into the `knowledge` DB table via `db_seed.py`
+- `data/signals/signal_registry.json` — pending signals awaiting user review (gitignored; created at runtime)
+
+`paths.py` is the single source of truth for all file and DB locations.
 
 ### FastAPI server
 
@@ -82,11 +107,11 @@ Settings HTML is assembled from partials at `templates/partials/settings/standar
 
 ### Learning and signal flow
 
-Signals flow through `signal_registry.py` and sit in a pending state until the user approves them via the UI. Approval commits the signal to the appropriate knowledge file (e.g. `capability_knowledge.json`, `hard_blocker_rules.json`). Unapproved signals never alter runtime filtering.
+Signals flow through `signal_registry.py` and sit in a pending state until the user approves them via the UI. Approval commits the signal to the appropriate knowledge entry in the DB. Unapproved signals never alter runtime filtering.
 
 ### Knowledge ownership
 
-All business judgement (scoring weights, thresholds, blocker patterns, capability definitions) lives in `data/knowledge/*.json`. The Python modules that consume these files are consumers only — they never embed fallback business values. `paths.py` is the single source of truth for all file locations.
+All business judgement (scoring weights, thresholds, blocker patterns, capability definitions) lives in `data/knowledge/*.json`, seeded into the DB `knowledge` table. The Python modules that consume these files are consumers only — they never embed fallback business values.
 
 ### Auth and CSRF
 

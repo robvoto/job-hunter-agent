@@ -27,10 +27,13 @@ from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
 from job_hunter_agent.io_utils import (
+    clear_agent_state,
     clear_audit_rows,
     clear_job_history,
     clear_review_data,
     clear_run_stats,
+    clear_user_settings,
+    clear_workspace_pool,
     load_job_history,
     load_run_stats,
     load_ui_labels,
@@ -321,7 +324,6 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "reset_learning_confirm_body_2",
     "reset_learning_error",
     "reset_learning_success_message",
-    "no_profile_warning",
     "profile_status_error",
     "load_profile_error",
     "create_profile_button_building",
@@ -429,8 +431,6 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "archive_stale_after_days_help",
     "hidden_review_days_label",
     "hidden_review_days_help",
-    "max_history_sightings_label",
-    "max_history_sightings_help",
     "repeated_listing_min_times_seen_label",
     "repeated_listing_min_times_seen_help",
     "repeated_listing_min_span_days_label",
@@ -1060,7 +1060,9 @@ def _write_run_stats_field(key: str, value: object) -> None:
 def _run_scrape_job() -> None:
     try:
         scrape_jobs_direct()
-        _write_run_stats_field("last_run_error", None)
+        run_stats = load_run_stats()
+        if not str((run_stats or {}).get("last_run_error") or "").strip():
+            _write_run_stats_field("last_run_error", None)
     except Exception as exc:
         msg = f"{type(exc).__name__}: {exc}"
         print(f"[RUN][ERROR] {msg}")
@@ -1115,6 +1117,8 @@ class SettingsHandler:
 
     @classmethod
     def _reset_current_user_state(cls) -> dict[str, Any]:
+        if _is_run_in_progress():
+            raise ValueError("A scrape is currently running. Wait for it to finish before resetting.")
         # Wipe every per-user data directory under data/users/
         if USERS_DIR.exists():
             try:
@@ -1136,6 +1140,9 @@ class SettingsHandler:
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
         clear_job_history()
+        clear_user_settings()
+        clear_workspace_pool()
+        clear_agent_state()
         clear_review_data()
         clear_run_stats()
         clear_audit_rows()

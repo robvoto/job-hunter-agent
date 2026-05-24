@@ -2,14 +2,13 @@ import re
 import sys 
 from typing import Dict, List, Optional
 
-from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.record_schema import RECORD_JOB_REQUIREMENTS_KEY
 from job_hunter_agent.signal_detection import hard_block_reasons
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
-from job_hunter_agent.global_settings import get_max_history_sightings, get_multi_listing_red_flag_min_listings, get_multi_listing_red_flag_min_span_days, get_repeated_listing_min_times_seen, get_repeated_listing_min_span_days
+from job_hunter_agent.global_settings import get_multi_listing_red_flag_min_listings, get_multi_listing_red_flag_min_span_days, get_repeated_listing_min_times_seen, get_repeated_listing_min_span_days
 
 TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING = CLI_FLAG_RESET_NEW_TO_YOU in set(sys.argv[1:])
  
@@ -153,17 +152,6 @@ def history_cluster_key(record: dict) -> str:
     return history_cluster_key_from_parts(source, record.get("company"), record.get("title"))
 
 
-def build_history_sighting(record: dict, run_iso: str) -> dict:
-    return {
-        "seen_at": run_iso,
-        "url": str(record.get("url") or "").strip(),
-        "posted": normalize_posted_text(record.get("posted")),
-        "posted_age_days": record.get("posted_age_days"),
-        "company": str(record.get("company") or "").strip(),
-        "title": str(record.get("title") or "").strip(),
-        "source": str(record.get("source") or "").strip().lower(),
-    }
-
 
 def build_history_cluster_index(history: Dict[str, dict]) -> Dict[str, dict]:
     clusters: Dict[str, dict] = {}
@@ -256,13 +244,6 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
     record["last_seen_at"] = entry.get("last_seen_at")
     record["first_viewed_at"] = entry.get("first_viewed_at")
     record["last_viewed_at"] = entry.get("last_viewed_at")
-    sightings = entry.get("sightings") if isinstance(entry.get("sightings"), list) else []
-    current_sighting = build_history_sighting(record, run_iso)
-    if not sightings or sightings[-1] != current_sighting:
-        sightings = [*sightings, current_sighting][-get_max_history_sightings():]
-    entry["sightings"] = sightings
-    record["history_sightings"] = sightings
-
     if record.get("decision") == "KEEP":
         if not entry.get("first_kept_at"):
             entry["first_kept_at"] = run_iso

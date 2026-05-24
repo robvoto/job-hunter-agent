@@ -1,8 +1,8 @@
 {
   "kind": "rules",
   "name": "title_normalization_rules",
-  "version": 3,
-  "updated_at": "2026-05-07",
+  "version": 4,
+  "updated_at": "2026-05-24",
   "seniority_modifiers": [
     "junior",
     "mid",
@@ -19,6 +19,10 @@
     "ba": "business analyst",
     "po": "product owner"
   },
+  "search_qualifier_prefix_strip_description": "Leading adjective/methodology words stripped from the SEEK search keyword only (not from title matching). Add words that prefix a role without changing its core identity, e.g. 'agile project coordinator' → search keyword 'project coordinator'.",
+  "search_qualifier_prefix_strip": [
+    "agile"
+  ],
   "normalization": {
     "collapse_spaces": true,
     "strip_outer_punctuation": true,

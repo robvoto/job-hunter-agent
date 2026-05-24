@@ -70,11 +70,11 @@ def test_unknown_work_type_returns_neutral_signal():
     }
 
     assert assess_contract_preference({"work_type": ""}, profile) == {
-        "label": "Work type neutral because work type was unknown",
+        "label": "Work type unknown — couldn't determine from ad",
         "value": 0,
     }
     assert assess_contract_preference({"work_type": "unknown"}, profile) == {
-        "label": "Work type neutral because work type was unknown",
+        "label": "Work type unknown — couldn't determine from ad",
         "value": 0,
     }
 
@@ -156,7 +156,7 @@ def test_single_selected_work_type_scores_confirmed_contract_role():
     )
 
     assert item == {
-        "label": "Work type confirmed selected work type bonus: 12+ month contract with extension potential",
+        "label": "Work type matches your preference: 12+ month contract with extension potential",
         "value": 4,
     }
 
@@ -244,7 +244,7 @@ def test_all_work_modes_selected_keeps_onsite_neutral_for_scoring():
         profile,
     )
 
-    assert any(item["label"] == "Work mode neutral because all modes were selected" and item["value"] == 0 for item in breakdown)
+    assert any(item["label"] == "Work mode neutral because all work modes were selected" and item["value"] == 0 for item in breakdown)
 
 
 def test_work_mode_selection_bonus_applies_only_to_single_selected_mode():
@@ -275,7 +275,7 @@ def test_work_mode_selection_bonus_applies_only_to_single_selected_mode():
         profile,
     )
 
-    assert any(item["label"] == "Work mode confirmed selected mode bonus" and item["value"] == 5 for item in breakdown)
+    assert any(item["label"] == "Work mode matches your preference" and item["value"] == 5 for item in breakdown)
 
 
 def test_multiple_selected_work_modes_are_neutral_for_scoring():
@@ -321,8 +321,8 @@ def test_multiple_selected_work_modes_are_neutral_for_scoring():
         profile,
     )
 
-    assert any(item["label"] == "Work mode neutral because multiple modes were selected" and item["value"] == 0 for item in remote_breakdown)
-    assert any(item["label"] == "Work mode neutral because multiple modes were selected" and item["value"] == 0 for item in onsite_breakdown)
+    assert any(item["label"] == "Work mode neutral — you've selected multiple" and item["value"] == 0 for item in remote_breakdown)
+    assert any(item["label"] == "Work mode neutral — you've selected multiple" and item["value"] == 0 for item in onsite_breakdown)
 
 
 def test_unknown_work_mode_stays_neutral():
@@ -356,4 +356,4 @@ def test_unknown_work_mode_stays_neutral():
 
     assert ok is True
     assert reason == "OK"
-    assert any(item["label"] == "Work mode neutral because work mode was unknown" and item["value"] == 0 for item in breakdown)
+    assert any(item["label"] == "Work mode unknown — couldn't determine from ad" and item["value"] == 0 for item in breakdown)

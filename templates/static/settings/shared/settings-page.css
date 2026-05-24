@@ -490,39 +490,8 @@
       margin-top: 12px;
     }
     .rule-chips { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-    .badge-editor-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      min-height: 30px;
-      align-items: flex-start;
-    }
-    .badge-editor-empty {
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      padding: 5px 0;
-    }
     .subpanel .settings-form-field + .settings-form-field {
       margin-top: var(--surface-gap-md);
-    }
-    .settings-form-field > .field-label-row {
-      margin-bottom: var(--surface-gap-sm);
-    }
-    .badge-editor-form.token-input-group {
-      margin-top: var(--surface-gap-sm);
-      border: 0;
-      background: transparent;
-      padding-inline-end: 0;
-    }
-    .badge-editor-form.token-input-group .token-input-field {
-      min-width: 0;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--control-radius-md);
-      background: var(--bg-surface);
-    }
-    .badge-editor-form.token-input-group .token-input-field:focus {
-      border-color: var(--selection-accent);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent);
     }
     .capability-editor {
       display: grid;
@@ -694,18 +663,44 @@
         max-width: none;
       }
     }
-    .review-list { display: grid; gap: var(--surface-gap-sm); }
+    .optimise-shell .tuning-suggestions-panel {
+      display: block;
+      margin-top: var(--surface-gap-sm);
+    }
+    .optimise-shell .tuning-suggestions-content {
+      display: grid;
+      gap: var(--surface-gap-lg);
+    }
+    .review-list { display: grid; gap: var(--surface-gap-md); }
     .tuning-summary {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--surface-gap-sm);
-      margin-bottom: var(--surface-gap-sm);
+      grid-template-columns: repeat(3, minmax(200px, 1fr));
+      gap: var(--surface-gap-md);
+      margin-bottom: var(--surface-gap-md);
     }
-    .tuning-summary-card strong { display: block; font-size: 1.35rem; margin-bottom: 4px; }
-    .tuning-summary-card span { color: var(--text-muted); font-size: 0.9rem; }
-    .tuning-group + .tuning-group { margin-top: var(--surface-gap-md); }
-    .tuning-group h3 { margin: 0 0 6px; font-size: 1rem; }
-    .tuning-group-copy { margin: 0 0 var(--surface-gap-sm); color: var(--text-muted); font-size: 0.9rem; line-height: 1.45; }
+    .tuning-summary-card {
+      display: grid;
+      gap: 4px;
+      padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
+      min-height: 96px;
+      align-content: start;
+    }
+    .tuning-summary-card strong { display: block; font-size: 1.4rem; line-height: 1; }
+    .tuning-summary-card span { color: var(--text-muted); font-size: 0.92rem; line-height: 1.35; }
+    .tuning-group + .tuning-group { margin-top: var(--surface-gap-lg); }
+    .tuning-group {
+      display: grid;
+      gap: var(--surface-gap-sm);
+    }
+    .tuning-group h3 { margin: 0; font-size: 1rem; }
+    .tuning-group-copy { margin: 0; color: var(--text-muted); font-size: 0.92rem; line-height: 1.55; }
+    .tuning-empty-state { margin-top: 2px; }
+    .optimise-shell .tuning-actions {
+      margin-top: var(--surface-gap-lg);
+      padding-top: var(--surface-gap-md);
+      border-top: 1px solid var(--border-subtle);
+      justify-content: flex-end;
+    }
     .suggestion-meta { display: flex; flex-wrap: wrap; gap: var(--surface-gap-sm); margin: var(--surface-gap-sm) 0; }
     .suggestion-chip {
       display: inline-flex;
@@ -738,8 +733,13 @@
       border-color: var(--state-error-border);
       color: var(--state-error-text);
     }
-    .review-card h3 { margin: 0 0 var(--surface-gap-sm); font-size: 1rem; }
-    .review-card p { margin: 0 0 var(--surface-gap-sm); color: var(--text-muted); }
+    .review-card {
+      padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
+      display: grid;
+      gap: var(--surface-gap-sm);
+    }
+    .review-card h3 { margin: 0; font-size: 1rem; }
+    .review-card p { margin: 0; color: var(--text-muted); line-height: 1.5; }
     .review-card ul { margin: var(--surface-gap-sm) 0 0 18px; padding: 0; }
     .review-card li { margin: 4px 0; }
     .review-choice-guide, .review-examples {

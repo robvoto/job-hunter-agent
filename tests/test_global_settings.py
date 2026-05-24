@@ -56,7 +56,6 @@ def test_save_global_settings_normalizes_values(isolated_db):
             "capability_strength_preset": "recent_focus",
         },
         "history_settings": {
-            "max_history_sightings": "48",
             "repeated_listing_min_times_seen": "5",
             "repeated_listing_min_span_days": "14",
             "multi_listing_red_flag_min_listings": "4",
@@ -84,7 +83,6 @@ def test_save_global_settings_normalizes_values(isolated_db):
     assert saved["onboarding_settings"]["signal_cluster_min_alias_hits"] == 3
     assert saved["onboarding_settings"]["signal_cluster_min_snippet_hits"] == 4
     assert saved["onboarding_settings"]["signal_cluster_dense_snippet_alias_hits"] == 5
-    assert saved["history_settings"]["max_history_sightings"] == 48
     assert saved["history_settings"]["repeated_listing_min_times_seen"] == 5
     assert saved["history_settings"]["repeated_listing_min_span_days"] == 14
     assert saved["history_settings"]["multi_listing_red_flag_min_listings"] == 4

@@ -24,6 +24,11 @@ Report:
 - Remaining
 - Validation
 
+## Diagnosing runtime issues
+- Server log: `output/server.log` — timestamped, written for every server run. Check this before grep-hunting for a bug visible in the UI or logs.
+- All log lines from the app use `print()` or the app logger. Search for the last log line before a hang, then read what runs next in code.
+- Geolocation lookup (`/api/onboarding/lookup-location-by-geolocation`) is a separate network call — slow network or missing provider will make it appear as part of extraction.
+
 ## Checklist
 - Are imports still needed?
 - Did any unrelated file change?

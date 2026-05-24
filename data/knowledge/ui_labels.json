@@ -20,32 +20,32 @@
                                 },
     "negative_score_labels_description":  "Human-readable labels for negative score breakdown items.",
     "negative_score_labels":  {
-                                  "Description capture incomplete":  "Description capture incomplete",
-                                  "Salary/rate below target":  "Salary/rate below target",
-                                  "Already viewed by you":  "Already viewed by you",
-                                  "Fit evidence bullets":  "Fit evidence bullets",
+                                  "Description capture incomplete":  "Job description wasn't fully captured",
+                                  "Salary/rate below target":  "Salary is below your target",
+                                  "Already viewed by you":  "You've already seen this one",
+                                  "Fit evidence bullets":  "Not enough evidence in description to score well",
                                   "Passed content filters":  "Passed content filters"
                               },
     "work_mode_score_labels_description":  "Display labels for work-mode eligibility and scoring explanations.",
     "work_mode_score_labels":  {
-                                  "selected_bonus":  "Work mode confirmed selected mode bonus",
-                                  "multiple_selected_neutral":  "Work mode neutral because multiple modes were selected",
-                                  "all_selected_neutral":  "Work mode neutral because all modes were selected",
-                                  "unknown_neutral":  "Work mode neutral because work mode was unknown"
+                                  "selected_bonus":  "Work mode matches your preference",
+                                  "multiple_selected_neutral":  "Work mode neutral — you've selected multiple",
+                                  "all_selected_neutral":  "Work mode neutral because all work modes were selected",
+                                  "unknown_neutral":  "Work mode unknown — couldn't determine from ad"
                               },
     "work_type_score_labels_description":  "Display labels for work-type eligibility and scoring explanations.",
     "work_type_score_labels":  {
-                                  "selected_bonus":  "Work type confirmed selected work type bonus",
-                                  "multiple_selected_neutral":  "Work type neutral because multiple work types were selected",
+                                  "selected_bonus":  "Work type matches your preference",
+                                  "multiple_selected_neutral":  "Work type neutral — you've selected multiple",
                                   "all_selected_neutral":  "Work type neutral because all work types were selected",
-                                  "unknown_neutral":  "Work type neutral because work type was unknown"
+                                  "unknown_neutral":  "Work type unknown — couldn't determine from ad"
                               },
     "sector_score_labels_description":  "Display labels for sector eligibility and scoring explanations.",
     "sector_score_labels":  {
-                                  "selected_bonus":  "Sector preference matched",
-                                  "multiple_selected_neutral":  "Sector neutral because multiple sectors were selected",
-                                  "all_selected_neutral":  "Sector neutral because both sectors are selected",
-                                  "unknown_neutral":  "Sector unknown"
+                                  "selected_bonus":  "Sector matches your preference",
+                                  "multiple_selected_neutral":  "Sector neutral — you've selected multiple",
+                                  "all_selected_neutral":  "Sector neutral — you've selected both",
+                                  "unknown_neutral":  "Sector couldn't be determined from ad"
                               },
     "title_match_labels_description":  "Display labels for preferred- and alternative-role score breakdown entries.",
     "title_match_labels":  {
@@ -75,7 +75,7 @@
     "capability_ui_labels":  {
                                 "settings_title":  "Capability Matrix",
                                 "onboarding_title":  "Capabilities",
-                                "help_text":  "Capabilities are the proven work strengths the agent found in your CV that help it match you to the right jobs. Related skills are alternate names for the same capability, so the agent can recognise it even when job ads use different wording.",
+                                "help_text":  "Capabilities are the proven work strengths the agent found in your CV that help it match you to the right jobs. Related skills are synonyms for the same capability, helping the agent recognize them across different job ads. You can delete any incorrect matches.",
                                 "add_button_aria_label":  "Add capability",
                                 "related_skills_label":  "Related skills",
                                 "related_skills_summary":  "Related skills ({count})",
@@ -213,7 +213,6 @@
                                     "create_profile_status_building":  "Building your draft profile...",
                                     "continue_search_basics_error":  "Could not save onboarding search basics before continuing.",
                                     "finish_setup_error":  "Could not finish onboarding",
-                                    "no_profile_warning":  "No saved profile yet.",
                                     "profile_status_error":  "Could not check whether a saved profile exists.",
                                     "load_profile_error":  "Could not load saved profile.",
                                     "reset_user_confirm_title":  "Reset current user?",
@@ -330,7 +329,7 @@
     "fit_highlight_labels":  {
                                  "strong_capability_match":  "Strong capability match",
                                  "capability_match":  "Capability match",
-                                 "matched_signal":  "Matched signal",
+                                 "matched_signal":  "Related term found",
                                  "long_contract":  "12+ month contract",
                                  "permanent_role":  "Permanent role",
                                  "competitive_signal_aligns":  "Competitive signal",
@@ -338,10 +337,10 @@
                                 },
     "score_gap_labels_description":  "Display labels for workspace score-gap explanations.",
     "score_gap_labels":  {
-                              "capability_evidence_limited":  "Capability evidence is limited: {count} matches contributed to scoring",
-                              "no_recent_posted_signal":  "No reliable recent-posted signal",
-                              "no_comparable_salary_rate":  "No comparable salary/rate found",
-                              "limited_description_confidence":  "Scoring confidence is limited because the full description was not captured"
+                              "capability_evidence_limited":  "Only {count} skill match found — scoring confidence is low",
+                              "no_recent_posted_signal":  "Posting date unclear — may be older than it looks",
+                              "no_comparable_salary_rate":  "No salary info found — couldn’t check pay fit",
+                              "limited_description_confidence":  "Job description wasn’t fully captured — scoring may be off"
                           },
     "duplicate_labels_description":  "Display labels and copy for workspace duplicate and related-job cards.",
     "duplicate_labels":  {
@@ -362,8 +361,10 @@
                           },
     "workspace_card_labels_description":  "Labels and tooltips for workspace job cards.",
     "workspace_card_labels":  {
-                                  "posting_channel_unclear_badge":  "Direct employer unclear",
-                                  "posting_channel_unclear_tooltip":  "No trusted employer metadata was found. This role may be via a recruiter or intermediary.",
+                                  "posting_channel_likely_recruiter_badge":  "Likely recruiter",
+                                  "posting_channel_likely_recruiter_tooltip":  "Recruiter language detected in the description. This may be posted on behalf of an employer.",
+                                  "posting_channel_unknown_badge":  "Source unclear",
+                                  "posting_channel_unknown_tooltip":  "Couldn't determine whether this was posted by the employer directly or via a recruiter.",
                                   "job_requirements_summary":  "Job requirements",
                                   "debug_only_badge":  "Debug only",
                                   "debug_only_tooltip":  "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
@@ -517,8 +518,6 @@
         "archive_stale_after_days_help": "How long an archived job stays fresh before the workspace treats it as stale.",
         "hidden_review_days_label": "Hidden review days",
         "hidden_review_days_help": "How long a hidden job stays hidden before it is eligible for another review.",
-        "max_history_sightings_label": "Max history sightings",
-        "max_history_sightings_help": "How many sighting snapshots are kept per job listing before older ones are dropped.",
         "repeated_listing_min_times_seen_label": "Repeated listing minimum times seen",
         "repeated_listing_min_times_seen_help": "How many times the same listing must be seen before the repeated-listing red flag triggers.",
         "repeated_listing_min_span_days_label": "Repeated listing minimum span days",

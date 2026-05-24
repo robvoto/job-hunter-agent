@@ -479,6 +479,9 @@ export function showStatus(message, kind) {
     workingStatusTimer = null;
   }
   statusUi.show(message, kind);
+  if (kind === 'error') {
+    statusEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 export function hideStatus() {

@@ -491,16 +491,6 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
             "dominant_signal_clusters": [],
         },
     )
-    monkeypatch.setattr(
-        fit_scoring,
-        "reviewed_signal_matches_for_text",
-        lambda text: {
-            "matched": [],
-            "evidence_only": [],
-            "ignored": [],
-            "unresolved": [],
-        },
-    )
 
     highlights = fit_scoring.build_fit_highlights(
         {
@@ -834,7 +824,7 @@ def test_on_site_role_is_neutral_when_all_work_modes_are_selected():
         },
     )
 
-    assert _breakdown_value(breakdown, "Work mode neutral because all modes were selected") == 0
+    assert _breakdown_value(breakdown, "Work mode neutral because all work modes were selected") == 0
 
 
 def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
@@ -878,7 +868,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     )
 
     assert _breakdown_value(breakdown, "Preferred role-family match") == 20
-    assert _breakdown_value(breakdown, "Work mode confirmed selected mode bonus") == 6
+    assert _breakdown_value(breakdown, "Work mode matches your preference") == 6
 
 
 def test_fit_score_breakdown_applies_primary_seniority_adjustment_only_for_primary_matches():
@@ -1023,10 +1013,10 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
         _test_profile(),
     )
 
-    assert "<strong>Matched signals</strong>" in html
+    assert "<strong>Related terms</strong>" in html
     assert "<li>Stakeholder management</li>" in html
     assert "<li>Jira</li>" in html
-    assert "<strong>Ignored</strong>" in html
+    assert "<strong>Filtered out</strong>" in html
     assert "<li>Project</li>" in html
     # Unresolved signals (Banking) only render in debug mode
 
@@ -1090,8 +1080,8 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
         _test_profile(),
     )
 
-    assert 'badge-warning" title="No trusted employer metadata was found' in html
-    assert "Direct employer unclear" in html
+    assert 'badge-warning" title="Recruiter language detected' in html
+    assert "Likely recruiter" in html
     assert "Job requirements" in html
     assert "Strong stakeholder engagement and communication skills" in html
     assert "badge-sector-government" not in html
@@ -1461,8 +1451,8 @@ def test_low_confidence_card_shows_single_description_issue_section():
         _test_profile(),
     )
 
-    assert "Description Issue" in html
-    assert html.count("<strong>Description issue</strong>") == 1
+    assert "Incomplete description" in html
+    assert html.count("<strong>Incomplete description</strong>") == 1
     assert "<strong>Missing evidence</strong>" not in html
     assert "Risks &amp; missing evidence" not in html
 
@@ -1578,7 +1568,7 @@ def test_contract_preference_treats_hyphenated_full_time_as_permanent():
                 "engagement_type": ["permanent"],
             },
         },
-    ) == {"label": "Work type confirmed selected work type bonus: Permanent role", "value": 10}
+    ) == {"label": "Work type matches your preference: Permanent role", "value": 10}
 
 
 def test_scoring_helpers_ignore_display_only_fit_highlights():
@@ -1605,7 +1595,7 @@ def test_scoring_helpers_ignore_display_only_fit_highlights():
 
     from job_hunter_agent.preferences import assess_sector_preference, assess_contract_preference
     assert assess_sector_preference(record, profile) == {
-        "label": "Sector unknown",
+        "label": "Sector couldn't be determined from ad",
         "value": 0,
     }
     assert assess_contract_preference(record, profile) == {
@@ -1634,7 +1624,7 @@ def test_scoring_helpers_skip_contract_signal_when_both_selected():
 
     from job_hunter_agent.preferences import assess_sector_preference, assess_contract_preference
     assert assess_sector_preference(record, profile) == {
-        "label": "Sector preference matched: Public sector",
+        "label": "Sector matches your preference: Public sector",
         "value": 4,
     }
     assert assess_contract_preference(record, profile) == {
@@ -1663,7 +1653,7 @@ def test_contract_preference_scores_contract_roles_when_contract_only_selected()
 
     from job_hunter_agent.preferences import assess_contract_preference
     assert assess_contract_preference(record, profile) == {
-        "label": "Work type confirmed selected work type bonus: 12+ month contract with extension potential",
+        "label": "Work type matches your preference: 12+ month contract with extension potential",
         "value": 9,
     }
 

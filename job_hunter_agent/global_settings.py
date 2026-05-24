@@ -165,10 +165,6 @@ def get_hidden_review_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
 
 
-def get_max_history_sightings() -> int:
-    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MAX_HISTORY_SIGHTINGS])
-
-
 def get_repeated_listing_min_times_seen() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_TIMES_SEEN])
 
@@ -211,7 +207,7 @@ def get_allowed_source_document_suffixes_label() -> str:
 
 
 def get_cv_chars_per_page() -> int:
-    return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS]["cv_chars_per_page"])
+    return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_CV_CHARS_PER_PAGE])
 
 
 def get_candidate_application_history_settings() -> dict[str, Any]:

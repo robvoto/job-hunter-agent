@@ -158,21 +158,6 @@ const flowRefs = Object.freeze({
   editDraftProfile: document.getElementById('edit_draft_profile'),
   editSearchBasics: document.getElementById('edit_search_basics'),
 });
-const testMenuRefs = Object.freeze({
-  testPanel: document.getElementById('job_hunter_account_test_panel'),
-  testTrigger: document.getElementById('job_hunter_account_test_trigger'),
-  testMenu: document.getElementById('job_hunter_account_test_menu'),
-  resetUserBtn: document.getElementById('job_hunter_reset_user_btn'),
-  resetLearningBtn: document.getElementById('job_hunter_reset_learning_btn'),
-});
-
-function setTestMenuOpen(open) {
-  if (!testMenuRefs.testMenu || !testMenuRefs.testTrigger) {
-    return;
-  }
-  testMenuRefs.testMenu.classList.toggle('is-open', Boolean(open));
-  testMenuRefs.testTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
 
 function clearOnboardingBrowserState() {
   try {
@@ -181,19 +166,6 @@ function clearOnboardingBrowserState() {
   } catch (error) {
     console.warn('Could not clear onboarding browser state.', error);
   }
-}
-
-async function postTestAction(path) {
-  const response = await jobHunterFetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || 'Request failed');
-  }
-  return payload;
 }
 
 const engagementTypeOptions = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
@@ -577,6 +549,13 @@ function renderReviewStep() {
   onboardingStorage.saveWizardState();
 }
 
+function getSearchBasicsHydrationProfile() {
+  return {
+    ...(onboardingPage.lastLoadedProfile || {}),
+    ...((onboardingPage.lastImportPayload || {}).profile || {}),
+  };
+}
+
 function hydrateDraftStep(profile) {
   const normalizedTitles = normalizeReviewTitleLists(
     profile?.target_roles || [],
@@ -689,7 +668,7 @@ function continueFromReview() {
   }
   onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, SEARCH_STEP));
   renderReviewStep();
-  hydrateSearchBasics((onboardingPage.lastImportPayload || {}).profile || onboardingPage.lastLoadedProfile || {});
+  hydrateSearchBasics(getSearchBasicsHydrationProfile());
   setStep(SEARCH_STEP);
 }
 
@@ -779,7 +758,6 @@ async function loadProfileStatus() {
 
 async function loadProfileDefaultsIfPresent(hasProfile) {
   if (!hasProfile) {
-    showStatus(onboardingFlowLabels.no_profile_warning, 'warning');
     return null;
   }
   return loadProfileDefaults();
@@ -793,53 +771,6 @@ async function loadProfileDefaultsForInit(hasProfile) {
     showStatus(error.message, 'error');
     throw error;
   }
-}
-
-if (isTestMode && testMenuRefs.testPanel && testMenuRefs.testTrigger && testMenuRefs.testMenu) {
-  testMenuRefs.testPanel.hidden = false;
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      setTestMenuOpen(false);
-    }
-  });
-
-  testMenuRefs.resetUserBtn?.addEventListener('click', async () => {
-    const confirmed = window.confirm([
-      onboardingFlowLabels.reset_user_confirm_title,
-      onboardingFlowLabels.reset_user_confirm_body_1,
-      onboardingFlowLabels.reset_user_confirm_body_2,
-    ].filter(Boolean).join('\n\n'));
-    if (!confirmed) {
-      return;
-    }
-    try {
-      setTestMenuOpen(false);
-      const payload = await postTestAction('/api/test/reset-user');
-      clearOnboardingBrowserState();
-      window.location.href = payload.redirect_to || '/start';
-    } catch (error) {
-      window.alert(error.message || onboardingFlowLabels.reset_user_error);
-    }
-  });
-
-  testMenuRefs.resetLearningBtn?.addEventListener('click', async () => {
-    const confirmed = window.confirm([
-      onboardingFlowLabels.reset_learning_confirm_title,
-      onboardingFlowLabels.reset_learning_confirm_body_1,
-      onboardingFlowLabels.reset_learning_confirm_body_2,
-    ].filter(Boolean).join('\n\n'));
-    if (!confirmed) {
-      return;
-    }
-    try {
-      setTestMenuOpen(false);
-      const payload = await postTestAction('/api/test/reset-learning');
-      window.alert(payload.message || onboardingFlowLabels.reset_learning_success_message);
-    } catch (error) {
-      window.alert(error.message || onboardingFlowLabels.reset_learning_error);
-    }
-  });
 }
 
 createProfileButton.addEventListener('click', async (event) => {

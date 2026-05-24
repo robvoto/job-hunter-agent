@@ -25,6 +25,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     HISTORY_SETTING_LIMITS,
     KEY_ARCHIVE_STALE_AFTER_DAYS,
     KEY_CAPABILITY_STRENGTH_PRESETS,
+    KEY_CV_CHARS_PER_PAGE,
     KEY_DATE_RANGE_DAYS,
     KEY_DEFAULT_COUNTRY_SUFFIX,
     KEY_DESCRIPTION_TRUST_SETTINGS,
@@ -63,7 +64,6 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_TEMPLATES,
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_SETTINGS,
-    KEY_MAX_HISTORY_SIGHTINGS,
     KEY_MODEL_OPTIONS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
@@ -597,13 +597,6 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
             1,
             365,
         ),
-        KEY_MAX_HISTORY_SIGHTINGS: _require_int(
-            history_source,
-            KEY_MAX_HISTORY_SIGHTINGS,
-            DEFAULT_HISTORY_SETTINGS[KEY_MAX_HISTORY_SIGHTINGS],
-            normalized_history_limits[KEY_MAX_HISTORY_SIGHTINGS]["min"],
-            normalized_history_limits[KEY_MAX_HISTORY_SIGHTINGS]["max"],
-        ),
         KEY_REPEATED_LISTING_MIN_TIMES_SEEN: _require_int(
             history_source,
             KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
@@ -644,6 +637,13 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
         ),
     }
     normalized_source_document_settings = {
+        KEY_CV_CHARS_PER_PAGE: _require_int(
+            source_document_source,
+            KEY_CV_CHARS_PER_PAGE,
+            DEFAULT_SOURCE_DOCUMENT_SETTINGS[KEY_CV_CHARS_PER_PAGE],
+            1,
+            100_000,
+        ),
         KEY_SOURCE_DOCUMENT_SUFFIXES: _normalize_source_document_suffixes(
             source_document_source,
             DEFAULT_SOURCE_DOCUMENT_SETTINGS[KEY_SOURCE_DOCUMENT_SUFFIXES],

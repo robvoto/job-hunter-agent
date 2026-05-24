@@ -12,7 +12,7 @@ from job_hunter_agent.record_schema import (
     RECORD_ROLE_SNAPSHOT_KEY, RECORD_TIMES_VIEWED_KEY, RECORD_TIMES_KEPT_KEY,
     RECORD_TIMES_SEEN_KEY, RECORD_FIRST_KEPT_AT_KEY, RECORD_LAST_KEPT_AT_KEY,
     RECORD_FIRST_SEEN_AT_KEY, RECORD_LAST_SEEN_AT_KEY, RECORD_FIRST_VIEWED_AT_KEY,
-    RECORD_LAST_VIEWED_AT_KEY, RECORD_SIGHTINGS_KEY, RECORD_SEEN_BEFORE_KEY,
+    RECORD_LAST_VIEWED_AT_KEY, RECORD_SEEN_BEFORE_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
 )
 
@@ -80,7 +80,6 @@ def build_history_workspace_record(
         RECORD_LAST_SEEN_AT_KEY: entry.get(RECORD_LAST_SEEN_AT_KEY),
         RECORD_FIRST_VIEWED_AT_KEY: entry.get(RECORD_FIRST_VIEWED_AT_KEY),
         RECORD_LAST_VIEWED_AT_KEY: entry.get(RECORD_LAST_VIEWED_AT_KEY),
-        "history_sightings": entry.get(RECORD_SIGHTINGS_KEY) if isinstance(entry.get(RECORD_SIGHTINGS_KEY), list) else [],
         "archived": True,
         "archived_age_days": archived_age_days,
         "is_stale": archived_age_days is not None and archived_age_days > archive_stale_after_days,
