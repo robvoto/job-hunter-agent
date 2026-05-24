@@ -44,7 +44,6 @@ The system should find roles worth human attention, hide obvious mismatches, and
 ## Knowledge and learning
 
 - Business judgement belongs in managed JSON-backed knowledge modules, not sealed Python constants.
-- Managed knowledge is authored in `data/knowledge/*.json` and materialised into SQLite for runtime use; the JSON files own the shipped source of truth.
 - New learned patterns must enter the signal registry as pending review before affecting runtime behaviour.
 - Approved knowledge is valuable state and should not be discarded or regenerated silently.
 - Do not silently delete candidate or job signals during extraction; preserve doubtful signals for review.
@@ -62,5 +61,4 @@ The system should find roles worth human attention, hide obvious mismatches, and
 - Do not modify unrelated files.
 - Do not reintroduce hidden scoring shortcuts or fixed dictionaries to force outcomes.
 - Prefer warnings, review signals, neutral metrics, and configurable scoring over hard rejection.
-- Fallbacks are exceptions, not a design default. Use them only when the justification is explicit, the behavior is logged, and the owner is clear.
 - When uncertain, preserve evidence and surface it for review instead of dropping it.

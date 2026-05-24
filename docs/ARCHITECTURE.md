@@ -96,12 +96,6 @@ The runtime profile is authoritative system state.
 
 Source onboarding material is evidence input, not runtime truth.
 
-Managed reference knowledge is separate:
-
-* shipped labels, defaults, and rules live in `data/knowledge/*.json`
-* the database stores the runtime copy used by the app
-* seeding or versioned upgrades refresh the database copy from the shipped JSON
-
 ---
 
 ## Filtering Pipeline
@@ -213,8 +207,6 @@ Rules:
 * preserve explainability
 * avoid hidden filtering shortcuts
 * avoid legacy compatibility layers unless explicitly required
-* managed knowledge is authored in JSON and then materialised into the database for runtime use
-* any fallback path must be justified, explicit, and logged
 
 ---
 

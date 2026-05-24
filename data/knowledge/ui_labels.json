@@ -1,7 +1,7 @@
 {
     "kind":  "ui_labels",
     "name":  "ui_labels",
-    "version": 17,
+  "version": 16,
     "updated_at":  "2026-05-23",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {

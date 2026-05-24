@@ -1,0 +1,237 @@
+Agentic Job Hunter – Managed Knowledge & Learning Plan
+
+Core principle:
+- Candidate profile extraction and global knowledge learning are separate.
+- Knowledge helps resolve uncertainty and canonicalise terms.
+- Knowledge must not gate onboarding or replace extraction.
+- LLM/extractors may suggest; only approved review writes to knowledge JSON.
+
+1. Candidate onboarding
+
+Purpose:
+- Extract this candidate’s profile from their CV.
+- User reviews/removes bad extracted profile items.
+- This is not global knowledge approval.
+
+Capabilities:
+- CV → extractor/LLM → candidate capability_profile_rules.
+- Capability knowledge may later help canonicalise uncertain terms.
+- Empty capability_knowledge.json must not stop onboarding from working.
+- Capability level means candidate strength, not extraction confidence.
+
+Roles:
+- CV parsing extracts primary and secondary role titles.
+- User confirms candidate search direction.
+- Role title knowledge helps detect title-like tokens only.
+- It does not mean the user wants that role.
+
+2. Signal registry
+
+Purpose:
+- Pending review inbox only.
+- Stores possible reusable knowledge candidates.
+- Runtime should not depend on pending signals.
+
+Minimal signal shape:
+{
+  "normalized_key": "jira",
+  "original_texts": ["Jira"],
+  "suggested_category": "capability_concept"
+}
+
+No:
+- approved
+- pending
+- promoted
+- decision
+- needs_review
+- source
+- notes
+
+If it is in signal_registry.json, it is pending.
+
+Ignored signals should eventually move to a separate ignored_signals.json.
+
+3. Knowledge files
+
+Purpose:
+- Approved runtime knowledge only.
+- If an entry is in a knowledge file, it is approved.
+- No status field.
+
+Capability knowledge:
+{
+  "value": "business process modelling",
+  "aliases": ["process modelling", "bpmn modelling"]
+}
+
+Role title knowledge:
+{
+  "value": "analyst"
+}
+
+Sector knowledge:
+{
+  "value": "public sector"
+}
+
+Hard blocker knowledge:
+{
+  "value": "mandatory coding"
+}
+
+No entry-level:
+- status
+- enabled
+- source
+- notes
+- examples
+- runtime flags
+
+4. Capabilities
+
+Capability knowledge is not a world dictionary.
+
+Purpose:
+- Canonicalise and stabilise known capability concepts.
+- Help resolve uncertain extraction.
+- Improve matching consistency.
+
+It should not:
+- gate onboarding
+- auto-create candidate capabilities
+- contain every possible skill in the world
+
+Runtime rule:
+- Candidate capability extraction works independently.
+- Approved capability knowledge may map extracted/seen aliases to canonical values.
+- Unknown but clean capability candidates go to signal_registry for review.
+
+5. Role title knowledge
+
+role_title_knowledge.json contains title-bearing nouns only.
+
+Examples:
+- analyst
+- manager
+- coordinator
+- consultant
+- specialist
+- developer
+- engineer
+- architect
+- officer
+- director
+- administrator
+- owner
+
+Do not put seniority/modifier terms here:
+- senior
+- junior
+- lead
+- principal
+- head
+- chief
+- executive
+- staff
+- master
+
+Those belong in title_normalization_rules.json.
+
+6. Title normalization rules
+
+New rules file:
+title_normalization_rules.json
+
+Purpose:
+- Normalize mechanics, not preference.
+
+Examples:
+{
+  "seniority_modifiers": [
+    "junior",
+    "mid",
+    "senior",
+    "lead",
+    "principal",
+    "head",
+    "chief",
+    "executive"
+  ],
+  "abbreviation_expansions": {
+    "sr": "senior",
+    "jr": "junior",
+    "ba": "business analyst",
+    "po": "product owner"
+  },
+  "normalization": {
+    "collapse_spaces": true,
+    "strip_outer_punctuation": true,
+    "lowercase_for_matching": true,
+    "preserve_original_for_display": true
+  }
+}
+
+Important:
+- “BA” expanding to “business analyst” does not mean the candidate wants BA roles.
+- It only helps parsing and matching.
+
+7. Job-description learning
+
+When a trusted job description is read, collect learning candidates.
+
+Do not write directly to knowledge JSON.
+
+Register clean pending signals for:
+- capability_concept
+- sector
+- role_title_token
+- hard_blocker_pattern
+
+Capability candidates must be conservative:
+- not broken fragments
+- not company names
+- not full sentences
+- not generic words
+- not title-only terms
+- preferably from kept/high-quality jobs
+- evidence/context should be available in drill-down
+
+Government:
+- register specific detected terms, not whole sentences.
+
+Role title:
+- register unknown title-bearing tokens only.
+- do not register seniority modifiers.
+
+Hard blocker:
+- register only clear requirement phrases already surfaced by blocker/rejection logic.
+
+8. Candidate-level suggestions
+
+Settings may suggest capabilities the candidate might have.
+
+These are candidate-profile suggestions, not global knowledge approval.
+
+Use only clean capability candidates.
+Show evidence/context in drill-down.
+User can add or ignore.
+
+9. Evidence / context
+
+Do not clutter the main UI.
+
+Use optional drill-down:
+- Why did the system think this is a capability?
+- Which role/job description did it come from?
+- What text supported it?
+
+Evidence is for inspection first, not scoring.
+
+10. Rule of thumb
+
+Knowledge = approved reusable concepts.
+Rules = how concepts behave.
+Signals = pending review inbox.
+Candidate profile = this user’s extracted truth.
+Job descriptions = source of new pending learning signals.

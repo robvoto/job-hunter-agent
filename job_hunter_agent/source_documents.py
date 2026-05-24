@@ -274,11 +274,11 @@ def merge_capability_rules_with_dominant_signals(
         cluster_name_n = _norm_term(cluster_name)
         cluster_alias_norms = [_norm_term(a) for a in (cluster.get("aliases") or []) if a]
         cluster_terms = frozenset(t for t in [cluster_name_n, *cluster_alias_norms] if t)
-
         # Only exact cluster terms / aliases can merge into existing capability rules.
         # Do not match individual words from multi-product clusters; e.g.
         # "jira confluence" must not make Confluence an alias of Jira.
         cluster_lookup = cluster_terms
+
         logger.debug(
             "[MERGE_CAPABILITIES] Dominant signal: '%s' aliases=%s",
             cluster_name,

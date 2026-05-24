@@ -85,10 +85,6 @@ function suggestionExamplesMarkup(items, emptyLabel) {
   `).join('')}</ul>`;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 87903c2 (fix)
 function requirementPhrasesMarkup(items, emptyLabel) {
   if (!items || !items.length) return `<p>${escapeHtml(emptyLabel)}</p>`;
   return `<ul>${items.map(item => `
@@ -206,11 +202,6 @@ function renderRequirementCard(item) {
   `;
 }
 
-<<<<<<< HEAD
-=======
->>>>>>> 8c60aa0 (fix)
-=======
->>>>>>> 87903c2 (fix)
 function renderSuggestedTuning(reviewData) {
   const panel = document.getElementById('tuning_suggestions_panel');
   if (!panel) return;
@@ -221,23 +212,11 @@ function renderSuggestedTuning(reviewData) {
     || reviewData.suggested_tuning
   ));
   if (!hasReviewData) {
-<<<<<<< HEAD
-<<<<<<< HEAD
     panel.innerHTML = `<div class="tuning-suggestions-content">${renderCapabilityEmptyState(false)}</div>`;
-=======
-    panel.innerHTML = '<p>No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals.</p>';
->>>>>>> 8c60aa0 (fix)
-=======
-    panel.innerHTML = `<div class="tuning-suggestions-content">${renderCapabilityEmptyState(false)}</div>`;
->>>>>>> 87903c2 (fix)
     return;
   }
   const suggestions = reviewData.suggested_tuning || {};
   const capabilitySuggestions = suggestions.capability_suggestions || [];
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 87903c2 (fix)
   const requirementSuggestions = suggestions.requirement_suggestions || [];
   const ruleSuggestions = suggestions.rule_suggestions || [];
   const summary = suggestions.summary || {};
@@ -249,13 +228,6 @@ function renderSuggestedTuning(reviewData) {
     return reason !== RULE_REASON_TITLE_NOT_TARGET && reason !== RULE_REASON_TITLE_BAD_KEYWORD;
   });
   const renderedRuleCount = titleTuningRules.length + workingFilterRules.length + otherRuleSuggestions.length;
-<<<<<<< HEAD
-=======
-  const ruleSuggestions = suggestions.rule_suggestions || [];
-  const summary = suggestions.summary || {};
->>>>>>> 8c60aa0 (fix)
-=======
->>>>>>> 87903c2 (fix)
   const capabilityHtml = capabilitySuggestions.length ? `
     <div class="tuning-group">
       <h3>${escapeHtml(TUNING_TEXT.capabilityHeading)}</h3>
@@ -285,22 +257,8 @@ function renderSuggestedTuning(reviewData) {
         `).join('')}
       </div>
     </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
   ` : renderCapabilityEmptyState(keptJobUrls.length > 0);
   const requirementHtml = requirementSuggestions.length ? renderRequirementGroup(requirementSuggestions) : '';
-=======
-  ` : `
-    <div class="tuning-group">
-      <h3>Capabilities from viable roles</h3>
-      <p>No capability suggestions yet. The capabilities found in kept jobs are either already in your profile or did not produce new capability signals.</p>
-    </div>
-  `;
->>>>>>> 8c60aa0 (fix)
-=======
-  ` : renderCapabilityEmptyState(keptJobUrls.length > 0);
-  const requirementHtml = requirementSuggestions.length ? renderRequirementGroup(requirementSuggestions) : '';
->>>>>>> 87903c2 (fix)
 
   const ruleHtml = renderedRuleCount ? `
     ${renderTuningGroup(TUNING_TEXT.titleTuningHeading, TUNING_TEXT.titleTuningCopy, titleTuningRules, 'title-tuning')}

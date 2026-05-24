@@ -11,22 +11,12 @@ from job_hunter_agent.global_settings import (
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
 )
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 87903c2 (fix)
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_SEARCH_LOCATION_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
 )
-<<<<<<< HEAD
-=======
-from job_hunter_agent.signal_detection import extract_skill_observations
->>>>>>> 8c60aa0 (fix)
-=======
->>>>>>> 87903c2 (fix)
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_PROFILE_RULES,
@@ -570,28 +560,12 @@ def build_suggested_tuning(
     }
 
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], _profile: dict[str, Any]) -> list[dict]:
-=======
-def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], profile: dict[str, Any]) -> list[dict]:
->>>>>>> 8c60aa0 (fix)
-=======
-def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], _profile: dict[str, Any]) -> list[dict]:
->>>>>>> 87903c2 (fix)
     observations: list[dict] = []
     for row in audit_rows:
         if not isinstance(row, dict) or row.get("decision") != "KEEP":
             continue
-<<<<<<< HEAD
-<<<<<<< HEAD
         observations.extend(_observations_from_kept_row(row))
-=======
-        observations.extend(extract_skill_observations(row, profile))
->>>>>>> 8c60aa0 (fix)
-=======
-        observations.extend(_observations_from_kept_row(row))
->>>>>>> 87903c2 (fix)
     return observations
 
 
