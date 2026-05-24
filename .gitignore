@@ -46,7 +46,6 @@ appData-dontupload.txt
 debug/
 tmp-fastapi.err.log
 tmp-fastapi.out.log
-docs/RUN_COMMANDS.txt
 venv activate.ps1
 remove bad char.ps1
 Programming - Shortcut.lnk
@@ -55,4 +54,6 @@ templates/static/job_hunter_img2.png
 pytest.ini
 docs/job_hunter_learning_architecture_plan.txt
 *.pem
-docs/backlog/general.md
+docs/backlog/
+debug.log
+.tmp_onboarding_cv*.txt
