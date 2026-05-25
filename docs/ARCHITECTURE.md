@@ -51,6 +51,8 @@ Standard format: `source:platform_id` (e.g., `seek:7945621` or `linkedin:3984551
 | Workspace         | Present explainable ranked jobs                  |
 | Settings          | Runtime control surface                          |
 
+State-changing UI actions use `POST` plus CSRF protection. `GET /logout` is not supported.
+
 ---
 
 # Core Runtime Components

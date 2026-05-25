@@ -8,7 +8,7 @@ from html import escape as _html_escape
 
 from job_hunter_agent.auth import auth_required_response, is_admin, issue_csrf_token, read_session_user
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.config import GLOBAL_SETTINGS_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
+from job_hunter_agent.config import GLOBAL_SETTINGS_PATH, LOGOUT_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
 from job_hunter_agent.locations import default_location_value, load_location_options
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
@@ -46,6 +46,7 @@ JOB_HUNTER_LOGO_SRC = "/static/assets/job_hunter_img.png"
 def _build_top_utility_bar_html(
     request: Request,
     *,
+    csrf_token: str | None = None,
     shortcut_href: str | None = None,
     shortcut_label: str | None = None,
     shortcut_aria_label: str | None = None,
@@ -92,6 +93,14 @@ def _build_top_utility_bar_html(
             f' type="button" role="menuitem">{_html_escape(shared_labels["account_menu_reset_learning_warning_label"])}</button>'
             '</div></div>'
         )
+    logout_form = (
+        f'<form class="job-hunter-account-bar__logout-form" action="{LOGOUT_PATH}" method="post">'
+        f'<input type="hidden" name="csrf_token" value="{_html_escape(csrf_token or "")}">'
+        f'<button class="job-hunter-account-bar__logout" type="submit" role="menuitem">'
+        f'{_html_escape(shared_labels["account_menu_logout_label"])}'
+        '</button>'
+        '</form>'
+    )
     return (
         '<div class="job-hunter-page-utility" id="job_hunter_top_utility_bar">'
         f'{brand_html}'
@@ -112,7 +121,7 @@ def _build_top_utility_bar_html(
         '<div class="job-hunter-account-bar__dropdown" id="job_hunter_account_dropdown" role="menu" hidden>'
         f'{name_row}{email_row}'
         '<div class="job-hunter-account-bar__dropdown-sep" aria-hidden="true"></div>'
-        f'<a href="/logout" class="job-hunter-account-bar__logout" role="menuitem">{_html_escape(shared_labels["account_menu_logout_label"])}</a>'
+        f'{logout_form}'
         '</div></div></div>'
         '</div>'
     )
@@ -137,7 +146,7 @@ def _replace_label_tokens(html: str, prefix: str, labels: dict[str, str]) -> str
 
 
 def _render_template_with_locations(request: Request, template_path: Path, *, page_mode: str = "default", page_title: str = "Job Hunter", page_heading: str = "", page_copy: str = "", onboarding_defaults: dict | None = None, global_settings: dict | None = None, resume_step: int | None = None, account_shortcut_href: str | None = None, account_shortcut_label: str | None = None, account_shortcut_aria_label: str | None = None) -> str:
-    csrf_token = issue_csrf_token(request) or ""
+    csrf_token = issue_csrf_token(request)
     shared_labels = srv.load_shared_ui_labels()
     bootstrap_script = srv.build_bootstrap_script(
         csrf_token=csrf_token,
@@ -156,6 +165,7 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
             shortcut_href=account_shortcut_href,
             shortcut_label=account_shortcut_label,
             shortcut_aria_label=account_shortcut_aria_label,
+            csrf_token=csrf_token,
         ),
     )
     if template_path == SETTINGS_HTML_PATH:

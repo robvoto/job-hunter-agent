@@ -15,15 +15,22 @@ Flags:
 Debug-only local bypass:
     Debug mode bypasses login and CSRF checks during manual local testing.
     Set JOB_HUNTER_DISABLE_AUTH=true if you want to force that bypass outside debug.
+
+CORS:
+    In debug/auth-disabled mode the wildcard origin (*) is used.
+    In production, set JOB_HUNTER_CORS_ALLOWED_ORIGINS to a comma-separated list
+    of allowed origins (e.g. https://example.com). Requests from unlisted origins
+    receive no CORS headers and a WARN is logged.
 """
 
 from __future__ import annotations
 
 import logging
 import logging.config
+import os
 import sys
 
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -38,12 +45,39 @@ from job_hunter_agent.auth import (
     is_auth_disabled,
     read_session_user,
     read_session_username,
+    validate_session_cookie_security_for_startup,
     verify_csrf_token,
 )
-from job_hunter_agent.config import LOGIN_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
+from job_hunter_agent.config import LOGIN_PATH, LOGOUT_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
 from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.paths import LOCAL_USER_ID
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
+
+_logger = logging.getLogger(__name__)
+
+_CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
+_CORS_HEADERS = "Content-Type"
+
+
+def _cors_origin(request: Request) -> str | None:
+    """Return the CORS origin value to echo, or None to omit the header.
+
+    Debug/auth-disabled: always returns '*' (unchanged local behaviour).
+    Production: matches the request Origin against JOB_HUNTER_CORS_ALLOWED_ORIGINS
+    (comma-separated). Unmatched origins are logged at WARN and return None so no
+    Access-Control-Allow-Origin header is set.
+    """
+    if is_auth_disabled():
+        return "*"
+    origin = request.headers.get("origin")
+    if not origin:
+        return None
+    raw = os.environ.get("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "")
+    allowed = {o.strip() for o in raw.split(",") if o.strip()}
+    if origin in allowed:
+        return origin
+    _logger.warning("CORS: rejected origin %r — not in JOB_HUNTER_CORS_ALLOWED_ORIGINS", origin)
+    return None
 
 
 class _LineLoggingStream:
@@ -140,35 +174,33 @@ def create_app() -> FastAPI:
     async def _starlette_http_exc(request: Request, exc: StarletteHTTPException):  # type: ignore[no-untyped-def]
         if exc.status_code == 404:
             return json_response({"error": "Not found"}, 404)
+        cors = _cors_origin(request)
+        headers: dict[str, str] = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+        if cors:
+            headers["Access-Control-Allow-Origin"] = cors
+            headers["Access-Control-Allow-Methods"] = _CORS_METHODS
+            headers["Access-Control-Allow-Headers"] = _CORS_HEADERS
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": str(exc.detail)},
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, PUT, PATCH, POST, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
-            },
+            headers=headers,
         )
 
     @app.middleware("http")
     async def cors_options(request, call_next):  # type: ignore[no-untyped-def]
+        cors = _cors_origin(request)
         if request.method == "OPTIONS":
-            return JSONResponse(
-                content={"ok": True},
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, PUT, PATCH, POST, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type",
-                },
-            )
+            resp_headers: dict[str, str] = {}
+            if cors:
+                resp_headers["Access-Control-Allow-Origin"] = cors
+                resp_headers["Access-Control-Allow-Methods"] = _CORS_METHODS
+                resp_headers["Access-Control-Allow-Headers"] = _CORS_HEADERS
+            return JSONResponse(content={"ok": True}, headers=resp_headers)
         response = await call_next(request)
-        response.headers.setdefault("Access-Control-Allow-Origin", "*")
-        response.headers.setdefault(
-            "Access-Control-Allow-Methods",
-            "GET, PUT, PATCH, POST, DELETE, OPTIONS",
-        )
-        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
+        if cors:
+            response.headers.setdefault("Access-Control-Allow-Origin", cors)
+            response.headers.setdefault("Access-Control-Allow-Methods", _CORS_METHODS)
+            response.headers.setdefault("Access-Control-Allow-Headers", _CORS_HEADERS)
         return response
 
     @app.middleware("http")
@@ -192,7 +224,12 @@ def create_app() -> FastAPI:
             return await call_next(request)
         if read_session_username(request) is None:
             return await call_next(request)
-        if not verify_csrf_token(request, request.headers.get("x-csrf-token")):
+        presented_token = request.headers.get("x-csrf-token")
+        if not presented_token and request.url.path == LOGOUT_PATH:
+            body = (await request.body()).decode("utf-8", errors="ignore")
+            form_fields = dict(parse_qsl(body, keep_blank_values=True))
+            presented_token = str(form_fields.get("csrf_token") or "")
+        if not verify_csrf_token(request, presented_token):
             return json_response({"error": "CSRF token missing or invalid"}, 403)
         return await call_next(request)
 
@@ -255,6 +292,8 @@ if __name__ == "__main__":
 
     if args.rebuild or args.debug:
         srv._rebuild_workspace_on_startup()
+
+    validate_session_cookie_security_for_startup(HOST)
 
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")

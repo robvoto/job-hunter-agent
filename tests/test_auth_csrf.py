@@ -12,6 +12,7 @@ from job_hunter_agent.auth import (
     issue_csrf_token,
     is_admin,
     set_session_cookie,
+    validate_session_cookie_security_for_startup,
     verify_csrf_token,
 )
 
@@ -95,6 +96,31 @@ def test_session_cookie_secure_flag_tracks_request_scheme():
     assert "__Host-" not in http_cookie
     assert "Secure" in https_cookie
     assert "__Host-" in https_cookie
+
+
+def test_network_exposed_startup_requires_forced_secure_cookie(monkeypatch):
+    monkeypatch.delenv("JOB_HUNTER_SESSION_COOKIE_SECURE", raising=False)
+    monkeypatch.setattr("job_hunter_agent.config.AUTH_DISABLED", False)
+    monkeypatch.setattr("job_hunter_agent.auth.app_config.AUTH_DISABLED", False)
+
+    with pytest.raises(RuntimeError, match="JOB_HUNTER_SESSION_COOKIE_SECURE=true"):
+        validate_session_cookie_security_for_startup("0.0.0.0")
+
+
+def test_network_exposed_startup_accepts_forced_secure_cookie(monkeypatch):
+    monkeypatch.setenv("JOB_HUNTER_SESSION_COOKIE_SECURE", "true")
+    monkeypatch.setattr("job_hunter_agent.config.AUTH_DISABLED", False)
+    monkeypatch.setattr("job_hunter_agent.auth.app_config.AUTH_DISABLED", False)
+
+    validate_session_cookie_security_for_startup("0.0.0.0")
+
+
+def test_localhost_startup_allows_auto_secure_cookie(monkeypatch):
+    monkeypatch.delenv("JOB_HUNTER_SESSION_COOKIE_SECURE", raising=False)
+    monkeypatch.setattr("job_hunter_agent.config.AUTH_DISABLED", False)
+    monkeypatch.setattr("job_hunter_agent.auth.app_config.AUTH_DISABLED", False)
+
+    validate_session_cookie_security_for_startup("127.0.0.1")
 
 
 # ── get_or_create_user (DB-backed) ──────────────────────────────────────────

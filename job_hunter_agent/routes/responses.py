@@ -18,12 +18,7 @@ def json_response(payload: dict[str, Any], status_code: int = 200) -> JSONRespon
     return JSONResponse(
         status_code=status_code,
         content=payload,
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, PUT, PATCH, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        },
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
 
 

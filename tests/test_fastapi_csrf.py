@@ -84,6 +84,27 @@ def test_csrf_middleware_allows_valid_token(monkeypatch):
     assert response.json() == {"ok": True, "patched": {}}
 
 
+def test_csrf_middleware_protects_logout(monkeypatch):
+    monkeypatch.setenv("JOB_HUNTER_AUTH_USERNAME", "alice")
+    monkeypatch.setenv("JOB_HUNTER_AUTH_PASSWORD_HASH", "hash")
+    monkeypatch.setenv("JOB_HUNTER_AUTH_SESSION_SECRET", "secret")
+
+    app = create_app()
+    session_cookie_name, session_cookie_value, token = _session_cookie_and_token(app)
+
+    client = TestClient(app)
+    client.cookies.set(session_cookie_name, session_cookie_value)
+
+    blocked = client.post("/logout", follow_redirects=False)
+    assert blocked.status_code == 403
+    assert blocked.json() == {"error": "CSRF token missing or invalid"}
+
+    allowed = client.post("/logout", follow_redirects=False, data={"csrf_token": token})
+    assert allowed.status_code == 302
+    assert allowed.headers["location"] == "/login"
+    assert session_cookie_name in allowed.headers.get("set-cookie", "")
+
+
 def test_debug_auth_bypass_skips_csrf(monkeypatch):
     monkeypatch.setenv("JOB_HUNTER_DISABLE_AUTH", "true")
 

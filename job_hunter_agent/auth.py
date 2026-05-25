@@ -149,6 +149,30 @@ def configure_auth(app) -> None:
     app.state.auth_config = config
 
 
+def validate_session_cookie_security_for_startup(host: str) -> None:
+    """Fail fast when a network-exposed authenticated server would issue insecure cookies.
+
+    Local development can use the default transport-aware `auto` mode. A server bound
+    to a network interface cannot rely on request-scheme detection because production
+    deployments commonly sit behind a reverse proxy. In that case the operator must
+    explicitly force secure cookies with `JOB_HUNTER_SESSION_COOKIE_SECURE=true`.
+    """
+    if is_auth_disabled():
+        return
+    secure_mode = _session_cookie_secure_mode()
+    if secure_mode not in {"true", "false", "auto"}:
+        raise RuntimeError(
+            "Invalid JOB_HUNTER_SESSION_COOKIE_SECURE value. "
+            "Use true, false, or auto."
+        )
+    if _is_network_exposed_host(host) and secure_mode != "true":
+        raise RuntimeError(
+            "Network-accessible production server requires "
+            "JOB_HUNTER_SESSION_COOKIE_SECURE=true. "
+            "Use --debug or JOB_HUNTER_DISABLE_AUTH=true only for local development."
+        )
+
+
 def read_session_user(request: Request) -> dict | None:
     config = getattr(request.app.state, "auth_config", None)
     if not isinstance(config, GoogleOAuthConfig) or not config.session_secret:
@@ -278,7 +302,7 @@ def _get_session_cookie_params(request: Request) -> tuple[str, bool]:
     base_name = os.getenv("JOB_HUNTER_SESSION_COOKIE_NAME", SESSION_COOKIE_DEFAULT_NAME)
     if base_name.startswith("__Host-"):
         base_name = base_name[7:]
-    secure_mode = os.getenv("JOB_HUNTER_SESSION_COOKIE_SECURE", "auto").strip().lower()
+    secure_mode = _session_cookie_secure_mode()
     if secure_mode == "true":
         secure_flag = True
     elif secure_mode == "false":
@@ -288,6 +312,21 @@ def _get_session_cookie_params(request: Request) -> tuple[str, bool]:
     if secure_flag:
         return f"__Host-{base_name}", True
     return base_name, False
+
+
+def _session_cookie_secure_mode() -> str:
+    return os.getenv("JOB_HUNTER_SESSION_COOKIE_SECURE", "auto").strip().lower()
+
+
+def _is_network_exposed_host(host: str) -> bool:
+    candidate = str(host or "").strip().lower()
+    if not candidate:
+        return False
+    if candidate in {"0.0.0.0", "::", "[::]"}:
+        return True
+    if candidate in {"127.0.0.1", "localhost", "::1", "[::1]"}:
+        return False
+    return True
 
 
 def _build_session_cookie_value(user: dict, secret: str) -> str:

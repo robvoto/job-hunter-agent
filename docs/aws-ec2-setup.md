@@ -571,8 +571,11 @@ sudo systemctl restart job-hunter
 | `JOB_HUNTER_DATA_DIR` | Persistent app data | `/var/lib/job-hunter/data` |
 | `JOB_HUNTER_OUTPUT_DIR` | Log output directory | `/var/log/job-hunter` |
 | `JOB_HUNTER_DB_PATH` | SQLite database file | `/var/lib/job-hunter/data/app.db` |
+| `JOB_HUNTER_CORS_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins | `https://example.com` |
 
-All three must be set. The app raises an explicit error if `JOB_HUNTER_DB_PATH` is missing.
+The first three must be set. The app raises an explicit error if `JOB_HUNTER_DB_PATH` is missing.
+
+`JOB_HUNTER_CORS_ALLOWED_ORIGINS` is required in production. If unset, all cross-origin requests are rejected (no CORS headers returned) and a WARN is logged per rejected origin. In debug/auth-disabled mode this variable is ignored and the wildcard origin is used.
 
 ## 16. Production-style next steps
 
@@ -619,6 +622,7 @@ JOB_HUNTER_GOOGLE_CLIENT_ID=<google-client-id>
 JOB_HUNTER_GOOGLE_CLIENT_SECRET=<google-client-secret>
 JOB_HUNTER_ADMIN_EMAIL=<admin-email>
 JOB_HUNTER_AUTH_SESSION_SECRET=<random-secret>
+JOB_HUNTER_CORS_ALLOWED_ORIGINS=https://<your-domain>
 ```
 
 Generate a session secret:

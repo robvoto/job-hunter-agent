@@ -92,6 +92,7 @@ Session cookie behavior:
 - `http://127.0.0.1:8765` and LAN HTTP access stay usable without a reverse proxy
 - set `JOB_HUNTER_SESSION_COOKIE_SECURE=true` or `false` to force a mode explicitly
 - for local debug-only testing, set `JOB_HUNTER_DISABLE_AUTH=true` together with `--debug` to bypass login and CSRF checks
+- logout is `POST /logout` only; the account menu submits the CSRF token automatically
 
 Primary routes:
 
@@ -422,6 +423,8 @@ Use targeted tests when validating a specific area, such as:
 * workspace rendering
 * learning logic
 
+For changes that cross modules, auth, UI, persistence, or shared template/bootstrap code, run the targeted tests plus at least one representative integration, end-to-end, or page-render path.
+
 Run the full suite before merging into `main`.
 
 ---
@@ -440,7 +443,7 @@ The runtime must:
 
 ## Network Deployment & Security
 
-When the server is bound to a network-accessible IP (e.g., `0.0.0.0`), it enforces `Secure` and `__Host-` prefixed cookies. 
+When the server is bound to a network-accessible IP (e.g., `0.0.0.0`), startup requires `JOB_HUNTER_SESSION_COOKIE_SECURE=true`; otherwise the server fails fast before accepting requests. Secure cookies use the `__Host-` prefix. 
 
 **Requirement:** Operations must provide an SSL/TLS termination layer (using a reverse proxy like Caddy or Nginx) to handle HTTPS, otherwise session management will fail.
 

@@ -14,7 +14,7 @@ Use before modifying existing code.
 - Do not change business judgement during mechanical cleanup.
 - Load `.skills/no-hardcoding/SKILL.md` if the change touches thresholds, mappings, labels, schema fields, defaults, or rule IDs.
 - If a task is likely owned by one module, search that owner first and stop once you find the source of truth.
-- Prefer the smallest relevant validation over broad test runs unless the change crosses multiple owners or the user asks for a full pass.
+- During implementation, use targeted tests for fast feedback. Before declaring done, always finish with the full suite (`pytest tests/`).
 - When a symptom is visible in the UI, inspect the rendered template, injected bootstrap data, and owning normaliser in parallel before editing.
 
 ## Finish format
@@ -33,4 +33,4 @@ Report:
 - Are imports still needed?
 - Did any unrelated file change?
 - Did the change preserve existing ownership boundaries?
-- Did you run the smallest relevant validation?
+- Did you run the full suite (`pytest tests/`)?

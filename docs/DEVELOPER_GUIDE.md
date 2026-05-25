@@ -213,4 +213,4 @@ Do not accidentally commit:
 
 ## Testing Workflow
 
-Use the smallest relevant validation for the change. Test execution commands live in `docs/OPERATIONS.md`.
+Follow `docs/OPERATIONS.md` for validation scope and commands.

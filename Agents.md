@@ -62,6 +62,45 @@ Load the relevant skill before editing that area.
 - Keep changes small and targeted.
 - Run the smallest relevant validation.
 
+## Backlog management
+
+- The working backlog is `docs/backlog/backlog_review.xlsx`.
+- Treat the workbook as the backlog source of truth, not the old markdown backlog notes.
+- Do not regenerate a new backlog structure unless explicitly agreed.
+- Keep existing backlog IDs stable.
+- Do not delete backlog rows without human agreement.
+- If an item looks duplicate, obsolete, already done, or unclear, mark it in the workbook with evidence instead of deleting it.
+- New agreed backlog items should be added to the workbook.
+- When creating or updating a backlog row, fill or update every relevant column, not just the title. At minimum maintain: ID, Title, Epic, Type, Priority, Size, Problem, Outcome, Acceptance Criteria, Source Files, Duplicate Of, Depends On, Notes, Implementation State, Implementation Date, Implemented By, and Evidence when those columns exist.
+- Adapt to workbook schema changes made by the human. Read the header row first and update existing columns by name rather than assuming fixed column positions.
+- Maintain Excel 2013 compatibility for `backlog_review.xlsx`. Avoid workbook features that Excel 2013 may repair/remove, and test compatibility before adding Excel features such as filters, panes, tables, validations, or hidden helper sheets.
+- Do not remove or rename workbook columns unless explicitly agreed.
+- Old markdown backlog files may be archived only after coverage has been checked and agreed.
+
+## Definition of Done
+
+A change is done only when all relevant checks below are satisfied:
+
+1. The implementation is tested.
+   - Run the smallest relevant test set first, then add adjacent tests and at least one representative integration, end-to-end, or page-render path for any change that crosses modules, auth, UI, persistence, or shared bootstrap/template code.
+   - If the change is broad, risky, or still leaves uncertainty, say that a wider pass is needed instead of treating the minimal set as enough.
+   - Add new tests or update existing tests.
+   - Link or name the relevant tests in the implementation notes, PR, or backlog evidence.
+2. The solution is not an unapproved fallback, hardcoding, or heuristic.
+   - Business judgement belongs in managed config, knowledge, profile data, or reviewed learning flows.
+   - If a fallback, hardcoding, or heuristic is genuinely needed, get human agreement first and document the reason.
+3. Current project patterns and frontend best practices are followed.
+   - For frontend work, prefer the established modular JavaScript / ES module-style ownership patterns where applicable.
+   - If a weaker or legacy pattern is used, get human agreement first and document the reason.
+4. Unused code is removed.
+   - Do not leave dead paths, duplicate implementations, or compatibility shims unless explicitly agreed.
+5. Code help text is added or updated where it helps a human understand the implementation.
+   - Add concise module, class, function, or complex-block comments when the purpose is not obvious.
+   - Comments should explain intent and ownership, not repeat the code line-by-line.
+   - This is mainly for human maintainability, not agent prompting.
+6. Documentation is updated.
+   - Update the relevant docs, skills, backlog evidence, or operations notes for the touched area.
+
 ## Design and code quality
 
 - Prefer small, single-purpose modules over large monolithic files.

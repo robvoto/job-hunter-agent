@@ -107,7 +107,6 @@ def google_callback(  # type: ignore[no-untyped-def]
     return response
 
 
-@router.get(LOGOUT_PATH)
 @router.post(LOGOUT_PATH)
 def logout(request: Request):  # type: ignore[no-untyped-def]
     response = RedirectResponse(LOGIN_PATH, status_code=302)

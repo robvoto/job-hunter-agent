@@ -1,8 +1,10 @@
+import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request as StarletteRequest
 
 import job_hunter_agent.fastapi_app as _fa
 import job_hunter_agent.routes.pages as _pages
-from job_hunter_agent.fastapi_app import create_app
+from job_hunter_agent.fastapi_app import create_app, _cors_origin
 
 _FAKE_USER = {"user_id": "test", "email": "test@example.com", "role": "admin"}
 
@@ -62,8 +64,68 @@ def test_logout_redirects_to_login_and_clears_session_cookie():
     client = TestClient(create_app())
     client.cookies.set("job_hunter_session", "stale-session", domain="testserver", path="/")
 
-    response = client.get("/logout", follow_redirects=False)
+    response = client.post("/logout", follow_redirects=False)
 
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
     assert "job_hunter_session=" in response.headers.get("set-cookie", "")
+
+
+def _make_request(origin: str | None = None) -> StarletteRequest:
+    headers = {}
+    if origin:
+        headers["origin"] = origin
+    scope = {"type": "http", "method": "GET", "path": "/", "headers": [(k.encode(), v.encode()) for k, v in headers.items()], "query_string": b""}
+    return StarletteRequest(scope)
+
+
+def test_cors_origin_debug_mode_returns_wildcard(monkeypatch):
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: True)
+    assert _cors_origin(_make_request("https://evil.example.com")) == "*"
+    assert _cors_origin(_make_request(None)) == "*"
+
+
+def test_cors_origin_production_allowed_origin_is_echoed(monkeypatch):
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: False)
+    monkeypatch.setenv("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "https://app.example.com,https://other.example.com")
+    assert _cors_origin(_make_request("https://app.example.com")) == "https://app.example.com"
+
+
+def test_cors_origin_production_rejected_origin_returns_none(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: False)
+    monkeypatch.setenv("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    with caplog.at_level(logging.WARNING, logger="job_hunter_agent.fastapi_app"):
+        result = _cors_origin(_make_request("https://evil.com"))
+    assert result is None
+    assert "rejected origin" in caplog.text
+
+
+def test_cors_origin_production_no_env_var_returns_none(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: False)
+    monkeypatch.delenv("JOB_HUNTER_CORS_ALLOWED_ORIGINS", raising=False)
+    with caplog.at_level(logging.WARNING, logger="job_hunter_agent.fastapi_app"):
+        result = _cors_origin(_make_request("https://any.example.com"))
+    assert result is None
+    assert "rejected origin" in caplog.text
+
+
+def test_cors_middleware_sets_header_for_allowed_origin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "read_session_username", lambda request: _FAKE_USER["email"])
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: False)
+    monkeypatch.setenv("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    client = TestClient(create_app())
+    r = client.get("/api/health", headers={"origin": "https://app.example.com"})
+    assert r.headers.get("access-control-allow-origin") == "https://app.example.com"
+
+
+def test_cors_middleware_omits_header_for_rejected_origin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "read_session_username", lambda request: _FAKE_USER["email"])
+    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: False)
+    monkeypatch.setenv("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    client = TestClient(create_app())
+    r = client.get("/api/health", headers={"origin": "https://evil.com"})
+    assert "access-control-allow-origin" not in r.headers

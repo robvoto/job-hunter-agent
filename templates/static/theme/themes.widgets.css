@@ -1604,17 +1604,32 @@
   word-break: break-word;
 }
 
+.job-hunter-account-bar__logout-form {
+  margin: 0;
+}
+
 .job-hunter-account-bar__logout {
   display: block;
+  width: 100%;
   padding: var(--control-space-sm) var(--control-space-2xs);
+  border: 0;
+  background: transparent;
   color: var(--selection-accent);
+  font: inherit;
   font-size: 0.85rem;
   font-weight: 700;
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
 }
 
 .job-hunter-account-bar__logout:hover {
   text-decoration: underline;
+}
+
+.job-hunter-account-bar__logout:focus-visible {
+  outline: 2px solid var(--selection-accent);
+  outline-offset: 2px;
 }
 
 /* Shared choice pills: inactive states must recede, selected states must be obvious. */

@@ -56,3 +56,4 @@ docs/backlog/
 debug.log
 test_tmp.db
 ignore/
+fix_xlsx_view.py
