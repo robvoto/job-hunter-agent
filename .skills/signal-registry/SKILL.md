@@ -1,3 +1,8 @@
+﻿---
+name: signal-registry
+description: Use ONLY for approved learning signal lifecycle: pending/approved/ignored signals, promotion into runtime knowledge, and signal governance. Do NOT use for raw ad extraction; use ad-learning.
+---
+
 # Skill: Signal Registry
 
 Use before editing learning candidates, approval flow, or signal registry behaviour.
@@ -51,6 +56,24 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - Do not add learning category guidance to the fit review prompt; it causes category names to leak into `contextual_capability_matches`
 
 **Consequence:** `government_context_pattern`, `role_title_pattern`, and similar signals are only generated for jobs decided by the deterministic path. Jobs decided by the full LLM review produce no LLM-proposed learning candidates.
+
+## Capability alias review map
+Use this section only when tracing capability alias mapping between `dominant_signal_clusters`, `candidate_capabilities`, DB `user_profile`, and onboarding review screens.
+
+Keep this split clear:
+- `dominant_signal_clusters` are raw CV-derived evidence clusters.
+- `candidate_capabilities` are approved capability rules saved for runtime use.
+- The two lists are related but not the same.
+
+Core map:
+- Start at `job_hunter_agent/source_documents.py`.
+- `run_onboarding()` builds both deterministic `pipeline_patch` from `cv_pipeline.py` and learning `learning_patch` from `profile_learning.py`.
+- Final saved `candidate_capabilities` currently come from the learning path.
+- `profile_store.normalize_capability_rules()` only cleans and dedupes aliases. It does not create new ones.
+
+If aliases look sparse, inspect `profile_learning._llm_extract_from_cv()`.
+If the review screen shows the wrong layer, inspect onboarding UI bindings.
+Do not invent aliases or add heuristic alias expansion unless explicitly requested.
 
 ## Checklist
 - Does the signal include original evidence?

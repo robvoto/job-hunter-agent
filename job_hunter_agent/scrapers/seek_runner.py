@@ -1,38 +1,34 @@
+"""Scraper helpers for seek runner."""
+
 from __future__ import annotations
 
-import re
+import logging
 import sys
+import time
 import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Set
 
-from playwright.sync_api import sync_playwright
-from playwright._impl._errors import TargetClosedError
+logger = logging.getLogger(__name__)
 
-from job_hunter_agent.global_settings import (
-    get_playwright_browser_mode,
-)
-from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
-from job_hunter_agent.filters import (
-    analyze_title_filters,
-    passes_content_filters,
-    passes_quick_card_filters,
-)
-from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
+from playwright._impl._errors import TargetClosedError
+from playwright.sync_api import sync_playwright
+
+from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
+from job_hunter_agent.global_settings import get_playwright_browser_mode
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
-from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
+from job_hunter_agent.history import finalize_record
+from job_hunter_agent.job_quality import detect_broad_engagement_signal
+from job_hunter_agent.job_review_pipeline import (
+    ReviewPipelineContext,
+    ReviewPipelineHooks,
+    review_post_detail_normalized_job,
+    review_pre_detail_normalized_job,
+)
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
-from job_hunter_agent.preferences import passes_preference_filters
 import job_hunter_agent.record_schema as rs
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
-from job_hunter_agent.capability_matching import build_risk_and_missing_evidence, reviewed_signal_matches_for_text
-from job_hunter_agent.fit_scoring import build_fit_highlights, fit_score, fit_score_breakdown
-from job_hunter_agent.role_analysis import infer_posting_channel
-from job_hunter_agent.salary_utils import preferred_salary_display
-from job_hunter_agent.scrapers.base import (
-    build_initial_flat_record,
-    _build_initial_source_metadata,
-)
+from job_hunter_agent.scrapers.base import build_initial_flat_record, _build_initial_source_metadata
 from job_hunter_agent.scrapers.seek import (
     SELECTOR_CARDS,
     SELECTOR_COMPANY,
@@ -44,26 +40,14 @@ from job_hunter_agent.scrapers.seek import (
     fetch_job_details_payload,
     stable_job_key,
 )
-from job_hunter_agent.signal_detection import (
-    detect_competitive_signals,
-    evaluate_competitive_signal_alignment,
-    extract_skill_observations,
-    hard_block_entries,
+from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+from job_hunter_agent.utils import parse_seek_posted_age_days, set_page_param
+from job_hunter_agent.work_mode_extraction import (
+    WORK_MODE_UNKNOWN,
+    extract_from_seek_detail,
+    extract_seek_filter_panel_state,
+    log_work_mode_result,
 )
-from job_hunter_agent.signal_schema import HARD_BLOCK_REASONS_KEY
-from job_hunter_agent.source_learning import (
-    has_high_value_ambiguous_learning_candidate,
-    merge_pending_learning_signals,
-    register_pending_learning_signals,
-    resolve_llm_review_payload,
-    build_ad_learning_signals,
-    deterministic_review_outcome,
-    register_hard_blocker_learning_from_rejection,
-)
-from job_hunter_agent.llm_gate import llm_extract_job_requirements
-from job_hunter_agent.text_processing import build_role_summary, compact_whitespace, dedupe_preserve_order
-from job_hunter_agent.utils import extract_salary, parse_seek_posted_age_days, set_page_param
-from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_seek_detail, extract_seek_filter_panel_state, log_work_mode_result
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
@@ -194,112 +178,6 @@ def build_seek_card_record(card, search_target: dict, run_iso: str, page_num: in
     return record
 
 
-def apply_title_match_result(record: dict, title_analysis: dict, title_reason: str) -> None:
-    record[rs.RECORD_TITLE_REASON_KEY] = title_reason
-    record[rs.RECORD_TITLE_MATCH_METADATA_KEY] = title_analysis
-
-
-def apply_reject_result(record: dict, reason: str) -> None:
-    record[rs.RECORD_REJECT_REASON_KEY] = reason
-
-
-def apply_skip_result(record: dict, reason: str) -> None:
-    record.update({rs.RECORD_DECISION_KEY: "SKIP", rs.RECORD_REJECT_REASON_KEY: reason})
-
-
-def apply_detail_payload_to_record(record: dict, details_payload: dict, details_text: str, details_status: str) -> tuple[bool, str]:
-    record[rs.RECORD_DETAILS_STATUS_KEY] = details_status
-    record[rs.RECORD_DETAILS_LENGTH_KEY] = len(details_text)
-
-    if details_status != "ok" or not details_text:
-        reject_reason = {
-            "challenge_page": "DETAILS_CHALLENGE_PAGE",
-            "blocked_page": "DETAILS_BLOCKED_PAGE",
-            "navigation_error": "DETAILS_NAVIGATION_ERROR",
-            "empty": "NO_DETAILS",
-        }.get(details_status, "NO_DETAILS")
-        record[rs.RECORD_CONTENT_REASON_KEY] = reject_reason
-        return False, reject_reason
-
-    record[rs.RECORD_FIT_SOURCE_TEXT_KEY] = details_text
-    record[rs.RECORD_FULL_DESCRIPTION_KEY] = details_text
-    record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
-    source = str(record.get(rs.RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
-    is_trusted = source in get_trusted_sources() and len(details_text) >= get_min_trusted_description_length()
-    record[rs.RECORD_FIT_CONFIDENCE_KEY] = rs.CONFIDENCE_HIGH if is_trusted else rs.CONFIDENCE_LOW
-    record[rs.RECORD_CONTENT_REASON_KEY] = "OK"
-    return True, "OK"
-
-
-def apply_source_metadata_to_record(record: dict, source_metadata: dict, details_text: str) -> None:
-    record[rs.RECORD_SOURCE_METADATA_KEY] = source_metadata
-    channel_signal = infer_posting_channel(record, details_text)
-    record[rs.RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
-        "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),
-        "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
-        "needs_review": bool(channel_signal.get("needs_review")),
-    }
-
-
-def apply_content_filter_result(record: dict, details_text: str, profile: dict, title_reason: str) -> tuple[bool, str]:
-    ok_desc, desc_reason = passes_content_filters(details_text, record[rs.RECORD_LOCATION_KEY], title_reason)
-    if not ok_desc:
-        if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
-            knowledge_matches = find_hard_block_matches(details_text, profile.get("must_not_require_skills", []))
-            record[HARD_BLOCK_REASONS_KEY] = dedupe_preserve_order(
-                [
-                    compact_whitespace(match.get("value") or match.get("matched_term") or "")
-                    for match in knowledge_matches
-                ]
-            )[:3]
-        register_hard_blocker_learning_from_rejection(record, desc_reason, details_text, profile=profile)
-        return False, desc_reason
-    return True, "OK"
-
-
-def apply_competitive_signal_enrichment(record: dict, details_text: str, profile: dict) -> None:
-    record[rs.RECORD_COMPETITIVE_SIGNALS_KEY] = [
-        evaluate_competitive_signal_alignment(signal, profile)
-        for signal in detect_competitive_signals(details_text, profile)
-    ]
-    record[rs.RECORD_REVIEWED_SIGNAL_MATCHES_KEY] = reviewed_signal_matches_for_text(details_text)
-
-
-def apply_hard_block_result(record: dict, details_text: str, profile: dict) -> tuple[bool, str]:
-    hard_block_matches = hard_block_entries(record, profile)
-    record[rs.RECORD_HARD_BLOCK_REASONS_KEY] = [entry["text"] for entry in hard_block_matches]
-    if record[rs.RECORD_HARD_BLOCK_REASONS_KEY]:
-        term = compact_whitespace(record[rs.RECORD_HARD_BLOCK_REASONS_KEY][0]).lower()
-        reason_code = f"DESC_HARD_BLOCK_RULE:{re.sub(r'[^a-z0-9]+', '_', term).strip('_') or 'hard_block'}"
-        register_hard_blocker_learning_from_rejection(record, reason_code, details_text, hard_block_matches, profile=profile)
-        return False, reason_code
-    return True, "OK"
-
-
-def apply_learning_signal_enrichment(record: dict, details_text: str, profile: dict) -> None:
-    record["skill_observations"] = extract_skill_observations(record, profile)
-    record["ad_learning_signals"] = build_ad_learning_signals(record, details_text, profile)
-    record[rs.RECORD_SALARY_KEY] = preferred_salary_display(
-        record.get(rs.RECORD_CARD_SALARY_KEY),
-        extract_salary(details_text),
-    )
-
-
-def apply_preference_result(record: dict, profile: dict) -> tuple[bool, str]:
-    ok_pref, pref_reason = passes_preference_filters(record, profile)
-    if not ok_pref:
-        print(f"[SEEK] REJECTED (preference gate) [{pref_reason}] {record.get(rs.RECORD_TITLE_KEY)} @ {record.get(rs.RECORD_COMPANY_KEY)}")
-        return False, pref_reason
-    return True, "OK"
-
-
-def apply_quality_signal_enrichment(record: dict) -> None:
-    from job_hunter_agent.job_quality import detect_broad_engagement_signal  # noqa: PLC0415
-    signals = list(record.get(rs.RECORD_JOB_QUALITY_SIGNALS_KEY) or [])
-    signals.extend(detect_broad_engagement_signal(record))
-    record[rs.RECORD_JOB_QUALITY_SIGNALS_KEY] = signals
-
-
 def apply_work_mode_enrichment(record: dict, raw_source_payload: object, details_text: str) -> None:
     detail_extraction = extract_from_seek_detail(raw_source_payload, details_text)
     detail_mode = detail_extraction["work_mode"]
@@ -312,112 +190,74 @@ def apply_work_mode_enrichment(record: dict, raw_source_payload: object, details
         log_work_mode_result(str(record.get(rs.RECORD_JOB_KEY) or ""), "seek", record)
 
 
-def apply_fit_summary_enrichment(record: dict, details_text: str, profile: dict, title_reason: str) -> None:
-    record[rs.RECORD_ROLE_SNAPSHOT_KEY] = build_role_summary(record, details_text, profile)
-    record[rs.RECORD_FIT_HIGHLIGHTS_KEY] = build_fit_highlights(record, details_text, profile)
-    record[rs.RECORD_SOFT_RISK_REASONS_KEY], record[rs.RECORD_MISSING_EVIDENCE_KEY] = build_risk_and_missing_evidence(
-        details_text, title_reason, profile, competitive_signals=record[rs.RECORD_COMPETITIVE_SIGNALS_KEY]
-    )
-
-
-def apply_fit_review_result(record: dict, fit_eval: dict) -> None:
-    record.update(fit_eval)
-
-
-def _process_seek_job_details(record: dict, detail_page, profile: dict, title_reason: str) -> tuple[bool, str]:
-    details_payload = fetch_job_details_payload(detail_page, record[rs.RECORD_URL_KEY])
-    details_text = str(details_payload.get("text") or "")
-    details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
-
-    ok, reason = apply_detail_payload_to_record(record, details_payload, details_text, details_status)
-    if not ok:
-        return False, reason
-
-    source_metadata, raw_source_payload = _seek_source_metadata(detail_page, details_payload)
-    apply_source_metadata_to_record(record, source_metadata, details_text)
-
-    if DEBUG_CAPTURE_SOURCE_PAYLOADS:
-        try:
-            write_source_payload_debug(
-                "seek",
-                str(record.get(rs.RECORD_JOB_KEY) or record.get(rs.RECORD_URL_KEY) or "unknown"),
-                raw_html=detail_page.content(),
-                raw_json=raw_source_payload,
-                normalized_record=record,
-            )
-        except Exception:
-            pass
-
-    ok, reason = apply_content_filter_result(record, details_text, profile, title_reason)
-    if not ok:
-        return False, reason
-
-    apply_competitive_signal_enrichment(record, details_text, profile)
-
-    ok, reason = apply_hard_block_result(record, details_text, profile)
-    if not ok:
-        return False, reason
-
-    apply_learning_signal_enrichment(record, details_text, profile)
-
-    ok, reason = apply_preference_result(record, profile)
-    if not ok:
-        return False, reason
-
-    apply_quality_signal_enrichment(record)
-    apply_work_mode_enrichment(record, raw_source_payload, details_text)
-    apply_fit_summary_enrichment(record, details_text, profile, title_reason)
-    return True, "OK"
-
-
-def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
-    deterministic_review = deterministic_review_outcome(
-        record, profile, record["fit_highlights"], record["missing_evidence"], record["soft_risk_reasons"]
-    )
-    record["llm_learning_candidates"] = []
-    record[rs.RECORD_JOB_REQUIREMENTS_KEY] = []
-    contextual_capability_matches: list = []
-
-    if deterministic_review is not None:
-        review = deterministic_review
-        source = "rule"
-        if has_high_value_ambiguous_learning_candidate(record.get("ad_learning_signals") or []):
+def _build_seek_review_hooks(detail_page, raw_source_payload: object) -> ReviewPipelineHooks:
+    def _after_description_loaded(record: dict, context: ReviewPipelineContext) -> None:
+        if DEBUG_CAPTURE_SOURCE_PAYLOADS:
             try:
-                payload = resolve_llm_review_payload(
-                    record,
-                    llm_cache,
-                    learning_only=True,
+                write_source_payload_debug(
+                    "seek",
+                    str(record.get(rs.RECORD_JOB_KEY) or record.get(rs.RECORD_URL_KEY) or "unknown"),
+                    raw_html=detail_page.content(),
+                    raw_json=raw_source_payload,
+                    normalized_record=record,
                 )
-                record["llm_learning_candidates"] = payload.get("learning_candidates") or []
-                record[rs.RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
-                if record["llm_learning_candidates"]:
-                    source = "rule+learning"
-            except Exception as llm_exc:
-                print(f"[LLM][LEARNING_ERROR] {type(llm_exc).__name__}: {llm_exc}")
-        if not record[rs.RECORD_JOB_REQUIREMENTS_KEY]:
-            try:
-                record[rs.RECORD_JOB_REQUIREMENTS_KEY] = llm_extract_job_requirements(record.get("full_description") or record.get("fit_source_text") or "")
-            except Exception as llm_exc:
-                print(f"[LLM][JOB_REQUIREMENTS_ERROR] {type(llm_exc).__name__}: {llm_exc}")
-    else:
-        payload = resolve_llm_review_payload(
-            record,
-            llm_cache,
-        )
-        review = payload["fit_review"]
-        record["llm_learning_candidates"] = payload.get("learning_candidates") or []
-        record[rs.RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
-        contextual_capability_matches = payload.get("contextual_capability_matches") or []
-        source = str(payload.get("payload_source") or "llm")
+            except Exception:
+                pass
 
-    return {
-        "llm_decision": review["decision"],
-        "llm_fit_grade": review["grade"],
-        "review_source": source,
-        "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
-        "contextual_capability_matches": contextual_capability_matches,
-        rs.RECORD_JOB_REQUIREMENTS_KEY: record[rs.RECORD_JOB_REQUIREMENTS_KEY],
-    }
+    def _after_preference_filters(record: dict, context: ReviewPipelineContext) -> None:
+        apply_work_mode_enrichment(record, raw_source_payload, str(record.get(rs.RECORD_FIT_SOURCE_TEXT_KEY) or ""))
+
+    return ReviewPipelineHooks(
+        after_description_loaded=_after_description_loaded,
+        after_preference_filters=_after_preference_filters,
+    )
+
+
+def _process_seek_job_details(
+    record: dict,
+    detail_page,
+    review_context: ReviewPipelineContext,
+) -> tuple[dict, dict, list[dict]]:
+    job_key = str(record.get(rs.RECORD_JOB_KEY) or "unknown")
+    title = str(record.get(rs.RECORD_TITLE_KEY) or "")
+    company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
+    url = str(record.get(rs.RECORD_URL_KEY) or "")
+    try:
+        logger.info("[PIPELINE][DETAIL_FETCH_START] source=SEEK job_key=%s title=%r company=%r url=%r",
+                    job_key, title, company, url)
+        _t0 = time.monotonic()
+        details_payload = fetch_job_details_payload(detail_page, record[rs.RECORD_URL_KEY])
+        details_text = str(details_payload.get("text") or "")
+        details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
+        logger.info("[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
+                    job_key, title, company, details_status, int((time.monotonic() - _t0) * 1000), len(details_text))
+        source_metadata, raw_source_payload = _seek_source_metadata(detail_page, details_payload)
+        record[rs.RECORD_SOURCE_METADATA_KEY] = source_metadata
+        record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
+        record[rs.RECORD_DETAILS_TEXT_KEY] = details_text
+        record[rs.RECORD_DETAILS_STATUS_KEY] = details_status
+
+        hooks = _build_seek_review_hooks(detail_page, raw_source_payload)
+        return review_post_detail_normalized_job(record, review_context, hooks=hooks)
+    except TargetClosedError:
+        raise
+    except Exception as exc:
+        record[rs.RECORD_DECISION_KEY] = "REJECT"
+        record[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
+        finalize_record(review_context.job_history, review_context.audit_rows, record, review_context.run_iso)
+        return {"decision": "REJECT", "reject_reason": record[rs.RECORD_REJECT_REASON_KEY]}, record, []
+
+
+def review_seek_card_record(
+    record: dict,
+    detail_page,
+    review_context: ReviewPipelineContext,
+) -> tuple[dict, dict, list[dict]]:
+    record["job_quality_signals"] = detect_broad_engagement_signal(record)
+    pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(record, review_context)
+    if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+        return pre_outcome, record, []
+    return _process_seek_job_details(record, detail_page, review_context)
 
 
 def seek_scrape_to_records(
@@ -438,6 +278,19 @@ def seek_scrape_to_records(
     audit_rows: List[dict] = []
     kept_records: List[dict] = []
     skill_observations: List[dict] = []
+    seen_urls: set[str] = set()
+    review_context = ReviewPipelineContext(
+        profile=profile,
+        job_history=job_history,
+        audit_rows=audit_rows,
+        llm_cache=llm_cache,
+        applied_job_keys=applied_job_keys,
+        hidden_job_keys=hidden_job_keys,
+        seen_urls=seen_urls,
+        run_iso=run_iso,
+        date_range_days=configured_date_range,
+        source_name="SEEK",
+    )
 
     browser_mode = "persistent" if WORKSPACE_DEBUG_MODE else get_playwright_browser_mode()
     use_persistent_browser = browser_mode == "persistent"
@@ -459,7 +312,6 @@ def seek_scrape_to_records(
             detail_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height})
 
         try:
-            seen_urls: Set[str] = set()
             total_targets = len(search_targets)
             for target_index, search_target in enumerate(search_targets, start=1):
                 base_search_url = search_target["url"]
@@ -500,6 +352,9 @@ def seek_scrape_to_records(
                     page_has_fresh_card = False
 
                     for card in job_cards:
+                        record = {}
+                        title = ""
+                        company = ""
                         try:
                             record = build_seek_card_record(card, search_target, run_iso, current_page_num, filter_state)
                             title, company = record[rs.RECORD_TITLE_KEY], record[rs.RECORD_COMPANY_KEY]
@@ -507,127 +362,35 @@ def seek_scrape_to_records(
                             if posted_age_days is None or posted_age_days <= configured_date_range:
                                 page_has_fresh_card = True
 
-                            title_analysis = analyze_title_filters(title, profile)
-                            ok_title = bool(title_analysis.get("ok"))
-                            title_reason = str(title_analysis.get("reason") or "")
-                            apply_title_match_result(record, title_analysis, title_reason)
-                            if not ok_title:
-                                print(f"{page_tag} REJECTED (title) [{title_reason}] {title}")
-                                apply_reject_result(record, title_reason)
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            if not record[rs.RECORD_URL_KEY]:
-                                print(f"{page_tag} REJECTED (card) [NO_URL] {title} @ {company}")
-                                apply_reject_result(record, "NO_URL")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            job_key = record[rs.RECORD_JOB_KEY]
-                            if job_key in applied_job_keys:
-                                print(f"{page_tag} SKIP (applied) {title} @ {company}")
-                                apply_skip_result(record, "ALREADY_APPLIED")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            if job_key in hidden_job_keys:
-                                print(f"{page_tag} SKIP (hidden) {title} @ {company}")
-                                apply_skip_result(record, "MANUALLY_HIDDEN")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            if posted_age_days is not None and posted_age_days > configured_date_range:
-                                print(f"{page_tag} REJECTED (posted) [POSTED_TOO_OLD:{configured_date_range}] {title} @ {company}")
-                                apply_reject_result(record, f"POSTED_TOO_OLD:{configured_date_range}")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            if record[rs.RECORD_URL_KEY] in seen_urls:
-                                print(f"{page_tag} SKIP (duplicate) {title} @ {company}")
-                                apply_skip_result(record, "DUPLICATE_URL")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-                            seen_urls.add(record[rs.RECORD_URL_KEY])
-
-                            ok_card, card_reason = passes_quick_card_filters(
-                                title=title,
-                                teaser=record[rs.RECORD_TEASER_KEY],
-                                company=company,
-                                location=record[rs.RECORD_LOCATION_KEY],
-                                work_mode=record[rs.RECORD_WORK_MODE_KEY],
-                                work_type=record[rs.RECORD_WORK_TYPE_KEY],
-                                salary=record.get(rs.RECORD_CARD_SALARY_KEY) or "",
+                            outcome, record, record_skill_observations = review_seek_card_record(
+                                record,
+                                detail_page,
+                                review_context,
                             )
-                            if not ok_card:
-                                print(f"{page_tag} REJECTED (card gate) [{card_reason}] {title} @ {company}")
-                                apply_reject_result(record, card_reason)
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            history_entry = job_history.get(job_key or "", {})
-                            if can_reuse_kept_job(history_entry, record, profile):
-                                record = apply_kept_job_reuse(record, history_entry)
-                                finalize_record(job_history, audit_rows, record, run_iso)
+                            if outcome["decision"] == "KEEP":
+                                if WORKSPACE_DEBUG_MODE:
+                                    score = fit_score(record, profile)
+                                    breakdown = fit_score_breakdown(record, profile)
+                                    print(
+                                        f"{page_tag} [DEBUG][SCORE] {score}/100 | "
+                                        f"{record[rs.RECORD_TITLE_KEY]} @ {record[rs.RECORD_COMPANY_KEY]} | "
+                                        f"Grade: {record.get('llm_fit_grade')} ({record.get('review_source')}) | "
+                                        f"{record.get(rs.RECORD_URL_KEY, '')}"
+                                    )
+                                    for entry in breakdown:
+                                        print(f"{page_tag}   {entry['label']}: {entry['value']:+d}")
+                                skill_observations.extend(record_skill_observations)
                                 kept_records.append(record)
-                                print(f"{page_tag} KEPT (history reuse) {title} @ {company}")
-                                continue
-
-                            ok_details, reject_reason = _process_seek_job_details(record, detail_page, profile, title_reason)
-                            if not ok_details:
-                                print(
-                                    f"{page_tag} REJECTED (details/content) [{reject_reason}]\n"
-                                    f"  {title} @ {company}"
-                                )
-                                apply_reject_result(record, reject_reason)
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            try:
-                                fit_eval = _evaluate_job_fit(record, profile, llm_cache)
-                            except Exception as llm_exc:
-                                print(f"{page_tag} [LLM][ERROR] {type(llm_exc).__name__}: {llm_exc} — {title} @ {company}")
-                                apply_reject_result(record, "LLM_ERROR")
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-                            apply_fit_review_result(record, fit_eval)
-
-                            if WORKSPACE_DEBUG_MODE:
-                                score = fit_score(record, profile)
-                                breakdown = fit_score_breakdown(record, profile)
-                                print(f"{page_tag} [DEBUG][SCORE] {score}/100 | {record[rs.RECORD_TITLE_KEY]} @ {record[rs.RECORD_COMPANY_KEY]} | Grade: {record.get('llm_fit_grade')} ({record.get('review_source')}) | {record.get(rs.RECORD_URL_KEY, '')}")
-                                for entry in breakdown:
-                                    print(f"{page_tag}   {entry['label']}: {entry['value']:+d}")
-
-                            if record[rs.RECORD_DECISION_KEY] == "REJECT":
-                                print(f"{page_tag} REJECTED ({record['review_source']}) {title} @ {company}")
-                                apply_reject_result(record, "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT")
-                                register_pending_learning_signals(merge_pending_learning_signals(
-                                    record.get("ad_learning_signals") or [],
-                                    record.get("llm_learning_candidates") or [],
-                                ))
-                                finalize_record(job_history, audit_rows, record, run_iso)
-                                continue
-
-                            skill_observations.extend(record.get("skill_observations") or [])
-                            pending_signals = merge_pending_learning_signals(
-                                record.get("ad_learning_signals") or [],
-                                record.get("llm_learning_candidates") or [],
-                            )
-                            register_pending_learning_signals(pending_signals)
-                            record.pop("skill_observations", None)
-                            record.pop("ad_learning_signals", None)
-                            record.pop("llm_learning_candidates", None)
-                            finalize_record(job_history, audit_rows, record, run_iso)
-                            kept_records.append(record)
-                            print(f"{page_tag} KEPT {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
+                                print(f"{page_tag} KEPT {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
 
                         except TargetClosedError:
                             print(f"{page_tag} browser target closed; stopping target")
                             break
                         except Exception as exc:
-                            apply_reject_result(record, f"CARD_EXCEPTION:{type(exc).__name__}")
-                            print(f"{page_tag} REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}\n{traceback.format_exc()}")
+                            record[rs.RECORD_DECISION_KEY] = "REJECT"
+                            record[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
                             finalize_record(job_history, audit_rows, record, run_iso)
+                            print(f"{page_tag} REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}\n{traceback.format_exc()}")
 
                     if not page_has_fresh_card:
                         print(f"{page_tag} all cards were older than {configured_date_range} day(s); stopping target")
@@ -638,4 +401,3 @@ def seek_scrape_to_records(
             context.close()
 
     return kept_records, audit_rows, skill_observations
-

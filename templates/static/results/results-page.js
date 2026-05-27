@@ -1111,4 +1111,48 @@
       document.getElementById('rejection-btn-cancel').click();
     });
     // end rejection-learning panel
+
+    // Profile gap actions — "Needs confirmation" block on each job card
+    document.addEventListener('click', function(event) {
+      const btn = event.target.closest('.gap-btn');
+      if (!btn) return;
+      const action = String(btn.dataset.action || '').trim();
+      const requirement = String(btn.dataset.requirement || '').trim();
+      if (!requirement || !action) return;
+
+      const gapItem = btn.closest('.job-gap-item');
+      const gapsBlock = btn.closest('.job-gaps-block');
+
+      function hideGapItem() {
+        if (gapItem) gapItem.hidden = true;
+        if (gapsBlock) {
+          const remaining = gapsBlock.querySelectorAll('.job-gap-item:not([hidden])');
+          if (!remaining.length) gapsBlock.hidden = true;
+        }
+      }
+
+      if (action === 'decide_later') {
+        hideGapItem();
+        return;
+      }
+
+      const allBtns = btn.closest('.job-gap-actions')
+        ? Array.from(btn.closest('.job-gap-actions').querySelectorAll('button'))
+        : [btn];
+      allBtns.forEach(function(b) { b.disabled = true; });
+
+      jobHunterFetch(`${API_BASE_URL}/api/profile-gap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirement: requirement, action: action }),
+      }).then(function(resp) {
+        if (!resp.ok) {
+          allBtns.forEach(function(b) { b.disabled = false; });
+          return;
+        }
+        hideGapItem();
+      }).catch(function() {
+        allBtns.forEach(function(b) { b.disabled = false; });
+      });
+    });
 })();

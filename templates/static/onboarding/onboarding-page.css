@@ -758,7 +758,7 @@ body {
   border: 0;
   border-radius: 0;
   overflow: visible;
-  background: var(--bg-toolbar-glass);
+  background: transparent;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s ease;
@@ -777,14 +777,14 @@ body {
   min-width: 34px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
 }
 
 .review-capability-action:hover {
-  background: color-mix(in srgb, var(--accent-soft) 55%, var(--bg-surface));
+  background: color-mix(in srgb, var(--state-error-text) 10%, transparent);
 }
 
 .review-capability-action-icon {
@@ -794,7 +794,7 @@ body {
 
 .review-capability-action-danger {
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--bg-muted) 72%, var(--bg-surface));
+  background: transparent;
 }
 
 .review-capability-footer {

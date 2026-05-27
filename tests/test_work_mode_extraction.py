@@ -1,3 +1,5 @@
+"""Tests for work mode extraction."""
+
 from job_hunter_agent.work_mode_extraction import display_work_mode_label
 
 

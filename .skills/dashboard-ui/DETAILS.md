@@ -1,4 +1,4 @@
-# Skill: Workspace UI
+﻿# Skill: Workspace UI
 
 Use before editing FastAPI routes, templates, workspace data, settings UI, or score/highlight display.
 
@@ -94,7 +94,7 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - `clearOnboardingBrowserState()` removes sessionStorage key `jobHunter.onboardingWizard`. This function is defined in two places: `onboarding-page.js` for onboarding and inline in `workspace.html` for workspace. Keep them in sync if the key ever changes.
 - `setCurrencyFieldValue` and `readCurrencyFieldValue` in `settings-utils.js` accept either a string ID or an HTMLElement. Do not change this back to ID-only, because onboarding callers always pass elements.
 - After reset, keywords and location on the Search Basics step will re-populate from fresh CV extraction. That is correct, not stale state.
-- `_onboarding_resume_step()` returns 2, Review Draft, only when `capability_profile_rules` is non-empty. A fresh-reset profile has `[]`, so it returns 1 and onboarding always starts at step 1 after reset.
+- `_onboarding_resume_step()` returns 2, Review Draft, only when `candidate_capabilities` is non-empty. A fresh-reset profile has `[]`, so it returns 1 and onboarding always starts at step 1 after reset.
 - `applyProfileDefaults()` in `onboarding-page.js` only sets form fields when they are currently empty. After `bindCurrencyInput` runs `sync()` on page load, any non-empty field value is locked in and `applyProfileDefaults` will not override it. The `?fresh=1` handler bypasses this by explicitly resetting field `.value = ''` before `loadProfileDefaults()` runs.
 
 ## Theme CSS file map

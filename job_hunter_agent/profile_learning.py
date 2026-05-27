@@ -1,4 +1,4 @@
-"""Profile learning helpers.
+﻿"""Profile learning helpers.
 
 This module provides utilities for processing and learning from candidate CV text.
 It focuses on extracting structured information, such as capabilities and role titles,
@@ -27,7 +27,7 @@ from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_MATCH_PREFS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
@@ -42,21 +42,19 @@ from job_hunter_agent.profile_store import (
 )
 KEY_NEEDS_REVIEW = "needs_review"
 
-from job_hunter_agent.role_title_knowledge import load_role_title_knowledge
-from job_hunter_agent.title_normalization_rules import (
-    load_title_normalization_rules,
-    normalize_title_text,
-)
+def _simple_title(value: str) -> str:
+    """Normalize a role title for onboarding: trim, lowercase, collapse whitespace only."""
+    return re.sub(r"\s+", " ", str(value or "").strip().lower()).strip()
+
+from job_hunter_agent.title_normalization_rules import normalize_title_text
+
 from job_hunter_agent.signal_registry import register_signals, signal_in_approved_knowledge
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
-    CATEGORY_ROLE_TITLE_TOKEN,
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
     LEARNING_CATEGORY_KEY,
     LEARNING_EVIDENCE_KEY,
     LEARNING_KNOWLEDGE_MATCH_KEY,
     LEARNING_CONTEXT_KEY,
-    LEARNING_CONTEXT_TERMS_KEY,
     LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
@@ -79,14 +77,11 @@ from job_hunter_agent.parsing_schema import (
 
 CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
 
-# Internal result keys
+# Internal result key
 KEY_CAPABILITIES = "capabilities"
-KEY_SUGGESTED_KEYWORDS = "suggested_search_keywords"
 
 # Signal categories
 CAT_CAPABILITY = CATEGORY_CAPABILITY_CONCEPT
-CAT_ROLE_TITLE = CATEGORY_ROLE_TITLE_TOKEN
-CAT_TITLE_NORM = CATEGORY_TITLE_NORMALIZATION_CANDIDATE
 
 _VALID_LEVELS = {CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC}
 _CURRENT_YEAR = datetime.now().year
@@ -139,77 +134,9 @@ _DATE_RANGE_PATTERN = re.compile(
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
+_cv_extraction_cache_loaded = False
 
 
-@lru_cache(maxsize=1)
-def _load_generic_role_tokens() -> frozenset[str]:
-    """Load a list of job role words (like 'manager' or 'engineer') from saved settings.
-
-    Normalization includes:
-    - Lowercasing and removing non-standard punctuation.
-    - Basic singularization (stripping 's', converting 'ies' to 'y') to improve match rates.
-    What it does:
-    1. It reads words from the file 'data/role_title_knowledge.json'.
-    2. It cleans them by making them lowercase and removing symbols.
-    3. It simplifies plural words: it turns 'engineers' into 'engineer' and 'consultancies' 
-       into 'consultancy'. This ensures the system recognizes the role even if the 
-       CV uses a plural version. It only does this for words longer than 4 letters 
-       and avoids words like 'boss' to prevent breaking them.
-
-    Caching:
-    The result is cached using @lru_cache(maxsize=1). Since this function takes no
-    arguments, it effectively computes the normalized set once per process. This
-    avoids repeated disk I/O and regex overhead during high-frequency CV parsing.
-    Examples:
-    It looks for core role words like 'analyst', 'developer', or 'officer'. It does 
-    NOT look for seniority words like 'senior' or 'junior' (those are handled elsewhere).
-
-    Returns:
-        A frozenset of normalized, singularized role tokens.
-    How the cache works:
-    The '@lru_cache' tells the computer to remember the final list in its memory. This 
-    way, it only has to read the file and clean the words once. When it scans your CV, 
-    it reuses that memory instead of doing the work over and over, making it much faster.
-    """
-    entries = load_role_title_knowledge()
-
-    tokens: list[str] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        value = str(entry.get("value") or "").strip()
-        token = re.sub(r"[^a-z0-9+#/&-]", "", value.lower()).strip("-/")
-        if token.endswith("ies") and len(token) > 4:
-            token = token[:-3] + "y"
-        elif token.endswith("s") and len(token) > 4 and not token.endswith("ss") and not token.endswith("is"):
-            token = token[:-1]
-        if token:
-            tokens.append(token)
-    return frozenset(tokens)
-
-
-def _generic_role_tokens() -> frozenset[str]:
-    return _load_generic_role_tokens()
-
-
-def _has_approved_role_title_token(text: str) -> bool:
-    return any(token in _generic_role_tokens() for token in _pattern_tokens(text))
-
-
-def _load_title_seniority_modifiers() -> frozenset[str]:
-    try:
-        rules = load_title_normalization_rules()
-    except Exception:
-        print(f"[PROFILE_LEARNING][WARN] Failed to load title normalization rules for seniority modifiers.")
-        return frozenset() # Silently returns an empty set
-    modifiers = rules.get("seniority_modifiers")
-    if not isinstance(modifiers, list):
-        return frozenset()
-    return frozenset(
-        _normalize_token(value)
-        for value in modifiers
-        if _normalize_token(value)
-    )
 
 
 class _CapabilityExtraction(BaseModel):
@@ -229,24 +156,11 @@ class _MatchPreferenceExtraction(BaseModel):
     home_location: str = ""
 
 
-class _TitleNormalizationCandidateExtraction(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    signal: str
-    suggested_category: Literal["title_normalization_candidate"]
-    suggested_values: list[str] = Field(default_factory=list)
-    context_terms: list[str] = Field(default_factory=list)
-    confidence: Literal["high", "medium", "low", "ambiguous"]
-    original_texts: list[str] = Field(default_factory=list)
-    needs_review: bool = True
-
-
 class _CvExtractionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
-    title_normalization_candidates: list[_TitleNormalizationCandidateExtraction] = Field(default_factory=list)
     role_titles: list[str] = Field(default_factory=list)
 
 
@@ -382,15 +296,6 @@ def _looks_like_role_title_line(text: str) -> bool:
     tokens = _pattern_tokens(normalized)
     if not tokens or len(tokens) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_TOKENS):
         return False
-    if _has_approved_role_title_token(normalized):
-        return True
-    # ── SEALED: do not weaken this guard ──────────────────────────────────────
-    # Multi-word lines that contain no recognised role token are almost always
-    # company names (e.g. "TechCorp (contract)", "Digital Solutions Group") or
-    # description fragments — not job titles.  Weakening this check causes
-    # company names to be promoted to title patterns.  The append_role fallback
-    # in _parse_role_entries also gates on this function, so any bypass there
-    # would reintroduce the same regression.
     return False
 
 
@@ -401,15 +306,7 @@ def _select_role_title_and_employer(candidate_lines: list[str]) -> tuple[str, st
     if not title_indexes:
         return title, employer
 
-    strong_title_indexes = [
-        index
-        for index, line in enumerate(candidate_lines)
-        if any(token in _generic_role_tokens() for token in _pattern_tokens(line))
-    ]
-    if strong_title_indexes:
-        title_index = strong_title_indexes[0]
-    else:
-        title_index = title_indexes[0]
+    title_index = title_indexes[0]
 
     title = candidate_lines[title_index]
     for index in range(title_index - 1, -1, -1):
@@ -708,8 +605,21 @@ def _build_cv_evidence_payload(source_text: str, lookback_years: int) -> dict[st
 
 # ── LLM extraction ─────────────────────────────────────────────────────────────
 
+def _ensure_cv_extraction_cache_loaded() -> None:
+    global _cv_extraction_cache_loaded
+    if _cv_extraction_cache_loaded:
+        return
+    _cv_extraction_cache_loaded = True
+    try:
+        from job_hunter_agent.io_utils import load_cv_extraction_cache
+        _cv_extraction_cache.update(load_cv_extraction_cache())
+    except Exception:
+        pass
+
+
 def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int) -> dict[str, Any]:
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
+    _ensure_cv_extraction_cache_loaded()
     cache_key = hashlib.sha256(f"{lookback_years}:{alias_limit}:{source_text}".encode()).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
         return _cv_extraction_cache[cache_key]
@@ -747,9 +657,6 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
         "- role_titles: list the job titles from the evidence roles exactly as they appear in the title field. One entry per role, no duplicates.\n"
-        "- title_normalization_candidates: list short title forms, acronyms, or compressed titles that are not safe to resolve from the CV alone. "
-        "If context clearly resolves the meaning, include the resolved title in suggested_values and the resolving words in context_terms. "
-        "If context does not resolve it, keep suggested_values empty and needs_review=true.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
         f"Evidence pack JSON:\n{evidence_json[:evidence_json_limit]}\n\n"
@@ -769,9 +676,14 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         result = parsed.model_dump() if parsed is not None else {}
     except Exception:
         print(f"[PROFILE_LEARNING][ERROR] LLM CV extraction failed for cache key {cache_key}.")
-        result = {} # Silently returns an empty dictionary
+        result = {}
 
     _cv_extraction_cache[cache_key] = result
+    try:
+        from job_hunter_agent.io_utils import save_cv_extraction_cache
+        save_cv_extraction_cache(_cv_extraction_cache)
+    except Exception:
+        pass
     return result
 
 
@@ -788,10 +700,6 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
         aliases = [str(a).strip().lower() for a in (item.get(KEY_ALIASES) or []) if str(a).strip()]
         if not name:
             rejected.append("<empty name>")
-            continue
-        name_tokens = re.findall(r"[a-z0-9]+", name)
-        if name_tokens and len(name_tokens) <= 3 and name_tokens[-1] in _generic_role_tokens():
-            rejected.append(f"{name} [generic-role-token filter]")
             continue
         needs_review = bool(item.get(KEY_NEEDS_REVIEW))
         result.append({
@@ -854,83 +762,6 @@ def _capability_context_sections(
     return snippets
 
 
-def _role_title_context_sections(
-    title: str,
-    source_sections: list[dict[str, str]] | None = None,
-    *,
-    max_hits: int = 3,
-) -> list[str]:
-    if not source_sections:
-        return []
-
-    normalized_title = _normalize_role_title_value(title)
-    if not normalized_title:
-        return []
-
-    title_terms = [normalized_title, *_pattern_tokens(normalized_title)]
-    title_terms = [term for term in title_terms if term]
-
-    snippets: list[str] = []
-    seen: set[str] = set()
-    for section in source_sections:
-        if not isinstance(section, dict):
-            continue
-        label = str(section.get("label") or "Source").strip()
-        text = repair_text(str(section.get("text") or ""))
-        if not text:
-            continue
-        for line in text.splitlines():
-            cleaned = _clean_line(line)
-            if not cleaned:
-                continue
-            lowered = cleaned.lower()
-            if normalized_title not in lowered and not all(term in lowered for term in title_terms):
-                continue
-            snippet = f"{label}: {cleaned}"
-            key = snippet.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            snippets.append(snippet)
-            break
-        if len(snippets) >= max_hits:
-            break
-    return snippets
-
-
-def build_role_title_review_signals(
-    titles: list[str],
-    source_sections: list[dict[str, str]] | None = None,
-) -> list[dict[str, Any]]:
-    review_signals: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    for title in titles or []:
-        cleaned_title = _clean_line(title)
-        review_token = build_role_title_review_token(cleaned_title)
-        if not review_token or review_token in seen:
-            continue
-        seen.add(review_token)
-
-        known_signal, knowledge_match = signal_in_approved_knowledge(CAT_ROLE_TITLE, review_token)
-        if known_signal:
-            continue
-
-        review_signal: dict[str, Any] = {
-            LEARNING_SIGNAL_KEY: review_token,
-            LEARNING_CATEGORY_KEY: CAT_ROLE_TITLE,
-            LEARNING_SOURCE_KEY: SOURCE_CV_PARSING,
-            LEARNING_CONTEXT_KEY: _role_title_context_sections(cleaned_title, source_sections),
-            LEARNING_EVIDENCE_KEY: [cleaned_title, _normalize_role_title_value(cleaned_title)],
-            LEARNING_NEEDS_REVIEW_KEY: True,
-        }
-        if knowledge_match:
-            review_signal[LEARNING_KNOWLEDGE_MATCH_KEY] = knowledge_match
-        review_signals.append(review_signal)
-
-    return review_signals
-
-
 def _split_learning_capabilities(
     capabilities: list[dict[str, Any]],
     *,
@@ -974,32 +805,15 @@ def _normalize_role_title_value(value: str) -> str:
     return normalize_title_text(_clean_line(value))
 
 
-def build_role_title_review_token(title: str) -> str:
-    normalized = _normalize_role_title_value(title)
-    if not normalized:
-        return ""
-    tokens = [_normalize_token(token) for token in re.split(r"\s+", normalized) if _normalize_token(token)]
-    if len(tokens) < 2:
-        return ""
-    modifiers = _load_title_seniority_modifiers()
-    filtered = [token for token in tokens if token not in modifiers]
-    if len(filtered) < 2:
-        return ""
-    candidate = filtered[-1]
-    if candidate in _generic_role_tokens():
-        return ""
-    return candidate
-
-
 def _split_compound_role_title(title: str) -> list[str]:
     raw_title = _clean_line(title)
-    cleaned = _normalize_role_title_value(raw_title)
+    cleaned = _simple_title(raw_title)
     if not cleaned:
         return []
     raw_parts = [
-        _normalize_role_title_value(part)
+        _simple_title(part)
         for part in re.split(r"\s*/\s*|\s*\|\s*|\s+\band\b\s+|\s*&\s+", raw_title)
-        if _normalize_role_title_value(part)
+        if _simple_title(part)
     ]
     if len(raw_parts) <= 1:
         return [cleaned]
@@ -1169,57 +983,16 @@ def build_learning_patch(
 
     patch: dict[str, Any] = {}
 
-    title_normalization_candidates = [
-        item
-        for item in (extracted.get("title_normalization_candidates") or [])
-        if isinstance(item, dict)
-    ]
-    if title_normalization_candidates:
-        title_normalization_signals: list[dict[str, Any]] = []
-        seen_title_normalization: set[str] = set()
-        for candidate in title_normalization_candidates:
-            signal = str(candidate.get("signal") or "").strip()
-            if not signal or signal.lower() in seen_title_normalization:
-                continue
-            seen_title_normalization.add(signal.lower())
-            context_terms = [
-                str(value).strip()
-                for value in (candidate.get("context_terms") or [])
-                if str(value).strip()
-            ]
-            title_normalization_signals.append(
-                {
-                    "signal": signal,
-                    "suggested_category": CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-                    "original_texts": [
-                        str(text).strip()
-                        for text in (candidate.get("original_texts") or [signal])
-                        if str(text).strip()
-                    ],
-                    "suggested_values": [
-                        str(value).strip()
-                        for value in (candidate.get("suggested_values") or [])
-                        if str(value).strip()
-                    ],
-                    "confidence": str(candidate.get("confidence") or "ambiguous").strip(),
-                    "needs_review": bool(candidate.get("needs_review", True)),
-                }
-            )
-            if context_terms:
-                title_normalization_signals[-1][LEARNING_CONTEXT_TERMS_KEY] = context_terms
-        if title_normalization_signals:
-            register_signals(title_normalization_signals)
-
     raw_caps = extracted.get(KEY_CAPABILITIES, [])
     _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capabilities before validation")
     capabilities = _validate_capabilities(raw_caps)
     approved_capabilities, review_signals = _split_learning_capabilities(capabilities, source_sections=source_sections)
     _cap_log(
-        f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability rule(s) will be written to capability_profile_rules"
+        f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability rule(s) will be written to candidate_capabilities"
     )
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
     if approved_capabilities:
-        patch[KEY_CAPABILITY_PROFILE_RULES] = approved_capabilities
+        patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
     if review_signals:
         register_signals(review_signals)
 
@@ -1251,14 +1024,14 @@ def extract_title_pattern_suggestions(
     )
 
     target_patterns = [
-        _normalize_role_title_value(value)
+        _simple_title(value)
         for value in (classified.get(KEY_PRIMARY_PATTERNS) or [])
-        if _normalize_role_title_value(value)
+        if _simple_title(value)
     ][:max_target]
     secondary_patterns = [
-        _normalize_role_title_value(value)
+        _simple_title(value)
         for value in (classified.get(KEY_SECONDARY_PATTERNS) or [])
-        if _normalize_role_title_value(value)
+        if _simple_title(value)
     ][:max_secondary]
     primary_set = {pattern for pattern in target_patterns if pattern}
     secondary_patterns = [
@@ -1266,14 +1039,8 @@ def extract_title_pattern_suggestions(
         for pattern in secondary_patterns
         if pattern not in primary_set
     ][:max_secondary]
-    from job_hunter_agent.title_normalization_rules import derive_search_keyword
-    suggested_search_keywords = list(dict.fromkeys(
-        kw for pattern in target_patterns[:4]
-        if (kw := derive_search_keyword(pattern))
-    ))
 
     return {
         KEY_PRIMARY_PATTERNS: list(dict.fromkeys(target_patterns)),
         KEY_SECONDARY_PATTERNS: list(dict.fromkeys(secondary_patterns)),
-        KEY_SUGGESTED_KEYWORDS: suggested_search_keywords[:4],
     }

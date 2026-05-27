@@ -1,4 +1,0 @@
-interface:
-  display_name: "Initialise"
-  short_description: "Repo bootstrap and workflow guardrails"
-  default_prompt: "Use $initialise to start a repo task by reading AGENTS.md, loading the relevant skill, and following the project guardrails."

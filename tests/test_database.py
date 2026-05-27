@@ -1,6 +1,9 @@
 """Tests for DB foundation: init, schema, connection behaviour."""
 
+import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from job_hunter_agent.database import (
@@ -32,6 +35,67 @@ def test_init_creates_all_tables(tmp_db):
     assert EXPECTED_TABLES.issubset(tables), (
         f"Missing tables: {EXPECTED_TABLES - tables}"
     )
+
+
+def test_occupation_title_cache_schema(tmp_db):
+    with db_conn(tmp_db) as conn:
+        conn.execute(
+            """
+            INSERT INTO occupation_title_cache (
+                normalized_title,
+                candidate_profile_hash,
+                taxonomy_version,
+                result,
+                matched_occupation_code,
+                confidence
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "business analyst",
+                "profile-hash-1",
+                "O*NET-SOC 2019",
+                "near",
+                "13-1111.00",
+                0.91,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT result, matched_occupation_code, confidence
+            FROM occupation_title_cache
+            WHERE normalized_title = ?
+              AND candidate_profile_hash = ?
+              AND taxonomy_version = ?
+            """,
+            ("business analyst", "profile-hash-1", "O*NET-SOC 2019"),
+        ).fetchone()
+
+    assert row["result"] == "near"
+    assert row["matched_occupation_code"] == "13-1111.00"
+    assert row["confidence"] == 0.91
+
+
+def test_occupation_title_cache_rejects_invalid_result(tmp_db):
+    with pytest.raises(sqlite3.IntegrityError):
+        with db_conn(tmp_db) as conn:
+            conn.execute(
+                """
+                INSERT INTO occupation_title_cache (
+                    normalized_title,
+                    candidate_profile_hash,
+                    taxonomy_version,
+                    result,
+                    confidence
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "business analyst",
+                    "profile-hash-1",
+                    "O*NET-SOC 2019",
+                    "maybe",
+                    0.5,
+                ),
+            )
 
 
 def test_init_is_idempotent(tmp_db):
@@ -149,3 +213,58 @@ def test_ensure_user_row_skips_local_debug_user(tmp_db):
     with db_conn(tmp_db) as conn:
         row = conn.execute("SELECT email FROM users WHERE user_id = '_local'").fetchone()
     assert row is None or row["email"] is None
+
+
+def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
+    from job_hunter_agent import profile_store
+    from job_hunter_agent.paths import LOCAL_USER_ID
+    from job_hunter_agent.user_context import set_user_id
+
+    def write_profile(index: int) -> None:
+        set_user_id(LOCAL_USER_ID)
+        profile_store.save_profile({
+            **profile_store.DEFAULT_PROFILE,
+            "llm_profile_brief": f"brief-{index}",
+        })
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        list(executor.map(write_profile, range(20)))
+
+    with db_conn(isolated_db) as conn:
+        row = conn.execute(
+            "SELECT data FROM user_profile WHERE user_id = ?",
+            (LOCAL_USER_ID,),
+        ).fetchone()
+
+    assert row is not None
+    data = json.loads(row["data"])
+    assert isinstance(data, dict)
+    assert str(data["llm_profile_brief"]).startswith("brief-")
+
+
+def test_concurrent_job_history_writes_do_not_corrupt_state(isolated_db):
+    from job_hunter_agent.io_utils import load_job_history, save_job_history
+    from job_hunter_agent.paths import LOCAL_USER_ID
+    from job_hunter_agent.user_context import set_user_id
+
+    def write_job(index: int) -> None:
+        set_user_id(LOCAL_USER_ID)
+        save_job_history({
+            f"seek:{index}": {
+                "title": f"Business Analyst {index}",
+                "company": "Example Co",
+                "state": "seen",
+                "first_seen_at": "2026-01-01T00:00:00",
+                "last_seen_at": "2026-01-01T00:00:00",
+            }
+        })
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        list(executor.map(write_job, range(20)))
+
+    set_user_id(LOCAL_USER_ID)
+    history = load_job_history()
+
+    assert len(history) == 20
+    assert history["seek:0"]["title"] == "Business Analyst 0"
+    assert history["seek:19"]["title"] == "Business Analyst 19"

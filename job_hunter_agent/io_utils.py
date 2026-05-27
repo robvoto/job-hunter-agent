@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.paths import (
+    CV_EXTRACTION_CACHE_PATH,
     DEBUG_SOURCE_PAYLOADS_DIR,
     LLM_CACHE_PATH,
 )
@@ -183,6 +184,15 @@ def load_llm_cache() -> Dict[str, Any]:
 
 def save_llm_cache(cache: Dict[str, Any]) -> None:
     save_json(LLM_CACHE_PATH, cache)
+
+
+def load_cv_extraction_cache() -> Dict[str, Any]:
+    raw = load_json_dict(CV_EXTRACTION_CACHE_PATH)
+    return {str(k): v for k, v in raw.items()}
+
+
+def save_cv_extraction_cache(cache: Dict[str, Any]) -> None:
+    save_json(CV_EXTRACTION_CACHE_PATH, cache)
 
 
 def load_parsing_rules() -> Dict[str, Any]:

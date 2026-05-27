@@ -20,22 +20,6 @@ from job_hunter_agent.capability_knowledge import (
     upsert_capability_entry,
     save_capability_knowledge,
 )
-from job_hunter_agent.role_title_knowledge import (
-    load_role_title_knowledge,
-    save_role_title_knowledge,
-    upsert_role_title_entry,
-)
-from job_hunter_agent.role_title_rules import (
-    load_role_title_rules,
-    save_role_title_rules,
-    upsert_role_title_rule,
-)
-from job_hunter_agent.government_context_patterns import (
-    load_government_context_patterns,
-    save_government_context_patterns,
-    upsert_government_context_pattern,
-)
-from job_hunter_agent.title_normalization_rules import find_approved_title_normalization
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
     KEY_P_ROUTING_PRIMARY,
@@ -45,14 +29,9 @@ from job_hunter_agent.parsing_schema import (
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_CV_FARMING_PATTERN,
-    CATEGORY_GOVERNMENT_CONTEXT,
-    CATEGORY_GOVERNMENT_CONTEXT_PATTERN,
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
     CATEGORY_PROFILE_SECTION_LABEL,
-    CATEGORY_ROLE_TITLE_TOKEN,
-    CATEGORY_ROLE_TITLE_PATTERN,
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
 
     LEARNING_CATEGORY_KEY,
     LEARNING_CONFIDENCE_KEY,
@@ -80,14 +59,9 @@ from job_hunter_agent.signal_schema import (
 CATEGORY_LABELS = {
     CATEGORY_CAPABILITY_CONCEPT: "Capability",
     CATEGORY_CV_FARMING_PATTERN: "CV farming pattern",
-    CATEGORY_GOVERNMENT_CONTEXT: "Government context",
-    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: "Government context pattern",
     CATEGORY_HARD_BLOCKER_PATTERN: "Hard blocker pattern",
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "Job type",
     CATEGORY_PROFILE_SECTION_LABEL: "Profile section label",
-    CATEGORY_ROLE_TITLE_TOKEN: "Role title",
-    CATEGORY_ROLE_TITLE_PATTERN: "Role title pattern",
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "Role title normalization",
 }
 
 CATEGORY_METADATA = {
@@ -103,18 +77,6 @@ CATEGORY_METADATA = {
         "examples": ["expression of interest", "talent pool", "future opportunities", "upload CV", "register your details", "keep your profile active"],
         "warning": "⚠️ Approving CV farming patterns will cause matching jobs to be rejected.",
     },
-    CATEGORY_GOVERNMENT_CONTEXT: {
-        "label": "Government context",
-        "description": "Terms showing public sector, clearance, agency, or regulated context. Helps identify government and public sector roles.",
-        "examples": ["APS", "department", "ministry", "Baseline", "NV1", "NV2", "Top Secret", "public servant", "federal", "state government"],
-        "warning": None,
-    },
-    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: {
-        "label": "Government context pattern",
-        "description": "Structural government context patterns using [*] as a wildcard. Matches clearance designations, agency types, and regulated-environment phrases that share a common shape.",
-        "examples": ["Baseline [*] clearance", "NV[*] clearance", "[*] security clearance", "APS [*]"],
-        "warning": None,
-    },
     CATEGORY_HARD_BLOCKER_PATTERN: {
         "label": "Hard blocker pattern",
         "description": "Strong rejection patterns that disqualify a job. Hard blockers are mandatory dealbreakers that block matching jobs from processing.",
@@ -126,24 +88,6 @@ CATEGORY_METADATA = {
         "description": "Employment structure and engagement terms. Helps normalize contract, permanent, casual, and part-time work arrangements.",
         "examples": ["contract", "permanent", "casual", "part-time", "full-time", "fixed-term", "temporary"],
         "warning": None,
-    },
-    CATEGORY_ROLE_TITLE_TOKEN: {
-        "label": "Role title",
-        "description": "Recognized job titles or role families used for classifying positions. These are standard roles from job title taxonomies.",
-        "examples": ["Business Analyst", "Technical BA", "Delivery Manager", "Project Manager", "Systems Administrator", "QA Engineer"],
-        "warning": None,
-    },
-    CATEGORY_ROLE_TITLE_PATTERN: {
-        "label": "Role title pattern",
-        "description": "Structural title patterns using [*] as a wildcard. Used to match role titles that share a common shape (e.g. 'Head of [*]' matches 'Head of Operations', 'Head of Insurance', etc.).",
-        "examples": ["Head of [*]", "[*] Manager", "Senior [*] Analyst", "Director of [*]"],
-        "warning": None,
-    },
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: {
-        "label": "Role title normalization",
-        "description": "Short role-title forms, abbreviations, and acronyms that normalize to approved role titles. Ambiguous cases stay pending until reviewed.",
-        "examples": ["BA = Business Analyst", "PM = Project Manager", "QA = Quality Assurance", "SME = Subject Matter Expert"],
-        "warning": "⚠️ NOTE: Ambiguous role abbreviations can map to more than one approved title.",
     },
     CATEGORY_PROFILE_SECTION_LABEL: {
         "label": "Profile section label",
@@ -157,22 +101,14 @@ CATEGORY_METADATA = {
 _CATEGORY_KNOWLEDGE_PATHS = {
     CATEGORY_CAPABILITY_CONCEPT: "capability_knowledge",
     CATEGORY_CV_FARMING_PATTERN: "cv_farming_rules",
-    CATEGORY_GOVERNMENT_CONTEXT: "government_context_knowledge",
-    CATEGORY_GOVERNMENT_CONTEXT_PATTERN: "government_context_patterns",
     CATEGORY_HARD_BLOCKER_PATTERN: "hard_blocker_rules",
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "job_type",
-    CATEGORY_ROLE_TITLE_TOKEN: "role_title_knowledge",
-    CATEGORY_ROLE_TITLE_PATTERN: "role_title_rules",
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE: "title_normalization_rules",
 }
 
 # Categories handled by dedicated save functions in clear_signal_learning_state.
 _SPECIALIZED_CLEAR_CATEGORIES = {
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
-    CATEGORY_ROLE_TITLE_TOKEN,
-    CATEGORY_ROLE_TITLE_PATTERN,
-    CATEGORY_GOVERNMENT_CONTEXT_PATTERN,
     CATEGORY_HARD_BLOCKER_PATTERN,
 }
 
@@ -445,54 +381,6 @@ def _append_knowledge_entry(knowledge_key: str, value: str, aliases: list[str]) 
     _save_approved_knowledge_payload(knowledge_key, payload)
 
 
-def _append_title_normalization_expansion(knowledge_key: str, abbreviation: str, expansion: str, context_terms: list[str] | None = None) -> None:
-    payload = get_knowledge(knowledge_key) or {}
-    if not isinstance(payload, dict):
-        payload = {}
-    payload.setdefault("kind", "rules")
-    payload.setdefault("name", "title_normalization_rules")
-    payload.setdefault("version", 1)
-    abbreviation_key = _clean_term(abbreviation)
-    expansion_value = _clean_text(expansion)
-    if not abbreviation_key or not expansion_value:
-        return
-
-    if context_terms:
-        contextual = payload.get("contextual_abbreviation_expansions")
-        if not isinstance(contextual, dict):
-            contextual = {}
-        entries = contextual.setdefault(abbreviation_key, [])
-        if not isinstance(entries, list):
-            entries = []
-        cleaned_context_terms = _clean_text_list(context_terms)
-        if cleaned_context_terms:
-            cleaned_context_set = set(cleaned_context_terms)
-            for entry in entries:
-                if not isinstance(entry, dict):
-                    continue
-                if _clean_term(entry.get("expansion")) != _clean_term(expansion_value):
-                    continue
-                if set(_clean_text_list(entry.get(LEARNING_CONTEXT_TERMS_KEY))) == cleaned_context_set:
-                    payload["contextual_abbreviation_expansions"] = contextual
-                    set_knowledge(knowledge_key, payload)
-                    return
-            entries.append({
-                "expansion": expansion_value,
-                LEARNING_CONTEXT_TERMS_KEY: cleaned_context_terms,
-            })
-            contextual[abbreviation_key] = entries
-            payload["contextual_abbreviation_expansions"] = contextual
-            set_knowledge(knowledge_key, payload)
-            return
-
-    expansions = payload.get("abbreviation_expansions")
-    if not isinstance(expansions, dict):
-        expansions = {}
-    expansions[abbreviation_key] = expansion_value
-    payload["abbreviation_expansions"] = expansions
-    set_knowledge(knowledge_key, payload)
-
-
 def load_registry() -> dict[str, dict[str, Any]]:
     return _normalize_registry(get_knowledge("signal_registry") or {})
 
@@ -502,17 +390,11 @@ def _approved_signal_keys() -> set[str]:
     for item in load_approved_signal_catalog():
         if not isinstance(item, dict):
             continue
-        if item.get(LEARNING_CATEGORY_KEY) == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-            continue
         for term in item.get("terms", []) or []:
             term_key = _clean_term(term)
             if term_key:
                 keys.add(term_key)
     return keys
-
-
-def _title_normalization_is_approved(signal: str, aliases: list[str] | None = None, context_terms: list[str] | None = None) -> tuple[bool, str]:
-    return find_approved_title_normalization(signal, aliases, context_terms)
 
 
 def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> list[str | dict[str, Any]]:
@@ -537,11 +419,7 @@ def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> lis
         key = _signal_key(signal)
         if not key or key in seen:
             continue
-        if item_category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-            approved, _ = _title_normalization_is_approved(signal, suggested_values, context_terms)
-            if approved or key in registry_keys or key in ignored_keys:
-                continue
-        elif key in registry_keys or key in ignored_keys or key in approved_keys:
+        if key in registry_keys or key in ignored_keys or key in approved_keys:
             continue
         seen.add(key)
         filtered.append(item)
@@ -565,9 +443,6 @@ def signal_in_approved_knowledge(
     query_terms = _clean_text_list([signal, *(aliases or [])])
     if not query_terms:
         return False, ""
-
-    if category_key == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-        return _title_normalization_is_approved(signal, aliases, context_terms)
 
     if category_key == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
         query_keys = {_signal_key(term) for term in query_terms}
@@ -724,15 +599,6 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_job_type_entry(value, suggested[0] if suggested else value)
-    elif category_key == CATEGORY_ROLE_TITLE_TOKEN:
-        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
-        upsert_role_title_entry(value)
-    elif category_key == CATEGORY_ROLE_TITLE_PATTERN:
-        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
-        upsert_role_title_rule(value)
-    elif category_key == CATEGORY_GOVERNMENT_CONTEXT_PATTERN:
-        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
-        upsert_government_context_pattern(value)
     elif category_key == CATEGORY_HARD_BLOCKER_PATTERN:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_hard_blocker_rule(value, aliases)
@@ -743,16 +609,6 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_profile_section_label(value, suggested[0] if suggested else "primary")
-    elif category_key == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-        if not explicit_value:
-            return None
-        context_terms = _clean_text_list(record.get(LEARNING_CONTEXT_TERMS_KEY))
-        if context_terms:
-            _append_title_normalization_expansion(
-                _CATEGORY_KNOWLEDGE_PATHS[category_key], key, explicit_value, context_terms
-            )
-        else:
-            _append_title_normalization_expansion(_CATEGORY_KNOWLEDGE_PATHS[category_key], key, explicit_value)
     else:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)
@@ -795,19 +651,9 @@ def clear_signal_learning_state() -> None:
     set_knowledge("ignored_signal", {})
     save_capability_knowledge([])
     save_job_type({})
-    save_role_title_knowledge([])
-    save_role_title_rules([])
-    save_government_context_patterns([])
     save_hard_blocker_rules([])
     for category, knowledge_key in _CATEGORY_KNOWLEDGE_PATHS.items():
         if category in _SPECIALIZED_CLEAR_CATEGORIES:
-            continue
-        if category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-            payload = get_knowledge(knowledge_key) or {}
-            if isinstance(payload, dict):
-                payload["abbreviation_expansions"] = {}
-                payload["contextual_abbreviation_expansions"] = {}
-                set_knowledge(knowledge_key, payload)
             continue
         _save_approved_knowledge_payload(knowledge_key, {
             "kind": "managed_knowledge",
@@ -818,35 +664,6 @@ def clear_signal_learning_state() -> None:
 def load_approved_signal_catalog() -> list[dict[str, Any]]:
     catalog: list[dict[str, Any]] = []
     for category, knowledge_key in _CATEGORY_KNOWLEDGE_PATHS.items():
-        if category == CATEGORY_TITLE_NORMALIZATION_CANDIDATE:
-            payload = get_knowledge(knowledge_key) or {}
-            expansions = payload.get("abbreviation_expansions") if isinstance(payload, dict) else {}
-            if isinstance(expansions, dict):
-                for abbrev, expansion in expansions.items():
-                    abbrev = _clean_text(abbrev)
-                    if not abbrev:
-                        continue
-                    terms = [abbrev]
-                    expanded = _clean_text(expansion)
-                    if expanded:
-                        terms.append(expanded)
-                    catalog.append({"category": category, "label": expanded or abbrev, "terms": terms})
-            contextual = payload.get("contextual_abbreviation_expansions") if isinstance(payload, dict) else {}
-            if isinstance(contextual, dict):
-                for abbrev, entries in contextual.items():
-                    abbrev = _clean_text(abbrev)
-                    if not abbrev or not isinstance(entries, list):
-                        continue
-                    for entry in entries:
-                        if not isinstance(entry, dict):
-                            continue
-                        expanded = _clean_text(entry.get("expansion"))
-                        context_terms = _clean_text_list(entry.get(LEARNING_CONTEXT_TERMS_KEY))
-                        if not expanded or not context_terms:
-                            continue
-                        terms = [abbrev, expanded, *context_terms]
-                        catalog.append({"category": category, "label": expanded, "terms": terms})
-            continue
         if category == CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
             for raw_value, canonical_value in load_job_type().items():
                 cleaned_raw = _clean_text(raw_value)
@@ -862,25 +679,11 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                     "terms": terms,
                 })
             continue
-        if category == CATEGORY_ROLE_TITLE_PATTERN:
-            for entry in load_role_title_rules():
-                pattern = _clean_text(entry.get("pattern"))
-                if pattern:
-                    catalog.append({"category": category, "label": pattern, "terms": [pattern]})
-            continue
-        if category == CATEGORY_GOVERNMENT_CONTEXT_PATTERN:
-            for entry in load_government_context_patterns():
-                pattern = _clean_text(entry.get("pattern"))
-                if pattern:
-                    catalog.append({"category": category, "label": pattern, "terms": [pattern]})
-            continue
         if category == CATEGORY_CAPABILITY_CONCEPT:
             entries = load_capability_knowledge()
         elif category == CATEGORY_CV_FARMING_PATTERN:
             payload = _load_approved_knowledge_payload(knowledge_key)
             entries = payload.get("entries", [])
-        elif category == CATEGORY_ROLE_TITLE_TOKEN:
-            entries = load_role_title_knowledge()
         elif category == CATEGORY_HARD_BLOCKER_PATTERN:
             entries = load_hard_blocker_rules()
         else:

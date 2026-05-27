@@ -1,4 +1,4 @@
-"""FastAPI ASGI application for the local workspace and settings server.
+﻿"""FastAPI ASGI application for the local workspace and settings server.
 
 Route handlers live under ``job_hunter_agent.routes``; this module wires the app,
 exception handlers, and CORS-style middleware.
@@ -12,12 +12,7 @@ Flags:
     --rebuild   Rebuild the workspace HTML from last saved run on startup.
                 Can be combined with --debug.
 
-Debug-only local bypass:
-    Debug mode bypasses login and CSRF checks during manual local testing.
-    Set JOB_HUNTER_DISABLE_AUTH=true if you want to force that bypass outside debug.
-
 CORS:
-    In debug/auth-disabled mode the wildcard origin (*) is used.
     In production, set JOB_HUNTER_CORS_ALLOWED_ORIGINS to a comma-separated list
     of allowed origins (e.g. https://example.com). Requests from unlisted origins
     receive no CORS headers and a WARN is logged.
@@ -30,7 +25,7 @@ import logging.config
 import os
 import sys
 
-from urllib.parse import parse_qsl, quote
+from urllib.parse import parse_qsl, quote, urlsplit
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -42,15 +37,17 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from job_hunter_agent.auth import (
     OPEN_PATHS,
     configure_auth,
-    is_auth_disabled,
     read_session_user,
-    read_session_username,
-    validate_session_cookie_security_for_startup,
     verify_csrf_token,
 )
-from job_hunter_agent.config import LOGIN_PATH, LOGOUT_PATH, ONBOARDING_PATH, ONBOARDING_DEBUG_ALIAS_PATH
+from job_hunter_agent.config import (
+    JOB_HUNTER_BASE_URL,
+    LOGIN_PATH,
+    LOGOUT_PATH,
+    ONBOARDING_PATH,
+    ONBOARDING_DEBUG_ALIAS_PATH,
+)
 from job_hunter_agent.user_context import set_user_id
-from job_hunter_agent.paths import LOCAL_USER_ID
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 
 _logger = logging.getLogger(__name__)
@@ -59,26 +56,39 @@ _CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
 _CORS_HEADERS = "Content-Type"
 
 
-def _cors_origin(request: Request) -> str | None:
-    """Return the CORS origin value to echo, or None to omit the header.
+def _origin_from_url(value: str) -> str | None:
+    """Return scheme://host[:port] for a configured URL/origin value."""
+    parsed = urlsplit(str(value or "").strip().rstrip("/"))
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
 
-    Debug/auth-disabled: always returns '*' (unchanged local behaviour).
-    Production: matches the request Origin against JOB_HUNTER_CORS_ALLOWED_ORIGINS
-    (comma-separated). Unmatched origins are logged at WARN and return None so no
-    Access-Control-Allow-Origin header is set.
+
+def _configured_cors_origins() -> set[str]:
+    """Return browser origins allowed to call this app.
+
+    JOB_HUNTER_BASE_URL is the canonical app URL and is always trusted.
+    JOB_HUNTER_CORS_ALLOWED_ORIGINS is only for additional frontends/proxies.
     """
-    if is_auth_disabled():
-        return "*"
-    origin = request.headers.get("origin")
+    configured = {_origin_from_url(JOB_HUNTER_BASE_URL)}
+    raw_extra = os.environ.get("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "")
+    configured.update(_origin_from_url(item) for item in raw_extra.split(","))
+    return {origin for origin in configured if origin}
+
+
+def _cors_origin(request: Request) -> str | None:
+    """Return the allowed CORS origin to echo, or None to omit the header."""
+    origin = _origin_from_url(request.headers.get("origin", ""))
     if not origin:
         return None
-    raw = os.environ.get("JOB_HUNTER_CORS_ALLOWED_ORIGINS", "")
-    allowed = {o.strip() for o in raw.split(",") if o.strip()}
+    allowed = _configured_cors_origins()
     if origin in allowed:
         return origin
-    _logger.warning("CORS: rejected origin %r — not in JOB_HUNTER_CORS_ALLOWED_ORIGINS", origin)
+    _logger.warning(
+        "CORS: rejected origin %r not in JOB_HUNTER_BASE_URL or JOB_HUNTER_CORS_ALLOWED_ORIGINS",
+        origin,
+    )
     return None
-
 
 class _LineLoggingStream:
     def __init__(self, logger: logging.Logger, level: int) -> None:
@@ -206,12 +216,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def user_context_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
         user = read_session_user(request)
-        if user:
-            set_user_id(user["user_id"])
-        elif is_auth_disabled():
-            set_user_id(LOCAL_USER_ID)
-        else:
-            set_user_id(None)
+        set_user_id(user["user_id"] if user else None)
         return await call_next(request)
 
     @app.middleware("http")
@@ -220,9 +225,7 @@ def create_app() -> FastAPI:
             return await call_next(request)
         if request.url.path == "/api/debug/browser-log":
             return await call_next(request)
-        if is_auth_disabled():
-            return await call_next(request)
-        if read_session_username(request) is None:
+        if read_session_user(request) is None:
             return await call_next(request)
         presented_token = request.headers.get("x-csrf-token")
         if not presented_token and request.url.path == LOGOUT_PATH:
@@ -237,8 +240,6 @@ def create_app() -> FastAPI:
     async def auth_enforcement(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
         if path in OPEN_PATHS or path.startswith("/static/"):
-            return await call_next(request)
-        if is_auth_disabled():
             return await call_next(request)
         if read_session_user(request) is None:
             if path.startswith("/api/"):
@@ -286,14 +287,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Rebuild the workspace from the last saved run before starting.",
     )
+    parser.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User ID required when using --rebuild.",
+    )
     args = parser.parse_args()
 
     _configure_server_logging()
 
     if args.rebuild or args.debug:
-        srv._rebuild_workspace_on_startup()
-
-    validate_session_cookie_security_for_startup(HOST)
+        if not args.user_id:
+            print("[STARTUP][WARN] --rebuild requires --user-id. Skipping workspace rebuild.")
+        else:
+            srv._rebuild_workspace_on_startup(args.user_id)
 
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")
@@ -311,3 +319,4 @@ if __name__ == "__main__":
         access_log=srv.DEBUG_MODE,
         log_config=None,
     )
+

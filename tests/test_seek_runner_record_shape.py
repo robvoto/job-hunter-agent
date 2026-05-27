@@ -1,3 +1,5 @@
+"""Tests for seek runner record shape."""
+
 from types import SimpleNamespace
 
 from job_hunter_agent.record_schema import (

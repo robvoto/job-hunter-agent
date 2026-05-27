@@ -1,3 +1,5 @@
+﻿"""Tests for source documents."""
+
 import pytest
 
 from job_hunter_agent import llm_gate
@@ -39,13 +41,13 @@ def test_run_onboarding_passes_configured_settings_to_pipeline(monkeypatch):
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
         captured["text"] = text
         captured["onboarding_settings"] = onboarding_settings
-        return {"capability_profile_rules": [{"name": "delivery", "level": "working", "fit": "core"}]}
+        return {"candidate_capabilities": [{"name": "delivery", "level": "working", "fit": "core"}]}
 
     monkeypatch.setattr(source_documents, "run_cv_pipeline", fake_run_cv_pipeline)
 
@@ -65,12 +67,12 @@ def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch):
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": []},
     )
     monkeypatch.setattr(
         source_documents,
         "run_cv_pipeline",
-        lambda text, llm_client, onboarding_settings=None: {"capability_profile_rules": [{"name": "delivery", "level": "working"}]},
+        lambda text, llm_client, onboarding_settings=None: {"candidate_capabilities": [{"name": "delivery", "level": "working"}]},
     )
     monkeypatch.setattr(
         source_documents,
@@ -81,8 +83,8 @@ def test_run_onboarding_ignores_pipeline_capability_rules(monkeypatch):
     result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
-    assert result["profile"].get("capability_profile_rules") == []
-    assert result["profile"].get("cv_text")
+    assert result["profile"].get("candidate_capabilities") == []
+    assert "cv_text" not in result["profile"]
     assert result["profile"].get("candidate_profile_tiers") == {
         "primary_candidate_profile_context": "# Professional Experience\nAcme - Platform Lead (2019 - 2024)",
         "secondary_candidate_profile_context": "",
@@ -96,7 +98,7 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
     monkeypatch.setattr(
@@ -108,7 +110,7 @@ def test_run_onboarding_does_not_restore_legacy_capability_rules_when_pipeline_r
     result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
-    assert result["profile"].get("capability_profile_rules") == []
+    assert result["profile"].get("candidate_capabilities") == []
 
 
 def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch):
@@ -117,14 +119,14 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch):
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": []},
     )
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
     monkeypatch.setattr(
         source_documents,
         "build_learning_patch",
         lambda text, onboarding_settings=None, source_sections=None: {
-            "capability_profile_rules": [{"name": "delivery", "level": "working"}],
+            "candidate_capabilities": [{"name": "delivery", "level": "working"}],
             "match_preferences": {"prefer_permanent": True, "home_location": "Sydney"},
         },
     )
@@ -132,62 +134,15 @@ def test_run_onboarding_preserves_non_capability_learning_signals(monkeypatch):
     result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
 
     assert result["ok"] is True
-    assert result["profile"].get("capability_profile_rules") == [{"name": "delivery", "level": "working"}]
+    assert result["profile"].get("candidate_capabilities") == [{"name": "delivery", "level": "working"}]
     assert result["profile"].get("match_preferences", {})["prefer_permanent"] is True
     assert result["profile"].get("match_preferences", {})["home_location"] == "Sydney"
-    assert result["profile"].get("cv_text")
+    assert "cv_text" not in result["profile"]
     assert result["profile"].get("candidate_profile_tiers") == {
         "primary_candidate_profile_context": "# Professional Experience\nAcme - Platform Lead (2019 - 2024)",
         "secondary_candidate_profile_context": "",
         "supplementary_candidate_profile_context": "",
     }
-
-
-def test_run_onboarding_routes_uncertain_role_titles_to_signals(monkeypatch):
-    captured: dict[str, object] = {}
-
-    monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
-    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(
-        source_documents,
-        "extract_title_pattern_suggestions",
-        lambda text, settings: {
-            "target_roles": ["platform lead"],
-            "also_consider_roles": ["delivery analyst"],
-            "suggested_search_keywords": ["platform lead"],
-        },
-    )
-    monkeypatch.setattr(
-        source_documents,
-        "build_role_title_review_signals",
-        lambda titles, source_sections=None: [
-            {
-                "signal": "Delivery Analyst",
-                "category": "role_title_token",
-                "source": "CV parsing",
-                "context": ["Experience: Delivery Analyst"],
-                "evidence": ["Delivery Analyst"],
-                "needs_review": True,
-            }
-        ],
-    )
-    monkeypatch.setattr(source_documents, "register_signals", lambda items: captured.setdefault("signals", items))
-    monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
-    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings=None, source_sections=None: {"capability_profile_rules": []})
-
-    result = source_documents.run_onboarding({"profile_sources": [_CV_SOURCE]})
-
-    assert result["ok"] is True
-    assert captured["signals"] == [
-        {
-            "signal": "Delivery Analyst",
-            "category": "role_title_token",
-            "source": "CV parsing",
-            "context": ["Experience: Delivery Analyst"],
-            "evidence": ["Delivery Analyst"],
-            "needs_review": True,
-        }
-    ]
 
 
 def test_merge_capability_rules_preserves_jira_confluence_cluster_for_review(monkeypatch):
@@ -241,7 +196,7 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
         lambda: {
             "llm_profile_brief": "",
             "star_evidence_text": "",
-            "capability_profile_rules": [
+            "candidate_capabilities": [
                 {"name": "process mapping", "level": "strong", "fit": "core", "aliases": ["process design"]},
                 "bad",
                 {"name": "stakeholder engagement", "level": "working", "aliases": "not-a-list"},
@@ -257,3 +212,123 @@ def test_build_profile_prompt_context_ignores_malformed_capability_rules(monkeyp
 
     assert "process mapping: strong, core (process design)" in context
     assert "stakeholder engagement: working" in context
+
+
+# ── target_occupation_queries population ──────────────────────────────────────
+
+_AGILE_CV = (
+    "# Professional Experience\n"
+    "Tech Corp - Scrum Master (2021 - 2024)\n"
+    "Led agile ceremonies, managed sprints, coached two delivery teams.\n\n"
+    "Gov Agency - Agile Project Coordinator (2018 - 2021)\n"
+    "Coordinated delivery across cross-functional agile teams.\n"
+)
+_AGILE_CV_SOURCE = {"label": "Primary CV", "filename": "cv.txt", "content": _AGILE_CV}
+
+_AGILE_QUERIES = [
+    "Scrum Master",
+    "Agile Project Coordinator",
+    "IT Delivery Coordinator",
+    "Software Delivery Coordinator",
+    "Agile Coach",
+]
+
+
+def _stub_onboarding(monkeypatch, cv_source, occupation_queries):
+    """Wire standard onboarding stubs so tests can control LLM outputs."""
+    monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}})
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(
+        source_documents,
+        "extract_title_pattern_suggestions",
+        lambda text, settings: {"target_roles": ["scrum master", "agile project coordinator"], "also_consider_roles": []},
+    )
+    monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {})
+    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings=None, source_sections=None: {})
+    monkeypatch.setattr(source_documents, "generate_target_occupation_queries", lambda **kwargs: occupation_queries)
+
+
+def test_run_onboarding_populates_target_occupation_queries(monkeypatch):
+    """Onboarding must store LLM-generated occupation queries in the profile patch."""
+    _stub_onboarding(monkeypatch, _AGILE_CV_SOURCE, _AGILE_QUERIES)
+
+    result = source_documents.run_onboarding({"profile_sources": [_AGILE_CV_SOURCE]})
+
+    assert result["ok"] is True
+    assert result["profile"].get("target_occupation_queries") == _AGILE_QUERIES
+
+
+def test_run_onboarding_occupation_queries_reset_on_fresh_run(monkeypatch):
+    """Each onboarding run must replace any previously stored queries."""
+    _stub_onboarding(monkeypatch, _AGILE_CV_SOURCE, ["Business Analyst"])
+
+    result = source_documents.run_onboarding({"profile_sources": [_AGILE_CV_SOURCE]})
+
+    assert result["profile"].get("target_occupation_queries") == ["Business Analyst"]
+
+
+def test_run_onboarding_stores_empty_list_when_llm_returns_none(monkeypatch):
+    """A failed or skipped LLM call must store [] not None."""
+    _stub_onboarding(monkeypatch, _AGILE_CV_SOURCE, [])
+
+    result = source_documents.run_onboarding({"profile_sources": [_AGILE_CV_SOURCE]})
+
+    assert result["profile"].get("target_occupation_queries") == []
+
+
+def test_generate_target_occupation_queries_returns_empty_without_client():
+    """Without an LLM client the function must return [] without raising."""
+    from job_hunter_agent.llm_gate import generate_target_occupation_queries
+    result = generate_target_occupation_queries(
+        target_roles=["scrum master"],
+        also_consider_roles=[],
+        cv_text="Some CV text",
+        llm_client=None,
+    )
+    assert result == []
+
+
+def test_generate_target_occupation_queries_parses_llm_response():
+    """The function must parse a JSON array from the LLM and return cleaned strings."""
+    from job_hunter_agent.llm_gate import generate_target_occupation_queries
+
+    class _FakeResp:
+        output_text = '["Scrum Master", "Agile Project Coordinator", "IT Delivery Coordinator"]'
+        usage = None
+
+    class _FakeClient:
+        class responses:
+            @staticmethod
+            def create(**kwargs):
+                return _FakeResp()
+
+    result = generate_target_occupation_queries(
+        target_roles=["scrum master"],
+        also_consider_roles=[],
+        cv_text="",
+        llm_client=_FakeClient(),
+    )
+    assert result == ["Scrum Master", "Agile Project Coordinator", "IT Delivery Coordinator"]
+
+
+def test_generate_target_occupation_queries_handles_bad_llm_response():
+    """A non-JSON or non-list LLM response must return [] without raising."""
+    from job_hunter_agent.llm_gate import generate_target_occupation_queries
+
+    class _FakeResp:
+        output_text = "Sorry, I cannot help with that."
+        usage = None
+
+    class _FakeClient:
+        class responses:
+            @staticmethod
+            def create(**kwargs):
+                return _FakeResp()
+
+    result = generate_target_occupation_queries(
+        target_roles=["scrum master"],
+        also_consider_roles=[],
+        cv_text="",
+        llm_client=_FakeClient(),
+    )
+    assert result == []

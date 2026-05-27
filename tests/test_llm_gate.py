@@ -1,3 +1,5 @@
+"""Tests for llm gate."""
+
 from job_hunter_agent import llm_gate
 
 

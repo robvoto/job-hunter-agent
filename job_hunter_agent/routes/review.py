@@ -1,3 +1,5 @@
+﻿"""Route handlers for review."""
+
 import hashlib
 import json
 import logging
@@ -223,3 +225,52 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response({"ok": True, "reject_title_rules": saved.get("reject_title_rules", [])})
+
+
+_PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have", "decide_later"})
+
+
+@router.post("/api/profile-gap")
+def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
+    """Record a user response to a 'Needs confirmation' gap on a job card.
+
+    confirm_have        → add the requirement as a candidate_capabilities entry (level: working)
+    confirm_do_not_have → add the requirement to must_not_require_skills
+    decide_later        → no-op; gap reappears on next page load
+    """
+    try:
+        action = str(body.get("action", "")).strip()
+        requirement = str(body.get("requirement", "")).strip()
+        if not requirement:
+            raise ValueError("requirement is required")
+        if action not in _PROFILE_GAP_VALID_ACTIONS:
+            raise ValueError(f"invalid action: {action!r}")
+
+        if action == "decide_later":
+            return json_response({"ok": True})
+
+        profile = srv.load_profile()
+
+        if action == "confirm_have":
+            rules = list(profile.get("candidate_capabilities") or [])
+            normalized_name = requirement.lower().strip()
+            if not any(str(r.get("name") or "").lower().strip() == normalized_name for r in rules):
+                rules.append({
+                    "name": normalized_name,
+                    "level": "working",
+                    "fit": "supporting",
+                    "aliases": [],
+                })
+                profile["candidate_capabilities"] = rules
+                srv.save_profile(profile)
+
+        elif action == "confirm_do_not_have":
+            skills = list(profile.get("must_not_require_skills") or [])
+            if requirement not in skills:
+                skills.append(requirement)
+                profile["must_not_require_skills"] = skills
+                srv.save_profile(profile)
+
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+    return json_response({"ok": True})

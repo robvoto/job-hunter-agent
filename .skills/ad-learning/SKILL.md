@@ -1,3 +1,8 @@
+---
+name: ad-learning
+description: Use ONLY for extracting learning candidates from job ads after scraping/review. Do NOT use for approved signal storage; use signal-registry instead.
+---
+
 # Skill: Ad Learning
 
 Use before editing logic that learns from job ads or proposes new knowledge from job descriptions.

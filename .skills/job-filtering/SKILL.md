@@ -1,3 +1,8 @@
+---
+name: job-filtering
+description: Use ONLY for deterministic pass/fail filters, hard blockers, rejection reasons, and pre-scoring job eligibility. Do NOT use for ranking scores; use scoring-ranking.
+---
+
 # Skill: Job Filtering
 
 Use before editing `filters.py`, reject reasons, title/content filters, or hard blocker behaviour.

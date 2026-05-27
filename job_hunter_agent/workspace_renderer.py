@@ -1,4 +1,4 @@
-"""
+﻿"""
 Workspace HTML rendering functions.
 
 This module follows an "App Shell + Fragment" architecture. It processes
@@ -47,7 +47,6 @@ from job_hunter_agent.posting_utils import (
 from job_hunter_agent.preferences import assess_contract_preference
 from job_hunter_agent.preferences import display_work_type_label
 from job_hunter_agent.profile_store import ENGAGEMENT_TYPE_OPTIONS, get_match_levels, load_profile
-from job_hunter_agent.role_analysis import infer_role_sector
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.global_settings import get_default_country_suffix
 from job_hunter_agent.salary_utils import salary_sort_value
@@ -63,6 +62,7 @@ from job_hunter_agent.signal_detection import (
     hard_block_reasons,
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
+from job_hunter_agent.profile_gaps import compute_profile_gaps
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
@@ -554,8 +554,7 @@ def render_job_card(
     record_kind = "applied" if applied_record else ("hidden" if hidden_record else ("saved" if archived else "current"))
     company_attr = safe_html(company_display)
     teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
-    sector_signal = infer_role_sector(display_record, trusted_desc if trusted_desc else stored_snapshot)
-    card_sector = "public" if sector_signal.get("kind") == "government" else "unknown"
+    card_sector = "unknown"
     channel_signal = display_record.get("posting_channel_evidence")
     if not isinstance(channel_signal, dict):
         channel_signal = {}
@@ -564,6 +563,11 @@ def render_job_card(
         for item in (display_record.get(RECORD_JOB_REQUIREMENTS_KEY) or [])
         if compact_whitespace(item)
     ]
+    profile_gaps = compute_profile_gaps(
+        job_requirements,
+        active_profile.get("candidate_capabilities") or [],
+        active_profile.get("must_not_require_skills") or [],
+    )
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
         duplicate_links = []
@@ -612,8 +616,6 @@ def render_job_card(
     if description_issue:
         badges.append(render_badge("Description Issue", "badge-warning", "The full job description was not captured clearly, so this match needs manual checking."))
     badges.append(render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}."))
-    if sector_signal.get("kind") == "government":
-        badges.append(render_badge("Public sector", "badge-sector-public", "Public-sector context detected from the captured job text."))
     channel_kind = channel_signal.get("kind", "unknown")
     if channel_kind == "agency_or_recruiter":
         badges.append(render_badge("Recruiter", "badge-source-neutral", "Posted via a recruitment agency or third-party recruiter."))
@@ -891,6 +893,25 @@ def render_job_card(
             f'<div class="job-insight-group is-secondary"><ul>{"".join(f"<li>{safe_html(item)}</li>" for item in job_requirements)}</ul></div>'
             '</details>'
         )
+    profile_gaps_html = ""
+    if profile_gaps:
+        gap_items_html = "".join(
+            f'<div class="job-gap-item">'
+            f'<span class="job-gap-requirement">{safe_html(gap["requirement"])}</span>'
+            f'<div class="job-gap-actions">'
+            f'<button class="gap-btn gap-btn--have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_have">Yes, I have this</button>'
+            f'<button class="gap-btn gap-btn--not-have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_do_not_have">No, I don\'t have this</button>'
+            f'<button class="gap-btn gap-btn--later" data-requirement="{safe_html(gap["requirement"])}" data-action="decide_later">Decide later</button>'
+            f'</div>'
+            f'</div>'
+            for gap in profile_gaps
+        )
+        profile_gaps_html = (
+            f'<div class="job-gaps-block" data-job-key="{job_key}">'
+            f'<div class="job-gap-heading">Needs confirmation ({len(profile_gaps)})</div>'
+            f'<div class="job-gap-items">{gap_items_html}</div>'
+            f'</div>'
+        )
     if duplicate_links:
         linked_items = []
         for item in duplicate_links:
@@ -1153,6 +1174,7 @@ def render_job_card(
         f"{note_html}"
         f"{insight_html}"
         f"{job_requirements_html}"
+        f"{profile_gaps_html}"
         f"{candidate_history_html}"
         f"{context_html}"
         f"{actions_html}"

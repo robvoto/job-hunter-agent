@@ -1,4 +1,4 @@
-"""LLM fit-decision gateway.
+﻿"""LLM fit-decision gateway.
 
 This module provides a gateway for interacting with Large Language Models (LLMs)
 to perform various job-hunting related tasks. It handles the construction of
@@ -108,6 +108,7 @@ from job_hunter_agent.signal_schema import (
 )
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_store import (
+    KEY_CANDIDATE_CAPABILITIES,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
     load_profile,
@@ -281,7 +282,7 @@ def build_profile_prompt_context() -> str:
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
-        KEY_CAPABILITY_PROFILE_RULES,
+        KEY_CANDIDATE_CAPABILITIES,
     )
     profile = load_profile()
     llm_profile_brief = str(profile.get("llm_profile_brief") or "").strip()
@@ -291,7 +292,7 @@ def build_profile_prompt_context() -> str:
     prompt_settings = _get_llm_prompt_settings()
     prompt_templates = prompt_settings[KEY_LLM_PROMPT_TEMPLATES]
     prompt_evidence_tiers = prompt_settings[KEY_LLM_PROMPT_EVIDENCE_TIERS]
-    capability_rules = profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
+    capability_rules = profile.get(KEY_CANDIDATE_CAPABILITIES, [])
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = profile.get("match_preferences", {}) if isinstance(profile.get("match_preferences", {}), dict) else {}
 
@@ -574,7 +575,7 @@ def normalize_llm_job_requirements(value: Any, max_items: int | None = None) -> 
     return requirements
 
 
-def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
+def normalize_llm_review_payload(value: Any, valid_capability_names: "frozenset[str] | None" = None) -> dict[str, Any]:
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
         has_explicit_fit_review = isinstance(fit_review, dict) or "decision" in value or "grade" in value
@@ -588,7 +589,8 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
                 "fit_review": _require_fit_review(fit_review),
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
                 "contextual_capability_matches": normalize_llm_contextual_capability_matches(
-                    value.get("contextual_capability_matches")
+                    value.get("contextual_capability_matches"),
+                    valid_capability_names=valid_capability_names,
                 ),
                 "job_requirements": normalize_llm_job_requirements(value.get("job_requirements")),
             }
@@ -617,7 +619,7 @@ def normalize_llm_review_payload(value: Any) -> dict[str, Any]:
             parsed = _json_mod.loads(_strip_json_fence(text))
         except Exception:
             raise ValueError("LLM review payload must be JSON or DECISION|GRADE")
-        return normalize_llm_review_payload(parsed)
+        return normalize_llm_review_payload(parsed, valid_capability_names=valid_capability_names)
 
     raise ValueError(f"LLM review payload must be a dict or string, got {type(value).__name__}")
 
@@ -692,6 +694,67 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
         print(f"[LLM][REJECTION_SUGGESTIONS][UNEXPECTED] {str(resp.output_text).strip()}")
     return suggestions
+
+
+def generate_target_occupation_queries(
+    target_roles: list[str],
+    also_consider_roles: list[str],
+    cv_text: str = "",
+    llm_client: Any = None,
+) -> list[str]:
+    """Generate machine-facing O*NET occupation query strings from the candidate's profile.
+
+    These are NOT display titles. They are precise occupation names that O*NET's index
+    can match unambiguously — e.g. "Scrum Master" rather than "Agile Delivery Lead".
+    Returns 3–8 queries as a list of strings, or [] on failure.
+    """
+    active_client = llm_client or client
+    if active_client is None:
+        return []
+
+    all_roles = list(dict.fromkeys(
+        [r.strip() for r in (target_roles or []) + (also_consider_roles or []) if str(r).strip()]
+    ))
+    if not all_roles and not cv_text:
+        return []
+
+    roles_block = "\n".join(f"- {r}" for r in all_roles) if all_roles else "(none detected)"
+    cv_snippet = (cv_text or "")[:2000].strip()
+
+    prompt = (
+        "You are a career taxonomy assistant. Given a candidate's role titles and a short CV excerpt, "
+        "generate 3 to 8 machine-facing occupation query strings for O*NET matching.\n\n"
+        "Rules:\n"
+        "- Each query must be a precise, standard occupation name that appears in O*NET (e.g. 'Scrum Master', "
+        "'Business Analyst', 'Project Manager', 'Agile Coach').\n"
+        "- Do NOT use vague labels like 'Delivery Lead', 'ICT Consultant', or 'Change Lead' unless they map cleanly to O*NET.\n"
+        "- Do NOT repeat the candidate's display titles verbatim if they are vague or non-standard.\n"
+        "- Cover the candidate's genuine occupation family — include variants a job ad might use.\n"
+        "- Return ONLY a JSON array of strings. No explanation, no markdown.\n\n"
+        f"Candidate role titles:\n{roles_block}\n\n"
+        f"CV excerpt (first 2000 chars):\n{cv_snippet}\n"
+    )
+
+    try:
+        _model = get_llm_model()
+        resp = active_client.responses.create(
+            model=_model,
+            input=[{"role": "user", "content": prompt}],
+            max_output_tokens=256,
+        )
+        _log_llm_call(resp, "target_occupation_queries", _model)
+        raw = (resp.output_text or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        queries = _json_mod.loads(raw)
+        if not isinstance(queries, list):
+            print(f"[LLM][OCCUPATION_QUERIES][WARN] non-list response: {raw[:200]}")
+            return []
+        cleaned = [str(q).strip() for q in queries if str(q).strip()]
+        return cleaned[:8]
+    except Exception as exc:
+        print(f"[LLM][OCCUPATION_QUERIES][ERROR] {exc}")
+        return []
 
 
 def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
@@ -777,6 +840,19 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     if client is None:
         raise RuntimeError("LLM review requested but LLM is disabled or OPENAI_API_KEY is missing")
 
+    valid_capability_names: frozenset[str] | None = None
+    if fit_review:
+        profile = load_profile()
+        valid_capability_names = frozenset(
+            str(r.get("name") or "").strip().lower()
+            for r in profile.get(KEY_CANDIDATE_CAPABILITIES, [])
+            if isinstance(r, dict) and str(r.get("name") or "").strip()
+        )
+        if not valid_capability_names:
+            raise ValueError(
+                "LLM fit review requested but candidate profile has no capability rules — seed or update the profile first"
+            )
+
     try:
         model = _log_llm_model_once()
         resp = client.responses.parse(
@@ -800,7 +876,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     if parsed is None:
         raise ValueError("LLM review payload is missing parsed output")
 
-    payload = normalize_llm_review_payload(parsed.model_dump())
+    payload = normalize_llm_review_payload(parsed.model_dump(), valid_capability_names=valid_capability_names)
     if fit_review:
         if payload.get("fit_review") is None:
             raise ValueError("LLM fit review payload is missing fit_review")

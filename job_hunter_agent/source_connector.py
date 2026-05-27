@@ -13,13 +13,11 @@ Notes:
 
 import argparse
 import sys
-from typing import Any
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from job_hunter_agent.user_settings import get_workspace_minimum_score
-from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
     CLI_FLAG_NO_LLM,
@@ -29,59 +27,17 @@ from job_hunter_agent.runtime_helpers import (
 from job_hunter_agent.profile_store import (
     load_profile,
 )
-from job_hunter_agent.scrapers.seek import fetch_job_details_payload
 from job_hunter_agent.io_utils import configure_console_output
 
-from job_hunter_agent.filters import passes_content_filters
-from job_hunter_agent.signal_registry import register_signals
-from job_hunter_agent.signal_schema import CATEGORY_HARD_BLOCKER_PATTERN, LEARNING_ORIGINAL_TEXTS_KEY, LEARNING_SIGNAL_KEY, LEARNING_SUGGESTED_CATEGORY_KEY
-
-from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.run_context import build_scrape_run_context
 from job_hunter_agent.scrape_finalize import finalize_scrape_run
 from job_hunter_agent.source_runner import run_enabled_sources
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
-from job_hunter_agent.paths import LOCAL_USER_ID
-from job_hunter_agent.config import AUTH_DISABLED
 
 NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 CONSOLE_BANNER_WIDTH = 60
-
-def _process_seek_job_details(record: dict, detail_page, profile: dict, title_reason: str) -> tuple[bool, str]:
-    details_payload = fetch_job_details_payload(detail_page, record.get("url") or "")
-    details_text = str(details_payload.get("text") or "")
-    details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
-    if details_status != "ok":
-        return False, details_status
-
-    ok_desc, desc_reason = passes_content_filters(details_text, str(record.get("location") or ""), title_reason)
-    if not ok_desc:
-        if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
-            hard_block_matches = find_hard_block_matches(details_text, (profile or {}).get("must_not_require_skills", []))
-            signals: list[dict[str, Any]] = []
-            seen: set[str] = set()
-            for match in hard_block_matches or []:
-                value = compact_whitespace(match.get("value") or "")
-                if not value:
-                    continue
-                key = value.lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                signals.append(
-                    {
-                        LEARNING_SIGNAL_KEY: value,
-                        LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN,
-                        LEARNING_ORIGINAL_TEXTS_KEY: [compact_whitespace(match.get("context") or details_text or desc_reason)],
-                    }
-                )
-            if signals:
-                register_signals(signals)
-        return False, desc_reason
-
-    return True, "OK"
 
 
 def scrape_jobs_direct(headless: bool = False) -> str:
@@ -140,10 +96,9 @@ if __name__ == "__main__":
         help="Explicit user id for CLI runs that need a per-user workspace.",
     )
     args, _ = parser.parse_known_args()
-    if args.user_id:
-        set_user_id(str(args.user_id).strip())
-    elif AUTH_DISABLED:
-        set_user_id(LOCAL_USER_ID)
+    if not args.user_id:
+        raise RuntimeError("--user-id is required for CLI runs.")
+    set_user_id(str(args.user_id).strip())
     try:
         if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_WORKSPACE):
             rebuild_workspace_results(user_id=args.user_id)

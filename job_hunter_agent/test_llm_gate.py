@@ -1,3 +1,5 @@
+"""Tests for llm gate."""
+
 from types import SimpleNamespace
 
 import pytest

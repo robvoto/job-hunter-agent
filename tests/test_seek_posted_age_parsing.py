@@ -1,3 +1,5 @@
+"""Tests for seek posted age parsing."""
+
 import pytest
 
 from job_hunter_agent.scrapers.seek import extract_posted_text_from_card

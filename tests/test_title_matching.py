@@ -1,30 +1,18 @@
+"""Tests for title matching."""
+
 from __future__ import annotations
 
 from job_hunter_agent import filters
 from job_hunter_agent import title_normalization_rules
 
 
-def test_passes_title_filters_normalizes_runtime_abbreviations(isolated_db, monkeypatch):
-    from job_hunter_agent.knowledge_store import set_knowledge
-    set_knowledge("title_normalization_rules", {
-        "kind": "rules",
-        "name": "title_normalization_rules",
-        "version": 1,
-        "updated_at": "2026-05-03",
-        "seniority_modifiers": ["junior", "senior", "lead"],
-        "abbreviation_expansions": {"sr": "senior", "ba": "business analyst"},
-        "normalization": {
-            "collapse_spaces": True,
-            "strip_outer_punctuation": True,
-            "lowercase_for_matching": True,
-            "preserve_original_for_display": True,
-        },
-    }, isolated_db)
+def test_passes_title_filters_abbreviations_are_not_expanded(monkeypatch):
+    """Abbreviations like 'Sr BA' are no longer expanded. They must match profiles literally."""
     monkeypatch.setattr(
         filters,
         "load_profile",
         lambda: {
-            "target_roles": ["senior business analyst"],
+            "target_roles": ["sr ba"],
             "also_consider_roles": [],
             "reject_title_rules": [],
         },
@@ -35,30 +23,7 @@ def test_passes_title_filters_normalizes_runtime_abbreviations(isolated_db, monk
     assert (ok, reason) == (True, "OK")
 
 
-def test_passes_title_filters_matches_base_role_family(isolated_db, monkeypatch):
-    from job_hunter_agent.knowledge_store import set_knowledge
-    set_knowledge("title_normalization_rules", {
-        "kind": "rules",
-        "name": "title_normalization_rules",
-        "version": 1,
-        "updated_at": "2026-05-03",
-        "seniority_modifiers": ["junior", "senior", "lead"],
-        "abbreviation_expansions": {"sr": "senior", "ba": "business analyst"},
-        "normalization": {
-            "collapse_spaces": True,
-            "strip_outer_punctuation": True,
-            "lowercase_for_matching": True,
-            "preserve_original_for_display": True,
-        },
-    }, isolated_db)
-    set_knowledge("role_title_knowledge", {
-        "kind": "managed_knowledge",
-        "name": "role_title_knowledge",
-        "version": 1,
-        "updated_at": "2026-05-03",
-        "description": "",
-        "entries": [{"value": "analyst"}],
-    }, isolated_db)
+def test_passes_title_filters_matches_normalized_title_substring(monkeypatch):
     monkeypatch.setattr(
         filters,
         "load_profile",

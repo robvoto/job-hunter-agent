@@ -1,120 +1,50 @@
+﻿---
+name: scraping
+description: Use ONLY for SEEK/LinkedIn scraping, source connector behaviour, scraped job data shape, source diagnostics, work-mode provenance, and raw evidence capture. Do NOT use for scoring or candidate preference decisions.
+---
+
 # Skill: Scraping
 
 Use before editing SEEK/LinkedIn scrapers or scraped job data shape.
 
-## Rules
+See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-specific rules, debug logging, and scraper run diagnosis.
+
+## Load order
+1. Read `AGENTS.md`.
+2. Read this skill.
+3. Read `.skills/scraping/DETAILS.md` only for detailed work-mode extraction, source-specific rules, debug logging, or scraper run diagnosis.
+
+## Non-negotiable rules
+- Scrapers collect evidence; they do not decide fit, score, rank, or reject beyond source/search validity guards.
 - SEEK uses direct job pages only; do not restore pane scraping.
-- Scrapers collect evidence; they do not decide fit.
 - Preserve raw/important job signals where possible.
-- Capture source metadata separately from classification, including apply URL/domain, company links, poster identity, and ATS hints.
-- Keep posting-channel fallback heuristics data-driven in managed JSON, not hardcoded in scraper code, and keep the extracted evidence unique/canonical.
-- Use strong metadata first; only use fallback heuristics when trusted metadata is unavailable.
-- When debug capture is enabled, persist raw HTML, raw JSON, and normalized records for source payload review.
-- Do not add filtering, scoring, or rejection judgement inside scraper code.
+- Keep source metadata separate from classification: apply URL/domain, company links, poster identity, ATS hints, work-mode provenance, and description confidence.
+- Prefer board-declared/structured metadata over text inference.
+- Use fallback text heuristics only when trusted metadata is unavailable, and preserve provenance/review flags.
+- Keep fallback heuristics data-driven in managed knowledge/config, not hardcoded in scraper code.
 - Normalise job identity consistently for dedup/history.
 - Surface partial or low-confidence descriptions; do not hide them.
-- Prefer board-declared metadata over text inference when extracting work mode.
-- Only use fallback text heuristics for work mode when no structured or visible board metadata is available.
-- Preserve work mode provenance so later review can distinguish trusted board metadata from inferred text.
+- Do not treat search keywords as job-level work-mode proof.
 
-## Work type normalization
-Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(raw, load_job_type())` from `scrapers/base.py` and `job_types.py`. The normalization mapping lives in `data/job_type.json` under the `"mapping"` key — no source-specific logic or hardcoded labels in scraper code. Unknown values are passed through and registered via the signal registry. The `"filter_groups"` key in the same file defines how canonical values map to workspace filter options; scrapers do not use filter_groups.
-
-## Owners
+## Ownership
 - `scrapers/seek.py`: SEEK scraping.
 - `scrapers/linkedin.py`: LinkedIn via python-jobspy.
-- `source_connector.py`: orchestration.
+- `source_connector.py`: source orchestration.
 - `job_identity.py`: cross-source identity/dedup.
 - `description_trust.py`: full-description confidence.
 - `job_types.py`: work type normalization mapping and filter group definitions.
 
-## Work mode extraction
+## Search guards
+- Reject ads whose `posted_age_days` exceeds `date_range_days` before scoring.
+- Never send blank keyword searches to SEEK.
+- `/api/run` requires onboarding completion before starting a scrape.
+- Debug zero results by checking both `search_settings.keywords` and role/title patterns.
 
-Work mode extraction is evidence collection only. It must not score, reject, rank, or apply candidate preference.
+## Current run logs
+Use `output/server.log` for current scrape diagnosis. Do not rely on stale `output/console.log`.
 
-Expected output fields when available:
+## Validation
+- Run the smallest relevant scraper/data-shape test first.
+- Add adjacent validation if source orchestration, identity, work-mode provenance, or filtering boundaries are affected.
+- Record the exact validation command before marking work done.
 
-```json
-{
-  "work_mode": "remote | hybrid | onsite | unknown",
-  "work_mode_source": "seek_filter | seek_card | seek_detail_visible | seek_detail_payload | linkedin_structured | fallback_text | unknown",
-  "work_mode_evidence": "exact text, selector, or structured field used",
-  "work_mode_needs_review": true
-}
-```
-
-### SEEK order
-1. Search/listing metadata and selected work arrangement filter:
-   - `[data-automation="refineWorkArrangement"]`
-   - option links containing `/jobs/on-site`, `/jobs/hybrid`, `/jobs/remote`
-   - visible option text or `aria-label`: `On-site`, `Hybrid`, `Remote`
-   - selected state via checkbox / `aria-checked="true"`
-2. Job card visible work arrangement/location metadata.
-3. Direct job page visible metadata.
-4. Embedded SEEK state/payload fields if already captured, especially fields containing:
-   - `workArrangement`
-   - `workArrangements`
-   - `remote`
-   - `hybrid`
-   - `onsite`
-   - `workplace`
-   - `location`
-5. Description text fallback only when metadata is unavailable.
-
-Search filters are search context, not always job-level proof. If a filter value is used, preserve `work_mode_source="seek_filter"` and the exact filter evidence.
-
-### LinkedIn order
-1. Use python-jobspy structured output first when present:
-   - `workplace_type`
-   - `workplaceType`
-   - `job_workplace`
-   - `work_type`
-   - `remote_allowed`
-   - `is_remote`
-   - `location`
-2. If LinkedIn HTML is inspected directly, only use structured job-level state as metadata.
-3. Do not treat search keywords such as `hybrid or remote` as job-level work mode evidence.
-4. Description text fallback only when metadata is unavailable.
-
-### Logging
-Add structured debug logs when work mode is extracted:
-
-- `job_id`
-- `source_board`
-- `work_mode`
-- `work_mode_source`
-- `work_mode_evidence`
-- `fallback_used`
-- `work_mode_needs_review`
-
-These logs exist to support later review and learning. They must not promote new rules automatically.
-
-## Age filtering
-
-- Both SEEK and LinkedIn **always** reject ads whose `posted_age_days` exceeds `date_range_days` (hard-reject, reason `POSTED_TOO_OLD:<n>`) before scoring.
-- There is no configurable bypass — the window is always enforced.
-
-## Search parameter guards
-
-- `build_seek_search_targets` raises `ValueError` if keywords are empty — never send a blank keyword search to SEEK.
-- `/api/run` checks `_onboarding_complete()` before starting a scrape job — returns HTTP 400 if onboarding is not done.
-- Onboarding is complete when `primary_job_title_pattern`, `search_settings.keywords`, and `search_settings.locations` are all non-empty.
-- These guards are application-level validation, not scraper filtering logic.
-- `search_settings.keywords` and `primary_job_title_pattern` are independent — keywords control what SEEK returns, patterns control what the title filter passes. A mismatch (e.g. keywords = "software developer" but pattern = "accounts officer") silently yields 0 kept records. When debugging zero results, verify both fields agree.
-
-## Where to find current run logs
-
-When debugging a scrape run, use **`output/server.log`** — it contains both the FastAPI/uvicorn access log AND the full `job_hunter_agent.app` pipeline output (SEEK/LinkedIn progress, per-card REJECTED/KEPT lines, summaries). It is appended on every run, so the bottom is always the most recent run.
-
-Do **not** use `output/console.log` for diagnosing current behaviour — it is written by a separate PowerShell redirect mechanism and is stale from a previous run.
-
-## Checklist
-- Is this collection logic, not judgement?
-- Is full-description confidence preserved?
-- Are missing/partial descriptions surfaced, not hidden?
-- Is job identity stable across sources?
-- Is work mode extracted from board metadata before fallback text inference?
-- Is work mode provenance preserved for review/debugging?
-- Are search keywords avoided as job-level work mode proof?
-- Are search parameters validated before the scraper fires (non-empty keywords, location, completed onboarding)?
-- Did you run the smallest relevant scraper/data-shape check?

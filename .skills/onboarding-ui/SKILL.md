@@ -1,12 +1,14 @@
----
+﻿---
 name: onboarding-ui
-description: Onboarding wizard, search-basics, and onboarding page UI. Use when editing onboarding templates, scripts, routes, bootstrap data, reset flow, shared widgets, copy ownership, or onboarding-specific validation.
+description: Use ONLY for onboarding wizard/search-basics UI, onboarding templates/scripts/routes, bootstrap data, reset/resume flow, upload flow, and onboarding validation. Do NOT use for workspace/dashboard UI.
 ---
 
 # Onboarding UI
 
+See `.skills/onboarding-ui/DETAILS.md` for module ownership notes, UI component maps, reset/resume behaviour, and longer examples.
+
 ## Load order
-1. Read `Agents.md` first.
+1. Read `AGENTS.md` first.
 2. Read this skill.
 3. If module ownership or field-specific behaviour matters, read `.skills/onboarding-ui/DETAILS.md` for the relevant section only.
 
@@ -43,3 +45,4 @@ Read only when needed:
 - Check the rendered onboarding page or the smallest relevant browser interaction.
 - Prefer targeted checks over full test runs unless the change crosses multiple owners.
 - Never add a second persistence path for wizard state.
+

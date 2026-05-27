@@ -157,8 +157,6 @@ def validate_session_cookie_security_for_startup(host: str) -> None:
     deployments commonly sit behind a reverse proxy. In that case the operator must
     explicitly force secure cookies with `JOB_HUNTER_SESSION_COOKIE_SECURE=true`.
     """
-    if is_auth_disabled():
-        return
     secure_mode = _session_cookie_secure_mode()
     if secure_mode not in {"true", "false", "auto"}:
         raise RuntimeError(
@@ -169,7 +167,7 @@ def validate_session_cookie_security_for_startup(host: str) -> None:
         raise RuntimeError(
             "Network-accessible production server requires "
             "JOB_HUNTER_SESSION_COOKIE_SECURE=true. "
-            "Use --debug or JOB_HUNTER_DISABLE_AUTH=true only for local development."
+            "Set JOB_HUNTER_SESSION_COOKIE_SECURE=true on the server."
         )
 
 
@@ -212,19 +210,7 @@ def read_session_user(request: Request) -> dict | None:
     return {"user_id": user_id, "email": email, "role": role, "name": name}
 
 
-def read_session_username(request: Request) -> str | None:
-    """Compatibility shim for CSRF middleware — returns the authenticated user's email."""
-    user = read_session_user(request)
-    return user["email"] if user else None
-
-
-def is_auth_disabled() -> bool:
-    return bool(app_config.AUTH_DISABLED)
-
-
 def is_authenticated(request: Request) -> bool:
-    if is_auth_disabled():
-        return True
     return read_session_user(request) is not None
 
 

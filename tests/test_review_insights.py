@@ -1,3 +1,5 @@
+﻿"""Tests for review insights."""
+
 from job_hunter_agent.global_settings import (
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
     KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
@@ -9,7 +11,7 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_review_data
 from job_hunter_agent.profile_store import (
     KEY_ALIASES,
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_LEVEL,
     KEY_NAME,
 )
@@ -77,7 +79,7 @@ def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monke
                 "search_location": "Sydney",
             }
         ],
-        profile={KEY_CAPABILITY_PROFILE_RULES: []},
+        profile={KEY_CANDIDATE_CAPABILITIES: []},
     )
 
     assert result["kept_job_urls"] == ["https://example.test/job-1"]
@@ -119,7 +121,7 @@ def test_build_review_data_ignores_rejected_job_capabilities(monkeypatch):
             }
         ],
         skill_observations=[],
-        profile={KEY_CAPABILITY_PROFILE_RULES: []},
+        profile={KEY_CANDIDATE_CAPABILITIES: []},
     )
 
     assert result["skill_observations"] == []
@@ -160,7 +162,7 @@ def test_build_review_data_exposes_title_tuning_rules(monkeypatch):
             },
         ],
         skill_observations=[],
-        profile={KEY_CAPABILITY_PROFILE_RULES: []},
+        profile={KEY_CANDIDATE_CAPABILITIES: []},
     )
 
     assert result["suggested_tuning"]["summary"]["rule_count"] == 2
@@ -208,7 +210,7 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
             },
         ],
         skill_observations=[],
-        profile={KEY_CAPABILITY_PROFILE_RULES: []},
+        profile={KEY_CANDIDATE_CAPABILITIES: []},
     )
 
     requirement_suggestions = result["suggested_tuning"]["requirement_suggestions"]
@@ -224,13 +226,13 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
 
 
 def test_apply_capability_tuning_decisions_adds_confirmed_capability():
-    profile = {KEY_CAPABILITY_PROFILE_RULES: []}
+    profile = {KEY_CANDIDATE_CAPABILITIES: []}
 
     updated = apply_capability_tuning_decisions(
         profile,
         [{"skill": "Process mapping", "choice": "working", KEY_ALIASES: ["process modelling"]}],
     )
 
-    assert updated[KEY_CAPABILITY_PROFILE_RULES] == [
+    assert updated[KEY_CANDIDATE_CAPABILITIES] == [
         {KEY_NAME: "Process mapping", KEY_LEVEL: "working", KEY_ALIASES: ["process modelling"]}
     ]

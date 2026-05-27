@@ -1,14 +1,12 @@
-"""Tests for the capability evidence scoring layer.
+﻿"""Tests for the capability evidence scoring layer.
 
 Covers:
-- Canonical name matches get full deterministic credit
-- Alias matches get the same credit as canonical
-- LLM high-confidence contextual matches get credited using existing level weights
-- LLM medium-confidence contextual matches get zero credit
-- LLM low-confidence contextual matches get zero credit
+- LLM high-confidence confirmed matches get credited using profile level weights
+- LLM medium/low-confidence matches are logged and skipped — no credit
+- Unknown capability name from LLM is logged as a gate breach error and skipped
 - Stop-at-cap: accumulation stops once max_score is reached
-- Per-capability breakdown entries show match type tags
-- normalize_llm_contextual_capability_matches filters invalid entries
+- Per-capability breakdown entries show llm_confirmed match type tag
+- normalize_llm_contextual_capability_matches filters by valid_capability_names
 """
 
 import logging
@@ -18,7 +16,6 @@ import pytest
 from job_hunter_agent import fit_scoring
 from job_hunter_agent.fit_scoring import (
     capability_evidence_score,
-    capability_scored_matches,
     fit_score_breakdown,
 )
 from job_hunter_agent.llm_gate import normalize_llm_contextual_capability_matches
@@ -30,7 +27,7 @@ from job_hunter_agent.llm_gate import normalize_llm_contextual_capability_matche
 
 def _profile(rules):
     return {
-        "capability_profile_rules": rules,
+        "candidate_capabilities": rules,
         "dominant_signal_clusters": [],
         "match_preferences": {"home_location": "Sydney NSW"},
         "preference_weights": {},
@@ -48,6 +45,7 @@ def _base_record(**kwargs):
         "title_reason": "OK",
         "content_reason": "OK",
         "llm_fit_grade": "SOLID",
+        "llm_decision": "KEEP",
         "location": "Sydney NSW",
         "work_type": "Full Time",
         "work_mode": "Hybrid",
@@ -57,225 +55,142 @@ def _base_record(**kwargs):
     }
 
 
-# ---------------------------------------------------------------------------
-# capability_scored_matches — deterministic path
-# ---------------------------------------------------------------------------
-
-def test_canonical_name_match_is_credited():
-    profile = _profile([_rule("stakeholder management", level="strong")])
-    matches = capability_scored_matches(
-        "You will lead stakeholder management across delivery teams.", profile
-    )
-    assert len(matches) == 1
-    assert matches[0]["match_type"] == "canonical"
-    assert matches[0]["matched_text"] == "stakeholder management"
-    assert matches[0]["level"] == "strong"
-
-
-def test_alias_match_is_credited_same_as_canonical():
-    profile = _profile([_rule("stakeholder management", level="strong", aliases=["stakeholder engagement"])])
-    canonical_matches = capability_scored_matches(
-        "Lead stakeholder management activities.", profile
-    )
-    alias_matches = capability_scored_matches(
-        "Lead stakeholder engagement activities.", profile
-    )
-    assert len(canonical_matches) == 1
-    assert len(alias_matches) == 1
-    assert canonical_matches[0]["match_type"] == "canonical"
-    assert alias_matches[0]["match_type"] == "alias"
-    assert alias_matches[0]["matched_text"] == "stakeholder engagement"
-    # Both should have the same combined_strength (same rule, same profile evidence)
-    assert canonical_matches[0]["combined_strength"] == alias_matches[0]["combined_strength"]
-
-
-def test_no_match_when_neither_canonical_nor_alias_present():
-    profile = _profile([_rule("stakeholder management", level="strong", aliases=["stakeholder engagement"])])
-    matches = capability_scored_matches("Lead workshops across delivery teams.", profile)
-    assert matches == []
-
-
-def test_canonical_takes_priority_over_alias_when_both_present():
-    profile = _profile([_rule("agile methodologies", level="strong", aliases=["agile"])])
-    matches = capability_scored_matches(
-        "You will apply agile methodologies including agile delivery.", profile
-    )
-    assert len(matches) == 1
-    assert matches[0]["match_type"] == "canonical"
+def _contextual_match(name, confidence="high", matched_text="", reason=""):
+    return {
+        "capability_name": name,
+        "confidence": confidence,
+        "matched_text": matched_text,
+        "reason": reason,
+    }
 
 
 # ---------------------------------------------------------------------------
-# capability_evidence_score — LLM contextual matches
+# capability_evidence_score — LLM-confirmed matches
 # ---------------------------------------------------------------------------
 
-def test_high_confidence_contextual_match_adds_credit():
+def test_high_confidence_match_is_credited():
     profile = _profile([_rule("requirements elicitation", level="strong")])
     record = _base_record(
-        full_description="Run discovery workshops to understand the problem space.",
         contextual_capability_matches=[
-            {
-                "capability_name": "requirements elicitation",
-                "confidence": "high",
-                "matched_text": "run discovery workshops",
-                "reason": "Discovery workshops are a requirements elicitation technique.",
-            }
+            _contextual_match("requirements elicitation", "high", "run discovery workshops", "Workshops are elicitation.")
         ],
     )
     score, matches = capability_evidence_score(record, profile)
     assert score > 0
-    contextual = [m for m in matches if m["match_type"] == "contextual_llm"]
-    assert len(contextual) == 1
-    assert contextual[0]["matched_text"] == "run discovery workshops"
-
-
-def test_high_confidence_contextual_match_not_added_if_already_credited_deterministically():
-    profile = _profile([_rule("requirements elicitation", level="strong")])
-    record = _base_record(
-        full_description="Requirements elicitation and discovery workshops are key.",
-        contextual_capability_matches=[
-            {
-                "capability_name": "requirements elicitation",
-                "confidence": "high",
-                "matched_text": "discovery workshops",
-                "reason": "Workshops are an elicitation technique.",
-            }
-        ],
-    )
-    score, matches = capability_evidence_score(record, profile)
-    # Only one entry — deterministic wins, contextual not duplicated
     assert len(matches) == 1
-    assert matches[0]["match_type"] == "canonical"
+    assert matches[0]["match_type"] == "llm_confirmed"
+    assert matches[0]["matched_text"] == "run discovery workshops"
 
 
-def test_medium_confidence_contextual_match_gets_zero_credit(caplog):
+def test_medium_confidence_match_gets_zero_credit(caplog):
     profile = _profile([_rule("requirements elicitation", level="strong")])
     record = _base_record(
-        full_description="Run discovery workshops.",
         contextual_capability_matches=[
-            {
-                "capability_name": "requirements elicitation",
-                "confidence": "medium",
-                "matched_text": "run discovery workshops",
-                "reason": "Possibly related.",
-            }
+            _contextual_match("requirements elicitation", "medium", "run discovery workshops", "Possibly related.")
         ],
     )
     with caplog.at_level(logging.INFO, logger="job_hunter_agent.fit_scoring"):
         score, matches = capability_evidence_score(record, profile)
 
     assert score == 0
-    assert not any(m["match_type"] == "contextual_llm" for m in matches)
-    assert "MEDIUM" in caplog.text
+    assert matches == []
+    assert "BELOW_THRESHOLD" in caplog.text
     assert "requirements elicitation" in caplog.text
 
 
-def test_low_confidence_contextual_match_gets_zero_credit(caplog):
+def test_low_confidence_match_gets_zero_credit(caplog):
     profile = _profile([_rule("requirements elicitation", level="strong")])
     record = _base_record(
-        full_description="Support the delivery team.",
         contextual_capability_matches=[
-            {
-                "capability_name": "requirements elicitation",
-                "confidence": "low",
-                "matched_text": "support the delivery team",
-                "reason": "Very loose connection.",
-            }
+            _contextual_match("requirements elicitation", "low", "support the team", "Very loose.")
         ],
     )
-    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.fit_scoring"):
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.fit_scoring"):
         score, matches = capability_evidence_score(record, profile)
 
     assert score == 0
-    assert not any(m["match_type"] == "contextual_llm" for m in matches)
+    assert matches == []
 
 
-def test_unknown_capability_name_from_llm_is_ignored(caplog):
+def test_unknown_capability_name_from_llm_is_logged_as_gate_breach(caplog):
     profile = _profile([_rule("requirements elicitation", level="strong")])
     record = _base_record(
-        full_description="Support the delivery team.",
         contextual_capability_matches=[
-            {
-                "capability_name": "magic capability that does not exist",
-                "confidence": "high",
-                "matched_text": "support the delivery team",
-                "reason": "Invented.",
-            }
+            _contextual_match("magic capability that does not exist", "high", "support the team", "Invented.")
         ],
     )
-    with caplog.at_level(logging.WARNING, logger="job_hunter_agent.fit_scoring"):
+    with caplog.at_level(logging.ERROR, logger="job_hunter_agent.fit_scoring"):
         score, matches = capability_evidence_score(record, profile)
 
     assert score == 0
-    assert "capability name not in profile rules" in caplog.text
+    assert matches == []
+    assert "GATE_BREACH" in caplog.text
+
+
+def test_same_capability_not_credited_twice():
+    profile = _profile([_rule("requirements elicitation", level="strong")])
+    record = _base_record(
+        contextual_capability_matches=[
+            _contextual_match("requirements elicitation", "high", "text one", "First."),
+            _contextual_match("requirements elicitation", "high", "text two", "Second."),
+        ],
+    )
+    score, matches = capability_evidence_score(record, profile)
+    assert len(matches) == 1
+
+
+def test_no_contextual_matches_returns_zero():
+    profile = _profile([_rule("requirements elicitation", level="strong")])
+    record = _base_record(contextual_capability_matches=[])
+    score, matches = capability_evidence_score(record, profile)
+    assert score == 0
+    assert matches == []
 
 
 # ---------------------------------------------------------------------------
-# Stop-at-cap: accumulation stops once max_score is reached
+# Stop-at-cap
 # ---------------------------------------------------------------------------
 
 def test_evidence_score_stops_at_cap():
-    # Six STRONG capabilities — well over the max_score of 20
     rules = [_rule(f"capability {i}", level="strong") for i in range(6)]
     profile = _profile(rules)
-    text = " ".join(f"capability {i}" for i in range(6))
-    record = _base_record(full_description=text)
+    record = _base_record(
+        contextual_capability_matches=[
+            _contextual_match(f"capability {i}", "high", f"evidence {i}", "Clear.") for i in range(6)
+        ],
+    )
     score, matches = capability_evidence_score(record, profile)
     assert score == 20  # capped at max_score
-    # Not all 6 necessarily credited — some may be cut off
     total_points = sum(m["points"] for m in matches)
     assert total_points == 20
 
 
 # ---------------------------------------------------------------------------
-# Per-capability breakdown labels show match type tags
+# fit_score_breakdown — requires LLM review
 # ---------------------------------------------------------------------------
 
-def test_breakdown_shows_canonical_tag():
+def test_fit_score_breakdown_raises_without_llm_review():
     profile = _profile([_rule("stakeholder management", level="strong")])
-    record = _base_record(
-        full_description="Lead stakeholder management across the programme."
-    )
-    breakdown = fit_score_breakdown(record, profile)
-    labels = [item["label"] for item in breakdown]
-    assert any("[canonical]" in label and "stakeholder management" in label.lower() for label in labels)
+    record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        # no llm_fit_grade
+    }
+    with pytest.raises(RuntimeError, match="Cannot score job without LLM review"):
+        fit_score_breakdown(record, profile)
 
 
-def test_breakdown_shows_alias_tag():
-    profile = _profile([_rule("stakeholder management", level="strong", aliases=["stakeholder engagement"])])
-    record = _base_record(
-        full_description="Lead stakeholder engagement across the programme."
-    )
-    breakdown = fit_score_breakdown(record, profile)
-    labels = [item["label"] for item in breakdown]
-    assert any("[alias:" in label and "stakeholder management" in label.lower() for label in labels)
-
-
-def test_breakdown_shows_contextual_llm_tag():
+def test_breakdown_shows_llm_confirmed_tag():
     profile = _profile([_rule("requirements elicitation", level="strong")])
     record = _base_record(
-        full_description="Run discovery workshops.",
         contextual_capability_matches=[
-            {
-                "capability_name": "requirements elicitation",
-                "confidence": "high",
-                "matched_text": "run discovery workshops",
-                "reason": "Discovery workshops are a requirements elicitation technique.",
-            }
+            _contextual_match("requirements elicitation", "high", "run discovery workshops", "Workshops are elicitation.")
         ],
     )
     breakdown = fit_score_breakdown(record, profile)
     labels = [item["label"] for item in breakdown]
-    assert any("[contextual_llm]" in label and "requirements elicitation" in label.lower() for label in labels)
-
-
-def test_breakdown_has_no_fit_evidence_bullets_label():
-    profile = _profile([_rule("stakeholder management", level="strong")])
-    record = _base_record(
-        full_description="Lead stakeholder management across the programme."
-    )
-    breakdown = fit_score_breakdown(record, profile)
-    labels = [item["label"] for item in breakdown]
-    assert "Fit evidence bullets" not in labels
+    assert any("[llm_confirmed]" in label and "requirements elicitation" in label.lower() for label in labels)
 
 
 # ---------------------------------------------------------------------------

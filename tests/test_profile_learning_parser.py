@@ -1,14 +1,16 @@
+﻿"""Tests for profile learning parser."""
+
 import json
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from job_hunter_agent import profile_learning
-from job_hunter_agent import role_title_knowledge
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     build_learning_patch,
-    build_role_title_review_signals,
     extract_title_pattern_suggestions,
 )
 
@@ -46,7 +48,6 @@ _LLM_FIXTURE = {
     ],
     "target_roles": ["delivery lead"],
     "also_consider_roles": ["project coordinator"],
-    "suggested_search_keywords": ["delivery lead", "business analysis"],
     "match_preferences": {"prefer_permanent": None, "work_mode_preference": None, "home_location": ""},
 }
 
@@ -56,7 +57,7 @@ def test_build_learning_patch_returns_capabilities_without_cv_text():
         patch_result = build_learning_patch(SAMPLE_CV)
 
     assert "cv_text" not in patch_result
-    rules = patch_result.get("capability_profile_rules", [])
+    rules = patch_result.get("candidate_capabilities", [])
     assert rules
     names = {r["name"] for r in rules}
     assert "stakeholder engagement" in names
@@ -68,10 +69,10 @@ def test_build_learning_patch_returns_empty_when_llm_unavailable():
         patch_result = build_learning_patch(SAMPLE_CV)
 
     assert "cv_text" not in patch_result
-    assert not patch_result.get("capability_profile_rules")
+    assert not patch_result.get("candidate_capabilities")
 
 
-def test_build_learning_patch_routes_title_normalization_candidates_to_signals():
+def test_build_learning_patch_does_not_register_title_normalization_candidate_signals():
     captured = []
 
     def fake_register_signals(items):
@@ -80,32 +81,11 @@ def test_build_learning_patch_routes_title_normalization_candidates_to_signals()
     with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={
         "capabilities": [],
         "match_preferences": {},
-        "title_normalization_candidates": [
-            {
-                "signal": "PM",
-                "suggested_category": "title_normalization_candidate",
-                "suggested_values": ["project manager"],
-                "context_terms": ["delivery", "project"],
-                "confidence": "high",
-                "original_texts": ["PM delivery project"],
-                "needs_review": True,
-            }
-        ],
     }), \
          patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
         build_learning_patch("CV text")
 
-    assert captured == [
-        {
-            "signal": "PM",
-            "suggested_category": "title_normalization_candidate",
-            "original_texts": ["PM delivery project"],
-            "suggested_values": ["project manager"],
-            "context_terms": ["delivery", "project"],
-            "confidence": "high",
-            "needs_review": True,
-        }
-    ]
+    assert not any(item.get("suggested_category") == "title_normalization_candidate" for item in captured)
 
 
 def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry():
@@ -132,7 +112,7 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
          patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
         patch_result = build_learning_patch(SAMPLE_CV, source_sections=[{"label": "Skills", "text": "unknown platform"}])
 
-    rules = patch_result.get("capability_profile_rules", [])
+    rules = patch_result.get("candidate_capabilities", [])
     assert [rule["name"] for rule in rules] == ["business analysis", "api design"]
     assert rules[1]["knowledge_match"] == "API design"
     assert captured == [
@@ -168,46 +148,6 @@ def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
     assert all(item.get("category") != "hard_blocker_pattern" for item in captured)
 
 
-def test_build_role_title_review_signals_routes_uncertain_titles_to_signals():
-    def fake_knowledge_match(category, name, aliases=None):
-        if name == "analyst":
-            return True, "analyst"
-        return False, ""
-
-    with patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", side_effect=fake_knowledge_match):
-        signals = build_role_title_review_signals(
-            ["Senior BA", "Delivery Ninja"],
-            source_sections=[{"label": "Experience", "text": "Senior BA\nDelivery Ninja"}],
-        )
-
-    assert signals == [
-        {
-            "signal": "ninja",
-            "category": "role_title_token",
-            "source": "CV parsing",
-            "context": ["Experience: Delivery Ninja"],
-            "evidence": ["Delivery Ninja", "delivery ninja"],
-            "needs_review": True,
-        }
-    ]
-
-
-def test_extract_title_pattern_suggestions_returns_parser_titles():
-    result = extract_title_pattern_suggestions(
-        """
-# Professional Experience
-Project Manager
-Company Name
-2023 - Present
-- Managed end-to-end delivery.
-""",
-        {"extraction_lookback_years": 8},
-    )
-
-    assert "project manager" in result["target_roles"]
-    assert result["suggested_search_keywords"][0] == "project manager"
-
-
 def test_extract_title_pattern_suggestions_respects_max_limits():
     fixture = {
         **_LLM_FIXTURE,
@@ -221,253 +161,14 @@ def test_extract_title_pattern_suggestions_respects_max_limits():
     assert len(result["also_consider_roles"]) <= 1
 
 
-# ── _parse_role_entries: inline format (title/employer set directly) ───────────
 
-def test_parse_role_entries_captures_inline_dash_format_in_header_lines():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Business Analyst - Contoso (2016 - 2020)
-"""
-    )
-
-    assert parsed
-    assert "Business Analyst" in parsed[0]["header_lines"]
-    assert "Contoso" in parsed[0]["header_lines"]
-
-
-def test_parse_role_entries_prefers_title_line_over_company_date_line():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Project Manager
-Company Name | 2023 - Present
-- Managed end-to-end delivery.
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Project Manager"
-    assert parsed[0]["employer"] == "Company Name"
-
-
-def test_parse_role_entries_prefers_title_line_over_company_paren_date_line():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Project Manager
-Company Name (2023 - Present)
-- Managed end-to-end delivery.
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Project Manager"
-    assert parsed[0]["employer"] == "Company Name"
-
-
-def test_parse_role_entries_collects_bullets_for_inline_roles():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Senior Business Analyst - Payments (2024 - Present)
-- Requirements workshops, process mapping, user stories.
-- Stakeholder management and backlog refinement.
-"""
-    )
-
-    assert parsed
-    assert "Senior Business Analyst" in parsed[0]["header_lines"]
-    assert parsed[0]["bullets"] == [
-        "Requirements workshops, process mapping, user stories.",
-        "Stakeholder management and backlog refinement.",
-    ]
-
-
-def test_parse_role_entries_accepts_title_with_dates_only():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Business Analyst (2022 - 2024)
-- Insurance platform delivery, UAT, backlog refinement.
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Business Analyst"
-    assert parsed[0]["employer"] == ""
-    assert parsed[0]["bullets"] == ["Insurance platform delivery, UAT, backlog refinement."]
-
-
-def test_extract_title_pattern_suggestions_returns_job_title_for_company_date_layout():
-    result = extract_title_pattern_suggestions(
-        """
-# Professional Experience
-Project Manager
-Company Name | 2023 - Present
-- Managed end-to-end delivery.
-"""
-    )
-
-    assert "project manager" in result["target_roles"]
-    assert "company name" not in result["target_roles"]
-
-
-def test_parse_role_entries_accepts_project_manager_title():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Project Manager (2021 - 2023)
-- Delivered projects.
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Project Manager"
-    assert parsed[0]["header_lines"] == ["Project Manager"]
-
-
-def test_parse_role_entries_pipe_format_uses_previous_line_as_employer():
-    parsed = profile_learning._parse_role_entries(
-        """
-EMPLOYMENT HISTORY
-Department of Employment and Workplace Relations (DEWR)
-Senior Systems Analyst | 2025 - Present | Federal Government | Contract
-Systems analysis and requirements definition.
-Produced functional specifications.
-"""
-    )
-
-    assert parsed
-    assert parsed[0]["title"] == "Senior Systems Analyst"
-    assert parsed[0]["employer"] == "Department of Employment and Workplace Relations (DEWR)"
-    assert parsed[0]["bullets"] == [
-        "Systems analysis and requirements definition.",
-        "Produced functional specifications.",
-    ]
-
-
-# ── _parse_role_entries: date-first / prefix format (header_lines used) ───────
-
-def test_parse_role_entries_captures_prefix_lines_as_header_lines():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Senior Business Analyst
-Acme Bank
-2022 - Present
-- Led workshops
-"""
-    )
-
-    assert parsed
-    assert "Senior Business Analyst" in parsed[0]["header_lines"]
-    assert "Acme Bank" in parsed[0]["header_lines"]
-
-
-def test_parse_role_entries_captures_post_date_lines_as_header_lines():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-2022 - Present
-Senior Business Analyst
-Acme Bank
-- Led workshops
-"""
-    )
-
-    assert parsed
-    assert "Senior Business Analyst" in parsed[0]["header_lines"]
-    assert "Acme Bank" in parsed[0]["header_lines"]
-
-
-def test_parse_role_entries_keeps_plain_paragraphs_after_prefix_in_date_first():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Senior Business Analyst
-Acme Bank
-2022 - Present
-Led workshops across product and delivery teams.
-Produced process maps and business requirements.
-"""
-    )
-
-    assert parsed
-    assert "Senior Business Analyst" in parsed[0]["header_lines"]
-    assert "Acme Bank" in parsed[0]["header_lines"]
-    assert parsed[0]["bullets"] == [
-        "Led workshops across product and delivery teams.",
-        "Produced process maps and business requirements.",
-    ]
-
-
-def test_parse_role_entries_supports_unicode_bullet_markers():
-    parsed = profile_learning._parse_role_entries(
-        """
-# Professional Experience
-Business Analyst
-Contoso
-2022 - Present
-• Led workshops
-• Produced user stories
-"""
-    )
-
-    assert parsed
-    assert "Business Analyst" in parsed[0]["header_lines"]
-    assert parsed[0]["bullets"] == ["Led workshops", "Produced user stories"]
-
-
-def test_parse_role_entries_date_first_layout_captures_employer_in_header_lines():
-    parsed = profile_learning._parse_role_entries(
-        """
-EMPLOYMENT HISTORY
-NSW eHealth
-Digital & Infrastructure Business Analyst / Project Coordinator
-May 2022 - Nov 2023
-Led workshops with stakeholders.
-Produced onboarding documentation.
-"""
-    )
-
-    assert parsed
-    assert "NSW eHealth" in parsed[0]["header_lines"]
-    assert "Digital & Infrastructure Business Analyst / Project Coordinator" in parsed[0]["header_lines"]
-
-
-def test_role_title_knowledge_file_contains_enabled_entries():
-    from job_hunter_agent.knowledge_store import get_knowledge
-    payload = get_knowledge("role_title_knowledge")
-
-    assert payload["kind"] == "managed_knowledge"
-    assert any(entry.get("value") for entry in payload["entries"])
-    assert all(set(entry.keys()) == {"value"} for entry in payload["entries"])
-    assert "analyst" in profile_learning._generic_role_tokens()
-
-
-def test_role_title_detection_uses_managed_generic_role_tokens():
-    assert profile_learning._looks_like_role_title_line("Operations Support Officer") is True
-    assert profile_learning._looks_like_role_title_line("Sr BA") is True
+def test_role_title_detection_always_returns_false_without_knowledge():
+    # _looks_like_role_title_line returns False for all inputs — role_title_knowledge removed.
+    # Title detection now relies on explicit user-entered target roles.
+    assert profile_learning._looks_like_role_title_line("Operations Support Officer") is False
+    assert profile_learning._looks_like_role_title_line("Sr BA") is False
     assert profile_learning._looks_like_role_title_line("TechCorp Ltd") is False
 
-
-def test_company_name_with_dates_not_promoted_as_target_role():
-    # Regression: CV lines like "Company Name (2020 - 2023)" matched the date-range
-    # regex, and the append_role fallback used the raw capture without re-checking
-    # _looks_like_role_title_line, causing "company name" to appear as a preferred role.
-    result = extract_title_pattern_suggestions(
-        """
-# Professional Experience
-Company Name (2018 - 2020)
-- Did some work there.
-Business Analyst (2020 - Present)
-- Analysed requirements and produced specifications.
-"""
-    )
-
-    assert "company name" not in result["target_roles"]
-    assert "business analyst" in result["target_roles"]
 
 
 def test_update_job_history_does_not_write_sightings():
@@ -494,18 +195,19 @@ def test_update_job_history_does_not_write_sightings():
 
 
 @pytest.mark.parametrize(
-    "line,expected",
+    "line",
     [
-        ("Senior Business Analyst", True),
-        ("Project Manager", True),
-        ("Evangelist", False),
-        ("Strategist", False),
-        ("Velocity", False),
-        ("Digital Edge", False),
+        "Senior Business Analyst",
+        "Project Manager",
+        "Evangelist",
+        "Strategist",
+        "Velocity",
+        "Digital Edge",
     ],
 )
-def test_role_title_detection_requires_an_approved_role_token(line, expected):
-    assert profile_learning._looks_like_role_title_line(line) is expected
+def test_role_title_detection_always_returns_false(line):
+    # role_title_knowledge removed — title detection always returns False.
+    assert profile_learning._looks_like_role_title_line(line) is False
 
 
 def test_role_title_detection_uses_parsing_config_for_line_rules(monkeypatch):
@@ -530,6 +232,64 @@ def test_role_title_detection_uses_parsing_config_for_line_rules(monkeypatch):
     profile_learning._load_title_candidate_line_rules.cache_clear()
 
 
-def test_role_title_normalization_expands_abbreviations():
-    assert profile_learning._normalize_role_title_value("Sr BA") == "senior business analyst"
-    assert profile_learning._normalize_role_title_value("PO") == "product owner"
+def test_role_title_normalization_does_simple_cleanup_only():
+    # No expansion — abbreviations pass through unchanged
+    assert profile_learning._normalize_role_title_value("Sr BA") == "sr ba"
+    assert profile_learning._normalize_role_title_value("PO") == "po"
+    assert profile_learning._normalize_role_title_value("Senior Business Analyst") == "senior business analyst"
+
+
+# ── CV extraction disk cache (regression: in-memory cache lost on server restart) ──
+
+import hashlib as _hashlib
+
+
+def _reset_cv_extraction_cache():
+    profile_learning._cv_extraction_cache.clear()
+    profile_learning._cv_extraction_cache_loaded = False
+
+
+def test_llm_extract_from_cv_cache_hit_skips_save():
+    """A cache hit must return the stored result without calling save."""
+    cv_text = "Test CV for cache-hit test"
+    lookback, alias_limit = 5, 3
+    cache_key = _hashlib.sha256(f"{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[:16]
+    fake_result = {"capabilities": [{"name": "delivery management"}]}
+
+    _reset_cv_extraction_cache()
+    profile_learning._cv_extraction_cache[cache_key] = fake_result
+
+    saved = []
+    with patch("job_hunter_agent.profile_learning._ensure_cv_extraction_cache_loaded"), \
+         patch("job_hunter_agent.io_utils.save_cv_extraction_cache", side_effect=saved.append):
+        result = profile_learning._llm_extract_from_cv(cv_text, lookback, alias_limit)
+
+    assert result == fake_result
+    assert saved == [], "save must not be called on a cache hit"
+
+
+def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():
+    """Simulates server restart: disk cache has a prior result; LLM must not be called."""
+    cv_text = "My CV content for disk restore test"
+    lookback, alias_limit = 5, 3
+    cache_key = _hashlib.sha256(f"{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[:16]
+    prior_result = {"capabilities": [{"name": "stakeholder engagement"}]}
+
+    _reset_cv_extraction_cache()
+
+    def fake_load():
+        return {cache_key: prior_result}
+
+    with patch("job_hunter_agent.io_utils.load_cv_extraction_cache", side_effect=fake_load), \
+         patch("job_hunter_agent.io_utils.save_cv_extraction_cache"):
+        profile_learning._cv_extraction_cache_loaded = False
+        profile_learning._ensure_cv_extraction_cache_loaded()
+
+        assert cache_key in profile_learning._cv_extraction_cache
+
+        saved = []
+        with patch("job_hunter_agent.io_utils.save_cv_extraction_cache", side_effect=saved.append):
+            result = profile_learning._llm_extract_from_cv(cv_text, lookback, alias_limit)
+
+    assert result == prior_result
+    assert saved == [], "save must not be called when the disk cache already had the entry"

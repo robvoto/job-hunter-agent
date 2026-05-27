@@ -21,6 +21,7 @@ USERS_DIR = DATA_DIR / "users"
 
 # Server-level output (not per-user)
 SERVER_LOG_PATH = OUTPUT_DIR / "server.log"
+UNCERTAINTY_LOG_PATH = OUTPUT_DIR / "uncertainty.jsonl"
 DEBUG_SOURCE_PAYLOADS_DIR = REPO_ROOT / "debug" / "source_payloads"
 # Persistent Playwright profile so local testing can reuse login state.
 PLAYWRIGHT_USER_DATA_DIR = DATA_DIR / "playwright_user_data"
@@ -38,12 +39,9 @@ ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
 
 def get_active_user_id() -> str:
     from job_hunter_agent.user_context import get_user_id
-    from job_hunter_agent.config import AUTH_DISABLED
     uid = get_user_id()
     if uid:
         return uid
-    if AUTH_DISABLED:
-        return LOCAL_USER_ID
     raise RuntimeError(
         "No active user id is set. Call set_user_id() before performing file operations."
     )
@@ -74,11 +72,8 @@ SCORING_RULES_PATH = KNOWLEDGE_DIR / "scoring_rules.json"
 MATCH_LEVEL_DEFAULTS_PATH = KNOWLEDGE_DIR / "match_level_defaults.json"
 FIT_REVIEW_DEFAULTS_PATH = KNOWLEDGE_DIR / "llm_fit_review_defaults.json"
 HARD_BLOCKER_RULES_PATH = KNOWLEDGE_DIR / "hard_blocker_rules.json"
+ONET_TAXONOMY_DIR = KNOWLEDGE_DIR / "occupation_taxonomy"
 CAPABILITY_KNOWLEDGE_PATH = KNOWLEDGE_DIR / "capability_knowledge.json"
-ROLE_TITLE_KNOWLEDGE_PATH = KNOWLEDGE_DIR / "role_title_knowledge.json"
-ROLE_TITLE_RULES_PATH = KNOWLEDGE_DIR / "role_title_rules.json"
-GOVERNMENT_CONTEXT_KNOWLEDGE_PATH = KNOWLEDGE_DIR / "government_context_knowledge.json"
-GOVERNMENT_CONTEXT_PATTERNS_PATH = KNOWLEDGE_DIR / "government_context_patterns.json"
 CV_FARMING_RULES_PATH = KNOWLEDGE_DIR / "cv_farming_rules.json"
 CV_FARMING_RULES_NAME = "cv_farming_rules"
 CV_FARMING_RULES_VERSION = 1
@@ -88,8 +83,8 @@ LLM_COSTS_PATH = RUNTIME_DIR / "llm_costs.jsonl"
 UI_LABELS_PATH = KNOWLEDGE_DIR / "ui_labels.json"
 WORK_MODE_RULES_PATH = KNOWLEDGE_DIR / "work_mode_rules.json"
 LLM_CACHE_PATH = RUNTIME_DIR / "llm_cache.json"
+CV_EXTRACTION_CACHE_PATH = RUNTIME_DIR / "cv_extraction_cache.json"
 CANDIDATE_APPLICATION_HISTORY_CACHE_PATH = RUNTIME_DIR / "candidate_application_history_cache.json"
-GOVERNMENT_CONTEXT_RULES_PATH = KNOWLEDGE_DIR / "government_context_rules.json"
 POSTING_CHANNEL_INDICATORS_PATH = KNOWLEDGE_DIR / "posting_channel_indicators.json"
 TITLE_NORMALIZATION_RULES_PATH = KNOWLEDGE_DIR / "title_normalization_rules.json"
 DUPLICATE_RULES_PATH = KNOWLEDGE_DIR / "duplicate_rules.json"

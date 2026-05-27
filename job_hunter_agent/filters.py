@@ -1,3 +1,5 @@
+﻿"""Helpers for filters."""
+
 # filters.py
 
 import re
@@ -6,9 +8,9 @@ from typing import Any, Tuple
 from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.profile_store import KEY_CAPABILITY_PROFILE_RULES, load_profile
+from job_hunter_agent.profile_store import KEY_CANDIDATE_CAPABILITIES, load_profile
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
-from job_hunter_agent.title_normalization_rules import decompose_title_text, normalize_title_text
+from job_hunter_agent.title_normalization_rules import normalize_title_text
 
 
 
@@ -22,8 +24,7 @@ def _normalize_title_pattern_text(value: str) -> str:
         return ""
     raw = raw.replace(r"\b", " ").replace(r"\B", " ").replace(r"\A", " ").replace(r"\Z", " ")
     raw = raw.replace("\\", " ")
-    decomposition = decompose_title_text(raw)
-    return str(decomposition.get("base_role") or decomposition.get("normalized_title") or normalize_title_text(raw)).strip()
+    return normalize_title_text(raw).strip()
 
 
 def _get_synonym_group(role: str) -> set[str]:
@@ -37,7 +38,7 @@ def _get_synonym_group(role: str) -> set[str]:
 
 
 def _find_matching_title_pattern(text: str, patterns: list[str]) -> str:
-    normalized_text = decompose_title_text(text).get("base_role") or normalize_title_text(text)
+    normalized_text = normalize_title_text(text)
     if not normalized_text:
         return ""
     text_synonyms = _get_synonym_group(normalized_text)
@@ -60,76 +61,29 @@ def _matches_normalized_title(text: str, patterns: list[str]) -> bool:
     return bool(_find_matching_title_pattern(text, patterns))
 
 
-def _title_match_family_text(text: str) -> str:
-    decomposition = decompose_title_text(text)
-    return str(decomposition.get("base_role") or decomposition.get("normalized_title") or "").strip()
-
-
 def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "ok": False,
         "reason": "TITLE_EMPTY",
         "normalized_title": "",
-        "base_role": "",
-        "seniority_modifiers": [],
-        "variant_terms": "",
         "match_family": "",
         "matched_pattern": "",
-        "title_seniority": "plain",
-        "primary_pattern_has_seniority": False,
-        "seniority_adjustment": 0,
         "warning_reason": "",
     }
     if not title:
         return result
 
     profile = profile if isinstance(profile, dict) else load_profile()
-    decomposition = decompose_title_text(title)
-    normalized_title = str(decomposition.get("normalized_title") or "").strip()
-    base_role = _title_match_family_text(title)
+    normalized_title = normalize_title_text(title)
     target_patterns = profile.get("target_roles", [])
     adjacent_patterns = profile.get("also_consider_roles", [])
-    matched_primary_pattern = ""
-    primary_pattern_has_seniority = False
-    for pattern in target_patterns:
-        cleaned_pattern = _normalize_title_pattern_text(pattern)
-        if not cleaned_pattern:
-            continue
-        if not matched_primary_pattern and _find_matching_title_pattern(base_role, [pattern]):
-            matched_primary_pattern = cleaned_pattern
-        if decompose_title_text(pattern).get("seniority_modifiers"):
-            if _find_matching_title_pattern(base_role, [pattern]):
-                primary_pattern_has_seniority = True
-    matched_secondary_pattern = _find_matching_title_pattern(base_role, adjacent_patterns)
+    matched_primary_pattern = _find_matching_title_pattern(normalized_title, target_patterns)
+    matched_secondary_pattern = _find_matching_title_pattern(normalized_title, adjacent_patterns)
     is_direct_match = bool(matched_primary_pattern)
     is_adjacent_match = bool(matched_secondary_pattern)
-    rules = load_parsing_rules()
-    lower_sen_tokens = set(rules.get("title_seniority_groups", {}).get("lower", []))
-    title_seniority = "plain"
-    if any(token in lower_sen_tokens for token in decomposition.get("seniority_modifiers") or []):
-        title_seniority = "lower"
-    elif decomposition.get("seniority_modifiers"):
-        title_seniority = "preferred"
 
-    result.update(
-        {
-            "normalized_title": normalized_title,
-            "base_role": base_role,
-            "seniority_modifiers": list(decomposition.get("seniority_modifiers") or []),
-            "variant_terms": str(decomposition.get("variant_terms") or "").strip(),
-            "matched_pattern": matched_primary_pattern or matched_secondary_pattern,
-            "title_seniority": title_seniority,
-            "primary_pattern_has_seniority": primary_pattern_has_seniority,
-            "warning_reason": "TITLE_SENIORITY_VARIANT" if decomposition.get("seniority_modifiers") else "",
-            "seniority_adjustment": 0,
-        }
-    )
-    if result["primary_pattern_has_seniority"]:
-        adjustments = rules.get("seniority_score_adjustments", {})
-        if title_seniority == "lower":
-            result["seniority_adjustment"] = adjustments.get("lower", -5)
-        elif title_seniority == "preferred":
-            result["seniority_adjustment"] = adjustments.get("preferred", 3)
+    result["normalized_title"] = normalized_title
+    result["matched_pattern"] = matched_primary_pattern or matched_secondary_pattern
 
     for rule in profile.get("reject_title_rules", []):
         pattern = rule.get("pattern", "")
@@ -270,7 +224,7 @@ def _load_required_parsing_rule_terms(rule_key: str) -> list[str]:
 
 
 def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple[bool, str]:
-    capability_rules = profile.get(KEY_CAPABILITY_PROFILE_RULES, [])
+    capability_rules = profile.get(KEY_CANDIDATE_CAPABILITIES, [])
     positive_hits = 0
     warning_reason = "OK"
 

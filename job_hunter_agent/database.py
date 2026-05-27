@@ -163,6 +163,24 @@ CREATE TABLE IF NOT EXISTS agent_state (
     data       TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Runtime cache for occupation-title taxonomy decisions.
+-- The O*NET taxonomy itself is stored as versioned JSON under data/knowledge,
+-- not duplicated into SQLite.
+CREATE TABLE IF NOT EXISTS occupation_title_cache (
+    normalized_title          TEXT NOT NULL,
+    candidate_profile_hash    TEXT NOT NULL,
+    taxonomy_version          TEXT NOT NULL,
+    result                    TEXT NOT NULL CHECK (result IN ('near', 'far', 'uncertain')),
+    matched_occupation_code   TEXT,
+    confidence                REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    created_at                TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (normalized_title, candidate_profile_hash, taxonomy_version)
+);
+CREATE INDEX IF NOT EXISTS idx_occupation_title_cache_lookup
+    ON occupation_title_cache(normalized_title, candidate_profile_hash, taxonomy_version);
+CREATE INDEX IF NOT EXISTS idx_occupation_title_cache_result
+    ON occupation_title_cache(result);
 """
 
 
@@ -202,6 +220,7 @@ EXPECTED_TABLES = {
     "profile_documents",
     "candidate_application_history",
     "agent_state",
+    "occupation_title_cache",
 }
 
 

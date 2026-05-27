@@ -1,3 +1,5 @@
+﻿"""Helpers for signal detection."""
+
 import re
 from typing import Any, List, Optional, Set
 
@@ -7,9 +9,8 @@ from job_hunter_agent.capability_matching import (
     evidence_tier_alignment_score,
 )
 
-from job_hunter_agent.profile_learning import build_role_title_review_token
 from job_hunter_agent.profile_store import (
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_COMPETITIVE_SIGNAL_ALIGNMENT,
     KEY_LEVEL,
     KEY_SIGNAL_CLUSTERS,
@@ -17,14 +18,9 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.role_analysis import text_contains_term
-from job_hunter_agent.role_analysis import _load_government_context_rules
 from job_hunter_agent.scoring_utils import build_scoring_source_text, profile_recency_multiplier
 from job_hunter_agent.parsing_schema import (
-    PARSING_APS_PATTERN_KEY,
-    PARSING_CLEARANCE_PATTERN_KEY,
     PARSING_DEFAULT_KEY,
-    PARSING_DEPARTMENT_PATTERN_KEY,
-    PARSING_EL_PATTERN_KEY,
     PARSING_JUNK_KEYWORDS_KEY,
     PARSING_MAX_DISCOVERY_TERMS_KEY,
     PARSING_MIN_TERM_LENGTH_KEY,
@@ -46,9 +42,7 @@ from job_hunter_agent.signal_schema import (
     ALIGNMENT_WEAK,
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_CV_FARMING_PATTERN,
-    CATEGORY_GOVERNMENT_CONTEXT,
     CATEGORY_HARD_BLOCKER_PATTERN,
-    CATEGORY_ROLE_TITLE_TOKEN,
     LEARNING_CATEGORY_KEY,
     LEARNING_CONTEXT_KEY,
     LEARNING_EVIDENCE_KEY,
@@ -75,12 +69,6 @@ from job_hunter_agent.signal_schema import (
     TITLE_REASON_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
     OBSERVATION_SKILL_KEY,
-)
-from job_hunter_agent.parsing_schema import (
-    PARSING_CLEARANCE_NORMALIZATION_KEY,
-    PARSING_GOVERNMENT_DISCOVERY_CONFIG_KEY,
-    PARSING_GOVERNMENT_DISCOVERY_PATTERNS_KEY,
-    PARSING_GOVERNMENT_TERMS_KEY,
 )
 from job_hunter_agent.signal_registry import signal_in_approved_knowledge
 from job_hunter_agent.job_quality import detect_cv_farming_signals, load_dodgy_job_rules
@@ -116,13 +104,6 @@ def _dedupe_key(value: Any) -> str:
     return compact_whitespace(str(value or "")).lower()
 
 
-def _iter_pattern_matches(patterns: dict[str, Any], key: str, text: str):
-    pattern = patterns.get(key)
-    if not isinstance(pattern, str) or not pattern.strip():
-        return ()
-    return re.finditer(pattern, text)
-
-
 def _signal_defaults() -> dict[str, str]:
     defaults = load_signal_defaults()
     return {
@@ -132,45 +113,11 @@ def _signal_defaults() -> dict[str, str]:
     }
 
 
-def _government_discovery_config() -> dict[str, Any]:
-    rules = load_parsing_rules()
-    config = rules.get(PARSING_GOVERNMENT_DISCOVERY_CONFIG_KEY, {})
-    return config if isinstance(config, dict) else {}
-
-
 def _resolved_signal_text(source: dict[str, Any], key: str, defaults: dict[str, str]) -> str:
     value = compact_whitespace(source.get(key) or "")
     if value:
         return value
     return compact_whitespace(defaults.get(key) or "")
-
-
-def _configured_terms(values: Any) -> list[str]:
-    if isinstance(values, str):
-        values = [values]
-    if not isinstance(values, list):
-        return []
-    return [
-        compact_whitespace(value).lower()
-        for value in values
-        if compact_whitespace(value)
-    ]
-
-
-def _normalized_clearance_value(raw_text: str, config: dict[str, Any]) -> str:
-    lowered = compact_whitespace(raw_text).lower()
-    if not lowered:
-        return ""
-    mappings = config.get(PARSING_CLEARANCE_NORMALIZATION_KEY, {})
-    if isinstance(mappings, dict):
-        for canonical, aliases in mappings.items():
-            canonical_value = compact_whitespace(canonical).lower()
-            if not canonical_value:
-                continue
-            alias_values = _configured_terms(aliases)
-            if alias_values and any(text_contains_term(lowered, alias) for alias in alias_values):
-                return canonical_value
-    return ""
 
 
 def _capability_rule_strength(rule: dict) -> float:
@@ -254,7 +201,7 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     aliases = _normalized_aliases([signal_name])
     capability_best = 0.0
 
-    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
+    for rule in profile.get(KEY_CANDIDATE_CAPABILITIES, []):
         if not isinstance(rule, dict):
             continue
         canonical = canonical_capability_term(rule)
@@ -406,22 +353,6 @@ def build_job_learning_signals(
         for skill in new_skills:
             _add_to_pending(skill, CATEGORY_CAPABILITY_CONCEPT, record, pending, seen)
 
-    # 3. Detect Government contexts
-    government_signals = _extract_government_context_learning_signals(record)
-    for item in government_signals:
-        sig_key = _dedupe_key(item.get(LEARNING_SIGNAL_KEY) or "")
-        if sig_key and sig_key not in seen:
-            seen.add(sig_key)
-            pending.append(item)
-
-    # 4. Role title patterns
-    title_reason = compact_whitespace(record.get(TITLE_REASON_KEY) or "").upper()
-    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
-        title = compact_whitespace(record.get(RECORD_TITLE_KEY) or "")
-        review_token = build_role_title_review_token(title)
-        if review_token:
-            _add_to_pending(review_token, CATEGORY_ROLE_TITLE_TOKEN, record, pending, seen, context=[title])
-
     if details_text:
         for item in detect_cv_farming_signals(details_text, load_dodgy_job_rules()):
             sig = compact_whitespace(item.get(LEARNING_SIGNAL_KEY) or "")
@@ -488,84 +419,6 @@ def _extract_capability_learning_signals(text: str, profile: dict) -> List[str]:
     # Basic n-gram extraction (discovery only)
     max_discovery_terms = int(config.get(PARSING_MAX_DISCOVERY_TERMS_KEY, 10) or 10)
     return list(set(t for t in tokens if len(t) >= config.get(PARSING_MIN_TERM_LENGTH_KEY, 3)))[:max_discovery_terms]
-
-
-def _extract_government_context_learning_signals(record: dict) -> List[dict[str, Any]]:
-    sources = [
-        compact_whitespace(record.get(RECORD_COMPANY_KEY) or ""),
-        compact_whitespace(record.get(RECORD_TITLE_KEY) or ""),
-        compact_whitespace(record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""),
-    ]
-    combined = "\n".join(item for item in sources if item)
-    lowered = combined.lower()
-    if not lowered:
-        return []
-
-    rules = load_parsing_rules()
-    patterns = rules.get(PARSING_GOVERNMENT_DISCOVERY_PATTERNS_KEY, {})
-    config = _government_discovery_config()
-
-    try:
-        _, false_positive_patterns = _load_government_context_rules()
-    except Exception:
-        false_positive_patterns = ()
-    for pattern in false_positive_patterns:
-        lowered = re.sub(pattern, " ", lowered)
-
-    signals: List[dict[str, Any]] = []
-    seen: Set[str] = set()
-
-    def add_signal(value: str, original_text: str | None = None) -> None:
-        cleaned = _dedupe_key(value)
-        if not cleaned or cleaned in seen:
-            return
-        seen.add(cleaned)
-        known_signal, knowledge_match = signal_in_approved_knowledge(CATEGORY_GOVERNMENT_CONTEXT, cleaned, [original_text] if original_text else None)
-        if known_signal:
-            return
-        signal: dict[str, Any] = {
-            LEARNING_SIGNAL_KEY: cleaned,
-            LEARNING_ORIGINAL_TEXTS_KEY: [original_text or cleaned],
-            LEARNING_CATEGORY_KEY: CATEGORY_GOVERNMENT_CONTEXT,
-            LEARNING_SOURCE_KEY: SOURCE_JOB_PARSING,
-            LEARNING_NEEDS_REVIEW_KEY: True,
-        }
-        if knowledge_match:
-            signal[LEARNING_KNOWLEDGE_MATCH_KEY] = knowledge_match
-        signals.append(signal)
-
-    for government_term in _configured_terms(config.get(PARSING_GOVERNMENT_TERMS_KEY)):
-        if text_contains_term(lowered, government_term):
-            add_signal(government_term, government_term)
-
-    for match in _iter_pattern_matches(patterns, PARSING_APS_PATTERN_KEY, lowered):
-        level = match.group(1)
-        add_signal(f"aps{level}", match.group(0))
-
-    for match in _iter_pattern_matches(patterns, PARSING_EL_PATTERN_KEY, lowered):
-        level = match.group(1)
-        add_signal(f"el{level}", match.group(0))
-
-    for match in _iter_pattern_matches(patterns, PARSING_CLEARANCE_PATTERN_KEY, lowered):
-        normalized = _normalized_clearance_value(match.group(0), config)
-        if normalized:
-            add_signal(normalized, match.group(0))
-
-    dept_pattern = patterns.get(PARSING_DEPARTMENT_PATTERN_KEY)
-    if not isinstance(dept_pattern, str) or not dept_pattern.strip():
-        return signals
-    dept_pattern = re.compile(dept_pattern, flags=re.IGNORECASE)
-    for line in lowered.splitlines():
-        line = compact_whitespace(line)
-        if not line or "department" not in line:
-            continue
-        for match in dept_pattern.finditer(line):
-            phrase = compact_whitespace(match.group(0))
-            if len(phrase.split()) < 2 or len(phrase) > 80:
-                continue
-            add_signal(phrase, phrase)
-
-    return signals
 
 
 def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:

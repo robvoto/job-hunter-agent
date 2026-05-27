@@ -1,4 +1,4 @@
-import * as onboardingPage from './onboarding-page.js';
+﻿import * as onboardingPage from './onboarding-page.js';
 import { setSelectedLocations, hydrateSearchBasics } from './onboarding-search.js';
 import * as onboardingStorage from './onboarding-storage.js';
 import * as onboardingUpload from './onboarding-upload.js';
@@ -563,7 +563,7 @@ function hydrateDraftStep(profile) {
   );
   onboardingPage.setReviewTargetTitles(normalizedTitles.primary);
   onboardingPage.setReviewSecondaryTitles(normalizedTitles.secondary);
-  onboardingPage.setReviewCapabilityRules((profile?.capability_profile_rules || []).map(normalizeReviewCapability).filter((rule) => rule.name));
+  onboardingPage.setReviewCapabilityRules((profile?.candidate_capabilities || []).map(normalizeReviewCapability).filter((rule) => rule.name));
   onboardingPage.selectedReviewCapabilityIndexes.clear();
   onboardingPage.setReviewCapabilityVisibleCount(getReviewCapabilityPreviewCount());
   renderReviewStep();
@@ -706,7 +706,7 @@ async function finishSetup() {
         minimum_daily_rate: searchPrefs.minimum_daily_rate,
       target_roles: onboardingPage.reviewTargetTitles,
       also_consider_roles: onboardingPage.reviewSecondaryTitles,
-      capability_profile_rules: onboardingPage.reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
+      candidate_capabilities: onboardingPage.reviewCapabilityRules.map(normalizeReviewCapability).filter((rule) => rule.name),
     }),
   });
   const payload = await response.json().catch(() => ({}));

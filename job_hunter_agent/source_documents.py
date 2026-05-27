@@ -1,4 +1,4 @@
-"""Source document processing and onboarding orchestration.
+﻿"""Source document processing and onboarding orchestration.
 
 This module handles the extraction of text from source files (such as CVs 
 in .docx or .txt format) and coordinates the multi-step onboarding process 
@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 from job_hunter_agent.cv_pipeline import run_cv_pipeline
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_cv_chars_per_page
 from job_hunter_agent.logging_utils import format_log_block
-from job_hunter_agent.llm_gate import client as llm_client
+from job_hunter_agent.llm_gate import client as llm_client, generate_target_occupation_queries
 from job_hunter_agent.paths import (
     DATA_DIR,
     OUTPUT_DIR,
@@ -28,7 +28,6 @@ from job_hunter_agent.paths import (
 )
 from job_hunter_agent.profile_learning import (
     build_learning_patch,
-    build_role_title_review_signals,
     clear_capability_debug_log,
     extract_title_pattern_suggestions,
     repair_text,
@@ -37,7 +36,7 @@ from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
     build_candidate_profile_tiers_from_sections,
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_CV_MAX_PAGES,
     KEY_EVIDENCE_TIERS,
     KEY_ONBOARDING_COMPLETE,
@@ -65,14 +64,14 @@ ROOT_DIR = REPO_ROOT
 ONBOARDING_RESET_FIELDS = (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_ONBOARDING_COMPLETE,
-    "cv_text",
     KEY_EVIDENCE_TIERS,
     "llm_profile_brief",
     "star_evidence_text",
     "dominant_signal_clusters",
     KEY_MUST_NOT_REQUIRED_SKILLS,
+    "target_occupation_queries",
 )
 
 DEFAULT_SOURCE_MATERIALS = {
@@ -433,8 +432,6 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # --- Build a fresh onboarding patch from clean defaults ---
     patch = build_onboarding_reset_patch(active_onboarding_settings)
 
-    # --- Extract fresh from combined_text ---
-    patch["cv_text"] = combined_text
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
@@ -445,16 +442,16 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         learning_patch = learning_future.result()
     patch.update(pipeline_patch)
     for key, value in learning_patch.items():
-        if key == KEY_CAPABILITY_PROFILE_RULES:
+        if key == KEY_CANDIDATE_CAPABILITIES:
             continue
         patch[key] = value
-    capability_rules = list(learning_patch.get(KEY_CAPABILITY_PROFILE_RULES, []))
+    capability_rules = list(learning_patch.get(KEY_CANDIDATE_CAPABILITIES, []))
     dominant_clusters = list(pipeline_patch.get(KEY_SIGNAL_CLUSTERS, []))
-    patch[KEY_CAPABILITY_PROFILE_RULES] = merge_capability_rules_with_dominant_signals(
+    patch[KEY_CANDIDATE_CAPABILITIES] = merge_capability_rules_with_dominant_signals(
         capability_rules, dominant_clusters
     )
 
-    brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CAPABILITY_PROFILE_RULES) or [])
+    brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CANDIDATE_CAPABILITIES) or [])
     if brief:
         patch["llm_profile_brief"] = brief
 
@@ -495,31 +492,33 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         print(f"[TITLE_PATTERNS] Extracted {len(patch[KEY_PRIMARY_PATTERNS])} target and {len(patch[KEY_SECONDARY_PATTERNS])} secondary patterns")
         print(
             f"[ONBOARDING] Extraction summary: target={len(patch[KEY_PRIMARY_PATTERNS])} "
-            f"secondary={len(patch[KEY_SECONDARY_PATTERNS])} capabilities={len(patch.get(KEY_CAPABILITY_PROFILE_RULES) or [])}"
+            f"secondary={len(patch[KEY_SECONDARY_PATTERNS])} capabilities={len(patch.get(KEY_CANDIDATE_CAPABILITIES) or [])}"
         )
-        review_signals = build_role_title_review_signals(
-            patch[KEY_SECONDARY_PATTERNS],
-            source_sections=source_sections,
-        )
-        if review_signals:
-            register_signals(review_signals)
         target_roles = list(patch.get(KEY_PRIMARY_PATTERNS) or [])
         if target_roles:
             current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
             if not current_kw and not manual_keywords:
-                from job_hunter_agent.title_normalization_rules import derive_search_keyword
-                base = derive_search_keyword(target_roles[0])
-                patch["search_settings"]["keywords"] = base or target_roles[0]
+                patch["search_settings"]["keywords"] = target_roles[0]
                 print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
     except Exception as exc:
         print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
+
+    # --- Generate machine-facing O*NET occupation queries ---
+    occupation_queries = generate_target_occupation_queries(
+        target_roles=list(patch.get(KEY_PRIMARY_PATTERNS) or []),
+        also_consider_roles=list(patch.get(KEY_SECONDARY_PATTERNS) or []),
+        cv_text=combined_text,
+        llm_client=llm_client,
+    )
+    patch["target_occupation_queries"] = occupation_queries
+    print(f"[OCCUPATION_QUERIES] Generated {len(occupation_queries)} target occupation queries: {occupation_queries}")
 
     profile = patch_profile(patch)
 
     extraction_counts = {
         "target_titles": len(patch.get(KEY_PRIMARY_PATTERNS) or []),
         "secondary_titles": len(patch.get(KEY_SECONDARY_PATTERNS) or []),
-        "capabilities": len(patch.get(KEY_CAPABILITY_PROFILE_RULES) or []),
+        "capabilities": len(patch.get(KEY_CANDIDATE_CAPABILITIES) or []),
         "dominant_signal_clusters": len(patch.get("dominant_signal_clusters") or []),
     }
 

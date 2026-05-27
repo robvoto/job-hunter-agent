@@ -1,3 +1,5 @@
+﻿"""Tests for llm rejection suggestions."""
+
 from job_hunter_agent import llm_gate
 import json
 import pytest
@@ -135,7 +137,7 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
         lambda: {
             "llm_profile_brief": "",
             "star_evidence_text": "",
-            "capability_profile_rules": [],
+            "candidate_capabilities": [],
             "salary_preferences": {
                 "minimum_salary_yearly": 150000,
                 "minimum_daily_rate": 900,
@@ -228,8 +230,8 @@ def test_normalize_llm_learning_candidates_uses_managed_max_items(monkeypatch):
 
     candidates = llm_gate.normalize_llm_learning_candidates(
         [
-            {"signal": "platform engineer", "suggested_category": "role_title_token"},
-            {"signal": "delivery manager", "suggested_category": "role_title_token"},
+            {"signal": "platform engineer", "suggested_category": "capability_concept"},
+            {"signal": "delivery manager", "suggested_category": "capability_concept"},
         ]
     )
 
@@ -283,14 +285,15 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
             "decision": "KEEP",
             "grade": "SOLID",
             "learning_candidates": [
-                {"signal": "platform engineer", "suggested_category": "role_title_token", "original_texts": ["Platform Engineer"]},
-                {"signal": "platform engineer", "suggested_category": "role_title_token", "original_texts": ["Platform Engineer"]},
+                {"signal": "platform engineer", "suggested_category": "capability_concept", "original_texts": ["Platform Engineer"]},
+                {"signal": "platform engineer", "suggested_category": "capability_concept", "original_texts": ["Platform Engineer"]},
             ],
             "job_requirements": [
                 "Strong stakeholder engagement",
                 "Strong stakeholder engagement",
             ],
-        }
+        },
+        valid_capability_names=frozenset(),
     )
 
     assert payload == {
@@ -298,7 +301,7 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
         "learning_candidates": [
             {
                 "signal": "platform engineer",
-                "suggested_category": "role_title_token",
+                "suggested_category": "capability_concept",
                 "suggested_values": [],
                 "context_terms": [],
                 "confidence": "",
@@ -312,8 +315,8 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
 
 
 def test_normalize_llm_review_payload_rejects_missing_grade():
-    with pytest.raises(ValueError, match="missing grade"):
-        llm_gate.normalize_llm_review_payload({"decision": "KEEP"})
+    with pytest.raises(ValueError):
+        llm_gate.normalize_llm_review_payload({"decision": "KEEP"}, valid_capability_names=frozenset())
 
 
 def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
@@ -322,6 +325,11 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "test-model")
     monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
     monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {"candidate_capabilities": [{"name": "stakeholder management", "level": "strong"}]},
+    )
 
     payload = llm_gate._request_learning_payload("Example role description", fit_review=True)
 

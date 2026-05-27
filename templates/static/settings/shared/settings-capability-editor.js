@@ -1,4 +1,4 @@
-import { escapeHtml, settingsField } from './settings-utils.js';
+﻿import { escapeHtml, settingsField } from './settings-utils.js';
 import * as capabilityUi from '../../common/capability-ui.js';
 
 export const JobHunterCapabilityEditor = (function () {
@@ -80,7 +80,7 @@ export const JobHunterCapabilityEditor = (function () {
     if (!aliases.length) {
       expandedCapabilityRows.delete(index);
     }
-    settingsField('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+    settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
     renderCapabilityRuleEditor();
   }
 
@@ -170,7 +170,7 @@ export const JobHunterCapabilityEditor = (function () {
     expandedCapabilityRows = new Set(
       [...expandedCapabilityRows].filter(index => index >= 0 && index < capabilityRuleState.length)
     );
-    settingsField('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+    settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
     renderCapabilityRuleEditor();
   }
 
@@ -179,7 +179,7 @@ export const JobHunterCapabilityEditor = (function () {
       .map(normalizeCapabilityRule)
       .filter(rule => rule.name);
     capabilityRuleState = cleaned;
-    settingsField('capability_profile_rules').value = capabilityRulesToText(cleaned);
+    settingsField('candidate_capabilities').value = capabilityRulesToText(cleaned);
     return cleaned;
   }
 
@@ -241,7 +241,7 @@ export const JobHunterCapabilityEditor = (function () {
         ...capabilityRuleState[index],
         [key]: key === 'name' ? String(field.value || '').replace(/\s+/g, ' ').trim() : String(field.value || '').trim().toLowerCase(),
       };
-      settingsField('capability_profile_rules').value = capabilityRulesToText(capabilityRuleState);
+      settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
       markDirty();
     });
 

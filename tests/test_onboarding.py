@@ -1,3 +1,5 @@
+﻿"""Tests for onboarding."""
+
 import base64
 import json
 from pathlib import Path
@@ -35,7 +37,7 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
 
 
 def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
-    monkeypatch.setattr(_fa, "is_auth_disabled", lambda: True)
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"})
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
     monkeypatch.setattr(_pages, "get_user_id_for_runtime", lambda: "test-user")
 
@@ -200,7 +202,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
             "prefer_sector": ["government", "private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "capability_profile_rules": [],
+            "candidate_capabilities": [],
         }
     )
 
@@ -228,7 +230,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
             "prefer_sector": ["government"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "capability_profile_rules": [],
+            "candidate_capabilities": [],
         }
     )
 
@@ -243,7 +245,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
     cv_path.write_text("A" * 5000, encoding="utf-8")
 
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {"match_preferences": {}})
-    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"capability_profile_rules": []})
+    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"candidate_capabilities": []})
     monkeypatch.setattr(source_documents, "extract_title_pattern_suggestions", lambda text, settings: {"target_roles": [], "also_consider_roles": []})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {"capability_strength_preset": "balanced"}})
@@ -289,7 +291,7 @@ def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_se
             "prefer_sector": ["private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "capability_profile_rules": [],
+            "candidate_capabilities": [],
         }
     )
 
@@ -424,12 +426,12 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
     monkeypatch.setattr(
         source_documents,
         "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_roles": [], "also_consider_roles": [], "suggested_search_keywords": []},
+        lambda text, settings: {"target_roles": [], "also_consider_roles": []},
     )
 
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
         captured["onboarding_settings"] = onboarding_settings
-        return {"capability_profile_rules": [{"name": "delivery", "level": "working", "fit": "core"}]}
+        return {"candidate_capabilities": [{"name": "delivery", "level": "working", "fit": "core"}]}
 
     monkeypatch.setattr(source_documents, "run_cv_pipeline", fake_run_cv_pipeline)
 
@@ -602,7 +604,7 @@ def test_remove_review_key_supports_unapply(monkeypatch):
 
 
 def test_patch_affects_matching_rules_includes_capability_matrix():
-    assert server_helpers.SettingsHandler._patch_affects_matching_rules({"capability_profile_rules": []}) is True
+    assert server_helpers.SettingsHandler._patch_affects_matching_rules({"candidate_capabilities": []}) is True
 
 
 def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp_path):
@@ -637,16 +639,15 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
 
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: tmp_path / "workspace.html")
     monkeypatch.setattr(server_helpers, "load_run_stats", lambda: {"run_started_at": "2026-05-16T08:00:00"})
-    monkeypatch.setattr(server_helpers, "AUTH_DISABLED", True)
     monkeypatch.setattr(
         server_helpers,
         "rebuild_workspace_results",
         lambda reason="", user_id=None: rebuilds.append((reason, user_id)),
     )
 
-    server_helpers._rebuild_workspace_on_startup()
+    server_helpers._rebuild_workspace_on_startup("test-user")
 
-    assert rebuilds == [("server startup rebuild", server_helpers.LOCAL_USER_ID)]
+    assert rebuilds == [("server startup rebuild", "test-user")]
 
 
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):

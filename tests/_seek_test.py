@@ -1,3 +1,5 @@
+"""Tests for seek."""
+
 from playwright.sync_api import sync_playwright
 from job_hunter_agent.scrapers.seek import SELECTOR_CARDS
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR

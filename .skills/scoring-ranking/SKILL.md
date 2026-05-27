@@ -1,3 +1,8 @@
+---
+name: scoring-ranking
+description: Use ONLY for fit score calculation, ranking, score explanations, score weights, and score regression tests. Do NOT use for hard rejection filters; use job-filtering.
+---
+
 # Skill: Scoring & Ranking
 
 Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection.py`, `score_labels.py`, or match bands.

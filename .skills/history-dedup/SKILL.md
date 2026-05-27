@@ -1,3 +1,8 @@
+---
+name: history-dedup
+description: Use ONLY for job history, viewed/applied/hidden/saved state, duplicate job identity, and cross-source deduplication. Do NOT use for scoring or filtering rules.
+---
+
 # Skill: History & Dedup
 
 Use before editing job history, viewed/applied/hidden state, posting timestamps, or deduplication.

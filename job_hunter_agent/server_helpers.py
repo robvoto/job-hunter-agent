@@ -1,4 +1,4 @@
-"""Server-side helper functions for the Job Hunter Agent web application.
+﻿"""Server-side helper functions for the Job Hunter Agent web application.
 
 This module provides utilities for handling server-specific logic,
 including user authentication, settings management, data normalization,
@@ -39,10 +39,8 @@ from job_hunter_agent.io_utils import (
     load_ui_labels,
     write_run_stats,
 )
-from job_hunter_agent.config import AUTH_DISABLED
 from job_hunter_agent.paths import (
     DATA_DIR,
-    LOCAL_USER_ID,
     USERS_DIR,
     REPO_ROOT as ROOT_DIR,
     get_workspace_results_path,
@@ -83,7 +81,7 @@ from job_hunter_agent.profile_store import (
     KEY_BRIEF,
     KEY_STAR_EVIDENCE,
     KEY_EVIDENCE_TIERS,
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_ONBOARDING_COMPLETE,
     KEY_ONBOARDING_SETTINGS,
     MATCHING_RULE_PROFILE_KEYS,
@@ -1040,7 +1038,7 @@ def _onboarding_complete(profile: dict[str, Any] | None = None) -> bool:
 def _onboarding_resume_step(profile: dict[str, Any] | None = None) -> int:
     """Returns the wizard step to resume at (1 = upload, 2 = review draft)."""
     current = profile if isinstance(profile, dict) else load_profile()
-    capability_rules = [r for r in current.get("capability_profile_rules", []) if r]
+    capability_rules = [r for r in current.get("candidate_capabilities", []) if r]
     if capability_rules:
         return 2
     return 1
@@ -1071,14 +1069,11 @@ def _run_scrape_job() -> None:
         _set_run_in_progress(False)
 
 
-def _rebuild_workspace_on_startup() -> None:
+def _rebuild_workspace_on_startup(user_id: str) -> None:
     if not get_workspace_results_path().exists() and not load_run_stats():
         return
-    if not AUTH_DISABLED:
-        print("[WORKSPACE][INFO] Startup rebuild skipped: no request user context is available.")
-        return
     try:
-        rebuild_workspace_results(reason="server startup rebuild", user_id=LOCAL_USER_ID)
+        rebuild_workspace_results(reason="server startup rebuild", user_id=user_id)
     except Exception as exc:
         print(f"[WORKSPACE][WARN] Could not rebuild on startup: {type(exc).__name__}: {exc}")
 
@@ -1105,8 +1100,8 @@ class SettingsHandler:
         else:
             auto_brief = build_llm_profile_brief(
                 capability_rules=normalized.get(
-                    KEY_CAPABILITY_PROFILE_RULES,
-                    current.get(KEY_CAPABILITY_PROFILE_RULES, []),
+                    KEY_CANDIDATE_CAPABILITIES,
+                    current.get(KEY_CANDIDATE_CAPABILITIES, []),
                 ),
             )
             normalized[KEY_BRIEF] = auto_brief

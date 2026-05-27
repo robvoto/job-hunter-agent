@@ -1,3 +1,8 @@
+---
+name: profile-extraction
+description: Use ONLY for CV parsing, profile extraction, candidate capabilities, role history, role duration, and profile normalization. Do NOT use for job-ad learning.
+---
+
 # Skill: Profile Extraction
 
 Use before editing CV/onboarding/profile extraction, capability clustering, or profile updates.

@@ -1,3 +1,5 @@
+"""Tests for scraper base."""
+
 from datetime import date
 from types import SimpleNamespace
 

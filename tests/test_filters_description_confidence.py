@@ -1,3 +1,5 @@
+﻿"""Tests for filters description confidence."""
+
 from job_hunter_agent import filters
 from job_hunter_agent import hard_blocker_rules
 from job_hunter_agent import signal_registry
@@ -26,9 +28,9 @@ AGILE_METHODS_RULE = {
 }
 
 
-def _load_profile(*, capability_profile_rules=None, reject_description_phrase_rules=None, must_not_require_skills=None, extra=None):
+def _load_profile(*, candidate_capabilities=None, reject_description_phrase_rules=None, must_not_require_skills=None, extra=None):
     profile = {
-        "capability_profile_rules": capability_profile_rules or [],
+        "candidate_capabilities": candidate_capabilities or [],
         "reject_description_phrase_rules": reject_description_phrase_rules or [],
         "must_not_require_skills": must_not_require_skills or [],
     }

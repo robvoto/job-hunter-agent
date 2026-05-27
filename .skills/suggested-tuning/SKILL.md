@@ -1,6 +1,6 @@
----
+﻿---
 name: suggested-tuning
-description: Trace, verify, and change Settings > Optimise > Suggested Tuning. Use when checking why suggestions are empty, whether scrape/review data generated tuning items, how capability suggestions are confirmed, or how repeated rejection patterns become exclusion suggestions.
+description: Use ONLY for Settings > Optimise > Suggested Tuning: empty suggestions, scrape/review-derived tuning items, capability suggestion confirmation, and rejection-pattern exclusion suggestions.
 ---
 
 # Suggested Tuning
@@ -53,7 +53,7 @@ Confirming a suggestion calls:
 - `POST /api/tuning-decisions`
 - `apply_capability_tuning_decisions()`
 
-This writes to `capability_profile_rules` in the runtime profile.
+This writes to `candidate_capabilities` in the runtime profile.
 
 ## Rule suggestions
 
@@ -91,7 +91,7 @@ Minimum checks:
 - saved review data produces capability suggestions for repeated kept-role skills
 - already classified capabilities are not suggested again
 - repeated rejection reasons produce rule suggestions at threshold
-- capability confirmation writes `capability_profile_rules`
+- capability confirmation writes `candidate_capabilities`
 
 For UI shell changes, keep settings rendering tests aligned with current class names and element IDs.
 

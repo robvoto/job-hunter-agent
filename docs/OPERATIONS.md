@@ -84,6 +84,9 @@ Server logs:
 - each line gets a timestamp
 - the terminal still shows the same server output
 - browser `console.log` is separate from server logs and only matters for JS running in the page
+- structured uncertainty events are appended to `output/uncertainty.jsonl` and also logged in the main server log
+- to emit one, call `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` then `append_uncertainty_log()` with `job_hunter_agent.paths.UNCERTAINTY_LOG_PATH`
+- keep `reason_code` stable so the file stays queryable across agents and future runs
 
 Session cookie behavior:
 
@@ -91,7 +94,6 @@ Session cookie behavior:
 - `Secure` is enabled when the request is HTTPS
 - `http://127.0.0.1:8765` and LAN HTTP access stay usable without a reverse proxy
 - set `JOB_HUNTER_SESSION_COOKIE_SECURE=true` or `false` to force a mode explicitly
-- for local debug-only testing, set `JOB_HUNTER_DISABLE_AUTH=true` together with `--debug` to bypass login and CSRF checks
 - logout is `POST /logout` only; the account menu submits the CSRF token automatically
 
 Primary routes:

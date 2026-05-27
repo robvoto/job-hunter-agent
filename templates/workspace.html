@@ -63,7 +63,6 @@
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
     let workspaceWaitState = null;
-    let workspaceProfile = null;
     let workspaceResultsLoadToken = 0;
 
     function clearOnboardingBrowserState() {
@@ -113,24 +112,6 @@
         window.localStorage.removeItem(ONBOARDING_WELCOME_KEY);
         return null;
       }
-    }
-
-    async function loadWorkspaceProfile() {
-      if (workspaceProfile) {
-        return workspaceProfile;
-      }
-      try {
-        const response = await jobHunterFetch('/api/profile');
-        if (!response.ok) {
-          workspaceProfile = null;
-          return null;
-        }
-        const profile = await response.json().catch(() => ({}));
-        workspaceProfile = profile && typeof profile === 'object' ? profile : null;
-      } catch {
-        workspaceProfile = null;
-      }
-      return workspaceProfile;
     }
 
     function escapeHtml(value) {
@@ -402,12 +383,6 @@
       }
       const state = peekOnboardingWelcomeState();
       if (!state) {
-        dismissOnboardingOverlay();
-        return;
-      }
-      const profile = await loadWorkspaceProfile();
-      const hasLoadedCv = Boolean(String(profile?.cv_text || '').trim());
-      if (!hasLoadedCv) {
         dismissOnboardingOverlay();
         return;
       }

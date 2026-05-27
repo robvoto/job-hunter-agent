@@ -1,3 +1,8 @@
+---
+name: knowledge-management
+description: Use ONLY for managed knowledge/config sources, DB-seeded knowledge, rule loaders, file/path ownership, and source-of-truth questions. Do NOT use for UI or scraper logic directly.
+---
+
 # Skill: Knowledge Management
 
 Use before editing managed JSON knowledge, rule loaders, paths, or approval-backed runtime knowledge.

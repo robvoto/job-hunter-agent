@@ -1,3 +1,8 @@
+---
+name: no-hardcoding
+description: Use whenever changing thresholds, labels, mappings, schema fields, defaults, business rules, fallback values, or rule IDs. Usually combine with the task domain skill.
+---
+
 # Skill: No Hardcoding
 
 Use before adding/changing thresholds, mappings, defaults, labels, scoring values, rule IDs, schema fields, or business judgement.
@@ -5,6 +10,7 @@ Use before adding/changing thresholds, mappings, defaults, labels, scoring value
 ## Core rule
 Business judgement must not hide in feature code.
 Silent fallbacks are not acceptable. If required data is missing, surface an explicit error or fix the owner.
+Do not mask failures with fallback encoders, fallback parsers, fallback labels, default models, guessed config, alternate fields, broad exception swallowing, or compatibility shims. Stop and expose the failure unless the human explicitly approves the fallback with a stated reason.
 
 ## Forbidden
 - Inline scoring maps, e.g. `{ "strong": 4, "working": 3 }`

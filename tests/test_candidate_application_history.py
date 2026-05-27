@@ -1,3 +1,5 @@
+"""Tests for candidate application history."""
+
 from copy import deepcopy
 import json
 from unittest.mock import patch

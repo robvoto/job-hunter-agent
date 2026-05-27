@@ -1,3 +1,5 @@
+"""Tests for results runtime config."""
+
 from pathlib import Path
 from datetime import datetime
 from unittest.mock import patch, MagicMock
@@ -141,25 +143,28 @@ def test_rendered_workspace_html_content():
             captured_tools["header_tools_html"] = header_tools_html
         return "<section>Rendered Section</section>"
 
-    with patch('job_hunter_agent.profile_store.load_profile', return_value=mock_profile), \
-         patch('job_hunter_agent.user_settings.get_workspace_minimum_score', return_value=55), \
-         patch('job_hunter_agent.workspace_data.build_workspace_record_sets', return_value={
-              "shortlist_records": [], "current_records": [], "archive_records": [],
-              "recent_archive_records": [], "stale_archive_records": [],
-              "applied_records": [], "hidden_records": []
-          }), \
-         patch('job_hunter_agent.history.build_history_cluster_index', return_value={}), \
-         patch('job_hunter_agent.workspace_renderer.render_score_filter_options', return_value="<option>Score Options</option>"), \
-         patch('job_hunter_agent.workspace_renderer.render_posted_filter_options', return_value="<option>Posted Options</option>"), \
-         patch('job_hunter_agent.workspace_renderer.render_work_type_filter_options', return_value="<option>Work Type Options</option>"), \
-         patch('job_hunter_agent.workspace_service.render_section', side_effect=fake_render_section), \
-         patch('job_hunter_agent.workspace_renderer.render_match_level_guide_html', return_value="<div>Match Level Guide</div>"), \
-         patch('job_hunter_agent.workspace_service._format_common_search_preferences', return_value=("Permanent", "Remote", "Any")), \
-         patch('job_hunter_agent.workspace_service._format_salary_min_label', return_value="$100,000/yr"), \
-         patch('job_hunter_agent.workspace_renderer._workspace_ui_labels', return_value=mock_ui_labels_content), \
-         patch('job_hunter_agent.paths.RESULTS_TEMPLATE_PATH', new_callable=MagicMock) as mock_results_template_path:
-
-        mock_results_template_path.read_text.return_value = (Path(__file__).parent.parent / "templates" / "results.html").read_text(encoding="utf-8")
+    with (
+        patch('job_hunter_agent.profile_store.load_profile', return_value=mock_profile),
+        patch('job_hunter_agent.user_settings.get_workspace_minimum_score', return_value=55),
+        patch('job_hunter_agent.workspace_data.build_workspace_record_sets', return_value={
+            "shortlist_records": [], "current_records": [], "archive_records": [],
+            "recent_archive_records": [], "stale_archive_records": [],
+            "applied_records": [], "hidden_records": []
+        }),
+        patch('job_hunter_agent.history.build_history_cluster_index', return_value={}),
+        patch('job_hunter_agent.workspace_renderer.render_score_filter_options', return_value="<option>Score Options</option>"),
+        patch('job_hunter_agent.workspace_renderer.render_posted_filter_options', return_value="<option>Posted Options</option>"),
+        patch('job_hunter_agent.workspace_renderer.render_work_type_filter_options', return_value="<option>Work Type Options</option>"),
+        patch('job_hunter_agent.workspace_service.render_section', side_effect=fake_render_section),
+        patch('job_hunter_agent.workspace_renderer.render_match_level_guide_html', return_value="<div>Match Level Guide</div>"),
+        patch('job_hunter_agent.workspace_service._format_common_search_preferences', return_value=("Permanent", "Remote", "Any")),
+        patch('job_hunter_agent.workspace_service._format_salary_min_label', return_value="$100,000/yr"),
+        patch('job_hunter_agent.workspace_renderer._workspace_ui_labels', return_value=mock_ui_labels_content),
+        patch('job_hunter_agent.paths.RESULTS_TEMPLATE_PATH', new_callable=MagicMock) as mock_results_template_path,
+    ):
+        mock_results_template_path.read_text.return_value = (
+            Path(__file__).parent.parent / "templates" / "results.html"
+        ).read_text(encoding="utf-8")
 
         workspace_service.render_html(
             output_path=mock_output_path,

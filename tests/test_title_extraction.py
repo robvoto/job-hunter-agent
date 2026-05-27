@@ -1,3 +1,5 @@
+"""Tests for title extraction."""
+
 from job_hunter_agent.profile_learning import (
     _CURRENT_MONTH,
     _CURRENT_YEAR,

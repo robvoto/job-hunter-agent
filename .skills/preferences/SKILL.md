@@ -1,3 +1,8 @@
+---
+name: preferences
+description: Use ONLY for candidate preference inputs and settings such as location, contract, government, salary, work mode, source settings, and preference-to-filter handoff. Do NOT use for scoring implementation.
+---
+
 # Skill: Preferences
 
 Use before editing location, salary, contract, government, work mode, or preference weights.

@@ -1,4 +1,4 @@
-import { JobHunterChipEditor as chipEditor } from './settings-chip-editor.js';
+﻿import { JobHunterChipEditor as chipEditor } from './settings-chip-editor.js';
 import { JobHunterCapabilityEditor as capabilityEditor } from './settings-capability-editor.js';
 import { JobHunterAdminSettings as adminSettings } from '../global/settings-admin.js';
 import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-alerts.js';
@@ -289,7 +289,7 @@ function collectProfile() {
     },
     llm_profile_brief_mode: 'auto',
     llm_profile_brief: '',
-    capability_profile_rules: capabilityEditor.collectCapabilityRuleState(),
+    candidate_capabilities: capabilityEditor.collectCapabilityRuleState(),
     target_roles: toLines(settingsField('target_roles').value),
     also_consider_roles: toLines(settingsField('also_consider_roles').value),
     must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
@@ -346,7 +346,7 @@ function fillForm(profile) {
   document.getElementById('contract_weight').value = String(profile.preference_weights?.contract);
   document.getElementById('government_weight').value = String(profile.preference_weights?.government);
   document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness);
-  capabilityEditor.setCapabilityRuleState(profile.capability_profile_rules || []);
+  capabilityEditor.setCapabilityRuleState(profile.candidate_capabilities || []);
   document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
   for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
     settingsField(id).value = (profile[id] || []).join('\n');

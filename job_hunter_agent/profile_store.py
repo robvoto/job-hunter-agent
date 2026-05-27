@@ -1,4 +1,4 @@
-"""Profile persistence and defaults.
+﻿"""Profile persistence and defaults.
 
 This module defines the runtime profile structure used by matching and review flows.
 It provides logic for creating a safe default profile, loading/saving profile.json,
@@ -133,12 +133,11 @@ KEY_CV_MAX_PAGES = "cv_max_pages"
 KEY_BRIEF_MODE = "llm_profile_brief_mode"
 KEY_BRIEF = "llm_profile_brief"
 KEY_STAR_EVIDENCE = "star_candidate_profile_text"
-KEY_CV_TEXT = "cv_text"
 KEY_EVIDENCE_TIERS = "candidate_profile_tiers"
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
-KEY_CAPABILITY_PROFILE_RULES = "capability_profile_rules"
+KEY_CANDIDATE_CAPABILITIES = "candidate_capabilities"
 KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
 KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
@@ -150,7 +149,7 @@ KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 MATCHING_RULE_PROFILE_KEYS = frozenset({
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
@@ -261,23 +260,16 @@ DEFAULT_PROFILE = {
     "candidate_profile_tier_weights": {
         **DEFAULT_EVIDENCE_TIER_WEIGHTS,
     },
-    KEY_CAPABILITY_PROFILE_RULES: [],
+    KEY_CANDIDATE_CAPABILITIES: [],
     "dominant_signal_clusters": [],
     "target_roles": [],
     "also_consider_roles": [],
+    "target_occupation_queries": [],
     "must_not_require_skills": [],  
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
     },
 }
-
-
-def strip_legacy_cv_text(profile: dict[str, Any] | None) -> dict[str, Any]:
-    cleaned = copy.deepcopy(profile if isinstance(profile, dict) else {})
-    cleaned.pop(KEY_CV_TEXT, None)
-    return cleaned
-
-
 def _decode_escaped_newlines(value: Any) -> str:
     text = str(value or "")
     return (
@@ -536,7 +528,6 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         raise TypeError("profile must be a dict")
     merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
     merged.pop("".join(["llm", "_capability_naming_guidance"]), None)
-    merged.pop(KEY_CV_TEXT, None)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
     merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
     merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
@@ -564,8 +555,14 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     if primary_search_location and not merged["match_preferences"].get("home_location"):
         merged["match_preferences"]["home_location"] = primary_search_location
-    merged[KEY_CAPABILITY_PROFILE_RULES] = normalize_capability_rules(
-        merged.get(KEY_CAPABILITY_PROFILE_RULES, []),
+    # Migrate legacy field name from capability_profile_rules → candidate_capabilities.
+    # Runs transparently on every load; committed on next save.
+    if "candidate_capabilities" in merged:
+        if KEY_CANDIDATE_CAPABILITIES not in merged or not merged[KEY_CANDIDATE_CAPABILITIES]:
+            merged[KEY_CANDIDATE_CAPABILITIES] = merged["candidate_capabilities"]
+        del merged["candidate_capabilities"]
+    merged[KEY_CANDIDATE_CAPABILITIES] = normalize_capability_rules(
+        merged.get(KEY_CANDIDATE_CAPABILITIES, []),
         merged.get("onboarding_settings", {}),
     )
     primary_titles, secondary_titles = normalize_title_pattern_lists(
@@ -591,10 +588,7 @@ def load_profile() -> dict[str, Any]:
     data = json.loads(row["data"])
     if not isinstance(data, dict):
         raise ProfileLoadError("user_profile in DB must contain a JSON object")
-    migrated = strip_legacy_cv_text(data)
-    if migrated != data:
-        save_profile(migrated)
-    return normalize_full_profile(migrated)
+    return normalize_full_profile(data)
 
 
 def profile_exists() -> bool:

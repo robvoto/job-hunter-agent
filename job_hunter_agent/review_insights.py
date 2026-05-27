@@ -1,3 +1,5 @@
+﻿"""Helpers for review insights."""
+
 import re
 from typing import Any
 
@@ -19,7 +21,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_ALIASES,
     KEY_NAME,
@@ -38,7 +40,7 @@ def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
         if normalized:
             known_terms.add(normalized)
 
-    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
+    for rule in profile.get(KEY_CANDIDATE_CAPABILITIES, []):
         normalized_name = _normalize_term(str(rule.get(KEY_NAME) or ""))
         if normalized_name:
             known_terms.add(normalized_name)
@@ -121,7 +123,7 @@ def _friendly_reason_suffix(value: str) -> str:
 
 def _capability_rule_lookup(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
     lookup: dict[str, dict[str, Any]] = {}
-    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
+    for rule in profile.get(KEY_CANDIDATE_CAPABILITIES, []):
         if not isinstance(rule, dict):
             continue
         aliases = [rule.get(KEY_NAME), *(rule.get(KEY_ALIASES) or [])]
@@ -588,7 +590,7 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
 
 
 def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
-    capability_rules = list(profile.get(KEY_CAPABILITY_PROFILE_RULES, []))
+    capability_rules = list(profile.get(KEY_CANDIDATE_CAPABILITIES, []))
     existing_index = _capability_rule_index_lookup(capability_rules)
 
     for item in decisions:
@@ -642,6 +644,6 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             capability_rules.append(rule)
             existing_index[normalized] = len(capability_rules) - 1
 
-    profile[KEY_CAPABILITY_PROFILE_RULES] = capability_rules
+    profile[KEY_CANDIDATE_CAPABILITIES] = capability_rules
     return profile
 

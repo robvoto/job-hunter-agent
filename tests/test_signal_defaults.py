@@ -1,3 +1,5 @@
+﻿"""Tests for signal defaults."""
+
 from job_hunter_agent import io_utils, signal_detection
 from job_hunter_agent.profile_store import KEY_COMPETITIVE_SIGNAL_ALIGNMENT, KEY_EVIDENCE_TIERS
 from job_hunter_agent.signal_schema import (
@@ -58,7 +60,7 @@ def test_competitive_signal_alignment_preserves_managed_labels():
         "dominance_level": 1,
     }
     profile = {
-        "capability_profile_rules": [
+        "candidate_capabilities": [
             {
                 "name": "Platform engineering",
                 "level": "strong",
@@ -94,7 +96,7 @@ def test_competitive_signal_alignment_uses_profile_scoring_rules():
                 "weak_penalty_by_dominance": {"1": 3, "2": 4, "3": 5},
             }
         },
-        "capability_profile_rules": [
+        "candidate_capabilities": [
             {
                 "name": "Platform engineering",
                 "level": "strong",

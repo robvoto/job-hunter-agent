@@ -1,3 +1,5 @@
+﻿"""Route handlers for onboarding api."""
+
 from pathlib import Path
 import logging
 
@@ -8,7 +10,7 @@ from job_hunter_agent.global_settings import get_allowed_source_document_suffixe
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.source_documents import persist_uploaded_source_pack, run_onboarding, load_source_materials
 from job_hunter_agent.profile_store import (
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_ENGAGEMENT_TYPE,
     KEY_KEYWORDS,
     KEY_LOCATIONS,
@@ -121,7 +123,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
         # Keep the current onboarding limits in the learning path so profile saves do not drop them.
-        capability_rules = normalize_capability_rules(body.get(KEY_CAPABILITY_PROFILE_RULES) or [], current_onboarding)
+        capability_rules = normalize_capability_rules(body.get(KEY_CANDIDATE_CAPABILITIES) or [], current_onboarding)
         if not target:
             raise ValueError("Primary job title must not be empty")
         if keyword and (len(keyword) < 2 or len(keyword) > 120):
@@ -177,7 +179,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             KEY_ONBOARDING_COMPLETE: True,
         }
         if capability_rules:
-            profile_patch[KEY_CAPABILITY_PROFILE_RULES] = capability_rules
+            profile_patch[KEY_CANDIDATE_CAPABILITIES] = capability_rules
         current = srv.load_profile()
         search_settings = dict(current.get(PROFILE_SEARCH_SETTINGS_KEY, {}))
         if keyword:

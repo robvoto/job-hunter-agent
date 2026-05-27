@@ -100,7 +100,7 @@ def test_repo_knowledge_seeds_successfully(tmp_db):
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
     seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
-    assert len(seeded) == 24, f"Expected 24 knowledge files, got {len(seeded)}: {seeded}"
+    assert len(seeded) == 18, f"Expected 18 knowledge files, got {len(seeded)}: {seeded}"
 
 
 def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
@@ -181,3 +181,53 @@ def test_match_level_defaults_loaded_from_db(tmp_db):
     assert isinstance(data, dict)
     assert "entries" in data
     assert len(data["entries"]) > 0
+
+
+def test_upgrade_fixes_stale_ui_labels_missing_settings_alerts(isolated_db):
+    from pathlib import Path
+    from job_hunter_agent.server_helpers import build_bootstrap_script, load_settings_alerts_labels
+
+    repo_root = Path(__file__).resolve().parent.parent
+    knowledge_dir = repo_root / "data" / "knowledge"
+
+    stale = {
+        "kind": "ui_labels",
+        "name": "ui_labels",
+        "version": 16,
+        "settings_alerts_labels": {},
+    }
+    set_knowledge("ui_labels", stale, isolated_db)
+
+    updated = upgrade_knowledge_from_dir(knowledge_dir, isolated_db)
+    assert "ui_labels" in updated
+
+    # Direct loader must not raise.
+    labels = load_settings_alerts_labels()
+    assert "section_title" in labels
+    assert "telegram_heading" in labels
+    assert "llm_model_label" in labels
+
+    # The actual page-render path must not raise (this is what failed at runtime).
+    html = build_bootstrap_script()
+    assert "__JOB_HUNTER_SETTINGS_ALERTS_LABELS__" in html
+
+
+def test_build_bootstrap_script_includes_all_ui_label_sections():
+    """Smoke test: the render path must include every ui_labels section.
+
+    Any future section added to ui_labels.json that is wired into
+    build_bootstrap_script() will show up here as a failing assertion
+    before it ever reaches production.
+    """
+    from job_hunter_agent.server_helpers import build_bootstrap_script
+
+    html = build_bootstrap_script()
+    for sentinel in (
+        "__JOB_HUNTER_ONBOARDING_FLOW_LABELS__",
+        "__JOB_HUNTER_ONBOARDING_PAGE_LABELS__",
+        "__JOB_HUNTER_TITLE_TIER_LABELS__",
+        "__JOB_HUNTER_CAPABILITY_UI_LABELS__",
+        "__JOB_HUNTER_SHARED_UI_LABELS__",
+        "__JOB_HUNTER_SETTINGS_ALERTS_LABELS__",
+    ):
+        assert sentinel in html, f"build_bootstrap_script() is missing {sentinel}"

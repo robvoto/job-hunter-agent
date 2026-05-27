@@ -1,3 +1,5 @@
+﻿"""Tests for profile store llm guidance."""
+
 import json
 import pytest
 
@@ -50,55 +52,6 @@ def test_load_profile_drops_legacy_guidance_key(isolated_db):
     assert legacy_key not in loaded
 
 
-def test_load_profile_strips_legacy_cv_text_and_keeps_structured_fields(isolated_db):
-    from job_hunter_agent.database import db_conn, ensure_user_row
-    from job_hunter_agent.paths import LOCAL_USER_ID
-
-    ensure_user_row(LOCAL_USER_ID)
-    legacy_profile = {
-        "cv_text": "# Experience\nDelivery lead\n",
-        "candidate_profile_tiers": {
-            "primary_candidate_profile_context": "## Experience\nDelivery lead\n",
-            "secondary_candidate_profile_context": "",
-            "supplementary_candidate_profile_context": "",
-        },
-        "target_roles": ["delivery lead"],
-        "capability_profile_rules": [{"name": "stakeholder engagement", "level": "working"}],
-    }
-    with db_conn() as conn:
-        conn.execute(
-            """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
-            (LOCAL_USER_ID, json.dumps(legacy_profile)),
-        )
-
-    loaded = profile_store.load_profile()
-
-    assert "cv_text" not in loaded
-    assert loaded["candidate_profile_tiers"] == {
-        "primary_candidate_profile_context": "## Experience\nDelivery lead",
-        "secondary_candidate_profile_context": "",
-        "supplementary_candidate_profile_context": "",
-    }
-    assert loaded["target_roles"] == legacy_profile["target_roles"]
-    assert loaded["capability_profile_rules"][0]["name"] == "stakeholder engagement"
-    assert loaded["capability_profile_rules"][0]["level"] == "working"
-
-    with db_conn() as conn:
-        row = conn.execute(
-            "SELECT data FROM user_profile WHERE user_id = ?",
-            (LOCAL_USER_ID,),
-        ).fetchone()
-    persisted = json.loads(row["data"])
-    assert "cv_text" not in persisted
-    assert persisted["candidate_profile_tiers"] == {
-        "primary_candidate_profile_context": "## Experience\nDelivery lead",
-        "secondary_candidate_profile_context": "",
-        "supplementary_candidate_profile_context": "",
-    }
-    assert persisted["capability_profile_rules"][0]["name"] == "stakeholder engagement"
-
-
 def test_load_profile_raises_for_non_object_data(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import LOCAL_USER_ID
@@ -118,6 +71,7 @@ def test_load_profile_raises_for_non_object_data(isolated_db):
 def test_default_profile_does_not_include_legacy_guidance_key():
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
     assert legacy_key not in profile_store.DEFAULT_PROFILE
+    assert "cv_text" not in profile_store.DEFAULT_PROFILE
 
 
 def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():
@@ -146,36 +100,36 @@ def test_capability_level_tokens_and_display_labels_are_standardized():
 
 
 def test_apply_capability_tuning_decisions_uses_internal_level_tokens():
-    profile = {"capability_profile_rules": []}
+    profile = {"candidate_capabilities": []}
 
     updated = review_insights.apply_capability_tuning_decisions(
         profile,
         [{"skill": "Process mapping", "choice": "working"}],
     )
 
-    assert updated["capability_profile_rules"][0]["level"] == "working"
+    assert updated["candidate_capabilities"][0]["level"] == "working"
 
 
 def test_apply_capability_tuning_decisions_preserves_aliases():
-    profile = {"capability_profile_rules": []}
+    profile = {"candidate_capabilities": []}
 
     updated = review_insights.apply_capability_tuning_decisions(
         profile,
         [{"skill": "Process mapping", "choice": "working", "aliases": ["workflow design"]}],
     )
 
-    assert updated["capability_profile_rules"][0]["aliases"] == ["workflow design"]
+    assert updated["candidate_capabilities"][0]["aliases"] == ["workflow design"]
 
 
 def test_apply_capability_tuning_decisions_rejects_legacy_low_choice():
-    profile = {"capability_profile_rules": []}
+    profile = {"candidate_capabilities": []}
 
     updated = review_insights.apply_capability_tuning_decisions(
         profile,
         [{"skill": "Process mapping", "choice": "low"}],
     )
 
-    assert updated["capability_profile_rules"] == []
+    assert updated["candidate_capabilities"] == []
 
 
 _ROUTING_FIXTURE = {

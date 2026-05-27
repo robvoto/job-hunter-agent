@@ -1,3 +1,5 @@
+﻿"""Helpers for capability matching."""
+
 import re
 from functools import lru_cache
 from datetime import datetime
@@ -10,7 +12,7 @@ from job_hunter_agent.io_utils import load_ui_labels
 
 
 from job_hunter_agent.profile_store import (
-    KEY_CAPABILITY_PROFILE_RULES,
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
@@ -20,7 +22,6 @@ from job_hunter_agent.profile_store import (
     get_candidate_profile_tiers,
 )
 from job_hunter_agent.role_analysis import friendly_capability_label, text_contains_term
-from job_hunter_agent.title_normalization_rules import load_title_normalization_rules
 from job_hunter_agent.scoring_utils import (
     build_scoring_source_text,
     find_profile_experience_year_in_text,
@@ -35,8 +36,6 @@ from job_hunter_agent.signal_schema import (
     SIGNAL_ALIGNMENT_KEY,
     SIGNAL_LABEL_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
-    CATEGORY_ROLE_TITLE_TOKEN,
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
 )
 from job_hunter_agent.text_processing import (
     compact_whitespace,
@@ -45,10 +44,7 @@ from job_hunter_agent.text_processing import (
 )
 
 
-_REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset({
-    CATEGORY_ROLE_TITLE_TOKEN,
-    CATEGORY_TITLE_NORMALIZATION_CANDIDATE,
-})
+_REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset()
 _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {CATEGORY_HARD_BLOCKER_PATTERN}
 
 
@@ -113,32 +109,10 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
     }
 
 
-@lru_cache(maxsize=1)
-def _review_signal_display_rules() -> tuple[frozenset[str], dict[str, str]]:
-    title_rules = load_title_normalization_rules()
-    expansions = title_rules.get("abbreviation_expansions", {})
-    normalized_expansions = {
-        str(key).strip().lower(): compact_whitespace(value).lower()
-        for key, value in expansions.items()
-        if str(key).strip() and compact_whitespace(value)
-    } if isinstance(expansions, dict) else {}
-    suppressed_title_terms = frozenset({
-        *normalized_expansions.keys(),
-        *normalized_expansions.values(),
-    })
-    return suppressed_title_terms, normalized_expansions
-
-
 def _display_review_signal_label(value: str) -> str:
     cleaned = compact_whitespace(value).lower()
     if not cleaned:
         return ""
-
-    noisy_title_tokens, expansions = _review_signal_display_rules()
-    if cleaned in noisy_title_tokens:
-        return ""
-
-    cleaned = expansions.get(cleaned, cleaned)
     return friendly_capability_label(cleaned)
 
 
@@ -173,7 +147,7 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
     matched_limited_depth: List[str] = []
     matched_must_not: List[str] = []
 
-    for rule in profile.get(KEY_CAPABILITY_PROFILE_RULES, []):
+    for rule in profile.get(KEY_CANDIDATE_CAPABILITIES, []):
         if not isinstance(rule, dict):
             continue
         name = str(rule.get("name") or "").strip()

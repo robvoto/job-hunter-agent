@@ -1,8 +1,8 @@
 {
     "kind":  "ui_labels",
     "name":  "ui_labels",
-  "version": 16,
-    "updated_at":  "2026-05-23",
+  "version": 18,
+    "updated_at":  "2026-05-25",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {
                              "remote_label":  "Remote",

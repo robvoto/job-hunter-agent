@@ -1,4 +1,4 @@
-# ---- Python ----
+﻿# ---- Python ----
 __pycache__/
 *.py[cod]
 *.pyo
@@ -24,13 +24,11 @@ output/
 data/playwright_user_data/
 data/runtime/
 data/users/
+data/signals/
 
 data/app.db
 data/app.db-shm
 data/app.db-wal
-data/signals/ignored_signal.json
-data/signals/signal_defaults.json
-data/signals/signal_registry.json
 docs/signals/
 
 # ---- OS / IDE ----
@@ -57,3 +55,13 @@ debug.log
 test_tmp.db
 ignore/
 fix_xlsx_view.py
+angular-log-prj-7cc59b5b73a0.json
+CLAUDE.md
+docs/archived-skills/
+
+# ---- Agent local adapters / scratch ----
+/_*.py
+/_*.ps1
+/_*.json
+/_*.txt
+
