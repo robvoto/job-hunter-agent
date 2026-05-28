@@ -17,6 +17,7 @@ the normalization and validation of extracted data to ensure consistency.
 import hashlib
 import json
 import re
+import traceback
 from functools import lru_cache
 from datetime import datetime
 from typing import Any, Literal
@@ -284,6 +285,10 @@ def _get_title_candidate_punctuation_blockers() -> set[str]:
 
 
 
+def _get_title_candidate_leading_verb_blockers() -> set[str]:
+    return get_parsing_rule_set("title_candidate_leading_verb_blockers")
+
+
 def _looks_like_role_title_line(text: str) -> bool:
     cleaned = _clean_line(text)
     if not cleaned:
@@ -296,7 +301,9 @@ def _looks_like_role_title_line(text: str) -> bool:
     tokens = _pattern_tokens(normalized)
     if not tokens or len(tokens) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_TOKENS):
         return False
-    return False
+    if tokens[0] in _get_title_candidate_leading_verb_blockers():
+        return False
+    return True
 
 
 def _select_role_title_and_employer(candidate_lines: list[str]) -> tuple[str, str]:
@@ -414,15 +421,18 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
         bullets: list[str],
         date_info: dict[str, Any],
     ) -> None:
-        resolved_title, resolved_employer = _select_role_title_and_employer(header_lines)
-        if not resolved_title:
-            cleaned = _clean_line(title)
-            if cleaned and _looks_like_role_title_line(cleaned):
-                resolved_title = cleaned
-        if not resolved_employer:
-            candidate_employer = _clean_line(employer)
-            if candidate_employer and not _is_heading_line(employer) and not _is_plain_section_label(employer):
-                resolved_employer = candidate_employer
+        cleaned_title = _clean_line(title)
+        cleaned_employer = _clean_line(employer)
+        resolved_title = cleaned_title if cleaned_title and _looks_like_role_title_line(cleaned_title) else ""
+        resolved_employer = ""
+        if cleaned_employer and not _is_heading_line(employer) and not _is_plain_section_label(employer):
+            resolved_employer = cleaned_employer
+        if not resolved_title or not resolved_employer:
+            structural_title, structural_employer = _select_role_title_and_employer(header_lines)
+            if not resolved_title:
+                resolved_title = structural_title
+            if not resolved_employer:
+                resolved_employer = structural_employer
         if not resolved_title:
             return
         roles.append(
@@ -473,7 +483,8 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
                     previous_line,
                     next_line,
                 )
-                append_role(title_pipe_dates_match.group("title"), previous_line, header_lines, bullets, date_info)
+                employer_hint = next_line if next_line and not _is_bullet_line(next_line) else previous_line
+                append_role(title_pipe_dates_match.group("title"), employer_hint, header_lines, bullets, date_info)
             i = max(j, i + 1)
             continue
 
@@ -535,7 +546,11 @@ def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
             j += 1
 
         if candidate_lines:
-            title, employer = _select_role_title_and_employer(candidate_lines)
+            if prefix_candidate_lines and _looks_like_role_title_line(prefix_candidate_lines[0]):
+                title = prefix_candidate_lines[0]
+                employer = prefix_candidate_lines[1] if len(prefix_candidate_lines) > 1 else ""
+            else:
+                title, employer = _select_role_title_and_employer(candidate_lines)
             if not title:
                 i = max(j, i + 1)
                 continue
@@ -663,6 +678,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"Raw CV fallback:\n{source_text[:fallback_text_limit]}"
     )
 
+    _cap_log(f"[ONBOARDING][LLM_CALL_START] purpose=capability_extraction cache_key={cache_key}")
     try:
         model = get_llm_model()
         resp = client.responses.parse(
@@ -674,9 +690,10 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         _log_llm_call(resp, "cv_extraction", model)
         parsed = resp.output_parsed
         result = parsed.model_dump() if parsed is not None else {}
-    except Exception:
-        print(f"[PROFILE_LEARNING][ERROR] LLM CV extraction failed for cache key {cache_key}.")
-        result = {}
+    except Exception as exc:
+        _cap_log(f"[ONBOARDING][LLM_CALL_ERROR] purpose=capability_extraction cache_key={cache_key} error={exc}")
+        traceback.print_exc()
+        raise
 
     _cv_extraction_cache[cache_key] = result
     try:
@@ -984,17 +1001,37 @@ def build_learning_patch(
     patch: dict[str, Any] = {}
 
     raw_caps = extracted.get(KEY_CAPABILITIES, [])
-    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capabilities before validation")
+    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capability candidate(s) before validation")
     capabilities = _validate_capabilities(raw_caps)
     approved_capabilities, review_signals = _split_learning_capabilities(capabilities, source_sections=source_sections)
     _cap_log(
-        f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability rule(s) will be written to candidate_capabilities"
+        f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written"
     )
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
+    _cap_log(f"[ONBOARDING][LLM_CALL_DONE] purpose=capability_extraction count={len(approved_capabilities)}")
     if approved_capabilities:
         patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
     if review_signals:
         register_signals(review_signals)
+
+    _cap_log("[ONBOARDING][LLM_CALL_START] purpose=title_extraction")
+    raw_titles = extracted.get("role_titles") or []
+    extracted_titles = _split_compound_role_titles([
+        str(value).strip()
+        for value in raw_titles
+        if str(value).strip()
+    ])
+    primary_titles: list[str] = []
+    secondary_titles: list[str] = []
+    if extracted_titles:
+        max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
+        max_secondary = _resolve_onboarding_int(onboarding_settings, KEY_MAX_SECONDARY)
+        primary_titles = extracted_titles[:max_target]
+        secondary_titles = extracted_titles[max_target:max_target + max_secondary]
+        patch[KEY_PRIMARY_PATTERNS] = primary_titles
+        patch[KEY_SECONDARY_PATTERNS] = secondary_titles
+        _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)")
+    _cap_log(f"[ONBOARDING][LLM_CALL_DONE] purpose=title_extraction target_count={len(primary_titles)} secondary_count={len(secondary_titles)}")
 
     raw_prefs = extracted.get(KEY_MATCH_PREFS) or {}
     match_prefs = {k: v for k, v in raw_prefs.items() if v is not None and v != ""}

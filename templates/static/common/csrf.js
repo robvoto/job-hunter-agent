@@ -1,3 +1,18 @@
+/**
+ * @file csrf.js
+ * @description Sets window.jobHunterFetch — a fetch wrapper that automatically injects
+ *   the CSRF token header on state-changing requests. Loaded as a plain (non-module)
+ *   script so it runs synchronously and the global is available before any deferred
+ *   module scripts execute.
+ *
+ *   NOT YET an ES module: converting it requires adding explicit imports to every
+ *   module file that currently uses jobHunterFetch as a global (settings-page.js,
+ *   onboarding-flow.js, signal-registry.js, settings-review-panel.js, and others).
+ *   Migrate those consumers first, then convert this file and remove the window assignment.
+ *
+ * @author hernanvoto
+ * @created 2026-05-27
+ */
 (() => {
   if (window.__JOB_HUNTER_CSRF_HELPER__) {
     return;

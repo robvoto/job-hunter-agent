@@ -50,11 +50,29 @@
   "title_candidate_line_rules": {
     "max_length_chars": 80,
     "max_tokens": 7,
-    "punctuation_blockers": [
-      ".",
-      ","
-    ]
+    "punctuation_blockers": []
   },
+  "title_candidate_leading_verb_blockers": [
+    "achieving",
+    "administering",
+    "analysing",
+    "analyzing",
+    "building",
+    "coaching",
+    "coordinating",
+    "delivering",
+    "designing",
+    "developing",
+    "driving",
+    "facilitating",
+    "implementing",
+    "improving",
+    "leading",
+    "managing",
+    "owning",
+    "supporting",
+    "working"
+  ],
   "candidate_profile_section_routing_description": "Section labels used to route profile text into primary, secondary, or supplementary evidence buckets.",
   "candidate_profile_section_routing": {
     "default_bucket": "primary_candidate_profile_context",

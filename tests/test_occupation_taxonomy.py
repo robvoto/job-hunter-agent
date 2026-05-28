@@ -192,21 +192,15 @@ def test_profile_with_unknown_roles_returns_uncertain(tmp_db):
 
 # ── target_occupation_queries ─────────────────────────────────────────────────
 
-def test_target_occupation_queries_preferred_over_vague_target_roles(tmp_db):
-    """Precise machine-facing queries must be used instead of vague display titles.
-
-    Scenario: the display title "coordinator" is ambiguous in O*NET (two distinct
-    SOC codes → uncertain by itself). But target_occupation_queries includes
-    "business analyst" which maps clearly to SOC major group 13. A job title
-    of "analyst" (SOC 13-xxxx) must therefore classify as near.
-    """
+def test_target_occupation_queries_are_ignored_for_profile_context(tmp_db):
+    """LLM-generated target occupation queries must not override detected/user-confirmed titles."""
     profile = {
-        "target_roles": ["coordinator"],          # vague — would yield no useful SOC groups
+        "target_roles": ["coordinator"],
         "also_consider_roles": [],
-        "target_occupation_queries": ["business analyst"],  # precise → SOC group 13
+        "target_occupation_queries": ["business analyst"],
     }
     result = classify_title("analyst", profile, db_path=tmp_db, _index=_TEST_INDEX)
-    assert result.result == RESULT_NEAR
+    assert result.result == RESULT_FAR
     assert result.matched_occupation_code == "13-1111.00"
 
 

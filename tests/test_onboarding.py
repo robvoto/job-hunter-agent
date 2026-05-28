@@ -245,8 +245,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
     cv_path.write_text("A" * 5000, encoding="utf-8")
 
     monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {"match_preferences": {}})
-    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"candidate_capabilities": []})
-    monkeypatch.setattr(source_documents, "extract_title_pattern_suggestions", lambda text, settings: {"target_roles": [], "also_consider_roles": []})
+    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"target_roles": ["business analyst"], "also_consider_roles": [], "candidate_capabilities": []})
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {"capability_strength_preset": "balanced"}})
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
@@ -271,7 +270,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
     assert "chars read" in output
     assert "approx pages" in output
     assert "[ONBOARDING] CV source read" in output
-    assert "[ONBOARDING] Extraction summary" in output
+    assert "[ONBOARDING][LLM_CALL_DONE] purpose=target_occupation_queries" in output
 
 
 def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_selected(monkeypatch):
@@ -423,17 +422,12 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
         },
     )
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    monkeypatch.setattr(
-        source_documents,
-        "extract_title_pattern_suggestions",
-        lambda text, settings: {"target_roles": [], "also_consider_roles": []},
-    )
-
     def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
         captured["onboarding_settings"] = onboarding_settings
         return {"candidate_capabilities": [{"name": "delivery", "level": "working", "fit": "core"}]}
 
     monkeypatch.setattr(source_documents, "run_cv_pipeline", fake_run_cv_pipeline)
+    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings=None, source_sections=None: {"target_roles": ["delivery lead"], "also_consider_roles": []})
 
     result = source_documents.run_onboarding(
         {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "# Professional Experience\nAcme - Delivery Lead (2020 - 2024)\n"}]}

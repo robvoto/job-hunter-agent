@@ -79,7 +79,7 @@ def _format_cv_pipeline_summary(
         f"  phrases: {phrases}",
         f"  clusters: {clusters}",
         f"  candidates: {candidates}",
-        f"  dominant signal clusters: {dominant} (evidence/review only)",
+        f"  capability candidates: {dominant} (evidence/review only)",
     ]
     return "\n".join(lines)
 
@@ -517,16 +517,16 @@ def run_cv_pipeline(
     output = _build_output(candidates, total_roles=len(roles), onboarding_settings=onboarding_settings)
     output["role_experience"] = _compute_role_experience(roles)
 
-    dominant = output.get("dominant_signal_clusters", [])
+    capability_candidates = output.get("dominant_signal_clusters", [])
     _cap_log(
         _format_cv_pipeline_summary(
             len(roles),
             len(phrase_items),
             len(clusters),
             len(candidates),
-            len(dominant),
+            len(capability_candidates),
         )
     )
-    if dominant:
-        _cap_log(f"[CV_PIPELINE] dominant signal names: {[r['name'] for r in dominant]}")
+    if capability_candidates:
+        _cap_log(f"[CV_PIPELINE] capability candidate names: {[r['name'] for r in capability_candidates]}")
     return _strip_internal_keys(output)

@@ -33,14 +33,6 @@ const statusEl = document.getElementById('status');
 const statusUi = createMessageBannerController(statusEl);
 const isTestMode = document.body?.dataset.testMode === 'true';
 const capabilityLabels = capabilityUi.labels || {};
-const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ || {};
-const testMenuRefs = Object.freeze({
-  testPanel: document.getElementById('job_hunter_account_test_panel'),
-  testTrigger: document.getElementById('job_hunter_account_test_trigger'),
-  testMenu: document.getElementById('job_hunter_account_test_menu'),
-  resetUserBtn: document.getElementById('job_hunter_reset_user_btn'),
-  resetLearningBtn: document.getElementById('job_hunter_reset_learning_btn'),
-});
 
 const capabilityMatrixNav = document.getElementById('settings_capability_matrix_nav');
 if (capabilityMatrixNav && capabilityLabels.settings_title) {
@@ -138,26 +130,6 @@ function renderLlmModelOptions() {
   if (currentModel) select.value = currentModel;
 }
 
-function setTestMenuOpen(open) {
-  if (!testMenuRefs.testMenu || !testMenuRefs.testTrigger) {
-    return;
-  }
-  testMenuRefs.testMenu.classList.toggle('is-open', Boolean(open));
-  testMenuRefs.testTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-async function postTestAction(path, fallbackErrorMessage) {
-  const response = await jobHunterFetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || fallbackErrorMessage || '');
-  }
-  return payload;
-}
 
 function renderLocationOptions() {
   const select = document.getElementById('locations');
@@ -606,61 +578,6 @@ document.getElementById('send_telegram_test')?.addEventListener('click', async (
     btn.textContent = originalLabel;
   }
 });
-
-if (isTestMode && testMenuRefs.testPanel && testMenuRefs.testTrigger && testMenuRefs.testMenu) {
-  testMenuRefs.testPanel.hidden = false;
-
-  testMenuRefs.testTrigger.addEventListener('click', () => {
-    setTestMenuOpen(!testMenuRefs.testMenu.classList.contains('is-open'));
-  });
-
-  document.addEventListener('click', (event) => {
-    if (!testMenuRefs.testPanel.contains(event.target)) {
-      setTestMenuOpen(false);
-    }
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    setTestMenuOpen(false);
-  });
-
-  testMenuRefs.resetUserBtn?.addEventListener('click', async () => {
-    const confirmed = window.confirm([
-      onboardingFlowLabels.reset_user_confirm_title,
-      onboardingFlowLabels.reset_user_confirm_body_1,
-      onboardingFlowLabels.reset_user_confirm_body_2,
-    ].filter(Boolean).join('\n\n'));
-    if (!confirmed) {
-      return;
-    }
-    try {
-      setTestMenuOpen(false);
-      const payload = await postTestAction('/api/test/reset-user', onboardingFlowLabels.reset_user_error);
-      window.location.href = payload.redirect_to || '/start';
-    } catch (error) {
-      window.alert(error.message || onboardingFlowLabels.reset_user_error);
-    }
-  });
-
-  testMenuRefs.resetLearningBtn?.addEventListener('click', async () => {
-    const confirmed = window.confirm([
-      onboardingFlowLabels.reset_learning_confirm_title,
-      onboardingFlowLabels.reset_learning_confirm_body_1,
-      onboardingFlowLabels.reset_learning_confirm_body_2,
-    ].filter(Boolean).join('\n\n'));
-    if (!confirmed) {
-      return;
-    }
-    try {
-      setTestMenuOpen(false);
-      const payload = await postTestAction('/api/test/reset-learning', onboardingFlowLabels.reset_learning_error);
-      window.alert(payload.message || onboardingFlowLabels.reset_learning_success_message);
-    } catch (error) {
-      window.alert(error.message || onboardingFlowLabels.reset_learning_error);
-    }
-  });
-}
 
 async function saveActivePage() {
   if (!activeSaveButton) return;

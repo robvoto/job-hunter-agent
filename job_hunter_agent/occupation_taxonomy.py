@@ -62,7 +62,6 @@ def _load_index() -> dict[str, list[dict[str, str]]]:
 
 def _compute_profile_hash(profile: dict[str, Any]) -> str:
     relevant = {
-        "target_occupation_queries": sorted(profile.get("target_occupation_queries") or []),
         "target_roles": sorted(profile.get("target_roles") or []),
         "also_consider_roles": sorted(profile.get("also_consider_roles") or []),
     }
@@ -73,18 +72,13 @@ def _compute_profile_hash(profile: dict[str, Any]) -> str:
 def _derive_near_soc_major_groups(profile: dict[str, Any], index: dict[str, list[dict[str, str]]]) -> set[str]:
     """Return SOC major-group codes (e.g. '13', '15') for the profile's target occupations.
 
-    Source priority:
-      1. target_occupation_queries  — machine-facing O*NET queries generated at onboarding
-      2. target_roles + also_consider_roles  — display titles, used as fallback
+    Source:
+      - target_roles + also_consider_roles from detected or user-confirmed title evidence.
 
-    Using target_occupation_queries first ensures that precise occupation terms
-    drive classification rather than vague display labels like "coordinator".
+    O*NET is reference data only. It must not consume LLM-generated target occupation
+    queries from CV text, because that can invent target occupations.
     """
-    primary = list(profile.get("target_occupation_queries") or [])
-    if primary:
-        roles = primary
-    else:
-        roles = list(profile.get("target_roles") or []) + list(profile.get("also_consider_roles") or [])
+    roles = list(profile.get("target_roles") or []) + list(profile.get("also_consider_roles") or [])
 
     groups: set[str] = set()
     for role in roles:
@@ -156,7 +150,6 @@ def _log_classification(
     logger.info(format_log_block("PIPELINE][ONET_TITLE_CLASSIFY", {
         "title": title,
         "normalized_title": normalized,
-        "target_occupation_queries": profile.get("target_occupation_queries") or [],
         "result": result.result,
         "matched_occupation_code": result.matched_occupation_code,
         "confidence": result.confidence,

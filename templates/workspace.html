@@ -7,9 +7,9 @@
   <link rel="stylesheet" href="/static/workspace/workspace-page.css">
   __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
   <script src="/static/common/csrf.js"></script>
-  <script src="/static/common/console-bridge.js"></script>
+  <script type="module" src="/static/common/console-bridge.js"></script>
   <script src="/static/theme/theme-switcher.js"></script>
-  <script src="/static/common/account-bar.js"></script>
+  <script type="module" src="/static/common/account-bar.js"></script>
 </head>
 <body data-test-mode="__JOB_HUNTER_DEBUG_MODE__">
   <header class="ws-header">
@@ -438,62 +438,7 @@
       }
     }
 
-if (isTestMode && wsTestPanel && wsTestTrigger && wsTestMenu) {
-      wsTestPanel.hidden = false;
 
-      wsTestTrigger.addEventListener('click', () => {
-        setTestMenuOpen(!wsTestMenu.classList.contains('is-open'));
-      });
-
-      document.addEventListener('click', (event) => {
-        if (!wsTestPanel.contains(event.target)) {
-          setTestMenuOpen(false);
-        }
-      });
-
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-          setTestMenuOpen(false);
-        }
-      });
-
-      wsResetUserBtn?.addEventListener('click', async () => {
-        const confirmed = window.confirm(
-          'Reset current user?\n\n'
-          + 'This clears the current profile, onboarding state, uploaded CV state, local review feedback, and job history.\n\n'
-          + 'Shared learned signals will be preserved.'
-        );
-        if (!confirmed) {
-          return;
-        }
-        try {
-          setTestMenuOpen(false);
-          const payload = await postTestAction('/api/test/reset-user');
-          clearOnboardingBrowserState();
-          window.location.href = payload.redirect_to || '/start';
-        } catch (error) {
-          window.alert(error.message || 'Could not reset current user.');
-        }
-      });
-
-      wsResetLearningBtn?.addEventListener('click', async () => {
-        const confirmed = window.confirm(
-          'Reset global learning?\n\n'
-          + 'This wipes the shared learned signal memory for every test user.\n\n'
-          + 'This is dangerous and cannot be undone.'
-        );
-        if (!confirmed) {
-          return;
-        }
-        try {
-          setTestMenuOpen(false);
-          const payload = await postTestAction('/api/test/reset-learning');
-          window.alert(payload.message || 'Global learning reset.');
-        } catch (error) {
-          window.alert(error.message || 'Could not reset global learning.');
-        }
-      });
-    }
 
     async function loadResults(expectedRunId = '', attempt = 0) {
       const requestToken = ++workspaceResultsLoadToken;

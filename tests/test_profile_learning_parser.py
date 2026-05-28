@@ -1,4 +1,4 @@
-﻿"""Tests for profile learning parser."""
+"""Tests for profile learning parser."""
 
 import json
 import tempfile
@@ -162,13 +162,11 @@ def test_extract_title_pattern_suggestions_respects_max_limits():
 
 
 
-def test_role_title_detection_always_returns_false_without_knowledge():
-    # _looks_like_role_title_line returns False for all inputs — role_title_knowledge removed.
-    # Title detection now relies on explicit user-entered target roles.
-    assert profile_learning._looks_like_role_title_line("Operations Support Officer") is False
-    assert profile_learning._looks_like_role_title_line("Sr BA") is False
-    assert profile_learning._looks_like_role_title_line("TechCorp Ltd") is False
-
+def test_role_title_detection_uses_structural_line_rules_without_title_knowledge():
+    # role_title_knowledge is removed. Detection is structural only; no synonym expansion.
+    assert profile_learning._looks_like_role_title_line("Operations Support Officer") is True
+    assert profile_learning._looks_like_role_title_line("Sr BA") is True
+    assert profile_learning._looks_like_role_title_line("TechCorp Ltd") is True
 
 
 def test_update_job_history_does_not_write_sightings():
@@ -205,9 +203,10 @@ def test_update_job_history_does_not_write_sightings():
         "Digital Edge",
     ],
 )
-def test_role_title_detection_always_returns_false(line):
-    # role_title_knowledge removed — title detection always returns False.
-    assert profile_learning._looks_like_role_title_line(line) is False
+def test_role_title_detection_is_structural_only(line):
+    # This check intentionally does not decide whether a title is desirable or accurate.
+    # O*NET handles taxonomy matching later; ambiguous titles return uncertain.
+    assert profile_learning._looks_like_role_title_line(line) is True
 
 
 def test_role_title_detection_uses_parsing_config_for_line_rules(monkeypatch):

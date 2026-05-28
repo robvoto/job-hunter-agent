@@ -1,6 +1,7 @@
 ﻿"""Tests for fastapi app."""
 
 import pytest
+from pathlib import Path
 from fastapi.testclient import TestClient
 from starlette.requests import Request as StarletteRequest
 
@@ -54,8 +55,25 @@ def test_workspace_page_bootstrap_includes_user_id(monkeypatch):
     html = client.get("/").text
 
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
+    assert 'id="job_hunter_account_test_trigger"' in html
+    assert '>Test</button>' in html
     assert 'Reset learning' in html
     assert 'Reset Signals' not in html
+
+
+def test_workspace_template_uses_shared_account_bar_script_only():
+    """The workspace must not keep stale inline menu wiring beside account-bar.js."""
+    template = Path("templates/workspace.html").read_text(encoding="utf-8")
+
+    assert "/static/common/account-bar.js" in template
+    for stale_name in (
+        "wsTestPanel",
+        "wsTestTrigger",
+        "wsTestMenu",
+        "wsResetUserBtn",
+        "wsResetLearningBtn",
+    ):
+        assert stale_name not in template
 
 
 def test_logout_redirects_to_login_and_clears_session_cookie():

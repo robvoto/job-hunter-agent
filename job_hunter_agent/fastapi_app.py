@@ -268,7 +268,7 @@ if __name__ == "__main__":
     from job_hunter_agent.database import init_db
     from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
-    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+    from job_hunter_agent.paths import LOCAL_USER_ID, REPO_ROOT as _REPO_ROOT
 
     init_db()
     seed_global_settings_from_file()
@@ -291,17 +291,14 @@ if __name__ == "__main__":
         "--user-id",
         dest="user_id",
         default=None,
-        help="User ID required when using --rebuild.",
+        help="User ID to rebuild for when using --rebuild. Defaults to the local user.",
     )
     args = parser.parse_args()
 
     _configure_server_logging()
 
-    if args.rebuild or args.debug:
-        if not args.user_id:
-            print("[STARTUP][WARN] --rebuild requires --user-id. Skipping workspace rebuild.")
-        else:
-            srv._rebuild_workspace_on_startup(args.user_id)
+    if args.rebuild:
+        srv._rebuild_workspace_on_startup(args.user_id or LOCAL_USER_ID)
 
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")

@@ -12,7 +12,6 @@ import json
 import logging
 import re
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -29,7 +28,6 @@ from job_hunter_agent.paths import (
 from job_hunter_agent.profile_learning import (
     build_learning_patch,
     clear_capability_debug_log,
-    extract_title_pattern_suggestions,
     repair_text,
 )
 from job_hunter_agent.profile_store import (
@@ -435,11 +433,9 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        pipeline_future = pool.submit(run_cv_pipeline, combined_text, llm_client, active_onboarding_settings)
-        learning_future = pool.submit(build_learning_patch, combined_text, active_onboarding_settings, source_sections)
-        pipeline_patch = pipeline_future.result()
-        learning_patch = learning_future.result()
+    # Keep onboarding extraction in the request thread. User context does not propagate into worker threads.
+    pipeline_patch = run_cv_pipeline(combined_text, llm_client, active_onboarding_settings)
+    learning_patch = build_learning_patch(combined_text, active_onboarding_settings, source_sections)
     patch.update(pipeline_patch)
     for key, value in learning_patch.items():
         if key == KEY_CANDIDATE_CAPABILITIES:
@@ -484,34 +480,32 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
 
-    # Title patterns - always rebuilt from parsed role headers during onboarding
-    try:
-        suggestion = extract_title_pattern_suggestions(combined_text, active_onboarding_settings)
-        patch[KEY_PRIMARY_PATTERNS] = suggestion.get(KEY_PRIMARY_PATTERNS) or []
-        patch[KEY_SECONDARY_PATTERNS] = suggestion.get(KEY_SECONDARY_PATTERNS) or []
-        print(f"[TITLE_PATTERNS] Extracted {len(patch[KEY_PRIMARY_PATTERNS])} target and {len(patch[KEY_SECONDARY_PATTERNS])} secondary patterns")
-        print(
-            f"[ONBOARDING] Extraction summary: target={len(patch[KEY_PRIMARY_PATTERNS])} "
-            f"secondary={len(patch[KEY_SECONDARY_PATTERNS])} capabilities={len(patch.get(KEY_CANDIDATE_CAPABILITIES) or [])}"
-        )
-        target_roles = list(patch.get(KEY_PRIMARY_PATTERNS) or [])
-        if target_roles:
-            current_kw = current_profile.get("search_settings", {}).get("keywords", "").strip()
-            if not current_kw and not manual_keywords:
-                patch["search_settings"]["keywords"] = target_roles[0]
-                print(f"[TITLE_PATTERNS] Pre-filled search keywords: {patch['search_settings']['keywords']}")
-    except Exception as exc:
-        print(f"[TITLE_PATTERNS] Deterministic parser failed: {exc}")
+    # Titles come only from controlled structured LLM CV extraction.
+    # No deterministic parser fallback and no automatic keyword prefill from detected titles.
+    print(
+        f"[TITLE_PATTERNS] LLM extracted {len(patch.get(KEY_PRIMARY_PATTERNS) or [])} target "
+        f"and {len(patch.get(KEY_SECONDARY_PATTERNS) or [])} secondary title(s)"
+    )
 
-    # --- Generate machine-facing O*NET occupation queries ---
+    if not patch.get(KEY_PRIMARY_PATTERNS) and not patch.get(KEY_SECONDARY_PATTERNS):
+        raise ValueError(
+            "No role titles could be extracted from the CV. "
+            "Please upload a more detailed CV and try again."
+        )
+
+    # Generate O*NET occupation queries from the LLM-extracted titles (not raw CV text).
+    # Using extracted titles as input is safe: we are disambiguating confirmed titles, not inventing occupations.
+    target_titles = list(patch.get(KEY_PRIMARY_PATTERNS) or [])
+    also_titles = list(patch.get(KEY_SECONDARY_PATTERNS) or [])
+    print(f"[ONBOARDING][LLM_CALL_START] purpose=target_occupation_queries")
     occupation_queries = generate_target_occupation_queries(
-        target_roles=list(patch.get(KEY_PRIMARY_PATTERNS) or []),
-        also_consider_roles=list(patch.get(KEY_SECONDARY_PATTERNS) or []),
+        target_roles=target_titles,
+        also_consider_roles=also_titles,
         cv_text=combined_text,
         llm_client=llm_client,
     )
+    print(f"[ONBOARDING][LLM_CALL_DONE] purpose=target_occupation_queries count={len(occupation_queries)}")
     patch["target_occupation_queries"] = occupation_queries
-    print(f"[OCCUPATION_QUERIES] Generated {len(occupation_queries)} target occupation queries: {occupation_queries}")
 
     profile = patch_profile(patch)
 
@@ -519,7 +513,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         "target_titles": len(patch.get(KEY_PRIMARY_PATTERNS) or []),
         "secondary_titles": len(patch.get(KEY_SECONDARY_PATTERNS) or []),
         "capabilities": len(patch.get(KEY_CANDIDATE_CAPABILITIES) or []),
-        "dominant_signal_clusters": len(patch.get("dominant_signal_clusters") or []),
+        "capability_candidates": len(patch.get(KEY_SIGNAL_CLUSTERS) or []),
+        "occupation_queries": len(occupation_queries),
     }
 
     return {
@@ -561,3 +556,7 @@ def build_llm_profile_brief(
 
     return "\n".join(lines).strip()[:3000]
  
+
+
+
+
