@@ -696,67 +696,6 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     return suggestions
 
 
-def generate_target_occupation_queries(
-    target_roles: list[str],
-    also_consider_roles: list[str],
-    cv_text: str = "",
-    llm_client: Any = None,
-) -> list[str]:
-    """Generate machine-facing O*NET occupation query strings from the candidate's profile.
-
-    These are NOT display titles. They are precise occupation names that O*NET's index
-    can match unambiguously — e.g. "Scrum Master" rather than "Agile Delivery Lead".
-    Returns 3–8 queries as a list of strings, or [] on failure.
-    """
-    active_client = llm_client or client
-    if active_client is None:
-        return []
-
-    all_roles = list(dict.fromkeys(
-        [r.strip() for r in (target_roles or []) + (also_consider_roles or []) if str(r).strip()]
-    ))
-    if not all_roles and not cv_text:
-        return []
-
-    roles_block = "\n".join(f"- {r}" for r in all_roles) if all_roles else "(none detected)"
-    cv_snippet = (cv_text or "")[:2000].strip()
-
-    prompt = (
-        "You are a career taxonomy assistant. Given a candidate's role titles and a short CV excerpt, "
-        "generate 3 to 8 machine-facing occupation query strings for O*NET matching.\n\n"
-        "Rules:\n"
-        "- Each query must be a precise, standard occupation name that appears in O*NET (e.g. 'Scrum Master', "
-        "'Business Analyst', 'Project Manager', 'Agile Coach').\n"
-        "- Do NOT use vague labels like 'Delivery Lead', 'ICT Consultant', or 'Change Lead' unless they map cleanly to O*NET.\n"
-        "- Do NOT repeat the candidate's display titles verbatim if they are vague or non-standard.\n"
-        "- Cover the candidate's genuine occupation family — include variants a job ad might use.\n"
-        "- Return ONLY a JSON array of strings. No explanation, no markdown.\n\n"
-        f"Candidate role titles:\n{roles_block}\n\n"
-        f"CV excerpt (first 2000 chars):\n{cv_snippet}\n"
-    )
-
-    try:
-        _model = get_llm_model()
-        resp = active_client.responses.create(
-            model=_model,
-            input=[{"role": "user", "content": prompt}],
-            max_output_tokens=256,
-        )
-        _log_llm_call(resp, "target_occupation_queries", _model)
-        raw = (resp.output_text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1].lstrip("json").strip()
-        queries = _json_mod.loads(raw)
-        if not isinstance(queries, list):
-            print(f"[LLM][OCCUPATION_QUERIES][WARN] non-list response: {raw[:200]}")
-            return []
-        cleaned = [str(q).strip() for q in queries if str(q).strip()]
-        return cleaned[:8]
-    except Exception as exc:
-        print(f"[LLM][OCCUPATION_QUERIES][ERROR] {exc}")
-        return []
-
-
 def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
     """Use the LLM only to label pre-selected deterministic capability clusters."""
     active_client = llm_client or client

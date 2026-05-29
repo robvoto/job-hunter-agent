@@ -16,10 +16,8 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from job_hunter_agent.cv_pipeline import run_cv_pipeline
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_cv_chars_per_page
 from job_hunter_agent.logging_utils import format_log_block
-from job_hunter_agent.llm_gate import client as llm_client, generate_target_occupation_queries
 from job_hunter_agent.paths import (
     DATA_DIR,
     OUTPUT_DIR,
@@ -41,16 +39,10 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
-    KEY_SIGNAL_CLUSTERS,
+    KEY_TARGET_OCCUPATION_QUERIES,
     load_profile,
     normalize_engagement_type_preferences,
     patch_profile,
-)
-from job_hunter_agent.signal_registry import register_signals
-from job_hunter_agent.signal_schema import (
-    CATEGORY_CAPABILITY_CONCEPT,
-    LEARNING_CATEGORY_KEY,
-    LEARNING_SIGNAL_KEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +61,7 @@ ONBOARDING_RESET_FIELDS = (
     "star_evidence_text",
     "dominant_signal_clusters",
     KEY_MUST_NOT_REQUIRED_SKILLS,
-    "target_occupation_queries",
+    KEY_TARGET_OCCUPATION_QUERIES,
 )
 
 DEFAULT_SOURCE_MATERIALS = {
@@ -240,92 +232,6 @@ def _norm_term(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
 
 
-def merge_capability_rules_with_dominant_signals(
-    capability_rules: list[dict],
-    dominant_signal_clusters: list[dict],
-) -> list[dict]:
-    """Merge deterministic signal cluster aliases into matching LLM capability rules.
-
-    LLM capability rules are the source of truth for names and levels.
-    Clusters that clearly match an existing rule have their aliases merged in.
-    Clusters with no match are registered for user review.
-    """
-    if not dominant_signal_clusters:
-        return list(capability_rules)
-
-    llm_cap_names = [rule.get("name", "") for rule in capability_rules]
-    logger.debug("[MERGE_CAPABILITIES] LLM capabilities: %s", llm_cap_names)
-
-    # Build normalised term sets per capability rule.
-    cap_term_sets: list[frozenset[str]] = []
-    for rule in capability_rules:
-        name_n = _norm_term(rule.get("name", ""))
-        alias_norms = [_norm_term(a) for a in (rule.get("aliases") or []) if a]
-        cap_term_sets.append(frozenset(t for t in [name_n, *alias_norms] if t))
-
-    merged_rules = [dict(rule) for rule in capability_rules]
-    unmatched: list[dict] = []
-
-    for cluster in dominant_signal_clusters:
-        cluster_name = cluster.get("name", "")
-        cluster_name_n = _norm_term(cluster_name)
-        cluster_alias_norms = [_norm_term(a) for a in (cluster.get("aliases") or []) if a]
-        cluster_terms = frozenset(t for t in [cluster_name_n, *cluster_alias_norms] if t)
-        # Only exact cluster terms / aliases can merge into existing capability rules.
-        # Do not match individual words from multi-product clusters; e.g.
-        # "jira confluence" must not make Confluence an alias of Jira.
-        cluster_lookup = cluster_terms
-
-        logger.debug(
-            "[MERGE_CAPABILITIES] Dominant signal: '%s' aliases=%s",
-            cluster_name,
-            cluster.get("aliases"),
-        )
-
-        matched_idx: int | None = None
-        for idx, cap_terms in enumerate(cap_term_sets):
-            if cluster_lookup & cap_terms:
-                matched_idx = idx
-                break
-
-        if matched_idx is not None:
-            cap_rule = merged_rules[matched_idx]
-            existing_alias_norms = {_norm_term(a) for a in (cap_rule.get("aliases") or [])}
-            cap_name_n = _norm_term(cap_rule.get("name", ""))
-            new_aliases = list(cap_rule.get("aliases") or [])
-            added: list[str] = []
-            for alias in cluster.get("aliases") or []:
-                alias_n = _norm_term(alias)
-                if alias_n and alias_n != cap_name_n and alias_n not in existing_alias_norms:
-                    new_aliases.append(alias)
-                    existing_alias_norms.add(alias_n)
-                    added.append(alias)
-            if added:
-                cap_rule["aliases"] = new_aliases
-                logger.debug(
-                    "[MERGE_CAPABILITIES] Merged aliases %s into capability '%s'",
-                    added,
-                    cap_rule.get("name"),
-                )
-        else:
-            unmatched.append(cluster)
-            logger.debug(
-                "[MERGE_CAPABILITIES] Unmatched cluster '%s' → registering for review",
-                cluster_name,
-            )
-
-    if unmatched:
-        signals = [
-            {LEARNING_SIGNAL_KEY: c["name"], LEARNING_CATEGORY_KEY: CATEGORY_CAPABILITY_CONCEPT}
-            for c in unmatched
-            if c.get("name")
-        ]
-        logger.debug("[MERGE_CAPABILITIES] Registering %d unmatched signals", len(signals))
-        register_signals(signals)
-
-    return merged_rules
-
-
 def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | None = None, onboarding_settings: dict | None = None) -> dict[str, Any]:
     """Collect source documents, reset onboarding fields, re-extract everything, save.
 
@@ -433,19 +339,8 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
-    # Keep onboarding extraction in the request thread. User context does not propagate into worker threads.
-    pipeline_patch = run_cv_pipeline(combined_text, llm_client, active_onboarding_settings)
     learning_patch = build_learning_patch(combined_text, active_onboarding_settings, source_sections)
-    patch.update(pipeline_patch)
-    for key, value in learning_patch.items():
-        if key == KEY_CANDIDATE_CAPABILITIES:
-            continue
-        patch[key] = value
-    capability_rules = list(learning_patch.get(KEY_CANDIDATE_CAPABILITIES, []))
-    dominant_clusters = list(pipeline_patch.get(KEY_SIGNAL_CLUSTERS, []))
-    patch[KEY_CANDIDATE_CAPABILITIES] = merge_capability_rules_with_dominant_signals(
-        capability_rules, dominant_clusters
-    )
+    patch.update(learning_patch)
 
     brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CANDIDATE_CAPABILITIES) or [])
     if brief:
@@ -480,32 +375,10 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
 
-    # Titles come only from controlled structured LLM CV extraction.
-    # No deterministic parser fallback and no automatic keyword prefill from detected titles.
     print(
         f"[TITLE_PATTERNS] LLM extracted {len(patch.get(KEY_PRIMARY_PATTERNS) or [])} target "
         f"and {len(patch.get(KEY_SECONDARY_PATTERNS) or [])} secondary title(s)"
     )
-
-    if not patch.get(KEY_PRIMARY_PATTERNS) and not patch.get(KEY_SECONDARY_PATTERNS):
-        raise ValueError(
-            "No role titles could be extracted from the CV. "
-            "Please upload a more detailed CV and try again."
-        )
-
-    # Generate O*NET occupation queries from the LLM-extracted titles (not raw CV text).
-    # Using extracted titles as input is safe: we are disambiguating confirmed titles, not inventing occupations.
-    target_titles = list(patch.get(KEY_PRIMARY_PATTERNS) or [])
-    also_titles = list(patch.get(KEY_SECONDARY_PATTERNS) or [])
-    print(f"[ONBOARDING][LLM_CALL_START] purpose=target_occupation_queries")
-    occupation_queries = generate_target_occupation_queries(
-        target_roles=target_titles,
-        also_consider_roles=also_titles,
-        cv_text=combined_text,
-        llm_client=llm_client,
-    )
-    print(f"[ONBOARDING][LLM_CALL_DONE] purpose=target_occupation_queries count={len(occupation_queries)}")
-    patch["target_occupation_queries"] = occupation_queries
 
     profile = patch_profile(patch)
 
@@ -513,8 +386,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         "target_titles": len(patch.get(KEY_PRIMARY_PATTERNS) or []),
         "secondary_titles": len(patch.get(KEY_SECONDARY_PATTERNS) or []),
         "capabilities": len(patch.get(KEY_CANDIDATE_CAPABILITIES) or []),
-        "capability_candidates": len(patch.get(KEY_SIGNAL_CLUSTERS) or []),
-        "occupation_queries": len(occupation_queries),
+        "occupation_queries": len(patch.get(KEY_TARGET_OCCUPATION_QUERIES) or []),
     }
 
     return {

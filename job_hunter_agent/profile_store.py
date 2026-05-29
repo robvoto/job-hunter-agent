@@ -145,6 +145,7 @@ KEY_ONBOARDING_COMPLETE = "onboarding_complete"
 KEY_MATCH_PREFS = "match_preferences"
 KEY_PRIMARY_PATTERNS = "target_roles"
 KEY_SECONDARY_PATTERNS = "also_consider_roles"
+KEY_TARGET_OCCUPATION_QUERIES = "target_occupation_queries"
 KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
@@ -264,7 +265,7 @@ DEFAULT_PROFILE = {
     "dominant_signal_clusters": [],
     "target_roles": [],
     "also_consider_roles": [],
-    "target_occupation_queries": [],
+    KEY_TARGET_OCCUPATION_QUERIES: [],
     "must_not_require_skills": [],  
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,

@@ -1,13 +1,12 @@
 ﻿"""Profile learning helpers.
 
 This module provides utilities for processing and learning from candidate CV text.
-It focuses on extracting structured information, such as capabilities and role titles,
-and preparing this data for use in the job matching and profile building processes.
+It focuses on extracting structured information, such as capabilities, role titles,
+and occupation queries, for use in the job matching and profile building processes.
 
 Key functionalities include:
 - Repairing common text encoding and formatting issues in imported CV text.
-- Extracting capabilities and title patterns from CV text using LLMs.
-- Performing structural parsing of CVs to identify sections, dates, and roles.
+- Extracting capabilities, role titles, and occupation queries from CV text using LLMs.
 - Building learning signals for new capabilities and title normalization candidates.
 
 The module integrates with LLMs for advanced extraction tasks and includes
@@ -15,7 +14,6 @@ mechanisms for caching LLM responses to improve efficiency. It also handles
 the normalization and validation of extracted data to ensure consistency.
 """
 import hashlib
-import json
 import re
 import traceback
 from functools import lru_cache
@@ -32,6 +30,7 @@ from job_hunter_agent.profile_store import (
     KEY_MATCH_PREFS,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
+    KEY_TARGET_OCCUPATION_QUERIES,
     KEY_LOOKBACK_YEARS,
     KEY_MAX_TARGET,
     KEY_MAX_SECONDARY,
@@ -46,8 +45,6 @@ KEY_NEEDS_REVIEW = "needs_review"
 def _simple_title(value: str) -> str:
     """Normalize a role title for onboarding: trim, lowercase, collapse whitespace only."""
     return re.sub(r"\s+", " ", str(value or "").strip().lower()).strip()
-
-from job_hunter_agent.title_normalization_rules import normalize_title_text
 
 from job_hunter_agent.signal_registry import register_signals, signal_in_approved_knowledge
 from job_hunter_agent.signal_schema import (
@@ -64,16 +61,7 @@ from job_hunter_agent.signal_schema import (
 )
 from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
-    get_llm_cv_evidence_json_chars,
-    get_llm_cv_fallback_chars,
     get_llm_profile_extraction_max_output_tokens,
-)
-
-from job_hunter_agent.parsing_schema import (
-    KEY_P_TITLE_LINE_RULES,
-    KEY_P_TITLE_MAX_CHARS,
-    KEY_P_TITLE_MAX_TOKENS,
-    KEY_P_TITLE_PUNCT_BLOCKERS,
 )
 
 CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
@@ -110,28 +98,6 @@ def clear_capability_debug_log() -> None:
         print(f"[CAP_LOG ERROR] could not reset capability_debug.log: {exc}")
 
 
-_CURRENT_MONTH = datetime.now().month
-_MONTH_NAME_TO_NUMBER = {
-    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
-    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
-    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
-    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
-}
-_MONTH_TOKEN_PATTERN = (
-    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
-    r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|"
-    r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
-)
-
-_DATE_RANGE_PATTERN = re.compile(
-    rf"(?:(?P<start_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
-    rf"(?P<start_year>(?:19|20)\d{{2}})"
-    rf"\s*(?:-|–|—|to|/)\s*"
-    rf"(?:(?P<end_month>{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?"
-    rf"(?:(?P<end_year>(?:19|20)\d{{2}})|(?P<end_relative>present|current|now|ongoing))",
-    flags=re.IGNORECASE,
-)
-
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
@@ -163,6 +129,7 @@ class _CvExtractionResponse(BaseModel):
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
     role_titles: list[str] = Field(default_factory=list)
+    target_occupation_queries: list[str] = Field(default_factory=list)
 
 
 # ── Text repair ────────────────────────────────────────────────────────────────
@@ -260,362 +227,8 @@ def get_parsing_rule_set(key: str) -> set[str]:
     return set()
 
 
-@lru_cache(maxsize=1)
-def _load_title_candidate_line_rules() -> dict[str, Any]:
-    rules = _load_parsing_rules()
-    line_rules = rules.get(KEY_P_TITLE_LINE_RULES)
-    if not isinstance(line_rules, dict):
-        raise ValueError("parsing_rules.json must define title_candidate_line_rules")
-    return line_rules
-
-
-def _get_title_candidate_line_int(key: str) -> int:
-    value = _load_title_candidate_line_rules().get(key)
-    try:
-        return int(value)
-    except Exception as exc:
-        raise ValueError(f"title_candidate_line_rules.{key} must be an integer") from exc
-
-
-def _get_title_candidate_punctuation_blockers() -> set[str]:
-    blockers = _load_title_candidate_line_rules().get(KEY_P_TITLE_PUNCT_BLOCKERS)
-    if not isinstance(blockers, list):
-        raise ValueError("title_candidate_line_rules.punctuation_blockers must be a list")
-    return {str(item) for item in blockers if str(item)}
-
-
-
-def _get_title_candidate_leading_verb_blockers() -> set[str]:
-    return get_parsing_rule_set("title_candidate_leading_verb_blockers")
-
-
-def _looks_like_role_title_line(text: str) -> bool:
-    cleaned = _clean_line(text)
-    if not cleaned:
-        return False
-    if len(cleaned) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_CHARS):
-        return False
-    if any(blocker in cleaned for blocker in _get_title_candidate_punctuation_blockers()):
-        return False
-    normalized = _normalize_role_title_value(cleaned)
-    tokens = _pattern_tokens(normalized)
-    if not tokens or len(tokens) > _get_title_candidate_line_int(KEY_P_TITLE_MAX_TOKENS):
-        return False
-    if tokens[0] in _get_title_candidate_leading_verb_blockers():
-        return False
-    return True
-
-
-def _select_role_title_and_employer(candidate_lines: list[str]) -> tuple[str, str]:
-    title = ""
-    employer = ""
-    title_indexes = [index for index, line in enumerate(candidate_lines) if _looks_like_role_title_line(line)]
-    if not title_indexes:
-        return title, employer
-
-    title_index = title_indexes[0]
-
-    title = candidate_lines[title_index]
-    for index in range(title_index - 1, -1, -1):
-        line = candidate_lines[index]
-        if line != title and not _looks_like_role_title_line(line):
-            employer = line
-            break
-    if not employer:
-        for index in range(title_index + 1, len(candidate_lines)):
-            line = candidate_lines[index]
-            if line != title and not _looks_like_role_title_line(line):
-                employer = line
-                break
-    return title, employer
-
-
-def _header_candidate_lines(*values: str) -> list[str]:
-    candidates: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        cleaned = _clean_line(value)
-        if not cleaned:
-            continue
-        if _extract_year_range(cleaned):
-            continue
-        if _is_heading_line(value) or _is_plain_section_label(value) or _is_bullet_line(value):
-            continue
-        if cleaned in seen:
-            continue
-        seen.add(cleaned)
-        candidates.append(cleaned)
-    return candidates
-
-
 def _strip_bullet_prefix(text: str) -> str:
     return _clean_line(_BULLET_PREFIX_RE.sub("", str(text or "").lstrip()))
-
-
-def _extract_year_range(text: str) -> dict[str, Any] | None:
-    match = _DATE_RANGE_PATTERN.search(str(text or ""))
-    if not match:
-        return None
-    start_year = int(match.group("start_year"))
-    start_month_name = str(match.group("start_month") or "").strip().lower()
-    end_month_name = str(match.group("end_month") or "").strip().lower()
-    raw_end_relative = str(match.group("end_relative") or "").strip().lower()
-    is_current = raw_end_relative in {"present", "current", "now", "ongoing"}
-    end_year = _CURRENT_YEAR if is_current else int(match.group("end_year"))
-    start_month = _MONTH_NAME_TO_NUMBER.get(start_month_name, 1)
-    end_month = _CURRENT_MONTH if is_current else _MONTH_NAME_TO_NUMBER.get(end_month_name, 12)
-    duration_months = max(((end_year - start_year) * 12) + (end_month - start_month) + 1, 1)
-    return {
-        "start_year": start_year,
-        "start_month": start_month,
-        "end_year": end_year,
-        "end_month": end_month,
-        "is_current": is_current,
-        "duration_months": duration_months,
-    }
-
-
-def _parse_role_entries(source_text: str) -> list[dict[str, Any]]:
-    lines = source_text.splitlines()
-    roles: list[dict[str, Any]] = []
-    current_section = ""
-    i = 0
-
-    inline_role_re = re.compile(
-        rf"^(?P<employer>.+?)\s*-\s*(?P<title>.+?)\s*\((?P<dates>.*?(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}.*?(?:present|current|now|ongoing|(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}))\)\s*$",
-        flags=re.IGNORECASE,
-    )
-    title_with_dates_re = re.compile(
-        rf"^(?P<title>.+?)\s*\((?P<dates>.*?(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}.*?(?:present|current|now|ongoing|(?:{_MONTH_TOKEN_PATTERN}\s*[.,]?\s*)?(?:19|20)\d{{2}}))\)\s*$",
-        flags=re.IGNORECASE,
-    )
-    title_pipe_dates_re = re.compile(
-        rf"^(?P<title>.+?)\s*\|\s*(?P<dates>(?:(?:{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?(?:19|20)\d{{2}}\s*(?:-|–|—|to|/)\s*(?:(?:{_MONTH_TOKEN_PATTERN})\s*[.,]?\s*)?(?:present|current|now|ongoing|(?:19|20)\d{{2}}))(?:\s*\|\s*(?P<tail>.*))?$",
-        flags=re.IGNORECASE,
-    )
-
-    def collect_role_detail_lines(start_index: int) -> tuple[list[str], int]:
-        details: list[str] = []
-        j = start_index
-        while j < len(lines):
-            look_raw = lines[j].strip()
-            look = _clean_line(look_raw)
-            if not look:
-                j += 1
-                continue
-            if look_raw.lstrip().startswith("#") or _is_plain_section_label(look_raw):
-                break
-            if _extract_year_range(look):
-                break
-            if _is_bullet_line(look_raw):
-                details.append(_strip_bullet_prefix(look_raw))
-            else:
-                details.append(look)
-            j += 1
-        return details, j
-
-    def append_role(
-        title: str,
-        employer: str,
-        header_lines: list[str],
-        bullets: list[str],
-        date_info: dict[str, Any],
-    ) -> None:
-        cleaned_title = _clean_line(title)
-        cleaned_employer = _clean_line(employer)
-        resolved_title = cleaned_title if cleaned_title and _looks_like_role_title_line(cleaned_title) else ""
-        resolved_employer = ""
-        if cleaned_employer and not _is_heading_line(employer) and not _is_plain_section_label(employer):
-            resolved_employer = cleaned_employer
-        if not resolved_title or not resolved_employer:
-            structural_title, structural_employer = _select_role_title_and_employer(header_lines)
-            if not resolved_title:
-                resolved_title = structural_title
-            if not resolved_employer:
-                resolved_employer = structural_employer
-        if not resolved_title:
-            return
-        roles.append(
-            {
-                "title": resolved_title,
-                "employer": resolved_employer,
-                "header_lines": header_lines or [resolved_title, resolved_employer],
-                "section": current_section,
-                "bullets": bullets,
-                **date_info,
-            }
-        )
-
-    while i < len(lines):
-        raw_line = lines[i].strip()
-        cleaned = _clean_line(raw_line)
-        if not cleaned:
-            i += 1
-            continue
-
-        if _is_heading_line(raw_line):
-            current_section = cleaned.lower()
-            i += 1
-            continue
-
-        inline_match = inline_role_re.match(cleaned)
-        if inline_match:
-            date_info = _extract_year_range(inline_match.group("dates"))
-            bullets, j = collect_role_detail_lines(i + 1)
-            if date_info:
-                header_lines = _header_candidate_lines(
-                    inline_match.group("title"),
-                    inline_match.group("employer"),
-                )
-                append_role(inline_match.group("title"), inline_match.group("employer"), header_lines, bullets, date_info)
-            i = max(j, i + 1)
-            continue
-
-        title_pipe_dates_match = title_pipe_dates_re.match(cleaned)
-        if title_pipe_dates_match:
-            date_info = _extract_year_range(title_pipe_dates_match.group("dates"))
-            if date_info:
-                bullets, j = collect_role_detail_lines(i + 1)
-                previous_line = lines[i - 1].strip() if i > 0 else ""
-                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
-                header_lines = _header_candidate_lines(
-                    title_pipe_dates_match.group("title"),
-                    previous_line,
-                    next_line,
-                )
-                employer_hint = next_line if next_line and not _is_bullet_line(next_line) else previous_line
-                append_role(title_pipe_dates_match.group("title"), employer_hint, header_lines, bullets, date_info)
-            i = max(j, i + 1)
-            continue
-
-        title_with_dates_match = title_with_dates_re.match(cleaned)
-        if title_with_dates_match:
-            date_info = _extract_year_range(title_with_dates_match.group("dates"))
-            if date_info:
-                bullets, j = collect_role_detail_lines(i + 1)
-                previous_line = lines[i - 1].strip() if i > 0 else ""
-                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
-                header_lines = _header_candidate_lines(
-                    title_with_dates_match.group("title"),
-                    previous_line,
-                    next_line,
-                )
-                append_role(title_with_dates_match.group("title"), previous_line, header_lines, bullets, date_info)
-            i = max(j, i + 1)
-            continue
-
-        date_info = _extract_year_range(cleaned)
-        if not date_info:
-            i += 1
-            continue
-
-        prefix_candidate_lines: list[str] = []
-        k = i - 1
-        while k >= 0 and len(prefix_candidate_lines) < 3:
-            look_back_raw = lines[k].strip()
-            look_back = _clean_line(look_back_raw)
-            if not look_back:
-                break
-            if _is_heading_line(look_back_raw) or _is_plain_section_label(look_back_raw) or look_back_raw.lstrip().startswith(("-", "*")):
-                break
-            if _extract_year_range(look_back):
-                break
-            prefix_candidate_lines.append(look_back)
-            k -= 1
-        prefix_candidate_lines.reverse()
-
-        candidate_lines: list[str] = list(prefix_candidate_lines)
-        bullets: list[str] = []
-        j = i + 1
-        while j < len(lines):
-            look_raw = lines[j].strip()
-            look = _clean_line(look_raw)
-            if not look:
-                j += 1
-                continue
-            if _is_heading_line(look_raw) or _is_plain_section_label(look_raw):
-                break
-            if _extract_year_range(look):
-                break
-            if _is_bullet_line(look_raw):
-                bullets.append(_strip_bullet_prefix(look_raw))
-            elif prefix_candidate_lines:
-                bullets.append(look)
-            elif not bullets and len(candidate_lines) < 3:
-                candidate_lines.append(look)
-            j += 1
-
-        if candidate_lines:
-            if prefix_candidate_lines and _looks_like_role_title_line(prefix_candidate_lines[0]):
-                title = prefix_candidate_lines[0]
-                employer = prefix_candidate_lines[1] if len(prefix_candidate_lines) > 1 else ""
-            else:
-                title, employer = _select_role_title_and_employer(candidate_lines)
-            if not title:
-                i = max(j, i + 1)
-                continue
-            roles.append(
-                {
-                    "title": title,
-                    "employer": employer,
-                    "header_lines": [item for item in [employer, title] if item] or [item for item in candidate_lines if item][:3],
-                    "section": current_section,
-                    "bullets": bullets,
-                    **date_info,
-                }
-            )
-        i = max(j, i + 1)
-
-    deduped: list[dict[str, Any]] = []
-    seen: set[tuple[str, int, int]] = set()
-    for role in roles:
-        header_key = " | ".join(
-            _normalize_phrase(item)
-            for item in (role.get("header_lines") or [])
-            if _normalize_phrase(item)
-        )
-        role_key = _normalize_phrase(role.get("title", "")) or header_key
-        key = (
-            role_key,
-            int(role.get("start_year", 0) or 0),
-            int(role.get("end_year", 0) or 0),
-        )
-        if not key[0] or key in seen:
-            continue
-        seen.add(key)
-        deduped.append(role)
-    return deduped
-
-
-def _build_cv_evidence_payload(source_text: str, lookback_years: int) -> dict[str, Any]:
-    recent_from_year = _CURRENT_YEAR - lookback_years
-    structured_roles: list[dict[str, Any]] = []
-
-    for index, role in enumerate(_parse_role_entries(source_text)):
-        structured_roles.append(
-            {
-                "role_index": index,
-                "title": str(role.get("title") or "").strip(),
-                "employer": str(role.get("employer") or "").strip(),
-                "header_lines": [str(item).strip() for item in (role.get("header_lines") or []) if str(item).strip()][:3],
-                "section": str(role.get("section") or "").strip(),
-                "start_year": int(role.get("start_year") or 0),
-                "start_month": int(role.get("start_month") or 0),
-                "end_year": int(role.get("end_year") or 0),
-                "end_month": int(role.get("end_month") or 0),
-                "is_current": bool(role.get("is_current")),
-                "duration_months": int(role.get("duration_months") or 0),
-                "is_recent": int(role.get("end_year") or 0) >= recent_from_year,
-                "bullets": [str(item).strip() for item in (role.get("bullets") or []) if str(item).strip()][:8],
-            }
-        )
-
-    return {
-        "current_year": _CURRENT_YEAR,
-        "lookback_years": lookback_years,
-        "recent_from_year": recent_from_year,
-        "roles": structured_roles,
-    }
 
 
 # ── LLM extraction ─────────────────────────────────────────────────────────────
@@ -646,24 +259,16 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
 
     if client is None:
         return {}
-
-    recent_from = _CURRENT_YEAR - lookback_years
-    evidence_payload = _build_cv_evidence_payload(source_text, lookback_years)
-    evidence_json = json.dumps(evidence_payload, ensure_ascii=True)
-    evidence_json_limit = get_llm_cv_evidence_json_chars()
-    fallback_text_limit = get_llm_cv_fallback_chars()
     profile_extraction_max_output_tokens = get_llm_profile_extraction_max_output_tokens()
     prompt = (
-        "Extract structured data from this CV evidence pack.\n\n"
+        "Extract structured data from this CV text.\n\n"
         "Return data that matches the requested response schema exactly.\n\n"
         "Rules:\n"
-        f"- Current year is {_CURRENT_YEAR}. Recent means {recent_from} onward.\n"
-        "- Treat the evidence pack as the source of truth. Use raw CV text only as fallback context when evidence is incomplete.\n"
-        "- For each role, trust header_lines plus dates and bullets more than any best-effort title/employer fields.\n"
-        "- capabilities: extract 8–15 transferable professional skills when the evidence supports them. "
+        f"- Current year is {_CURRENT_YEAR}.\n"
+        "- Treat the raw CV text as the source of truth.\n"
+        "- capabilities: extract 8–15 transferable professional skills when the CV supports them. "
         "Not company names, employer names, job titles, or raw phrase fragments. "
-        "Each capability must be a named skill or practice area grounded in the CV bullets or role headers. "
-        "Use explicit role titles when present, plus header_lines and bullets, as evidence. "
+        "Each capability must be a named skill or practice area grounded in the CV bullets, skills section, summary, or experience text. "
         "Set level='strong' only for current or recent strengths that are repeated and clearly senior. "
         "Older evidence should usually be 'working' or 'basic' unless the CV still shows current depth. "
         "Set needs_review=true when the capability is plausible but you are not confident it belongs in the final profile. "
@@ -671,14 +276,15 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "that refer to the same skill (e.g. for 'business process modeling': ['bpmn', 'process mapping', 'workflow design']). "
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
-        "- role_titles: list the job titles from the evidence roles exactly as they appear in the title field. One entry per role, no duplicates.\n"
+        "- role_titles: list the job titles explicitly shown in the CV. One entry per role, no duplicates.\n"
+        "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
+        "  Use standard job titles a job-search system could match against.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
-        f"Evidence pack JSON:\n{evidence_json[:evidence_json_limit]}\n\n"
-        f"Raw CV fallback:\n{source_text[:fallback_text_limit]}"
+        f"CV text:\n{source_text}"
     )
 
-    _cap_log(f"[ONBOARDING][LLM_CALL_START] purpose=capability_extraction cache_key={cache_key}")
+    _cap_log(f"[ONBOARDING][LLM_CALL_START] purpose=cv_extraction cache_key={cache_key}")
     try:
         model = get_llm_model()
         resp = client.responses.parse(
@@ -691,7 +297,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         parsed = resp.output_parsed
         result = parsed.model_dump() if parsed is not None else {}
     except Exception as exc:
-        _cap_log(f"[ONBOARDING][LLM_CALL_ERROR] purpose=capability_extraction cache_key={cache_key} error={exc}")
+        _cap_log(f"[ONBOARDING][LLM_CALL_ERROR] purpose=cv_extraction cache_key={cache_key} error={exc}")
         traceback.print_exc()
         raise
 
@@ -814,163 +420,6 @@ def _split_learning_capabilities(
     return approved, review_signals
 
 
-def _pattern_tokens(value: str) -> tuple[str, ...]:
-    return tuple(re.findall(r"[a-z0-9]+", str(value or "").lower()))
-
-
-def _normalize_role_title_value(value: str) -> str:
-    return normalize_title_text(_clean_line(value))
-
-
-def _split_compound_role_title(title: str) -> list[str]:
-    raw_title = _clean_line(title)
-    cleaned = _simple_title(raw_title)
-    if not cleaned:
-        return []
-    raw_parts = [
-        _simple_title(part)
-        for part in re.split(r"\s*/\s*|\s*\|\s*|\s+\band\b\s+|\s*&\s+", raw_title)
-        if _simple_title(part)
-    ]
-    if len(raw_parts) <= 1:
-        return [cleaned]
-    if not all(len(_pattern_tokens(part)) >= 2 for part in raw_parts):
-        return [cleaned]
-    return list(dict.fromkeys(raw_parts))
-
-
-def _split_compound_role_titles(titles: list[str]) -> list[str]:
-    split_titles: list[str] = []
-    seen: set[str] = set()
-    for title in titles or []:
-        for part in _split_compound_role_title(title):
-            if not part or part in seen:
-                continue
-            seen.add(part)
-            split_titles.append(part)
-    return split_titles
-
-
-def _sorted_roles_for_title_selection(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(
-        roles,
-        key=lambda role: (
-            0 if bool(role.get("is_current")) else 1,
-            -(int(role.get("end_year") or 0)),
-            -(int(role.get("end_month") or 0)),
-            -(int(role.get("start_year") or 0)),
-            -(int(role.get("start_month") or 0)),
-        ),
-    )
-
-
-def _collect_title_evidence(roles: list[dict[str, Any]], *, recent_years: int) -> dict[str, dict[str, int]]:
-    evidence: dict[str, dict[str, int]] = {}
-    for role in _sorted_roles_for_title_selection(roles):
-        raw_title = str(role.get("title") or "").strip()
-        if not raw_title:
-            continue
-        titles = _split_compound_role_title(raw_title)
-        is_compound = len(titles) > 1
-        end_year = int(role.get("end_year") or 0)
-        years_since_last_use = max(_CURRENT_YEAR - end_year, 0) if end_year else 99
-        for title in titles:
-            bucket = evidence.setdefault(
-                title,
-                {
-                    "current_occurrences": 0,
-                    "recent_occurrences": 0,
-                    "older_occurrences": 0,
-                    "standalone_occurrences": 0,
-                    "compound_occurrences": 0,
-                    "total_occurrences": 0,
-                },
-            )
-            bucket["total_occurrences"] += 1
-            if bool(role.get("is_current")):
-                bucket["current_occurrences"] += 1
-            elif years_since_last_use <= recent_years:
-                bucket["recent_occurrences"] += 1
-            else:
-                bucket["older_occurrences"] += 1
-            if is_compound:
-                bucket["compound_occurrences"] += 1
-            else:
-                bucket["standalone_occurrences"] += 1
-    return evidence
-
-
-def _classify_titles_from_evidence(
-    title_evidence: dict[str, dict[str, int]],
-    *,
-    max_target: int,
-    max_secondary: int,
-) -> dict[str, list[str]]:
-    primary: list[str] = []
-    secondary: list[str] = []
-
-    def primary_sort_key(item: tuple[str, dict[str, int]]) -> tuple[int, int, int, int, str]:
-        title, stats = item
-        return (
-            -int(stats["current_occurrences"]),
-            -int(stats["recent_occurrences"]),
-            -int(stats["standalone_occurrences"]),
-            -int(stats["total_occurrences"]),
-            title,
-        )
-
-    def secondary_sort_key(item: tuple[str, dict[str, int]]) -> tuple[int, int, int, int, str]:
-        title, stats = item
-        return (
-            -(int(stats["current_occurrences"]) + int(stats["recent_occurrences"])),
-            -int(stats["standalone_occurrences"]),
-            -int(stats["total_occurrences"]),
-            -int(stats["compound_occurrences"]),
-            title,
-        )
-
-    sorted_items = sorted(title_evidence.items(), key=primary_sort_key)
-    for title, stats in sorted_items:
-        has_recent_signal = bool(stats["current_occurrences"] or stats["recent_occurrences"])
-        has_standalone_signal = stats["standalone_occurrences"] > 0
-        repeated = stats["total_occurrences"] > 1
-        compound_only = stats["compound_occurrences"] > 0 and stats["standalone_occurrences"] == 0
-
-        if has_recent_signal and has_standalone_signal:
-            primary.append(title)
-            continue
-        if has_recent_signal and repeated and not compound_only:
-            primary.append(title)
-
-    primary = primary[:max_target]
-    primary_set = set(primary)
-
-    for title, stats in sorted(title_evidence.items(), key=secondary_sort_key):
-        if title in primary_set:
-            continue
-        has_recent_signal = bool(stats["current_occurrences"] or stats["recent_occurrences"])
-        has_standalone_signal = stats["standalone_occurrences"] > 0
-        repeated = stats["total_occurrences"] > 1
-        compound_only = stats["compound_occurrences"] > 0 and stats["standalone_occurrences"] == 0
-        older_only = not has_recent_signal and stats["older_occurrences"] > 0
-
-        if compound_only and not repeated and not has_recent_signal:
-            continue
-        if older_only or compound_only or not has_standalone_signal or not repeated:
-            secondary.append(title)
-        if len(secondary) >= max_secondary:
-            break
-
-    return {
-        KEY_PRIMARY_PATTERNS: primary,
-        KEY_SECONDARY_PATTERNS: secondary,
-    }
-
-
-
-
-# ── Public API ─────────────────────────────────────────────────────────────────
-
 def build_learning_patch(
     text: str,
     onboarding_settings: dict[str, Any] | None = None,
@@ -1004,34 +453,53 @@ def build_learning_patch(
     _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capability candidate(s) before validation")
     capabilities = _validate_capabilities(raw_caps)
     approved_capabilities, review_signals = _split_learning_capabilities(capabilities, source_sections=source_sections)
-    _cap_log(
-        f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written"
-    )
+    _cap_log(f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
-    _cap_log(f"[ONBOARDING][LLM_CALL_DONE] purpose=capability_extraction count={len(approved_capabilities)}")
-    if approved_capabilities:
-        patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
+
+    raw_titles = extracted.get("role_titles") or []
+    extracted_titles = list(
+        dict.fromkeys(
+            _simple_title(value)
+            for value in raw_titles
+            if _simple_title(value)
+        )
+    )
+    raw_queries = extracted.get(KEY_TARGET_OCCUPATION_QUERIES) or []
+    occupation_queries = list(
+        dict.fromkeys(
+            re.sub(r"\s+", " ", str(value or "")).strip()
+            for value in raw_queries
+            if str(value or "").strip()
+        )
+    )
+    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)")
+    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(occupation_queries)} target occupation query(ies)")
+
+    missing: list[str] = []
+    if not approved_capabilities:
+        missing.append("capability groups")
+    if not extracted_titles:
+        missing.append("role titles")
+    if not occupation_queries:
+        missing.append("target occupation queries")
+    if missing:
+        raise ValueError("LLM did not return required onboarding data: " + ", ".join(missing) + ".")
+
+    _cap_log(
+        "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction "
+        f"capability_count={len(approved_capabilities)} target_count={len(extracted_titles)} "
+        f"occupation_query_count={len(occupation_queries)}"
+    )
+
+    patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
     if review_signals:
         register_signals(review_signals)
 
-    _cap_log("[ONBOARDING][LLM_CALL_START] purpose=title_extraction")
-    raw_titles = extracted.get("role_titles") or []
-    extracted_titles = _split_compound_role_titles([
-        str(value).strip()
-        for value in raw_titles
-        if str(value).strip()
-    ])
-    primary_titles: list[str] = []
-    secondary_titles: list[str] = []
-    if extracted_titles:
-        max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
-        max_secondary = _resolve_onboarding_int(onboarding_settings, KEY_MAX_SECONDARY)
-        primary_titles = extracted_titles[:max_target]
-        secondary_titles = extracted_titles[max_target:max_target + max_secondary]
-        patch[KEY_PRIMARY_PATTERNS] = primary_titles
-        patch[KEY_SECONDARY_PATTERNS] = secondary_titles
-        _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)")
-    _cap_log(f"[ONBOARDING][LLM_CALL_DONE] purpose=title_extraction target_count={len(primary_titles)} secondary_count={len(secondary_titles)}")
+    max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
+    max_secondary = _resolve_onboarding_int(onboarding_settings, KEY_MAX_SECONDARY)
+    patch[KEY_PRIMARY_PATTERNS] = extracted_titles[:max_target]
+    patch[KEY_SECONDARY_PATTERNS] = extracted_titles[max_target:max_target + max_secondary]
+    patch[KEY_TARGET_OCCUPATION_QUERIES] = occupation_queries
 
     raw_prefs = extracted.get(KEY_MATCH_PREFS) or {}
     match_prefs = {k: v for k, v in raw_prefs.items() if v is not None and v != ""}
@@ -1039,45 +507,3 @@ def build_learning_patch(
         patch[KEY_MATCH_PREFS] = match_prefs
 
     return patch
-
-
-def extract_title_pattern_suggestions(
-    source_text: str,
-    onboarding_settings: dict | None = None,
-) -> dict[str, list[str]]:
-    source_text = repair_text(source_text)
-    settings = onboarding_settings or {}
-    max_target = _resolve_onboarding_int(settings, KEY_MAX_TARGET)
-    max_secondary = _resolve_onboarding_int(settings, KEY_MAX_SECONDARY)
-    roles = _parse_role_entries(source_text)
-    title_evidence = _collect_title_evidence(
-        roles,
-        recent_years=_resolve_extraction_lookback_years(settings),
-    )
-    classified = _classify_titles_from_evidence(
-        title_evidence,
-        max_target=max_target,
-        max_secondary=max_secondary,
-    )
-
-    target_patterns = [
-        _simple_title(value)
-        for value in (classified.get(KEY_PRIMARY_PATTERNS) or [])
-        if _simple_title(value)
-    ][:max_target]
-    secondary_patterns = [
-        _simple_title(value)
-        for value in (classified.get(KEY_SECONDARY_PATTERNS) or [])
-        if _simple_title(value)
-    ][:max_secondary]
-    primary_set = {pattern for pattern in target_patterns if pattern}
-    secondary_patterns = [
-        pattern
-        for pattern in secondary_patterns
-        if pattern not in primary_set
-    ][:max_secondary]
-
-    return {
-        KEY_PRIMARY_PATTERNS: list(dict.fromkeys(target_patterns)),
-        KEY_SECONDARY_PATTERNS: list(dict.fromkeys(secondary_patterns)),
-    }

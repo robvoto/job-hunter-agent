@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from job_hunter_agent import server_helpers
+from job_hunter_agent import profile_learning
 from job_hunter_agent import server_review
 from job_hunter_agent import source_documents
 from job_hunter_agent import profile_store
@@ -241,11 +242,17 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
 
 
 def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
-    cv_path = tmp_path / "cv.txt"
-    cv_path.write_text("A" * 5000, encoding="utf-8")
+    fixture = {
+        "capabilities": [
+            {"name": "business analysis", "level": "strong", "aliases": [], "needs_review": False},
+        ],
+        "role_titles": ["Business Analyst"],
+        "target_occupation_queries": ["Business Analyst"],
+        "match_preferences": {},
+    }
 
-    monkeypatch.setattr(source_documents, "run_cv_pipeline", lambda text, llm_client, onboarding_settings=None: {"match_preferences": {}})
-    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings, source_sections: {"target_roles": ["business analyst"], "also_consider_roles": [], "candidate_capabilities": []})
+    monkeypatch.setattr(profile_learning, "signal_in_approved_knowledge", lambda category, name, aliases=None: (False, ""))
+    monkeypatch.setattr(profile_learning, "_llm_extract_from_cv", lambda text, lookback_years, alias_limit: fixture)
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(source_documents, "load_profile", lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {"capability_strength_preset": "balanced"}})
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
@@ -270,7 +277,8 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
     assert "chars read" in output
     assert "approx pages" in output
     assert "[ONBOARDING] CV source read" in output
-    assert "[ONBOARDING][LLM_CALL_DONE] purpose=target_occupation_queries" in output
+    assert "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction" in output
+    assert "occupation_query_count=1" in output
 
 
 def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_selected(monkeypatch):
@@ -422,26 +430,31 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
         },
     )
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
-    def fake_run_cv_pipeline(text, llm_client, onboarding_settings=None):
-        captured["onboarding_settings"] = onboarding_settings
-        return {"candidate_capabilities": [{"name": "delivery", "level": "working", "fit": "core"}]}
+    monkeypatch.setattr(profile_learning, "signal_in_approved_knowledge", lambda category, name, aliases=None: (False, ""))
 
-    monkeypatch.setattr(source_documents, "run_cv_pipeline", fake_run_cv_pipeline)
-    monkeypatch.setattr(source_documents, "build_learning_patch", lambda text, onboarding_settings=None, source_sections=None: {"target_roles": ["delivery lead"], "also_consider_roles": []})
+    def fake_llm_extract_from_cv(text, lookback_years, alias_limit):
+        captured["onboarding_settings"] = {
+            "lookback_years": lookback_years,
+            "alias_limit": alias_limit,
+        }
+        return {
+            "capabilities": [
+                {"name": "delivery", "level": "working", "aliases": [], "needs_review": False}
+            ],
+            "role_titles": ["Delivery Lead"],
+            "target_occupation_queries": ["Delivery Lead"],
+            "match_preferences": {},
+        }
+
+    monkeypatch.setattr(profile_learning, "_llm_extract_from_cv", fake_llm_extract_from_cv)
 
     result = source_documents.run_onboarding(
         {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "# Professional Experience\nAcme - Delivery Lead (2020 - 2024)\n"}]}
     )
 
     assert result["ok"] is True
-    assert captured["onboarding_settings"]["extraction_lookback_years"] == 11
-    assert captured["onboarding_settings"]["title_extraction_min_months"] == 5
-    assert captured["onboarding_settings"]["max_target_patterns"] == 9
-    assert captured["onboarding_settings"]["max_secondary_patterns"] == 4
-    assert captured["onboarding_settings"]["capability_alias_limit"] == 7
-    assert captured["onboarding_settings"]["signal_cluster_min_alias_hits"] == 3
-    assert captured["onboarding_settings"]["signal_cluster_min_snippet_hits"] == 4
-    assert captured["onboarding_settings"]["signal_cluster_dense_snippet_alias_hits"] == 5
+    assert captured["onboarding_settings"]["lookback_years"] == 11
+    assert captured["onboarding_settings"]["alias_limit"] == 7
 
 
 def test_normalize_full_profile_preserves_selected_title_categories():

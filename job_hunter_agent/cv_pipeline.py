@@ -1,4 +1,4 @@
-"""CV analysis pipeline with deterministic extraction plus one label-only LLM pass.
+"""CV analysis pipeline for capability candidate diagnostics plus one label-only LLM pass.
 
 This module orchestrates the processing of raw CV text through a multi-stage pipeline 
 to extract structured information. It performs deterministic extraction of roles, 
@@ -15,7 +15,7 @@ Produces the deterministic review fields from raw CV text:
   dominant_signal_clusters and must_not_require_skills.
 
 Layers:
-  A - parse_roles: extract structured role list
+  A - extract source groups from raw CV text
   B - extract_phrases: bigrams/trigrams from bullets
   C - cluster_phrases: Jaccard-based phrase grouping
   D - score_and_promote: score clusters into strength bands
@@ -31,10 +31,11 @@ from job_hunter_agent.capability_matrix import choose_capability_name, derive_jo
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
     _cap_log,
+    _clean_line,
+    _is_bullet_line,
+    _is_heading_line,
     _normalize_token,
     _normalize_phrase,
-    _parse_role_entries,
-    _resolve_extraction_lookback_years,
     get_parsing_rule_set,
     repair_text,
 )
@@ -67,7 +68,7 @@ def _is_quality_phrase(text: str) -> bool:
 
 
 def _format_cv_pipeline_summary(
-    roles: int,
+    source_groups: int,
     phrases: int,
     clusters: int,
     candidates: int,
@@ -75,7 +76,7 @@ def _format_cv_pipeline_summary(
 ) -> str:
     lines = [
         "[CV_PIPELINE]",
-        f"  roles: {roles}",
+        f"  source groups: {source_groups}",
         f"  phrases: {phrases}",
         f"  clusters: {clusters}",
         f"  candidates: {candidates}",
@@ -89,46 +90,40 @@ _TOOL_LINE_RE = re.compile(
 )
 
 
-def _compute_role_experience(roles: list[dict[str, Any]]) -> dict[str, int]:
-    """Sum duration_months per normalized title. Returns {lowercase_title: total_months}."""
-    totals: dict[str, int] = defaultdict(int)
-    for role in roles:
-        title = re.sub(r"\s+", " ", str(role.get("title") or "").strip()).lower()
-        if not title:
+def _strip_bullet_prefix(text: str) -> str:
+    return re.sub(r"^[\-\*\u2022\u2013\u2014]+\s*", "", str(text or "").lstrip()).strip()
+
+
+def _source_groups_from_cv_text(cv_text: str) -> list[dict[str, Any]]:
+    source_groups: list[dict[str, Any]] = []
+    current_label = "source"
+    current_bullets: list[str] = []
+
+    def flush_group() -> None:
+        if current_bullets:
+            source_groups.append({
+                "label": current_label,
+                "bullets": list(current_bullets),
+            })
+
+    for line in cv_text.splitlines():
+        raw_line = line.strip()
+        cleaned = _clean_line(raw_line)
+        if not cleaned:
             continue
-        months = int(role.get("duration_months") or 0)
-        totals[title] += months
-    return dict(totals)
+        if _is_heading_line(raw_line):
+            flush_group()
+            current_bullets.clear()
+            current_label = cleaned.lower() or "source"
+            continue
+        if _is_bullet_line(raw_line):
+            current_bullets.append(_strip_bullet_prefix(raw_line))
+            continue
+        if _TOOL_LINE_RE.match(cleaned):
+            current_bullets.append(cleaned)
 
-
-def parse_roles(
-    cv_text: str,
-    onboarding_settings: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    roles: list[dict[str, Any]] = []
-    recent_years = _resolve_extraction_lookback_years(onboarding_settings)
-    recent_cutoff = _CURRENT_YEAR - recent_years
-    for role in _parse_role_entries(cv_text):
-        end_year = int(role.get("end_year") or 0)
-        duration_months = int(role.get("duration_months") or 0)
-        roles.append({
-            "title": role.get("title", ""),
-            "employer": role.get("employer", ""),
-            "role_key": "|".join(
-                [
-                    str(role.get("title") or "").strip().lower(),
-                    str(role.get("employer") or "").strip().lower(),
-                    str(end_year),
-                ]
-            ),
-            "start_year": role.get("start_year"),
-            "end_year": end_year,
-            "duration_months": duration_months,
-            "is_recent": end_year >= recent_cutoff,
-            "is_current": bool(role.get("is_current")),
-            "bullets": role.get("bullets", []),
-        })
-    return roles
+    flush_group()
+    return source_groups
 
 
 def _tool_terms(text: str) -> list[str]:
@@ -184,36 +179,32 @@ def _ngrams(text: str, excluded_tokens: set[str] | None = None) -> list[str]:
     return list(dict.fromkeys(phrases))
 
 
-def extract_phrases(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def extract_phrases(source_groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
     phrase_items: list[dict[str, Any]] = []
-    for role in roles:
-        title = role.get("title", "")
-        is_recent = bool(role.get("is_recent"))
-        role_key = str(role.get("role_key") or title)
-        end_year = int(role.get("end_year") or 0)
-        duration_months = max(int(role.get("duration_months") or 0), 0)
-        is_current = bool(role.get("is_current"))
-        for bullet in role.get("bullets", []):
+    for index, group in enumerate(source_groups):
+        source_label = str(group.get("label") or "source").strip().lower() or "source"
+        role_key = f"{source_label}|{index}"
+        for bullet in group.get("bullets", []):
             tool_terms = _tool_terms(bullet)
             for phrase in tool_terms:
                 phrase_items.append({
                     "phrase": phrase,
-                    "role_title": title,
+                    "role_title": source_label,
                     "role_key": role_key,
-                    "end_year": end_year,
-                    "duration_months": duration_months,
-                    "is_recent": is_recent,
-                    "is_current": is_current,
+                    "end_year": 0,
+                    "duration_months": 0,
+                    "is_recent": False,
+                    "is_current": False,
                 })
             for phrase in _ngrams(bullet):
                 phrase_items.append({
                     "phrase": phrase,
-                    "role_title": title,
+                    "role_title": source_label,
                     "role_key": role_key,
-                    "end_year": end_year,
-                    "duration_months": duration_months,
-                    "is_recent": is_recent,
-                    "is_current": is_current,
+                    "end_year": 0,
+                    "duration_months": 0,
+                    "is_recent": False,
+                    "is_current": False,
                 })
     return phrase_items
 
@@ -509,18 +500,17 @@ def run_cv_pipeline(
     if not text:
         return {}
 
-    roles = parse_roles(text, onboarding_settings=onboarding_settings)
-    phrase_items = extract_phrases(roles)
+    source_groups = _source_groups_from_cv_text(text)
+    phrase_items = extract_phrases(source_groups)
     clusters = cluster_phrases(phrase_items)
     candidates = score_and_promote(clusters, onboarding_settings=onboarding_settings)
     candidates = _rename_top_clusters(candidates, llm_client=llm_client)
-    output = _build_output(candidates, total_roles=len(roles), onboarding_settings=onboarding_settings)
-    output["role_experience"] = _compute_role_experience(roles)
+    output = _build_output(candidates, total_roles=len(source_groups), onboarding_settings=onboarding_settings)
 
     capability_candidates = output.get("dominant_signal_clusters", [])
     _cap_log(
         _format_cv_pipeline_summary(
-            len(roles),
+            len(source_groups),
             len(phrase_items),
             len(clusters),
             len(candidates),
