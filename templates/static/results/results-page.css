@@ -417,6 +417,61 @@
   margin: 4px 0;
 }
 
+.job-requirement-list {
+  list-style: none;
+  padding-left: 0 !important;
+}
+
+.job-requirement-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.job-requirement-item--confirmed-have {
+  color: var(--text-muted);
+}
+
+.job-requirement-item--confirmed-do-not-have {
+  background: color-mix(in srgb, var(--state-error-bg) 55%, transparent);
+  color: var(--state-error-text);
+}
+
+.job-requirement-item--unknown {
+  color: var(--text-primary);
+}
+
+.job-requirement-text {
+  flex: 1;
+}
+
+.job-requirement-status {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--control-radius-pill);
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-surface) 75%, transparent);
+}
+
+.job-requirement-item--confirmed-have .job-requirement-status {
+  border-color: var(--state-success-border);
+  color: var(--state-success-text);
+  background: var(--state-success-bg);
+}
+
+.job-requirement-item--confirmed-do-not-have .job-requirement-status {
+  border-color: var(--state-error-border);
+  color: var(--state-error-text);
+  background: var(--state-error-bg);
+}
+
 .job-insight-unavailable strong {
   color: var(--text-muted);
 }

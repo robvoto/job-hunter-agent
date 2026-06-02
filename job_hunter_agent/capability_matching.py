@@ -35,6 +35,7 @@ from job_hunter_agent.signal_schema import (
     SIGNAL_ADJUSTMENT_KEY,
     SIGNAL_ALIGNMENT_KEY,
     SIGNAL_LABEL_KEY,
+    SIGNAL_RISK_LABEL_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
 )
 from job_hunter_agent.text_processing import (
@@ -276,13 +277,14 @@ def build_risk_and_missing_evidence(
     for signal in (competitive_signals or []):
         if int(signal.get(SIGNAL_ADJUSTMENT_KEY, 0)) < 0:
             alignment = compact_whitespace(signal.get(SIGNAL_ALIGNMENT_KEY) or "").lower()
-            label = signal[SIGNAL_LABEL_KEY]
-            if label:
+            fit_label = compact_whitespace(signal.get(SIGNAL_LABEL_KEY) or "")
+            risk_label = compact_whitespace(signal.get(SIGNAL_RISK_LABEL_KEY) or "") or fit_label
+            if risk_label:
                 if alignment == "weak":
-                    missing.append(f"{label} required but weakly evidenced")
+                    missing.append(f"{risk_label} required but weakly evidenced")
                 else:
-                    partial_suffix = str(_capability_ui_labels().get("partial_evidence_risk_suffix") or "is only partially supported")
-                    risks.append(f"{label} {partial_suffix}")
+                    partial_suffix = str(_capability_ui_labels().get("partial_evidence_risk_suffix") or "is only partially supported by your profile")
+                    risks.append(f"{risk_label} {partial_suffix}")
 
     return dedupe_preserve_order(risks)[:4], dedupe_preserve_order(missing)[:4]
 

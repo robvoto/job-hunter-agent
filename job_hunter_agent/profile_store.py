@@ -164,6 +164,8 @@ KEY_ALIASES = "aliases"
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
 KEY_CAPABILITY_CONTEXTUAL_LLM = "capability_contextual_llm"
+PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE = "Create your profile before reviewing jobs."
+PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
 
 class CapabilityLevel:
     STRONG = "strong"
@@ -600,6 +602,47 @@ def profile_exists() -> bool:
     with db_conn() as conn:
         row = conn.execute("SELECT 1 FROM user_profile WHERE user_id = ? LIMIT 1", (user_id,)).fetchone()
     return row is not None
+
+
+def profile_review_status(
+    profile: dict[str, Any] | None = None,
+    has_profile: bool | None = None,
+) -> dict[str, Any]:
+    current = profile if isinstance(profile, dict) else load_profile()
+    current_has_profile = profile_exists() if has_profile is None else bool(has_profile)
+    capability_rules = current.get(KEY_CANDIDATE_CAPABILITIES, [])
+    if not isinstance(capability_rules, list):
+        capability_rules = []
+    usable_capabilities = [
+        rule
+        for rule in capability_rules
+        if isinstance(rule, dict) and str(rule.get(KEY_NAME) or "").strip()
+    ]
+    candidate_capability_count = len(usable_capabilities)
+    has_candidate_capabilities = candidate_capability_count > 0
+    profile_ready_for_review = current_has_profile and has_candidate_capabilities
+    blocking_reason = ""
+    if not current_has_profile:
+        blocking_reason = PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE
+    elif not has_candidate_capabilities:
+        blocking_reason = PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES
+    return {
+        "has_profile": current_has_profile,
+        "has_candidate_capabilities": has_candidate_capabilities,
+        "candidate_capability_count": candidate_capability_count,
+        "profile_ready_for_review": profile_ready_for_review,
+        "blocking_reason": blocking_reason,
+    }
+
+
+def require_profile_ready_for_review(
+    profile: dict[str, Any] | None = None,
+    has_profile: bool | None = None,
+) -> dict[str, Any]:
+    status = profile_review_status(profile=profile, has_profile=has_profile)
+    if not status["profile_ready_for_review"]:
+        raise ValueError(str(status.get("blocking_reason") or PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE))
+    return status
 
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:

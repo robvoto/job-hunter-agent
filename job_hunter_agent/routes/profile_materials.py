@@ -42,7 +42,7 @@ def api_profile_status_get():  # type: ignore[no-untyped-def]
 
     try:
 
-        return json_response({"has_profile": srv.profile_exists()})
+        return json_response(srv.profile_review_status())
 
     except Exception as exc:
 

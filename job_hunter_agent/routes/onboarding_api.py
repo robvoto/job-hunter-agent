@@ -24,6 +24,7 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     MIN_CONTRACT_MONTH_OPTIONS,
+    PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES,
     VALID_ENGAGEMENT_TYPES,
     VALID_SECTOR_PREFERENCE_VALUES,
     VALID_WORK_MODE_PREFERENCES,
@@ -124,6 +125,8 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
         # Keep the current onboarding limits in the learning path so profile saves do not drop them.
         capability_rules = normalize_capability_rules(body.get(KEY_CANDIDATE_CAPABILITIES) or [], current_onboarding)
+        if not capability_rules:
+            raise ValueError(PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES)
         if not target:
             raise ValueError("Primary job title must not be empty")
         if keyword and (len(keyword) < 2 or len(keyword) > 120):
@@ -178,8 +181,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             KEY_SECONDARY_PATTERNS: secondary,
             KEY_ONBOARDING_COMPLETE: True,
         }
-        if capability_rules:
-            profile_patch[KEY_CANDIDATE_CAPABILITIES] = capability_rules
+        profile_patch[KEY_CANDIDATE_CAPABILITIES] = capability_rules
         current = srv.load_profile()
         search_settings = dict(current.get(PROFILE_SEARCH_SETTINGS_KEY, {}))
         if keyword:

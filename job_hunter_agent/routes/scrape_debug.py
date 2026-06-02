@@ -107,6 +107,11 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
             400,
         )
 
+    try:
+        srv.require_profile_ready_for_review()
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
     if not srv._try_mark_run_started():
         last_run = srv._read_last_run_timestamp()
         return json_response(

@@ -346,6 +346,12 @@ function updateCheckStep() {
   flowRefs.checkSectorPreference.textContent = sectorPreferenceLabel(searchPrefs.prefer_sector);
   flowRefs.checkSalaryYearly.textContent = formatCurrencySummaryValue(searchPrefs.minimum_salary_yearly);
   flowRefs.checkSalaryDaily.textContent = formatCurrencySummaryValue(searchPrefs.minimum_daily_rate);
+  if (flowRefs.confirmReview) {
+    const canFinish = onboardingPage.reviewTargetTitles.length > 0 && onboardingPage.reviewCapabilityRules.length > 0;
+    flowRefs.confirmReview.disabled = !canFinish;
+    flowRefs.confirmReview.setAttribute('aria-disabled', canFinish ? 'false' : 'true');
+    flowRefs.confirmReview.title = canFinish ? '' : 'Add at least one title and one capability before finishing onboarding.';
+  }
 }
 
 function removeReviewCapability(index) {
@@ -750,10 +756,16 @@ async function loadProfileStatus() {
   if (!response.ok) {
     throw new Error(payload.error || onboardingFlowLabels.profile_status_error);
   }
-  if (typeof payload.has_profile !== 'boolean') {
+  if (
+    typeof payload.has_profile !== 'boolean'
+    || typeof payload.has_candidate_capabilities !== 'boolean'
+    || typeof payload.candidate_capability_count !== 'number'
+    || typeof payload.profile_ready_for_review !== 'boolean'
+    || (payload.profile_ready_for_review === false && typeof payload.blocking_reason !== 'string')
+  ) {
     throw new Error(onboardingFlowLabels.profile_status_error);
   }
-  return payload.has_profile;
+  return payload;
 }
 
 async function loadProfileDefaultsIfPresent(hasProfile) {
@@ -1026,13 +1038,14 @@ const onboardingResumeStep = Number(window.__JOB_HUNTER_ONBOARDING_RESUME_STEP__
 
 async function initWizard() {
   const urlParams = new URLSearchParams(window.location.search);
-  let hasProfile;
+  let profileStatus;
   try {
-    hasProfile = await loadProfileStatus();
+    profileStatus = await loadProfileStatus();
   } catch (error) {
     showStatus(error.message, 'error');
     return;
   }
+  const hasProfile = profileStatus.has_profile;
   if (urlParams.has('fresh')) {
     clearOnboardingBrowserState();
     history.replaceState(null, '', window.location.pathname);
@@ -1085,6 +1098,9 @@ async function initWizard() {
   onboardingUpload.updatePrimaryCvStatus(primaryCvInput?.files?.[0] || onboardingPage.preservedPrimaryCvFile || null);
   onboardingUpload.updateCreateProfileAvailability();
   updateCompensationVisibility();
+  if (profileStatus.has_profile && !profileStatus.profile_ready_for_review && profileStatus.blocking_reason) {
+    showStatus(profileStatus.blocking_reason, 'error');
+  }
 }
 
 initWizard().catch((error) => { console.error('[ONBOARDING] initWizard failed:', error); });

@@ -26,6 +26,7 @@ from job_hunter_agent.runtime_helpers import (
 )
 from job_hunter_agent.profile_store import (
     load_profile,
+    require_profile_ready_for_review,
 )
 from job_hunter_agent.io_utils import configure_console_output
 
@@ -44,6 +45,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
     from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
     get_user_id_for_runtime()
     context = build_scrape_run_context(sys.argv)
+    require_profile_ready_for_review(load_profile())
     reset_session_cost()
     search_keywords = str(context.search_settings.get("keywords") or "").strip()
     search_locations = [

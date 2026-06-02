@@ -188,9 +188,11 @@ def _build_top_utility_bar_html(
 
             '</button>'
 
-            f'<button class="account-bar-test-action account-bar-test-action--danger" id="job_hunter_reset_learning_btn"'
+            f'<button class="account-bar-test-action account-bar-test-action--danger" id="job_hunter_reset_learning_btn" type="button" role="menuitem">'
 
-            f' type="button" role="menuitem">{_html_escape(shared_labels["account_menu_reset_learning_warning_label"])}</button>'
+            f'{_html_escape(shared_labels["account_menu_reset_learning_warning_label"])}'
+
+            '</button>'
 
             '</div></div>'
 
@@ -808,15 +810,4 @@ def page_onboarding(request: Request):  # type: ignore[no-untyped-def]
 
 
 
-
-
-@router.get("/demo")
-
-def page_demo():  # type: ignore[no-untyped-def]
-
-    if srv.SHOWCASE_PATH.exists():
-
-        return html_response(srv.SHOWCASE_PATH.read_text(encoding="utf-8", errors="ignore"))
-
-    return html_response("<h1>Demo page not found</h1>")
-
+ 

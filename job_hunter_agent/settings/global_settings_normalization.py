@@ -50,6 +50,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
     KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
     KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
+    KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
     KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
@@ -151,7 +152,7 @@ def _normalize_llm_pricing_map(source: dict[str, Any], defaults: dict[str, dict[
     return normalized
 
 
-def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
+def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bool = False) -> dict[str, Any]:
     templates_source = source.get(KEY_LLM_PROMPT_TEMPLATES, {})
     if not isinstance(templates_source, dict):
         raise ValueError(
@@ -201,8 +202,13 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
         )
 
     def _prompt_int(key: str, default_key: str, *, minimum: int, maximum: int) -> int:
+        if strict_managed and key not in source:
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{key} is required"
+            )
+        raw = source.get(key, DEFAULT_LLM_PROMPT_SETTINGS[default_key])
         try:
-            value = int(source.get(key, DEFAULT_LLM_PROMPT_SETTINGS[default_key]) or DEFAULT_LLM_PROMPT_SETTINGS[default_key])
+            value = int(raw)
         except (TypeError, ValueError) as exc:
             raise ValueError(
                 f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS}.{key} must be an integer"
@@ -226,6 +232,12 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
         KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
         minimum=100,
         maximum=2_000,
+    )
+    job_requirements_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
+        minimum=50,
+        maximum=1_000,
     )
     rejection_blocker_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
@@ -366,6 +378,7 @@ def _normalize_llm_prompt_settings(source: dict[str, Any]) -> dict[str, Any]:
         KEY_LLM_PROMPT_EVIDENCE_TIERS: evidence_tiers,
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS: fit_decision_max_output_tokens,
         KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS: learning_candidates_max_output_tokens,
+        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS: job_requirements_max_output_tokens,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS: rejection_blocker_max_output_tokens,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS: capability_naming_max_output_tokens,
         KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS: profile_extraction_max_output_tokens,
@@ -445,7 +458,7 @@ def _normalize_limit_map(
     return normalized
 
 
-def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
+def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed: bool = False) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
@@ -535,7 +548,7 @@ def normalize_global_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
     prompt_source = llm_source.get(KEY_LLM_PROMPT_SETTINGS, {})
     if not isinstance(prompt_source, dict):
         raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
-    normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source)
+    normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source, strict_managed=strict_managed)
 
     try:
         max_llm_chars = int(

@@ -4,7 +4,7 @@
 
 import re
 
-from typing import Optional
+from typing import Any, Optional
 
 
 
@@ -244,7 +244,7 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
 
 
 
-def infer_posting_channel(record: dict, details_text: str) -> dict[str, object]:
+def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
 
     trusted_metadata, trusted_recruiter, trusted_employer = _collect_trusted_posting_channel_metadata(record)
 

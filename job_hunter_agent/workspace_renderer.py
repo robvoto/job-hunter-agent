@@ -62,7 +62,13 @@ from job_hunter_agent.signal_detection import (
     hard_block_reasons,
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
-from job_hunter_agent.profile_gaps import compute_profile_gaps
+from job_hunter_agent.profile_gaps import (
+    STATUS_CONFIRMED_DO_NOT_HAVE,
+    STATUS_CONFIRMED_HAVE,
+    STATUS_UNKNOWN,
+    classify_requirement_status,
+    compute_profile_gaps,
+)
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
@@ -563,10 +569,19 @@ def render_job_card(
         for item in (display_record.get(RECORD_JOB_REQUIREMENTS_KEY) or [])
         if compact_whitespace(item)
     ]
+    candidate_capabilities = active_profile.get("candidate_capabilities") or []
+    must_not_require_skills = active_profile.get("must_not_require_skills") or []
+    requirement_statuses = [
+        {
+            "requirement": item,
+            "status": classify_requirement_status(item, candidate_capabilities, must_not_require_skills),
+        }
+        for item in job_requirements
+    ]
     profile_gaps = compute_profile_gaps(
         job_requirements,
-        active_profile.get("candidate_capabilities") or [],
-        active_profile.get("must_not_require_skills") or [],
+        candidate_capabilities,
+        must_not_require_skills,
     )
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
@@ -814,10 +829,7 @@ def render_job_card(
         note_bits.append("Description issue: full job description was not captured clearly.")
     elif is_possible_repost:
         note_bits.append("Alert: This looks like a role you already marked as applied at this company.")
-    elif missing_evidence:
-        note_bits.append(f"Missing evidence: {missing_evidence[0]}.")
-    elif soft_risk_reasons:
-        note_bits.append(f"Risk: {soft_risk_reasons[0]}.")
+
     note_html = (
         f'<div class="job-note">{safe_html(" ".join(note_bits))}</div>'
         if note_bits
@@ -886,11 +898,23 @@ def render_job_card(
                 '</div>'
             )
     job_requirements_html = ""
-    if job_requirements:
+    if requirement_statuses:
+        status_labels = {
+            STATUS_CONFIRMED_HAVE: "In profile",
+            STATUS_CONFIRMED_DO_NOT_HAVE: "Not in profile",
+            STATUS_UNKNOWN: "Check",
+        }
+        requirement_items_html = "".join(
+            f'<li class="job-requirement-item job-requirement-item--{safe_html(item["status"].replace("_", "-"))}">'
+            f'<span class="job-requirement-text">{safe_html(item["requirement"])}</span>'
+            f'<span class="job-requirement-status">{safe_html(status_labels.get(item["status"], "Check"))}</span>'
+            f'</li>'
+            for item in requirement_statuses
+        )
         job_requirements_html = (
-            '<details class="job-insights">'
+            '<details class="job-insights job-requirements-panel">'
             f'<summary>{safe_html(_workspace_label("workspace_card_labels", "job_requirements_summary", "Job requirements"))}</summary>'
-            f'<div class="job-insight-group is-secondary"><ul>{"".join(f"<li>{safe_html(item)}</li>" for item in job_requirements)}</ul></div>'
+            f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
             '</details>'
         )
     profile_gaps_html = ""
@@ -979,7 +1003,6 @@ def render_job_card(
     negative_items = dedupe_preserve_order([
         *([] if description_issue else missing_evidence),
         *soft_risk_reasons,
-        *visible_penalties,
     ])[:6]
     if description_issue:
         description_issue_items = [DESCRIPTION_CAPTURE_ISSUE]
@@ -1027,14 +1050,6 @@ def render_job_card(
             '</div>'
         )
     if active_debug_mode:
-        negative_reasons = negative_score_reasons(score_breakdown)
-        if negative_reasons:
-            insight_sections.append(
-                '<div class="job-insight-group job-insight-warning">'
-                '<strong>What brought it down</strong>'
-                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in negative_reasons)}</ul>'
-                '</div>'
-            )
         gap_reasons = score_gap_reasons(display_record, score_breakdown)
         if gap_reasons:
             insight_sections.append(
@@ -1282,3 +1297,4 @@ def render_match_level_guide_html(profile: Optional[dict] = None) -> str:
         '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
     ])
     return "".join(guide_bits)
+

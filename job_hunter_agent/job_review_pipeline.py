@@ -237,8 +237,8 @@ def _apply_learning_signal_enrichment(record: dict, details_text: str, profile: 
     record["skill_observations"] = skill_observations
     record["ad_learning_signals"] = build_ad_learning_signals(record, details_text, profile)
     record[RECORD_SALARY_KEY] = preferred_salary_display(
-        record.get(RECORD_SALARY_KEY),
-        record.get(RECORD_CARD_SALARY_KEY),
+        str(record.get(RECORD_SALARY_KEY) or ""),
+        str(record.get(RECORD_CARD_SALARY_KEY) or ""),
         extract_salary(details_text),
     )
     return skill_observations
@@ -506,7 +506,15 @@ def review_post_detail_normalized_job(
     try:
         fit_eval = _evaluate_job_fit(record, profile, context.llm_cache)
     except Exception as llm_exc:
-        print(f"{source_tag} [LLM][ERROR] {type(llm_exc).__name__}: {llm_exc} - {title} @ {company}")
+        logger.error(
+            "[PIPELINE][LLM_FAIL] source=%s job_key=%s title=%r company=%r error=%s: %s",
+            context.source_name,
+            record.get(RECORD_JOB_KEY),
+            title,
+            company,
+            type(llm_exc).__name__,
+            llm_exc,
+        )
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = "LLM_ERROR"
         _finalize(record, context)

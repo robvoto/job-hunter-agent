@@ -68,7 +68,7 @@ def llm_review_state(record: dict) -> dict:
     detail = (
         "llm_decision is present but llm_fit_grade is missing."
         if decision
-        else "Job has not been through LLM review — re-run the pipeline."
+        else "Job has not been through LLM review, so scoring is blocked until the pipeline runs successfully."
     )
     return {
         "state": LLM_REVIEW_STATE_INVALID,

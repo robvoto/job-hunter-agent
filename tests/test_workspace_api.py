@@ -1,5 +1,8 @@
 ﻿"""Tests for workspace api."""
 
+from types import SimpleNamespace
+
+import pytest
 from fastapi.testclient import TestClient
 from datetime import datetime
 
@@ -7,6 +10,7 @@ from job_hunter_agent.database import db_conn
 from job_hunter_agent.fastapi_app import create_app
 from job_hunter_agent.io_utils import write_review_data
 from job_hunter_agent import workspace_service
+from job_hunter_agent import source_connector
 import job_hunter_agent.routes.workspace_api as workspace_api
 from job_hunter_agent.paths import LOCAL_USER_ID
 from pathlib import Path
@@ -168,5 +172,44 @@ def test_workspace_welcome_overlay_is_not_gated_on_cv_text():
     html_text = html_path.read_text(encoding="utf-8")
 
     assert "profile?.cv_text" not in html_text
-    assert "loadWorkspaceProfile" not in html_text
+    assert "loadWorkspaceProfileStatus" in html_text
     assert "renderOnboardingWelcome" in html_text
+    assert 'id="ws_profile_status_mount"' in html_text
+    assert "/api/profile/status" in html_text
+    assert "profile_ready_for_review" in html_text
+    assert "blocking_reason" in html_text
+
+
+def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.profile_store.profile_exists", lambda: True)
+    monkeypatch.setattr(source_connector, "get_user_id_for_runtime", lambda: "test-user")
+    monkeypatch.setattr(source_connector, "load_profile", lambda: {"candidate_capabilities": []})
+    monkeypatch.setattr(
+        source_connector,
+        "build_scrape_run_context",
+        lambda argv: SimpleNamespace(
+            search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+            enabled_sources=["seek"],
+            configured_seek_max_pages=1,
+            configured_date_range=7,
+            dashboard_debug_mode=False,
+            no_llm_mode=False,
+            dashboard_min_score=0,
+            reset_new_to_you=False,
+            headless=False,
+        ),
+    )
+
+    called = []
+
+    def fake_run_enabled_sources(context):
+        called.append(context)
+        raise AssertionError("run_enabled_sources must not be called for an incomplete profile")
+
+    monkeypatch.setattr(source_connector, "run_enabled_sources", fake_run_enabled_sources)
+
+    with pytest.raises(ValueError) as exc:
+        source_connector.scrape_jobs_direct()
+
+    assert str(exc.value) == "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+    assert called == []

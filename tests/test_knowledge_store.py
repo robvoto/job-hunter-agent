@@ -212,6 +212,55 @@ def test_upgrade_fixes_stale_ui_labels_missing_settings_alerts(isolated_db):
     assert "__JOB_HUNTER_SETTINGS_ALERTS_LABELS__" in html
 
 
+def test_upgrade_fixes_stale_ui_labels_missing_shared_reset_learning_label(isolated_db):
+    from pathlib import Path
+    from job_hunter_agent.server_helpers import build_bootstrap_script, load_shared_ui_labels
+
+    repo_root = Path(__file__).resolve().parent.parent
+    knowledge_dir = repo_root / "data" / "knowledge"
+
+    stale = {
+        "kind": "ui_labels",
+        "name": "ui_labels",
+        "version": 18,
+        "shared_ui_labels": {
+            "select_theme_aria_label": "Select theme",
+            "account_menu_aria_label": "Account",
+            "account_menu_title": "Account",
+            "account_menu_logout_label": "Log out",
+            "account_menu_settings_shortcut_label": "⚙",
+            "account_menu_settings_shortcut_aria_label": "Open settings",
+            "account_menu_workspace_shortcut_label": "↩",
+            "account_menu_workspace_shortcut_aria_label": "Open workspace",
+            "account_menu_test_label": "Test",
+            "account_menu_test_actions_label": "Test actions",
+            "account_menu_reset_user_label": "Reset User",
+            "add_button_label": "+",
+            "add_button_aria_label": "Add item",
+            "add_button_title": "+",
+            "search_wait_copy": "Wait",
+            "search_running_title": "Search in progress",
+            "search_running_copy": "Copy",
+            "search_starting_title": "Starting search",
+            "search_starting_copy": "Copy",
+            "search_refreshing_title": "Refreshing workspace",
+            "search_refreshing_copy": "Copy",
+            "search_running_subcopy": "Copy",
+            "search_starting_subcopy": "Copy",
+        },
+    }
+    set_knowledge("ui_labels", stale, isolated_db)
+
+    updated = upgrade_knowledge_from_dir(knowledge_dir, isolated_db)
+    assert "ui_labels" in updated
+
+    labels = load_shared_ui_labels()
+    assert labels["account_menu_reset_learning_warning_label"]
+
+    html = build_bootstrap_script()
+    assert "__JOB_HUNTER_SHARED_UI_LABELS__" in html
+
+
 def test_build_bootstrap_script_includes_all_ui_label_sections():
     """Smoke test: the render path must include every ui_labels section.
 

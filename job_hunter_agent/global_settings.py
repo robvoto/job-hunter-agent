@@ -72,6 +72,11 @@ def get_llm_learning_candidates_max_output_tokens() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS)
 
 
+def get_llm_job_requirements_max_output_tokens() -> int:
+    """Max tokens for the job-requirements response."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS)
+
+
 def get_llm_rejection_blocker_suggestions_max_output_tokens() -> int:
     """Max tokens for blocker-term suggestions."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS)
@@ -240,13 +245,13 @@ def load_global_settings() -> dict[str, Any]:
         )
     if not isinstance(data, dict):
         raise GlobalSettingsLoadError("global_settings in DB must contain a JSON object")
-    return normalize_global_settings(data)
+    return normalize_global_settings(data, strict_managed=True)
 
 
 def seed_global_settings_from_file(db_path: Path | None = None, *, overwrite: bool = False) -> bool:
     if not overwrite and _db_load(db_path) is not None:
         return False
-    normalized = normalize_global_settings(_load_managed_global_settings())
+    normalized = normalize_global_settings(_load_managed_global_settings(), strict_managed=True)
     _db_save(normalized, db_path)
     load_global_settings.cache_clear()
     return True

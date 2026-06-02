@@ -24,7 +24,7 @@ from job_hunter_agent.profile_store import (
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
 )
-from job_hunter_agent.signal_schema import SIGNAL_ADJUSTMENT_KEY, SIGNAL_ALIGNMENT_KEY, SIGNAL_LABEL_KEY
+from job_hunter_agent.signal_schema import SIGNAL_ADJUSTMENT_KEY, SIGNAL_ALIGNMENT_KEY, SIGNAL_LABEL_KEY, SIGNAL_RISK_LABEL_KEY
 from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.work_mode_extraction import extract_from_text
 
@@ -839,13 +839,23 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
                 "needs_review": True,
             },
         },
-        _test_profile(),
+        {
+            **_test_profile(),
+            "candidate_capabilities": [
+                {"name": "stakeholder engagement", "level": "strong", "fit": "core", "aliases": []},
+            ],
+            "must_not_require_skills": ["end-to-end BA activities"],
+        },
     )
 
     assert 'badge-warning" title="Recruiter language detected' in html
     assert "Likely recruiter" in html
-    assert "Job requirements" in html
+    assert "Mandatory Job Requirements" in html
     assert "Strong stakeholder engagement and communication skills" in html
+    assert "In profile" in html
+    assert "Not in profile" in html
+    assert 'job-requirement-item--confirmed-have' in html
+    assert 'job-requirement-item--confirmed-do-not-have' in html
     assert "badge-sector-government" not in html
 
 
@@ -1794,6 +1804,7 @@ def test_build_risk_and_missing_evidence_uses_shared_partial_support_label(monke
         competitive_signals=[
             {
                 SIGNAL_LABEL_KEY: "specialist context",
+                SIGNAL_RISK_LABEL_KEY: "Role leans toward specialist depth",
                 SIGNAL_ALIGNMENT_KEY: "strong",
                 SIGNAL_ADJUSTMENT_KEY: -1,
             }
@@ -1801,4 +1812,4 @@ def test_build_risk_and_missing_evidence_uses_shared_partial_support_label(monke
     )
 
     assert missing == []
-    assert risks == ["specialist context is only partially supported"]
+    assert risks == ["Role leans toward specialist depth is only partially supported by your profile"]

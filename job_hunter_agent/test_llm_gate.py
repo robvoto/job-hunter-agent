@@ -46,6 +46,8 @@ def test_request_learning_payload_uses_parsed_output(monkeypatch, fit_review):
     monkeypatch.setattr(llm_gate, "client", fake_client)
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "gpt-test")
     monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
+    if fit_review:
+        monkeypatch.setattr(llm_gate, "load_profile", lambda: {"candidate_capabilities": [{"name": "python"}]})
 
     payload = llm_gate._request_learning_payload("job description", fit_review=fit_review)
 
@@ -67,9 +69,19 @@ def test_llm_extract_job_requirements_uses_parsed_output(monkeypatch):
 
     monkeypatch.setattr(llm_gate, "client", fake_client)
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "gpt-test")
+    monkeypatch.setattr(llm_gate, "get_llm_job_requirements_max_output_tokens", lambda: 321)
 
     payload = llm_gate.llm_extract_job_requirements("job description")
 
     assert fake_client.responses.calls
     assert fake_client.responses.calls[0]["text_format"] is llm_gate._LLMJobRequirementsPayload
+    assert fake_client.responses.calls[0]["max_output_tokens"] == 321
     assert payload == ["Strong stakeholder engagement", "Experience across BA activities"]
+
+
+def test_request_learning_payload_requires_candidate_capabilities_for_fit_review(monkeypatch):
+    monkeypatch.setattr(llm_gate, "client", SimpleNamespace())
+    monkeypatch.setattr(llm_gate, "load_profile", lambda: {"candidate_capabilities": []})
+
+    with pytest.raises(ValueError, match="Fit review cannot run because the candidate profile has no capability rules"):
+        llm_gate._request_learning_payload("job description", fit_review=True)

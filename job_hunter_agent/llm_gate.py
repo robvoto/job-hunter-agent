@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json as _json_mod
+import logging
 import os
 import re
 import sys
@@ -76,8 +77,10 @@ from job_hunter_agent.global_settings import (
     get_llm_contextual_matches_max_items,
     get_llm_fit_decision_max_output_tokens,
 
+    get_llm_max_chars,
     get_llm_job_description_max_chars,
     get_llm_job_requirements_max_items,
+    get_llm_job_requirements_max_output_tokens,
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
     get_llm_profile_brief_max_chars,
@@ -113,6 +116,8 @@ from job_hunter_agent.profile_store import (
     get_candidate_profile_tiers,
     load_profile,
 )
+
+logger = logging.getLogger(__name__)
 
 _NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 
@@ -160,6 +165,15 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
         session_usd=_session_cost_usd,
     )
     append_llm_cost_log(_LLM_COSTS_PATH, entry)
+    logger.info(
+        "[LLM][COST] purpose=%s model=%s input_tokens=%d output_tokens=%d call_cost_usd=%.6f session_cost_usd=%.6f",
+        purpose,
+        model,
+        tok_in,
+        tok_out,
+        cost,
+        _session_cost_usd,
+    )
 
 
 def get_session_cost_usd() -> float:
@@ -207,7 +221,7 @@ def _log_llm_model_once() -> str:
     global _llm_model_logged
     model = get_llm_model()
     if not _llm_model_logged:
-        print(f"[LLM] Model: {model}  (source: user settings)")
+        logger.info("[LLM][MODEL] using model=%s (source=user settings)", model)
         _llm_model_logged = True
     return model
 
@@ -667,6 +681,12 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
 
     try:
         model = _log_llm_model_once()
+        logger.info(
+            "[LLM][REQUEST] purpose=rejection_suggestions model=%s input_chars=%d max_output_tokens=%d",
+            model,
+            len(description[:get_llm_job_description_max_chars()]),
+            get_llm_rejection_blocker_suggestions_max_output_tokens(),
+        )
         resp = active_client.responses.create(
             model=model,
             input=[
@@ -681,18 +701,22 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
         )
         _log_llm_call(resp, "rejection_suggestions", model)
     except Exception as exc:
-        print(f"[LLM][REJECTION_SUGGESTIONS][ERROR] {exc}")
+        logger.error("[LLM][FAIL] purpose=rejection_suggestions error=%s", exc)
         return []
 
     suggestions = normalize_rejection_blocker_suggestions(getattr(resp, "output_text", ""))
     raw_output = str(getattr(resp, "output_text", "") or "").strip()
     if raw_output:
-        print(
-            f"[LLM][REJECTION_SUGGESTIONS][RAW] {raw_output[:get_llm_raw_output_log_max_chars()]}"
+        logger.info(
+            "[LLM][RESULT] purpose=rejection_suggestions raw=%r",
+            raw_output[:get_llm_raw_output_log_max_chars()],
         )
-    print(f"[LLM][REJECTION_SUGGESTIONS][NORMALIZED] {suggestions}")
+    logger.info("[LLM][RESULT] purpose=rejection_suggestions normalized=%s", suggestions)
     if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
-        print(f"[LLM][REJECTION_SUGGESTIONS][UNEXPECTED] {str(resp.output_text).strip()}")
+        logger.warning(
+            "[LLM][WARN] purpose=rejection_suggestions output_could_not_be_normalized=%r",
+            str(resp.output_text).strip()[:get_llm_raw_output_log_max_chars()],
+        )
     return suggestions
 
 
@@ -723,6 +747,12 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
 
     try:
         _model = get_llm_model()
+        logger.info(
+            "[LLM][REQUEST] purpose=capability_naming model=%s input_clusters=%d max_output_tokens=%d",
+            _model,
+            len(payload),
+            get_llm_capability_naming_max_output_tokens(),
+        )
         resp = active_client.responses.create(
             model=_model,
             input=[{"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}],
@@ -738,7 +768,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
             return []
         return [str(label).strip().lower() for label in labels[: len(payload)]]
     except Exception as exc:
-        print(f"[LLM][CAPABILITY_NAMING][ERROR] Failed to name capability clusters: {exc}")
+        logger.error("[LLM][FAIL] purpose=capability_naming error=%s", exc)
         return []
 
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:
@@ -789,11 +819,19 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         )
         if not valid_capability_names:
             raise ValueError(
-                "LLM fit review requested but candidate profile has no capability rules — seed or update the profile first"
+                "Fit review cannot run because the candidate profile has no capability rules "
+                "(candidate_capabilities is empty). Complete onboarding or seed the profile first."
             )
 
     try:
         model = _log_llm_model_once()
+        logger.info(
+            "[LLM][REQUEST] purpose=%s model=%s input_chars=%d max_output_tokens=%d",
+            "fit_review" if fit_review else "learning_candidates",
+            model,
+            len(job_description_text[:get_llm_max_chars()]),
+            get_llm_fit_decision_max_output_tokens() if fit_review else get_llm_learning_candidates_max_output_tokens(),
+        )
         resp = client.responses.parse(
             model=model,
             input=[
@@ -840,18 +878,24 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
 
     try:
         model = _log_llm_model_once()
+        logger.info(
+            "[LLM][REQUEST] purpose=job_requirements model=%s input_chars=%d max_output_tokens=%d",
+            model,
+            len(description[:get_llm_job_description_max_chars()]),
+            get_llm_job_requirements_max_output_tokens(),
+        )
         resp = active_client.responses.parse(
             model=model,
             input=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + description},
             ],
-            max_output_tokens=get_llm_learning_candidates_max_output_tokens(),
+            max_output_tokens=get_llm_job_requirements_max_output_tokens(),
             text_format=_LLMJobRequirementsPayload,
         )
         _log_llm_call(resp, "job_requirements", model)
     except Exception as exc:
-        print(f"[LLM][JOB_REQUIREMENTS][ERROR] {exc}")
+        logger.error("[LLM][FAIL] purpose=job_requirements error=%s", exc)
         return []
 
     parsed = getattr(resp, "output_parsed", None)
@@ -859,7 +903,10 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
         return []
     raw_output = str(getattr(resp, "output_text", "") or "").strip()
     if raw_output:
-        print(f"[LLM][JOB_REQUIREMENTS][RAW] {raw_output[:get_llm_raw_output_log_max_chars()]}")
+        logger.info(
+            "[LLM][RESULT] purpose=job_requirements raw=%r",
+            raw_output[:get_llm_raw_output_log_max_chars()],
+        )
     return normalize_llm_job_requirements(parsed.model_dump())
 
 
@@ -893,6 +940,12 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
 
     try:
         model = _log_llm_model_once()
+        logger.info(
+            "[LLM][REQUEST] purpose=section_label_classification model=%s input_chars=%d max_output_tokens=%d",
+            model,
+            len(label),
+            50,
+        )
         resp = active_client.responses.create(
             model=model,
             input=[
@@ -903,7 +956,7 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
         )
         _log_llm_call(resp, "section_label_classification", model)
     except Exception as exc:
-        print(f"[LLM][SECTION_LABEL][ERROR] {exc}")
+        logger.error("[LLM][FAIL] purpose=section_label_classification error=%s", exc)
         return None
 
     raw = str(getattr(resp, "output_text", "") or "").strip()
@@ -913,16 +966,21 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
     try:
         parsed = _json_mod.loads(raw)
     except _json_mod.JSONDecodeError:
-        print(f"[LLM][SECTION_LABEL][PARSE_ERROR] {raw[:200]}")
+        logger.warning("[LLM][WARN] purpose=section_label_classification parse_error=%r", raw[:200])
         return None
 
     bucket = str(parsed.get("bucket") or "").strip().lower()
     confident = bool(parsed.get("confident"))
     if bucket not in {"primary", "secondary", "supplementary"}:
-        print(f"[LLM][SECTION_LABEL][INVALID_BUCKET] {bucket!r}")
+        logger.warning("[LLM][WARN] purpose=section_label_classification invalid_bucket=%r", bucket)
         return None
 
-    print(f"[LLM][SECTION_LABEL] '{label}' → {bucket} (confident={confident})")
+    logger.info(
+        "[LLM][RESULT] purpose=section_label_classification label=%r bucket=%s confident=%s",
+        label,
+        bucket,
+        confident,
+    )
     return {"bucket": bucket, "confident": confident}
 
 

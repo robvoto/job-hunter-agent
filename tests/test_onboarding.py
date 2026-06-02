@@ -19,6 +19,7 @@ import job_hunter_agent.fastapi_app as _fa
 import job_hunter_agent.routes.pages as _pages
 from job_hunter_agent.routes import onboarding_api
 from job_hunter_agent.routes import profile_materials
+from job_hunter_agent.routes import scrape_debug
 
 
 def test_normalize_onboarding_search_preferences_trims_and_normalizes():
@@ -108,20 +109,29 @@ def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_outpu
     assert "if (extractionMessage)" in js_text
 
 
-def test_api_profile_status_reports_presence(monkeypatch):
-    monkeypatch.setattr(profile_materials.srv, "profile_exists", lambda: False)
+def test_onboarding_flow_uses_profile_readiness_status_fields():
+    js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-flow.js"
+    js_text = js_path.read_text(encoding="utf-8")
+
+    assert "profile_ready_for_review" in js_text
+    assert "blocking_reason" in js_text
+    assert "confirmReview.disabled" in js_text
+
+
+def test_api_profile_status_reports_readiness(monkeypatch):
+    monkeypatch.setattr(profile_store, "profile_exists", lambda: True)
+    monkeypatch.setattr(profile_store, "load_profile", lambda: {"candidate_capabilities": []})
 
     response = profile_materials.api_profile_status_get()
 
     assert response.status_code == 200
-    assert json.loads(response.body.decode("utf-8")) == {"has_profile": False}
-
-    monkeypatch.setattr(profile_materials.srv, "profile_exists", lambda: True)
-
-    response = profile_materials.api_profile_status_get()
-
-    assert response.status_code == 200
-    assert json.loads(response.body.decode("utf-8")) == {"has_profile": True}
+    assert json.loads(response.body.decode("utf-8")) == {
+        "has_profile": True,
+        "has_candidate_capabilities": False,
+        "candidate_capability_count": 0,
+        "profile_ready_for_review": False,
+        "blocking_reason": "Your profile has no capability rules. Rebuild onboarding before reviewing jobs.",
+    }
 
 
 def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
@@ -190,7 +200,6 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
     captured = {}
     monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
-    monkeypatch.setattr(onboarding_api, "normalize_capability_rules", lambda rules, current_onboarding: [])
 
     response = onboarding_api.api_onboarding_confirm(
         {
@@ -203,7 +212,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
             "prefer_sector": ["government", "private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "candidate_capabilities": [],
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": []}],
         }
     )
 
@@ -218,7 +227,6 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
     captured = {}
     monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
-    monkeypatch.setattr(onboarding_api, "normalize_capability_rules", lambda rules, current_onboarding: [])
 
     response = onboarding_api.api_onboarding_confirm(
         {
@@ -231,7 +239,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
             "prefer_sector": ["government"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "candidate_capabilities": [],
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": []}],
         }
     )
 
@@ -285,7 +293,6 @@ def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_se
     captured = {}
     monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: captured.setdefault("patch", patch) or patch)
-    monkeypatch.setattr(onboarding_api, "normalize_capability_rules", lambda rules, current_onboarding: [])
 
     response = onboarding_api.api_onboarding_confirm(
         {
@@ -298,12 +305,57 @@ def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_se
             "prefer_sector": ["private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "candidate_capabilities": [],
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": []}],
         }
     )
 
     assert response.status_code == 200
     assert captured["patch"]["match_preferences"]["min_contract_months"] is None
+
+
+def test_api_onboarding_confirm_rejects_empty_candidate_capabilities(monkeypatch):
+    monkeypatch.setattr(onboarding_api.srv, "load_profile", lambda: {"match_preferences": {}, "search_settings": {}})
+
+    response = onboarding_api.api_onboarding_confirm(
+        {
+            "target_roles": ["Business Analyst"],
+            "also_consider_roles": [],
+            "search_keyword": "business analyst",
+            "search_locations": ["Sydney"],
+            "engagement_type": ["permanent", "contract"],
+            "prefer_sector": ["government"],
+            "minimum_salary_yearly": 0,
+            "minimum_daily_rate": 0,
+            "candidate_capabilities": [],
+        }
+    )
+
+    assert response.status_code == 400
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["error"] == "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+
+
+def test_api_run_rejects_incomplete_profile_before_thread_start(monkeypatch):
+    monkeypatch.setattr(profile_store, "profile_exists", lambda: True)
+    monkeypatch.setattr(profile_store, "load_profile", lambda: {"candidate_capabilities": []})
+    monkeypatch.setattr(scrape_debug.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(scrape_debug.srv, "_try_mark_run_started", lambda: (_ for _ in ()).throw(AssertionError("run must not start when profile is incomplete")))
+
+    thread_started = []
+
+    class _FailingThread:
+        def __init__(self, *args, **kwargs):
+            thread_started.append(True)
+            raise AssertionError("run thread must not start when profile is incomplete")
+
+    monkeypatch.setattr(scrape_debug.threading, "Thread", _FailingThread)
+
+    response = scrape_debug.api_run({})
+
+    assert response.status_code == 400
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["error"] == "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+    assert thread_started == []
 
 
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():

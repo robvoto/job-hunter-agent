@@ -20,12 +20,14 @@
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div class="job-hunter-wait-mount" id="ws_wait_mount" hidden></div>
   <div class="ws-run-info-mount" id="ws_run_info_mount"></div>
+  <div class="ws-profile-status-mount" id="ws_profile_status_mount" hidden></div>
   <div id="results-mount"></div>
 
   <script>
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const wsWaitMount = document.getElementById('ws_wait_mount');
     const wsRunInfoMount = document.getElementById('ws_run_info_mount');
+    const wsProfileStatusMount = document.getElementById('ws_profile_status_mount');
     const resultsMount = document.getElementById('results-mount');
     const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
     const SEARCH_WAIT_COPY = String(SHARED_UI_LABELS.search_wait_copy || '').trim();
@@ -63,6 +65,7 @@
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
     let workspaceWaitState = null;
+    let workspaceProfileStatus = null;
     let workspaceResultsLoadToken = 0;
 
     function clearOnboardingBrowserState() {
@@ -170,6 +173,65 @@
       document.body.classList.toggle('ws-onboarding-active', Boolean(visible));
     }
 
+    function workspaceProfileReady() {
+      return Boolean(workspaceProfileStatus?.profile_ready_for_review);
+    }
+
+    function updateWorkspaceRunButtons() {
+      const ready = workspaceProfileReady();
+      const blockingReason = String(workspaceProfileStatus?.blocking_reason || '').trim();
+      for (const button of [document.getElementById('ws_sidebar_run_btn'), document.getElementById('ws_flash_run_search')]) {
+        if (!button) {
+          continue;
+        }
+        button.disabled = !ready;
+        button.setAttribute('aria-disabled', ready ? 'false' : 'true');
+        if (ready) {
+          button.removeAttribute('title');
+        } else {
+          button.title = blockingReason || 'Your profile is not ready for review.';
+        }
+      }
+    }
+
+    function renderWorkspaceProfileStatus() {
+      if (!wsProfileStatusMount) {
+        return;
+      }
+      const status = workspaceProfileStatus;
+      if (!status || status.profile_ready_for_review) {
+        wsProfileStatusMount.hidden = true;
+        wsProfileStatusMount.innerHTML = '';
+        return;
+      }
+      const reason = escapeHtml(String(status.blocking_reason || 'Your profile is not ready for review.'));
+      wsProfileStatusMount.hidden = false;
+      wsProfileStatusMount.innerHTML = `
+        <div class="workspace-status-message">
+          <div class="workspace-error-card">
+            <strong class="workspace-error-card__title">Profile not ready for review</strong>
+            <div class="workspace-error-card__copy">${reason}</div>
+          </div>
+          <div class="workspace-status-message__hint">Go back to onboarding, rebuild your profile, and finish setup before starting a search.</div>
+        </div>
+      `;
+    }
+
+    async function loadWorkspaceProfileStatus() {
+      const response = await jobHunterFetch('/api/profile/status', { method: 'GET' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not check profile readiness.');
+      }
+      if (typeof payload.profile_ready_for_review !== 'boolean') {
+        throw new Error('Could not check profile readiness.');
+      }
+      workspaceProfileStatus = payload;
+      renderWorkspaceProfileStatus();
+      updateWorkspaceRunButtons();
+      return payload;
+    }
+
     function splitOnboardingSummary(value) {
       return String(value || '')
         .split(ONBOARDING_KEYWORD_SPLIT_RE)
@@ -275,6 +337,7 @@
         <p class="snapshot-helper">New searches add to your existing results. Nothing is lost.</p>
       `;
       searchMeta.insertAdjacentElement('afterend', actions);
+      updateWorkspaceRunButtons();
     }
 
     function stopRunStatusPolling() {
@@ -319,6 +382,13 @@
     }
 
     async function startWorkspaceRunFromOverlay() {
+      if (!workspaceProfileReady()) {
+        renderWorkspaceProfileStatus();
+        const reason = String(workspaceProfileStatus?.blocking_reason || 'Your profile is not ready for review.');
+        updateResultsLoadingMessage(reason);
+        window.alert(reason);
+        return;
+      }
       renderWorkspaceWait({
         title: SEARCH_STARTING_TITLE,
         copy: SEARCH_STARTING_COPY,
@@ -436,6 +506,7 @@
       if (runSearchButton) {
         runSearchButton.addEventListener('click', closeAndRunSearch);
       }
+      updateWorkspaceRunButtons();
     }
 
 
@@ -501,6 +572,19 @@
 
     (async () => {
       const isRunning = await syncWorkspaceRunStatus();
+      try {
+        await loadWorkspaceProfileStatus();
+      } catch (error) {
+        workspaceProfileStatus = {
+          has_profile: false,
+          has_candidate_capabilities: false,
+          candidate_capability_count: 0,
+          profile_ready_for_review: false,
+          blocking_reason: String(error?.message || 'Could not check profile readiness.'),
+        };
+        renderWorkspaceProfileStatus();
+        updateWorkspaceRunButtons();
+      }
       if (!isRunning) {
         let overlayTimer = window.setTimeout(
           () => renderWorkspaceWait({ title: 'Loading workspace', copy: 'Fetching the latest search results.' }),

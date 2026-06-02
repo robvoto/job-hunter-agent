@@ -65,7 +65,9 @@ from job_hunter_agent.profile_store import (
     normalize_onboarding_settings,
     normalize_search_settings,
     normalize_work_mode_preferences,
+    profile_review_status,
     profile_exists,
+    require_profile_ready_for_review,
     save_profile,
     KEY_KEYWORDS,
     KEY_LOCATIONS,
@@ -502,9 +504,6 @@ def load_onboarding_title_tier_labels() -> dict[str, str]:
         raise ValueError(f"ui_labels.json is missing title_tier_labels values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS}
 
-def get_docs() -> list[dict[str, str]]:
-    """Return allowed markdown docs under the repo root (for /docs API)."""
-    docs: list[dict[str, str]] = []
 
 def load_onboarding_import_summary_labels() -> dict:
     labels = load_ui_labels().get("onboarding_import_summary_labels", {})
@@ -572,9 +571,7 @@ def load_onboarding_flow_labels() -> dict[str, str]:
 def load_global_settings_labels() -> dict[str, str]:
     return _load_required_ui_labels("global_settings_labels", _GLOBAL_SETTINGS_LABEL_KEYS)
 
-
-
-
+ 
 def get_docs() -> list[dict[str, str]]:
     """Return allowed markdown docs under the repo root (for /docs API)."""
     docs: list[dict[str, str]] = []

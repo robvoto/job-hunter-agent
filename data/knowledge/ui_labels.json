@@ -1,7 +1,7 @@
 {
     "kind":  "ui_labels",
     "name":  "ui_labels",
-  "version": 18,
+  "version": 19,
     "updated_at":  "2026-05-25",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {
@@ -29,22 +29,22 @@
     "work_mode_score_labels_description":  "Display labels for work-mode eligibility and scoring explanations.",
     "work_mode_score_labels":  {
                                   "selected_bonus":  "Work mode matches your preference",
-                                  "multiple_selected_neutral":  "Work mode neutral — you've selected multiple",
+                                  "multiple_selected_neutral":  "Work mode neutral â€” you've selected multiple",
                                   "all_selected_neutral":  "Work mode neutral because all work modes were selected",
-                                  "unknown_neutral":  "Work mode unknown — couldn't determine from ad"
+                                  "unknown_neutral":  "Work mode unknown â€” couldn't determine from ad"
                               },
     "work_type_score_labels_description":  "Display labels for work-type eligibility and scoring explanations.",
     "work_type_score_labels":  {
                                   "selected_bonus":  "Work type matches your preference",
-                                  "multiple_selected_neutral":  "Work type neutral — you've selected multiple",
+                                  "multiple_selected_neutral":  "Work type neutral â€” you've selected multiple",
                                   "all_selected_neutral":  "Work type neutral because all work types were selected",
-                                  "unknown_neutral":  "Work type unknown — couldn't determine from ad"
+                                  "unknown_neutral":  "Work type unknown â€” couldn't determine from ad"
                               },
     "sector_score_labels_description":  "Display labels for sector eligibility and scoring explanations.",
     "sector_score_labels":  {
                                   "selected_bonus":  "Sector matches your preference",
-                                  "multiple_selected_neutral":  "Sector neutral — you've selected multiple",
-                                  "all_selected_neutral":  "Sector neutral — you've selected both",
+                                  "multiple_selected_neutral":  "Sector neutral â€” you've selected multiple",
+                                  "all_selected_neutral":  "Sector neutral â€” you've selected both",
                                   "unknown_neutral":  "Sector couldn't be determined from ad"
                               },
     "title_match_labels_description":  "Display labels for preferred- and alternative-role score breakdown entries.",
@@ -93,9 +93,9 @@
                             "account_menu_aria_label":  "Account",
                             "account_menu_title":  "Account",
                             "account_menu_logout_label":  "Log out",
-                            "account_menu_settings_shortcut_label":  "⚙",
+                            "account_menu_settings_shortcut_label":  "âš™",
                             "account_menu_settings_shortcut_aria_label":  "Open settings",
-                            "account_menu_workspace_shortcut_label":  "↩",
+                            "account_menu_workspace_shortcut_label":  "â†©",
                             "account_menu_workspace_shortcut_aria_label":  "Open workspace",
                             "account_menu_test_label":  "Test",
                             "account_menu_test_actions_label":  "Test actions",
@@ -187,12 +187,12 @@
                                     "minimum_compensation_label":  "Minimum compensation",
                                     "minimum_compensation_help":  "Set the lowest salary or rate you want Job Hunter to consider.",
                                     "back_label":  "Back",
-                                    "save_and_continue_label":  "Save and continue →",
+                                    "save_and_continue_label":  "Save and continue â†’",
                                     "review_setup_title":  "Review your setup",
                                     "review_setup_copy":  "Review your draft profile and search direction before Job Hunter starts matching roles.",
                                     "draft_profile_label":  "Draft profile",
                                     "draft_profile_ready_label":  "Draft profile ready",
-                                    "edit_label":  "✎ Edit",
+                                    "edit_label":  "âœŽ Edit",
                                     "search_basics_label":  "Search basics",
                                     "locations_label":  "Locations",
                                     "finish_setup_label":  "Finish Setup",
@@ -239,8 +239,8 @@
                                     "capability_remove_label":  "Remove {name}",
                                     "capability_remove_title":  "Remove {name}",
                                     "capability_untitled_label":  "Untitled capability",
-                                    "capability_show_more_label":  "Show {count} more ˅",
-                                    "capability_show_fewer_label":  "Show fewer ˄",
+                                    "capability_show_more_label":  "Show {count} more Ë…",
+                                    "capability_show_fewer_label":  "Show fewer Ë„",
                                     "capability_shown_of_label":  "{shown} shown of {total}",
                                     "capability_count_with_selection_label":  "{total} capabilities, {selected} selected",
                                     "capability_count_label":  "{total} capabilities",
@@ -337,10 +337,10 @@
                                 },
     "score_gap_labels_description":  "Display labels for workspace score-gap explanations.",
     "score_gap_labels":  {
-                              "capability_evidence_limited":  "Only {count} skill match found — scoring confidence is low",
-                              "no_recent_posted_signal":  "Posting date unclear — may be older than it looks",
-                              "no_comparable_salary_rate":  "No salary info found — couldn’t check pay fit",
-                              "limited_description_confidence":  "Job description wasn’t fully captured — scoring may be off"
+                              "capability_evidence_limited":  "Only {count} skill match found â€” scoring confidence is low",
+                              "no_recent_posted_signal":  "Posting date unclear â€” may be older than it looks",
+                              "no_comparable_salary_rate":  "No salary info found â€” couldnâ€™t check pay fit",
+                              "limited_description_confidence":  "Job description wasnâ€™t fully captured â€” scoring may be off"
                           },
     "duplicate_labels_description":  "Display labels and copy for workspace duplicate and related-job cards.",
     "duplicate_labels":  {
@@ -365,13 +365,13 @@
                                   "posting_channel_likely_recruiter_tooltip":  "Recruiter language detected in the description. This may be posted on behalf of an employer.",
                                   "posting_channel_unknown_badge":  "Source unclear",
                                   "posting_channel_unknown_tooltip":  "Couldn't determine whether this was posted by the employer directly or via a recruiter.",
-                                  "job_requirements_summary":  "Job requirements",
+                                  "job_requirements_summary":  "Mandatory Job Requirements",
                                   "debug_only_badge":  "Debug only",
                                   "debug_only_tooltip":  "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
                                   "hard_blocked_badge":  "Hard blocked",
                                   "hard_blocked_tooltip":  "This role hit a hard blocker and would normally be excluded.",
                                   "debug_status_summary":  "Filter status",
-                                  "partial_evidence_risk_suffix":  "is only partially supported"
+                                  "partial_evidence_risk_suffix":  "is only partially supported by your profile"
                               },
     "workspace_page_labels_description": "Labels for the main workspace page (results.html).",
     "workspace_page_labels": {
@@ -402,7 +402,7 @@
         "sector_option_public": "Public sector",
         "sector_option_private": "Private sector",
         "match_level_label": "Match level",
-        "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn’t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
+        "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesnâ€™t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
         "results_helper_dismiss_button": "Dismiss",
         "applied_jobs_heading": "Applied Jobs",
         "applied_jobs_copy": "This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.",
@@ -426,11 +426,11 @@
         "run_efficiency_separator": ". ",
         "how_match_levels_work_summary": "How Match Levels Work",
         "how_match_levels_work_copy": "Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the workspace does not pretend to be more precise than it really is.",
-        "rejection_panel_title": "Why isn’t this a fit for you?",
+        "rejection_panel_title": "Why isnâ€™t this a fit for you?",
         "rejection_panel_copy": "Choose required terms you do not want the app to accept again.",
         "rejection_how_this_works_summary": "How this works",
         "rejection_how_this_works_body": "If you save a term here, future jobs are filtered only when it looks required. To block any mention, use global description blockers in Settings.",
-        "rejection_loading_suggestions": "Loading suggestions…",
+        "rejection_loading_suggestions": "Loading suggestionsâ€¦",
         "rejection_add_own_term_label": "Add your own required term",
         "rejection_add_own_term_placeholder": "e.g. SAP, payroll, NV1 clearance",
         "rejection_add_button": "Add",
@@ -613,3 +613,4 @@
         "linkedin_toggle_help": "Select if you want to include LinkedIn in search runs."
     }
 }
+

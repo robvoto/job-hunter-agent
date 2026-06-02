@@ -443,18 +443,26 @@ def resolve_llm_review_payload(
     if cached:
 
         if learning_only and cached.get("learning_candidates"):
-
-            logger.info("[PIPELINE][LLM_CALL_START] source=%s job_key=%s title=%r company=%r call=%r cache=HIT",
-
-                        source, job_key, title, company, call_type)
+            logger.info(
+                "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=HIT",
+                source,
+                job_key,
+                title,
+                company,
+                call_type,
+            )
 
             return {**cached, "payload_source": "cache"}
 
         if not learning_only and cached.get("fit_review"):
-
-            logger.info("[PIPELINE][LLM_CALL_START] source=%s job_key=%s title=%r company=%r call=%r cache=HIT",
-
-                        source, job_key, title, company, call_type)
+            logger.info(
+                "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=HIT",
+                source,
+                job_key,
+                title,
+                company,
+                call_type,
+            )
 
             return {**cached, "payload_source": "cache"}
 
@@ -466,9 +474,15 @@ def resolve_llm_review_payload(
 
 
 
-    logger.info("[PIPELINE][LLM_CALL_START] source=%s job_key=%s title=%r company=%r call=%r cache=MISS text_len=%d",
-
-                source, job_key, title, company, call_type, len(llm_input_text[:max_llm_chars]))
+    logger.info(
+        "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=MISS input_chars=%d",
+        source,
+        job_key,
+        title,
+        company,
+        call_type,
+        len(llm_input_text[:max_llm_chars]),
+    )
 
 
 
@@ -487,32 +501,6 @@ def resolve_llm_review_payload(
     else:
 
         payload = llm_should_consider_with_learning(llm_input_text[:max_llm_chars])
-
-
-
-    if cached:
-
-        merged = dict(cached)
-
-        if payload.get("fit_review"):
-
-            merged["fit_review"] = payload["fit_review"]
-
-        if payload.get("learning_candidates"):
-
-            merged["learning_candidates"] = payload["learning_candidates"]
-
-        if payload.get("contextual_capability_matches") is not None:
-
-            merged["contextual_capability_matches"] = payload["contextual_capability_matches"]
-
-        if payload.get("job_requirements") is not None:
-
-            merged["job_requirements"] = payload["job_requirements"]
-
-        merged["payload_source"] = "cache+llm"
-
-        return merged
 
 
 

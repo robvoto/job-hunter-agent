@@ -289,6 +289,7 @@
       ],
       "fit_decision_max_output_tokens": 1500,
       "learning_candidates_max_output_tokens": 500,
+      "job_requirements_max_output_tokens": 300,
       "rejection_blocker_suggestions_max_output_tokens": 300,
       "capability_naming_max_output_tokens": 500,
       "profile_extraction_max_output_tokens": 2000,
