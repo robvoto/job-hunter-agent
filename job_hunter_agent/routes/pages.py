@@ -188,12 +188,6 @@ def _build_top_utility_bar_html(
 
             '</button>'
 
-            f'<button class="account-bar-test-action account-bar-test-action--danger" id="job_hunter_reset_learning_btn" type="button" role="menuitem">'
-
-            f'{_html_escape(shared_labels["account_menu_reset_learning_warning_label"])}'
-
-            '</button>'
-
             '</div></div>'
 
         )

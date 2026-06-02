@@ -1,4 +1,4 @@
-import {
+﻿import {
   escapeHtml,
   toLines,
   setCurrencyFieldValue,
@@ -10,6 +10,146 @@ import {
 } from '../shared/settings-utils.js';
 
 export const JobHunterAdminSettings = (function () {
+  const HELP_BY_CONTROL_ID = {
+    highlight_strong_capability_count: ['fit_highlights', 'strong_capability_count'],
+    highlight_working_capability_count: ['fit_highlights', 'working_capability_count'],
+    highlight_basic_capability_count: ['fit_highlights', 'basic_capability_count'],
+    highlight_reviewed_signal_count: ['fit_highlights', 'reviewed_signal_count'],
+    highlight_max_highlights: ['fit_highlights', 'max_highlights'],
+    search_default_date_range_days: ['search_settings', 'date_range_days'],
+    search_default_linkedin_hours_old: ['search_settings', 'linkedin_hours_old'],
+    search_default_linkedin_results_per_search: ['search_settings', 'linkedin_results_per_search'],
+    search_default_sort_newest_first: ['search_settings', 'sort_newest_first'],
+    search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
+    default_country_suffix: ['default_country_suffix', null],
+    playwright_viewport_width: ['playwright_settings', 'playwright_viewport_width'],
+    playwright_viewport_height: ['playwright_settings', 'playwright_viewport_height'],
+    playwright_selector_timeout: ['playwright_settings', 'playwright_selector_timeout'],
+    search_limit_date_range_days_min: ['limits.search', 'date_range_days'],
+    search_limit_date_range_days_max: ['limits.search', 'date_range_days'],
+    search_limit_seek_max_pages_min: ['limits.search', 'seek_max_pages'],
+    search_limit_seek_max_pages_max: ['limits.search', 'seek_max_pages'],
+    search_limit_linkedin_hours_old_min: ['limits.search', 'linkedin_hours_old'],
+    search_limit_linkedin_hours_old_max: ['limits.search', 'linkedin_hours_old'],
+    search_limit_linkedin_results_per_search_min: ['limits.search', 'linkedin_results_per_search'],
+    search_limit_linkedin_results_per_search_max: ['limits.search', 'linkedin_results_per_search'],
+    salary_limit_minimum_salary_yearly_max: ['limits.salary', 'minimum_salary_yearly'],
+    salary_limit_minimum_daily_rate_max: ['limits.salary', 'minimum_daily_rate'],
+    evidence_primary_weight: ['candidate_profile_tier_weights', 'primary_candidate_profile_context'],
+    evidence_secondary_weight: ['candidate_profile_tier_weights', 'secondary_candidate_profile_context'],
+    evidence_supplementary_weight: ['candidate_profile_tier_weights', 'supplementary_candidate_profile_context'],
+    preference_fit_weight: ['preference_weights', 'fit'],
+    preference_salary_weight: ['preference_weights', 'salary'],
+    preference_location_weight: ['preference_weights', 'location'],
+    preference_work_mode_weight: ['preference_weights', 'work_mode'],
+    preference_contract_weight: ['preference_weights', 'contract'],
+    preference_government_weight: ['preference_weights', 'government'],
+    preference_freshness_weight: ['preference_weights', 'freshness'],
+    history_archive_stale_after_days: ['history_settings', 'archive_stale_after_days'],
+    history_hidden_review_days: ['history_settings', 'hidden_review_days'],
+    history_repeated_listing_min_times_seen: ['history_settings', 'repeated_listing_min_times_seen'],
+    history_repeated_listing_min_span_days: ['history_settings', 'repeated_listing_min_span_days'],
+    history_multi_listing_red_flag_min_listings: ['history_settings', 'multi_listing_red_flag_min_listings'],
+    history_multi_listing_red_flag_min_span_days: ['history_settings', 'multi_listing_red_flag_min_span_days'],
+    description_trust_min_trusted_description_length: ['description_trust_settings', 'min_trusted_description_length'],
+    source_document_allowed_suffixes: ['source_document_settings', 'allowed_suffixes'],
+    onboarding_extraction_lookback_years: ['onboarding_settings', 'extraction_lookback_years'],
+    onboarding_title_extraction_min_months: ['onboarding_settings', 'title_extraction_min_months'],
+    onboarding_max_target_patterns: ['onboarding_settings', 'max_target_patterns'],
+    onboarding_max_secondary_patterns: ['onboarding_settings', 'max_secondary_patterns'],
+    onboarding_cv_max_pages: ['onboarding_settings', 'cv_max_pages'],
+    onboarding_capability_alias_limit: ['onboarding_settings', 'capability_alias_limit'],
+    onboarding_signal_cluster_min_alias_hits: ['onboarding_settings', 'signal_cluster_min_alias_hits'],
+    onboarding_signal_cluster_min_snippet_hits: ['onboarding_settings', 'signal_cluster_min_snippet_hits'],
+    onboarding_signal_cluster_dense_snippet_alias_hits: ['onboarding_settings', 'signal_cluster_dense_snippet_alias_hits'],
+    onboarding_capability_strength_preset: ['onboarding_settings', 'capability_strength_preset'],
+    llm_model_options: ['llm_settings', 'model_options'],
+    llm_max_llm_chars: ['llm_settings', 'max_llm_chars'],
+    llm_pricing_per_1m: ['llm_settings', 'pricing_per_1m'],
+    llm_prompt_settings: ['llm_settings.llm_prompt_settings', null],
+  };
+
+  let globalSettingsHelp = null;
+  let globalSettingsHelpPromise = null;
+
+  function helpTextFor(groupKey, fieldKey) {
+    const group = globalSettingsHelp?.groups?.[groupKey];
+    if (!group) return '';
+    if (fieldKey) return String(group.fields?.[fieldKey] || group.description || '').trim();
+    return String(group.description || '').trim();
+  }
+
+  function promptSettingsFieldList(group) {
+    const fields = group?.fields || {};
+    const rows = Object.entries(fields).map(([key, value]) => (
+      `<li><strong>${escapeHtml(key)}</strong>: ${escapeHtml(String(value))}</li>`
+    ));
+    return rows.length ? `<ul>${rows.join('')}</ul>` : '';
+  }
+
+  function findLabelForControl(controlId) {
+    return document.querySelector(`label[for="${CSS.escape(controlId)}"]`);
+  }
+
+  function ensureHelpPanelForControl(controlId) {
+    const label = findLabelForControl(controlId);
+    if (!label) return null;
+    const existingRow = label.closest('.field-label-row');
+    let drawer = existingRow?.querySelector('details.field-info-drawer');
+    if (!drawer) {
+      const row = document.createElement('div');
+      row.className = 'field-label-row';
+      label.parentNode.insertBefore(row, label);
+      row.appendChild(label);
+      drawer = document.createElement('details');
+      drawer.className = 'field-info-drawer settings-help-drawer';
+      const summary = document.createElement('summary');
+      summary.className = 'field-info';
+      summary.setAttribute('aria-label', 'Help');
+      summary.textContent = 'i';
+      const panel = document.createElement('div');
+      panel.className = 'field-info-panel';
+      drawer.append(summary, panel);
+      row.appendChild(drawer);
+    }
+    return drawer.querySelector('.field-info-panel');
+  }
+
+  function applyGlobalSettingsHelp() {
+    if (!globalSettingsHelp?.groups) return;
+    for (const [controlId, [groupKey, fieldKey]] of Object.entries(HELP_BY_CONTROL_ID)) {
+      const panel = ensureHelpPanelForControl(controlId);
+      if (!panel) continue;
+      const group = globalSettingsHelp.groups[groupKey];
+      const text = helpTextFor(groupKey, fieldKey);
+      if (!text) continue;
+      if (controlId === 'llm_prompt_settings') {
+        panel.innerHTML = `<p>${escapeHtml(text)}</p>${promptSettingsFieldList(group)}`;
+      } else {
+        panel.textContent = text;
+      }
+    }
+  }
+
+  async function loadGlobalSettingsHelp() {
+    if (globalSettingsHelpPromise) return globalSettingsHelpPromise;
+    globalSettingsHelpPromise = fetch('/data/config/global_settings_help.json', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error('Could not load global settings help');
+        return response.json();
+      })
+      .then((payload) => {
+        globalSettingsHelp = payload;
+        applyGlobalSettingsHelp();
+        return payload;
+      })
+      .catch((error) => {
+        console.warn('[GLOBAL_SETTINGS_HELP] failed to load', error);
+        return null;
+      });
+    return globalSettingsHelpPromise;
+  }
+
 
   // Fills the admin/global-settings form. Caller is responsible for storing settings
   // in loadedGlobalSettings and calling renderLlmModelOptions() afterwards.
@@ -269,5 +409,6 @@ export const JobHunterAdminSettings = (function () {
     };
   }
 
-  return { fillGlobalForm, collectGlobalSettings };
+  return { fillGlobalForm, collectGlobalSettings, loadGlobalSettingsHelp, applyGlobalSettingsHelp };
 }());
+

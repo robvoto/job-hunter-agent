@@ -171,6 +171,12 @@ if (minContractMonthsEl) {
     saveWizardState();
     scheduleSearchBasicsPersistence();
   });
+  minContractMonthsEl.addEventListener('blur', () => {
+    const contractRow = document.getElementById('contract_duration_row');
+    if (contractRow && !String(minContractMonthsEl.value || '').trim()) {
+      contractRow.hidden = true;
+    }
+  });
 }
 
 document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {

@@ -18,6 +18,8 @@ Use before editing managed JSON knowledge, rule loaders, paths, or approval-back
 - Has `version` + `entries` list with `value` field → additive merge: new entries appended, existing preserved.
 - Has `version`, no `entries` list → full replace only when file version > DB version.
 
+`data/config/global_settings.json` is NOT a knowledge entry — it is stored in the `global_settings` DB table and always overwritten by `db_seed --upgrade`. When adding new required fields to the global settings schema, ship the JSON change and document that `--upgrade` is needed on deploy.
+
 ## Rules
 - Business knowledge belongs in managed JSON/profile/config, not sealed Python constants.
 - JSON knowledge must have one owner module, clear metadata, and validation.

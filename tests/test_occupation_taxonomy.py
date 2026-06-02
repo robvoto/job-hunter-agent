@@ -10,22 +10,11 @@ from job_hunter_agent.occupation_taxonomy import (
 )
 
 # Minimal test index.
-# SOC major groups used:
-#   13 = Business and Financial Operations  (target family for ANALYST_PROFILE)
-#   11 = Management                         (also-consider family for ANALYST_PROFILE)
-#   35 = Food Preparation and Serving       (clearly far from an analyst profile)
 _TEST_INDEX = {
     "business analyst": [
         {
             "occupation_code": "13-1111.00",
             "occupation_title": "Management Analysts",
-            "source": "occupation_title",
-        }
-    ],
-    "project manager": [
-        {
-            "occupation_code": "11-9199.00",
-            "occupation_title": "Managers, All Other",
             "source": "occupation_title",
         }
     ],
@@ -73,13 +62,121 @@ _TEST_INDEX = {
             "source": "alternate_title",
         },
     ],
+    "project management specialist": [
+        {
+            "occupation_code": "13-1082.00",
+            "occupation_title": "Project Management Specialists",
+            "source": "occupation_title",
+        }
+    ],
+    "project delivery manager": [
+        {
+            "occupation_code": "13-1082.00",
+            "occupation_title": "Project Management Specialists",
+            "matched_title": "Project Delivery Manager",
+            "source": "alternate_title",
+        }
+    ],
+    "accountant": [
+        {
+            "occupation_code": "13-2011.00",
+            "occupation_title": "Accountants and Auditors",
+            "source": "occupation_title",
+        }
+    ],
+    "bookkeeper": [
+        {
+            "occupation_code": "43-3031.00",
+            "occupation_title": "Bookkeeping, Accounting, and Auditing Clerks",
+            "source": "occupation_title",
+        }
+    ],
+    "payroll clerk": [
+        {
+            "occupation_code": "43-3051.00",
+            "occupation_title": "Payroll and Timekeeping Clerks",
+            "source": "occupation_title",
+        }
+    ],
+    "accounts payable officer": [
+        {
+            "occupation_code": "43-3031.00",
+            "occupation_title": "Bookkeeping, Accounting, and Auditing Clerks",
+            "matched_title": "Accounts Payable Officer",
+            "source": "alternate_title",
+        }
+    ],
+    "office administrator": [
+        {
+            "occupation_code": "43-6014.00",
+            "occupation_title": "Secretaries and Administrative Assistants",
+            "source": "occupation_title",
+        }
+    ],
+    "administrative assistant": [
+        {
+            "occupation_code": "43-6014.00",
+            "occupation_title": "Secretaries and Administrative Assistants",
+            "matched_title": "Administrative Assistant",
+            "source": "alternate_title",
+        }
+    ],
+    "electrician": [
+        {
+            "occupation_code": "47-2111.00",
+            "occupation_title": "Electricians",
+            "source": "occupation_title",
+        }
+    ],
+    "registered nurse": [
+        {
+            "occupation_code": "29-1141.00",
+            "occupation_title": "Registered Nurses",
+            "source": "occupation_title",
+        }
+    ],
+    "nurse": [
+        {
+            "occupation_code": "29-1141.00",
+            "occupation_title": "Registered Nurses",
+            "matched_title": "Nurse",
+            "source": "alternate_title",
+        }
+    ],
+    "help desk technician": [
+        {
+            "occupation_code": "15-1232.00",
+            "occupation_title": "Computer User Support Specialists",
+            "source": "occupation_title",
+        }
+    ],
 }
 
 _ANALYST_PROFILE = {
-    "target_roles": ["business analyst"],
+    "target_occupation_queries": ["business analyst"],
+    "target_roles": ["chef"],
     "also_consider_roles": ["project manager"],
 }
 
+_ACCOUNTING_PROFILE = {
+    "target_occupation_queries": ["accountant", "bookkeeper", "payroll clerk"],
+}
+
+_ADMIN_PROFILE = {
+    "target_occupation_queries": ["administrative assistant", "office administrator"],
+}
+
+_PROJECT_PROFILE = {
+    "target_occupation_queries": ["project management specialist"],
+}
+
+_HEALTHCARE_PROFILE = {
+    "target_occupation_queries": ["registered nurse"],
+}
+
+_ICT_PROFILE = {
+    "target_occupation_queries": ["help desk technician"],
+}
 
 @pytest.fixture()
 def tmp_db(tmp_path):
@@ -160,18 +257,22 @@ def test_cache_hit_returns_cached_result(tmp_db):
 
 
 def test_cache_is_keyed_by_profile_hash(tmp_db):
-    # Different profiles must not share cached decisions.
-    other_profile = {"target_roles": [], "also_consider_roles": []}
+    # Different non-query profile fields must not change cache results.
+    other_profile = {
+        "target_occupation_queries": ["business analyst"],
+        "target_roles": ["chef"],
+        "also_consider_roles": ["surgeon"],
+    }
     classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
-    result = classify_title("business analyst", other_profile, db_path=tmp_db, _index=_TEST_INDEX)
-    assert result.result == RESULT_UNCERTAIN
-    assert result.reason == "no_profile_context"
+    result = classify_title("business analyst", other_profile, db_path=tmp_db, _index={})
+    assert result.result == RESULT_NEAR
+    assert result.reason == "cached"
 
 
 # ── no profile context → uncertain ───────────────────────────────────────────
 
 def test_no_profile_context_returns_uncertain(tmp_db):
-    empty_profile: dict = {"target_roles": [], "also_consider_roles": []}
+    empty_profile: dict = {"target_roles": ["business analyst"], "also_consider_roles": ["project manager"]}
     result = classify_title("business analyst", empty_profile, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "no_profile_context"
@@ -179,10 +280,11 @@ def test_no_profile_context_returns_uncertain(tmp_db):
     assert result.matched_occupation_code == "13-1111.00"
 
 
-def test_profile_with_unknown_roles_returns_uncertain(tmp_db):
-    # Profile roles that don't exist in the index yield no SOC groups.
+def test_profile_with_queries_that_do_not_match_returns_uncertain(tmp_db):
+    # Unknown queries should not fall back to title strings.
     unknown_profile = {
-        "target_roles": ["ict portfolio transformation lead"],
+        "target_occupation_queries": ["ict portfolio transformation lead"],
+        "target_roles": ["business analyst"],
         "also_consider_roles": [],
     }
     result = classify_title("business analyst", unknown_profile, db_path=tmp_db, _index=_TEST_INDEX)
@@ -192,39 +294,79 @@ def test_profile_with_unknown_roles_returns_uncertain(tmp_db):
 
 # ── target_occupation_queries ─────────────────────────────────────────────────
 
-def test_target_occupation_queries_are_ignored_for_profile_context(tmp_db):
-    """LLM-generated target occupation queries must not override detected/user-confirmed titles."""
-    profile = {
-        "target_roles": ["coordinator"],
-        "also_consider_roles": [],
-        "target_occupation_queries": ["business analyst"],
-    }
-    result = classify_title("analyst", profile, db_path=tmp_db, _index=_TEST_INDEX)
-    assert result.result == RESULT_FAR
-    assert result.matched_occupation_code == "13-1111.00"
+def test_target_occupation_queries_used_for_classification(tmp_db):
+    """target_occupation_queries codes must be included when deriving target occupations."""
+    result = classify_title("accounts payable officer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_NEAR
+    assert result.matched_occupation_code == "43-3031.00"
 
 
-def test_missing_target_occupation_queries_falls_back_to_target_roles(tmp_db):
-    """When target_occupation_queries is absent, classification uses target_roles as before."""
+def test_admin_profile_uses_occupation_queries(tmp_db):
+    """Multiple target occupation queries should expand the target code set."""
+    result = classify_title("office administrator", _ADMIN_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_NEAR
+    assert result.matched_occupation_code == "43-6014.00"
+
+
+def test_missing_target_occupation_queries_does_not_fall_back_to_target_roles(tmp_db):
+    """Display titles must not be reused as machine-facing occupation context."""
     profile_without_queries = {
         "target_roles": ["business analyst"],
         "also_consider_roles": ["project manager"],
-        # no target_occupation_queries key
     }
-    result = classify_title("analyst", profile_without_queries, db_path=tmp_db, _index=_TEST_INDEX)
-    assert result.result == RESULT_NEAR
-    assert result.matched_occupation_code == "13-1111.00"
+    result = classify_title("business analyst", profile_without_queries, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_UNCERTAIN
+    assert result.reason == "no_profile_context"
 
 
-def test_empty_target_occupation_queries_falls_back_to_target_roles(tmp_db):
-    """An empty list must not suppress the target_roles fallback."""
+def test_empty_target_occupation_queries_does_not_fall_back_to_target_roles(tmp_db):
+    """An empty occupation-query list must still leave O*NET uncertain."""
     profile = {
         "target_roles": ["business analyst"],
         "also_consider_roles": [],
         "target_occupation_queries": [],
     }
-    result = classify_title("analyst", profile, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title("business analyst", profile, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_UNCERTAIN
+    assert result.reason == "no_profile_context"
+
+
+def test_accounting_profile_accepts_related_occupation_titles(tmp_db):
+    cases = [
+        ("Accountant", "13-2011.00"),
+        ("Payroll Clerk", "43-3051.00"),
+        ("Accounts Payable Officer", "43-3031.00"),
+    ]
+
+    for title, occupation_code in cases:
+        result = classify_title(title, _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+        assert result.result == RESULT_NEAR
+        assert result.matched_occupation_code == occupation_code
+
+
+def test_admin_profile_keeps_unrelated_titles_far(tmp_db):
+    result = classify_title("Electrician", _ADMIN_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_FAR
+    assert result.matched_occupation_code == "47-2111.00"
+
+
+def test_healthcare_profile_uses_occupation_queries(tmp_db):
+    result = classify_title("Nurse", _HEALTHCARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_NEAR
+    assert result.matched_occupation_code == "29-1141.00"
+
+
+def test_ict_profile_uses_occupation_queries(tmp_db):
+    result = classify_title("Help Desk Technician", _ICT_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_NEAR
+    assert result.matched_occupation_code == "15-1232.00"
+
+
+def test_project_profile_marks_finance_roles_far(tmp_db):
+    for title, occupation_code in [("Accountant", "13-2011.00"), ("Payroll Clerk", "43-3051.00")]:
+        result = classify_title(title, _PROJECT_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+        assert result.result == RESULT_FAR
+        assert result.matched_occupation_code == occupation_code
 
 
 # ── ONET_TITLE_CLASSIFY log event ─────────────────────────────────────────────
@@ -235,3 +377,18 @@ def test_onet_classify_log_emitted(tmp_db, caplog):
     with caplog.at_level(logging.INFO, logger="job_hunter_agent.occupation_taxonomy"):
         classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert any("ONET_TITLE_CLASSIFY" in r.message for r in caplog.records)
+    assert any("profile_target_occupation_queries" in r.message for r in caplog.records)
+    assert any("derived_target_occupation_codes" in r.message for r in caplog.records)
+    assert any("matched_occupation_code" in r.message for r in caplog.records)
+    assert any("reason" in r.message for r in caplog.records)
+
+
+def test_onet_classify_logs_fresh_and_cached_lookups(tmp_db, caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.occupation_taxonomy"):
+        classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+        classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+
+    assert any("lookup_source" in r.message and "fresh" in r.message for r in caplog.records)
+    assert any("lookup_source" in r.message and "cache" in r.message for r in caplog.records)

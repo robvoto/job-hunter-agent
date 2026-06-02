@@ -39,11 +39,16 @@
     const SEARCH_REFRESHING_COPY = String(SHARED_UI_LABELS.search_refreshing_copy || '').trim();
     const SEARCH_RUNNING_SUBCOPY = String(SHARED_UI_LABELS.search_running_subcopy || '').trim();
     const SEARCH_STARTING_SUBCOPY = String(SHARED_UI_LABELS.search_starting_subcopy || '').trim();
+    const SEARCH_STOP_LABEL = String(SHARED_UI_LABELS.search_stop_label || '').trim();
+    const SEARCH_PROGRESS_PREFIX = String(SHARED_UI_LABELS.search_progress_prefix || '').trim();
+    const SEARCH_STOPPING_TITLE = String(SHARED_UI_LABELS.search_stopping_title || '').trim();
+    const SEARCH_STOPPING_COPY = String(SHARED_UI_LABELS.search_stopping_copy || '').trim();
+    const SEARCH_STOPPING_SUBCOPY = String(SHARED_UI_LABELS.search_stopping_subcopy || '').trim();
     const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
     if (!ONBOARDING_USER_ID) {
       throw new Error('Missing user id.');
     }
-    if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY) {
+    if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY || !SEARCH_STOP_LABEL || !SEARCH_PROGRESS_PREFIX || !SEARCH_STOPPING_TITLE || !SEARCH_STOPPING_COPY || !SEARCH_STOPPING_SUBCOPY) {
       throw new Error('Missing shared search UI labels.');
     }
     function scopedOnboardingStorageKey(baseKey) {
@@ -126,6 +131,15 @@
         .replace(/'/g, '&#39;');
     }
 
+    function composeProgressSubcopy(baseCopy, progress) {
+      const progressText = String(progress || '').trim();
+      if (!progressText) {
+        return String(baseCopy || '').trim();
+      }
+      const baseText = String(baseCopy || '').trim();
+      return baseText ? `${baseText} ${SEARCH_PROGRESS_PREFIX} ${progressText}` : `${SEARCH_PROGRESS_PREFIX} ${progressText}`;
+    }
+
     function renderWorkspaceWait(state) {
       if (!wsWaitMount) {
         return;
@@ -141,19 +155,23 @@
         title: String(state.title || 'Working').trim() || 'Working',
         copy: String(state.copy || '').trim(),
         subcopy: String(state.subcopy || '').trim(),
+        progress: String(state.progress || '').trim(),
+        allowStop: Boolean(state.allowStop),
       };
       if (
         workspaceWaitState
         && workspaceWaitState.title === nextState.title
         && workspaceWaitState.copy === nextState.copy
         && workspaceWaitState.subcopy === nextState.subcopy
+        && workspaceWaitState.progress === nextState.progress
+        && workspaceWaitState.allowStop === nextState.allowStop
       ) {
         return;
       }
       workspaceWaitState = { ...nextState };
       const title = escapeHtml(nextState.title);
       const copy = escapeHtml(nextState.copy);
-      const subcopy = nextState.subcopy;
+      const subcopy = composeProgressSubcopy(nextState.subcopy, nextState.progress);
       wsWaitMount.hidden = false;
       document.body.classList.add('job-hunter-wait-active');
       wsWaitMount.innerHTML = `
@@ -164,6 +182,11 @@
             <p class="wait-state__title">${title}</p>
             ${copy ? `<p class="wait-state__copy">${copy}</p>` : ''}
             ${subcopy ? `<p class="wait-state__subcopy">${escapeHtml(subcopy)}</p>` : ''}
+            ${nextState.allowStop ? `
+              <div class="wait-state__actions">
+                <button class="btn btn-secondary" id="ws_stop_search_btn" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
+              </div>
+            ` : ''}
           </div>
         </div>
       `;
@@ -309,15 +332,21 @@
             <h2 class="ws-run-info-title">${RUN_INFO_TITLE}</h2>
             ${RUN_INFO_COPY.map((copy) => `<p class="ws-run-info-copy">${escapeHtml(copy)}</p>`).join('')}
             <div class="ws-run-info-actions">
+              <button class="btn btn-secondary" id="ws_run_info_stop" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
               <button class="btn btn-primary" id="ws_run_info_ack" type="button">Got it</button>
             </div>
           </section>
         </div>
       `;
       const ackButton = document.getElementById('ws_run_info_ack');
+      const stopButton = document.getElementById('ws_run_info_stop');
       ackButton?.addEventListener('click', () => {
         setRunInfoDismissed(true);
         hideRunInfoPopup();
+      });
+      stopButton?.addEventListener('click', () => {
+        hideRunInfoPopup();
+        stopWorkspaceRun();
       });
       ackButton?.focus();
     }
@@ -366,6 +395,19 @@
             title: SEARCH_RUNNING_TITLE,
             copy: SEARCH_RUNNING_COPY,
             subcopy: SEARCH_RUNNING_SUBCOPY,
+            progress: payload?.progress || '',
+            allowStop: true,
+          });
+          startRunStatusPolling();
+          return true;
+        }
+        if (payload?.status === 'stopping') {
+          renderWorkspaceWait({
+            title: SEARCH_STOPPING_TITLE,
+            copy: SEARCH_STOPPING_COPY,
+            subcopy: SEARCH_STOPPING_SUBCOPY,
+            progress: payload?.progress || '',
+            allowStop: false,
           });
           startRunStatusPolling();
           return true;
@@ -393,6 +435,8 @@
         title: SEARCH_STARTING_TITLE,
         copy: SEARCH_STARTING_COPY,
         subcopy: SEARCH_STARTING_SUBCOPY,
+        progress: '',
+        allowStop: true,
       });
       try {
         const response = await jobHunterFetch('/api/run', {
@@ -408,6 +452,8 @@
           title: SEARCH_RUNNING_TITLE,
           copy: SEARCH_RUNNING_COPY,
           subcopy: SEARCH_RUNNING_SUBCOPY,
+          progress: '',
+          allowStop: true,
         });
         startRunStatusPolling();
         showRunInfoPopup();
@@ -416,6 +462,27 @@
         renderWorkspaceWait(null);
         updateResultsLoadingMessage('Could not start search. Refresh the page and try again.');
         window.alert(error.message || 'Could not start search.');
+      }
+    }
+
+    async function stopWorkspaceRun() {
+      hideRunInfoPopup();
+      try {
+        const response = await jobHunterFetch('/api/run/stop', { method: 'POST' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || 'Could not stop search.');
+        }
+        renderWorkspaceWait({
+          title: SEARCH_STOPPING_TITLE,
+          copy: SEARCH_STOPPING_COPY,
+          subcopy: SEARCH_STOPPING_SUBCOPY,
+          progress: '',
+          allowStop: false,
+        });
+        startRunStatusPolling();
+      } catch (error) {
+        window.alert(error.message || 'Could not stop search.');
       }
     }
 
@@ -430,10 +497,22 @@
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
           return;
         }
+        if (payload?.status === 'stopping' && attempt < RUN_STATUS_MAX_ATTEMPTS) {
+          renderWorkspaceWait({
+            title: SEARCH_STOPPING_TITLE,
+            copy: SEARCH_STOPPING_COPY,
+            subcopy: SEARCH_STOPPING_SUBCOPY,
+            allowStop: false,
+          });
+          window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
+          return;
+        }
         renderWorkspaceWait({
           ...(workspaceWaitState || {}),
           title: SEARCH_REFRESHING_TITLE,
           copy: SEARCH_REFRESHING_COPY,
+          progress: '',
+          allowStop: false,
         });
         await loadResults(String(payload?.last_run_at || '').trim());
         renderWorkspaceWait(null);
@@ -567,6 +646,10 @@
     document.addEventListener('click', (event) => {
       if (event.target.closest('#ws_sidebar_run_btn')) {
         startWorkspaceRunFromOverlay();
+        return;
+      }
+      if (event.target.closest('#ws_stop_search_btn')) {
+        stopWorkspaceRun();
       }
     });
 

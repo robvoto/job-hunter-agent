@@ -12,6 +12,7 @@ Notes:
 """
 
 import argparse
+import logging
 import sys
 
 from dotenv import load_dotenv
@@ -28,7 +29,9 @@ from job_hunter_agent.profile_store import (
     load_profile,
     require_profile_ready_for_review,
 )
-from job_hunter_agent.io_utils import configure_console_output
+from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request
+
+logger = logging.getLogger(__name__)
 
 from job_hunter_agent.run_context import build_scrape_run_context
 from job_hunter_agent.scrape_finalize import finalize_scrape_run
@@ -44,6 +47,8 @@ CONSOLE_BANNER_WIDTH = 60
 def scrape_jobs_direct(headless: bool = False) -> str:
     from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
     get_user_id_for_runtime()
+    clear_run_stop_request()
+    clear_run_progress()
     context = build_scrape_run_context(sys.argv)
     require_profile_ready_for_review(load_profile())
     reset_session_cost()
@@ -53,27 +58,38 @@ def scrape_jobs_direct(headless: bool = False) -> str:
         for value in context.search_settings.get("locations", [])
         if str(value).strip()
     ]
-    print("=" * CONSOLE_BANNER_WIDTH)
-    print("  JOB HUNTER AGENT - SCRAPE RUN")
-    print("=" * CONSOLE_BANNER_WIDTH)
-    print("  Trigger            : manual scrape command")
-    print("  Action             : scrape fresh jobs, review them, rebuild workspace")
-    print(f"  Enabled sources    : {', '.join(context.enabled_sources) or '(none)'}")
-    print("  Search params")
-    print(f"    Keywords         : {search_keywords or '(unset)'}")
-    print(f"    Locations        : {', '.join(search_locations) or '(unset)'}")
-    print(f"    SEEK pages       : 1..{context.configured_seek_max_pages}")
-    print(f"    Date range       : {context.configured_date_range} day(s)")
-    print("  Fresh scrape       : YES")
-    print(f"  Workspace debug    : {'ON (--debug)' if context.dashboard_debug_mode else 'OFF'}")
-    print(f"  LLM Disabled       : {'YES (--no-llm)' if context.no_llm_mode else 'NO'}")
-    if context.no_llm_mode:
-        print("  LLM Model          : disabled")
-    else:
-        print(f"  LLM Model          : {get_llm_model()}")
-    print(f"  Score Floor        : {context.dashboard_min_score}")
-    print(f"  Reset New To You   : {'YES (--reset-new-to-you)' if context.reset_new_to_you else 'NO'}")
-    print("=" * CONSOLE_BANNER_WIDTH)
+    llm_model_line = "  LLM Model          : disabled" if context.no_llm_mode else f"  LLM Model          : {get_llm_model()}"
+    logger.info(
+        "\n%s\n  JOB HUNTER AGENT - SCRAPE RUN\n%s\n"
+        "  Trigger            : manual scrape command\n"
+        "  Action             : scrape fresh jobs, review them, rebuild workspace\n"
+        "  Enabled sources    : %s\n"
+        "  Search params\n"
+        "    Keywords         : %s\n"
+        "    Locations        : %s\n"
+        "    SEEK pages       : 1..%d\n"
+        "    Date range       : %d day(s)\n"
+        "  Fresh scrape       : YES\n"
+        "  Workspace debug    : %s\n"
+        "  LLM Disabled       : %s\n"
+        "%s\n"
+        "  Score Floor        : %d\n"
+        "  Reset New To You   : %s\n"
+        "%s",
+        "=" * CONSOLE_BANNER_WIDTH,
+        "=" * CONSOLE_BANNER_WIDTH,
+        ", ".join(context.enabled_sources) or "(none)",
+        search_keywords or "(unset)",
+        ", ".join(search_locations) or "(unset)",
+        context.configured_seek_max_pages,
+        context.configured_date_range,
+        "ON (--debug)" if context.dashboard_debug_mode else "OFF",
+        "YES (--no-llm)" if context.no_llm_mode else "NO",
+        llm_model_line,
+        context.dashboard_min_score,
+        "YES (--reset-new-to-you)" if context.reset_new_to_you else "NO",
+        "=" * CONSOLE_BANNER_WIDTH,
+    )
 
     context.headless = headless
     kept_records, audit_rows, skill_observations = run_enabled_sources(context)
@@ -81,6 +97,8 @@ def scrape_jobs_direct(headless: bool = False) -> str:
 
 
 if __name__ == "__main__":
+    from job_hunter_agent.logging_utils import setup_cli_logging
+    setup_cli_logging()
     from job_hunter_agent.database import init_db
     from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
@@ -107,5 +125,5 @@ if __name__ == "__main__":
         else:
             scrape_jobs_direct()
     except RuntimeError as exc:
-        print(f"ERROR: {exc}")
+        logger.error("ERROR: %s", exc)
         raise SystemExit(2) from exc

@@ -139,7 +139,7 @@
 }
 
 .workflow-drawer-summary::before {
-  content: "ⓘ";
+  content: "\25B8";
   flex: 0 0 auto;
   color: var(--selection-accent);
   font-size: 0.95em;
@@ -508,50 +508,51 @@
   outline-offset: 2px;
 }
 
-/* Search choice groups use the same soft-chip visual language. */
+/* Search/preference choice groups: one compact modifier over the generic choice-card base. */
 #engagement_type_choices.choice-strip,
 #work_mode_preference.choice-strip,
 #prefer_sector_choices.choice-strip,
 #seek_max_pages_choices.choice-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--control-space-sm);
+  gap: 7px;
   margin-top: 0;
   border: 0;
   border-radius: 0;
   overflow: visible;
   background: transparent;
   box-shadow: none;
-  width: min(100%, 36rem);
+  width: min(100%, 30rem);
 }
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode,
 #work_mode_preference.choice-strip > .choice-card--work-mode,
 #prefer_sector_choices.choice-strip > .choice-card--work-mode {
   flex: 0 0 auto;
-  min-height: var(--control-height-sm);
-  min-width: 86px;
-  padding: var(--control-pad-block-md) var(--control-pad-inline-xl);
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
-  border-radius: var(--control-radius-lg);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  min-height: 1.9rem;
+  min-width: 0;
+  padding: 4px 11px;
+  border-radius: var(--control-radius-md);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
+  font-size: 0.78rem;
   box-shadow: none;
-  color: var(--text-primary);
-  font-size: 0.88rem;
-  font-weight: 650;
 }
 
-#engagement_type_choices.choice-strip > .choice-card--work-mode:last-child,
-#work_mode_preference.choice-strip > .choice-card--work-mode:last-child,
-#prefer_sector_choices.choice-strip > .choice-card--work-mode:last-child {
-  border-right: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
+#engagement_type_choices.choice-strip > .choice-card--work-mode:hover,
+#work_mode_preference.choice-strip > .choice-card--work-mode:hover,
+#prefer_sector_choices.choice-strip > .choice-card--work-mode:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 32%, var(--border-subtle));
+  color: var(--text-primary);
 }
 
 #engagement_type_choices.choice-strip > .choice-card--work-mode:has(input:checked),
 #work_mode_preference.choice-strip > .choice-card--work-mode:has(input:checked),
 #prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) {
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-subtle));
   color: var(--accent);
 }
 
@@ -560,13 +561,6 @@
 #prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) span {
   color: inherit;
   font-weight: 700;
-}
-
-#engagement_type_choices.choice-strip > .choice-card--work-mode:hover,
-#work_mode_preference.choice-strip > .choice-card--work-mode:hover,
-#prefer_sector_choices.choice-strip > .choice-card--work-mode:hover {
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle));
 }
 
 #seek_max_pages_choices.choice-strip > .choice-card--seek-pages {
@@ -596,7 +590,6 @@
   border-color: color-mix(in srgb, var(--accent) 46%, var(--border-subtle));
   color: var(--accent);
 }
-
 .search-operation-card {
   display: flex;
   flex-direction: column;
@@ -959,14 +952,14 @@
 .field-block {
   display: grid;
   align-content: start;
-  gap: 0;
+  row-gap: var(--field-label-control-gap);
   min-width: 0;
 }
 
 .settings-form-field > .field-label-row,
 .onb-field > .field-label-row,
 .field-block > .field-label-row {
-  margin-bottom: var(--field-label-control-gap);
+  margin-bottom: 0;
 }
 
 .settings-form-field--full {
@@ -992,15 +985,24 @@
   margin-bottom: 0;
 }
 
-.search-basics-summary {
-  margin: var(--field-summary-gap) 0 0;
+/* Shared inline summary line under choice strips and chip groups. */
+.summary-line {
+  margin: calc(var(--field-summary-gap) + 0px) 0 0;
   color: var(--text-muted);
   font-size: var(--help-copy-font-size);
   line-height: var(--help-copy-line-height);
 }
 
-.search-basics-summary:empty {
+.summary-line:empty {
   display: none;
+}
+
+/* Shared helper copy shown under form controls and descriptive blocks. */
+.help {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
 }
 
 @media (max-width: 760px) {
@@ -1632,35 +1634,6 @@
   outline-offset: 2px;
 }
 
-/* Shared choice pills: inactive states must recede, selected states must be obvious. */
-.choice-strip > .choice-card--work-mode,
-#engagement_type_choices.choice-strip > .choice-card--work-mode,
-#work_mode_preference.choice-strip > .choice-card--work-mode,
-#prefer_sector_choices.choice-strip > .choice-card--work-mode {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
-  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
-  box-shadow: none;
-}
-
-.choice-strip > .choice-card--work-mode:hover,
-#engagement_type_choices.choice-strip > .choice-card--work-mode:hover,
-#work_mode_preference.choice-strip > .choice-card--work-mode:hover,
-#prefer_sector_choices.choice-strip > .choice-card--work-mode:hover {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-  border-color: color-mix(in srgb, var(--text-muted) 32%, var(--border-subtle));
-  color: var(--text-primary);
-}
-
-.choice-strip > .choice-card--work-mode:has(input:checked),
-#engagement_type_choices.choice-strip > .choice-card--work-mode:has(input:checked),
-#work_mode_preference.choice-strip > .choice-card--work-mode:has(input:checked),
-#prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) {
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--border-subtle));
-  color: var(--accent);
-}
-
 /* Shared chip editor layout for onboarding role review and settings rule editors.
    Keep the add row outside the chip display box; do not create an extra parent card. */
 .review-block > .field-label-row + .chip-list,
@@ -1721,4 +1694,138 @@
 .chip-editor-row.token-input-group .token-input-action {
   align-self: center;
   justify-self: center;
+}
+
+/* Compact inline contract-length selector shown only when Contract is selected. */
+.onb-field .contract-duration-row,
+.settings-form-field .contract-duration-row {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  max-width: 9.5rem;
+  margin-top: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.onb-field .contract-duration-row[hidden],
+.settings-form-field .contract-duration-row[hidden] {
+  display: none;
+}
+
+.onb-field .contract-duration-row .jh-select,
+.settings-form-field .contract-duration-row .jh-select {
+  width: 9.5rem;
+  min-height: 2.15rem;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 0.85rem;
+}
+
+/* Shared icon-only action button for compact card actions such as edit pencils. */
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius-md);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-action:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.icon-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--selection-accent) 55%, white);
+  outline-offset: 2px;
+}
+
+/* Shared compact typography for review cards, chips, and capability cards. */
+.review-capability-title {
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.chip-list .chip-item,
+.badge-editor-list .chip-item {
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.badge-editor-form.token-input-group .token-input-field,
+.chip-editor-row.token-input-group .token-input-field {
+  font-size: 0.92rem;
+}
+
+.check-card-head h3 {
+  font-size: 1.25rem;
+}
+
+.check-list dd {
+  margin: 4px 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+
+
+
+/* Shared salary/compensation pair layout used by onboarding and settings forms. */
+.salary-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+  row-gap: 14px;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.salary-pair > div {
+  display: grid;
+  gap: var(--field-label-control-gap);
+  min-width: 0;
+}
+
+.salary-pair label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: var(--field-label-line-height);
+}
+
+.search-basics-card--details .salary-pair {
+  width: auto;
+}
+
+.search-basics-card--details .salary-pair .currency-input-wrap {
+  max-width: 190px;
+}
+
+@media (max-width: 760px) {
+  .salary-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shared spacing for a full-width field that follows choice/summary fields in a two-column form. */
+.settings-form-grid--search-basics > .settings-form-field--full,
+.search-basics-card--details .onb-field--full {
+  margin-top: 0;
 }

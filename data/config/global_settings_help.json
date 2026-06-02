@@ -1,0 +1,222 @@
+{
+  "description": "Human-readable explanations for managed global settings. Keep runtime values in global_settings.json; keep field meaning, UX help text, and operational guidance here.",
+  "groups": {
+    "fit_highlights": {
+      "description": "Controls how many positive fit reasons are shown on each job card.",
+      "fields": {
+        "strong_capability_count": "Maximum number of strong capability matches to show in job highlights.",
+        "working_capability_count": "Maximum number of working-level capability matches to show in job highlights.",
+        "basic_capability_count": "Maximum number of basic capability matches to show in job highlights.",
+        "reviewed_signal_count": "Maximum number of approved reviewed signals to surface as fit evidence.",
+        "max_highlights": "Overall cap for visible positive highlight items on a job card."
+      }
+    },
+    "search_settings": {
+      "description": "Default search behaviour shared across the app before user/profile-specific overrides are applied.",
+      "fields": {
+        "keywords": "Default search keyword string. Usually empty because candidate search terms come from onboarding/profile setup.",
+        "locations": "Default search locations used when no user/profile location is supplied.",
+        "classification_ids": "Default job-board classification IDs used for broad pre-filtering.",
+        "date_range_days": "How many days back SEEK-style searches should look by default.",
+        "seek_max_pages": "Maximum number of SEEK result pages to crawl by default.",
+        "sort_newest_first": "When true, workspace/search defaults prefer newer listings first.",
+        "linkedin_hours_old": "How fresh LinkedIn listings must be, measured in hours.",
+        "linkedin_results_per_search": "Maximum LinkedIn results collected per keyword/location search pair.",
+        "linkedin_easy_apply_only": "Optional LinkedIn Easy Apply filter. Null means do not force either direction.",
+        "playwright_viewport_width": "Browser viewport width used by Playwright source connectors.",
+        "playwright_viewport_height": "Browser viewport height used by Playwright source connectors.",
+        "playwright_selector_timeout": "How long Playwright waits for required selectors before failing a browser interaction."
+      }
+    },
+    "limits.search": {
+      "description": "Validation bounds for search defaults. These prevent UI/API values from drifting outside safe ranges.",
+      "fields": {
+        "date_range_days": "Allowed min/max for the search date window in days.",
+        "seek_max_pages": "Allowed min/max for the SEEK page crawl cap.",
+        "linkedin_hours_old": "Allowed min/max for LinkedIn listing freshness in hours.",
+        "linkedin_results_per_search": "Allowed min/max for LinkedIn results per search pair."
+      }
+    },
+    "limits.salary": {
+      "description": "Validation bounds for salary and daily-rate inputs.",
+      "fields": {
+        "minimum_salary_yearly": "Allowed min/max for permanent annual salary targets.",
+        "minimum_daily_rate": "Allowed min/max for contract daily-rate targets."
+      }
+    },
+    "limits.onboarding": {
+      "description": "Validation bounds for onboarding extraction and capability tuning settings.",
+      "fields": {
+        "extraction_lookback_years": "Allowed min/max for how far back onboarding may inspect role history.",
+        "title_extraction_min_months": "Allowed min/max role duration required before a role can count as a title signal.",
+        "max_target_patterns": "Allowed min/max for primary target title patterns kept from onboarding.",
+        "max_secondary_patterns": "Allowed min/max for secondary title patterns kept from onboarding.",
+        "capability_recent_years": "Allowed min/max for what counts as recent capability use.",
+        "capability_strong_max_years_since_use": "Allowed min/max for how recently a strong capability must have been used.",
+        "capability_strong_min_months": "Allowed min/max experience duration required for strong capability classification.",
+        "capability_working_max_years_since_use": "Allowed min/max for how recently a working capability must have been used.",
+        "capability_working_min_months": "Allowed min/max experience duration required for working capability classification.",
+        "capability_working_long_history_max_years_since_use": "Allowed min/max older-use window for long-history working capabilities.",
+        "capability_working_long_history_min_months": "Allowed min/max total duration required for long-history working capabilities.",
+        "capability_drop_to_basic_after_years": "Allowed min/max age after which an old capability drops to basic.",
+        "capability_max_items": "Allowed min/max number of capability rules kept after onboarding.",
+        "capability_alias_limit": "Allowed min/max aliases kept per capability.",
+        "cv_max_pages": "Allowed min/max number of CV pages read during onboarding.",
+        "signal_cluster_min_alias_hits": "Allowed min/max alias-hit threshold for keeping learned signal clusters.",
+        "signal_cluster_min_snippet_hits": "Allowed min/max snippet-hit threshold for keeping learned signal clusters.",
+        "signal_cluster_dense_snippet_alias_hits": "Allowed min/max dense-snippet alias threshold for keeping a signal cluster."
+      }
+    },
+    "limits.history": {
+      "description": "Validation bounds for history and repeated-listing red-flag settings.",
+      "fields": {
+        "repeated_listing_min_times_seen": "Allowed min/max number of sightings before repeated-listing detection can trigger.",
+        "repeated_listing_min_span_days": "Allowed min/max day span required before repeated-listing detection can trigger.",
+        "multi_listing_red_flag_min_listings": "Allowed min/max number of related listings required before multi-listing red-flag detection can trigger.",
+        "multi_listing_red_flag_min_span_days": "Allowed min/max day span required before multi-listing red-flag detection can trigger."
+      }
+    },
+    "preference_weights": {
+      "description": "Weights that shape the global job fit score. Higher values make that dimension move rankings more strongly; zero effectively ignores it.",
+      "fields": {
+        "fit": "Weight for overall role/capability fit.",
+        "salary": "Weight for salary or daily-rate alignment.",
+        "location": "Weight for location and travel preference alignment.",
+        "work_mode": "Weight for remote/hybrid/on-site preference alignment.",
+        "contract": "Weight for permanent/contract and contract-length preference alignment.",
+        "government": "Weight for public-sector/government preference alignment.",
+        "freshness": "Weight for newer job postings."
+      }
+    },
+    "candidate_profile_tier_weights": {
+      "description": "Weights applied to different profile evidence tiers when judging whether the candidate really has a capability.",
+      "fields": {
+        "primary_candidate_profile_context": "Highest-confidence candidate evidence, usually recent/direct CV evidence.",
+        "secondary_candidate_profile_context": "Medium-confidence candidate evidence, useful but weaker than primary profile context.",
+        "supplementary_candidate_profile_context": "Lowest-confidence background evidence, used carefully so old or indirect experience does not over-score a role."
+      }
+    },
+    "history_settings": {
+      "description": "Controls archive freshness, hidden-job review timing, and repeated-listing red flags.",
+      "fields": {
+        "archive_stale_after_days": "How long archived jobs stay fresh before they are considered stale.",
+        "hidden_review_days": "How long hidden jobs stay hidden before they become eligible for review again.",
+        "repeated_listing_min_times_seen": "How many times the same listing must be seen before a repeated-listing red flag can trigger.",
+        "repeated_listing_min_span_days": "Minimum days between first and last sighting before repeated-listing detection can trigger.",
+        "multi_listing_red_flag_min_listings": "How many similar listings from the same source/company/title cluster trigger a multi-listing red flag.",
+        "multi_listing_red_flag_min_span_days": "Minimum day span across similar listings before a multi-listing red flag can trigger."
+      }
+    },
+    "description_trust_settings": {
+      "description": "Controls whether fallback job-description text is trusted enough for fit review and scoring.",
+      "fields": {
+        "min_trusted_description_length": "Minimum fallback description length required before the system treats the text as a trusted full description."
+      }
+    },
+    "source_document_settings": {
+      "description": "Controls source document handling for CV/onboarding material.",
+      "fields": {
+        "cv_chars_per_page": "Approximate character budget used per CV page when limiting extraction input.",
+        "allowed_suffixes": "File suffixes accepted for CV/source uploads. Keep restricted to supported parsers."
+      }
+    },
+    "default_country_suffix": {
+      "description": "Country suffix removed from repeated display text where appropriate. Example: trimming repeated 'Australia' from location labels."
+    },
+    "onboarding_settings": {
+      "description": "Defaults used when building or rebuilding a candidate profile from onboarding/CV material.",
+      "fields": {
+        "extraction_lookback_years": "How far back the onboarding extractor looks through role history.",
+        "title_extraction_min_months": "Minimum role duration before a role title can count as a target-title signal.",
+        "max_target_patterns": "Maximum primary target title patterns kept from onboarding.",
+        "max_secondary_patterns": "Maximum secondary/also-consider title patterns kept from onboarding.",
+        "capability_recent_years": "How many years count as recent capability use.",
+        "capability_strong_max_years_since_use": "Maximum years since last use for a capability to remain strong.",
+        "capability_strong_min_months": "Minimum experience duration required for strong capability classification.",
+        "capability_working_max_years_since_use": "Maximum years since last use for a capability to remain working-level.",
+        "capability_working_min_months": "Minimum experience duration required for working capability classification.",
+        "capability_working_long_history_max_years_since_use": "Older-use allowance for capabilities with long history.",
+        "capability_working_long_history_min_months": "Minimum total duration required for older capabilities to remain working-level.",
+        "capability_drop_to_basic_after_years": "After this many years without use, a capability is downgraded to basic.",
+        "capability_max_items": "Maximum capability rules kept in the generated profile.",
+        "capability_alias_limit": "Maximum aliases kept per capability rule.",
+        "cv_max_pages": "Maximum number of pages read from an uploaded CV during onboarding.",
+        "signal_cluster_min_alias_hits": "Minimum alias hits required before a learned signal cluster is kept.",
+        "signal_cluster_min_snippet_hits": "Minimum separate snippets required before a learned signal cluster is kept.",
+        "signal_cluster_dense_snippet_alias_hits": "Dense alias-hit threshold that can keep a cluster even when snippet count is lower.",
+        "capability_strength_preset": "Selected preset used to populate capability-strength thresholds.",
+        "capability_strength_presets": "Named presets for capability recency and strength classification."
+      }
+    },
+    "llm_settings": {
+      "description": "Controls model choices, pricing, prompt budgets, and LLM runtime limits.",
+      "fields": {
+        "model": "Default/current LLM model selection.",
+        "model_options": "Models allowed in the runtime LLM selector.",
+        "pricing_per_1m": "Input/output token pricing used for local cost logging.",
+        "max_llm_chars_limits": "Validation bounds for max_llm_chars.",
+        "max_llm_chars": "Maximum job text kept for LLM review cache keys and prompt construction.",
+        "llm_prompt_settings": "Nested prompt budgets, item caps, and prompt templates used by LLM review/extraction calls."
+      }
+    },
+    "llm_settings.llm_prompt_settings": {
+      "description": "Fine-grained limits for LLM prompts and structured outputs. These protect cost, prevent oversized prompts, and reduce malformed JSON risk.",
+      "fields": {
+        "match_preference_templates": "Template text injected into fit-review prompts for salary, location, and preference guidance.",
+        "evidence_tiers": "Profile evidence sections sent to the LLM, with labels, weights, and character limits.",
+        "fit_decision_max_output_tokens": "Output-token budget for full fit-review calls. Must be high enough for decision, grade, contextual matches, learning candidates, and job requirements.",
+        "learning_candidates_max_output_tokens": "Output-token budget for learning-candidate-only calls.",
+        "job_requirements_max_output_tokens": "Output-token budget for extracting job requirements from an ad.",
+        "rejection_blocker_suggestions_max_output_tokens": "Output-token budget for suggesting blocker terms after rejection feedback.",
+        "capability_naming_max_output_tokens": "Output-token budget for naming capability clusters.",
+        "profile_extraction_max_output_tokens": "Output-token budget for extracting profile signals from onboarding/CV material.",
+        "job_description_max_chars": "Maximum job-description characters sent to job-requirement extraction.",
+        "cv_evidence_json_chars": "Maximum structured CV evidence characters sent to profile extraction.",
+        "cv_fallback_chars": "Fallback CV text budget when structured evidence is unavailable or insufficient.",
+        "profile_brief_max_chars": "Maximum candidate profile brief characters sent to fit-review prompts.",
+        "capability_rules_max_items": "Maximum capability rules included in LLM fit-review prompts.",
+        "capability_rule_aliases_max_items": "Maximum aliases shown per capability rule in LLM fit-review prompts.",
+        "fit_guidance_max_chars": "Maximum managed fit-review guidance characters included in prompts.",
+        "capability_naming_guidance_max_chars": "Maximum managed capability-naming guidance characters included in prompts.",
+        "capability_naming_aliases_max_items": "Maximum aliases included when naming capability clusters.",
+        "raw_output_log_max_chars": "Maximum raw LLM output characters retained in logs when parsing fails.",
+        "contextual_matches_max_items": "Maximum contextual capability matches requested from the LLM.",
+        "job_requirements_max_items": "Maximum extracted job requirements kept per job.",
+        "learning_candidates_max_items": "Maximum learning candidates requested/kept per LLM call.",
+        "rejection_blocker_suggestions_max_items": "Maximum rejection-blocker suggestions returned to the user.",
+        "rejection_blocker_suggestions_max_words": "Maximum words allowed per rejection-blocker suggestion."
+      }
+    },
+    "review_settings": {
+      "description": "Controls review-insight generation and rule/capability suggestion thresholds.",
+      "fields": {
+        "max_examples_per_skill": "Maximum examples shown per repeated skill or capability insight.",
+        "max_samples_per_rejection": "Maximum sample rejected jobs inspected per rejection pattern.",
+        "capability_suggestion_min_count": "Minimum repeated evidence count before suggesting a capability tuning item.",
+        "capability_working_min_count": "Minimum repeated evidence count before suggesting a capability should be treated as working-level.",
+        "title_not_target_min_count": "Minimum count before suggesting a title pattern is probably not a target.",
+        "rule_suggestion_min_count": "Minimum repeated evidence count before suggesting a rule/blocker."
+      }
+    },
+    "playwright_settings": {
+      "description": "Browser runtime settings used by source connectors.",
+      "fields": {
+        "playwright_viewport_width": "Browser viewport width used during scraping.",
+        "playwright_viewport_height": "Browser viewport height used during scraping.",
+        "playwright_selector_timeout": "Selector wait timeout in milliseconds before a browser interaction fails.",
+        "playwright_browser_mode": "Browser lifecycle mode. Ephemeral means the browser session is temporary."
+      }
+    },
+    "candidate_application_history": {
+      "description": "Settings for importing or reading candidate application/rejection history.",
+      "fields": {
+        "enabled": "Whether candidate application history is enabled.",
+        "source_type": "Where application history is read from.",
+        "spreadsheet_id": "Spreadsheet identifier used when the configured source is a spreadsheet.",
+        "tab_name": "Worksheet/tab name containing application history.",
+        "required_headers": "Headers required in the application history source.",
+        "content_max_chars": "Maximum message/content characters read from each application history record."
+      }
+    }
+  }
+}

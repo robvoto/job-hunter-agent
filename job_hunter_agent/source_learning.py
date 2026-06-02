@@ -434,7 +434,15 @@ def resolve_llm_review_payload(
 
     max_llm_chars = get_llm_max_chars()
 
-    llm_fp = build_llm_cache_key(llm_input_text[:max_llm_chars])
+    description_chars_fetched = len(str(body_text).strip())
+
+    truncated_input = llm_input_text[:max_llm_chars]
+
+    description_chars_sent = len(truncated_input)
+
+    truncation_applied = len(llm_input_text) > max_llm_chars
+
+    llm_fp = build_llm_cache_key(truncated_input)
 
     cached = normalize_llm_review_payload(llm_cache.get(llm_fp)) if llm_fp in llm_cache else None
 
@@ -475,14 +483,23 @@ def resolve_llm_review_payload(
 
 
     logger.info(
-        "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=MISS input_chars=%d",
+        "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=MISS"
+        " description_chars_fetched=%d description_chars_sent_to_llm=%d truncation_applied=%s",
         source,
         job_key,
         title,
         company,
         call_type,
-        len(llm_input_text[:max_llm_chars]),
+        description_chars_fetched,
+        description_chars_sent,
+        str(truncation_applied).lower(),
     )
+    if truncation_applied:
+        logger.warning(
+            "[REVIEW][TRUNCATION] source=%s job_key=%s truncated %d → %d chars (limit=%d)",
+            source, job_key,
+            len(llm_input_text), description_chars_sent, max_llm_chars,
+        )
 
 
 
@@ -492,7 +509,7 @@ def resolve_llm_review_payload(
 
             "fit_review": None,
 
-            "learning_candidates": llm_should_consider_learning_candidates(llm_input_text[:max_llm_chars]),
+            "learning_candidates": llm_should_consider_learning_candidates(truncated_input),
 
             "job_requirements": [],
 
@@ -500,7 +517,7 @@ def resolve_llm_review_payload(
 
     else:
 
-        payload = llm_should_consider_with_learning(llm_input_text[:max_llm_chars])
+        payload = llm_should_consider_with_learning(truncated_input)
 
 
 

@@ -147,6 +147,7 @@ KEY_PRIMARY_PATTERNS = "target_roles"
 KEY_SECONDARY_PATTERNS = "also_consider_roles"
 KEY_TARGET_OCCUPATION_QUERIES = "target_occupation_queries"
 KEY_LLM_GRADE_POINTS = "llm_grade_points"
+KEY_LLM_GRADE_BANDS = "llm_grade_bands"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 MATCHING_RULE_PROFILE_KEYS = frozenset({
@@ -560,10 +561,10 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         merged["match_preferences"]["home_location"] = primary_search_location
     # Migrate legacy field name from capability_profile_rules → candidate_capabilities.
     # Runs transparently on every load; committed on next save.
-    if "candidate_capabilities" in merged:
+    if "capability_profile_rules" in merged:
         if KEY_CANDIDATE_CAPABILITIES not in merged or not merged[KEY_CANDIDATE_CAPABILITIES]:
-            merged[KEY_CANDIDATE_CAPABILITIES] = merged["candidate_capabilities"]
-        del merged["candidate_capabilities"]
+            merged[KEY_CANDIDATE_CAPABILITIES] = merged["capability_profile_rules"]
+        del merged["capability_profile_rules"]
     merged[KEY_CANDIDATE_CAPABILITIES] = normalize_capability_rules(
         merged.get(KEY_CANDIDATE_CAPABILITIES, []),
         merged.get("onboarding_settings", {}),
@@ -574,6 +575,9 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     merged[KEY_PRIMARY_PATTERNS] = primary_titles
     merged[KEY_SECONDARY_PATTERNS] = secondary_titles
+    merged[KEY_TARGET_OCCUPATION_QUERIES] = normalize_multiline_string_list(
+        merged.get(KEY_TARGET_OCCUPATION_QUERIES, [])
+    )
     merged["must_not_require_skills"] = normalize_multiline_string_list(
         merged.get("must_not_require_skills", [])
     )
@@ -782,8 +786,13 @@ def normalize_preference_weights(payload: dict[str, Any] | None) -> dict[str, fl
 
 
 def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
+    # Always load fresh from the DB so schema additions in scoring_rules.json take effect
+    # on the next request after db_seed --upgrade, without requiring a process restart.
+    # (DEFAULT_SCORING_RULES is frozen at import time; that is too early for sections
+    # added after the first DB upgrade runs.)
+    live_default = _load_default_scoring_rules()
     source = payload if isinstance(payload, dict) else {}
-    normalized = copy.deepcopy(DEFAULT_SCORING_RULES)
+    normalized = copy.deepcopy(live_default)
 
     def _merge(default_value: Any, incoming_value: Any) -> Any:
         if isinstance(default_value, dict):
@@ -797,12 +806,16 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
                 return list(default_value)
             return [str(item).strip().upper() for item in incoming_value if str(item).strip()]
         if isinstance(default_value, int) and not isinstance(default_value, bool):
+            if incoming_value is None or incoming_value == "":
+                return int(default_value)
             try:
                 return int(incoming_value)
             except Exception as exc:
                 print(f"[PROFILE_STORE][WARN] Failed to merge int value: {exc}")
                 return int(default_value)
         if isinstance(default_value, float):
+            if incoming_value is None or incoming_value == "":
+                return float(default_value)
             try:
                 return float(incoming_value)
             except Exception as exc:
@@ -810,8 +823,15 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
                 return float(default_value)
         return copy.deepcopy(default_value if incoming_value in (None, "") else incoming_value)
 
-    for key, default_value in DEFAULT_SCORING_RULES.items():
+    for key, default_value in live_default.items():
         normalized[key] = _merge(default_value, source.get(key))
+    # Preserve dict sections from source that the live default does not yet know about.
+    # This ensures new sections (e.g. llm_grade_bands) from scoring_rules.json are available
+    # to feature code even if the DB version lags behind the file (e.g. between restarts).
+    _METADATA_KEYS = frozenset({"kind", "name", "version", "updated_at", "description", "calibration_notes"})
+    for key, value in source.items():
+        if key not in normalized and key not in _METADATA_KEYS and isinstance(value, dict):
+            normalized[key] = copy.deepcopy(value)
     return normalized
 
 

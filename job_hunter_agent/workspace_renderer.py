@@ -847,14 +847,14 @@ def render_job_card(
     if reviewed_signal_matches["matched"]:
         insight_sections.append(
             '<div class="job-insight-group">'
-            '<strong>Related terms</strong>'
+            '<strong>Matched profile evidence</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["matched"])}</ul>'
             '</div>'
         )
     if active_debug_mode and reviewed_signal_matches["unresolved"]:
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
-            '<strong>Terms needing review</strong>'
+            '<strong>Unclassified details</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["unresolved"])}</ul>'
             '</div>'
         )
@@ -1050,6 +1050,14 @@ def render_job_card(
             '</div>'
         )
     if active_debug_mode:
+        debug_negative_reasons = negative_score_reasons(score_breakdown)
+        if debug_negative_reasons:
+            insight_sections.append(
+                '<div class="job-insight-group job-insight-warning">'
+                '<strong>Debug: negative score penalties</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in debug_negative_reasons)}</ul>'
+                '</div>'
+            )
         gap_reasons = score_gap_reasons(display_record, score_breakdown)
         if gap_reasons:
             insight_sections.append(

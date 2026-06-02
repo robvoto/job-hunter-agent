@@ -40,7 +40,7 @@ Primary modules:
   | `signals.py`         | `GET/PATCH /api/signal-registry`                                                                            |
   | `review.py`          | `GET /api/rejection-suggestions` · `POST /api/tuning-decisions` `/api/skill-decisions` `/api/rule/phrase` `/api/rejection-feedback/mandatory-blockers` `/api/rejection-rules` `/api/title-block-preview` `/api/review` · `DELETE /api/rule/title-block` |
   | `onboarding_api.py`  | `POST /api/onboarding/import` `/api/onboarding/confirm-profile-signals`                                     |
-  | `scrape_debug.py`    | `POST /api/test/reset-user` `/api/test/reset-learning` `/api/debug/browser-log` `/api/run`                  |
+  | `scrape_debug.py`    | `POST /api/test/reset-user` `/api/debug/browser-log` `/api/run`                                             |
   | `static_docs.py`     | `GET /static/{path}` `/data/{path}` `/docs` `/api/docs`                                                     |
 
 Server logging:

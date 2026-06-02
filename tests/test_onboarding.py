@@ -68,6 +68,8 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'Search Basics' in html
     assert 'Check Setup' in html
     assert '0 shown' in html
+    assert 'id="review_capability_helper"' in html
+    assert 'review-capability-filter-shell' in html
     assert 'window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__' in html
     assert 'window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__' in html
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
@@ -99,6 +101,53 @@ def test_onboarding_template_uses_shared_primary_cv_copy_placeholders():
     assert "__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_HINT__" in html_text
 
 
+def test_onboarding_flow_labels_include_capability_review_copy():
+    labels = server_helpers.load_onboarding_flow_labels()
+
+    assert labels["review_capability_helper_copy"] == "Review the capability groups extracted from your CV."
+    assert labels["review_capability_extracted_skills_label_one"] == "1 extracted skill"
+    assert labels["review_capability_extracted_skills_label_many"] == "{count} extracted skills"
+
+
+def test_shared_ui_styles_are_centralised():
+    repo_root = Path(__file__).resolve().parents[1]
+    theme_primitives = (repo_root / "templates" / "static" / "theme" / "themes.primitives.css").read_text(encoding="utf-8")
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+    onboarding_page_css = (repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css").read_text(encoding="utf-8")
+    onboarding_review_css = (repo_root / "templates" / "static" / "onboarding" / "onboarding-review.css").read_text(encoding="utf-8")
+    settings_page_css = (repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.css").read_text(encoding="utf-8")
+    onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
+    settings_admin_html = (repo_root / "templates" / "partials" / "settings" / "global" / "settings-admin.html").read_text(encoding="utf-8")
+    settings_learning_html = (repo_root / "templates" / "partials" / "settings" / "global" / "settings-learning.html").read_text(encoding="utf-8")
+
+    assert ".page input," in theme_primitives
+    assert ".currency-input-wrap input," in theme_primitives
+    assert ".summary-line {" in theme_widgets
+    assert ".help {" in theme_widgets
+    assert 'class="summary-line"' in onboarding_html
+    assert 'class="summary-line"' in (repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html").read_text(encoding="utf-8")
+    assert 'class="help"' in onboarding_html
+    assert 'class="help"' in settings_admin_html
+    assert 'class="help"' in settings_learning_html
+    assert ".page input," not in onboarding_page_css
+    assert ".help {" not in onboarding_page_css
+    assert ".currency-input-wrap input" not in onboarding_review_css
+    assert ".help {" not in settings_page_css
+    assert ".currency-input-wrap input" not in settings_page_css
+
+
+def test_onboarding_contract_duration_row_floats_and_hides_on_blur():
+    css_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-page.css"
+    js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-storage.js"
+    css_text = css_path.read_text(encoding="utf-8")
+    js_text = js_path.read_text(encoding="utf-8")
+
+    assert ".onb-field .contract-duration-row" in css_text
+    assert "position: absolute;" in css_text
+    assert "minContractMonthsEl.addEventListener('blur'" in js_text
+    assert "contractRow.hidden = true;" in js_text
+
+
 def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_output():
     js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-flow.js"
     js_text = js_path.read_text(encoding="utf-8")
@@ -115,7 +164,7 @@ def test_onboarding_flow_uses_profile_readiness_status_fields():
 
     assert "profile_ready_for_review" in js_text
     assert "blocking_reason" in js_text
-    assert "confirmReview.disabled" in js_text
+    assert "aria-disabled" in js_text
 
 
 def test_api_profile_status_reports_readiness(monkeypatch):
@@ -249,7 +298,9 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
     assert captured["patch"]["match_preferences"]["work_mode_preference"] == ["remote", "hybrid"]
 
 
-def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
+def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path):
+    import logging as _logging
+    caplog.set_level(_logging.INFO)
     fixture = {
         "capabilities": [
             {"name": "business analysis", "level": "strong", "aliases": [], "needs_review": False},
@@ -279,14 +330,17 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, tmp_path):
         },
     )
 
+    import logging as _logging
     output = capsys.readouterr().out
+    log_text = caplog.text
+    combined = output + log_text
     assert result["ok"] is True
-    assert "[ONBOARDING] Extraction input" in output
-    assert "chars read" in output
-    assert "approx pages" in output
-    assert "[ONBOARDING] CV source read" in output
-    assert "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction" in output
-    assert "occupation_query_count=1" in output
+    assert "[ONBOARDING] Extraction input" in combined
+    assert "chars read" in combined
+    assert "approx pages" in combined
+    assert "[ONBOARDING] CV source read" in combined
+    assert "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction" in combined
+    assert "occupation_query_count=1" in combined
 
 
 def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_selected(monkeypatch):
@@ -533,6 +587,24 @@ def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
     assert normalized["also_consider_roles"] == ["scrum master"]
 
 
+def test_normalize_full_profile_preserves_clean_target_occupation_queries():
+    normalized = profile_store.normalize_full_profile(
+        {
+            "target_occupation_queries": [
+                "  Software Engineer  ",
+                "software engineer",
+                "DevOps Engineer\nCloud Engineer",
+            ]
+        }
+    )
+
+    assert normalized["target_occupation_queries"] == [
+        "Software Engineer",
+        "DevOps Engineer",
+        "Cloud Engineer",
+    ]
+
+
 def test_normalize_full_profile_mirrors_primary_search_location_into_match_preferences():
     normalized = profile_store.normalize_full_profile(
         {
@@ -548,6 +620,33 @@ def test_normalize_full_profile_mirrors_primary_search_location_into_match_prefe
     assert normalized["search_settings"]["locations"] == ["Sydney"]
     assert normalized["match_preferences"]["home_location"] == "Sydney"
     assert normalized["match_preferences"]["secondary_location"] == "Melbourne"
+
+
+def test_normalize_full_profile_preserves_candidate_capabilities():
+    """normalize_full_profile must not wipe candidate_capabilities.
+
+    Regression test: commit 44c591f introduced a migration block that checked
+    "candidate_capabilities" (the current key) instead of "capability_profile_rules"
+    (the legacy key), causing capabilities to be deleted on every profile load/save.
+    """
+    caps = [
+        {"name": "financial reporting", "level": "proficient", "aliases": []},
+        {"name": "accounts payable & receivable", "level": "working", "aliases": ["AP", "AR"]},
+    ]
+    normalized = profile_store.normalize_full_profile({"candidate_capabilities": caps})
+    result_names = [r["name"] for r in normalized["candidate_capabilities"]]
+    assert "financial reporting" in result_names
+    assert "accounts payable & receivable" in result_names
+    assert len(normalized["candidate_capabilities"]) == 2
+
+
+def test_normalize_full_profile_migrates_legacy_capability_profile_rules_key():
+    """Legacy key capability_profile_rules must be migrated to candidate_capabilities."""
+    caps = [{"name": "stakeholder engagement", "level": "proficient", "aliases": []}]
+    normalized = profile_store.normalize_full_profile({"capability_profile_rules": caps})
+    assert len(normalized["candidate_capabilities"]) == 1
+    assert normalized["candidate_capabilities"][0]["name"] == "stakeholder engagement"
+    assert "capability_profile_rules" not in normalized
 
 
 def test_user_settings_schedule_payload_is_sanitized_and_exposed():

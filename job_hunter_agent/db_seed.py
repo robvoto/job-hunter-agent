@@ -48,7 +48,8 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
         print(f"  {len(updated)} signal config entries updated: {updated or '(none - all current)'}")
 
         print(f"Seeding global settings from {global_settings_path} ...")
-        written = seed_global_settings_from_file(overwrite=overwrite)
+        # Global settings has no per-entry user approvals, so upgrade always overwrites.
+        written = seed_global_settings_from_file(overwrite=True)
         print(f"  {'updated' if written else 'already present'}")
     else:
         print(f"Seeding knowledge from {knowledge_dir} ...")

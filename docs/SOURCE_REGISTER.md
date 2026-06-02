@@ -160,3 +160,27 @@ Design decision:
 
 Limit:
 - Do not rely on permissive wildcard CORS in production.
+
+## LLM provider pricing
+
+Sources:
+- OpenAI API pricing: https://openai.com/api/pricing/
+- OpenAI GPT-4o mini pricing announcement: https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/
+- OpenAI current pricing docs: https://developers.openai.com/api/docs/pricing
+- Anthropic Claude API pricing: https://platform.claude.com/docs/en/about-claude/pricing
+- xAI model pricing: https://docs.x.ai/developers/models
+
+Used for:
+- Estimating LLM call cost from real provider token usage.
+- Maintaining model price entries in `data/config/global_settings.json` under `llm_settings.pricing_per_1m`.
+- Showing that displayed cost is an estimate, not the provider billing ledger.
+
+Design decision:
+- Token usage comes from provider responses.
+- Cost is calculated locally from configured provider/model pricing.
+- Pricing metadata must record source URLs, currency, unit, verification date, and stale-after period.
+- Missing pricing for a selected model must fail visibly; do not fallback to another model price.
+
+Limit:
+- Provider pricing pages can change.
+- Do not silently auto-update pricing unless a stable provider pricing API is available and tested.

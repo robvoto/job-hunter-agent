@@ -1,9 +1,24 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 4,
-  "updated_at": "2026-05-19",
+  "version": 6,
+  "updated_at": "2026-06-02",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
+  "calibration_notes": {
+    "design": "Band-anchored scoring. The LLM grade defines the band (floor/ceiling); other signals adjust the score within that band. Grade and score cannot contradict — a MISMATCH grade always produces a low score; a STRONG grade always produces a good score.",
+    "llm_grade_base_points": "Base additive contribution from the LLM grade before other signals are added. These are intentionally modest — the band floor and ceiling constrain the final score, not the base alone.",
+    "llm_grade_bands": "Each grade has a floor (minimum attainable) and ceiling (maximum attainable) for the non-hard-block score. After summing all core/preference/convenience entries the result is clamped to the band. Hard block penalties are applied after band clamping and can push the score to zero regardless of grade.",
+    "other_signals": "Title match, capability evidence, preferences, freshness, and competitive signals move the score within the grade band. A STRONG grade with clean title + capability evidence reaches the upper end of the band; the same grade with no supporting signals floors at the grade minimum.",
+    "hard_blockers": "Applied after band clamping. A single hard blocker subtracts 100, overriding the grade band and forcing the score to near-zero.",
+    "band_boundaries": {
+      "EXCELLENT": "88-100 — reserved for exceptional alignment across all signals",
+      "STRONG": "68-87 — strong fit confirmed by LLM; other signals calibrate within this range",
+      "SOLID": "48-67 — decent fit; moderate evidence",
+      "WEAK": "28-47 — limited alignment",
+      "POOR": "8-27 — poor alignment",
+      "MISMATCH": "0-7 — explicit mismatch; capped near-zero regardless of other signals"
+    }
+  },
   "fit_breakdown": {
     "description": "Core score components for title fit, content fit, review status, and hard-block penalties. Internal scoring logic.",
     "hard_block_penalty": -100,
@@ -14,13 +29,22 @@
     "viewed_by_user": -3
   },
   "llm_grade_points": {
-    "description": "Point values assigned to AI fit grades before the final score is assembled. Internal scoring logic.",
-    "EXCELLENT": 25,
-    "STRONG": 20,
-    "SOLID": 14,
-    "WEAK": 6,
-    "POOR": 0,
-    "MISMATCH": -8
+    "description": "Base additive points for each LLM grade. These anchor the score in the correct band but are intentionally modest — supporting signals from title, capability evidence, and preferences move the score within the band defined by llm_grade_bands.",
+    "EXCELLENT": 78,
+    "STRONG": 52,
+    "SOLID": 32,
+    "WEAK": 18,
+    "POOR": 6,
+    "MISMATCH": 0
+  },
+  "llm_grade_bands": {
+    "description": "Floor and ceiling for the non-hard-block score per LLM grade. The score is clamped to this range before hard block penalties are applied. A band adjustment entry is added to the breakdown when clamping occurs.",
+    "EXCELLENT": {"floor": 88, "ceiling": 100},
+    "STRONG":    {"floor": 68, "ceiling": 87},
+    "SOLID":     {"floor": 48, "ceiling": 67},
+    "WEAK":      {"floor": 28, "ceiling": 47},
+    "POOR":      {"floor": 8,  "ceiling": 27},
+    "MISMATCH":  {"floor": 0,  "ceiling": 7}
   },
   "capability_level_weights": {
     "description": "Weights for capability evidence strength bands. Managed scoring defaults, not free-form user input.",

@@ -278,12 +278,6 @@
       border-color: var(--accent);
     }
     textarea { min-height: 120px; resize: vertical; }
-    .help {
-      margin-top: 6px;
-      color: var(--text-muted);
-      font-size: var(--help-copy-font-size);
-      line-height: var(--help-copy-line-height);
-    }
     .actions {
       display: flex;
       gap: var(--surface-gap-sm);
@@ -1478,13 +1472,6 @@
         justify-content: flex-start;
       }
     }
-
-/* Keep currency values clear of the visual currency prefix on settings forms. */
-.currency-input-wrap input,
-.currency-input-wrap input[type='text'] {
-  padding-left: 52px !important;
-}
-
 
 /* Sidebar density tuning */
 .settings-sidebar .nav-item {

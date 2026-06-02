@@ -13,13 +13,30 @@
     "casual": "Casual",
     "contract/temp": "Contract/Temp",
     "casual/vacation": "Casual/Vacation",
-    "ftc": "ftc"
+    "ftc": "Full Time Contract",
+    "fixedterm": "Full Time Contract",
+    "fixed-term": "Full Time Contract",
+    "fixed term": "Full Time Contract",
+    "permanent": "Permanent",
+    "fulltimecontract": "Full Time Contract",
+    "full-timecontract": "Full Time Contract",
+    "full time contract": "Full Time Contract",
+    "fulltime/contract": "Full Time Contract",
+    "full-time/contract": "Full Time Contract",
+    "full time/contract": "Full Time Contract"
   },
   "filter_groups": [
     {
-      "label": "Full time",
+      "label": "Permanent",
       "values": [
+        "Permanent",
         "Full time"
+      ]
+    },
+    {
+      "label": "Full Time Contract",
+      "values": [
+        "Full Time Contract"
       ]
     },
     {
@@ -32,15 +49,53 @@
       "label": "Contract / Temp",
       "values": [
         "Contract",
-        "Temporary"
+        "Temporary",
+        "Contract/Temp"
       ]
     },
     {
       "label": "Casual",
       "values": [
         "Casual",
-        "Internship"
+        "Internship",
+        "Casual/Vacation"
       ]
     }
-  ]
+  ],
+  "work_type_inference": {
+    "description": "Rules for inferring a refined work type from the job description after it has been fetched. Applied only when the description is available. Never applied pre-description.",
+    "rules": [
+      {
+        "id": "full_time_to_permanent_or_contract",
+        "enabled": true,
+        "trigger_work_types": ["Full time"],
+        "no_signal_infers": "Permanent",
+        "contract_signal_infers": "Full Time Contract",
+        "contract_signal_keywords": [
+          "contract role",
+          "contract position",
+          "contract opportunity",
+          "contract engagement",
+          "fixed term",
+          "fixed-term",
+          "ftc",
+          "term contract",
+          "contract period",
+          "contract basis",
+          "on a contract",
+          "initial contract",
+          "12 month contract",
+          "6 month contract",
+          "3 month contract",
+          "18 month contract",
+          "24 month contract",
+          "12-month contract",
+          "6-month contract",
+          "3-month contract",
+          "18-month contract",
+          "24-month contract"
+        ]
+      }
+    ]
+  }
 }

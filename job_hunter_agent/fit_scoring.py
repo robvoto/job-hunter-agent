@@ -26,6 +26,7 @@ from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_LEVEL_WEIGHTS,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CONVERGENCE,
+    KEY_LLM_GRADE_BANDS,
     KEY_LLM_GRADE_POINTS,
     CapabilityLevel,
     VALID_CAPABILITY_RULE_LEVELS,
@@ -159,7 +160,12 @@ def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> t
 
         if confidence not in levels_with_credit:
             logger.info(
-                "[CAPABILITY_SCORING][BELOW_THRESHOLD] capability=%r confidence=%r matched_text=%r reason=%r job=%s",
+                "[CAPABILITY_SCORING][BELOW_THRESHOLD]\n"
+                "  capability  %s\n"
+                "  confidence  %s\n"
+                "  matched     %s\n"
+                "  reason      %s\n"
+                "  job         %s",
                 cap_name, confidence, matched_text, reason, record.get("job_key", "<unknown>"),
             )
             continue
@@ -295,18 +301,20 @@ def build_core_fit_breakdown(
         entries.append({
             "label": title_match_labels["primary_match"],
             "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"]),
+            "section": "title",
         })
     elif title_family == "secondary" or (not title_family and title_reason == TITLE_REASON_POTENTIAL_MATCH):
         entries.append({
             "label": title_match_labels["secondary_match"],
             "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"]),
+            "section": "title",
         })
     llm_entry = llm_description_fit_entry(record, active_profile)
-    entries.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"])})
+    entries.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"]), "section": "llm_fit"})
     if content_reason == "OK":
-        entries.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"])})
+        entries.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"]), "section": "content"})
     if full_description_confidence(record) == "LOW":
-        entries.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"])})
+        entries.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"]), "section": "content"})
     for m in scored_matches:
         points = int(m.get("points") or 0)
         if not points:
@@ -316,7 +324,10 @@ def build_core_fit_breakdown(
         entries.append({
             "label": f"{m['label']} {label_tag}",
             "value": weighted_points(points, weights["fit"]),
+            "section": "capability",
         })
+    if not scored_matches:
+        entries.append({"label": "No capability matches found", "value": 0, "section": "capability"})
     capability_matches = {}
     for m in scored_matches:
         capability_matches.setdefault(m["level"], [])
@@ -326,9 +337,10 @@ def build_core_fit_breakdown(
         entries.append({
             "label": convergence_entry["label"],
             "value": weighted_points(int(convergence_entry["value"]), weights["fit"]),
+            "section": "capability",
         })
     for item in competitive_signal_breakdown(record, active_profile):
-        entries.append({"label": item["label"], "value": weighted_points(int(item["value"]), weights["fit"])})
+        entries.append({"label": item["label"], "value": weighted_points(int(item["value"]), weights["fit"]), "section": "other"})
     return entries
 
 
@@ -339,24 +351,36 @@ def build_preference_breakdown(record: dict, scoring_rules: dict, weights: dict,
         entries.append({
             "label": location_item["label"],
             "value": weighted_points(int(location_item["value"]), weights["location"]),
+            "section": "location",
         })
+    else:
+        entries.append({"label": "Location: no preference set", "value": 0, "section": "location"})
     contract_item = assess_contract_preference(record, active_profile)
     if contract_item:
         entries.append({
             "label": contract_item["label"],
             "value": weighted_points(int(contract_item["value"]), weights["contract"]),
+            "section": "work_type",
         })
+    else:
+        entries.append({"label": "Work type: no preference set", "value": 0, "section": "work_type"})
     work_mode_item = assess_work_mode_preference(record, active_profile)
     if work_mode_item:
         entries.append({
             "label": work_mode_item["label"],
             "value": weighted_points(int(work_mode_item["value"]), weights["work_mode"]),
+            "section": "work_mode",
         })
+    else:
+        entries.append({"label": "Work mode: no preference set", "value": 0, "section": "work_mode"})
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
-        entries.append({"label": "Salary/rate signal", "value": salary_score})
+        entries.append({"label": "Salary/rate signal", "value": salary_score, "section": "salary"})
     elif salary_score < 0:
-        entries.append({"label": "Salary/rate below target", "value": salary_score})
+        entries.append({"label": "Salary/rate below target", "value": salary_score, "section": "salary"})
+    else:
+        no_salary_label = load_ui_labels().get("score_gap_labels", {}).get("no_comparable_salary_rate", "No salary info found")
+        entries.append({"label": no_salary_label, "value": 0, "section": "salary"})
     return entries
 
 
@@ -380,6 +404,7 @@ def build_freshness_breakdown(scoring_rules: dict, weights: dict, posted_age_day
             entries.append({
                 "label": str(bucket["label"]),
                 "value": weighted_points(int(freshness_rules[lookup_key]), weights["freshness"]),
+                "section": "freshness",
             })
             break
     return entries
@@ -395,9 +420,28 @@ def build_convenience_breakdown(record: dict, scoring_rules: dict, weights: dict
 
 def build_risk_breakdown(scoring_rules: dict, hard_block_labels: List[str]) -> List[dict]:
     return [
-        {"label": f"Hard blocker requirement mismatch: {label}", "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"])}
+        {"label": f"Hard blocker requirement mismatch: {label}", "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"]), "section": "risk"}
         for label in hard_block_labels
     ]
+
+
+def _grade_band_adjustment(grade: str, raw: int, bands: dict) -> Optional[dict]:
+    """Return a transparent breakdown entry when band clamping applies, or None.
+
+    Ceiling cap: score exceeds the grade's maximum — entry value is negative.
+    Floor lift:  score falls below the grade's minimum — entry value is positive.
+    Hard block entries are excluded from `raw` so they cannot trigger the floor.
+    """
+    band = bands.get(grade)
+    if not isinstance(band, dict):
+        return None
+    floor = int(band.get("floor") or 0)
+    ceiling = int(band.get("ceiling") or 100)
+    if raw > ceiling:
+        return {"label": f"Grade band ceiling ({grade} ≤ {ceiling})", "value": ceiling - raw}
+    if raw < floor:
+        return {"label": f"Grade band floor ({grade} ≥ {floor})", "value": floor - raw}
+    return None
 
 
 def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -423,12 +467,23 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
     title_family = str(title_metadata.get("match_family") or "").strip().lower()
 
-    return (
+    # Build non-hard-block entries first so the band clamp does not interact with hard block penalties.
+    non_hard_block = (
         build_core_fit_breakdown(record, scoring_rules, weights, scored_matches, title_family, title_reason, content_reason, active_profile)
         + build_preference_breakdown(record, scoring_rules, weights, active_profile)
         + build_convenience_breakdown(record, scoring_rules, weights, posted_age_days)
-        + build_risk_breakdown(scoring_rules, hard_block_labels)
     )
+
+    # Apply grade band clamping: enforce floor and ceiling per LLM grade.
+    # Hard block penalties (-100 each) are applied after this step and override the floor.
+    grade = str(record.get("llm_fit_grade") or "").strip().upper()
+    grade_bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
+    raw_non_hard_block = sum(e["value"] for e in non_hard_block)
+    band_entry = _grade_band_adjustment(grade, raw_non_hard_block, grade_bands)
+    if band_entry is not None:
+        non_hard_block = non_hard_block + [band_entry]
+
+    return non_hard_block + build_risk_breakdown(scoring_rules, hard_block_labels)
 
 
 def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:

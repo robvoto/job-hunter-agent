@@ -4,11 +4,11 @@ Single public entry point:
     classify_title(title, profile, db_path=None) -> OccupationClassification
 
 Classification logic:
-- No exact normalized-title match in the index   → uncertain (reason: no_match)
-- Multiple distinct SOC codes under one title    → uncertain (reason: ambiguous)
-- Profile target roles yield no known SOC groups → uncertain (reason: no_profile_context)
-- Matched SOC major group is in target families  → near
-- Otherwise                                      → far
+- No exact normalized-title match in the index               → uncertain (reason: no_match)
+- Multiple distinct SOC codes under one title                → uncertain (reason: ambiguous)
+- Profile target occupation queries yield no known codes     → uncertain (reason: no_profile_context)
+- Matched occupation code is in target occupation code set   → near
+- Otherwise                                                  → far
 
 O*NET is reference data, not truth. This module never hard-rejects a job on its own.
 The caller decides whether to use the classification result for rejection.
@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -34,6 +35,22 @@ _INDEX_PATH = ONET_TAXONOMY_DIR / "onet_index.json"
 RESULT_NEAR = "near"
 RESULT_FAR = "far"
 RESULT_UNCERTAIN = "uncertain"
+LOOKUP_SOURCE_CACHE = "cache"
+LOOKUP_SOURCE_FRESH = "fresh"
+
+_RESULT_RESPONSE_LABELS = {
+    RESULT_NEAR: "in your target roles",
+    RESULT_FAR: "outside your target roles",
+    RESULT_UNCERTAIN: "uncertain",
+}
+_REASON_RESPONSE_LABELS = {
+    RESULT_NEAR: "matched a target occupation",
+    RESULT_FAR: "matched an occupation outside your target set",
+    "no_match": "no exact title match",
+    "ambiguous": "multiple occupation codes matched",
+    "no_profile_context": "profile has no target occupation queries",
+    "cached": "cached",
+}
 
 _CONFIDENCE_EXACT = 0.9
 _CONFIDENCE_AMBIGUOUS = 0.4
@@ -47,6 +64,7 @@ class OccupationClassification:
     matched_occupation_code: str | None
     confidence: float
     reason: str
+    lookup_source: str = LOOKUP_SOURCE_FRESH
 
 
 @lru_cache(maxsize=1)
@@ -62,31 +80,39 @@ def _load_index() -> dict[str, list[dict[str, str]]]:
 
 def _compute_profile_hash(profile: dict[str, Any]) -> str:
     relevant = {
-        "target_roles": sorted(profile.get("target_roles") or []),
-        "also_consider_roles": sorted(profile.get("also_consider_roles") or []),
+        "target_occupation_queries": sorted(_profile_target_occupation_queries(profile)),
     }
     canonical = json.dumps(relevant, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-def _derive_near_soc_major_groups(profile: dict[str, Any], index: dict[str, list[dict[str, str]]]) -> set[str]:
-    """Return SOC major-group codes (e.g. '13', '15') for the profile's target occupations.
+def _profile_target_occupation_queries(profile: dict[str, Any]) -> list[str]:
+    queries: list[str] = []
+    seen: set[str] = set()
+    for value in profile.get("target_occupation_queries") or []:
+        cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        queries.append(cleaned)
+    return queries
 
-    Source:
-      - target_roles + also_consider_roles from detected or user-confirmed title evidence.
 
-    O*NET is reference data only. It must not consume LLM-generated target occupation
-    queries from CV text, because that can invent target occupations.
-    """
-    roles = list(profile.get("target_roles") or []) + list(profile.get("also_consider_roles") or [])
-
-    groups: set[str] = set()
-    for role in roles:
-        for match in index.get(normalize_title(role)) or []:
+def _derive_target_occupation_codes(
+    target_occupation_queries: list[str],
+    index: dict[str, list[dict[str, str]]],
+) -> set[str]:
+    """Return exact O*NET occupation codes for the profile's target occupation queries."""
+    occupation_codes: set[str] = set()
+    for query in target_occupation_queries:
+        for match in index.get(normalize_title(query)) or []:
             code = match.get("occupation_code") or ""
-            if "-" in code:
-                groups.add(code.split("-")[0])
-    return groups
+            if code:
+                occupation_codes.add(code)
+    return occupation_codes
 
 
 def _cache_lookup(
@@ -112,6 +138,7 @@ def _cache_lookup(
         matched_occupation_code=row["matched_occupation_code"],
         confidence=row["confidence"],
         reason="cached",
+        lookup_source=LOOKUP_SOURCE_CACHE,
     )
 
 
@@ -143,18 +170,34 @@ def _cache_save(
 def _log_classification(
     title: str,
     normalized: str,
-    profile: dict[str, Any],
+    profile_target_occupation_queries: list[str],
+    derived_target_occupation_codes: list[str],
     result: OccupationClassification,
 ) -> None:
     from job_hunter_agent.logging_utils import format_log_block
     logger.info(format_log_block("PIPELINE][ONET_TITLE_CLASSIFY", {
+        "lookup_source": result.lookup_source,
         "title": title,
         "normalized_title": normalized,
+        "profile_target_occupation_queries": profile_target_occupation_queries,
+        "derived_target_occupation_codes": derived_target_occupation_codes,
         "result": result.result,
+        "response": format_onet_response(result),
         "matched_occupation_code": result.matched_occupation_code,
         "confidence": result.confidence,
         "reason": result.reason,
     }))
+
+
+def format_onet_response(result: OccupationClassification) -> str:
+    """Return a human-friendly summary of an O*NET title classification."""
+    response = _RESULT_RESPONSE_LABELS.get(result.result, result.result)
+    reason = _REASON_RESPONSE_LABELS.get(result.reason, result.reason)
+    if reason and reason != response:
+        response = f"{response} - {reason}"
+    if result.matched_occupation_code:
+        response = f"{response} ({result.matched_occupation_code})"
+    return response
 
 
 def classify_title(
@@ -168,13 +211,22 @@ def classify_title(
     _index is for testing only — pass a minimal dict to avoid loading onet_index.json.
     """
     normalized = normalize_title(title)
+    index = _index if _index is not None else _load_index()
+    profile_target_occupation_queries = _profile_target_occupation_queries(profile)
+    target_occupation_codes = _derive_target_occupation_codes(profile_target_occupation_queries, index)
     profile_hash = _compute_profile_hash(profile)
 
     cached = _cache_lookup(normalized, profile_hash, db_path)
     if cached is not None:
+        _log_classification(
+            title,
+            normalized,
+            profile_target_occupation_queries,
+            sorted(target_occupation_codes),
+            cached,
+        )
         return cached
 
-    index = _index if _index is not None else _load_index()
     matches = list(index.get(normalized) or [])
 
     if not matches:
@@ -185,7 +237,13 @@ def classify_title(
             reason="no_match",
         )
         _cache_save(normalized, profile_hash, result, db_path)
-        _log_classification(title, normalized, profile, result)
+        _log_classification(
+            title,
+            normalized,
+            profile_target_occupation_queries,
+            sorted(target_occupation_codes),
+            result,
+        )
         return result
 
     unique_codes = {m["occupation_code"] for m in matches if m.get("occupation_code")}
@@ -198,13 +256,18 @@ def classify_title(
             reason="ambiguous",
         )
         _cache_save(normalized, profile_hash, result, db_path)
-        _log_classification(title, normalized, profile, result)
+        _log_classification(
+            title,
+            normalized,
+            profile_target_occupation_queries,
+            sorted(target_occupation_codes),
+            result,
+        )
         return result
 
     occupation_code = next(iter(unique_codes))
-    near_groups = _derive_near_soc_major_groups(profile, index)
 
-    if not near_groups:
+    if not target_occupation_codes:
         result = OccupationClassification(
             result=RESULT_UNCERTAIN,
             matched_occupation_code=occupation_code,
@@ -212,11 +275,16 @@ def classify_title(
             reason="no_profile_context",
         )
         _cache_save(normalized, profile_hash, result, db_path)
-        _log_classification(title, normalized, profile, result)
+        _log_classification(
+            title,
+            normalized,
+            profile_target_occupation_queries,
+            sorted(target_occupation_codes),
+            result,
+        )
         return result
 
-    soc_major = occupation_code.split("-")[0] if "-" in occupation_code else ""
-    if soc_major and soc_major in near_groups:
+    if occupation_code in target_occupation_codes:
         result = OccupationClassification(
             result=RESULT_NEAR,
             matched_occupation_code=occupation_code,
@@ -232,5 +300,11 @@ def classify_title(
         )
 
     _cache_save(normalized, profile_hash, result, db_path)
-    _log_classification(title, normalized, profile, result)
+    _log_classification(
+        title,
+        normalized,
+        profile_target_occupation_queries,
+        sorted(target_occupation_codes),
+        result,
+    )
     return result

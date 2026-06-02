@@ -56,8 +56,7 @@ def test_workspace_page_bootstrap_includes_user_id(monkeypatch):
 
     assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
     assert 'id="job_hunter_account_test_trigger"' in html
-    assert '>Test</button>' in html
-    assert 'Reset learning' in html
+    assert '>Test</button>' in html 
     assert 'Reset Signals' not in html
 
 

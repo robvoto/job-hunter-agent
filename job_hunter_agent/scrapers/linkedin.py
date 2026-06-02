@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import List
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+logger = logging.getLogger(__name__)
 
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
@@ -19,6 +22,7 @@ from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_sourc
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
+    print_job_human_summary,
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
@@ -38,12 +42,17 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_text, log_work_mode_result
 from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
 
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
+from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
+import sys
+
+WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
 
 salary_rules = load_salary()
@@ -85,7 +94,7 @@ class LinkedInScraper(BaseJobScraper):
         )
         targets = self._build_search_targets(search_settings)
         if not targets:
-            print("[LinkedIn] no search targets configured; skipping")
+            logger.info("[LinkedIn] no search targets configured; skipping")
             return kept_records, audit_rows, skill_observations
 
         review_context = ReviewPipelineContext(
@@ -103,19 +112,22 @@ class LinkedInScraper(BaseJobScraper):
         total_targets = len(targets)
         for target_index, target in enumerate(targets, start=1):
             target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
-            print(
-                f"{target_tag} search_term={target['search_term'] or '(unset)'} | "
-                f"location={target['location'] or '(all)'} | "
-                f"results_wanted={target['results_wanted']}"
+            set_run_progress(f"LinkedIn search {target_index}/{total_targets}")
+            logger.info(
+                "%s search_term=%s | location=%s | results_wanted=%d",
+                target_tag,
+                target["search_term"] or "(unset)",
+                target["location"] or "(all)",
+                target["results_wanted"],
             )
             try:
                 rows = self._fetch_jobspy(target)
             except Exception as exc:
-                print(f"{target_tag} jobspy call failed: {type(exc).__name__}: {exc}")
+                logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                 continue
 
             if rows is None or len(rows) == 0:
-                print(f"{target_tag} no results")
+                logger.info("%s no results", target_tag)
                 continue
 
             if target.get("sort_newest_first"):
@@ -128,9 +140,12 @@ class LinkedInScraper(BaseJobScraper):
                 except Exception:
                     pass
 
-            print(f"{target_tag} rows={len(rows)}")
+            logger.info("%s rows=%d", target_tag, len(rows))
 
             for _, row in rows.iterrows():
+                if run_stop_requested():
+                    logger.info("[LinkedIn] stop requested; ending scrape")
+                    break
                 record = normalize_jobspy_record(
                     row,
                     source=self.source_name,
@@ -153,25 +168,21 @@ class LinkedInScraper(BaseJobScraper):
                     continue
                 skill_observations.extend(record_skill_observations)
                 kept_records.append(record)
-                if WORKSPACE_DEBUG_MODE:
-                    score = fit_score(record, self.profile)
-                    breakdown = fit_score_breakdown(record, self.profile)
-                    print(
-                        f"{target_tag} [DEBUG][SCORE] {score}/100 | "
-                        f"{record.get(RECORD_TITLE_KEY)} @ {record.get(RECORD_COMPANY_KEY)} | "
-                        f"Grade: {record.get('llm_fit_grade')} ({record.get('review_source')}) | "
-                        f"{record.get(RECORD_URL_KEY, '')}"
-                    )
-                    for entry in breakdown:
-                        print(f"{target_tag}   {entry['label']}: {entry['value']:+d}")
-
-                print(
-                    f"{target_tag} KEPT {record.get(RECORD_TITLE_KEY)} @ {record.get(RECORD_COMPANY_KEY)} | "
-                    f"{record.get('posted')} | {record.get(RECORD_LOCATION_KEY)} | "
-                    f"{record.get('work_type')} | {record.get(RECORD_SALARY_KEY) or 'N/A'}"
+                _li_score = fit_score(record, self.profile)
+                _li_breakdown = fit_score_breakdown(record, self.profile)
+                logger.info(
+                    "%s KEPT %s @ %s | %s | %s | %s | %s",
+                    target_tag,
+                    record.get(RECORD_TITLE_KEY), record.get(RECORD_COMPANY_KEY),
+                    record.get("posted"),
+                    record.get(RECORD_LOCATION_KEY),
+                    record.get("work_type"),
+                    record.get(RECORD_SALARY_KEY) or "N/A",
                 )
+                print_job_human_summary(record, self.profile, score=_li_score, breakdown=_li_breakdown)
 
-        print(f"[LinkedIn] done | kept={len(kept_records)} audit={len(audit_rows)}")
+        logger.info("[LinkedIn] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
+        set_run_progress("LinkedIn complete")
         return kept_records, audit_rows, skill_observations
 
     def _build_search_targets(self, search_settings: dict) -> List[dict]:

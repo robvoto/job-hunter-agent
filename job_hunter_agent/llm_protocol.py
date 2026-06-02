@@ -20,7 +20,9 @@ LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO = (
 LLM_PROMPT_JOB_REQUIREMENTS_INTRO = (
     "For job_requirements: extract the job's explicit requirements as concise bullet-style phrases. "
     "Use only visible ad text, prefer the employer's own wording, keep each item short, and do not invent anything. "
-    "Capture the requirements the user would want to read before opening the ad."
+    "Capture the requirements the user would want to read before opening the ad. "
+    "If the ad states the work type explicitly, preserve it as one of: Permanent, Contract, Full Time Contract / FTC, Temporary. "
+    "Use Unknown when the work type is unclear."
 )
 LLM_PROMPT_LEARNING_CANDIDATES_INTRO = (
     "For learning_candidates: actively identify new signals visible in this ad that are not yet captured "

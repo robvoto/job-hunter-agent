@@ -15,6 +15,7 @@ import threading
 from pathlib import Path
 from typing import Any
 from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE, ALLOWED_DOC_REL_PATHS
+from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request
 from job_hunter_agent.user_settings import (
     DEFAULT_USER_SETTINGS,
     load_agent_state,
@@ -171,7 +172,6 @@ _SHARED_UI_LABEL_KEYS = (
     "account_menu_test_label",
     "account_menu_test_actions_label",
     "account_menu_reset_user_label",
-    "account_menu_reset_learning_warning_label",
     "add_button_label",
     "add_button_aria_label",
     "add_button_title",
@@ -184,6 +184,11 @@ _SHARED_UI_LABEL_KEYS = (
     "search_refreshing_copy",
     "search_running_subcopy",
     "search_starting_subcopy",
+    "search_stop_label",
+    "search_progress_prefix",
+    "search_stopping_title",
+    "search_stopping_copy",
+    "search_stopping_subcopy",
 )
 _SEARCH_SOURCE_LABEL_KEYS = (
     "section_title",
@@ -313,17 +318,15 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "create_profile_status_extracting",
     "create_profile_status_reviewing",
     "create_profile_status_building",
+    "review_capability_helper_copy",
+    "review_capability_extracted_skills_label_one",
+    "review_capability_extracted_skills_label_many",
     "continue_search_basics_error",
     "finish_setup_error",
     "reset_user_confirm_title",
     "reset_user_confirm_body_1",
     "reset_user_confirm_body_2",
     "reset_user_error",
-    "reset_learning_confirm_title",
-    "reset_learning_confirm_body_1",
-    "reset_learning_confirm_body_2",
-    "reset_learning_error",
-    "reset_learning_success_message",
     "profile_status_error",
     "load_profile_error",
     "create_profile_button_building",
@@ -594,7 +597,6 @@ def _set_run_in_progress(value: bool) -> None:
 def _is_run_in_progress() -> bool:
     with _run_state_lock:
         return _run_in_progress
-
 
 
 def _try_mark_run_started() -> bool:
@@ -1063,6 +1065,8 @@ def _run_scrape_job() -> None:
         print(f"[RUN][ERROR] {msg}")
         _write_run_stats_field("last_run_error", msg)
     finally:
+        clear_run_stop_request()
+        clear_run_progress()
         _set_run_in_progress(False)
 
 

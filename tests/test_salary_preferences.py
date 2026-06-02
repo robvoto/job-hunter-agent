@@ -280,6 +280,60 @@ def test_unknown_work_type_logs_uncertainty(tmp_path, monkeypatch, caplog):
 
 
 
+def test_display_work_type_label_normalizes_full_time_contract_to_ftc():
+
+    assert display_work_type_label({"work_type": "Full Time Contract"}) == "FTC"
+
+
+
+def test_permanent_only_rejects_ftc_work_type():
+
+    profile = {
+
+        "match_preferences": {
+
+            "engagement_type": ["permanent"],
+
+        },
+
+    }
+
+
+
+    ok, reason = passes_preference_filters({"work_type": "Full Time Contract"}, profile)
+
+
+
+    assert ok is False
+
+    assert reason == "PREF_CONTRACT_TYPE"
+
+
+
+def test_contract_only_accepts_ftc_work_type():
+
+    profile = {
+
+        "match_preferences": {
+
+            "engagement_type": ["contract"],
+
+        },
+
+    }
+
+
+
+    ok, reason = passes_preference_filters({"work_type": "Full Time Contract"}, profile)
+
+
+
+    assert ok is True
+
+    assert reason == "OK"
+
+
+
 def test_display_work_type_label_normalizes_full_time_to_permanent():
 
     assert display_work_type_label({"work_type": "Full time"}) == "Permanent"

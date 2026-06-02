@@ -337,7 +337,9 @@ python -m job_hunter_agent.db_seed
 
 ### After deploying a new app version
 
-Knowledge upgrades run automatically on every startup (`fastapi_app`, `source_connector`, `agent_runner`). No manual step is needed after a normal `git pull`.
+**Knowledge entries** (`data/knowledge/`, `data/signals/`) upgrade automatically on every startup — no manual step is needed after a normal `git pull`.
+
+**Global settings** (`data/config/global_settings.json`) do NOT auto-upgrade on startup. If the global settings schema gains new required fields, run `db_seed --upgrade` manually before restarting the server, otherwise startup will fail with a `ValueError` from `normalize_global_settings`.
 
 `--upgrade` is available for manual runs or scripted deployments:
 
@@ -345,10 +347,12 @@ Knowledge upgrades run automatically on every startup (`fastapi_app`, `source_co
 python -m job_hunter_agent.db_seed --upgrade
 ```
 
-`--upgrade` uses version-aware merge logic:
+`--upgrade` uses version-aware merge logic for knowledge files:
 - Files with no `version` field (pure reference data) — always replaced.
 - Files with `version` and an `entries` list (capability knowledge, blocker rules, etc.) — new entries appended; existing DB entries (including user-approved ones) are preserved.
 - Files with `version` but no `entries` list (scoring rules, ui_labels, etc.) — replaced only when the file version is newer than the DB version.
+
+Global settings are always overwritten by `--upgrade` (no per-entry user approvals exist, so replacement is always safe).
 
 ### Hard reset (wipes user-approved additions)
 

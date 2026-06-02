@@ -538,6 +538,14 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
     if not isinstance(pricing_source, dict):
         raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict")
     normalized_llm_pricing = _normalize_llm_pricing_map(pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M])
+    pricing_metadata_source = llm_source.get("pricing_metadata", DEFAULT_LLM_SETTINGS.get("pricing_metadata", {}))
+    if not isinstance(pricing_metadata_source, dict):
+        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.pricing_metadata must be a dict")
+    pricing_unit = str(pricing_metadata_source.get("unit") or "").strip().lower()
+    if pricing_unit not in {"per_1m_tokens", "per_million_tokens", "per_1000000_tokens", "per_1k_tokens", "per_thousand_tokens", "per_1000_tokens"}:
+        raise ValueError("global_settings.llm_settings.pricing_metadata.unit must be per_1m_tokens or per_1k_tokens")
+    normalized_pricing_metadata = copy.deepcopy(pricing_metadata_source)
+    normalized_pricing_metadata["unit"] = pricing_unit
     max_chars_limits_source = llm_source.get(KEY_LLM_MAX_CHARS_LIMITS, {})
     if not isinstance(max_chars_limits_source, dict):
         raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS_LIMITS} must be a dict")
@@ -783,6 +791,7 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
             "model": str(llm_source.get("model") or DEFAULT_LLM_SETTINGS.get("model")).strip(),
             KEY_MODEL_OPTIONS: normalized_model_options,
             KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
+            "pricing_metadata": normalized_pricing_metadata,
             KEY_LLM_MAX_CHARS_LIMITS: normalized_max_chars_limits,
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
             KEY_LLM_MAX_CHARS: max_llm_chars,

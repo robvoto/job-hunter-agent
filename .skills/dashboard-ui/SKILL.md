@@ -19,10 +19,12 @@ See `.skills/dashboard-ui/DETAILS.md` for component maps, layout patterns, and l
 - Do not hardcode display counts, labels, thresholds, fallback text, or business decisions in templates, JS, or renderer code.
 - Missing/invalid UI data should fail clearly or be fixed at the owning source; do not invent silent UI fallbacks.
 - Reuse existing theme tokens, widgets, switches, choice strips, chips, cards, drawers, and help patterns before creating new variants.
+- Do not create page-local CSS for reusable UI components. Reusable visual styling belongs in `templates/static/theme/themes.widgets.css` or the relevant central theme/token file.
+- Page CSS may only define page-specific layout/positioning/responsive exceptions. If adding CSS outside `templates/static/theme/`, document why it is a real local exception.
 - Keep labels and copy consistent across the app. If the same text appears in more than one place, centralise it in the owning label/config source.
 - Route aliases such as `/workspace` and `/` must stay intentional and documented.
 - Workspace UI must preserve explainability: summary for humans, debug/detail readable but not raw implementation noise.
-- Keep changes local. If a layout issue is one row or field, change only that block.
+- Keep changes scoped to the owning component, but not page-local when the style is reusable. Fix the smallest owning central selector instead of adding local overrides.
 - For frontend changes, follow the established modular JS ownership pattern; do not add one-off global scripts unless agreed.
 
 ## Detailed patterns moved to DETAILS.md
@@ -58,4 +60,6 @@ Do not assume `templates/results.html` changes are visible immediately.
 - Check the rendered page or smallest relevant browser/template path.
 - Run targeted tests where available.
 - Update docs/backlog evidence when the UI behaviour changes.
+
+
 

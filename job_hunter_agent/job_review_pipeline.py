@@ -8,9 +8,56 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from job_hunter_agent.config import DEBUG_MODE
+
 logger = logging.getLogger(__name__)
 
 _PIPELINE_LOG_CORE_FIELDS = ("source", "job_key", "title", "company")
+
+# Human-readable translations for internal pipeline reason codes.
+# Codes not listed fall back to the raw code in parentheses.
+_REASON_LABELS: dict[str, str] = {
+    "TITLE_NOT_TARGET": "title not in your target roles",
+    "TITLE_EMPTY": "job title is missing",
+    "TITLE_BAD_KEYWORD": "title contains a blocked keyword",
+    "TITLE_REASON_POTENTIAL_MATCH": "title is a potential match",
+    "ONET_FAR_OCCUPATION": "occupation too far from your targets",
+    "HARD_BLOCK": "matched a hard blocker rule",
+    "HARD_BLOCK_REQUIRED_SKILL": "requires a skill you flagged as blocking",
+    "DETAILS_CHALLENGE_PAGE": "description page was a bot challenge",
+    "DETAILS_BLOCKED_PAGE": "description page was blocked",
+    "DETAILS_NAVIGATION_ERROR": "description page failed to load",
+    "NO_DETAILS": "could not read job description",
+    "NO_DESCRIPTION_TRUST": "description too short to score reliably",
+    "CONTENT_REJECT": "description did not pass content filters",
+    "LLM_REJECT": "LLM reviewer rejected",
+    "LLM_ERROR": "LLM review failed with an error",
+    "DET_REJECT": "deterministic reviewer rejected",
+    "ALREADY_APPLIED": "you already applied to this one",
+    "DUPLICATE_URL": "duplicate listing",
+    "DUPLICATE_JOB_KEY": "duplicate listing",
+    "NO_JOB_KEY": "missing job ID",
+    "NO_URL": "missing job URL",
+    "OK": "passed",
+}
+
+def _reason_label(code: str) -> str:
+    if not code:
+        return ""
+    # Handle parameterised codes like POSTED_TOO_OLD:3
+    base = code.split(":")[0]
+    suffix = code[len(base):]
+    label = _REASON_LABELS.get(base)
+    if label:
+        return f"{label}{' (' + suffix.lstrip(':') + ' days)' if suffix else ''} ({code})"
+    return f"({code})"
+
+def _job_tag(source: str, title: str, company: str, job_key: str) -> str:
+    src = source.upper() if source else "?"
+    name = f'"{title}"' if title else "(no title)"
+    co = f" @ {company}" if company else ""
+    key = f" [{job_key}]" if job_key and job_key != "unknown" else ""
+    return f"{name}{co}  ({src}{key})"
 
 from job_hunter_agent.capability_matching import build_risk_and_missing_evidence, reviewed_signal_matches_for_text
 from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
@@ -18,9 +65,11 @@ from job_hunter_agent.filters import analyze_title_filters, passes_content_filte
 from job_hunter_agent.fit_scoring import build_fit_highlights
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
-from job_hunter_agent.llm_gate import llm_extract_job_requirements
+from job_hunter_agent.job_types import infer_work_type_from_description
+from job_hunter_agent.llm_gate import LLMCallError, get_session_cost_usd, llm_extract_job_requirements
+from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.preferences import passes_preference_filters
-from job_hunter_agent.occupation_taxonomy import RESULT_FAR, classify_title as _onet_classify_title
+from job_hunter_agent.occupation_taxonomy import RESULT_FAR, classify_title as _onet_classify_title, format_onet_response
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.record_schema import (
     CONFIDENCE_HIGH,
@@ -86,25 +135,117 @@ from job_hunter_agent.utils import extract_salary
 HookFn = Callable[[dict, "ReviewPipelineContext"], None]
 
 
+# Opening separator marks start of each job; closing marks end.
+_SEP_OPEN  = "═" * 72
+_SEP_CLOSE = "─" * 72
+_job_start_times: dict[str, float] = {}
+_job_start_costs: dict[str, float] = {}
+
+
+def close_job_block(job_key: str) -> None:
+    """Print the closing separator for a job block. Called by seek_runner after all output."""
+    logger.info("%s\n", _SEP_CLOSE)
+
+
 def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any) -> None:
     source = source_name or str(record.get("source") or "")
     job_key = str(record.get(RECORD_JOB_KEY) or "unknown")
-    title = str(record.get(RECORD_TITLE_KEY) or "")
+    title = str(record.get(RECORD_TITLE_KEY) or "(no title)")
     company = str(record.get(RECORD_COMPANY_KEY) or "")
-    fields: dict[str, Any] = {
-        "source": source,
-        "job_key": job_key,
-        "title": title,
-        "company": company,
-    }
-    fields.update(kwargs)
-    label_width = max(len(label) for label in _PIPELINE_LOG_CORE_FIELDS + tuple(kwargs.keys())) if fields else 0
-    lines = [f"[PIPELINE][{stage}]"]
-    for label in _PIPELINE_LOG_CORE_FIELDS:
-        lines.append(f"  {label.ljust(label_width)}  {fields[label]}")
-    for label, value in kwargs.items():
-        lines.append(f"  {label.ljust(label_width)}  {value}")
-    logger.info("\n".join(lines))
+    result = str(kwargs.get("result") or "")
+    reason = str(kwargs.get("reason") or "")
+    decision = str(kwargs.get("decision") or "")
+
+    # ── Open a new job block ──────────────────────────────────────────────────
+    if stage == "CARD_SEEN":
+        _job_start_times[job_key] = time.monotonic()
+        _job_start_costs[job_key] = get_session_cost_usd()
+        src = source.upper() if source else "?"
+        logger.info("\n%s\n  %s  @  %s\n  %s | %s\n", _SEP_OPEN, title, company, src, job_key)
+        return
+
+    # ── Title gate ────────────────────────────────────────────────────────────
+    if stage == "TITLE_GATE":
+        if result == "REJECT":
+            elapsed = _elapsed(job_key)
+            cost = _job_cost(job_key)
+            logger.info("  title: %s\n  ✗ REJECTED — title filtered out\n  time: %s  |  LLM: %s\n%s",
+                        _reason_label(reason), elapsed, cost, _SEP_CLOSE)
+        elif result == "REVIEW":
+            label = _REASON_LABELS.get(reason.split(":")[0], reason)
+            logger.info("  title: %s — will read description", label)
+        return
+
+    # ── Card gate (pre-description) ───────────────────────────────────────────
+    if stage == "CARD_GATE":
+        if result == "REJECT":
+            elapsed = _elapsed(job_key)
+            cost = _job_cost(job_key)
+            logger.info("  ✗ REJECTED before reading — %s\n  time: %s  |  LLM: %s",
+                        _reason_label(reason), elapsed, cost)
+        return
+
+    # ── Final outcome — closing separator printed by seek_runner after score output ──
+    if stage == "FINAL_DECISION":
+        elapsed = _elapsed(job_key)
+        cost = _job_cost(job_key)
+        start_time = _job_start_times.pop(job_key, None)
+        _job_start_costs.pop(job_key, None)
+        total_job_ms = int((time.monotonic() - start_time) * 1000) if start_time is not None else 0
+        if decision == "KEEP":
+            grade = str(kwargs.get("grade") or "")
+            review_source = str(kwargs.get("review_source") or "")
+            parts = [f"grade {grade}" if grade else "", review_source]
+            detail = "  |  ".join(p for p in parts if p)
+            logger.info("  ✓ KEPT%s\n  time: %s  |  LLM: %s",
+                        f"  —  {detail}" if detail else "", elapsed, cost)
+        elif decision == "REJECT":
+            logger.info("  ✗ REJECTED — %s\n  time: %s  |  LLM: %s",
+                        _reason_label(reason), elapsed, cost)
+        logger.info(format_log_block("PIPELINE][FINAL_DECISION", {
+            "source": source,
+            "job_key": job_key,
+            "decision": decision,
+            "reason": reason,
+            "total_job_ms": total_job_ms,
+        }))
+        return
+
+    # ── LLM call outcome ──────────────────────────────────────────────────────
+    if stage == "LLM_CALL_DONE":
+        call = str(kwargs.get("call") or "")
+        elapsed_ms = int(kwargs.get("elapsed_ms") or 0)
+        payload_source = str(kwargs.get("payload_source") or "llm")
+        logger.info("  llm %s: elapsed=%dms  source=%s", call, elapsed_ms, payload_source)
+        return
+
+    # ── Debug-only: show raw stage data for anything else ─────────────────────
+    if DEBUG_MODE:
+        fields: dict[str, Any] = {"source": source, "job_key": job_key, "title": title, "company": company}
+        fields.update(kwargs)
+        label_width = max(len(k) for k in fields) if fields else 0
+        lines = [f"  [DEBUG][{stage}]"]
+        for label in _PIPELINE_LOG_CORE_FIELDS:
+            lines.append(f"    {label.ljust(label_width)}  {fields[label]}")
+        for label, value in kwargs.items():
+            lines.append(f"    {label.ljust(label_width)}  {value}")
+        logger.info("\n".join(lines))
+
+
+def _elapsed(job_key: str) -> str:
+    start = _job_start_times.get(job_key)
+    if start is None:
+        return "?"
+    secs = time.monotonic() - start
+    return f"{secs:.1f}s"
+
+
+def _job_cost(job_key: str) -> str:
+    start_cost = _job_start_costs.get(job_key)
+    if start_cost is None:
+        return "$0.0000"
+    delta = get_session_cost_usd() - start_cost
+    return f"${max(delta, 0.0):.4f}"
 
 
 @dataclass(slots=True)
@@ -124,6 +265,7 @@ class ReviewPipelineContext:
     llm_cache: dict[str, Any]
     applied_job_keys: set[str]
     hidden_job_keys: set[str]
+    seen_job_keys: set[str] | None = None
     seen_urls: set[str] | None = None
     run_iso: str = ""
     date_range_days: int = 0
@@ -195,6 +337,32 @@ def _apply_source_metadata_to_record(record: dict, details_text: str) -> None:
         "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
         "needs_review": bool(channel_signal.get("needs_review")),
     }
+
+
+def _apply_work_type_inference(record: dict, details_text: str) -> None:
+    """Refine work_type using description evidence after the description has been fetched.
+
+    Only applies when the card-declared work type is in the trigger list (e.g. 'Full time').
+    The inference rules and contract-signal keywords live in data/knowledge/job_type.json.
+    """
+    original = str(record.get(RECORD_WORK_TYPE_KEY) or "").strip()
+    result = infer_work_type_from_description(original, details_text)
+    if result is None:
+        return
+    record[RECORD_WORK_TYPE_KEY] = result["inferred_type"]
+    record["work_type_inference_source"] = "description"
+    record["work_type_inference_original"] = original
+    record["work_type_inference_rule"] = result["rule_id"]
+    record["work_type_inference_evidence"] = result["evidence"]
+    logger.info(format_log_block("WORK_TYPE][INFERENCE", {
+        "source": record.get("source", ""),
+        "job_key": record.get(RECORD_JOB_KEY, ""),
+        "title": record.get(RECORD_TITLE_KEY, ""),
+        "original": original,
+        "inferred": result["inferred_type"],
+        "rule": result["rule_id"],
+        "evidence": result["evidence"],
+    }))
 
 
 def _apply_content_filter_result(record: dict, details_text: str, profile: dict, title_reason: str) -> tuple[bool, str]:
@@ -305,6 +473,8 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
         contextual_capability_matches = payload.get("contextual_capability_matches") or []
         source = str(payload.get("payload_source") or "llm")
+        record["_obs_llm_called"] = True
+        record["_obs_llm_cache_hit"] = (source == "cache")
 
     return {
         "llm_decision": review["decision"],
@@ -352,13 +522,29 @@ def review_pre_detail_normalized_job(
             # Downgraded gate: TITLE_NOT_TARGET alone is not a hard reject.
             # Consult O*NET to decide between a cheap skip (far occupation family)
             # and fetching the description (near or uncertain).
+            _onet_t0 = time.monotonic()
             onet = _onet_classify_title(title, profile)
+            _onet_elapsed_ms = int((time.monotonic() - _onet_t0) * 1000)
             record[RECORD_ONET_CLASSIFICATION_KEY] = {
                 "result": onet.result,
                 "matched_occupation_code": onet.matched_occupation_code,
                 "confidence": onet.confidence,
                 "reason": onet.reason,
             }
+            _onet_outcome = "REJECT" if onet.result == RESULT_FAR else "FETCH_DETAILS"
+            logger.info(format_log_block("PIPELINE][ONET_DECISION", {
+                "source": context.source_name,
+                "job_key": record.get(RECORD_JOB_KEY, ""),
+                "title": title,
+                "title_reason": title_reason,
+                "onet_result": onet.result,
+                "onet_response": format_onet_response(onet),
+                "onet_reason": onet.reason,
+                "matched_occupation_code": onet.matched_occupation_code,
+                "lookup_source": onet.lookup_source,
+                "elapsed_ms": _onet_elapsed_ms,
+                "outcome": _onet_outcome,
+            }))
             if onet.result == RESULT_FAR:
                 reject_reason = "ONET_FAR_OCCUPATION"
                 _pipeline_log("TITLE_GATE", record, context.source_name, result="REJECT", reason=reject_reason,
@@ -389,6 +575,14 @@ def review_pre_detail_normalized_job(
         record[RECORD_REJECT_REASON_KEY] = "MANUALLY_HIDDEN"
         _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
+    if context.seen_job_keys is not None:
+        if job_key in context.seen_job_keys:
+            record[RECORD_DECISION_KEY] = "SKIP"
+            record[RECORD_REJECT_REASON_KEY] = "DUPLICATE_JOB_KEY"
+            _finalize(record, context)
+            print(f"{source_tag} SKIPPED (duplicate job key) {title} @ {company}")
+            return _build_outcome(record), record, skill_observations, False
+        context.seen_job_keys.add(job_key)
 
     posted_age_days = record.get(RECORD_POSTED_AGE_DAYS_KEY)
     if posted_age_days is not None and posted_age_days > context.date_range_days:
@@ -421,6 +615,7 @@ def review_pre_detail_normalized_job(
         print(f"{source_tag} REJECTED (card gate) [{card_reason}] {title} @ {company}")
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = card_reason
+        record["_obs_card_rejected"] = True
         _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
 
@@ -459,6 +654,7 @@ def review_post_detail_normalized_job(
         return _build_outcome(record), record, skill_observations
 
     _apply_source_metadata_to_record(record, details_text)
+    _apply_work_type_inference(record, details_text)
     _call_hook(hooks, "before_common_review", record, context)
     _call_hook(hooks, "after_description_loaded", record, context)
 
@@ -503,18 +699,46 @@ def review_post_detail_normalized_job(
 
     _call_hook(hooks, "before_llm_review", record, context)
 
+    _llm_t0 = time.monotonic()
     try:
         fit_eval = _evaluate_job_fit(record, profile, context.llm_cache)
+    except LLMCallError as llm_exc:
+        _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
+        logger.error(format_log_block("PIPELINE][LLM_CALL_ERROR", {
+            "source": context.source_name,
+            "job_key": record.get(RECORD_JOB_KEY, ""),
+            "title": title,
+            "company": company,
+            "purpose": llm_exc.purpose,
+            "model": llm_exc.model,
+            "error_type": type(llm_exc).__name__,
+            "error_message": str(llm_exc),
+            "status_code": llm_exc.status_code,
+            "elapsed_ms": _llm_elapsed_ms,
+        }))
+        record["_obs_llm_called"] = True
+        record["_obs_llm_error"] = True
+        record[RECORD_DECISION_KEY] = "REJECT"
+        record[RECORD_REJECT_REASON_KEY] = "LLM_ERROR"
+        _finalize(record, context)
+        _pipeline_log("FINAL_DECISION", record, context.source_name, decision="REJECT", reason="LLM_ERROR")
+        return _build_outcome(record), record, skill_observations
     except Exception as llm_exc:
-        logger.error(
-            "[PIPELINE][LLM_FAIL] source=%s job_key=%s title=%r company=%r error=%s: %s",
-            context.source_name,
-            record.get(RECORD_JOB_KEY),
-            title,
-            company,
-            type(llm_exc).__name__,
-            llm_exc,
-        )
+        _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
+        logger.error(format_log_block("PIPELINE][LLM_CALL_ERROR", {
+            "source": context.source_name,
+            "job_key": record.get(RECORD_JOB_KEY, ""),
+            "title": title,
+            "company": company,
+            "purpose": "fit_review",
+            "model": "",
+            "error_type": type(llm_exc).__name__,
+            "error_message": str(llm_exc),
+            "status_code": None,
+            "elapsed_ms": _llm_elapsed_ms,
+        }))
+        record["_obs_llm_called"] = True
+        record["_obs_llm_error"] = True
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = "LLM_ERROR"
         _finalize(record, context)
@@ -557,3 +781,114 @@ def review_post_detail_normalized_job(
     _pipeline_log("FINAL_DECISION", record, context.source_name, decision="KEEP",
                   review_source=record.get("review_source", ""), grade=record.get(RECORD_LLM_FIT_GRADE_KEY, ""))
     return _build_outcome(record), record, skill_observations
+
+
+# ─── Human-readable per-job summary ──────────────────────────────────────────
+
+def print_job_human_summary(
+    record: dict,
+    profile: dict,
+    elapsed_s: float = 0.0,
+    score: int | None = None,
+    llm_cost: float = 0.0,
+    breakdown: list | None = None,
+) -> None:
+    """Single curated block printed to stdout at the end of every job's processing.
+
+    All structured machine logs still emit independently. This is the human view.
+    """
+    from job_hunter_agent.occupation_taxonomy import RESULT_FAR, RESULT_UNCERTAIN
+
+    title   = str(record.get(RECORD_TITLE_KEY) or "(no title)")
+    company = str(record.get(RECORD_COMPANY_KEY) or "")
+    source  = str(record.get("source") or "").upper()
+    decision      = str(record.get(RECORD_DECISION_KEY) or "")
+    reject_reason = str(record.get(RECORD_REJECT_REASON_KEY) or "")
+    title_reason  = str(record.get(RECORD_TITLE_REASON_KEY) or "")
+
+    targets = [str(r).strip() for r in (profile.get("target_roles") or []) if str(r).strip()]
+    also    = [str(r).strip() for r in (profile.get("also_consider_roles") or []) if str(r).strip()]
+    target_str = ", ".join(targets[:4]) or "(not set)"
+    also_str   = "  |  also: " + ", ".join(also[:3]) if also else ""
+
+    lines: list[str] = [
+        "",
+        f"  {'─' * 70}",
+        f"  {title}  ·  {company}  ({source})",
+        f"  You target:  {target_str}{also_str}",
+        "",
+    ]
+
+    # ── Title gate ────────────────────────────────────────────────────────────
+    if title_reason in {"TITLE_EMPTY", "TITLE_BAD_KEYWORD"}:
+        lines.append(f"  [✗] Title rejected  ({_reason_label(title_reason)})")
+    elif title_reason == "TITLE_NOT_TARGET":
+        onet = record.get(RECORD_ONET_CLASSIFICATION_KEY) or {}
+        onet_result = str(onet.get("result") or "")
+        onet_code   = str(onet.get("matched_occupation_code") or "—")
+        onet_src    = str(onet.get("reason") or "")
+        if onet_result == RESULT_FAR:
+            lines.append(f"  [✗] Title not in target roles  →  occupation too far ({onet_code})")
+        elif onet_result == RESULT_UNCERTAIN:
+            lines.append(f"  [?] Title not in target roles  →  ONET uncertain ({onet_src}), description decides")
+        else:
+            lines.append(f"  [?] Title not in target roles  →  ONET near ({onet_code}), description decides")
+    elif title_reason == TITLE_REASON_POTENTIAL_MATCH:
+        lines.append("  [?] Title is a potential match  →  description decides")
+    elif title_reason == "OK":
+        lines.append("  [✓] Title matched your target roles")
+
+    # ── Description fetch ─────────────────────────────────────────────────────
+    details_status = str(record.get(RECORD_DETAILS_STATUS_KEY) or "")
+    details_length = int(record.get(RECORD_DETAILS_LENGTH_KEY) or 0)
+    fetch_ms = int(record.get("_obs_detail_fetch_ms") or 0)
+    if details_length:
+        fetch_note = f"  ({fetch_ms / 1000:.1f}s)" if fetch_ms else ""
+        lines.append(f"  [✓] Description fetched  {details_length:,} chars{fetch_note}")
+    elif details_status and details_status not in {"", "ok"}:
+        lines.append(f"  [✗] Description {details_status}")
+
+    # ── Content / hard blocks ─────────────────────────────────────────────────
+    hard_blocks  = list(record.get(RECORD_HARD_BLOCK_REASONS_KEY) or [])
+    content_reason = str(record.get(RECORD_CONTENT_REASON_KEY) or "")
+    if hard_blocks:
+        blocks_str = "; ".join(str(b) for b in hard_blocks[:2])
+        lines.append(f"  [✗] Hard blocked: {blocks_str}")
+    elif content_reason and content_reason not in {"OK", ""}:
+        lines.append(f"  [✗] Content rejected  ({content_reason})")
+    elif details_length:
+        lines.append("  [✓] Content passed, no hard blockers")
+
+    # ── Review outcome ────────────────────────────────────────────────────────
+    review_source = str(record.get("review_source") or "")
+    llm_grade     = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "")
+    if review_source:
+        src_label = {"rule": "deterministic rule", "llm": "LLM", "cache": "LLM (cached)"}.get(review_source, review_source)
+        grade_note = f" · {llm_grade}" if llm_grade else ""
+        cost_note  = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
+        if decision == "KEEP":
+            lines.append(f"  [✓] Review: KEEP{grade_note}  ·  via {src_label}{cost_note}")
+        else:
+            lines.append(f"  [✗] Review: REJECT{grade_note}  ·  via {src_label}{cost_note}")
+    elif reject_reason == "LLM_ERROR":
+        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
+        lines.append(f"  [!] LLM review failed (API error){cost_note}")
+
+    lines.append("")
+
+    # ── Score breakdown ───────────────────────────────────────────────────────
+    if decision == "KEEP" and breakdown:
+        from job_hunter_agent.score_labels import format_score_breakdown_console
+        lines.extend(format_score_breakdown_console(breakdown))
+        lines.append("")
+
+    # ── Final line ────────────────────────────────────────────────────────────
+    time_note = f"  ·  {elapsed_s:.1f}s" if elapsed_s else ""
+    cost_line = f"  ·  LLM: ${llm_cost:.4f}" if llm_cost > 0.00005 else ""
+    if decision == "KEEP":
+        score_note = f"  ·  score {score}/100" if score is not None else ""
+        lines.append(f"  ✓  KEPT{score_note}{time_note}{cost_line}")
+    else:
+        lines.append(f"  ✗  REJECTED — {_reason_label(reject_reason)}{time_note}{cost_line}")
+
+    logger.info("\n".join(lines))

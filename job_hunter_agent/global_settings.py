@@ -55,6 +55,12 @@ def get_default_country_suffix() -> str:
 
 
 def get_llm_max_chars() -> int:
+    """Max chars for the combined (title + description) input to fit-review and learning-candidates calls.
+
+    Truncation is applied in source_learning.resolve_llm_review_payload before the LLM gate is called.
+    Lower than job_description_max_chars because the fit-review system prompt carries the full candidate
+    profile, capability rules, and guidance — leaving less room for the job text.
+    """
     return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_CHARS])
 
 
@@ -93,7 +99,10 @@ def get_llm_profile_extraction_max_output_tokens() -> int:
 
 
 def get_llm_job_description_max_chars() -> int:
-    """Max job-description characters sent to the LLM."""
+    """Max description-only chars for secondary sidebar calls: rejection-blocker suggestions and
+    job-requirements extraction. Higher than get_llm_max_chars() because these calls have
+    lightweight system prompts (no candidate profile context).
+    """
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS)
 
 

@@ -19,7 +19,6 @@ function initAccountBar() {
   const testTrigger = document.getElementById('job_hunter_account_test_trigger');
   const testMenu = document.getElementById('job_hunter_account_test_menu');
   const resetUserBtn = document.getElementById('job_hunter_reset_user_btn');
-  const resetLearningBtn = document.getElementById('job_hunter_reset_learning_btn');
 
   function setUserMenuOpen(open) {
     if (!avatarButton || !userDropdown) return;
@@ -67,8 +66,9 @@ function initAccountBar() {
   });
 
   // Test action buttons are wired here so they work on every page, not just Settings.
-  if (resetUserBtn || resetLearningBtn) {
+  if (resetUserBtn) {
     const testLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ || {};
+    let resetUserInFlight = false;
 
     function postTestAction(path) {
       return jobHunterFetch(path, {
@@ -78,35 +78,27 @@ function initAccountBar() {
       });
     }
 
-    resetUserBtn?.addEventListener('click', async () => {
+    resetUserBtn?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (resetUserInFlight) return;
       const confirmed = window.confirm(
         [testLabels.reset_user_confirm_title, testLabels.reset_user_confirm_body_1, testLabels.reset_user_confirm_body_2]
           .filter(Boolean).join('\n\n')
       );
       if (!confirmed) return;
       try {
+        resetUserInFlight = true;
+        resetUserBtn.disabled = true;
         const resp = await postTestAction('/api/test/reset-user');
         const payload = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(payload.error || testLabels.reset_user_error || 'Error');
         window.location.href = payload.redirect_to || '/start';
       } catch (err) {
         window.alert(err.message || testLabels.reset_user_error || 'Reset failed');
-      }
-    });
-
-    resetLearningBtn?.addEventListener('click', async () => {
-      const confirmed = window.confirm(
-        [testLabels.reset_learning_confirm_title, testLabels.reset_learning_confirm_body_1, testLabels.reset_learning_confirm_body_2]
-          .filter(Boolean).join('\n\n')
-      );
-      if (!confirmed) return;
-      try {
-        const resp = await postTestAction('/api/test/reset-learning');
-        const payload = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(payload.error || testLabels.reset_learning_error || 'Error');
-        window.alert(payload.message || testLabels.reset_learning_success_message || 'Done');
-      } catch (err) {
-        window.alert(err.message || testLabels.reset_learning_error || 'Reset failed');
+      } finally {
+        resetUserInFlight = false;
+        resetUserBtn.disabled = false;
       }
     });
   }

@@ -187,15 +187,20 @@
           </div>
 
           <section class="review-block capability-shell">
-            <div class="field-label-row">
-              <label id="review_capability_title"></label>
-              <details class="field-info-drawer settings-help-drawer">
-                <summary class="field-info" aria-label="Help">i</summary>
-                <div class="field-info-panel" id="review_capability_help"></div>
-              </details>
+            <div class="review-capability-heading">
+              <div class="field-label-row">
+                <label id="review_capability_title"></label>
+                <details class="field-info-drawer settings-help-drawer">
+                  <summary class="field-info" aria-label="Help">i</summary>
+                  <div class="field-info-panel" id="review_capability_help"></div>
+                </details>
+              </div>
+              <p id="review_capability_helper" class="help"></p>
             </div>
             <div class="review-capability-topbar">
-              <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="">
+              <div class="field-control-shell review-capability-filter-shell">
+                <input id="review_capability_filter" class="review-capability-filter" type="search" placeholder="">
+              </div>
             </div>
             <div id="review_capability_cards" class="review-capability-list"></div>
           </section>
@@ -249,7 +254,7 @@
                   <div class="field-control-shell">
                     __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
                   </div>
-                  <p id="sector_preference_summary" class="search-basics-summary" aria-live="polite"></p>
+                  <p id="sector_preference_summary" class="summary-line" aria-live="polite"></p>
                 </div>
 
                 <div class="onb-field">
@@ -269,7 +274,7 @@
                       __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
                     </select>
                   </div>
-                  <p id="engagement_type_summary" class="search-basics-summary" aria-live="polite"></p>
+                  <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
                 </div>
 
                 <div class="onb-field">
@@ -283,7 +288,7 @@
                   <div class="field-control-shell">
                     __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
                   </div>
-                  <p id="work_mode_preference_summary" class="search-basics-summary" aria-live="polite"></p>
+                  <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
                 </div>
 
                 <div class="onb-field onb-field--full">
@@ -326,7 +331,7 @@
             <section class="check-card">
               <div class="check-card-head">
                 <h3>__JOB_HUNTER_ONBOARDING_PAGE_DRAFT_PROFILE_LABEL__</h3>
-                <button class="text-link text-link--edit" id="edit_draft_profile" type="button">✎ Edit</button>
+                <button class="icon-action icon-action--edit" id="edit_draft_profile" type="button" aria-label="Edit draft profile" title="Edit draft profile"><span aria-hidden="true">&#9998;</span></button>
               </div>
               <dl class="check-list">
                 <div>
@@ -347,7 +352,7 @@
             <section class="check-card">
               <div class="check-card-head">
                 <h3>__JOB_HUNTER_ONBOARDING_PAGE_SEARCH_BASICS_LABEL__</h3>
-                <button class="text-link text-link--edit" id="edit_search_basics" type="button">✎ Edit</button>
+                <button class="icon-action icon-action--edit" id="edit_search_basics" type="button" aria-label="Edit search basics" title="Edit search basics"><span aria-hidden="true">&#9998;</span></button>
               </div>
               <dl class="check-list">
                 <div>

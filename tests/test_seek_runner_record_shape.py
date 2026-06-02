@@ -50,7 +50,7 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_TYPE_KEY,
 )
 from job_hunter_agent.scrapers.base import normalize_jobspy_record
-from job_hunter_agent.scrapers.seek_runner import _seek_source_metadata, build_seek_card_record
+from job_hunter_agent.scrapers.seek_runner import _seek_run_progress, _seek_source_metadata, build_seek_card_record
 
 
 class _FakeElement:
@@ -228,3 +228,7 @@ def test_seek_source_metadata_omits_blank_ats_id():
 
     assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "PLAT-1"
     assert RECORD_SOURCE_ATS_REQUISITION_ID_KEY not in metadata
+
+
+def test_seek_run_progress_includes_title_and_company():
+    assert _seek_run_progress(1, 3, "Senior Analyst", "Acme", elapsed_s=65) == "SEEK page 1/3 | Senior Analyst @ Acme | elapsed 1m 05s"

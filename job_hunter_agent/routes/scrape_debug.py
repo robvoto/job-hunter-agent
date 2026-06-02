@@ -7,6 +7,7 @@ import threading
 from fastapi import APIRouter, Body
 
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.run_control import clear_run_stop_request
 from job_hunter_agent.routes.responses import json_response
 
 logger = logging.getLogger(__name__)
@@ -19,17 +20,6 @@ def api_test_reset_user():  # type: ignore[no-untyped-def]
         return json_response({"error": "Test mode only"}, 403)
     try:
         result = srv.SettingsHandler._reset_current_user_state()
-    except Exception as exc:
-        return json_response({"error": str(exc)}, 400)
-    return json_response(result)
-
-
-@router.post("/api/test/reset-learning")
-def api_test_reset_learning():  # type: ignore[no-untyped-def]
-    if not srv.DEBUG_MODE:
-        return json_response({"error": "Test mode only"}, 403)
-    try:
-        result = srv.SettingsHandler._reset_global_learning()
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(result)
@@ -124,6 +114,7 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
         )
 
     try:
+        clear_run_stop_request()
         if search_settings:
             srv.patch_profile({"search_settings": search_settings})
         ctx = contextvars.copy_context()

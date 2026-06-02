@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from job_hunter_agent.run_context import ScrapeRunContext
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.scrapers.seek_runner import seek_scrape_to_records
@@ -34,6 +35,7 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         print("[Seek] disabled in enabled_sources; skipping")
 
     if SOURCE_SEEK in enabled_sources:
+        set_run_progress("Starting SEEK")
         search_targets = build_seek_search_targets(profile, configured_date_range, sort_newest_first)
         s_kept, s_audit, s_skills = seek_scrape_to_records(
             profile=profile,
@@ -53,12 +55,17 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         kept_records.extend(s_kept)
         audit_rows.extend(s_audit)
         skill_observations.extend(s_skills)
+        if run_stop_requested():
+            return kept_records, audit_rows, skill_observations
+    if run_stop_requested():
+        return kept_records, audit_rows, skill_observations
     if SOURCE_LINKEDIN in enabled_sources:
         print("[LinkedIn] enabled")
     else:
         print("[LinkedIn] disabled in enabled_sources; skipping")
 
     if SOURCE_LINKEDIN in enabled_sources:
+        set_run_progress("Starting LinkedIn")
         from job_hunter_agent.scrapers.linkedin import LinkedInScraper  # noqa: PLC0415
 
         try:

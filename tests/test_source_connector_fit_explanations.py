@@ -147,6 +147,31 @@ def test_score_to_match_label_uses_central_match_band_mapping():
     assert score_to_match_label(40) == "Stretch"
 
 
+def test_strong_llm_grade_lands_in_strong_score_band():
+    """STRONG grade with minimal supporting signals must land within the STRONG band (68-87).
+    It should NOT automatically produce 95 regardless of title/content/capability evidence.
+    """
+    scoring_rules = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
+    strong_band = scoring_rules["llm_grade_bands"]["STRONG"]
+    profile = {
+        **_test_profile(),
+        "scoring_rules": scoring_rules,
+    }
+    record = {
+        "title": "Accounts Payable Officer",
+        "title_reason": "TITLE_NOT_TARGET",
+        "content_reason": "NO_MATCH",
+        "llm_fit_grade": "STRONG",
+    }
+
+    score = fit_scoring.fit_score(record, profile)
+
+    assert strong_band["floor"] <= score <= strong_band["ceiling"], (
+        f"STRONG + minimal signals should land in the STRONG band "
+        f"[{strong_band['floor']}, {strong_band['ceiling']}], got {score}"
+    )
+
+
 def test_score_labels_and_tones_can_use_profile_match_levels():
     profile = {
         **_test_profile(),
@@ -775,7 +800,7 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
         _test_profile(),
     )
 
-    assert "<strong>Related terms</strong>" in html
+    assert "<strong>Matched profile evidence</strong>" in html
     assert "<li>Stakeholder management</li>" in html
     assert "<li>Jira</li>" in html
     assert "<strong>Filtered out</strong>" in html

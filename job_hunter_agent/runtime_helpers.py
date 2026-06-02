@@ -7,9 +7,12 @@ investigation events.
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 CLI_FLAG_NO_LLM = "--no-llm"
 CLI_FLAG_DEBUG = "--debug"
@@ -85,9 +88,7 @@ def append_llm_cost_log(path: Path, entry: dict[str, Any], *, prefix: str = "[LL
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
     except Exception as exc:
-        print(f"[RUNTIME_HELPERS][WARN] Failed to write LLM cost log to {path}: {exc}")
-        pass
-    print(_format_llm_cost_log(prefix, entry))
+        logger.warning("[RUNTIME_HELPERS][WARN] Failed to write LLM cost log to %s: %s", path, exc)
 
 
 def append_uncertainty_log(path: Path, entry: dict[str, Any]) -> None:
@@ -96,4 +97,4 @@ def append_uncertainty_log(path: Path, entry: dict[str, Any]) -> None:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
     except Exception as exc:
-        print(f"[RUNTIME_HELPERS][WARN] Failed to write uncertainty log to {path}: {exc}")
+        logger.warning("[RUNTIME_HELPERS][WARN] Failed to write uncertainty log to %s: %s", path, exc)

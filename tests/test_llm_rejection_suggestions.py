@@ -80,6 +80,7 @@ def test_llm_cost_logging_uses_managed_pricing(tmp_path, monkeypatch):
                 "pricing_per_1m": {
                     "gpt-4o-mini": {"input": 1.0, "output": 2.0},
                 },
+                "pricing_metadata": {"unit": "per_1m_tokens"},
             },
         },
     )

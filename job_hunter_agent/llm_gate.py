@@ -28,9 +28,10 @@ import re
 import sys
 from typing import Any, Dict
 
-from openai import OpenAI
+from openai import APIStatusError, OpenAI
 from pydantic import BaseModel, Field
 
+from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.user_settings import load_user_settings, DEFAULT_USER_SETTINGS
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_DECISIONS,
@@ -137,6 +138,31 @@ def _get_llm_pricing_per_1m() -> dict[str, dict[str, float]]:
     return pricing  # type: ignore[return-value]
 
 
+def _get_llm_pricing_token_unit_divisor() -> int:
+    llm_settings = load_global_settings().get(KEY_LLM_SETTINGS, {})
+    if not isinstance(llm_settings, dict):
+        raise ValueError("LLM settings must be configured in Admin.")
+    metadata = llm_settings.get("pricing_metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("LLM pricing metadata must be configured in Admin.")
+    unit = str(metadata.get("unit") or "").strip().lower()
+    if unit in {"per_1m_tokens", "per_million_tokens", "per_1000000_tokens"}:
+        return 1_000_000
+    if unit in {"per_1k_tokens", "per_thousand_tokens", "per_1000_tokens"}:
+        return 1_000
+    raise ValueError(
+        "Unsupported LLM pricing unit. Configure llm_settings.pricing_metadata.unit as "
+        "'per_1m_tokens' or 'per_1k_tokens'."
+    )
+
+
+def _calculate_llm_cost_usd(tok_in: int, tok_out: int, prices: dict[str, float]) -> float:
+    divisor = _get_llm_pricing_token_unit_divisor()
+    if "input" not in prices or "output" not in prices:
+        raise ValueError("LLM pricing for selected model must include input and output prices.")
+    return (tok_in * prices["input"] + tok_out * prices["output"]) / divisor
+
+
 def _get_llm_prompt_settings() -> dict[str, Any]:
     prompt_settings = load_global_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
     if not isinstance(prompt_settings, dict) or not prompt_settings:
@@ -153,7 +179,7 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
     tok_in  = getattr(usage, "input_tokens",  None) or getattr(usage, "prompt_tokens",     0) or 0
     tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens",  0) or 0
     prices  = _get_llm_pricing_per_1m()[model]
-    cost    = (tok_in * prices["input"] + tok_out * prices["output"]) / 1_000_000
+    cost    = _calculate_llm_cost_usd(tok_in, tok_out, prices)
     _session_cost_usd += cost
 
     entry = build_llm_cost_entry(
@@ -165,15 +191,16 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
         session_usd=_session_cost_usd,
     )
     append_llm_cost_log(_LLM_COSTS_PATH, entry)
-    logger.info(
-        "[LLM][COST] purpose=%s model=%s input_tokens=%d output_tokens=%d call_cost_usd=%.6f session_cost_usd=%.6f",
-        purpose,
-        model,
-        tok_in,
-        tok_out,
-        cost,
-        _session_cost_usd,
-    )
+    if DEBUG_MODE:
+        logger.info(
+            "[LLM][COST] purpose=%s model=%s input_tokens=%d output_tokens=%d call_cost_usd=%.6f session_cost_usd=%.6f",
+            purpose, model, tok_in, tok_out, cost, _session_cost_usd,
+        )
+    else:
+        logger.info(
+            "[LLM] %-30s  $%.4f  (%d in + %d out tokens)  session: $%.4f",
+            purpose, cost, tok_in, tok_out, _session_cost_usd,
+        )
 
 
 def get_session_cost_usd() -> float:
@@ -264,8 +291,30 @@ class _LLMFitReviewPayload(BaseModel):
     job_requirements: list[str] = Field(default_factory=list)
 
 
+class LLMCallError(RuntimeError):
+    """LLM API call failed. Carries metadata for structured pipeline logging."""
+
+    def __init__(self, message: str, *, purpose: str, model: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.purpose = purpose
+        self.model = model
+        self.status_code = status_code
+
+
 _api_key = os.environ.get("OPENAI_API_KEY")
-client = OpenAI(api_key=_api_key) if (_api_key and not _NO_LLM_MODE) else None
+
+
+def _build_openai_client() -> OpenAI | None:
+    if not _api_key or _NO_LLM_MODE:
+        return None
+    settings = load_global_settings().get(KEY_LLM_SETTINGS, {})
+    # Defaults match global_settings.json; active after db_seed --upgrade on existing deployments.
+    timeout = float(settings.get("request_timeout_seconds") or 30.0)
+    max_retries = int(settings.get("max_retries") if settings.get("max_retries") is not None else 0)
+    return OpenAI(api_key=_api_key, timeout=timeout, max_retries=max_retries)
+
+
+client = _build_openai_client()
 ALLOWED_LEARNING_CATEGORIES = frozenset(VALID_SIGNAL_CATEGORIES - {CATEGORY_HARD_BLOCKER_PATTERN})
 
 
@@ -381,6 +430,18 @@ def build_profile_prompt_context() -> str:
         parts.append(tier_text[:tier_limit])
 
     return "\n".join(part for part in parts if part)
+
+
+def build_job_requirements_prompt() -> str:
+    parts = [
+        LLM_PROMPT_JSON_ONLY,
+        LLM_PROMPT_DO_NOT_INVENT,
+        LLM_PROMPT_USE_VISIBLE_STRINGS,
+        LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+        f"Return exactly this shape: {LLM_JOB_REQUIREMENTS_PROMPT_SHAPE}",
+        f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
+    ]
+    return "\n".join(parts)
 
 
 def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
@@ -681,10 +742,15 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
 
     try:
         model = _log_llm_model_once()
+        _desc_limit = get_llm_job_description_max_chars()
+        _desc_truncated = description[:_desc_limit]
         logger.info(
-            "[LLM][REQUEST] purpose=rejection_suggestions model=%s input_chars=%d max_output_tokens=%d",
+            "[LLM][REQUEST] purpose=rejection_suggestions model=%s description_chars_fetched=%d"
+            " description_chars_sent_to_llm=%d truncation_applied=%s max_output_tokens=%d",
             model,
-            len(description[:get_llm_job_description_max_chars()]),
+            len(description),
+            len(_desc_truncated),
+            str(len(description) > _desc_limit).lower(),
             get_llm_rejection_blocker_suggestions_max_output_tokens(),
         )
         resp = active_client.responses.create(
@@ -693,8 +759,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX
-                    + description[:get_llm_job_description_max_chars()],
+                    "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + _desc_truncated,
                 },
             ],
             max_output_tokens=get_llm_rejection_blocker_suggestions_max_output_tokens(),
@@ -764,7 +829,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
             raw = raw.split("```")[1].lstrip("json").strip()
         labels = _json_mod.loads(raw)
         if not isinstance(labels, list): # Catches any exception during JSON loading
-            print(f"[LLM][CAPABILITY_NAMING][WARN] LLM returned non-list for capability naming: {raw[:200]}")
+            logger.warning("[LLM][CAPABILITY_NAMING][WARN] LLM returned non-list for capability naming: %r", raw[:200])
             return []
         return [str(label).strip().lower() for label in labels[: len(payload)]]
     except Exception as exc:
@@ -825,11 +890,13 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
 
     try:
         model = _log_llm_model_once()
+        # job_description_text is already truncated by the caller (source_learning.resolve_llm_review_payload).
+        # Log its length directly; do not re-apply the limit here.
         logger.info(
             "[LLM][REQUEST] purpose=%s model=%s input_chars=%d max_output_tokens=%d",
             "fit_review" if fit_review else "learning_candidates",
             model,
-            len(job_description_text[:get_llm_max_chars()]),
+            len(job_description_text),
             get_llm_fit_decision_max_output_tokens() if fit_review else get_llm_learning_candidates_max_output_tokens(),
         )
         resp = client.responses.parse(
@@ -846,8 +913,19 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
             text_format=_LLMFitReviewPayload if fit_review else _LLMReviewPayload,
         )
         _log_llm_call(resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model)
+    except APIStatusError as exc:
+        raise LLMCallError(
+            f"HTTP {exc.status_code} — {exc.message}",
+            purpose="fit_review" if fit_review else "learning_candidates",
+            model=model,
+            status_code=exc.status_code,
+        ) from exc
     except Exception as exc:
-        raise RuntimeError(f"LLM review request failed: {exc}") from exc
+        raise LLMCallError(
+            f"{type(exc).__name__}: {exc}",
+            purpose="fit_review" if fit_review else "learning_candidates",
+            model=model,
+        ) from exc
 
     parsed = getattr(resp, "output_parsed", None)
     if parsed is None:
@@ -868,27 +946,27 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
 
     system_prompt = "\n".join([
         "You extract only the explicit job requirements visible in the ad.",
-        LLM_PROMPT_JSON_ONLY,
-        LLM_PROMPT_DO_NOT_INVENT,
-        LLM_PROMPT_USE_VISIBLE_STRINGS,
-        LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
-        f"Return exactly this shape: {LLM_JOB_REQUIREMENTS_PROMPT_SHAPE}",
-        f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
+        build_job_requirements_prompt(),
     ])
 
     try:
         model = _log_llm_model_once()
+        _desc_limit = get_llm_job_description_max_chars()
+        _desc_truncated = description[:_desc_limit]
         logger.info(
-            "[LLM][REQUEST] purpose=job_requirements model=%s input_chars=%d max_output_tokens=%d",
+            "[LLM][REQUEST] purpose=job_requirements model=%s description_chars_fetched=%d"
+            " description_chars_sent_to_llm=%d truncation_applied=%s max_output_tokens=%d",
             model,
-            len(description[:get_llm_job_description_max_chars()]),
+            len(description),
+            len(_desc_truncated),
+            str(len(description) > _desc_limit).lower(),
             get_llm_job_requirements_max_output_tokens(),
         )
         resp = active_client.responses.parse(
             model=model,
             input=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + description},
+                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + _desc_truncated},
             ],
             max_output_tokens=get_llm_job_requirements_max_output_tokens(),
             text_format=_LLMJobRequirementsPayload,

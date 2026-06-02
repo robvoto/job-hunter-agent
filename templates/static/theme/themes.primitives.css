@@ -1,4 +1,4 @@
-/* Shared primitives
+﻿/* Shared primitives
    Base document defaults, buttons, wait state, and small input wrappers.
 */
 
@@ -22,6 +22,30 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* Shared page-shell input chrome for pages that use the .page wrapper. */
+.page input,
+.page textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--control-pad-block-2xl) var(--control-pad-inline-lg);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.page input[type="text"],
+.page input[type="number"],
+.page input[type="search"] {
+  border-radius: var(--radius-sm);
+  padding-block: var(--control-pad-block-lg);
+}
+
+.page input:focus,
+.page textarea:focus {
+  outline: 2px solid var(--selection-accent);
+  outline-offset: 2px;
 }
 
 .btn {
@@ -238,3 +262,4 @@ body.job-hunter-wait-active {
   color: var(--state-info-text);
   border-color: var(--state-info-border);
 }
+

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 
 
 from datetime import datetime
@@ -11,6 +12,10 @@ from datetime import datetime
 
 
 from job_hunter_agent import workspace_service
+from job_hunter_agent.config import DEBUG_MODE
+from job_hunter_agent.logging_utils import format_log_block
+
+logger = logging.getLogger(__name__)
 
 from job_hunter_agent.job_identity import deduplicate_across_sources
 
@@ -172,33 +177,105 @@ def _format_workspace_counts(workspace_records: dict[str, list[dict]], minimum_s
 
 
 
+def _format_duration(run_stats: dict) -> str:
+    try:
+        started = parse_timestamp(str(run_stats.get("run_started_at") or ""))
+        finished = parse_timestamp(str(run_stats.get("run_finished_at") or ""))
+        if started and finished:
+            secs = int((finished - started).total_seconds())
+            if secs >= 60:
+                return f"{secs // 60}m {secs % 60}s"
+            return f"{secs}s"
+    except Exception:
+        pass
+    return ""
+
+
+_TITLE_REJECT_CODES = frozenset({"TITLE_NOT_TARGET", "TITLE_EMPTY", "TITLE_BAD_KEYWORD"})
+_DETAIL_ERROR_CODES = frozenset({
+    "NO_DETAILS", "DETAILS_CHALLENGE_PAGE", "DETAILS_BLOCKED_PAGE",
+    "DETAILS_NAVIGATION_ERROR", "NO_DESCRIPTION_TRUST",
+})
+
+
+def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
+    source_counts: dict[str, int] = {}
+    title_rejected = onet_far_rejected = card_rejected = detail_fetch_errors = 0
+    llm_calls = llm_errors = llm_cache_hits = final_review = 0
+    for row in audit_rows:
+        src = str(row.get("source") or "unknown")
+        source_counts[src] = source_counts.get(src, 0) + 1
+        reason = str(row.get("reject_reason") or "")
+        if reason.split(":")[0] in _TITLE_REJECT_CODES:
+            title_rejected += 1
+        if reason == "ONET_FAR_OCCUPATION":
+            onet_far_rejected += 1
+        if row.get("_obs_card_rejected"):
+            card_rejected += 1
+        if reason in _DETAIL_ERROR_CODES:
+            detail_fetch_errors += 1
+        if row.get("_obs_llm_called"):
+            llm_calls += 1
+        if row.get("_obs_llm_error"):
+            llm_errors += 1
+        if row.get("_obs_llm_cache_hit"):
+            llm_cache_hits += 1
+        if row.get("review_source"):
+            final_review += 1
+
+    elapsed_seconds = 0
+    try:
+        started = parse_timestamp(str(run_stats.get("run_started_at") or ""))
+        finished = parse_timestamp(str(run_stats.get("run_finished_at") or ""))
+        if started and finished:
+            elapsed_seconds = int((finished - started).total_seconds())
+    except Exception:
+        pass
+
+    logger.info(format_log_block("PIPELINE][RUN_SUMMARY", {
+        "run_id": str(run_stats.get("last_run_attempt_at") or ""),
+        "source_counts": source_counts,
+        "cards_seen": run_stats.get("cards_seen", 0),
+        "title_rejected": title_rejected,
+        "onet_far_rejected": onet_far_rejected,
+        "card_rejected": card_rejected,
+        "detail_fetches": run_stats.get("cards_read", run_stats.get("detail_fetches", 0)),
+        "detail_fetch_errors": detail_fetch_errors,
+        "llm_calls": llm_calls,
+        "llm_errors": llm_errors,
+        "llm_cache_hits": llm_cache_hits,
+        "final_keep": run_stats.get("kept_count", 0),
+        "final_review": final_review,
+        "final_reject": run_stats.get("rejected_count", 0),
+        "elapsed_seconds": elapsed_seconds,
+    }))
+
+
 def _print_run_summary(run_stats: dict) -> None:
+    pages = run_stats.get("page_count", 0)
+    seen = run_stats.get("cards_seen", 0)
+    read = run_stats.get("cards_read", run_stats.get("detail_fetches", 0))
+    kept = run_stats.get("kept_count", 0)
+    rejected = run_stats.get("rejected_count", 0)
+    flagged = run_stats.get("cards_with_flags_count", 0)
+    llm_cost = float(run_stats.get("llm_total_cost_usd", 0.0) or 0.0)
+    duration = _format_duration(run_stats)
 
-    print("\nRun summary:")
-
-    print(f"  pages={run_stats.get('page_count', 0)}")
-
-    print(f"  cards_seen={run_stats.get('cards_seen', 0)}")
-
-    print(f"  cards_read={run_stats.get('cards_read', run_stats.get('detail_fetches', 0))}")
-
-    print(f"  kept={run_stats.get('kept_count', 0)}")
-
-    print(f"  rejected={run_stats.get('rejected_count', 0)}")
-
-    print(
-
-        "  cards_with_flags="
-
-        f"{run_stats.get('cards_with_flags_count', 0)} "
-
-        "(kept cards can still count if they carry review flags)"
-
-    )
-
-    print(f"  total_llm_cost=${float(run_stats.get('llm_total_cost_usd', 0.0) or 0.0):.6f}")
-
-    print(f"  flag_breakdown:{_format_issue_flag_summary(run_stats)}")
+    bar = "=" * 52
+    lines = [f"\n{bar}", "  Run complete", f"  Pages:      {pages}"]
+    lines.append(f"  Jobs seen:  {seen}  →  descriptions read: {read}  →  kept: {kept}  |  rejected: {rejected}")
+    if flagged:
+        lines.append(f"  Flagged:    {flagged}  (review suggestions available)")
+    lines.append(f"  LLM cost:   ${llm_cost:.4f}")
+    if duration:
+        lines.append(f"  Duration:   {duration}")
+    flags = _format_issue_flag_summary(run_stats)
+    if flags.strip():
+        lines.append(f"  Flags:     {flags}")
+    if DEBUG_MODE:
+        lines.append(f"  (debug) pages={pages} cards_seen={seen} cards_read={read} kept={kept} rejected={rejected} flags={flagged} cost=${llm_cost:.6f}")
+    lines.append(bar)
+    logger.info("\n".join(lines))
 
 
 
@@ -258,6 +335,7 @@ def finalize_scrape_run(
 
         }
 
+        _log_run_summary(run_stats, [])
         _print_run_summary(run_stats)
 
         workspace_service.render_html(
@@ -304,11 +382,11 @@ def finalize_scrape_run(
 
         workspace_path = get_workspace_results_path()
 
-        print(f"\n[RUN][ERROR] {NO_FRESH_CARDS_ERROR}")
+        logger.error("[RUN][ERROR] %s", NO_FRESH_CARDS_ERROR)
 
-        print("The previous workspace state was preserved.")
+        logger.info("The previous workspace state was preserved.")
 
-        print(f"Workspace results preserved at {workspace_path}")
+        logger.info("Workspace results preserved at %s", workspace_path)
 
         return str(workspace_path)
 
@@ -320,7 +398,7 @@ def finalize_scrape_run(
 
     new_count = len(merged_pool) - len(pool)
 
-    print(f"[Pool] {len(pool)} existing + {new_count} new = {len(merged_pool)} total records")
+    logger.info("[Pool] %d existing + %d new = %d total records", len(pool), new_count, len(merged_pool))
 
 
 
@@ -414,23 +492,24 @@ def finalize_scrape_run(
 
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
 
+    _log_run_summary(run_stats, audit_rows)
     _print_run_summary(run_stats)
 
     if no_fresh_cards:
 
-        print(f"\n[RUN][ERROR] {NO_FRESH_CARDS_ERROR}")
+        logger.error("[RUN][ERROR] %s", NO_FRESH_CARDS_ERROR)
 
-    print(f"  workspace_visible={_format_workspace_counts(workspace_records, context.dashboard_min_score)}")
+    logger.info("  workspace_visible=%s", _format_workspace_counts(workspace_records, context.dashboard_min_score))
 
-    print(f"\nSaved {len(kept_records)} jobs to {workspace_path}")
+    logger.info("Saved %d jobs to %s", len(kept_records), workspace_path)
 
-    print(f"Saved {len(audit_rows)} audit rows to DB")
+    logger.info("Saved %d audit rows to DB", len(audit_rows))
 
-    print("Saved run stats to DB")
+    logger.info("Saved run stats to DB")
 
-    print("Saved review data to DB")
+    logger.info("Saved review data to DB")
 
-    print(f"Saved history for {len(context.job_history)} jobs to DB")
+    logger.info("Saved history for %d jobs to DB", len(context.job_history))
 
     return str(workspace_path)
 

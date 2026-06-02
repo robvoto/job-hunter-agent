@@ -14,11 +14,14 @@ mechanisms for caching LLM responses to improve efficiency. It also handles
 the normalization and validation of extracted data to ensure consistency.
 """
 import hashlib
+import logging
 import re
 import traceback
 from functools import lru_cache
 from datetime import datetime
 from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -77,13 +80,13 @@ _CURRENT_YEAR = datetime.now().year
 
 
 def _cap_log(msg: str) -> None:
-    print(msg)
+    logger.info("%s", msg)
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         with CAP_DEBUG_LOG.open("a", encoding="utf-8") as fh:
             fh.write(msg + "\n")
     except Exception as exc:
-        print(f"[CAP_LOG ERROR] could not write capability_debug.log: {exc}")
+        logger.warning("[CAP_LOG ERROR] could not write capability_debug.log: %s", exc)
 
 
 def clear_capability_debug_log() -> None:
@@ -93,9 +96,9 @@ def clear_capability_debug_log() -> None:
             f"# capability_debug.log — onboarding run {datetime.now().isoformat()}Z\n",
             encoding="utf-8",
         )
-        print(f"[CAP_LOG] capability_debug.log reset at {CAP_DEBUG_LOG}")
+        logger.info("[CAP_LOG] capability_debug.log reset at %s", CAP_DEBUG_LOG)
     except Exception as exc:
-        print(f"[CAP_LOG ERROR] could not reset capability_debug.log: {exc}")
+        logger.warning("[CAP_LOG ERROR] could not reset capability_debug.log: %s", exc)
 
 
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")

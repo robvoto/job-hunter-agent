@@ -116,6 +116,37 @@ class _LineLoggingStream:
         return False
 
 
+_SUPPRESSED_ACCESS_PATHS = frozenset([
+    "/api/run-status",
+    "/api/run-status/",
+])
+
+
+class _AccessLogFilter(logging.Filter):
+    """Drops uvicorn access log lines for high-frequency polling endpoints."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(path in msg for path in _SUPPRESSED_ACCESS_PATHS)
+
+
+_CONSOLE_SUPPRESSED_FRAGMENTS = (
+    "[CAPABILITY_SCORING][BELOW_THRESHOLD]",
+)
+
+
+class _ConsoleNoiseFilter(logging.Filter):
+    """Console-only filter: hides verbose scoring internals.
+
+    These lines are still written to the file log at INFO level for post-run
+    analysis. Only the terminal display is suppressed.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(fragment in msg for fragment in _CONSOLE_SUPPRESSED_FRAGMENTS)
+
+
 def _configure_server_logging() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -127,12 +158,16 @@ def _configure_server_logging() -> None:
                 "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
+            "console": {
+                "format": "%(asctime)s  %(message)s",
+                "datefmt": "%H:%M:%S",
+            },
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "level": "INFO",
-                "formatter": "standard",
+                "formatter": "console",
                 "stream": "ext://sys.__stdout__",
             },
             "file": {
@@ -166,6 +201,19 @@ def _configure_server_logging() -> None:
         },
     }
     logging.config.dictConfig(logging_config)
+
+    access_filter = _AccessLogFilter()
+    logging.getLogger("uvicorn.access").addFilter(access_filter)
+
+    # Console-only noise filter — applied to the handler, not the logger,
+    # so the file handler still receives everything at INFO.
+    console_handler = next(
+        (h for h in logging.getLogger().handlers if isinstance(h, logging.StreamHandler)
+         and not isinstance(h, logging.FileHandler)),
+        None,
+    )
+    if console_handler:
+        console_handler.addFilter(_ConsoleNoiseFilter())
 
     app_logger = logging.getLogger("job_hunter_agent.app")
     sys.stdout = _LineLoggingStream(app_logger, logging.INFO)

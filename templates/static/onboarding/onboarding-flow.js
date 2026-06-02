@@ -83,6 +83,12 @@ if (!onboardingFlowLabels) {
 if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.onboarding_no_match_text) {
   throw new Error('Missing capability UI labels.');
 }
+if (
+  !onboardingFlowLabels.review_capability_extracted_skills_label_one
+  || !onboardingFlowLabels.review_capability_extracted_skills_label_many
+) {
+  throw new Error('Missing review capability labels.');
+}
 
 function normalizeReviewTitle(value) {
   return patternToLabel(value) || normalizeReviewText(value);
@@ -103,6 +109,12 @@ function formatLabel(template, values = {}) {
     }
     return '';
   });
+}
+
+function formatReviewCapabilitySkillsLabel(count) {
+  return count === 1
+    ? onboardingFlowLabels.review_capability_extracted_skills_label_one
+    : formatLabel(onboardingFlowLabels.review_capability_extracted_skills_label_many, { count });
 }
 
 function locationLabel(value) {
@@ -348,9 +360,7 @@ function updateCheckStep() {
   flowRefs.checkSalaryDaily.textContent = formatCurrencySummaryValue(searchPrefs.minimum_daily_rate);
   if (flowRefs.confirmReview) {
     const canFinish = onboardingPage.reviewTargetTitles.length > 0 && onboardingPage.reviewCapabilityRules.length > 0;
-    flowRefs.confirmReview.disabled = !canFinish;
     flowRefs.confirmReview.setAttribute('aria-disabled', canFinish ? 'false' : 'true');
-    flowRefs.confirmReview.title = canFinish ? '' : 'Add at least one title and one capability before finishing onboarding.';
   }
 }
 
@@ -406,7 +416,8 @@ function selectVisibleReviewCapabilities() {
   const orderedRules = onboardingPage.reviewCapabilityRules
     .map((rule, index) => ({ rule, index }))
     .sort((left, right) => left.rule.name.localeCompare(right.rule.name))
-    .filter((item) => !filterTerm || item.rule.name.toLowerCase().includes(filterTerm));
+    .filter((item) => !filterTerm || item.rule.name.toLowerCase().includes(filterTerm)
+      || item.rule.aliases.some((alias) => (patternToLabel(alias) || alias).toLowerCase().includes(filterTerm)));
   const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, onboardingPage.reviewCapabilityVisibleCount);
   visibleRules.forEach(({ index }) => onboardingPage.selectedReviewCapabilityIndexes.add(index));
   renderReviewCapabilities();
@@ -444,7 +455,7 @@ function renderReviewCapabilities() {
     .filter((item) => {
       if (!filterTerm) return true;
       return item.rule.name.toLowerCase().includes(filterTerm)
-        || item.rule.aliases.some((alias) => alias.includes(filterTerm));
+        || item.rule.aliases.some((alias) => (patternToLabel(alias) || alias).toLowerCase().includes(filterTerm));
     });
   const visibleRules = filterTerm ? orderedRules : orderedRules.slice(0, onboardingPage.reviewCapabilityVisibleCount);
   const hiddenCount = Math.max(orderedRules.length - visibleRules.length, 0);
@@ -462,6 +473,11 @@ function renderReviewCapabilities() {
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     const displayName = titleCaseName || onboardingFlowLabels.capability_untitled_label;
+    const extractedSkillsLabel = formatReviewCapabilitySkillsLabel(rule.aliases.length);
+    const extractedSkillPreview = rule.aliases
+      .slice(0, 3)
+      .map((alias) => escapeHtml(patternToLabel(alias) || alias))
+      .join(' · ');
     const aliasHtml = (() => {
       if (!rule.aliases.length) return '';
       const aliasChips = rule.aliases.map((alias) =>
@@ -471,11 +487,12 @@ function renderReviewCapabilities() {
         </span>`
       ).join('');
       return `
+        ${extractedSkillPreview ? `<p class="help">${extractedSkillPreview}</p>` : ''}
         <details class="capability-alias-drawer">
           <summary class="cap-alias-summary">
-            <span class="capability-summary-label">${escapeHtml(capabilityLabels.related_skills_summary.replace('{count}', String(rule.aliases.length)))}</span>
+            <span class="capability-summary-label">${escapeHtml(extractedSkillsLabel)}</span>
           </summary>
-          <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
+          <div class="cap-alias-chips" aria-label="${escapeHtml(extractedSkillsLabel)}">${aliasChips}</div>
         </details>
       `;
     })();
@@ -696,6 +713,9 @@ async function finishSetup() {
   validateSearchPreferences(searchPrefs);
   if (!onboardingPage.reviewTargetTitles.length) {
     throw new Error(onboardingFlowTitleTierLabels.keep_target_roles_finish_error);
+  }
+  if (!onboardingPage.reviewCapabilityRules.length) {
+    throw new Error(onboardingFlowLabels.finish_setup_incomplete_error);
   }
 
   const response = await jobHunterFetch('/api/onboarding/confirm-profile-signals', {
@@ -1098,9 +1118,6 @@ async function initWizard() {
   onboardingUpload.updatePrimaryCvStatus(primaryCvInput?.files?.[0] || onboardingPage.preservedPrimaryCvFile || null);
   onboardingUpload.updateCreateProfileAvailability();
   updateCompensationVisibility();
-  if (profileStatus.has_profile && !profileStatus.profile_ready_for_review && profileStatus.blocking_reason) {
-    showStatus(profileStatus.blocking_reason, 'error');
-  }
 }
 
 initWizard().catch((error) => { console.error('[ONBOARDING] initWizard failed:', error); });

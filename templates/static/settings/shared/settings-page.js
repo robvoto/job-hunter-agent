@@ -72,6 +72,7 @@ document.querySelectorAll('[data-screen]').forEach((element) => {
 if (isAdminPage && bootstrapGlobalSettings) {
   loadedGlobalSettings = bootstrapGlobalSettings;
   adminSettings.fillGlobalForm(bootstrapGlobalSettings);
+  adminSettings.loadGlobalSettingsHelp?.();
   renderLlmModelOptions();
 }
 
@@ -344,6 +345,7 @@ async function loadGlobalSettings() {
   const settings = await response.json();
   loadedGlobalSettings = settings;
   adminSettings.fillGlobalForm(settings);
+  adminSettings.loadGlobalSettingsHelp?.();
   renderLlmModelOptions();
 }
 
@@ -598,6 +600,7 @@ async function saveActivePage() {
       if (!globalResponse.ok) throw new Error(globalPayload.error || 'Could not save global settings.');
       loadedGlobalSettings = globalPayload;
       adminSettings.fillGlobalForm(globalPayload);
+      adminSettings.applyGlobalSettingsHelp?.();
       renderLlmModelOptions();
       showInlineStatus(globalStatus, 'Global settings saved.', 'success');
       showStatus('Global settings saved successfully.', 'success');

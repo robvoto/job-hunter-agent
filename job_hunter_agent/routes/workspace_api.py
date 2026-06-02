@@ -9,6 +9,7 @@ from starlette.responses import Response
 
 
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.run_control import get_run_progress, request_run_stop, run_stop_requested
 
 from job_hunter_agent.io_utils import load_review_data, load_run_stats
 
@@ -107,6 +108,9 @@ def api_run_stats():  # type: ignore[no-untyped-def]
 def api_run_status():  # type: ignore[no-untyped-def]
 
     last_run = srv._read_last_run_timestamp()
+    running = srv._is_run_in_progress()
+    stopping = running and run_stop_requested()
+    progress = get_run_progress()
 
     return json_response(
 
@@ -114,7 +118,9 @@ def api_run_status():  # type: ignore[no-untyped-def]
 
             "ok": True,
 
-            "status": "running" if srv._is_run_in_progress() else "idle",
+            "status": "stopping" if stopping else "running" if running else "idle",
+            "stop_requested": stopping,
+            "progress": progress or None,
 
             "last_run_at": last_run,
 
@@ -124,6 +130,39 @@ def api_run_status():  # type: ignore[no-untyped-def]
 
     )
 
+
+
+
+
+@router.post("/api/run/stop")
+
+def api_run_stop():  # type: ignore[no-untyped-def]
+
+    if not srv._is_run_in_progress():
+        return json_response({"ok": True, "status": "idle", "stop_requested": False})
+
+    request_run_stop()
+    last_run = srv._read_last_run_timestamp()
+    progress = get_run_progress()
+
+    return json_response(
+
+        {
+
+            "ok": True,
+
+            "status": "stopping",
+
+            "stop_requested": True,
+            "progress": progress or None,
+
+            "last_run_at": last_run,
+
+            "has_run": last_run is not None,
+
+        },
+
+    )
 
 
 

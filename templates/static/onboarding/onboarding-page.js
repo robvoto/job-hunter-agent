@@ -37,6 +37,7 @@ export const refs = Object.freeze({
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
   reviewCapabilityTitle: document.getElementById('review_capability_title'),
   reviewCapabilityHelp: document.getElementById('review_capability_help'),
+  reviewCapabilityHelper: document.getElementById('review_capability_helper'),
 });
 const {
   status: statusEl,
@@ -66,6 +67,7 @@ const {
   reviewCapabilityCards: reviewCapabilityCardsEl,
   reviewCapabilityTitle: reviewCapabilityTitleEl,
   reviewCapabilityHelp: reviewCapabilityHelpEl,
+  reviewCapabilityHelper: reviewCapabilityHelperEl,
 } = refs;
 const statusUi = createMessageBannerController(statusEl);
 export const STEP_COUNT = 4;
@@ -74,6 +76,7 @@ export const SEARCH_STEP = 3;
 export const CHECK_STEP = 4;
 const capabilityLabels = onboardingCapabilityUi.labels;
 const escapeHtml = onboardingSettingsUtils.escapeHtml;
+const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
 const ONBOARDING_CV_PAGE_LIMIT = Number(window.__JOB_HUNTER_ONBOARDING_DEFAULTS__.cv_max_pages);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__;
 const minContractMonthOptions = window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__;
@@ -85,6 +88,9 @@ if (!onboardingPageTitleTierLabels) {
 }
 if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.filter_placeholder) {
   throw new Error('Missing capability UI labels.');
+}
+if (!onboardingFlowLabels || !onboardingFlowLabels.review_capability_helper_copy) {
+  throw new Error('Missing onboarding flow labels.');
 }
 if (typeof escapeHtml !== 'function') {
   throw new Error('Missing HTML escaping helper.');
@@ -139,6 +145,9 @@ if (checkCapabilitiesLabelEl) {
 }
 if (reviewCapabilityHelpEl) {
   reviewCapabilityHelpEl.textContent = capabilityLabels.help_text;
+}
+if (reviewCapabilityHelperEl) {
+  reviewCapabilityHelperEl.textContent = onboardingFlowLabels.review_capability_helper_copy;
 }
 if (reviewCapabilityFilterEl) {
   reviewCapabilityFilterEl.placeholder = capabilityLabels.filter_placeholder;

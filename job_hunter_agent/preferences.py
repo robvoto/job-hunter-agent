@@ -492,6 +492,12 @@ def display_work_type_label(record: dict) -> str:
 
         return ""
 
+    normalized = re.sub(r"[\s_-]+", " ", raw_work_type.lower()).strip()
+
+    if normalized in {"ftc", "full time contract", "fulltime contract", "full time/contract", "full-time contract"}:
+
+        return "FTC"
+
 
 
     is_perm, is_contract = _parse_work_type_flags(raw_work_type)
@@ -561,6 +567,10 @@ def _parse_work_type_flags(work_type: str) -> tuple[bool, bool]:
     """Returns (is_perm, is_contract) from a raw work_type string."""
 
     normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(work_type).lower()).strip()
+
+    if normalized in {"ftc", "full time contract", "fulltime contract", "full time/contract", "full-time contract"}:
+
+        return False, True
 
     kw = load_parsing_rules().get("engagement_keywords", {})
 

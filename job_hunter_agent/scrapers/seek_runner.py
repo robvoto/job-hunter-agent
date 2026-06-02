@@ -15,6 +15,7 @@ from playwright._impl._errors import TargetClosedError
 from playwright.sync_api import sync_playwright
 
 from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
+from job_hunter_agent.llm_gate import get_session_cost_usd
 from job_hunter_agent.global_settings import get_playwright_browser_mode
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.history import finalize_record
@@ -22,10 +23,13 @@ from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
+    close_job_block,
+    print_job_human_summary,
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 import job_hunter_agent.record_schema as rs
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.scrapers.base import build_initial_flat_record, _build_initial_source_metadata
@@ -50,6 +54,41 @@ from job_hunter_agent.work_mode_extraction import (
 )
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
+RUN_PROGRESS_ITEM_SEPARATOR = " | "
+RUN_PROGRESS_TITLE_SEPARATOR = " @ "
+RUN_PROGRESS_ELAPSED_PREFIX = "elapsed "
+
+
+def _format_seek_elapsed(elapsed_s: float | int | None) -> str:
+    elapsed = max(int(float(elapsed_s or 0)), 0)
+    minutes, seconds = divmod(elapsed, 60)
+    if minutes:
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"
+
+
+def _seek_run_progress(
+    page_num: int,
+    total_pages: int,
+    title: str = "",
+    company: str = "",
+    elapsed_s: float | int | None = None,
+) -> str:
+    progress = f"SEEK page {page_num}/{total_pages}"
+    title_text = str(title or "").strip()
+    company_text = str(company or "").strip()
+    elapsed_text = _format_seek_elapsed(elapsed_s)
+    if title_text and company_text:
+        return (
+            f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}"
+            f"{title_text}{RUN_PROGRESS_TITLE_SEPARATOR}{company_text}"
+            f"{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
+        )
+    if title_text:
+        return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{title_text}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
+    if company_text:
+        return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{company_text}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
+    return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
 
 
 def _seek_nested_value(payload: object, key_names: tuple[str, ...]) -> object:
@@ -229,8 +268,10 @@ def _process_seek_job_details(
         details_payload = fetch_job_details_payload(detail_page, record[rs.RECORD_URL_KEY])
         details_text = str(details_payload.get("text") or "")
         details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
+        _fetch_ms = int((time.monotonic() - _t0) * 1000)
         logger.info("[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
-                    job_key, title, company, details_status, int((time.monotonic() - _t0) * 1000), len(details_text))
+                    job_key, title, company, details_status, _fetch_ms, len(details_text))
+        record["_obs_detail_fetch_ms"] = _fetch_ms
         source_metadata, raw_source_payload = _seek_source_metadata(detail_page, details_payload)
         record[rs.RECORD_SOURCE_METADATA_KEY] = source_metadata
         record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
@@ -286,6 +327,7 @@ def seek_scrape_to_records(
         llm_cache=llm_cache,
         applied_job_keys=applied_job_keys,
         hidden_job_keys=hidden_job_keys,
+        seen_job_keys=set(),
         seen_urls=seen_urls,
         run_iso=run_iso,
         date_range_days=configured_date_range,
@@ -314,89 +356,123 @@ def seek_scrape_to_records(
         try:
             total_targets = len(search_targets)
             for target_index, search_target in enumerate(search_targets, start=1):
+                if run_stop_requested():
+                    logger.info("[SEEK] stop requested; ending scrape")
+                    break
                 base_search_url = search_target["url"]
                 search_location = search_target["location"]
                 search_keywords = search_target["keywords"]
                 classification_ids = ",".join(search_target.get("classification_ids", []))
                 current_page_num = 1
+                target_t0 = time.monotonic()
 
-                print(
-                    f"[SEEK] target {target_index}/{total_targets} | "
-                    f"location={search_location or '(all)'} | "
-                    f"keywords={search_keywords or '(unset)'} | "
-                    f"classifications={classification_ids or '(none)'} | "
-                    f"pages=1..{configured_seek_max_pages}"
+                logger.info(
+                    "[SEEK] target %d/%d | location=%s | keywords=%s | classifications=%s | pages=1..%d",
+                    target_index, total_targets,
+                    search_location or "(all)",
+                    search_keywords or "(unset)",
+                    classification_ids or "(none)",
+                    configured_seek_max_pages,
                 )
 
                 while current_page_num <= configured_seek_max_pages:
                     page_tag = f"[SEEK p{current_page_num}/{configured_seek_max_pages}]"
+                    if run_stop_requested():
+                        logger.info("%s stop requested; ending scrape", page_tag)
+                        break
                     page_url = set_page_param(base_search_url, current_page_num) if current_page_num > 1 else base_search_url
 
-                    print(f"{page_tag} url={page_url}")
+                    logger.info("%s url=%s", page_tag, page_url)
 
                     try:
                         list_page.goto(page_url, wait_until="domcontentloaded")
                         list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
                     except Exception as exc:
-                        print(f"{page_tag} no visible job cards; stopping target [{type(exc).__name__}]")
+                        logger.info("%s no visible job cards; stopping target [%s]", page_tag, type(exc).__name__)
                         break
 
                     job_cards = list_page.query_selector_all(SELECTOR_CARDS)
-                    print(f"{page_tag} cards={len(job_cards)}")
+                    logger.info("%s cards=%d", page_tag, len(job_cards))
 
                     if len(job_cards) == 0:
-                        print(f"{page_tag} no cards found; stopping target")
+                        logger.info("%s no cards found; stopping target", page_tag)
                         break
 
                     filter_state = extract_seek_filter_panel_state(list_page)
                     page_has_fresh_card = False
 
                     for card in job_cards:
+                        if run_stop_requested():
+                            logger.info("%s stop requested; finishing current page", page_tag)
+                            break
                         record = {}
                         title = ""
                         company = ""
                         try:
                             record = build_seek_card_record(card, search_target, run_iso, current_page_num, filter_state)
                             title, company = record[rs.RECORD_TITLE_KEY], record[rs.RECORD_COMPANY_KEY]
+                            set_run_progress(
+                                _seek_run_progress(
+                                    current_page_num,
+                                    configured_seek_max_pages,
+                                    title,
+                                    company,
+                                    time.monotonic() - target_t0,
+                                )
+                            )
                             posted_age_days = record[rs.RECORD_POSTED_AGE_DAYS_KEY]
                             if posted_age_days is None or posted_age_days <= configured_date_range:
                                 page_has_fresh_card = True
 
+                            _job_t0 = time.monotonic()
+                            _job_cost_start = get_session_cost_usd()
                             outcome, record, record_skill_observations = review_seek_card_record(
                                 record,
                                 detail_page,
                                 review_context,
                             )
-                            if outcome["decision"] == "KEEP":
-                                if WORKSPACE_DEBUG_MODE:
-                                    score = fit_score(record, profile)
-                                    breakdown = fit_score_breakdown(record, profile)
-                                    print(
-                                        f"{page_tag} [DEBUG][SCORE] {score}/100 | "
-                                        f"{record[rs.RECORD_TITLE_KEY]} @ {record[rs.RECORD_COMPANY_KEY]} | "
-                                        f"Grade: {record.get('llm_fit_grade')} ({record.get('review_source')}) | "
-                                        f"{record.get(rs.RECORD_URL_KEY, '')}"
-                                    )
-                                    for entry in breakdown:
-                                        print(f"{page_tag}   {entry['label']}: {entry['value']:+d}")
+                            _job_elapsed_s = time.monotonic() - _job_t0
+                            _job_llm_cost  = max(get_session_cost_usd() - _job_cost_start, 0.0)
+                            _job_decision  = outcome.get("decision")
+                            _job_score: int | None = None
+
+                            _job_breakdown: list | None = None
+                            if _job_decision == "KEEP":
+                                _job_score = fit_score(record, profile)
+                                _job_breakdown = fit_score_breakdown(record, profile)
                                 skill_observations.extend(record_skill_observations)
                                 kept_records.append(record)
-                                print(f"{page_tag} KEPT {title} @ {company} | {'SEEN_BEFORE' if record.get('seen_before') else 'NEW'}")
+                                logger.info(
+                                    "%s KEPT %s @ %s | %s",
+                                    page_tag, title, company,
+                                    "SEEN_BEFORE" if record.get("seen_before") else "NEW",
+                                )
+
+                            if _job_decision in {"KEEP", "REJECT"}:
+                                print_job_human_summary(record, profile, elapsed_s=_job_elapsed_s, score=_job_score, llm_cost=_job_llm_cost, breakdown=_job_breakdown)
+                                close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
 
                         except TargetClosedError:
-                            print(f"{page_tag} browser target closed; stopping target")
+                            logger.warning("%s browser target closed; stopping target", page_tag)
                             break
                         except Exception as exc:
                             record[rs.RECORD_DECISION_KEY] = "REJECT"
                             record[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
                             finalize_record(job_history, audit_rows, record, run_iso)
-                            print(f"{page_tag} REJECTED (card) [CARD_EXCEPTION:{type(exc).__name__}] {title} @ {company}\n{traceback.format_exc()}")
+                            logger.warning(
+                                "%s REJECTED (card) [CARD_EXCEPTION:%s] %s @ %s\n%s",
+                                page_tag, type(exc).__name__, title, company, traceback.format_exc(),
+                            )
 
                     if not page_has_fresh_card:
-                        print(f"{page_tag} all cards were older than {configured_date_range} day(s); stopping target")
+                        logger.info("%s all cards were older than %d day(s); stopping target", page_tag, configured_date_range)
+                        break
+
+                    if run_stop_requested():
                         break
 
                     current_page_num += 1
+            set_run_progress("SEEK complete")
         finally:
             context.close()
 

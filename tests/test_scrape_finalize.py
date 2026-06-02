@@ -78,7 +78,9 @@ def _build_context() -> ScrapeRunContext:
 
 
 
-def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys):
+def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplog):
+    import logging as _logging
+    caplog.set_level(_logging.INFO)
 
     context = _build_context()
 
@@ -156,17 +158,20 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys):
 
 
 
-    output = capsys.readouterr().out
+    capsys.readouterr()
+    log_text = caplog.text
 
-    assert "Saved 2 jobs to" in output
+    assert "Saved 2 jobs to" in log_text
 
-    assert "Saved 1 audit rows to" in output
-
-
-
+    assert "Saved 1 audit rows to" in log_text
 
 
-def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(monkeypatch, tmp_path, capsys):
+
+
+
+def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(monkeypatch, tmp_path, capsys, caplog):
+    import logging as _logging
+    caplog.set_level(_logging.INFO)
 
     context = _build_context()
 
@@ -238,17 +243,20 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(mon
 
 
 
-    output = capsys.readouterr().out
+    capsys.readouterr()
+    log_text = caplog.text
 
-    assert "[RUN][ERROR] No fresh cards were captured in this run." in output
+    assert "[RUN][ERROR] No fresh cards were captured in this run." in log_text
 
-    assert "previous workspace state was preserved" in output
-
-
-
+    assert "previous workspace state was preserved" in log_text
 
 
-def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_path, capsys):
+
+
+
+def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_path, capsys, caplog):
+    import logging as _logging
+    caplog.set_level(_logging.INFO)
 
     context = _build_context()
 
@@ -304,9 +312,10 @@ def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_pat
 
     assert any(name == "write_run_stats" for name, _ in calls)
 
-    output = capsys.readouterr().out
+    capsys.readouterr()
+    log_text = caplog.text
 
-    assert "[RUN][ERROR] No fresh cards were captured in this run." in output
+    assert "[RUN][ERROR] No fresh cards were captured in this run." in log_text
 
 
 

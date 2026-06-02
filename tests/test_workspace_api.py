@@ -180,6 +180,15 @@ def test_workspace_welcome_overlay_is_not_gated_on_cv_text():
     assert "blocking_reason" in html_text
 
 
+def test_workspace_template_includes_stop_search_control():
+    html_path = Path(__file__).resolve().parents[1] / "templates" / "workspace.html"
+    html_text = html_path.read_text(encoding="utf-8")
+
+    assert "ws_stop_search_btn" in html_text
+    assert "/api/run/stop" in html_text
+    assert "search_stop_label" in html_text
+
+
 def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch):
     monkeypatch.setattr("job_hunter_agent.profile_store.profile_exists", lambda: True)
     monkeypatch.setattr(source_connector, "get_user_id_for_runtime", lambda: "test-user")
@@ -213,3 +222,29 @@ def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch
 
     assert str(exc.value) == "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
     assert called == []
+
+
+def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"})
+    monkeypatch.setattr("job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(workspace_api.srv, "_read_last_run_timestamp", lambda: "2026-05-26T00:00:00+10:00")
+    monkeypatch.setattr(workspace_api.srv, "_is_run_in_progress", lambda: True)
+    monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "SEEK page 1/3")
+    monkeypatch.setattr(workspace_api, "run_stop_requested", lambda: True)
+    stop_calls = []
+    monkeypatch.setattr(workspace_api, "request_run_stop", lambda: stop_calls.append(True))
+
+    client = TestClient(create_app())
+
+    status_response = client.get("/api/run-status")
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "stopping"
+    assert status_response.json()["stop_requested"] is True
+    assert status_response.json()["progress"] == "SEEK page 1/3"
+
+    stop_response = client.post("/api/run/stop")
+    assert stop_response.status_code == 200
+    assert stop_response.json()["status"] == "stopping"
+    assert stop_response.json()["stop_requested"] is True
+    assert stop_response.json()["progress"] == "SEEK page 1/3"
+    assert stop_calls == [True]

@@ -12,6 +12,8 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Route aliases such as `/workspace` and `/` must stay intentional and documented.
 - Workspace header actions keep settings and logout in the top-right action cluster; do not move logout into the sidebar or hide it behind a drawer.
 - UI structure and visual treatment must come from shared theme tokens/widgets first; page-level CSS is only for screen-specific layout exceptions.
+- Reusable component styling must not be added to page CSS. Before adding CSS to a page file, check whether the selector belongs in `templates/static/theme/themes.widgets.css`, `themes.primitives.css`, or `themes.tokens.css`.
+- If page-local CSS is genuinely required, add a short comment naming the exception, for example: `/* Local layout exception: onboarding step grid placement only. */`
 - Shared blocking overlays must use the existing `job-hunter-wait-*` component from `themes.primitives.css` and `body.job-hunter-wait-active`; do not invent screen-local `ws-wait-*` variants or rename the mount/backdrop/shell classes without updating every consumer.
 - If a workspace run is meant to be non-blocking, make that an explicit product decision. Do not let a class mismatch or partial CSS move silently change blocking behavior.
 - Reuse existing widget patterns for help, drawers, chips, cards, and settings rows instead of creating new variants for the same job.
@@ -20,7 +22,7 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - If the same display text appears in more than one place, centralise it in the owning JSON label source instead of copying it into renderer code.
 - If text or layout looks wrong, check the rendered HTML, the server-side copy source, and the CSS constraint together before editing one layer in isolation.
 - Prefer adjusting the owning copy/data source over patching a template placeholder when the text is injected server-side.
-- If a layout issue is local to one row or field, change only that block instead of widening the whole page.
+- If a layout issue is local to one row or field, change only that owning selector; if the selector is a reusable component, change the central component selector rather than adding a page-local override.
 
 ## Workspace filter pattern
 - Filter options that require data-driven groups are rendered server-side via a `render_*_filter_options()` function in `workspace_renderer.py` and injected as `$..._FILTER_OPTIONS_HTML` placeholders in `results.html`.
@@ -53,8 +55,8 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - `window.__JOB_HUNTER_TITLE_TIER_LABELS__` is injected by `build_bootstrap_script()` and owns the onboarding labels/help text for target roles, also-consider roles, and the search keyword field.
 - The onboarding search keyword is a single term. Do not auto-fill it with comma-joined title lists.
 - Rendered by `server_helpers.render_work_mode_preference_choices()` as three `<label class="choice-card--work-mode">` checkboxes inside `<div id="work_mode_preference">`.
-- CSS grid (`#work_mode_preference`) and card styles (`.choice-card--work-mode`) already exist in `onboarding-page.css` and `settings-page.css`. Do not re-create them.
-- `setWorkModePreferenceValues(values)` in `onboarding-flow.js` and `settings-page.js`: when `values` is empty or none, all checkboxes must default to checked (`selected.size === 0 || selected.has(...)`). The same rule applies to the legacy `<select>` path.
+- Choice-strip layout may be page-specific, but card visual styling (`.choice-card--work-mode` and related reusable chip/button treatment) belongs in the central theme/widget CSS. Do not add duplicate page-local visual overrides.
+- `setWorkModePreferenceValues(values)` in `onboarding-flow.js` and `settings-page.js`: when `values` is empty or none, all checkboxes must default to checked (`selected.size === 0 || selected.has(...)`).
 - The min-one constraint, where the user cannot uncheck the last checkbox, is enforced via a `change` listener added at init in both `onboarding-flow.js` and `settings-page.js`. Programmatic unchecking, for example `setWorkModePreferenceValues([])`, does not fire `change`, so the default-all-selected rule in the setter is the only guard there.
 
 ### Engagement type (`input[name="engagement_pref"]`)
@@ -187,3 +189,5 @@ This is always a version mismatch, not a code bug. Two causes:
 - Are labels and settings validated before use?
 - Is the widget or surface styling owned centrally in the theme unless there is a screen-specific exception?
 - Did you run the smallest relevant server or template check?
+
+

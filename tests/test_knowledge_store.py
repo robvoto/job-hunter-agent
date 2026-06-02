@@ -212,7 +212,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_settings_alerts(isolated_db):
     assert "__JOB_HUNTER_SETTINGS_ALERTS_LABELS__" in html
 
 
-def test_upgrade_fixes_stale_ui_labels_missing_shared_reset_learning_label(isolated_db):
+def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
     from pathlib import Path
     from job_hunter_agent.server_helpers import build_bootstrap_script, load_shared_ui_labels
 
@@ -247,15 +247,17 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_reset_learning_label(isola
             "search_refreshing_copy": "Copy",
             "search_running_subcopy": "Copy",
             "search_starting_subcopy": "Copy",
+            "search_stop_label": "Stop search",
+            "search_progress_prefix": "Current step:",
+            "search_stopping_title": "Stopping search",
+            "search_stopping_copy": "Copy",
+            "search_stopping_subcopy": "Copy",
         },
     }
     set_knowledge("ui_labels", stale, isolated_db)
 
     updated = upgrade_knowledge_from_dir(knowledge_dir, isolated_db)
     assert "ui_labels" in updated
-
-    labels = load_shared_ui_labels()
-    assert labels["account_menu_reset_learning_warning_label"]
 
     html = build_bootstrap_script()
     assert "__JOB_HUNTER_SHARED_UI_LABELS__" in html

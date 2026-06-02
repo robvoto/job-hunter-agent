@@ -121,6 +121,62 @@ def format_score_breakdown_for_console(breakdown: List[dict]) -> str:
     )
 
 
+_SECTION_ORDER = ["title", "llm_fit", "content", "capability", "location", "work_type", "work_mode", "salary", "freshness", "risk"]
+_SECTION_NAMES = {
+    "title":      "Title match",
+    "llm_fit":    "LLM fit",
+    "content":    "Content",
+    "capability": "Capabilities",
+    "location":   "Location",
+    "work_type":  "Work type",
+    "work_mode":  "Work mode",
+    "salary":     "Salary / rate",
+    "freshness":  "Freshness",
+    "risk":       "Blockers",
+}
+
+
+def format_score_breakdown_console(breakdown: List[dict]) -> List[str]:
+    """Format breakdown as a numbered 10-category block for console output."""
+    by_section: dict[str, list[dict]] = {s: [] for s in _SECTION_ORDER}
+    for entry in breakdown:
+        section = str(entry.get("section") or "")
+        if section in by_section:
+            by_section[section].append(entry)
+
+    lines: list[str] = ["  Score breakdown:", "  " + "─" * 70]
+    for i, key in enumerate(_SECTION_ORDER, 1):
+        cat = _SECTION_NAMES[key]
+        entries = by_section[key]
+
+        if key == "capability":
+            credited = [e for e in entries if int(e.get("value") or 0) > 0]
+            total = sum(int(e.get("value") or 0) for e in entries)
+            count = len(credited)
+            detail = entries[0].get("label", "No matches found") if count == 0 else f"{count} match{'es' if count != 1 else ''} found"
+            lines.append(f"  {i:2d}. {cat:<14}  {detail:<40}  {total:+d}")
+        elif key == "risk":
+            if not entries:
+                lines.append(f"  {i:2d}. {cat:<14}  —")
+            else:
+                for entry in entries:
+                    raw = str(entry.get("label") or "")
+                    detail = raw[:55] + "…" if len(raw) > 55 else raw
+                    lines.append(f"  {i:2d}. {cat:<14}  {detail:<40}  {int(entry.get('value') or 0):+d}")
+        elif key == "salary" and entries and int(entries[0].get("value") or 0) == 0:
+            lines.append(f"  {i:2d}. {cat:<14}  {entries[0].get('label', '—'):<40}   —")
+        elif not entries:
+            lines.append(f"  {i:2d}. {cat:<14}  —")
+        else:
+            total = sum(int(e.get("value") or 0) for e in entries)
+            raw = str(entries[0].get("label") or "")
+            detail = raw[:55] + "…" if len(raw) > 55 else raw
+            lines.append(f"  {i:2d}. {cat:<14}  {detail:<40}  {total:+d}")
+
+    lines.append("  " + "─" * 70)
+    return lines
+
+
 
 
 
