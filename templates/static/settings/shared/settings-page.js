@@ -228,7 +228,7 @@ function collectProfile() {
     throw new Error('Please choose a valid SEEK page limit.');
   }
   const engagementTypeValues = getEngagementTypeValues();
-  const contractEnabled = engagementTypeValues.includes('contract');
+  const contractEnabled = engagementTypeValues.includes('contract') || engagementTypeValues.includes('full_time_contract');
   const minContractEl = document.getElementById('min_contract_months');
   return {
     search_settings: {
@@ -306,7 +306,8 @@ function fillForm(profile) {
   const _minContractEl = document.getElementById('min_contract_months');
   if (_minContractEl) {
     _minContractEl.value = String(profile.match_preferences?.min_contract_months ?? '');
-    _minContractEl.disabled = !getEngagementTypeValues().includes('contract');
+    const _engagementTypeValues = getEngagementTypeValues();
+    _minContractEl.disabled = !(_engagementTypeValues.includes('contract') || _engagementTypeValues.includes('full_time_contract'));
   }
   updateContractChipLabel();
   document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
@@ -483,9 +484,11 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
       const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
-    if (!getEngagementTypeValues().includes('contract')) {
+    const selectedEngagementTypes = getEngagementTypeValues();
+    const hasContractDurationWorkType = selectedEngagementTypes.includes('contract') || selectedEngagementTypes.includes('full_time_contract');
+    if (!hasContractDurationWorkType) {
       updateContractDurationRow();
-    } else if (cb.value === 'contract' && cb.checked) {
+    } else if ((cb.value === 'contract' || cb.value === 'full_time_contract') && cb.checked) {
       const minContractEl = document.getElementById('min_contract_months');
       const contractRow = document.getElementById('contract_duration_row');
       if (minContractEl) minContractEl.disabled = false;

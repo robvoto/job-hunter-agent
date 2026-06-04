@@ -61,9 +61,11 @@ State-changing UI actions use `POST` plus CSRF protection. `GET /logout` is not 
 
 Primary modules:
 
-* `scrapers/seek.py`
-* `scrapers/linkedin.py`
-* `source_connector.py`
+* `scrapers/seek_runner.py` — SEEK scrape loop, card review dispatch, parallel detail fetch, result collection
+* `scrapers/seek.py` — SEEK low-level page helpers, selectors, URL building, detail payload fetch
+* `scrapers/linkedin.py` — LinkedIn via python-jobspy
+* `source_runner.py` — routes enabled sources; when both SEEK and LinkedIn are enabled they run concurrently via `ThreadPoolExecutor(max_workers=2)` with isolated mutable state per source
+* `source_connector.py` — orchestration entry point
 
 Responsibilities:
 
@@ -363,3 +365,12 @@ Expansion must preserve:
 * deterministic reviewability
 * inspectable learning
 * runtime transparency
+
+
+## Current fit-review architecture note 2026-06-02
+
+The current fit review has two layers. The LLM returns a holistic decision/grade plus contextual capability matches and job requirements. The scoring layer then consumes those stored fields. Capability matches are credited only when they match exact candidate capability names and have a configured credit confidence.
+
+Ongoing architecture direction: mandatory job requirements should become the main scoring spine. Candidate capabilities should be used as evidence to prove those requirements. The current implementation is not fully requirement-coverage-driven yet.
+
+O*NET is used as a conservative occupation-family helper. It uses onboarding-generated target_occupation_queries to derive target occupation codes. Uncertain O*NET results continue to detail/LLM review rather than rejecting the job.

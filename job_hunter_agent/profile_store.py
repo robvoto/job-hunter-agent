@@ -62,10 +62,12 @@ KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 class Engagement:
     PERMANENT = "permanent"
     CONTRACT = "contract"
+    FULL_TIME_CONTRACT = "full_time_contract"
 
 ENGAGEMENT_TYPE_OPTIONS = (
     {"value": Engagement.PERMANENT, "label": "Permanent"},
     {"value": Engagement.CONTRACT, "label": "Contract"},
+    {"value": Engagement.FULL_TIME_CONTRACT, "label": "FTC"},
 )
 VALID_ENGAGEMENT_TYPES = frozenset({item["value"] for item in ENGAGEMENT_TYPE_OPTIONS})
 ENGAGEMENT_TYPE_DEFAULT_VALUES = [item["value"] for item in ENGAGEMENT_TYPE_OPTIONS]
@@ -94,6 +96,7 @@ WORK_MODE_PREFERENCE_OPTIONS = (
     {"value": WorkMode.ONSITE, "label": "On-site"},
 )
 VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
+WORK_MODE_PREFERENCE_DEFAULT_VALUES = tuple(item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS)
 WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to include in search."
 WORK_MODE_PREFERENCE_NONE_LABEL = "Any"
 WORK_TYPE_PREFERENCE_HELP_TEXT = "Select both if permanent versus contract does not matter."
@@ -162,6 +165,22 @@ MATCHING_RULE_PROFILE_KEYS = frozenset({
 KEY_NAME = "name"
 KEY_LEVEL = "level"
 KEY_ALIASES = "aliases"
+KEY_ICON_KEY = "icon_key"
+CAPABILITY_ICON_GENERIC = "generic_capability"
+VALID_CAPABILITY_ICON_KEYS = frozenset({
+    "people_support",
+    "communication_stakeholders",
+    "analysis_requirements",
+    "operations_process",
+    "delivery_project",
+    "technical_build",
+    "systems_platforms",
+    "data_reporting",
+    "finance_commercial",
+    "risk_compliance_security",
+    "creative_marketing_content",
+    CAPABILITY_ICON_GENERIC,
+})
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
 KEY_CAPABILITY_CONTEXTUAL_LLM = "capability_contextual_llm"
@@ -247,7 +266,7 @@ DEFAULT_PROFILE = {
     "match_preferences": {
         "home_location": "",
         "secondary_location": "",
-        KEY_WORK_MODE_PREFERENCE: [],
+        KEY_WORK_MODE_PREFERENCE: list(WORK_MODE_PREFERENCE_DEFAULT_VALUES),
         KEY_PREFER_SECTOR: [],
         "prefer_permanent": False,
         "engagement_type": list(ENGAGEMENT_TYPE_DEFAULT_VALUES),
@@ -522,6 +541,7 @@ def normalize_capability_rules(
             "level": level,
             "aliases": aliases,
             "needs_review": needs_review,
+            KEY_ICON_KEY: str(rule.get(KEY_ICON_KEY) or CAPABILITY_ICON_GENERIC).strip().lower(),
         })
 
     return cleaned

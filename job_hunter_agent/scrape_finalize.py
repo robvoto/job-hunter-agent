@@ -39,6 +39,8 @@ from job_hunter_agent.review_insights import build_review_data
 
 from job_hunter_agent.run_context import ScrapeRunContext
 
+from job_hunter_agent.run_control import run_stop_requested
+
 from job_hunter_agent.posting_utils import parse_timestamp
 
 
@@ -106,12 +108,39 @@ def _save_workspace_pool(records: list[dict]) -> None:
 
 
 def _merge_into_pool(pool: list[dict], new_records: list[dict]) -> list[dict]:
+    frozen_score_keys = {
+        "fit_score",
+        "fit_score_breakdown",
+        "fit_label",
+        "fit_tone_class",
+    }
+    merged_by_key: dict[str, dict] = {}
+    ordered_keys: list[str] = []
 
-    existing_keys = {str(r.get("job_key") or "") for r in pool if r.get("job_key")}
+    for record in pool:
+        job_key = str(record.get("job_key") or "").strip()
+        if not job_key:
+            continue
+        merged_by_key[job_key] = dict(record)
+        ordered_keys.append(job_key)
 
-    added = [r for r in new_records if str(r.get("job_key") or "") and str(r.get("job_key")) not in existing_keys]
+    for record in new_records:
+        job_key = str(record.get("job_key") or "").strip()
+        if not job_key:
+            continue
+        existing = merged_by_key.get(job_key)
+        if existing is None:
+            merged_by_key[job_key] = dict(record)
+            ordered_keys.append(job_key)
+            continue
+        updated = dict(existing)
+        updated.update(record)
+        for key in frozen_score_keys:
+            if key in existing:
+                updated[key] = existing[key]
+        merged_by_key[job_key] = updated
 
-    return pool + added
+    return [merged_by_key[job_key] for job_key in ordered_keys]
 
 
 
@@ -310,6 +339,7 @@ def finalize_scrape_run(
 
 
     if no_fresh_cards and context.previous_audit_rows:
+        run_was_stopped = run_stop_requested()
 
         run_stats = {
 
@@ -330,8 +360,6 @@ def finalize_scrape_run(
             "llm_total_cost_usd": round(get_session_cost_usd(), 6),
 
             "last_run_attempt_at": context.run_iso,
-
-            "last_run_error": NO_FRESH_CARDS_ERROR,
 
         }
 
@@ -376,13 +404,17 @@ def finalize_scrape_run(
 
         save_job_history(context.job_history)
 
+        if run_was_stopped:
+            logger.info("Run stopped before any fresh cards were captured.")
+        else:
+            run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
+            logger.error("[RUN][ERROR] %s", NO_FRESH_CARDS_ERROR)
+
         write_review_data(build_review_data(context.previous_audit_rows, [], context.profile))
 
         write_run_stats(run_stats)
 
         workspace_path = get_workspace_results_path()
-
-        logger.error("[RUN][ERROR] %s", NO_FRESH_CARDS_ERROR)
 
         logger.info("The previous workspace state was preserved.")
 

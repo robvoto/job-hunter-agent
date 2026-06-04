@@ -129,6 +129,7 @@ export function restoreWizardState() {
       onboardingSettingsUtils.setSectorPreferenceValues(state.preferSector || []);
       onboardingPage.updateSearchPreferenceSummaries();
       onboardingPage.updateCompensationVisibility();
+      onboardingPage.updateMinContractMonthState();
     } catch (error) {
       console.warn('Could not restore onboarding search basics state.', error);
     }
@@ -163,19 +164,10 @@ document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
 
 if (minContractMonthsEl) {
   minContractMonthsEl.addEventListener('change', () => {
-    const contractRow = document.getElementById('contract_duration_row');
-    if (contractRow) contractRow.hidden = true;
-    onboardingPage.updateContractChipLabel();
-    onboardingPage.updateSearchPreferenceSummaries();
+    onboardingPage.updateMinContractMonthState();
     onboardingPage.hideStatus();
     saveWizardState();
     scheduleSearchBasicsPersistence();
-  });
-  minContractMonthsEl.addEventListener('blur', () => {
-    const contractRow = document.getElementById('contract_duration_row');
-    if (contractRow && !String(minContractMonthsEl.value || '').trim()) {
-      contractRow.hidden = true;
-    }
   });
 }
 

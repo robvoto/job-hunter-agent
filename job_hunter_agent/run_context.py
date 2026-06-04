@@ -32,6 +32,8 @@ from job_hunter_agent.global_settings import (
 
     KEY_SEEK_MAX_PAGES,
 
+    KEY_SEEK_PARALLEL_DETAIL_WORKERS,
+
     KEY_SORT_NEWEST_FIRST,
 
 )
@@ -94,6 +96,8 @@ class ScrapeRunContext:
 
     playwright_selector_timeout: int
 
+    seek_parallel_detail_workers: int
+
     applied_job_keys: set[str]
 
     hidden_job_keys: set[str]
@@ -144,6 +148,8 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
 
     playwright_selector_timeout = int(search_settings.get(KEY_PLAYWRIGHT_SELECTOR_TIMEOUT, DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT]) or DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT])
 
+    seek_parallel_detail_workers = max(1, int(DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_SEEK_PARALLEL_DETAIL_WORKERS, 3) or 3))
+
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
 
 
@@ -175,6 +181,8 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         playwright_viewport_height=playwright_viewport_height,
 
         playwright_selector_timeout=playwright_selector_timeout,
+
+        seek_parallel_detail_workers=seek_parallel_detail_workers,
 
         applied_job_keys=applied_job_keys,
 

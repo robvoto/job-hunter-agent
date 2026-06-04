@@ -100,3 +100,21 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
 
     assert "Alerts &amp; AI" in html
 
+
+def test_settings_capability_editor_preserves_icon_key_state():
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (repo_root / "templates" / "static" / "settings" / "shared" / "settings-capability-editor.js").read_text(encoding="utf-8")
+
+    assert "icon_key: String(rule?.icon_key || '').trim().toLowerCase()," in js_text
+    assert "icon_key: genericCapabilityIconKey" in js_text
+    assert "genericCapabilityIconKey = capabilityUi.genericCapabilityIconKey;" in js_text
+    assert "Missing generic capability icon key." in js_text
+
+
+def test_settings_utils_review_normaliser_preserves_icon_key():
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (repo_root / "templates" / "static" / "settings" / "shared" / "settings-utils.js").read_text(encoding="utf-8")
+
+    assert "const icon_key = normalizeReviewText(rule?.icon_key || '').toLowerCase();" in js_text
+    assert "return { name, level, aliases, icon_key };" in js_text
+

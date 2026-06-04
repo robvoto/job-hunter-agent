@@ -15,7 +15,7 @@ import threading
 from pathlib import Path
 from typing import Any
 from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE, ALLOWED_DOC_REL_PATHS
-from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request
+from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request, run_stop_requested
 from job_hunter_agent.user_settings import (
     DEFAULT_USER_SETTINGS,
     load_agent_state,
@@ -57,9 +57,9 @@ from job_hunter_agent.profile_store import (
     GovPref,
     SECTOR_PREFERENCE_CHOICE_OPTIONS,
     SECTOR_PREFERENCE_OPTIONS,
-    WorkMode,
     VALID_ENGAGEMENT_TYPES,
     WORK_MODE_PREFERENCE_NONE_LABEL,
+    WORK_MODE_PREFERENCE_DEFAULT_VALUES,
     WORK_MODE_PREFERENCE_OPTIONS,
     load_profile,
     normalize_engagement_type_preferences,
@@ -143,6 +143,7 @@ _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS = (
     "target_roles_plural",
     "capabilities_singular",
     "capabilities_plural",
+    "llm_cost_label",
     "source_suffix"
 )
 _CAPABILITY_UI_LABEL_KEYS = (
@@ -186,6 +187,7 @@ _SHARED_UI_LABEL_KEYS = (
     "search_starting_subcopy",
     "search_stop_label",
     "search_progress_prefix",
+    "search_elapsed_prefix",
     "search_stopping_title",
     "search_stopping_copy",
     "search_stopping_subcopy",
@@ -718,7 +720,7 @@ def build_bootstrap_script(
         f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__ = {json.dumps(WORK_MODE_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(WorkMode.NONE, ensure_ascii=True)};</script>'
+        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(list(WORK_MODE_PREFERENCE_DEFAULT_VALUES), ensure_ascii=True)};</script>'
     )
     parts.append(
         f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__ = {json.dumps(WORK_MODE_PREFERENCE_NONE_LABEL, ensure_ascii=True)};</script>'
@@ -834,10 +836,11 @@ def render_sector_preference_choices(*, selected_values: object) -> str:
 
 
 def render_work_mode_preference_choices(*, selected_values: object) -> str:
+    selected = normalize_work_mode_preferences(selected_values)
     return render_choice_strip(
         name="work_mode_preference",
         options=list(WORK_MODE_PREFERENCE_OPTIONS),
-        selected_values=normalize_work_mode_preferences(selected_values),
+        selected_values=selected if selected else list(WORK_MODE_PREFERENCE_DEFAULT_VALUES),
         input_type="checkbox",
         group_id="work_mode_preference",
         label_id="work_mode_preference_label",
@@ -1061,9 +1064,13 @@ def _run_scrape_job() -> None:
         if not str((run_stats or {}).get("last_run_error") or "").strip():
             _write_run_stats_field("last_run_error", None)
     except Exception as exc:
-        msg = f"{type(exc).__name__}: {exc}"
-        print(f"[RUN][ERROR] {msg}")
-        _write_run_stats_field("last_run_error", msg)
+        if run_stop_requested():
+            print("[RUN][INFO] Scrape run stopped by request; preserving partial results.")
+            _write_run_stats_field("last_run_error", None)
+        else:
+            msg = f"{type(exc).__name__}: {exc}"
+            print(f"[RUN][ERROR] {msg}")
+            _write_run_stats_field("last_run_error", msg)
     finally:
         clear_run_stop_request()
         clear_run_progress()

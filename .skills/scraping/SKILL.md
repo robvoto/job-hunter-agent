@@ -27,9 +27,11 @@ See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-spec
 - Do not treat search keywords as job-level work-mode proof.
 
 ## Ownership
-- `scrapers/seek.py`: SEEK scraping.
+- `scrapers/seek_runner.py`: SEEK scrape loop, card review dispatch, parallel detail fetch, result collection.
+- `scrapers/seek.py`: SEEK low-level page helpers, selectors, URL building, detail payload fetch.
 - `scrapers/linkedin.py`: LinkedIn via python-jobspy.
-- `source_connector.py`: source orchestration.
+- `source_runner.py`: routes enabled sources (SEEK/LinkedIn) in a single run.
+- `source_connector.py`: source orchestration entry point.
 - `job_identity.py`: cross-source identity/dedup.
 - `description_trust.py`: full-description confidence.
 - `job_types.py`: work type normalization mapping and filter group definitions.

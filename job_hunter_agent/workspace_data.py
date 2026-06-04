@@ -934,6 +934,12 @@ def build_run_stats(
 
             _add_flag("reviewed_signal_matches")
 
+    onet_match_count = sum(
+        1
+        for row in audit_rows
+        if str((row.get("onet_classification") or {}).get("result") or "").strip().lower() == "near"
+    )
+
 
 
     top_reject_reasons = [
@@ -1017,6 +1023,8 @@ def build_run_stats(
         "cards_with_flags_count": cards_with_flags_count,
 
         "issue_flag_summary": issue_flag_summary,
+
+        "onet_match_count": onet_match_count,
 
         "keep_rate": round((kept_count / cards_seen), 4) if cards_seen else 0.0,
 

@@ -71,6 +71,7 @@ const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
 const capabilityLabels = onboardingCapabilityUi.labels;
+const capabilityIconHtml = onboardingCapabilityUi.capabilityIconHtml;
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
 }
@@ -501,7 +502,10 @@ function renderReviewCapabilities() {
       <article class="capability-card${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
           <span class="review-capability-head">
-            <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
+            <span class="review-capability-title-row">
+              ${capabilityIconHtml(rule.icon_key, displayName)}
+              <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
+            </span>
           </span>
           ${aliasHtml}
         </div>
@@ -573,9 +577,15 @@ function renderReviewStep() {
 }
 
 function getSearchBasicsHydrationProfile() {
+  const reviewTitles = onboardingPage.reviewTargetTitles.length
+    ? onboardingPage.reviewTargetTitles
+    : (Array.isArray((onboardingPage.lastImportPayload || {}).profile?.target_roles)
+      ? (onboardingPage.lastImportPayload || {}).profile.target_roles
+      : []);
   return {
     ...(onboardingPage.lastLoadedProfile || {}),
     ...((onboardingPage.lastImportPayload || {}).profile || {}),
+    target_roles: reviewTitles,
   };
 }
 
@@ -639,6 +649,21 @@ function formatExtractionSummary(counts) {
   return `${onboardingImportSummaryLabels.lead_in} ${joined} ${onboardingImportSummaryLabels.source_suffix}`;
 }
 
+function formatImportSuccessSummary(payload) {
+  const parts = [];
+  const extractionMessage = payload?.fresh_onboarding_run_started
+    ? formatExtractionSummary(payload.extraction_counts || {})
+    : onboardingFlowLabels.create_profile_ready_message;
+  if (extractionMessage) {
+    parts.push(extractionMessage);
+  }
+  const llmCostUsd = Number(payload?.llm_cost_usd);
+  if (Number.isFinite(llmCostUsd)) {
+    parts.push(`${onboardingImportSummaryLabels.llm_cost_label} US$${llmCostUsd.toFixed(6)}`);
+  }
+  return parts.join('\n');
+}
+
 async function createProfile() {
   const primary = flowRefs.primaryCvInput.files[0];
   const onboardingSettings = onboardingSettingsPayload();
@@ -676,10 +701,10 @@ async function createProfile() {
   hydrateDraftStep(payload.profile || {});
   setStep(REVIEW_STEP);
   const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
-  const extractionMessage = payload?.fresh_onboarding_run_started
-    ? formatExtractionSummary(payload.extraction_counts || {})
-    : onboardingFlowLabels.create_profile_ready_message;
-  hideStatus();
+  const extractionMessage = formatImportSuccessSummary(payload);
+  if (extractionMessage) {
+    showStatus(extractionMessage, 'success');
+  }
   if (extractionMessage) {
     console.info('[ONBOARDING] Draft profile extraction summary:', pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
   }
@@ -689,9 +714,12 @@ function continueFromReview() {
   if (!onboardingPage.reviewTargetTitles.length) {
     throw new Error(onboardingFlowTitleTierLabels.keep_target_roles_continue_error);
   }
+  const alreadyVisitedSearch = onboardingPage.maxUnlockedStep >= SEARCH_STEP;
   onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, SEARCH_STEP));
   renderReviewStep();
-  hydrateSearchBasics(getSearchBasicsHydrationProfile());
+  if (!alreadyVisitedSearch) {
+    hydrateSearchBasics(getSearchBasicsHydrationProfile());
+  }
   setStep(SEARCH_STEP);
 }
 

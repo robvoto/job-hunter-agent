@@ -1,6 +1,7 @@
 """Tests for knowledge_store: get, set, seed, and idempotency."""
 
 import json
+import subprocess
 import pytest
 
 from job_hunter_agent.database import init_db
@@ -10,6 +11,23 @@ from job_hunter_agent.knowledge_store import (
     set_knowledge,
     upgrade_knowledge_from_dir,
 )
+from job_hunter_agent.server_helpers import (
+    _CAPABILITY_UI_LABEL_KEYS,
+    _ONBOARDING_FLOW_LABEL_KEYS,
+    _ONBOARDING_PAGE_LABEL_KEYS,
+    _SETTINGS_ALERTS_LABEL_KEYS,
+    _SHARED_UI_LABEL_KEYS,
+    load_onboarding_flow_labels,
+)
+
+
+_UI_LABEL_SECTION_KEYS = {
+    "onboarding_flow_labels": _ONBOARDING_FLOW_LABEL_KEYS,
+    "onboarding_page_labels": _ONBOARDING_PAGE_LABEL_KEYS,
+    "capability_ui_labels": _CAPABILITY_UI_LABEL_KEYS,
+    "shared_ui_labels": _SHARED_UI_LABEL_KEYS,
+    "settings_alerts_labels": _SETTINGS_ALERTS_LABEL_KEYS,
+}
 
 
 @pytest.fixture()
@@ -173,6 +191,38 @@ def test_upgrade_bumps_version_after_additive_merge(tmp_db, knowledge_dir):
     assert get_knowledge("rules", tmp_db)["version"] == 2
 
 
+def test_ui_labels_json_contains_required_onboarding_and_server_keys():
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parent.parent
+    data = json.loads((repo_root / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    missing = {
+        section: [key for key in keys if not str(data.get(section, {}).get(key, "")).strip()]
+        for section, keys in _UI_LABEL_SECTION_KEYS.items()
+    }
+    missing = {section: keys for section, keys in missing.items() if keys}
+
+    assert not missing, f"ui_labels.json is missing required keys: {missing}"
+
+
+def test_ui_labels_json_version_bumps_when_contents_change():
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parent.parent
+    ui_labels_path = repo_root / "data" / "knowledge" / "ui_labels.json"
+    current = json.loads(ui_labels_path.read_text(encoding="utf-8"))
+    head_text = subprocess.run(
+        ["git", "-C", str(repo_root), "show", f"HEAD:{ui_labels_path.relative_to(repo_root).as_posix()}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    head = json.loads(head_text)
+
+    if current != head:
+        assert int(current["version"]) > int(head["version"]), "ui_labels.json changed but its version was not bumped"
+
+
 def test_match_level_defaults_loaded_from_db(tmp_db):
     from pathlib import Path
     repo_root = Path(__file__).resolve().parent.parent
@@ -261,6 +311,31 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
 
     html = build_bootstrap_script()
     assert "__JOB_HUNTER_SHARED_UI_LABELS__" in html
+
+
+def test_create_app_bootstrap_refreshes_stale_ui_labels(isolated_db):
+    from pathlib import Path
+    from job_hunter_agent.fastapi_app import create_app
+
+    repo_root = Path(__file__).resolve().parent.parent
+    ui_labels_path = repo_root / "data" / "knowledge" / "ui_labels.json"
+    current_version = int(json.loads(ui_labels_path.read_text(encoding="utf-8"))["version"])
+
+    stale = {
+        "kind": "ui_labels",
+        "name": "ui_labels",
+        "version": current_version - 1,
+        "onboarding_flow_labels": {
+            "create_profile_error": "Could not create profile",
+        },
+    }
+    set_knowledge("ui_labels", stale, isolated_db)
+
+    create_app()
+
+    refreshed = get_knowledge("ui_labels", isolated_db)
+    assert refreshed["version"] == current_version
+    assert load_onboarding_flow_labels()["review_capability_helper_copy"] == "Review the capability groups extracted from your CV."
 
 
 def test_build_bootstrap_script_includes_all_ui_label_sections():

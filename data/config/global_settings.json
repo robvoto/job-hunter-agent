@@ -345,9 +345,9 @@
     "llm_prompt_settings": {
       "match_preference_templates": {
         "compensation_target_yearly": "Compensation target: permanent roles around {value} yearly.",
-        "compensation_target_daily": "Compensation target: contract roles around {value} per day.",
+        "compensation_target_daily": "Compensation target: contract and FTC roles around {value} per day.",
         "home_location": "Home base: {home_location}.",
-        "prefer_permanent": "Prefer permanent roles first, then 12+ month contracts with extensions, then shorter contracts."
+        "prefer_permanent": "Prefer permanent roles first, then 12+ month contract or FTC roles with extensions, then shorter contracts."
       },
       "evidence_tiers": [
         {
@@ -401,14 +401,15 @@
     "max_samples_per_rejection": 4,
     "capability_suggestion_min_count": 2,
     "capability_working_min_count": 5,
-    "title_not_target_min_count": 20,
+    "title_not_target_min_count": 2,
     "rule_suggestion_min_count": 2
   },
   "playwright_settings": {
     "playwright_viewport_width": 1400,
     "playwright_viewport_height": 900,
     "playwright_selector_timeout": 8000,
-    "playwright_browser_mode": "ephemeral"
+    "playwright_browser_mode": "ephemeral",
+    "seek_parallel_detail_workers": 3
   },
   "candidate_application_history": {
     "enabled": true,

@@ -5,17 +5,35 @@ LLM_ALLOWED_GRADES = frozenset({"EXCELLENT", "STRONG", "SOLID", "WEAK", "POOR", 
 
 LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
+    '"decision_summary":"...",'
+    '"positive_reasons":["..."],'
+    '"concerns":["..."],'
+    '"score_rationale":["..."],'
     '"contextual_capability_matches":[{"capability_name":"...","confidence":"high|medium|low","matched_text":"...","reason":"..."}],'
-    '"learning_candidates":[{"signal":"...","suggested_category":"...","suggested_values":["..."],'
-    '"context_terms":["..."],"confidence":"high|medium|low|ambiguous","needs_review":true,"original_texts":["..."]}],'
+    '"requirement_coverage":[{"requirement":"...","status":"met|partially_met|not_evidenced|mismatch",'
+    '"capability_name":"...","matched_job_text":"...","candidate_evidence":["..."]}],'
     '"job_requirements":["..."]}'
+)
+LLM_PROMPT_FIT_REVIEW_RATIONALE_INTRO = (
+    "For decision_summary, positive_reasons, concerns, and score_rationale: keep the wording plain and short. "
+    "decision_summary must be one concise sentence. positive_reasons may contain up to three items. "
+    "concerns may contain up to three items. score_rationale may contain up to two items that explain the score band "
+    "and what moved the score within that band. Do not use internal scoring jargon such as medium confidence, logged only due to confidence, or +0."
 )
 LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO = (
     "For contextual_capability_matches: identify profile capabilities evidenced in the ad but not stated verbatim. "
-    "Use the related skills to recognise a capability in the ad, but capability_name must always be the exact group name "
+    "Use the extracted skills to recognise a capability in the ad, but capability_name must always be the exact group name "
     "from the 'Capability levels' list — never a related skill or your own wording. "
     "Set confidence to high (clearly evidenced), medium (plausibly evidenced), or low (weak signal only). "
     "Leave the list empty if nothing is clearly evidenced beyond what is verbatim."
+)
+LLM_PROMPT_FIT_REVIEW_ONLY_INTRO = (
+    "For fit_review: focus only on candidate fit. Do not suggest learning signals, learning categories, or new taxonomy labels."
+)
+LLM_PROMPT_REQUIREMENT_COVERAGE_INTRO = (
+    "For requirement_coverage: review each important job requirement and classify it as met, partially_met, not_evidenced, or mismatch. "
+    "Use candidate capabilities as the structured evidence model. Link met and partially_met requirements to the exact profile capability name, "
+    "the matched job text, and candidate evidence when available. Leave capability_name empty only for not_evidenced or mismatch items."
 )
 LLM_PROMPT_JOB_REQUIREMENTS_INTRO = (
     "For job_requirements: extract the job's explicit requirements as concise bullet-style phrases. "
@@ -24,14 +42,6 @@ LLM_PROMPT_JOB_REQUIREMENTS_INTRO = (
     "If the ad states the work type explicitly, preserve it as one of: Permanent, Contract, Full Time Contract / FTC, Temporary. "
     "Use Unknown when the work type is unclear."
 )
-LLM_PROMPT_LEARNING_CANDIDATES_INTRO = (
-    "For learning_candidates: actively identify new signals visible in this ad that are not yet captured "
-    "in the candidate profile or approved knowledge — role title patterns, government/clearance context patterns, "
-    "and capability concepts not already listed above. "
-    "Use only visible ad text. Follow the category guidance above for each signal type. "
-    "Set needs_review=true for all entries. Leave the list empty only if nothing new is found."
-)
-
 LLM_LEARNING_ONLY_PROMPT_SHAPE = (
     '{"learning_candidates":[{"signal":"...","suggested_category":"...","suggested_values":["..."],'
     '"context_terms":["..."],"confidence":"high|medium|low|ambiguous","needs_review":true,"original_texts":["..."]}]}'
@@ -54,6 +64,12 @@ LLM_PROMPT_CAPABILITY_NAMING_INTRO = (
 LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER = "Default capability naming guidance:"
 LLM_PROMPT_CLUSTERS_HEADER = "Clusters:"
 LLM_PROMPT_SYSTEM_REVIEW_INTRO = "You are helping decide whether a candidate should apply for a job."
+LLM_PROMPT_FIT_REVIEW_GRADE_INTRO = (
+    "Set fit_review.grade from requirement_coverage, not from a vague overall impression. "
+    "EXCELLENT is only for near-complete coverage with capability evidence, STRONG for mostly covered requirements with capability evidence, "
+    "SOLID for mixed but supported coverage, WEAK for sparse support, POOR for weak or unsupported coverage, and MISMATCH for explicit conflicts. "
+    "If no capability evidence supports the requirements, fit_review.grade cannot be STRONG or EXCELLENT."
+)
 LLM_PROMPT_REVIEW_OUTPUT_FORMAT = "Answer with exactly ONE line in uppercase using this format: DECISION|GRADE."
 LLM_PROMPT_JSON_ONLY = "Return JSON only."
 LLM_PROMPT_JOB_DESCRIPTION_PREFIX = "Job description:\n"

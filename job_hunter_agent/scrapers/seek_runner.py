@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime
@@ -12,10 +14,10 @@ from typing import Any, Dict, List, Set
 logger = logging.getLogger(__name__)
 
 from playwright._impl._errors import TargetClosedError
+from playwright.async_api import async_playwright as async_playwright_ctx
 from playwright.sync_api import sync_playwright
 
-from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
-from job_hunter_agent.llm_gate import get_session_cost_usd
+from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 from job_hunter_agent.global_settings import get_playwright_browser_mode
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.history import finalize_record
@@ -41,7 +43,7 @@ from job_hunter_agent.scrapers.seek import (
     build_full_seek_url,
     extract_card_metadata,
     extract_posted_text_from_card,
-    fetch_job_details_payload,
+    fetch_job_details_payload_async,
     stable_job_key,
 )
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
@@ -91,6 +93,7 @@ def _seek_run_progress(
     return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
 
 
+
 def _seek_nested_value(payload: object, key_names: tuple[str, ...]) -> object:
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -125,12 +128,12 @@ def _seek_json_safe_value(value: object):
     return value
 
 
-def _seek_source_metadata(detail_page, details_payload: dict) -> tuple[dict, object]:
-    redux_payload = None
-    try:
-        redux_payload = detail_page.evaluate("window.SEEK_REDUX_DATA || null")
-    except Exception:
-        redux_payload = None
+def _seek_source_metadata(detail_page, details_payload: dict, *, redux_payload=None) -> tuple[dict, object]:
+    if redux_payload is None and detail_page is not None:
+        try:
+            redux_payload = detail_page.evaluate("window.SEEK_REDUX_DATA || null")
+        except Exception:
+            redux_payload = None
 
     combined_payload = redux_payload if redux_payload not in (None, "", [], {}) else details_payload
     apply_url = _seek_string_value(combined_payload, ("shareLink",))
@@ -229,14 +232,19 @@ def apply_work_mode_enrichment(record: dict, raw_source_payload: object, details
         log_work_mode_result(str(record.get(rs.RECORD_JOB_KEY) or ""), "seek", record)
 
 
-def _build_seek_review_hooks(detail_page, raw_source_payload: object) -> ReviewPipelineHooks:
+def _build_seek_review_hooks(raw_html: str | None, raw_source_payload: object) -> ReviewPipelineHooks:
+    """Build review hooks from pre-captured page data.
+
+    raw_html and raw_source_payload are captured in the main Playwright thread before
+    any thread pool dispatch, so the hooks hold only plain Python objects — no live page.
+    """
     def _after_description_loaded(record: dict, context: ReviewPipelineContext) -> None:
-        if DEBUG_CAPTURE_SOURCE_PAYLOADS:
+        if DEBUG_CAPTURE_SOURCE_PAYLOADS and raw_html is not None:
             try:
                 write_source_payload_debug(
                     "seek",
                     str(record.get(rs.RECORD_JOB_KEY) or record.get(rs.RECORD_URL_KEY) or "unknown"),
-                    raw_html=detail_page.content(),
+                    raw_html=raw_html,
                     raw_json=raw_source_payload,
                     normalized_record=record,
                 )
@@ -252,53 +260,153 @@ def _build_seek_review_hooks(detail_page, raw_source_payload: object) -> ReviewP
     )
 
 
-def _process_seek_job_details(
+
+def _review_seek_job_detail(
     record: dict,
-    detail_page,
     review_context: ReviewPipelineContext,
 ) -> tuple[dict, dict, list[dict]]:
+    """LLM review phase: run the review pipeline on a pre-fetched record.
+
+    No Playwright calls — safe to run in a thread pool. Reads raw_source_payload and
+    raw_html from private record keys written by _fetch_seek_job_detail.
+    """
+    raw_source_payload = record.pop("_raw_source_payload", None)
+    raw_html = record.pop("_raw_html", None)
+    hooks = _build_seek_review_hooks(raw_html, raw_source_payload)
+    return review_post_detail_normalized_job(record, review_context, hooks=hooks)
+
+
+async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
+    """Async Playwright fetch — mirrors _fetch_seek_job_detail but uses an async page.
+
+    Called concurrently from _seek_detail_batch_async; each call owns its own page.
+    Stores _raw_source_payload and _raw_html on the record for _review_seek_job_detail.
+    """
     job_key = str(record.get(rs.RECORD_JOB_KEY) or "unknown")
     title = str(record.get(rs.RECORD_TITLE_KEY) or "")
     company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
-    url = str(record.get(rs.RECORD_URL_KEY) or "")
+    logger.info("[PIPELINE][DETAIL_FETCH_START] source=SEEK job_key=%s title=%r company=%r url=%r",
+                job_key, title, company, str(record.get(rs.RECORD_URL_KEY) or ""))
+    _t0 = time.monotonic()
+    details_payload = await fetch_job_details_payload_async(page, record[rs.RECORD_URL_KEY])
+    details_text = str(details_payload.get("text") or "")
+    details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
+    _fetch_ms = int((time.monotonic() - _t0) * 1000)
+    logger.info("[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
+                job_key, title, company, details_status, _fetch_ms, len(details_text))
+    record["_obs_detail_fetch_ms"] = _fetch_ms
+
+    redux_payload = None
     try:
-        logger.info("[PIPELINE][DETAIL_FETCH_START] source=SEEK job_key=%s title=%r company=%r url=%r",
-                    job_key, title, company, url)
-        _t0 = time.monotonic()
-        details_payload = fetch_job_details_payload(detail_page, record[rs.RECORD_URL_KEY])
-        details_text = str(details_payload.get("text") or "")
-        details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
-        _fetch_ms = int((time.monotonic() - _t0) * 1000)
-        logger.info("[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
-                    job_key, title, company, details_status, _fetch_ms, len(details_text))
-        record["_obs_detail_fetch_ms"] = _fetch_ms
-        source_metadata, raw_source_payload = _seek_source_metadata(detail_page, details_payload)
-        record[rs.RECORD_SOURCE_METADATA_KEY] = source_metadata
-        record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
-        record[rs.RECORD_DETAILS_TEXT_KEY] = details_text
-        record[rs.RECORD_DETAILS_STATUS_KEY] = details_status
+        redux_payload = await page.evaluate("window.SEEK_REDUX_DATA || null")
+    except Exception:
+        pass
+    raw_html = await page.content() if DEBUG_CAPTURE_SOURCE_PAYLOADS else None
 
-        hooks = _build_seek_review_hooks(detail_page, raw_source_payload)
-        return review_post_detail_normalized_job(record, review_context, hooks=hooks)
-    except TargetClosedError:
-        raise
-    except Exception as exc:
-        record[rs.RECORD_DECISION_KEY] = "REJECT"
-        record[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
-        finalize_record(review_context.job_history, review_context.audit_rows, record, review_context.run_iso)
-        return {"decision": "REJECT", "reject_reason": record[rs.RECORD_REJECT_REASON_KEY]}, record, []
+    source_metadata, raw_source_payload = _seek_source_metadata(
+        None, details_payload, redux_payload=redux_payload
+    )
+    record[rs.RECORD_SOURCE_METADATA_KEY] = source_metadata
+    record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
+    record[rs.RECORD_DETAILS_TEXT_KEY] = details_text
+    record[rs.RECORD_DETAILS_STATUS_KEY] = details_status
+    record["_raw_source_payload"] = raw_source_payload
+    record["_raw_html"] = raw_html
+    return record
 
 
-def review_seek_card_record(
-    record: dict,
-    detail_page,
-    review_context: ReviewPipelineContext,
-) -> tuple[dict, dict, list[dict]]:
-    record["job_quality_signals"] = detect_broad_engagement_signal(record)
-    pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(record, review_context)
-    if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-        return pre_outcome, record, []
-    return _process_seek_job_details(record, detail_page, review_context)
+async def _seek_detail_batch_on_context(
+    needs_detail: list,
+    browser_context,
+    review_context,
+    n_workers: int,
+) -> dict:
+    """Parallel detail fetch + LLM review on an existing async browser context.
+
+    Each coroutine creates and closes its own page within the shared context.
+    A semaphore caps concurrency to n_workers.
+    Returns card_index -> (outcome, record, skill_obs, elapsed_s).
+    """
+    semaphore = asyncio.Semaphore(n_workers)
+    results: dict[int, tuple] = {}
+
+    async def _process_one(idx: int, rec: dict) -> None:
+        async with semaphore:
+            page = await browser_context.new_page()
+            t0 = time.monotonic()
+            try:
+                rec = await _fetch_seek_job_detail_async(rec, page)
+                result = await asyncio.to_thread(_review_seek_job_detail, rec, review_context)
+                results[idx] = (*result, time.monotonic() - t0)
+            except Exception as exc:
+                rec[rs.RECORD_DECISION_KEY] = "REJECT"
+                rec[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
+                finalize_record(review_context.job_history, review_context.audit_rows, rec, review_context.run_iso)
+                results[idx] = ({"decision": "REJECT", "reject_reason": rec[rs.RECORD_REJECT_REASON_KEY]}, rec, [], 0.0)
+                logger.warning(
+                    "[SEEK] REJECTED (async detail) [CARD_EXCEPTION:%s] %s @ %s\n%s",
+                    type(exc).__name__,
+                    str(rec.get(rs.RECORD_TITLE_KEY) or ""),
+                    str(rec.get(rs.RECORD_COMPANY_KEY) or ""),
+                    traceback.format_exc(),
+                )
+            finally:
+                await page.close()
+
+    await asyncio.gather(*[_process_one(idx, rec) for idx, rec in needs_detail])
+    return results
+
+
+class _AsyncDetailSession:
+    """Long-lived async Playwright session for SEEK detail page fetches.
+
+    Runs a dedicated asyncio event loop in a background daemon thread and keeps
+    one browser alive for the full duration of a scrape run.  All results pages
+    submit their detail batches via run_batch() rather than relaunching the
+    browser on every call.
+    """
+
+    def __init__(self, headless: bool, viewport_width: int, viewport_height: int, n_workers: int) -> None:
+        self._n_workers = n_workers
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(
+            target=self._loop.run_forever, daemon=True, name="seek-detail-loop"
+        )
+        self._thread.start()
+        init = asyncio.run_coroutine_threadsafe(
+            self._start(headless, viewport_width, viewport_height), self._loop
+        )
+        init.result(timeout=30)
+
+    async def _start(self, headless: bool, viewport_width: int, viewport_height: int) -> None:
+        self._pw_cm = async_playwright_ctx()
+        self._pw = await self._pw_cm.__aenter__()
+        self._browser = await self._pw.chromium.launch(headless=headless)
+        self._browser_context = await self._browser.new_context(
+            viewport={"width": viewport_width, "height": viewport_height}
+        )
+
+    def run_batch(self, needs_detail: list, review_context) -> dict:
+        """Submit a batch of cards for parallel fetch + LLM. Blocking until complete."""
+        future = asyncio.run_coroutine_threadsafe(
+            _seek_detail_batch_on_context(
+                needs_detail, self._browser_context, review_context, self._n_workers
+            ),
+            self._loop,
+        )
+        return future.result()
+
+    def close(self) -> None:
+        """Shut down the browser and stop the background event loop cleanly."""
+        close = asyncio.run_coroutine_threadsafe(self._shutdown(), self._loop)
+        close.result(timeout=30)
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._thread.join(timeout=10)
+
+    async def _shutdown(self) -> None:
+        await self._browser_context.close()
+        await self._browser.close()
+        await self._pw_cm.__aexit__(None, None, None)
 
 
 def seek_scrape_to_records(
@@ -314,6 +422,7 @@ def seek_scrape_to_records(
     playwright_viewport_width: int,
     playwright_viewport_height: int,
     playwright_selector_timeout: int,
+    seek_parallel_detail_workers: int,
     headless: bool,
 ) -> tuple:
     audit_rows: List[dict] = []
@@ -338,6 +447,7 @@ def seek_scrape_to_records(
     use_persistent_browser = browser_mode == "persistent"
 
     with sync_playwright() as playwright:
+        n_detail_workers = max(1, seek_parallel_detail_workers)
         if use_persistent_browser:
             PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
             context = playwright.chromium.launch_persistent_context(
@@ -346,13 +456,17 @@ def seek_scrape_to_records(
                 viewport={"width": playwright_viewport_width, "height": playwright_viewport_height},
             )
             list_page = context.new_page()
-            detail_page = context.new_page()
         else:
             browser = playwright.chromium.launch(headless=headless)
             context = browser
             list_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height})
-            detail_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height})
 
+        detail_session = _AsyncDetailSession(
+            headless=headless,
+            viewport_width=playwright_viewport_width,
+            viewport_height=playwright_viewport_height,
+            n_workers=n_detail_workers,
+        )
         try:
             total_targets = len(search_targets)
             for target_index, search_target in enumerate(search_targets, start=1):
@@ -399,70 +513,82 @@ def seek_scrape_to_records(
                         break
 
                     filter_state = extract_seek_filter_panel_state(list_page)
-                    page_has_fresh_card = False
 
+                    # Phase 1: extract all card records from DOM before any page navigation
+                    card_records: list[dict] = []
+                    target_closed = False
                     for card in job_cards:
                         if run_stop_requested():
                             logger.info("%s stop requested; finishing current page", page_tag)
                             break
-                        record = {}
-                        title = ""
-                        company = ""
                         try:
                             record = build_seek_card_record(card, search_target, run_iso, current_page_num, filter_state)
-                            title, company = record[rs.RECORD_TITLE_KEY], record[rs.RECORD_COMPANY_KEY]
-                            set_run_progress(
-                                _seek_run_progress(
-                                    current_page_num,
-                                    configured_seek_max_pages,
-                                    title,
-                                    company,
-                                    time.monotonic() - target_t0,
-                                )
-                            )
-                            posted_age_days = record[rs.RECORD_POSTED_AGE_DAYS_KEY]
-                            if posted_age_days is None or posted_age_days <= configured_date_range:
-                                page_has_fresh_card = True
-
-                            _job_t0 = time.monotonic()
-                            _job_cost_start = get_session_cost_usd()
-                            outcome, record, record_skill_observations = review_seek_card_record(
-                                record,
-                                detail_page,
-                                review_context,
-                            )
-                            _job_elapsed_s = time.monotonic() - _job_t0
-                            _job_llm_cost  = max(get_session_cost_usd() - _job_cost_start, 0.0)
-                            _job_decision  = outcome.get("decision")
-                            _job_score: int | None = None
-
-                            _job_breakdown: list | None = None
-                            if _job_decision == "KEEP":
-                                _job_score = fit_score(record, profile)
-                                _job_breakdown = fit_score_breakdown(record, profile)
-                                skill_observations.extend(record_skill_observations)
-                                kept_records.append(record)
-                                logger.info(
-                                    "%s KEPT %s @ %s | %s",
-                                    page_tag, title, company,
-                                    "SEEN_BEFORE" if record.get("seen_before") else "NEW",
-                                )
-
-                            if _job_decision in {"KEEP", "REJECT"}:
-                                print_job_human_summary(record, profile, elapsed_s=_job_elapsed_s, score=_job_score, llm_cost=_job_llm_cost, breakdown=_job_breakdown)
-                                close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
-
+                            record["job_quality_signals"] = detect_broad_engagement_signal(record)
+                            card_records.append(record)
                         except TargetClosedError:
-                            logger.warning("%s browser target closed; stopping target", page_tag)
+                            logger.warning("%s browser target closed during card build; stopping page", page_tag)
+                            target_closed = True
                             break
                         except Exception as exc:
-                            record[rs.RECORD_DECISION_KEY] = "REJECT"
-                            record[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
-                            finalize_record(job_history, audit_rows, record, run_iso)
                             logger.warning(
-                                "%s REJECTED (card) [CARD_EXCEPTION:%s] %s @ %s\n%s",
-                                page_tag, type(exc).__name__, title, company, traceback.format_exc(),
+                                "%s REJECTED (card build) [%s]\n%s",
+                                page_tag, type(exc).__name__, traceback.format_exc(),
                             )
+
+                    set_run_progress(_seek_run_progress(current_page_num, configured_seek_max_pages, elapsed_s=time.monotonic() - target_t0))
+
+                    page_has_fresh_card = any(
+                        r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) is None
+                        or r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) <= configured_date_range
+                        for r in card_records
+                    )
+
+                    # Phase 2: pre-detail checks (fast, no network)
+                    pre_decided: list[tuple[int, tuple]] = []
+                    needs_detail: list[tuple[int, dict]] = []
+                    for i, record in enumerate(card_records):
+                        pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(record, review_context)
+                        if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                            pre_decided.append((i, (pre_outcome, record, [], 0.0)))
+                        else:
+                            needs_detail.append((i, record))
+
+                    # batch_results: card_index -> (outcome, record, skill_obs, elapsed_s)
+                    batch_results: dict[int, tuple] = {i: res for i, res in pre_decided}
+
+                    # Phase 3: parallel detail fetch + LLM via persistent async browser
+                    if needs_detail and not run_stop_requested() and not target_closed:
+                        batch_results.update(
+                            detail_session.run_batch(needs_detail, review_context)
+                        )
+
+                    # Phase 4: process results in original card order
+                    for i in range(len(card_records)):
+                        if i not in batch_results:
+                            continue
+                        outcome, record, record_skill_observations, job_elapsed_s = batch_results[i]
+                        title = str(record.get(rs.RECORD_TITLE_KEY) or "")
+                        company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
+                        _job_decision = outcome.get("decision")
+                        _job_score: int | None = None
+                        _job_breakdown: list | None = None
+
+                        if _job_decision == "KEEP":
+                            _job_score, _job_breakdown = fit_score_and_breakdown_displayed(record, profile)
+                            skill_observations.extend(record_skill_observations)
+                            kept_records.append(record)
+                            logger.info(
+                                "%s KEPT %s @ %s | %s",
+                                page_tag, title, company,
+                                "SEEN_BEFORE" if record.get("seen_before") else "NEW",
+                            )
+
+                        if _job_decision in {"KEEP", "REJECT"}:
+                            print_job_human_summary(record, profile, elapsed_s=job_elapsed_s or None, score=_job_score, llm_cost=0.0, breakdown=_job_breakdown)
+                            close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
+
+                    if target_closed:
+                        break
 
                     if not page_has_fresh_card:
                         logger.info("%s all cards were older than %d day(s); stopping target", page_tag, configured_date_range)
@@ -474,6 +600,7 @@ def seek_scrape_to_records(
                     current_page_num += 1
             set_run_progress("SEEK complete")
         finally:
+            detail_session.close()
             context.close()
 
     return kept_records, audit_rows, skill_observations

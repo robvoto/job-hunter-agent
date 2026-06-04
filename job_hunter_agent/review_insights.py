@@ -13,6 +13,7 @@ from job_hunter_agent.global_settings import (
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
 )
+from job_hunter_agent.occupation_taxonomy import RESULT_UNCERTAIN
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_SEARCH_LOCATION_KEY,
@@ -21,11 +22,14 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
+    CAPABILITY_ICON_GENERIC,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_ALIASES,
+    KEY_ICON_KEY,
     KEY_NAME,
     KEY_LEVEL,
+    VALID_CAPABILITY_ICON_KEYS,
 )
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 
@@ -99,9 +103,18 @@ def build_rejection_review(audit_rows: list[dict]) -> list[dict]:
                 "reason": reason,
                 "count": 0,
                 "samples": [],
+                "onet_results": [],
+                "onet_result_counts": {},
             },
         )
         entry["count"] += 1
+        onet = row.get("onet_classification")
+        if isinstance(onet, dict):
+            onet_result = str(onet.get("result") or "").strip().lower()
+            if onet_result and onet_result not in entry["onet_results"]:
+                entry["onet_results"].append(onet_result)
+            if onet_result:
+                entry["onet_result_counts"][onet_result] = int(entry["onet_result_counts"].get(onet_result, 0)) + 1
         if len(entry["samples"]) < max_samples:
             entry["samples"].append(
                 {
@@ -461,15 +474,19 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
         count = int(item.get("count") or 0)
         samples = item.get("samples") or []
         if reason == "TITLE_NOT_TARGET":
-            if count < title_not_target_min:
+            uncertain_count = int((item.get("onet_result_counts") or {}).get(RESULT_UNCERTAIN, 0))
+            clear_count = count - uncertain_count
+            if clear_count <= 0:
+                continue
+            if clear_count < title_not_target_min:
                 continue
             suggestions.append(
                 {
                     "kind": "rule",
                     "reason": reason,
-                    "count": count,
+                    "count": clear_count,
                     "headline": "Broad capture is producing a lot of non-primary job titles",
-                    "detail": f"{count} roles were filtered by title before deeper review.",
+                    "detail": f"{clear_count} role(s) were filtered by title before deeper review.",
                     "target": "Search keywords and title matching",
                     "recommendation": "Keep search broad unless deeper review volume rises. Tighten title rules before tightening search keywords.",
                     "samples": samples,
@@ -542,6 +559,69 @@ def build_rule_tuning_suggestions(audit_rows: list[dict]) -> list[dict]:
     return _build_rule_tuning_suggestions_from_reviews(build_rejection_review(audit_rows))
 
 
+def build_title_optimization_suggestions(audit_rows: list[dict]) -> list[dict]:
+    settings = get_review_settings()
+    min_count = settings[KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT]
+    max_samples = settings[KEY_REVIEW_MAX_SAMPLES_PER_REJECTION]
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in audit_rows:
+        if not isinstance(row, dict) or row.get("decision") != "REJECT":
+            continue
+        title_reason = str(row.get("title_reason") or row.get("reject_reason") or "").strip()
+        if title_reason != "TITLE_NOT_TARGET":
+            continue
+        onet = row.get("onet_classification") or {}
+        if not isinstance(onet, dict) or str(onet.get("result") or "").strip().lower() != RESULT_UNCERTAIN:
+            continue
+        title = compact_whitespace(str(row.get(RECORD_TITLE_KEY) or ""))
+        normalized = _normalize_term(title)
+        if not title or not normalized:
+            continue
+        entry = grouped.setdefault(
+            normalized,
+            {
+                "title": title,
+                "count": 0,
+                "samples": [],
+            },
+        )
+        entry["count"] += 1
+        if len(entry["samples"]) < max_samples:
+            entry["samples"].append(
+                {
+                    "title": row.get("title"),
+                    "company": row.get("company"),
+                    "url": row.get("url"),
+                    "search_location": row.get("search_location"),
+                }
+            )
+
+    suggestions: list[dict[str, Any]] = []
+    for normalized, entry in grouped.items():
+        count = int(entry["count"] or 0)
+        if count < min_count:
+            continue
+        title = str(entry["title"] or normalized).strip()
+        suggestions.append(
+            {
+                "kind": "optimization",
+                "reason": "ONET_UNCERTAIN_TITLE",
+                "count": count,
+                "headline": f"Repeated uncertain title: {title}",
+                "detail": f"O*NET could not classify this title in {count} rejected role(s). Keep it as a softer optimise suggestion before hard blocking.",
+                "target": "Optimisation rules",
+                "recommendation": "Filter similar roles only if they keep coming back as poor fits.",
+                "samples": entry["samples"],
+            }
+        )
+
+    return sorted(
+        suggestions,
+        key=lambda item: (-int(item["count"]), str(item["headline"]).lower()),
+    )
+
+
 def build_suggested_tuning(
     audit_rows: list[dict],
     skill_observations: list[dict],
@@ -549,15 +629,18 @@ def build_suggested_tuning(
 ) -> dict[str, Any]:
     capability_suggestions = build_capability_tuning_suggestions(skill_observations, audit_rows, profile)
     requirement_suggestions = build_requirement_tuning_suggestions(audit_rows, profile)
+    optimization_suggestions = build_title_optimization_suggestions(audit_rows)
     rule_suggestions = build_rule_tuning_suggestions(audit_rows)
     return {
         "summary": {
             "capability_count": len(capability_suggestions),
             "requirement_count": len(requirement_suggestions),
+            "optimization_count": len(optimization_suggestions),
             "rule_count": len(rule_suggestions),
         },
         "capability_suggestions": capability_suggestions,
         "requirement_suggestions": requirement_suggestions,
+        "optimization_suggestions": optimization_suggestions,
         "rule_suggestions": rule_suggestions,
     }
 
@@ -640,7 +723,12 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
                 KEY_LEVEL: level,
                 KEY_ALIASES: merged_aliases,
             }
+            icon_key = str(existing_rule.get(KEY_ICON_KEY) or "").strip().lower()
+            if icon_key not in VALID_CAPABILITY_ICON_KEYS:
+                raise ValueError(f"Capability {canonical_name!r} has missing or invalid icon_key: {icon_key!r}")
+            capability_rules[existing_index[normalized]][KEY_ICON_KEY] = icon_key
         else:
+            rule[KEY_ICON_KEY] = CAPABILITY_ICON_GENERIC
             capability_rules.append(rule)
             existing_index[normalized] = len(capability_rules) - 1
 

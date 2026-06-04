@@ -62,14 +62,22 @@ def _job_tag(source: str, title: str, company: str, job_key: str) -> str:
 from job_hunter_agent.capability_matching import build_risk_and_missing_evidence, reviewed_signal_matches_for_text
 from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
 from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters
-from job_hunter_agent.fit_scoring import build_fit_highlights
+from job_hunter_agent.fit_scoring import (
+    build_fit_highlights,
+    fit_score_and_breakdown_displayed,
+    fit_score_breakdown_frozen,
+    fit_score_frozen,
+)
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
 from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.llm_gate import LLMCallError, get_session_cost_usd, llm_extract_job_requirements
 from job_hunter_agent.logging_utils import format_log_block
+from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.preferences import passes_preference_filters
 from job_hunter_agent.occupation_taxonomy import RESULT_FAR, classify_title as _onet_classify_title, format_onet_response
+from job_hunter_agent.profile_store import get_match_levels
+from job_hunter_agent.score_labels import score_to_tone_class
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.record_schema import (
     CONFIDENCE_HIGH,
@@ -86,14 +94,24 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_LABEL_KEY,
     RECORD_FIT_HIGHLIGHTS_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_FIT_SCORE_KEY,
+    RECORD_FIT_TONE_CLASS_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_DECISION_SUMMARY_KEY,
+    RECORD_LLM_POSITIVE_REASONS_KEY,
+    RECORD_LLM_CONCERNS_KEY,
+    RECORD_LLM_SCORE_RATIONALE_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
+    RECORD_LLM_COST_USD_KEY,
     RECORD_LOCATION_KEY,
     RECORD_MISSING_EVIDENCE_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
@@ -101,6 +119,7 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
     RECORD_SALARY_KEY,
     RECORD_SOFT_RISK_REASONS_KEY,
@@ -308,7 +327,21 @@ def _build_outcome(record: dict) -> dict[str, Any]:
         "llm_fit_grade": record.get(RECORD_LLM_FIT_GRADE_KEY),
         "review_source": record.get("review_source"),
         RECORD_CONTEXTUAL_CAPABILITY_MATCHES_KEY: list(record.get(RECORD_CONTEXTUAL_CAPABILITY_MATCHES_KEY) or []),
+        RECORD_REQUIREMENT_COVERAGE_KEY: list(record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []),
     }
+
+
+def _freeze_fit_score_fields(record: dict, profile: dict) -> None:
+    # Guard: cannot score without an LLM grade (e.g. very old history snapshots that predate
+    # grade capture, or future code paths that call this before review). Existing frozen
+    # fields from the snapshot are preserved as-is; the display path reads those directly.
+    if not str(record.get("llm_fit_grade") or "").strip():
+        return
+    fit_points = fit_score_frozen(record, profile)
+    record[RECORD_FIT_SCORE_KEY] = fit_points
+    record[RECORD_FIT_SCORE_BREAKDOWN_KEY] = fit_score_breakdown_frozen(record, profile)
+    record[RECORD_FIT_LABEL_KEY] = score_to_match_label(fit_points, get_match_levels(profile))
+    record[RECORD_FIT_TONE_CLASS_KEY] = score_to_tone_class(fit_points, profile)
 
 
 def _apply_detail_payload_to_record(record: dict, details_text: str, details_status: str) -> tuple[bool, str]:
@@ -444,7 +477,16 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     )
     record["llm_learning_candidates"] = []
     record[RECORD_JOB_REQUIREMENTS_KEY] = []
+    record[RECORD_REQUIREMENT_COVERAGE_KEY] = []
     contextual_capability_matches: list = []
+    rationale_defaults = {
+        RECORD_LLM_DECISION_SUMMARY_KEY: "",
+        RECORD_LLM_POSITIVE_REASONS_KEY: [],
+        RECORD_LLM_CONCERNS_KEY: [],
+        RECORD_LLM_SCORE_RATIONALE_KEY: [],
+    }
+    llm_elapsed_ms = None
+    llm_cost_usd = None
 
     if deterministic_review is not None:
         review = deterministic_review
@@ -465,16 +507,70 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         _pipeline_log("LLM_CALL_START", record, call="fit_review")
         _t0 = time.monotonic()
         payload = resolve_llm_review_payload(record, llm_cache)
+        llm_elapsed_ms = int((time.monotonic() - _t0) * 1000)
         _pipeline_log("LLM_CALL_DONE", record, call="fit_review",
-                      elapsed_ms=int((time.monotonic() - _t0) * 1000),
+                      elapsed_ms=llm_elapsed_ms,
                       payload_source=payload.get("payload_source", "llm"))
         review = payload["fit_review"]
         record["llm_learning_candidates"] = payload.get("learning_candidates") or []
         record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
+        record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
         contextual_capability_matches = payload.get("contextual_capability_matches") or []
+        rationale_defaults = {
+            RECORD_LLM_DECISION_SUMMARY_KEY: payload.get("decision_summary") or "",
+            RECORD_LLM_POSITIVE_REASONS_KEY: payload.get("positive_reasons") or [],
+            RECORD_LLM_CONCERNS_KEY: payload.get("concerns") or [],
+            RECORD_LLM_SCORE_RATIONALE_KEY: payload.get("score_rationale") or [],
+        }
+        llm_cost_usd = float(payload.get("llm_cost_usd") or 0.0)
         source = str(payload.get("payload_source") or "llm")
         record["_obs_llm_called"] = True
         record["_obs_llm_cache_hit"] = (source == "cache")
+        record[RECORD_LLM_ELAPSED_MS_KEY] = llm_elapsed_ms
+        record[RECORD_LLM_COST_USD_KEY] = llm_cost_usd
+        coverage_counts = {
+            "met": 0,
+            "partially_met": 0,
+            "not_evidenced": 0,
+            "mismatch": 0,
+        }
+        credited_capabilities: list[str] = []
+        ignored_capabilities: list[str] = []
+        for item in record[RECORD_REQUIREMENT_COVERAGE_KEY]:
+            status = str(item.get("status") or "").strip().lower()
+            if status in coverage_counts:
+                coverage_counts[status] += 1
+            capability_name = str(item.get("capability_name") or "").strip()
+            if capability_name and status in {"met", "partially_met"}:
+                credited_capabilities.append(capability_name)
+        for item in contextual_capability_matches:
+            capability_name = str(item.get("capability_name") or "").strip()
+            confidence = str(item.get("confidence") or "").strip().lower()
+            if not capability_name:
+                continue
+            if confidence == "high":
+                continue
+            ignored_capabilities.append(f"{capability_name} ({confidence})")
+        logger.info(
+            format_log_block(
+                "fit-review",
+                {
+                    "job_key": record.get(RECORD_JOB_KEY, ""),
+                    "title": record.get(RECORD_TITLE_KEY, ""),
+                    "capabilities_used": ", ".join(credited_capabilities) or "(none)",
+                    "contextual_matches_credited": ", ".join(
+                        str(item.get("capability_name") or "").strip()
+                        for item in contextual_capability_matches
+                        if str(item.get("confidence") or "").strip().lower() == "high"
+                    ) or "(none)",
+                    "contextual_matches_logged_only": ", ".join(ignored_capabilities) or "(none)",
+                    "requirement_coverage": (
+                        f"met={coverage_counts['met']}, partial={coverage_counts['partially_met']}, "
+                        f"not_evidenced={coverage_counts['not_evidenced']}, mismatch={coverage_counts['mismatch']}"
+                    ),
+                },
+            )
+        )
 
     return {
         "llm_decision": review["decision"],
@@ -482,7 +578,11 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         "review_source": source,
         "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
         "contextual_capability_matches": contextual_capability_matches,
+        **rationale_defaults,
         RECORD_JOB_REQUIREMENTS_KEY: record[RECORD_JOB_REQUIREMENTS_KEY],
+        RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
+        RECORD_LLM_ELAPSED_MS_KEY: llm_elapsed_ms,
+        RECORD_LLM_COST_USD_KEY: llm_cost_usd,
     }
 
 
@@ -622,6 +722,7 @@ def review_pre_detail_normalized_job(
     history_entry = context.job_history.get(job_key, {})
     if can_reuse_kept_job(history_entry, record, profile):
         record = apply_kept_job_reuse(record, history_entry)
+        _freeze_fit_score_fields(record, profile)
         _finalize(record, context)
         print(f"{source_tag} KEPT (history reuse) {title} @ {company}")
         return _build_outcome(record), record, skill_observations, False
@@ -764,6 +865,7 @@ def review_post_detail_normalized_job(
                       grade=record.get(RECORD_LLM_FIT_GRADE_KEY, ""))
         return _build_outcome(record), record, skill_observations
 
+    _freeze_fit_score_fields(record, profile)
     pending_signals = merge_pending_learning_signals(
         record.get("ad_learning_signals") or [],
         record.get("llm_learning_candidates") or [],

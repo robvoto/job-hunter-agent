@@ -130,6 +130,12 @@ Changes here affect the app globally, but users do not edit them from their own 
 - optional public/private preference for search
 - leave it at no preference unless you want sector filtering to be active
 
+`Work type`
+
+- lets you include Permanent, Contract, and FTC (Full Time Contract) roles in search and review
+- FTC is shown as a short chip label, but means Full Time Contract
+- contract-length preference applies to Contract and FTC roles where a duration is visible
+
 `Work mode`
 
 - lets you include remote, hybrid, and on-site in search

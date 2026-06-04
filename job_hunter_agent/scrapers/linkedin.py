@@ -45,7 +45,7 @@ from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_reco
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_text, log_work_mode_result
-from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
+from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
@@ -168,8 +168,7 @@ class LinkedInScraper(BaseJobScraper):
                     continue
                 skill_observations.extend(record_skill_observations)
                 kept_records.append(record)
-                _li_score = fit_score(record, self.profile)
-                _li_breakdown = fit_score_breakdown(record, self.profile)
+                _li_score, _li_breakdown = fit_score_and_breakdown_displayed(record, self.profile)
                 logger.info(
                     "%s KEPT %s @ %s | %s | %s | %s | %s",
                     target_tag,

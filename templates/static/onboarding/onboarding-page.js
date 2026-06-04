@@ -413,6 +413,17 @@ export function positionContractDurationRow() {
   contractRow.style.top = Math.round(chipRect.bottom - parentRect.top + 6) + 'px';
 }
 
+let _contractRowDismissHandler = null;
+
+function _hideContractRow() {
+  const contractRow = document.getElementById('contract_duration_row');
+  if (contractRow) contractRow.hidden = true;
+  if (_contractRowDismissHandler) {
+    document.removeEventListener('mousedown', _contractRowDismissHandler, true);
+    _contractRowDismissHandler = null;
+  }
+}
+
 export function updateMinContractMonthState({ showRow = false } = {}) {
   if (!refs.minContractMonths) return;
   const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
@@ -420,13 +431,22 @@ export function updateMinContractMonthState({ showRow = false } = {}) {
   const contractRow = document.getElementById('contract_duration_row');
   if (contractRow) {
     if (!contractEnabled) {
-      contractRow.hidden = true;
+      _hideContractRow();
     } else if (showRow) {
       if (!getMinContractMonthValue()) {
         setMinContractMonthValue(getResolvedMinContractMonthValue());
       }
       positionContractDurationRow();
       contractRow.hidden = false;
+      if (!_contractRowDismissHandler) {
+        _contractRowDismissHandler = (e) => {
+          const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
+          if (!contractRow.contains(e.target) && !contractChip?.contains(e.target)) {
+            _hideContractRow();
+          }
+        };
+        document.addEventListener('mousedown', _contractRowDismissHandler, true);
+      }
     }
   }
   updateContractChipLabel();
@@ -658,7 +678,7 @@ export function searchPreferencesPayload() {
     keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.length ? [selectedLocations[0]] : [],
     engagement_type: engagementType,
-    min_contract_months: engagementType.includes('contract') ? (getResolvedMinContractMonthValue() || null) : null,
+    min_contract_months: (engagementType.includes('contract') || engagementType.includes('full_time_contract')) ? (getResolvedMinContractMonthValue() || null) : null,
     work_mode_preference: getOnboardingWorkModePreferenceValues(),
     prefer_sector: getSectorPreferenceValues(),
     minimum_salary_yearly: reviewMinimumSalaryYearlyEl?.value.trim() || '',
@@ -785,16 +805,14 @@ export function applyProfileDefaults(profile) {
   }
   setOnboardingEngagementTypeValues(matchPreferences.engagement_type);
   updateMinContractMonthState();
-  if (!getOnboardingWorkModePreferenceValues().length) {
-    if (!Array.isArray(matchPreferences.work_mode_preference)) {
-      throw new Error('Missing work mode preferences.');
-    }
-    setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference);
-    updateSearchPreferenceSummaries();
-  }
-  if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
-    if (!Array.isArray(matchPreferences.prefer_sector)) {
-      throw new Error('Missing sector preferences.');
+   if (!Array.isArray(matchPreferences.work_mode_preference)) {
+     throw new Error('Missing work mode preferences.');
+   }
+   setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference);
+   updateSearchPreferenceSummaries();
+   if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
+     if (!Array.isArray(matchPreferences.prefer_sector)) {
+       throw new Error('Missing sector preferences.');
     }
     setSectorPreferenceValues(matchPreferences.prefer_sector);
     updateSearchPreferenceSummaries();

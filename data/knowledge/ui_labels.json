@@ -1,8 +1,8 @@
 {
     "kind":  "ui_labels",
     "name":  "ui_labels",
-  "version": 20,
-    "updated_at":  "2026-05-25",
+  "version": 26,
+    "updated_at":  "2026-06-04",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {
                              "remote_label":  "Remote",
@@ -114,6 +114,7 @@
                             "search_starting_subcopy":  "The workspace will refresh automatically while the search runs.",
                             "search_stop_label":  "Stop search",
                             "search_progress_prefix":  "Current step:",
+                            "search_elapsed_prefix":  "Search elapsed: ",
                             "search_stopping_title":  "Stopping search",
                             "search_stopping_copy":  "Job Hunter is stopping the current search and will show the results collected so far.",
                             "search_stopping_subcopy":  "Keep this tab open while the current run wraps up."
@@ -125,6 +126,7 @@
                                             "target_roles_plural":  "target roles",
                                             "capabilities_singular":  "capability row",
                                             "capabilities_plural":  "capability rows",
+                                            "llm_cost_label":  "LLM cost this run:",
                                             "source_suffix":  "from your CV.",
                                             "capability_preview_rows":  3
                                         },

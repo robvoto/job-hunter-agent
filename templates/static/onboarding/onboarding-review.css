@@ -59,21 +59,8 @@
   min-height: 0;
 }
 
-.check-card-head {
-  margin-bottom: 14px;
-}
-
 .check-list {
   gap: 12px;
-}
-
-.check-list dt {
-  margin-bottom: 2px;
-  color: var(--text-muted);
-  font-size: var(--font-size-2xs);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: none;
 }
 
 .check-list dd:empty::after {
@@ -94,10 +81,6 @@
   font-weight: 600;
 }
 
-.actions {
-  margin-top: var(--onboarding-actions-margin-top);
-}
-
 .wizard-step[data-step="1"] .workflow-drawer {
   margin: var(--onboarding-step1-workflow-drawer-margin);
 }
@@ -115,10 +98,6 @@
 
 .wizard-step[data-step="1"] .workflow-steps {
   gap: var(--onboarding-step1-workflow-steps-gap);
-}
-
-.wizard-step[data-step="1"] .actions {
-  margin-top: var(--onboarding-actions-margin-top);
 }
 
 .wizard-step[data-step="4"] .check-grid {

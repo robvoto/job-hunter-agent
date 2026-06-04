@@ -1,14 +1,14 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 6,
+  "version": 7,
   "updated_at": "2026-06-02",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
     "design": "Band-anchored scoring. The LLM grade defines the band (floor/ceiling); other signals adjust the score within that band. Grade and score cannot contradict — a MISMATCH grade always produces a low score; a STRONG grade always produces a good score.",
     "llm_grade_base_points": "Base additive contribution from the LLM grade before other signals are added. These are intentionally modest — the band floor and ceiling constrain the final score, not the base alone.",
     "llm_grade_bands": "Each grade has a floor (minimum attainable) and ceiling (maximum attainable) for the non-hard-block score. After summing all core/preference/convenience entries the result is clamped to the band. Hard block penalties are applied after band clamping and can push the score to zero regardless of grade.",
-    "other_signals": "Title match, capability evidence, preferences, freshness, and competitive signals move the score within the grade band. A STRONG grade with clean title + capability evidence reaches the upper end of the band; the same grade with no supporting signals floors at the grade minimum.",
+    "other_signals": "Title match, preferences, freshness, and competitive signals move the score within the grade band. Capability evidence is captured in the grade via requirement_coverage — it is shown for transparency but does not add separate points. A STRONG grade with a clean title and preference signals reaches the upper end of the band; the same grade with no supporting signals floors at the grade minimum.",
     "hard_blockers": "Applied after band clamping. A single hard blocker subtracts 100, overriding the grade band and forcing the score to near-zero.",
     "band_boundaries": {
       "EXCELLENT": "88-100 — reserved for exceptional alignment across all signals",
@@ -45,16 +45,6 @@
     "WEAK":      {"floor": 28, "ceiling": 47},
     "POOR":      {"floor": 8,  "ceiling": 27},
     "MISMATCH":  {"floor": 0,  "ceiling": 7}
-  },
-  "capability_level_weights": {
-    "description": "Weights for capability evidence strength bands. Managed scoring defaults, not free-form user input.",
-    "strong": 4,
-    "working": 3,
-    "basic": 2
-  },
-  "capability_evidence": {
-    "description": "Caps how much capability evidence can contribute to the final score.",
-    "max_score": 20
   },
   "convergence": {
     "description": "Bonuses for strong multi-signal agreement between title, content, and evidence.",
@@ -93,18 +83,12 @@
     }
   },
   "freshness": {
-    "description": "Bonuses for newer jobs. Used by the score engine, not the search filters.",
+    "description": "Bonuses for newer jobs. Used by the score engine, not the search filters. Only jobs posted within the last day receive a bonus.",
     "last_6_hours": 10,
     "last_day": 8,
-    "last_3_days": 5,
-    "last_week": 2,
-    "last_15_days": 1,
     "bucket_order": [
       "last_6_hours",
-      "last_day",
-      "last_3_days",
-      "last_week",
-      "last_15_days"
+      "last_day"
     ],
     "buckets": {
       "last_6_hours": {
@@ -114,18 +98,6 @@
       "last_day": {
         "max_days": 1,
         "label": "Posted within the last day"
-      },
-      "last_3_days": {
-        "max_days": 3,
-        "label": "Posted within the last 3 days"
-      },
-      "last_week": {
-        "max_days": 7,
-        "label": "Posted within the last week"
-      },
-      "last_15_days": {
-        "max_days": 15,
-        "label": "Still relatively recent"
       }
     }
   },
@@ -152,7 +124,7 @@
     "secondary_match": -1
   },
   "contract": {
-    "description": "Score adjustments for selected work type preference and contract-length confidence.",
+    "description": "Score adjustments for selected work-type preference, including Permanent, Contract, and FTC, plus contract-length confidence where relevant.",
     "permanent_match": 10,
     "long_with_extension": 9,
     "long_contract": 8,
@@ -180,10 +152,8 @@
     "freshness": 1.0
   },
   "capability_contextual_llm": {
-    "description": "Controls how LLM contextual capability matches are credited in scoring. High-confidence matches receive the same credit as deterministic matches. Medium and low receive no credit but are logged for review.",
-    "confidence_levels_with_credit": ["high"],
-    "confidence_levels_logged_only": ["medium"],
-    "confidence_levels_ignored": ["low"]
+    "description": "Defines which confidence levels count as LLM-evidenced for transparency and convergence bonus. High-confidence matches are shown as evidenced in the breakdown and count toward convergence. Lower confidence matches are shown as found but not confirmed. No separate scoring points are awarded — the grade already captures capability fit.",
+    "confidence_levels_with_credit": ["high"]
   },
   "deterministic_review_thresholds": {
     "description": "Controls the pre-LLM deterministic shortcut in source_learning.deterministic_review_outcome. When a job clears one of these rules it is decided without an LLM call (review_source='rule'). To calibrate, filter audit_records.json on review_source='rule' or 'rule+learning' and check whether the det_rule value matches your expectation.",

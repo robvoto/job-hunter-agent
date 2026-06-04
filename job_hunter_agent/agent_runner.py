@@ -40,7 +40,7 @@ from job_hunter_agent.user_settings import (
 )
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
 from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
-from job_hunter_agent.fit_scoring import fit_score
+from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
 from job_hunter_agent.io_utils import load_job_history, load_run_stats, configure_console_output
 from job_hunter_agent.history import viewed_by_user
@@ -165,8 +165,8 @@ def build_digest_payload(
     run_started_at, run_finished_at = _resolve_collection_timestamps(run_stats)
 
     strongest_records = sorted(
-        [record for record in current_records if fit_score(record) >= minimum_fit_score],
-        key=lambda record: (-fit_score(record), record.get(RECORD_POSTED_AGE_DAYS_KEY) if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None else 9999),
+        [record for record in current_records if fit_score_displayed(record) >= minimum_fit_score],
+        key=lambda record: (-fit_score_displayed(record), record.get(RECORD_POSTED_AGE_DAYS_KEY) if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None else 9999),
     )[:max_jobs]
     featured_records = new_records[:max_jobs]
     featured_heading = LABEL_NEW_MATCHES
@@ -197,7 +197,7 @@ def format_job_line(record: dict, index: int | None = None) -> str:
     company = str(record.get(RECORD_COMPANY_KEY) or "N/A")
     title = str(record.get(RECORD_TITLE_KEY) or "Untitled")
     location = str(record.get(RECORD_LOCATION_KEY) or "N/A")
-    score = fit_score(record)
+    score = fit_score_displayed(record)
     score_label = score_to_match_label(score, load_profile().get("match_levels", []))
     source = str(record.get(RECORD_SOURCE_KEY) or "N/A").upper()
     url = str(record.get(RECORD_URL_KEY) or "").strip()
@@ -216,7 +216,7 @@ def format_job_html(record: dict, index: int | None = None) -> str:
     company = html.escape(str(record.get(RECORD_COMPANY_KEY) or "N/A"))
     title = html.escape(str(record.get(RECORD_TITLE_KEY) or "Untitled"))
     location = html.escape(str(record.get(RECORD_LOCATION_KEY) or "N/A"))
-    score = fit_score(record)
+    score = fit_score_displayed(record)
     score_label = html.escape(score_to_match_label(score, load_profile().get("match_levels", [])))
     source = html.escape(str(record.get(RECORD_SOURCE_KEY) or "N/A").upper())
     url = str(record.get(RECORD_URL_KEY) or "").strip()

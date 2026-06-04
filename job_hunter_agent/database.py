@@ -174,6 +174,8 @@ CREATE TABLE IF NOT EXISTS occupation_title_cache (
     result                    TEXT NOT NULL CHECK (result IN ('near', 'far', 'uncertain')),
     matched_occupation_code   TEXT,
     confidence                REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    matched_phrase            TEXT,
+    match_type                TEXT,
     created_at                TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (normalized_title, candidate_profile_hash, taxonomy_version)
 );
@@ -189,6 +191,12 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     if "application_materials" in tables and "profile_documents" not in tables:
         conn.execute("ALTER TABLE application_materials RENAME TO profile_documents")
+    if "occupation_title_cache" in tables:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(occupation_title_cache)").fetchall()}
+        if "matched_phrase" not in columns:
+            conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN matched_phrase TEXT")
+        if "match_type" not in columns:
+            conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN match_type TEXT")
 
 
 def init_db(db_path: Path | None = None) -> None:

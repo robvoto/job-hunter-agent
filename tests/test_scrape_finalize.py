@@ -19,6 +19,12 @@ from job_hunter_agent import scrape_finalize
 from job_hunter_agent import workspace_service
 
 from job_hunter_agent.paths import LOCAL_USER_ID
+from job_hunter_agent.record_schema import (
+    RECORD_FIT_LABEL_KEY,
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_FIT_SCORE_KEY,
+    RECORD_FIT_TONE_CLASS_KEY,
+)
 
 
 
@@ -48,6 +54,8 @@ def _build_context() -> ScrapeRunContext:
 
         playwright_selector_timeout=8000,
 
+        seek_parallel_detail_workers=3,
+
         applied_job_keys={"job:applied"},
 
         hidden_job_keys={"job:hidden"},
@@ -73,6 +81,41 @@ def _build_context() -> ScrapeRunContext:
         reset_new_to_you=False,
 
     )
+
+
+def test_merge_into_pool_updates_non_score_fields_and_preserves_frozen_score():
+    pool = [
+        {
+            "job_key": "job:1",
+            "title": "Old title",
+            "company": "Acme",
+            "url": "https://old.example/job",
+            "salary": "$100k",
+            RECORD_FIT_SCORE_KEY: 72,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [{"label": "Base", "value": 72}],
+            RECORD_FIT_LABEL_KEY: "Strong fit",
+            RECORD_FIT_TONE_CLASS_KEY: "tone-good",
+        }
+    ]
+    new_records = [
+        {
+            "job_key": "job:1",
+            "title": "New title",
+            "company": "Acme",
+            "url": "https://new.example/job",
+            "salary": "$120k",
+        }
+    ]
+
+    merged = scrape_finalize._merge_into_pool(pool, new_records)
+
+    assert merged[0]["title"] == "New title"
+    assert merged[0]["url"] == "https://new.example/job"
+    assert merged[0]["salary"] == "$120k"
+    assert merged[0][RECORD_FIT_SCORE_KEY] == 72
+    assert merged[0][RECORD_FIT_SCORE_BREAKDOWN_KEY] == [{"label": "Base", "value": 72}]
+    assert merged[0][RECORD_FIT_LABEL_KEY] == "Strong fit"
+    assert merged[0][RECORD_FIT_TONE_CLASS_KEY] == "tone-good"
 
 
 
@@ -318,6 +361,49 @@ def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_pat
     assert "[RUN][ERROR] No fresh cards were captured in this run." in log_text
 
 
+def test_finalize_scrape_run_treats_stop_before_fresh_cards_as_cancellation(monkeypatch, tmp_path, capsys, caplog):
+    import logging as _logging
+    caplog.set_level(_logging.INFO)
+
+    context = _build_context()
+    context.previous_audit_rows = [{"job_key": "job:old", "decision": "KEEP", "run_started_at": context.run_iso}]
+    context.previous_run_stats = {"run_started_at": "2026-05-15T08:12:40"}
+
+    workspace_path = tmp_path / "workspace.html"
+
+    calls: list[tuple[str, object]] = []
+
+    with db_conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
+
+    monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(scrape_finalize, "deduplicate_across_sources", lambda records: records)
+    monkeypatch.setattr(scrape_finalize.workspace_service, "load_last_kept_records", lambda *args, **kwargs: [{"job_key": "job:old"}])
+    monkeypatch.setattr(scrape_finalize.workspace_service, "render_html", lambda *args: calls.append(("render_html", args)))
+    monkeypatch.setattr(scrape_finalize, "save_llm_cache", lambda payload: calls.append(("save_llm_cache", payload)))
+    monkeypatch.setattr(scrape_finalize, "save_job_history", lambda payload: calls.append(("save_job_history", payload)))
+    monkeypatch.setattr(scrape_finalize, "write_debug_json", lambda payload: calls.append(("write_debug_json", payload)))
+    monkeypatch.setattr(scrape_finalize, "write_run_stats", lambda payload: calls.append(("write_run_stats", payload)))
+    monkeypatch.setattr(scrape_finalize, "write_review_data", lambda payload: calls.append(("write_review_data", payload)))
+    monkeypatch.setattr(scrape_finalize, "run_stop_requested", lambda: True)
+
+    workspace_result = scrape_finalize.finalize_scrape_run(
+        context,
+        kept_records=[],
+        audit_rows=[],
+        skill_observations=[],
+    )
+
+    assert workspace_result == str(workspace_path)
+    run_stats_payload = next(payload for name, payload in calls if name == "write_run_stats")
+    assert "last_run_error" not in run_stats_payload
+
+    capsys.readouterr()
+    log_text = caplog.text
+    assert "stopped before any fresh cards were captured" in log_text
+    assert "[RUN][ERROR] No fresh cards were captured in this run." not in log_text
+
+
 
 
 
@@ -333,7 +419,7 @@ def test_build_run_stats_counts_unique_pages_across_sources():
 
         audit_rows=[
 
-            {"source": "seek", "search_location": "Sydney", "page": 1, "decision": "KEEP"},
+            {"source": "seek", "search_location": "Sydney", "page": 1, "decision": "KEEP", "onet_classification": {"result": "near"}},
 
             {"source": "seek", "search_location": "Sydney", "page": 1, "decision": "REJECT"},
 
@@ -362,4 +448,5 @@ def test_build_run_stats_counts_unique_pages_across_sources():
 
 
     assert stats["page_count"] == 3
+    assert stats["onet_match_count"] == 1
 

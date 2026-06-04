@@ -56,6 +56,9 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'id="min_contract_months"' in html
     assert 'class="choice-strip"' in html
     assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'name="work_mode_preference" value="remote" checked' in html
+    assert 'name="work_mode_preference" value="hybrid" checked' in html
+    assert 'name="work_mode_preference" value="onsite" checked' in html
     assert 'input type="checkbox" name="engagement_type"' in html
     assert 'input type="checkbox" name="work_mode_preference"' in html
     assert 'field-info-drawer' in html
@@ -92,6 +95,18 @@ def test_onboarding_flow_keyword_helper_is_owned_by_page_module():
     assert "defaultSearchKeywordsFromReviewedTitles" not in page_js_text
 
 
+def test_onboarding_work_mode_hydration_always_applies_saved_values():
+    page_js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    search_js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-search.js"
+    page_js_text = page_js_path.read_text(encoding="utf-8")
+    search_js_text = search_js_path.read_text(encoding="utf-8")
+
+    assert "setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference);" in page_js_text
+    assert "setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);" in search_js_text
+    assert "if (!getOnboardingWorkModePreferenceValues().length)" not in page_js_text
+    assert "if (!getWorkModePreferenceValues().length)" not in search_js_text
+
+
 def test_onboarding_template_uses_shared_primary_cv_copy_placeholders():
     html_path = Path(__file__).resolve().parents[1] / "templates" / "onboarding.html"
     html_text = html_path.read_text(encoding="utf-8")
@@ -109,6 +124,46 @@ def test_onboarding_flow_labels_include_capability_review_copy():
     assert labels["review_capability_extracted_skills_label_many"] == "{count} extracted skills"
 
 
+def test_onboarding_import_summary_labels_include_cost_copy():
+    labels = server_helpers.load_onboarding_import_summary_labels()
+
+    assert labels["llm_cost_label"] == "LLM cost this run:"
+
+
+def test_onboarding_capability_cards_use_one_shared_generic_icon():
+    repo_root = Path(__file__).resolve().parents[1]
+    capability_ui_js = (repo_root / "templates" / "static" / "common" / "capability-ui.js").read_text(encoding="utf-8")
+    onboarding_flow_js = (repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js").read_text(encoding="utf-8")
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+
+    assert "genericCapabilityIconHtml" in capability_ui_js
+    assert "review-capability-title-row" in onboarding_flow_js
+    assert "capability-card-icon" in theme_widgets
+
+
+def test_capability_ui_keeps_all_shared_icon_keys():
+    repo_root = Path(__file__).resolve().parents[1]
+    capability_ui_js = (repo_root / "templates" / "static" / "common" / "capability-ui.js").read_text(encoding="utf-8")
+
+    assert "capability-card-icon--${genericCapabilityIconKey}" in capability_ui_js
+    assert "M12 7.2 13.5 10h3l-2.4 1.8.9 2.9L12 13l-3 1.7.9-2.9L7.5 10h3z" in capability_ui_js
+    for icon_key in [
+        "people_support:",
+        "communication_stakeholders:",
+        "analysis_requirements:",
+        "operations_process:",
+        "delivery_project:",
+        "technical_build:",
+        "systems_platforms:",
+        "data_reporting:",
+        "finance_commercial:",
+        "risk_compliance_security:",
+        "creative_marketing_content:",
+    ]:
+        assert icon_key not in capability_ui_js
+    assert "genericCapabilityIconKey" in capability_ui_js
+
+
 def test_shared_ui_styles_are_centralised():
     repo_root = Path(__file__).resolve().parents[1]
     theme_primitives = (repo_root / "templates" / "static" / "theme" / "themes.primitives.css").read_text(encoding="utf-8")
@@ -124,6 +179,8 @@ def test_shared_ui_styles_are_centralised():
     assert ".currency-input-wrap input," in theme_primitives
     assert ".summary-line {" in theme_widgets
     assert ".help {" in theme_widgets
+    assert ".check-card-head h3" not in theme_widgets
+    assert ".check-list dd" not in theme_widgets
     assert 'class="summary-line"' in onboarding_html
     assert 'class="summary-line"' in (repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html").read_text(encoding="utf-8")
     assert 'class="help"' in onboarding_html
@@ -137,15 +194,18 @@ def test_shared_ui_styles_are_centralised():
 
 
 def test_onboarding_contract_duration_row_floats_and_hides_on_blur():
-    css_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-page.css"
-    js_path = Path(__file__).resolve().parents[1] / "templates" / "static" / "onboarding" / "onboarding-storage.js"
+    repo_root = Path(__file__).resolve().parents[1]
+    css_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css"
+    page_js_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    storage_js_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-storage.js"
     css_text = css_path.read_text(encoding="utf-8")
-    js_text = js_path.read_text(encoding="utf-8")
+    page_js_text = page_js_path.read_text(encoding="utf-8")
+    storage_js_text = storage_js_path.read_text(encoding="utf-8")
 
     assert ".onb-field .contract-duration-row" in css_text
     assert "position: absolute;" in css_text
-    assert "minContractMonthsEl.addEventListener('blur'" in js_text
-    assert "contractRow.hidden = true;" in js_text
+    assert "contractRow.hidden = true;" in page_js_text
+    assert "minContractMonthsEl.addEventListener('change'" in storage_js_text
 
 
 def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_output():
@@ -154,6 +214,9 @@ def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_outpu
 
     assert "window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__" in js_text
     assert "onboardingImportSummaryLabels.lead_in" in js_text
+    assert "onboardingImportSummaryLabels.llm_cost_label" in js_text
+    assert "formatImportSuccessSummary(payload)" in js_text
+    assert "showStatus(extractionMessage, 'success')" in js_text
     assert "if (!parts.length)" in js_text
     assert "if (extractionMessage)" in js_text
 
@@ -185,7 +248,26 @@ def test_api_profile_status_reports_readiness(monkeypatch):
 
 def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
     monkeypatch.setattr(onboarding_api, "persist_uploaded_source_pack", lambda files: {"profile_sources": [], "cv_variants": []})
-    monkeypatch.setattr(onboarding_api, "run_onboarding", lambda materials, search_preferences=None, onboarding_settings=None: {"ok": True, "materials": materials})
+    monkeypatch.setattr(
+        onboarding_api,
+        "run_onboarding",
+        lambda materials, search_preferences=None, onboarding_settings=None: {
+            "ok": True,
+            "materials": materials,
+            "profile": {
+                "candidate_capabilities": [
+                    {
+                        "name": "stakeholder engagement",
+                        "level": "strong",
+                        "aliases": [],
+                        "needs_review": False,
+                        "icon_key": "communication_stakeholders",
+                    }
+                ]
+            },
+        },
+    )
+    monkeypatch.setattr(onboarding_api, "get_session_cost_usd", lambda: 0.00112)
     monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
 
     response = onboarding_api.api_onboarding_import(
@@ -211,6 +293,8 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
     assert response.status_code == 200
     payload = json.loads(response.body.decode("utf-8"))
     assert payload["ok"] is True
+    assert payload["profile"]["candidate_capabilities"][0]["icon_key"] == "communication_stakeholders"
+    assert payload["llm_cost_usd"] == 0.00112
 
 
 def test_api_onboarding_import_logs_selected_capability_strength_preset(monkeypatch, caplog):
@@ -261,7 +345,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
             "prefer_sector": ["government", "private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": []}],
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": [], "icon_key": "communication_stakeholders"}],
         }
     )
 
@@ -270,6 +354,7 @@ def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
     assert payload["ok"] is True
     assert captured["patch"]["match_preferences"]["prefer_sector"] == ["government", "private"]
     assert captured["patch"]["match_preferences"]["min_contract_months"] == 6
+    assert captured["patch"]["candidate_capabilities"][0]["icon_key"] == "communication_stakeholders"
 
 
 def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
@@ -288,7 +373,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
             "prefer_sector": ["government"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": []}],
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": [], "icon_key": "communication_stakeholders"}],
         }
     )
 
@@ -303,7 +388,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
     caplog.set_level(_logging.INFO)
     fixture = {
         "capabilities": [
-            {"name": "business analysis", "level": "strong", "aliases": [], "needs_review": False},
+            {"name": "business analysis", "level": "strong", "aliases": [], "icon_key": "analysis_requirements", "needs_review": False},
         ],
         "role_titles": ["Business Analyst"],
         "target_occupation_queries": ["Business Analyst"],
@@ -359,7 +444,7 @@ def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_se
             "prefer_sector": ["private"],
             "minimum_salary_yearly": 0,
             "minimum_daily_rate": 0,
-            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": []}],
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong", "aliases": [], "icon_key": "communication_stakeholders"}],
         }
     )
 
@@ -545,7 +630,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
         }
         return {
             "capabilities": [
-                {"name": "delivery", "level": "working", "aliases": [], "needs_review": False}
+                {"name": "delivery", "level": "working", "aliases": [], "icon_key": "delivery_project", "needs_review": False}
             ],
             "role_titles": ["Delivery Lead"],
             "target_occupation_queries": ["Delivery Lead"],
@@ -630,19 +715,20 @@ def test_normalize_full_profile_preserves_candidate_capabilities():
     (the legacy key), causing capabilities to be deleted on every profile load/save.
     """
     caps = [
-        {"name": "financial reporting", "level": "proficient", "aliases": []},
-        {"name": "accounts payable & receivable", "level": "working", "aliases": ["AP", "AR"]},
+        {"name": "financial reporting", "level": "proficient", "aliases": [], "icon_key": "finance_commercial"},
+        {"name": "accounts payable & receivable", "level": "working", "aliases": ["AP", "AR"], "icon_key": "finance_commercial"},
     ]
     normalized = profile_store.normalize_full_profile({"candidate_capabilities": caps})
     result_names = [r["name"] for r in normalized["candidate_capabilities"]]
     assert "financial reporting" in result_names
     assert "accounts payable & receivable" in result_names
     assert len(normalized["candidate_capabilities"]) == 2
+    assert all(rule["icon_key"] == "finance_commercial" for rule in normalized["candidate_capabilities"])
 
 
 def test_normalize_full_profile_migrates_legacy_capability_profile_rules_key():
     """Legacy key capability_profile_rules must be migrated to candidate_capabilities."""
-    caps = [{"name": "stakeholder engagement", "level": "proficient", "aliases": []}]
+    caps = [{"name": "stakeholder engagement", "level": "proficient", "aliases": [], "icon_key": "communication_stakeholders"}]
     normalized = profile_store.normalize_full_profile({"capability_profile_rules": caps})
     assert len(normalized["candidate_capabilities"]) == 1
     assert normalized["candidate_capabilities"][0]["name"] == "stakeholder engagement"

@@ -65,3 +65,4 @@ docs/archived-skills/
 /_*.json
 /_*.txt
 
+.claudeignore

@@ -38,8 +38,6 @@ from job_hunter_agent.profile_store import (
 
     MIN_CONTRACT_MONTH_NONE_LABEL,
 
-    WorkMode,
-
     SECTOR_PREFERENCE_HELP_TEXT,
 
     SALARY_MIN_ANNUAL_LABEL,
@@ -52,6 +50,7 @@ from job_hunter_agent.profile_store import (
 
     SETTINGS_SALARY_DAILY_HELP_TEXT,
 
+    WORK_MODE_PREFERENCE_DEFAULT_VALUES,
     WORK_MODE_PREFERENCE_HELP_TEXT,
 
     WORK_TYPE_PREFERENCE_HELP_TEXT,
@@ -568,7 +567,10 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
 
         .replace("__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__", WORK_TYPE_PREFERENCE_HELP_TEXT)
 
-        .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__", srv.render_work_mode_preference_choices(selected_values=WorkMode.NONE))
+        .replace(
+            "__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__",
+            srv.render_work_mode_preference_choices(selected_values=WORK_MODE_PREFERENCE_DEFAULT_VALUES),
+        )
 
         .replace("__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__", WORK_MODE_PREFERENCE_HELP_TEXT)
 

@@ -17,13 +17,28 @@ Use before editing SEEK/LinkedIn scrapers or scraped job data shape.
 - Only use fallback text heuristics for work mode when no structured or visible board metadata is available.
 - Preserve work mode provenance so later review can distinguish trusted board metadata from inferred text.
 
+## SEEK card processing pipeline
+
+`seek_scrape_to_records()` in `seek_runner.py` processes cards in 4 phases per results page:
+
+1. **Phase 1 — DOM extraction (sequential):** Read all cards from the list page into plain dicts before any page navigation. Sets `job_quality_signals`.
+2. **Phase 2 — Pre-detail gate (sequential):** Run `review_pre_detail_normalized_job()` for each card. Fast: no network. Splits cards into `pre_decided` (fast-path REJECT/SKIP/seen-before KEEP) and `needs_detail`.
+3. **Phase 3 — Async parallel detail fetch + LLM:** `detail_session.run_batch(needs_detail, review_context)` — submits the batch to a persistent `_AsyncDetailSession` (background daemon thread + single async Playwright browser kept alive for the whole run). Each coroutine fetches one page via `asyncio.gather` + `asyncio.Semaphore(n_workers)`, then calls `asyncio.to_thread(_review_seek_job_detail)` for the LLM step. Results merged back by card index. The async browser is independent of the sync list-page browser.
+4. **Phase 4 — Result processing (sequential):** Iterate results in original card order — score, log, keep.
+
+`n_detail_workers` comes from `seek_parallel_detail_workers` in `playwright_settings` (global_settings.json, default 3). Change it there, not in code.
+
+Do not add filtering or scoring logic to Phases 1–3. Phase 4 is the only place that calls `fit_score_and_breakdown_displayed`.
+
 ## Work type normalization
 Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(raw, load_job_type())` from `scrapers/base.py` and `job_types.py`. The normalization mapping lives in `data/job_type.json` under the `"mapping"` key — no source-specific logic or hardcoded labels in scraper code. Unknown values are passed through and registered via the signal registry. The `"filter_groups"` key in the same file defines how canonical values map to workspace filter options; scrapers do not use filter_groups.
 
 ## Owners
-- `scrapers/seek.py`: SEEK scraping.
+- `scrapers/seek_runner.py`: SEEK scrape loop, card review dispatch, parallel detail fetch, result collection.
+- `scrapers/seek.py`: SEEK low-level page helpers, selectors, URL building, detail payload fetch.
 - `scrapers/linkedin.py`: LinkedIn via python-jobspy.
-- `source_connector.py`: orchestration.
+- `source_runner.py`: routes enabled sources (SEEK/LinkedIn) in a single run.
+- `source_connector.py`: orchestration entry point.
 - `job_identity.py`: cross-source identity/dedup.
 - `description_trust.py`: full-description confidence.
 - `job_types.py`: work type normalization mapping and filter group definitions.
@@ -118,3 +133,4 @@ Do **not** use `output/console.log` for diagnosing current behaviour — it is w
 - Are search keywords avoided as job-level work mode proof?
 - Are search parameters validated before the scraper fires (non-empty keywords, location, completed onboarding)?
 - Did you run the smallest relevant scraper/data-shape check?
+

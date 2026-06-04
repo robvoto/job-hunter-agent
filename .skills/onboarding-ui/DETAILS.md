@@ -33,7 +33,7 @@ Owns: wizard draft state save/restore (`saveWizardState`, `restoreWizardState`),
 Imports from page.js (one-way dependency only â€” page.js must not import storage.js). All page state is accessed via `onboardingPage.*`.
 
 ### `onboarding-search.js`
-Owns: `setSelectedLocations` (sets location from an array, called by flow.js) and `hydrateSearchBasics` (populates all search-basics fields from a DB profile, called by flow.js when transitioning from review step to search step after a fresh CV import).
+Owns: `setSelectedLocations` (sets location from an array, called by flow.js) and `hydrateSearchBasics` (populates all search-basics fields from a DB profile, called by flow.js when step 3 needs a profile-backed fallback during review-to-search transitions or resume restores).
 
 ### `onboarding-flow.js`
 Owns: review draft rendering, capability card rendering, check setup, all step-transition actions (continue buttons, upload submit, finalize), and `initWizard` (startup/restore orchestration).
@@ -41,8 +41,7 @@ Owns: review draft rendering, capability card rendering, check setup, all step-t
 Capability state on page load comes from:
 1. `onboardingStorage.restoreWizardState()` â€” localStorage draft (user-scoped key)
 2. `hydrateDraftStep(profile)` â€” falls back to DB profile if localStorage draft has no capabilities
-
-There is no file-based CV restore path. `restorePrimaryCvFromSourcePath` was removed when the system migrated to SQLite.
+3. `hydrateSearchBasics(profile)` â€” seeds step 3 from the best available profile source when search basics need to be restored or derived from review data.
 
 ### `onboarding-upload.js`
 Owns: CV file validation, drop zone handling, and `create_profile` button availability.

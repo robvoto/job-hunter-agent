@@ -5,6 +5,7 @@ Single public entry point:
 
 Classification logic:
 - No exact normalized-title match in the index               → uncertain (reason: no_match)
+- No exact match, but an embedded O*NET phrase matches       → near/far/uncertain based on the matched code
 - Multiple distinct SOC codes under one title                → uncertain (reason: ambiguous)
 - Profile target occupation queries yield no known codes     → uncertain (reason: no_profile_context)
 - Matched occupation code is in target occupation code set   → near
@@ -37,6 +38,7 @@ RESULT_FAR = "far"
 RESULT_UNCERTAIN = "uncertain"
 LOOKUP_SOURCE_CACHE = "cache"
 LOOKUP_SOURCE_FRESH = "fresh"
+LOOKUP_MATCHER_VERSION = "embedded-phrase-v1"
 
 _RESULT_RESPONSE_LABELS = {
     RESULT_NEAR: "in your target roles",
@@ -64,6 +66,8 @@ class OccupationClassification:
     matched_occupation_code: str | None
     confidence: float
     reason: str
+    matched_phrase: str | None = None
+    match_type: str = "none"
     lookup_source: str = LOOKUP_SOURCE_FRESH
 
 
@@ -81,6 +85,7 @@ def _load_index() -> dict[str, list[dict[str, str]]]:
 def _compute_profile_hash(profile: dict[str, Any]) -> str:
     relevant = {
         "target_occupation_queries": sorted(_profile_target_occupation_queries(profile)),
+        "lookup_matcher_version": LOOKUP_MATCHER_VERSION,
     }
     canonical = json.dumps(relevant, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
@@ -115,6 +120,88 @@ def _derive_target_occupation_codes(
     return occupation_codes
 
 
+@lru_cache(maxsize=1)
+def _load_phrase_candidates() -> tuple[dict[str, Any], ...]:
+    return _build_phrase_candidates(_load_index())
+
+
+def _build_phrase_candidates(index: dict[str, list[dict[str, str]]]) -> tuple[dict[str, Any], ...]:
+    candidates: list[dict[str, Any]] = []
+    for normalized_phrase, matches in index.items():
+        normalized = normalize_title(normalized_phrase)
+        if not normalized:
+            continue
+        codes = sorted({
+            str(match.get("occupation_code") or "").strip()
+            for match in matches
+            if str(match.get("occupation_code") or "").strip()
+        })
+        if not codes:
+            continue
+        occupation_title_match = next((match for match in matches if match.get("source") == "occupation_title"), None)
+        alternate_title_match = next((match for match in matches if match.get("source") == "alternate_title"), None)
+        source = "occupation_title" if occupation_title_match is not None else "alternate_title"
+        display_phrase = ""
+        if occupation_title_match is not None:
+            display_phrase = str(occupation_title_match.get("occupation_title") or "").strip()
+        if not display_phrase and alternate_title_match is not None:
+            display_phrase = str(alternate_title_match.get("matched_title") or alternate_title_match.get("occupation_title") or "").strip()
+        if not display_phrase:
+            display_phrase = normalized
+        candidates.append({
+            "normalized_phrase": normalized,
+            "display_phrase": display_phrase,
+            "match_type": source,
+            "occupation_codes": tuple(codes),
+            "unique_code_count": len(codes),
+            "word_count": len(normalized.split()),
+        })
+    candidates.sort(key=lambda item: (-int(item["word_count"]), 0 if item["match_type"] == "occupation_title" else 1, item["normalized_phrase"]))
+    return tuple(candidates)
+
+
+def _select_embedded_phrase_match(
+    normalized_title: str,
+    index: dict[str, list[dict[str, str]]],
+) -> dict[str, Any] | None:
+    title_tokens = normalized_title.split()
+    if len(title_tokens) < 2:
+        return None
+    title_span = f" {normalized_title} "
+    candidates = _build_phrase_candidates(index) if index is not _load_index() else _load_phrase_candidates()
+    eligible = [
+        candidate
+        for candidate in candidates
+        if candidate["normalized_phrase"] != normalized_title
+        and f' {candidate["normalized_phrase"]} ' in title_span
+        and (
+            candidate["word_count"] > 1
+            or (
+                candidate["word_count"] == 1
+                and candidate["match_type"] == "occupation_title"
+                and candidate["unique_code_count"] == 1
+            )
+        )
+    ]
+    if not eligible:
+        return None
+    return eligible[0]
+
+
+def _representative_match_phrase(matches: list[dict[str, str]]) -> str | None:
+    preferred = next((match for match in matches if match.get("source") == "occupation_title"), None)
+    if preferred is not None:
+        phrase = str(preferred.get("occupation_title") or "").strip()
+        if phrase:
+            return phrase
+    alternate = next((match for match in matches if match.get("source") == "alternate_title"), None)
+    if alternate is not None:
+        phrase = str(alternate.get("matched_title") or alternate.get("occupation_title") or "").strip()
+        if phrase:
+            return phrase
+    return None
+
+
 def _cache_lookup(
     normalized_title: str,
     profile_hash: str,
@@ -123,7 +210,7 @@ def _cache_lookup(
     with db_conn(db_path) as conn:
         row = conn.execute(
             """
-            SELECT result, matched_occupation_code, confidence
+            SELECT result, matched_occupation_code, confidence, matched_phrase, match_type
               FROM occupation_title_cache
              WHERE normalized_title = ?
                AND candidate_profile_hash = ?
@@ -138,6 +225,8 @@ def _cache_lookup(
         matched_occupation_code=row["matched_occupation_code"],
         confidence=row["confidence"],
         reason="cached",
+        matched_phrase=row["matched_phrase"],
+        match_type=str(row["match_type"] or "none"),
         lookup_source=LOOKUP_SOURCE_CACHE,
     )
 
@@ -153,8 +242,8 @@ def _cache_save(
             """
             INSERT OR REPLACE INTO occupation_title_cache
                 (normalized_title, candidate_profile_hash, taxonomy_version,
-                 result, matched_occupation_code, confidence)
-            VALUES (?, ?, ?, ?, ?, ?)
+                 result, matched_occupation_code, confidence, matched_phrase, match_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 normalized_title,
@@ -163,6 +252,8 @@ def _cache_save(
                 classification.result,
                 classification.matched_occupation_code,
                 classification.confidence,
+                classification.matched_phrase,
+                classification.match_type,
             ),
         )
 
@@ -184,6 +275,8 @@ def _log_classification(
         "result": result.result,
         "response": format_onet_response(result),
         "matched_occupation_code": result.matched_occupation_code,
+        "matched_phrase": result.matched_phrase,
+        "match_type": result.match_type,
         "confidence": result.confidence,
         "reason": result.reason,
     }))
@@ -228,76 +321,96 @@ def classify_title(
         return cached
 
     matches = list(index.get(normalized) or [])
-
-    if not matches:
-        result = OccupationClassification(
-            result=RESULT_UNCERTAIN,
-            matched_occupation_code=None,
-            confidence=_CONFIDENCE_NO_MATCH,
-            reason="no_match",
-        )
-        _cache_save(normalized, profile_hash, result, db_path)
-        _log_classification(
-            title,
-            normalized,
-            profile_target_occupation_queries,
-            sorted(target_occupation_codes),
-            result,
-        )
-        return result
-
-    unique_codes = {m["occupation_code"] for m in matches if m.get("occupation_code")}
-
-    if len(unique_codes) > 1:
-        result = OccupationClassification(
-            result=RESULT_UNCERTAIN,
-            matched_occupation_code=None,
-            confidence=_CONFIDENCE_AMBIGUOUS,
-            reason="ambiguous",
-        )
-        _cache_save(normalized, profile_hash, result, db_path)
-        _log_classification(
-            title,
-            normalized,
-            profile_target_occupation_queries,
-            sorted(target_occupation_codes),
-            result,
-        )
-        return result
-
-    occupation_code = next(iter(unique_codes))
-
-    if not target_occupation_codes:
-        result = OccupationClassification(
-            result=RESULT_UNCERTAIN,
-            matched_occupation_code=occupation_code,
-            confidence=_CONFIDENCE_NO_CONTEXT,
-            reason="no_profile_context",
-        )
-        _cache_save(normalized, profile_hash, result, db_path)
-        _log_classification(
-            title,
-            normalized,
-            profile_target_occupation_queries,
-            sorted(target_occupation_codes),
-            result,
-        )
-        return result
-
-    if occupation_code in target_occupation_codes:
-        result = OccupationClassification(
-            result=RESULT_NEAR,
-            matched_occupation_code=occupation_code,
-            confidence=_CONFIDENCE_EXACT,
-            reason=RESULT_NEAR,
-        )
+    if matches:
+        unique_codes = sorted({m["occupation_code"] for m in matches if m.get("occupation_code")})
+        matched_phrase = _representative_match_phrase(matches)
+        if len(unique_codes) > 1:
+            result = OccupationClassification(
+                result=RESULT_UNCERTAIN,
+                matched_occupation_code=None,
+                confidence=_CONFIDENCE_AMBIGUOUS,
+                reason="ambiguous",
+                matched_phrase=matched_phrase,
+                match_type="exact_title",
+            )
+        else:
+            occupation_code = unique_codes[0]
+            if not target_occupation_codes:
+                result = OccupationClassification(
+                    result=RESULT_UNCERTAIN,
+                    matched_occupation_code=occupation_code,
+                    confidence=_CONFIDENCE_NO_CONTEXT,
+                    reason="no_profile_context",
+                    matched_phrase=matched_phrase,
+                    match_type="exact_title",
+                )
+            elif occupation_code in target_occupation_codes:
+                result = OccupationClassification(
+                    result=RESULT_NEAR,
+                    matched_occupation_code=occupation_code,
+                    confidence=_CONFIDENCE_EXACT,
+                    reason=RESULT_NEAR,
+                    matched_phrase=matched_phrase,
+                    match_type="exact_title",
+                )
+            else:
+                result = OccupationClassification(
+                    result=RESULT_FAR,
+                    matched_occupation_code=occupation_code,
+                    confidence=_CONFIDENCE_EXACT,
+                    reason=RESULT_FAR,
+                    matched_phrase=matched_phrase,
+                    match_type="exact_title",
+                )
     else:
-        result = OccupationClassification(
-            result=RESULT_FAR,
-            matched_occupation_code=occupation_code,
-            confidence=_CONFIDENCE_EXACT,
-            reason=RESULT_FAR,
-        )
+        phrase_match = _select_embedded_phrase_match(normalized, index)
+        if phrase_match is None:
+            result = OccupationClassification(
+                result=RESULT_UNCERTAIN,
+                matched_occupation_code=None,
+                confidence=_CONFIDENCE_NO_MATCH,
+                reason="no_match",
+                matched_phrase=None,
+                match_type="none",
+            )
+        elif phrase_match["unique_code_count"] > 1:
+            result = OccupationClassification(
+                result=RESULT_UNCERTAIN,
+                matched_occupation_code=None,
+                confidence=_CONFIDENCE_AMBIGUOUS,
+                reason="ambiguous",
+                matched_phrase=phrase_match["display_phrase"],
+                match_type="onet_phrase",
+            )
+        else:
+            occupation_code = phrase_match["occupation_codes"][0]
+            if not target_occupation_codes:
+                result = OccupationClassification(
+                    result=RESULT_UNCERTAIN,
+                    matched_occupation_code=occupation_code,
+                    confidence=_CONFIDENCE_NO_CONTEXT,
+                    reason="no_profile_context",
+                    matched_phrase=phrase_match["display_phrase"],
+                    match_type="onet_phrase",
+                )
+            elif occupation_code in target_occupation_codes:
+                result = OccupationClassification(
+                    result=RESULT_NEAR,
+                    matched_occupation_code=occupation_code,
+                    confidence=_CONFIDENCE_EXACT,
+                    reason=RESULT_NEAR,
+                    matched_phrase=phrase_match["display_phrase"],
+                    match_type="onet_phrase",
+                )
+            else:
+                result = OccupationClassification(
+                    result=RESULT_FAR,
+                    matched_occupation_code=occupation_code,
+                    confidence=_CONFIDENCE_EXACT,
+                    reason=RESULT_FAR,
+                    matched_phrase=phrase_match["display_phrase"],
+                    match_type="onet_phrase",
+                )
 
     _cache_save(normalized, profile_hash, result, db_path)
     _log_classification(

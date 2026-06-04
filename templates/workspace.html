@@ -41,6 +41,7 @@
     const SEARCH_STARTING_SUBCOPY = String(SHARED_UI_LABELS.search_starting_subcopy || '').trim();
     const SEARCH_STOP_LABEL = String(SHARED_UI_LABELS.search_stop_label || '').trim();
     const SEARCH_PROGRESS_PREFIX = String(SHARED_UI_LABELS.search_progress_prefix || '').trim();
+    const SEARCH_ELAPSED_PREFIX = String(SHARED_UI_LABELS.search_elapsed_prefix || '').trim();
     const SEARCH_STOPPING_TITLE = String(SHARED_UI_LABELS.search_stopping_title || '').trim();
     const SEARCH_STOPPING_COPY = String(SHARED_UI_LABELS.search_stopping_copy || '').trim();
     const SEARCH_STOPPING_SUBCOPY = String(SHARED_UI_LABELS.search_stopping_subcopy || '').trim();
@@ -48,7 +49,7 @@
     if (!ONBOARDING_USER_ID) {
       throw new Error('Missing user id.');
     }
-    if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY || !SEARCH_STOP_LABEL || !SEARCH_PROGRESS_PREFIX || !SEARCH_STOPPING_TITLE || !SEARCH_STOPPING_COPY || !SEARCH_STOPPING_SUBCOPY) {
+    if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY || !SEARCH_STOP_LABEL || !SEARCH_PROGRESS_PREFIX || !SEARCH_ELAPSED_PREFIX || !SEARCH_STOPPING_TITLE || !SEARCH_STOPPING_COPY || !SEARCH_STOPPING_SUBCOPY) {
       throw new Error('Missing shared search UI labels.');
     }
     function scopedOnboardingStorageKey(baseKey) {
@@ -131,13 +132,42 @@
         .replace(/'/g, '&#39;');
     }
 
-    function composeProgressSubcopy(baseCopy, progress) {
-      const progressText = String(progress || '').trim();
-      if (!progressText) {
-        return String(baseCopy || '').trim();
+    function splitProgressText(progress) {
+      const text = String(progress || '').trim();
+      if (!text) {
+        return { step: '', elapsed: '' };
       }
-      const baseText = String(baseCopy || '').trim();
-      return baseText ? `${baseText} ${SEARCH_PROGRESS_PREFIX} ${progressText}` : `${SEARCH_PROGRESS_PREFIX} ${progressText}`;
+      const match = text.match(/^(.*?)(?:\s+\|\s+elapsed\s+(.+))$/i);
+      if (!match) {
+        return { step: text, elapsed: '' };
+      }
+      return {
+        step: String(match[1] || '').trim(),
+        elapsed: String(match[2] || '').trim(),
+      };
+    }
+
+    function renderProgressStatusMarkup(progress) {
+      const { step, elapsed } = splitProgressText(progress);
+      if (!step && !elapsed) {
+        return '';
+      }
+      return `
+        <div class="wait-state__progress">
+          ${step ? `
+            <p class="wait-state__status wait-state__status--progress">
+              <span class="wait-state__status-label">${escapeHtml(SEARCH_PROGRESS_PREFIX)}</span>
+              <span class="wait-state__status-value">${escapeHtml(step)}</span>
+            </p>
+          ` : ''}
+          ${elapsed ? `
+            <p class="wait-state__status wait-state__status--elapsed">
+              <span class="wait-state__status-label">${escapeHtml(SEARCH_ELAPSED_PREFIX)}</span>
+              <span class="wait-state__status-value">${escapeHtml(elapsed)}</span>
+            </p>
+          ` : ''}
+        </div>
+      `;
     }
 
     function renderWorkspaceWait(state) {
@@ -171,7 +201,8 @@
       workspaceWaitState = { ...nextState };
       const title = escapeHtml(nextState.title);
       const copy = escapeHtml(nextState.copy);
-      const subcopy = composeProgressSubcopy(nextState.subcopy, nextState.progress);
+      const progress = renderProgressStatusMarkup(nextState.progress);
+      const subcopy = escapeHtml(nextState.subcopy);
       wsWaitMount.hidden = false;
       document.body.classList.add('job-hunter-wait-active');
       wsWaitMount.innerHTML = `
@@ -181,7 +212,8 @@
             <span class="wait-state__spinner" aria-hidden="true"></span>
             <p class="wait-state__title">${title}</p>
             ${copy ? `<p class="wait-state__copy">${copy}</p>` : ''}
-            ${subcopy ? `<p class="wait-state__subcopy">${escapeHtml(subcopy)}</p>` : ''}
+            ${progress}
+            ${subcopy ? `<p class="wait-state__subcopy">${subcopy}</p>` : ''}
             ${nextState.allowStop ? `
               <div class="wait-state__actions">
                 <button class="btn btn-secondary" id="ws_stop_search_btn" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
@@ -621,7 +653,7 @@
             window.setTimeout(() => loadResults(expectedRunId, attempt + 1), RESULTS_REFRESH_RETRY_DELAY_MS);
             return;
           }
-          throw new Error('Workspace results are still reflecting the previous run.');
+          console.warn('Workspace results were still catching up, so the latest saved workspace will be shown.');
         }
         if (requestToken !== workspaceResultsLoadToken) {
           return;

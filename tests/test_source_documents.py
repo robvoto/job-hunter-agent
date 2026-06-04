@@ -59,8 +59,8 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
         captured["alias_limit"] = alias_limit
         return {
             "capabilities": [
-                {"name": "agile delivery", "level": "strong", "aliases": ["scrum"], "needs_review": False},
-                {"name": "stakeholder communication", "level": "working", "aliases": [], "needs_review": False},
+                {"name": "agile delivery", "level": "strong", "aliases": ["scrum"], "icon_key": "delivery_project", "needs_review": False},
+                {"name": "stakeholder communication", "level": "working", "aliases": [], "icon_key": "communication_stakeholders", "needs_review": False},
             ],
             "role_titles": ["Scrum Master", "Agile Project Coordinator"],
             "target_occupation_queries": ["Scrum Master", "Agile Project Coordinator"],
@@ -87,7 +87,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
         (
             {
                 "capabilities": [
-                    {"name": "agile delivery", "level": "strong", "aliases": [], "needs_review": False},
+                    {"name": "agile delivery", "level": "strong", "aliases": [], "icon_key": "delivery_project", "needs_review": False},
                 ],
                 "role_titles": [],
                 "target_occupation_queries": ["Scrum Master"],

@@ -83,7 +83,7 @@
         "salary": "Weight for salary or daily-rate alignment.",
         "location": "Weight for location and travel preference alignment.",
         "work_mode": "Weight for remote/hybrid/on-site preference alignment.",
-        "contract": "Weight for permanent/contract and contract-length preference alignment.",
+        "contract": "Weight for work-type preference alignment, including Permanent, Contract, and FTC, plus contract-length preference where relevant.",
         "government": "Weight for public-sector/government preference alignment.",
         "freshness": "Weight for newer job postings."
       }
@@ -204,7 +204,8 @@
         "playwright_viewport_width": "Browser viewport width used during scraping.",
         "playwright_viewport_height": "Browser viewport height used during scraping.",
         "playwright_selector_timeout": "Selector wait timeout in milliseconds before a browser interaction fails.",
-        "playwright_browser_mode": "Browser lifecycle mode. Ephemeral means the browser session is temporary."
+        "playwright_browser_mode": "Browser lifecycle mode. Ephemeral means the browser session is temporary.",
+        "seek_parallel_detail_workers": "Number of parallel Playwright pages used for SEEK detail-page fetches. Higher values speed up processing when many cards need description fetch + LLM review."
       }
     },
     "candidate_application_history": {

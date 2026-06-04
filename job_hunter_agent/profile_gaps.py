@@ -1,12 +1,8 @@
-"""Profile gap detection: job requirements not yet confirmed in the candidate profile.
+"""Profile gap detection for capability-like requirement coverage only.
 
-A 'gap' is a requirement extracted from a job ad that cannot be matched against
-the candidate's candidate_capabilities. Gaps are presented to the user in the
-workspace card under a 'Needs confirmation' block so they can respond:
-
-  - Yes, I have this  → adds the term to candidate_capabilities
-  - No, I don't have this → adds the term to must_not_require_skills
-  - Decide later → client-side dismiss; the gap reappears on the next page load
+The workspace confirmation flow should only surface uncertain capability
+requirements from requirement_coverage. Raw job_requirements remain available
+for display/debug, but they must not drive confirmation or profile writes.
 """
 
 from __future__ import annotations
@@ -16,6 +12,8 @@ import re
 STATUS_UNKNOWN = "unknown"
 STATUS_CONFIRMED_HAVE = "confirmed_have"
 STATUS_CONFIRMED_DO_NOT_HAVE = "confirmed_do_not_have"
+_CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_evidenced", "partially_met"})
+PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY = "job_requirement_text"
 
 
 def _normalize_for_match(text: str) -> str:
@@ -65,22 +63,37 @@ def classify_requirement_status(
 
 
 def compute_profile_gaps(
-    job_requirements: list[str],
+    requirement_coverage: list[dict],
     candidate_capabilities: list[dict],
     must_not_require_skills: list[str],
 ) -> list[dict]:
     """
-    Return the subset of job requirements not confirmed in the candidate profile.
+    Return capability-like requirement_coverage items that still need confirmation.
 
-    Each returned gap: {requirement: str, evidence: str, status: 'unknown'}.
-    Requirements already matched (confirmed_have or confirmed_do_not_have) are excluded.
+    Each returned gap keeps the canonical capability name plus supporting display
+    text from the job ad so the workspace can explain why the item is uncertain.
     """
     gaps = []
-    for req in job_requirements:
-        req = str(req).strip()
-        if not req:
+    for item in requirement_coverage:
+        if not isinstance(item, dict):
             continue
-        status = classify_requirement_status(req, candidate_capabilities, must_not_require_skills)
-        if status == STATUS_UNKNOWN:
-            gaps.append({"requirement": req, "evidence": req, "status": STATUS_UNKNOWN})
+        status = str(item.get("status") or "").strip().lower()
+        if status not in _CONFIRMABLE_REQUIREMENT_STATUSES:
+            continue
+        capability_name = str(item.get("capability_name") or "").strip()
+        if not capability_name:
+            continue
+        if classify_requirement_status(capability_name, candidate_capabilities, must_not_require_skills) != STATUS_UNKNOWN:
+            continue
+        raw_requirement = str(item.get("requirement") or "").strip()
+        matched_job_text = str(item.get("matched_job_text") or "").strip()
+        gaps.append(
+            {
+                "capability_name": capability_name,
+                "raw_requirement": raw_requirement,
+                "matched_job_text": matched_job_text,
+                "status": status,
+                PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY: matched_job_text or raw_requirement,
+            }
+        )
     return gaps

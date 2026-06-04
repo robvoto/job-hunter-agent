@@ -220,9 +220,23 @@ def _configure_server_logging() -> None:
     sys.stderr = _LineLoggingStream(app_logger, logging.ERROR)
 
 
+def _bootstrap_runtime_knowledge() -> None:
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.global_settings import seed_global_settings_from_file
+    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
+    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+
+    init_db()
+    seed_global_settings_from_file()
+    for _subdir in ("knowledge", "signals"):
+        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
+
 def create_app() -> FastAPI:
     from job_hunter_agent.routes import register_routes
     from job_hunter_agent.routes.responses import json_response
+
+    _bootstrap_runtime_knowledge()
 
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
     app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc")
@@ -313,15 +327,7 @@ if __name__ == "__main__":
 
     from job_hunter_agent import server_helpers as srv
     from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
-    from job_hunter_agent.database import init_db
-    from job_hunter_agent.global_settings import seed_global_settings_from_file
-    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
-    from job_hunter_agent.paths import LOCAL_USER_ID, REPO_ROOT as _REPO_ROOT
-
-    init_db()
-    seed_global_settings_from_file()
-    for _subdir in ("knowledge", "signals"):
-        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+    from job_hunter_agent.paths import LOCAL_USER_ID
 
     parser = argparse.ArgumentParser(description="Job Hunter Agent local server")
     parser.add_argument(

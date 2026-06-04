@@ -78,7 +78,8 @@ function normalizeReviewCapability(rule) {
     seen.add(cleaned);
     aliases.push(cleaned);
   }
-  return { name, level, aliases };
+  const icon_key = normalizeReviewText(rule?.icon_key || '').toLowerCase();
+  return { name, level, aliases, icon_key };
 }
 
 function rulesToText(rules, key) {
@@ -98,6 +99,9 @@ function textToRules(value, key) {
 const workModePreferenceOptions = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__)
   ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__
   : [];
+const workModePreferenceDefaultValues = Array.isArray(window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__)
+  ? window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+  : workModePreferenceOptions.map((option) => String(option.value || '').trim().toLowerCase()).filter(Boolean);
 const engagementTypeOptions = Array.isArray(window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__)
   ? window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__
   : [];
@@ -135,7 +139,7 @@ function normalizeWorkModePreferences(value) {
   return selected;
 }
 
-function normalizeEngagementTypePreferences(value, defaultToAll = true) {
+function normalizeEngagementTypePreferences(value) {
   const values = Array.isArray(value)
     ? value
     : String(value || '').split(/[,\n|/]+/);
@@ -152,9 +156,7 @@ function normalizeEngagementTypePreferences(value, defaultToAll = true) {
   if (selected.length) {
     return selected;
   }
-  return defaultToAll
-    ? engagementTypeDefaultValues.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
-    : [];
+  return engagementTypeDefaultValues.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);
 }
 
 function getWorkModePreferenceValues() {
@@ -164,7 +166,8 @@ function getWorkModePreferenceValues() {
 }
 
 function setWorkModePreferenceValues(values) {
-  const selected = new Set(normalizeWorkModePreferences(values));
+  const normalized = normalizeWorkModePreferences(values);
+  const selected = new Set(normalized.length ? normalized : workModePreferenceDefaultValues);
   document.querySelectorAll('input[name="work_mode_preference"]').forEach((input) => {
     input.checked = selected.size === 0 || selected.has(String(input.value || '').trim().toLowerCase());
   });
@@ -184,7 +187,7 @@ function setEngagementTypeValues(value) {
   });
 }
 
-function normalizeSectorPreferenceValues(value, defaultToAll = true) {
+function normalizeSectorPreferenceValues(value) {
   const values = Array.isArray(value)
     ? value
     : String(value || '').split(/[,\n|/]+/);
@@ -202,9 +205,7 @@ function normalizeSectorPreferenceValues(value, defaultToAll = true) {
   if (selected.length) {
     return selected;
   }
-  return defaultToAll
-    ? inputs.map((input) => String(input.value || '').trim().toLowerCase()).filter(Boolean)
-    : [];
+  return inputs.map((input) => String(input.value || '').trim().toLowerCase()).filter(Boolean);
 }
 
 function getSectorPreferenceValues() {

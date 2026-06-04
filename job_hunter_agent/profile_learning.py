@@ -40,6 +40,8 @@ from job_hunter_agent.profile_store import (
     KEY_NAME,
     KEY_LEVEL,
     KEY_ALIASES,
+    KEY_ICON_KEY,
+    VALID_CAPABILITY_ICON_KEYS,
     WorkMode,
     CapabilityLevel,
 )
@@ -115,6 +117,7 @@ class _CapabilityExtraction(BaseModel):
     name: str
     level: Literal["strong", "working", "basic"]
     aliases: list[str] = Field(default_factory=list)
+    icon_key: str
     needs_review: bool = False
 
 
@@ -251,7 +254,7 @@ def _ensure_cv_extraction_cache_loaded() -> None:
 def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int) -> dict[str, Any]:
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
     _ensure_cv_extraction_cache_loaded()
-    cache_key = hashlib.sha256(f"{lookback_years}:{alias_limit}:{source_text}".encode()).hexdigest()[:16]
+    cache_key = hashlib.sha256(f"icon-v2:{lookback_years}:{alias_limit}:{source_text}".encode()).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
         return _cv_extraction_cache[cache_key]
 
@@ -278,6 +281,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"For each capability include up to {alias_limit} aliases: known abbreviations, acronyms, and recruiter synonyms "
         "that refer to the same skill (e.g. for 'business process modeling': ['bpmn', 'process mapping', 'workflow design']). "
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
+        f"For each capability, set icon_key to exactly one of: {', '.join(sorted(VALID_CAPABILITY_ICON_KEYS))}.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
         "- role_titles: list the job titles explicitly shown in the CV. One entry per role, no duplicates.\n"
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
@@ -324,6 +328,11 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
         name = str(item.get(KEY_NAME) or "").strip().lower()
         level = str(item.get(KEY_LEVEL) or CapabilityLevel.BASIC).strip().lower()
         aliases = [str(a).strip().lower() for a in (item.get(KEY_ALIASES) or []) if str(a).strip()]
+        icon_key = str(item.get(KEY_ICON_KEY) or "").strip().lower()
+        if icon_key not in VALID_CAPABILITY_ICON_KEYS:
+            raise ValueError(
+                f"LLM capability {name!r} has missing or invalid icon_key: {icon_key!r}."
+            )
         if not name:
             rejected.append("<empty name>")
             continue
@@ -332,6 +341,7 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
             KEY_NAME: name,
             KEY_LEVEL: level if level in _VALID_LEVELS else CapabilityLevel.BASIC,
             KEY_ALIASES: aliases[:6],
+            KEY_ICON_KEY: icon_key,
             KEY_NEEDS_REVIEW: needs_review,
         })
     capped = result[:20]

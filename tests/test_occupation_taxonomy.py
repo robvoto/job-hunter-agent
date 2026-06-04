@@ -27,6 +27,37 @@ _TEST_INDEX = {
             "source": "alternate_title",
         }
     ],
+    "software developers": [
+        {
+            "occupation_code": "15-1252.00",
+            "occupation_title": "Software Developers",
+            "source": "occupation_title",
+        }
+    ],
+    "software engineer": [
+        {
+            "occupation_code": "15-1252.00",
+            "occupation_title": "Software Developers",
+            "matched_title": "Software Engineer",
+            "source": "alternate_title",
+        }
+    ],
+    "engineer": [
+        {
+            "occupation_code": "15-1252.00",
+            "occupation_title": "Software Developers",
+            "matched_title": "Engineer",
+            "source": "alternate_title",
+        }
+    ],
+    "data engineer": [
+        {
+            "occupation_code": "15-2051.00",
+            "occupation_title": "Data Scientists",
+            "matched_title": "Data Engineer",
+            "source": "alternate_title",
+        }
+    ],
     # Clearly unrelated occupation family
     "chef": [
         {
@@ -162,6 +193,10 @@ _ACCOUNTING_PROFILE = {
     "target_occupation_queries": ["accountant", "bookkeeper", "payroll clerk"],
 }
 
+_SOFTWARE_PROFILE = {
+    "target_occupation_queries": ["software developers"],
+}
+
 _ADMIN_PROFILE = {
     "target_occupation_queries": ["administrative assistant", "office administrator"],
 }
@@ -213,6 +248,32 @@ def test_alternate_title_returns_near(tmp_db):
     result = classify_title("management consultant", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "13-1111.00"
+    assert result.match_type == "exact_title"
+    assert result.matched_phrase == "Management Consultant"
+
+
+def test_embedded_software_engineer_phrase_returns_near(tmp_db):
+    result = classify_title("Senior Software Engineer - Java daily rates up to $1100!", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_NEAR
+    assert result.matched_occupation_code == "15-1252.00"
+    assert result.match_type == "onet_phrase"
+    assert result.matched_phrase == "Software Engineer"
+
+
+def test_embedded_accountant_preferred_title_returns_near(tmp_db):
+    result = classify_title("Senior Accountant", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_NEAR
+    assert result.matched_occupation_code == "13-2011.00"
+    assert result.match_type == "onet_phrase"
+    assert result.matched_phrase == "Accountants and Auditors"
+
+
+def test_one_word_alternate_title_is_not_used_for_embedded_match(tmp_db):
+    result = classify_title("AI Core Platform Engineer AWS", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_UNCERTAIN
+    assert result.reason == "no_match"
+    assert result.match_type == "none"
+    assert result.matched_phrase is None
 
 
 # ── no match → uncertain ──────────────────────────────────────────────────────
@@ -243,17 +304,28 @@ def test_far_occupation_returns_far(tmp_db):
     assert result.confidence > 0.5
 
 
+def test_data_engineer_remains_far_for_accounting_profile(tmp_db):
+    result = classify_title("Data Engineer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_FAR
+    assert result.matched_occupation_code == "15-2051.00"
+    assert result.match_type == "exact_title"
+    assert result.matched_phrase == "Data Engineer"
+
+
 # ── cache hit returns cached result ──────────────────────────────────────────
 
 def test_cache_hit_returns_cached_result(tmp_db):
     # First call classifies and writes to cache.
     first = classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert first.result == RESULT_NEAR
+    assert first.match_type == "exact_title"
 
     # Second call with an empty index — must come from cache, not re-classify.
     second = classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index={})
     assert second.result == RESULT_NEAR
     assert second.reason == "cached"
+    assert second.match_type == "exact_title"
+    assert second.matched_phrase == "Management Analysts"
 
 
 def test_cache_is_keyed_by_profile_hash(tmp_db):
@@ -375,11 +447,13 @@ def test_onet_classify_log_emitted(tmp_db, caplog):
     """A structured ONET_TITLE_CLASSIFY log line must be written for every classification."""
     import logging
     with caplog.at_level(logging.INFO, logger="job_hunter_agent.occupation_taxonomy"):
-        classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+        classify_title("Senior Software Engineer - Java daily rates up to $1100!", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert any("ONET_TITLE_CLASSIFY" in r.message for r in caplog.records)
     assert any("profile_target_occupation_queries" in r.message for r in caplog.records)
     assert any("derived_target_occupation_codes" in r.message for r in caplog.records)
     assert any("matched_occupation_code" in r.message for r in caplog.records)
+    assert any("matched_phrase" in r.message for r in caplog.records)
+    assert any("match_type" in r.message for r in caplog.records)
     assert any("reason" in r.message for r in caplog.records)
 
 

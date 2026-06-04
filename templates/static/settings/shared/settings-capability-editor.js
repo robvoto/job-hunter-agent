@@ -4,11 +4,15 @@ import * as capabilityUi from '../../common/capability-ui.js';
 export const JobHunterCapabilityEditor = (function () {
   const capabilityLabels = capabilityUi.labels || {};
   const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
+  const genericCapabilityIconKey = capabilityUi.genericCapabilityIconKey;
   const capabilityLevels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
     ? capabilityUi.capabilityLevels
     : Object.keys(capabilityLevelMeta);
   if (!capabilityLabels.settings_title || !capabilityLabels.help_text) {
     throw new Error('Missing capability UI labels.');
+  }
+  if (!genericCapabilityIconKey) {
+    throw new Error('Missing generic capability icon key.');
   }
 
   let capabilityRuleState = [];
@@ -48,6 +52,7 @@ export const JobHunterCapabilityEditor = (function () {
       level,
       fit,
       aliases,
+      icon_key: String(rule?.icon_key || '').trim().toLowerCase(),
       aliases_open: Boolean(rule?.aliases_open),
       needs_review: Boolean(rule?.needs_review) || aliases.length > 0,
     };
@@ -184,7 +189,12 @@ export const JobHunterCapabilityEditor = (function () {
   }
 
   function addCapabilityRule() {
-    capabilityRuleState = [...capabilityRuleState, { name: '', level: 'working', aliases: [] }];
+    capabilityRuleState = [...capabilityRuleState, {
+      name: '',
+      level: 'working',
+      aliases: [],
+      icon_key: genericCapabilityIconKey,
+    }];
     expandedCapabilityRows.add(capabilityRuleState.length - 1);
     renderCapabilityRuleEditor();
     requestAnimationFrame(() => {

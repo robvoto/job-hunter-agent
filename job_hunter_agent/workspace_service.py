@@ -54,7 +54,7 @@ from job_hunter_agent.workspace_renderer import (
 
 from job_hunter_agent.filters import passes_title_filters
 
-from job_hunter_agent.fit_scoring import fit_score
+from job_hunter_agent.fit_scoring import fit_score, fit_score_displayed
 
 from job_hunter_agent.history import (
 
@@ -244,7 +244,7 @@ def is_workspace_eligible(
 
     try:
 
-        return fit_score(record, profile) >= active_workspace_min_score
+        return fit_score_displayed(record, profile) >= active_workspace_min_score
 
     except RuntimeError as exc:
 
@@ -534,7 +534,7 @@ def build_workspace_record_sets(
 
         is_workspace_eligible_fn=is_workspace_eligible_fn,
 
-        fit_score_fn=fit_score,
+        fit_score_fn=fit_score_displayed,
 
         viewed_by_user_fn=viewed_by_user,
 

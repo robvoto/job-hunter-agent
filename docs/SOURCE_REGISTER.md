@@ -122,7 +122,7 @@ Used for:
 
 Design decision:
 - LLM capability scoring must operate only against candidate capability groups already present in the profile.
-- Related skills are context/evidence for matching, not standalone capabilities.
+- Extracted skills are context/evidence for matching, not standalone capabilities.
 - Validation layers must reject invalid capability names.
 
 Limit:
@@ -184,3 +184,19 @@ Design decision:
 Limit:
 - Provider pricing pages can change.
 - Do not silently auto-update pricing unless a stable provider pricing API is available and tested.
+
+
+## Current ONET design note 2026-06-02
+
+Decision:
+- Use onboarding-generated target_occupation_queries as machine-facing occupation context.
+- These queries are generated once from the candidate CV/profile and stored in the user profile.
+- They are not display titles and not manually hardcoded per domain.
+- ONET uses them to derive candidate target occupation codes.
+- ONET remains a conservative pre-detail helper: exact/strong occupation-code match = near; clear different occupation code = far; no reliable match = uncertain.
+- uncertain must not reject by itself; it continues to detail/LLM review.
+- Do not add deterministic title-normalisation heuristics or domain-specific Python title mappings.
+
+Limit:
+- ONET exact title lookup is useful but brittle for messy job-board titles and modern/composite titles.
+- ONET is an occupation-family sanity check, not the final fit decision.

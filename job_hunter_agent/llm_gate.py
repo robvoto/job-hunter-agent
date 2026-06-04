@@ -45,11 +45,14 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER,
     LLM_PROMPT_DO_NOT_INVENT,
     LLM_PROMPT_DO_NOT_SAVE,
+    LLM_PROMPT_FIT_REVIEW_RATIONALE_INTRO,
+    LLM_PROMPT_FIT_REVIEW_GRADE_INTRO,
+    LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
     LLM_PROMPT_JOB_DESCRIPTION_PREFIX,
     LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
-    LLM_PROMPT_LEARNING_CANDIDATES_INTRO,
     LLM_PROMPT_JSON_ONLY,
     LLM_PROMPT_LEARNING_PENDING_ONLY,
+    LLM_PROMPT_REQUIREMENT_COVERAGE_INTRO,
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
     LLM_PROMPT_REVIEW_OUTPUT_FORMAT,
@@ -275,6 +278,14 @@ class _LLMContextualCapabilityMatch(BaseModel):
     reason: str
 
 
+class _LLMRequirementCoverageItem(BaseModel):
+    requirement: str
+    status: str
+    capability_name: str = ""
+    matched_job_text: str = ""
+    candidate_evidence: list[str] = Field(default_factory=list)
+
+
 class _LLMJobRequirementsPayload(BaseModel):
     job_requirements: list[str] = Field(default_factory=list)
 
@@ -286,8 +297,12 @@ class _LLMReviewPayload(BaseModel):
 
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
+    decision_summary: str = ""
+    positive_reasons: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    score_rationale: list[str] = Field(default_factory=list)
     contextual_capability_matches: list[_LLMContextualCapabilityMatch] = Field(default_factory=list)
-    learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
+    requirement_coverage: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
 
 
@@ -587,25 +602,49 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
 
 
 _ALLOWED_CONTEXTUAL_CONFIDENCES = frozenset({"high", "medium", "low"})
+_ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset({"met", "partially_met", "not_evidenced", "mismatch"})
+
+
+def _build_valid_capability_lookup(
+    valid_capability_names: dict[str, str] | None,
+) -> dict[str, str] | None:
+    if valid_capability_names is None:
+        return None
+    lookup: dict[str, str] = {}
+    for key, value in valid_capability_names.items():
+        normalized_key = re.sub(r"\s+", " ", str(key or "")).strip().lower()
+        canonical_value = re.sub(r"\s+", " ", str(value or "")).strip()
+        if normalized_key and canonical_value:
+            lookup[normalized_key] = canonical_value
+    return lookup
+
+
+def _normalize_capability_name(value: Any, valid_capability_names: dict[str, str] | None = None) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not cleaned:
+        return ""
+    normalized = cleaned.lower()
+    if valid_capability_names is None:
+        return normalized
+    return valid_capability_names.get(normalized, "")
 
 
 def normalize_llm_contextual_capability_matches(
     value: Any,
-    valid_capability_names: "frozenset[str] | None" = None,
+    valid_capability_names: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
+    valid_lookup = _build_valid_capability_lookup(valid_capability_names)
     results: list[dict[str, Any]] = []
     for item in value:
         if not isinstance(item, dict):
             continue
-        cap_name = re.sub(r"\s+", " ", str(item.get("capability_name") or "")).strip().lower()
+        cap_name = _normalize_capability_name(item.get("capability_name"), valid_lookup)
         confidence = re.sub(r"\s+", " ", str(item.get("confidence") or "")).strip().lower()
         matched_text = re.sub(r"\s+", " ", str(item.get("matched_text") or "")).strip()
         reason = re.sub(r"\s+", " ", str(item.get("reason") or "")).strip()
         if not cap_name or confidence not in _ALLOWED_CONTEXTUAL_CONFIDENCES:
-            continue
-        if valid_capability_names is not None and cap_name not in valid_capability_names:
             continue
         results.append({
             "capability_name": cap_name,
@@ -614,6 +653,115 @@ def normalize_llm_contextual_capability_matches(
             "reason": reason,
         })
     return results
+
+
+def normalize_llm_requirement_coverage(
+    value: Any,
+    valid_capability_names: dict[str, str] | None = None,
+    max_items: int | None = None,
+) -> list[dict[str, Any]]:
+    if max_items is None:
+        max_items = get_llm_job_requirements_max_items()
+    if isinstance(value, dict):
+        value = value.get("requirement_coverage") or value.get("coverage") or []
+    if isinstance(value, str):
+        try:
+            value = _json_mod.loads(_strip_json_fence(value))
+        except Exception:
+            return []
+    if not isinstance(value, list):
+        return []
+
+    valid_lookup = _build_valid_capability_lookup(valid_capability_names)
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        requirement = _clean_job_requirement_text(item.get("requirement") or item.get("job_requirement") or item.get("text"))
+        status = re.sub(r"\s+", " ", str(item.get("status") or "")).strip().lower()
+        capability_name = _normalize_capability_name(item.get("capability_name"), valid_lookup)
+        matched_job_text = re.sub(r"\s+", " ", str(item.get("matched_job_text") or item.get("matched_text") or "")).strip()
+        raw_evidence = item.get("candidate_evidence") or []
+        if isinstance(raw_evidence, str):
+            raw_evidence = [raw_evidence]
+        candidate_evidence: list[str] = []
+        seen_evidence: set[str] = set()
+        if isinstance(raw_evidence, list):
+            for text in raw_evidence:
+                cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
+                lowered = cleaned.lower()
+                if not cleaned or lowered in seen_evidence:
+                    continue
+                seen_evidence.add(lowered)
+                candidate_evidence.append(cleaned)
+        if not requirement or status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
+            continue
+        if status in {"met", "partially_met"} and not capability_name:
+            logger.warning(
+                "[LLM][WARN] purpose=fit_review requirement_coverage_missing_capability requirement=%r status=%s",
+                requirement,
+                status,
+            )
+            continue
+        key = requirement.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append({
+            "requirement": requirement,
+            "status": status,
+            "capability_name": capability_name,
+            "matched_job_text": matched_job_text,
+            "candidate_evidence": candidate_evidence,
+        })
+        if len(results) >= max_items:
+            break
+    return results
+
+
+def derive_fit_review_grade(
+    requirement_coverage: list[dict[str, Any]],
+    job_requirements: list[str] | None = None,
+) -> str:
+    total_requirements = max(len(requirement_coverage), len(job_requirements or []))
+    if total_requirements <= 0:
+        return "POOR"
+
+    met_count = 0
+    partial_count = 0
+    mismatch_count = 0
+    for item in requirement_coverage:
+        status = str(item.get("status") or "").strip().lower()
+        if status == "met":
+            met_count += 1
+        elif status == "partially_met":
+            partial_count += 1
+        elif status == "mismatch":
+            mismatch_count += 1
+
+    supported_count = met_count + partial_count
+    support_score = met_count + (partial_count * 0.5)
+    support_ratio = support_score / total_requirements
+
+    if supported_count <= 0:
+        return "MISMATCH" if mismatch_count else "POOR"
+
+    if mismatch_count:
+        if support_ratio >= 0.5:
+            return "SOLID"
+        return "WEAK"
+
+    if met_count == total_requirements and partial_count == 0:
+        return "EXCELLENT" if total_requirements >= 3 else "STRONG"
+
+    if support_ratio >= 0.8 and partial_count <= 1 and met_count >= max(2, total_requirements - 1):
+        return "STRONG"
+
+    if support_ratio >= 0.5:
+        return "SOLID"
+
+    return "WEAK"
 
 
 def _clean_job_requirement_text(value: Any) -> str:
@@ -650,7 +798,38 @@ def normalize_llm_job_requirements(value: Any, max_items: int | None = None) -> 
     return requirements
 
 
-def normalize_llm_review_payload(value: Any, valid_capability_names: "frozenset[str] | None" = None) -> dict[str, Any]:
+def _normalize_llm_review_text(value: Any, *, max_chars: int) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not cleaned:
+        return ""
+    return cleaned[:max_chars]
+
+
+def _normalize_llm_review_list(value: Any, *, max_items: int, max_chars: int) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if isinstance(value, dict):
+        value = value.get("items") or value.get("values") or []
+    if not isinstance(value, list):
+        return []
+
+    items: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        cleaned = re.sub(r"\s+", " ", str(item or "")).strip()
+        key = cleaned.lower()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        items.append(cleaned[:max_chars])
+        if len(items) >= max_items:
+            break
+    return items
+
+
+def normalize_llm_review_payload(value: Any, valid_capability_names: dict[str, str] | None = None) -> dict[str, Any]:
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
         has_explicit_fit_review = isinstance(fit_review, dict) or "decision" in value or "grade" in value
@@ -660,14 +839,55 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: "frozenset[
                     "decision": value.get("decision"),
                     "grade": value.get("grade"),
                 }
+            contextual_capability_matches = normalize_llm_contextual_capability_matches(
+                value.get("contextual_capability_matches"),
+                valid_capability_names=valid_capability_names,
+            )
+            requirement_coverage = normalize_llm_requirement_coverage(
+                value.get("requirement_coverage"),
+                valid_capability_names=valid_capability_names,
+            )
+            job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
+            derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
+            fit_review_normalized = _require_fit_review(fit_review)
+            status_counts: dict[str, int] = {}
+            for _item in requirement_coverage:
+                _s = str(_item.get("status") or "")
+                status_counts[_s] = status_counts.get(_s, 0) + 1
+            cited_capabilities = list(dict.fromkeys(
+                str(_item.get("capability_name") or "").strip()
+                for _item in requirement_coverage
+                if _item.get("capability_name") and _item.get("status") in {"met", "partially_met"}
+            ))
+            # Only use derived_grade when coverage is non-empty. Empty coverage means the LLM
+            # didn't return requirement_coverage (old cache entry, prompt failure, or no
+            # requirements extracted) — fall back to the model's own grade rather than
+            # forcing every such job to POOR.
+            grade_to_use = derived_grade if requirement_coverage else (fit_review_normalized.get("grade") or derived_grade)
+            logger.info(
+                "[LLM][COVERAGE] purpose=fit_review grade_used=%s derived_grade=%s model_grade=%s"
+                " coverage_source=%s total=%d met=%d partial=%d not_evidenced=%d mismatch=%d capabilities=%s",
+                grade_to_use,
+                derived_grade,
+                fit_review_normalized["grade"],
+                "derived" if requirement_coverage else "model_fallback",
+                len(requirement_coverage),
+                status_counts.get("met", 0),
+                status_counts.get("partially_met", 0),
+                status_counts.get("not_evidenced", 0),
+                status_counts.get("mismatch", 0),
+                ", ".join(cited_capabilities) or "(none)",
+            )
             return {
-                "fit_review": _require_fit_review(fit_review),
-                "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
-                "contextual_capability_matches": normalize_llm_contextual_capability_matches(
-                    value.get("contextual_capability_matches"),
-                    valid_capability_names=valid_capability_names,
-                ),
-                "job_requirements": normalize_llm_job_requirements(value.get("job_requirements")),
+                "fit_review": {**fit_review_normalized, "grade": grade_to_use},
+                "decision_summary": _normalize_llm_review_text(value.get("decision_summary"), max_chars=240),
+                "positive_reasons": _normalize_llm_review_list(value.get("positive_reasons"), max_items=3, max_chars=300),
+                "concerns": _normalize_llm_review_list(value.get("concerns"), max_items=3, max_chars=300),
+                "score_rationale": _normalize_llm_review_list(value.get("score_rationale"), max_items=2, max_chars=300),
+                "learning_candidates": [],
+                "contextual_capability_matches": contextual_capability_matches,
+                "requirement_coverage": requirement_coverage,
+                "job_requirements": job_requirements,
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
@@ -675,6 +895,7 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: "frozenset[
                 "fit_review": None,
                 "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
                 "contextual_capability_matches": [],
+                "requirement_coverage": [],
                 "job_requirements": [],
             }
 
@@ -688,6 +909,7 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: "frozenset[
                 "fit_review": _require_fit_review({"decision": decision, "grade": grade}),
                 "learning_candidates": [],
                 "contextual_capability_matches": [],
+                "requirement_coverage": [],
                 "job_requirements": [],
             }
         try:
@@ -841,25 +1063,28 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> str:
-    parts = [
-        "You help decide whether a candidate should apply for a job and identify only pending learning signals.",
+    parts = [LLM_PROMPT_SYSTEM_REVIEW_INTRO if fit_review else "You help decide whether a candidate should apply for a job and identify only pending learning signals."]
+    parts.extend([
         LLM_PROMPT_JSON_ONLY,
         LLM_PROMPT_DO_NOT_SAVE,
         LLM_PROMPT_DO_NOT_INVENT,
         LLM_PROMPT_USE_VISIBLE_STRINGS,
-        LLM_PROMPT_LEARNING_PENDING_ONLY,
-    ]
+    ])
     if fit_review:
         parts.extend([
-            LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
+            LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
+            build_fit_review_guidance(),
+            LLM_PROMPT_FIT_REVIEW_RATIONALE_INTRO,
             f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
             LLM_PROMPT_CONTEXTUAL_CAPABILITY_INTRO,
-            LLM_PROMPT_LEARNING_CANDIDATES_INTRO,
+            LLM_PROMPT_REQUIREMENT_COVERAGE_INTRO,
+            LLM_PROMPT_FIT_REVIEW_GRADE_INTRO,
             LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
             f"Use at most {get_llm_contextual_matches_max_items()} contextual_capability_matches.",
-            f"Use at most {get_llm_learning_candidates_max_items()} learning_candidates.",
+            f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
         ])
     else:
+        parts.append(LLM_PROMPT_LEARNING_PENDING_ONLY)
         parts.extend([
             LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
             f"Return exactly this shape: {LLM_LEARNING_ONLY_PROMPT_SHAPE}",
@@ -874,14 +1099,14 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     if client is None:
         raise RuntimeError("LLM review requested but LLM is disabled or OPENAI_API_KEY is missing")
 
-    valid_capability_names: frozenset[str] | None = None
+    valid_capability_names: dict[str, str] | None = None
     if fit_review:
         profile = load_profile()
-        valid_capability_names = frozenset(
-            str(r.get("name") or "").strip().lower()
+        valid_capability_names = {
+            str(r.get("name") or "").strip().lower(): str(r.get("name") or "").strip()
             for r in profile.get(KEY_CANDIDATE_CAPABILITIES, [])
             if isinstance(r, dict) and str(r.get("name") or "").strip()
-        )
+        }
         if not valid_capability_names:
             raise ValueError(
                 "Fit review cannot run because the candidate profile has no capability rules "
@@ -890,6 +1115,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
 
     try:
         model = _log_llm_model_once()
+        session_cost_before = get_session_cost_usd()
         # job_description_text is already truncated by the caller (source_learning.resolve_llm_review_payload).
         # Log its length directly; do not re-apply the limit here.
         logger.info(

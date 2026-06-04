@@ -14,7 +14,20 @@ from job_hunter_agent.posting_utils import parse_timestamp
 
 from job_hunter_agent.company_normalization import normalize_company_name
 
-from job_hunter_agent.record_schema import RECORD_JOB_REQUIREMENTS_KEY
+from job_hunter_agent.record_schema import (
+    RECORD_FIT_LABEL_KEY,
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_FIT_SCORE_KEY,
+    RECORD_FIT_TONE_CLASS_KEY,
+    RECORD_LLM_CONCERNS_KEY,
+    RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_DECISION_SUMMARY_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
+    RECORD_LLM_POSITIVE_REASONS_KEY,
+    RECORD_LLM_SCORE_RATIONALE_KEY,
+    RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
+)
 
 from job_hunter_agent.signal_detection import hard_block_reasons
 
@@ -67,12 +80,22 @@ KEEP_SNAPSHOT_FIELDS = (
     "llm_decision",
 
     "llm_fit_grade",
+    RECORD_LLM_DECISION_SUMMARY_KEY,
+    RECORD_LLM_POSITIVE_REASONS_KEY,
+    RECORD_LLM_CONCERNS_KEY,
+    RECORD_LLM_SCORE_RATIONALE_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
+    RECORD_LLM_COST_USD_KEY,
 
     "search_location",
 
     "search_keywords",
 
     "fit_source_text",
+    RECORD_FIT_SCORE_KEY,
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_FIT_LABEL_KEY,
+    RECORD_FIT_TONE_CLASS_KEY,
 
     "full_description",
 
@@ -87,6 +110,7 @@ KEEP_SNAPSHOT_FIELDS = (
     "fit_highlights",
 
     RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
 
     "soft_risk_reasons",
 
@@ -210,6 +234,36 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
 
         record["fit_highlights"] = snapshot.get("fit_highlights") or []
 
+    if RECORD_FIT_SCORE_KEY in snapshot:
+        record[RECORD_FIT_SCORE_KEY] = snapshot.get(RECORD_FIT_SCORE_KEY)
+
+    if RECORD_FIT_SCORE_BREAKDOWN_KEY in snapshot:
+        record[RECORD_FIT_SCORE_BREAKDOWN_KEY] = snapshot.get(RECORD_FIT_SCORE_BREAKDOWN_KEY) or []
+
+    if RECORD_FIT_LABEL_KEY in snapshot:
+        record[RECORD_FIT_LABEL_KEY] = snapshot.get(RECORD_FIT_LABEL_KEY) or ""
+
+    if RECORD_FIT_TONE_CLASS_KEY in snapshot:
+        record[RECORD_FIT_TONE_CLASS_KEY] = snapshot.get(RECORD_FIT_TONE_CLASS_KEY) or ""
+
+    if not record.get(RECORD_LLM_DECISION_SUMMARY_KEY):
+        record[RECORD_LLM_DECISION_SUMMARY_KEY] = snapshot.get(RECORD_LLM_DECISION_SUMMARY_KEY) or ""
+
+    if not record.get(RECORD_LLM_POSITIVE_REASONS_KEY):
+        record[RECORD_LLM_POSITIVE_REASONS_KEY] = snapshot.get(RECORD_LLM_POSITIVE_REASONS_KEY) or []
+
+    if not record.get(RECORD_LLM_CONCERNS_KEY):
+        record[RECORD_LLM_CONCERNS_KEY] = snapshot.get(RECORD_LLM_CONCERNS_KEY) or []
+
+    if not record.get(RECORD_LLM_SCORE_RATIONALE_KEY):
+        record[RECORD_LLM_SCORE_RATIONALE_KEY] = snapshot.get(RECORD_LLM_SCORE_RATIONALE_KEY) or []
+
+    if not record.get(RECORD_LLM_ELAPSED_MS_KEY):
+        record[RECORD_LLM_ELAPSED_MS_KEY] = snapshot.get(RECORD_LLM_ELAPSED_MS_KEY)
+
+    if not record.get(RECORD_LLM_COST_USD_KEY):
+        record[RECORD_LLM_COST_USD_KEY] = snapshot.get(RECORD_LLM_COST_USD_KEY)
+
     if not record.get(RECORD_JOB_REQUIREMENTS_KEY):
 
         record[RECORD_JOB_REQUIREMENTS_KEY] = snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or []
@@ -229,6 +283,18 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
     if not record.get("hard_block_reasons"):
 
         record["hard_block_reasons"] = snapshot.get("hard_block_reasons") or []
+
+    if not record.get("contextual_capability_matches"):
+
+        record["contextual_capability_matches"] = snapshot.get("contextual_capability_matches") or []
+
+    if not record.get(RECORD_REQUIREMENT_COVERAGE_KEY):
+
+        record[RECORD_REQUIREMENT_COVERAGE_KEY] = snapshot.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
+
+    if not record.get("reviewed_signal_matches"):
+
+        record["reviewed_signal_matches"] = snapshot.get("reviewed_signal_matches") or []
 
     if not compact_whitespace(record.get("details_status") or ""):
 

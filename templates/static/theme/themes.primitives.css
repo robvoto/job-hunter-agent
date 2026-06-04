@@ -159,6 +159,52 @@ body.job-hunter-wait-active {
   max-width: 36ch;
 }
 
+.wait-state__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.wait-state__status {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 22%, var(--border-subtle));
+  border-radius: var(--control-radius-pill);
+  background: color-mix(in srgb, var(--accent-secondary) 7%, var(--bg-surface));
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.wait-state__status--elapsed {
+  padding-block: 7px;
+  border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
+  background: color-mix(in srgb, var(--bg-surface) 86%, var(--text-muted) 14%);
+  color: var(--text-muted);
+  font-size: 0.83rem;
+}
+
+.wait-state__status-label {
+  font-weight: 700;
+}
+
+.wait-state__status-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wait-state__status--elapsed .wait-state__status-value {
+  font-variant-numeric: tabular-nums;
+}
+
 .wait-state__subcopy {
   margin: 0;
   color: var(--text-muted);

@@ -14,9 +14,21 @@ from job_hunter_agent.record_schema import (
     CONFIDENCE_LOW,
     DETAILS_STATUS_OK,
     RECORD_DETAILS_STATUS_KEY,
+    RECORD_FIT_LABEL_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_FIT_SCORE_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FIT_TONE_CLASS_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_LLM_CONCERNS_KEY,
+    RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_DECISION_SUMMARY_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
+    RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_POSITIVE_REASONS_KEY,
+    RECORD_LLM_SCORE_RATIONALE_KEY,
 )
 from job_hunter_agent.profile_store import (
     KEY_EVIDENCE_TIERS,
@@ -91,12 +103,25 @@ def _workspace_record(**overrides):
         "description_source": "details",
         "details_status": "ok",
         "fit_confidence": "HIGH",
+        RECORD_FIT_SCORE_KEY: 54,
+        RECORD_FIT_LABEL_KEY: "Weak fit",
+        RECORD_FIT_TONE_CLASS_KEY: "tone-low",
+        RECORD_FIT_SCORE_BREAKDOWN_KEY: [],
         "applied": False,
         "archived": False,
         "hidden": False,
     }
     record.update(overrides)
     return record
+
+
+def _render_job_card(record, profile=None, **kwargs):
+    scored_record = _workspace_record(**record)
+    return _ORIGINAL_RENDER_JOB_CARD(scored_record, profile, **kwargs)
+
+
+_ORIGINAL_RENDER_JOB_CARD = workspace_renderer.render_job_card
+workspace_renderer.render_job_card = _render_job_card
 
 
 def test_infer_posting_channel_uses_trusted_metadata_before_text():
@@ -189,6 +214,18 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
     assert score_to_match_label(67, profile["match_levels"]) == "Review next"
     from job_hunter_agent.score_labels import score_to_tone_class
     assert score_to_tone_class(67, profile) == "tone-good"
+
+
+def test_render_job_card_does_not_create_needs_confirmation_from_raw_job_requirements_only():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_requirements": ["Permanent full-time role", "Sydney", "Salary"],
+            "requirement_coverage": [],
+        },
+        _test_profile(),
+    )
+
+    assert "Needs confirmation" not in html
 
 
 def test_build_ad_learning_signals_registers_pending_capability_signals(monkeypatch):
@@ -502,7 +539,7 @@ def test_fit_score_evidence_ignores_display_only_fit_highlights():
 
 
 def test_fit_score_evidence_credits_llm_confirmed_matches():
-    # LLM confirmed matches earn capability credit — related skills help recognition but group name is scored.
+    # High-confidence contextual matches appear as transparency entries (evidence/explanation only, no points).
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
@@ -523,11 +560,14 @@ def test_fit_score_evidence_credits_llm_confirmed_matches():
         _capability_profile(),
     )
 
-    capability_labels = [item["label"] for item in breakdown if "[llm_confirmed]" in item["label"]]
-    assert len(capability_labels) == 3
+    evidenced_entries = [item for item in breakdown if "LLM-evidenced capabilities" in item["label"]]
+    assert len(evidenced_entries) == 1
+    assert evidenced_entries[0]["value"] == 0
+    assert "Agile methodologies" in evidenced_entries[0]["label"]
 
 
-def test_fit_score_evidence_scores_llm_confirmed_by_level_weight():
+def test_fit_score_evidence_is_transparency_only_no_points():
+    # Contextual capability matches are evidence/explanation for the grade — they add no scoring points.
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
@@ -541,15 +581,16 @@ def test_fit_score_evidence_scores_llm_confirmed_by_level_weight():
             "competitive_signals": [],
             "contextual_capability_matches": [
                 {"capability_name": "agile methodologies", "confidence": "high", "matched_text": "agile delivery ceremonies", "reason": "Clear match."},
-                {"capability_name": "acceptance testing", "confidence": "high", "matched_text": "acceptance criteria", "reason": "Clear match."},
+                {"capability_name": "acceptance testing", "confidence": "low", "matched_text": "acceptance criteria", "reason": "Possible but not strong enough."},
                 {"capability_name": "primary stakeholder engagement", "confidence": "high", "matched_text": "stakeholder workshops", "reason": "Clear match."},
             ],
         },
         _capability_profile(),
     )
 
-    total_capability_points = sum(item["value"] for item in breakdown if "[llm_confirmed]" in item["label"])
-    assert total_capability_points > 0
+    llm_evidence_points = sum(item["value"] for item in breakdown if "LLM" in item["label"])
+    assert llm_evidence_points == 0
+    assert any("Possible capability match" in item["label"] for item in breakdown)
 
 
 def test_strong_high_confidence_fit_gets_convergence_bonus():
@@ -599,7 +640,10 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
                 "bonus_no_soft_risks": 11,
                 "bonus_with_soft_risks": 7,
                 "label": "Aligned",
-            }
+            },
+            "capability_contextual_llm": {
+                "confidence_levels_with_credit": ["high"],
+            },
         },
     }
     record = {
@@ -608,13 +652,12 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
         "llm_fit_grade": "SOLID",
         "missing_evidence": [],
         "soft_risk_reasons": [],
+        "contextual_capability_matches": [
+            {"capability_name": "platform engineering", "confidence": "high", "matched_text": "platform work", "reason": "Clear."},
+        ],
     }
 
-    entry = fit_scoring.convergence_bonus_entry(
-        record,
-        {"strong": ["platform engineering"], "working": [], "basic": []},
-        profile,
-    )
+    entry = fit_scoring.convergence_bonus_entry(record, profile)
 
     assert entry == {"label": "Aligned", "value": 11}
 
@@ -835,9 +878,6 @@ def test_job_card_uses_score_tone_as_card_accent_class():
 
 
 def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: 0)
-    monkeypatch.setattr(workspace_renderer, "fit_score_breakdown", lambda record, profile=None: [])
-
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-posting-channel-badge",
@@ -1398,7 +1438,7 @@ def test_scoring_helpers_skip_contract_signal_when_both_selected():
 
     from job_hunter_agent.preferences import assess_contract_preference
     assert assess_contract_preference(record, profile) == {
-        "label": "Work type neutral because all work types were selected",
+        "label": "Work type neutral — you've selected multiple",
         "value": 0,
     }
 
@@ -1449,7 +1489,7 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
 
 
 def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypatch):
-    monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"]))
     monkeypatch.setattr(workspace_service, "is_workspace_eligible", lambda record, profile=None, workspace_min_score=None: True)
 
     records = [
@@ -1475,7 +1515,7 @@ def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypa
 
 
 def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(monkeypatch):
-    monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"]))
     monkeypatch.setattr(workspace_service, "is_workspace_eligible", lambda record, profile=None, workspace_min_score=None: int(record["score"]) >= 55)
 
     records = [
@@ -1533,7 +1573,7 @@ def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(m
 
 def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
     monkeypatch.setattr(workspace_service, "passes_title_filters", lambda title: (True, "OK"))
-    monkeypatch.setattr(workspace_service, "fit_score", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"]))
     monkeypatch.setattr(workspace_service, "get_workspace_minimum_score", lambda: 60)
 
     from job_hunter_agent.workspace_service import is_workspace_eligible
@@ -1604,9 +1644,6 @@ def test_score_filter_options_default_to_all_in_debug_mode():
 
 
 def test_render_job_card_debug_mode_shows_filter_status_for_rejected_rows(monkeypatch):
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: 0)
-    monkeypatch.setattr(workspace_renderer, "fit_score_breakdown", lambda record, profile=None: [])
-
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-debug-filter",
@@ -1638,9 +1675,6 @@ def test_render_job_card_debug_mode_shows_filter_status_for_rejected_rows(monkey
 
 
 def test_render_job_card_debug_mode_shows_debug_only_label_for_non_blocker_rejections(monkeypatch):
-    monkeypatch.setattr(workspace_renderer, "fit_score", lambda record, profile=None: 0)
-    monkeypatch.setattr(workspace_renderer, "fit_score_breakdown", lambda record, profile=None: [])
-
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-debug-only",
@@ -1669,6 +1703,75 @@ def test_render_job_card_debug_mode_shows_debug_only_label_for_non_blocker_rejec
     assert "Title outside target role family" in html
 
 
+def test_render_job_card_shows_llm_rationale_and_plain_language_transparency_note():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-llm-rationale",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_FIT_SCORE_KEY: 72,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 72, "section": "llm_fit"},
+                {
+                    "label": "Possible capability match — mentioned in the job, but not strong enough to affect the score.",
+                    "value": 0,
+                    "section": "capability",
+                },
+            ],
+            RECORD_LLM_DECISION_SUMMARY_KEY: "Clear delivery fit with relevant capability evidence.",
+            RECORD_LLM_POSITIVE_REASONS_KEY: [
+                "Matches technical BA and delivery work",
+                "AWS, REST API, and DevOps experience look relevant",
+            ],
+            RECORD_LLM_CONCERNS_KEY: [
+                "AWS evidence is possible but not strongly proven",
+                "Salary not found",
+            ],
+            RECORD_LLM_SCORE_RATIONALE_KEY: [
+                "LLM grade placed this job in the Strong band.",
+                "Preferences and freshness moved the score within that band.",
+            ],
+            RECORD_LLM_ELAPSED_MS_KEY: 1234,
+            RECORD_LLM_COST_USD_KEY: 0.0123,
+            "contextual_capability_matches": [
+                {
+                    "capability_name": "agile methodologies",
+                    "confidence": "low",
+                    "matched_text": "agile delivery",
+                    "reason": "Possible capability match only.",
+                },
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=True,
+    )
+
+    assert "LLM fit review" in html
+    assert "Decision summary" in html
+    assert "Final decision: KEPT" in html
+    assert "Final score" in html
+    assert "LLM fit grade" in html
+    assert "Time taken" in html
+    assert "Estimated LLM cost" in html
+    assert "Possible capability match — mentioned in the job, but not strong enough to affect the score." in html
+    assert "Possible capability match — mentioned in the job, but not strong enough to affect the score.: +0" not in html
+    assert "medium confidence" not in html
+    assert "logged only due to confidence" not in html
+
+
 def test_posted_filter_options_show_explicit_day_windows():
     options_html = workspace_renderer.render_posted_filter_options(
         [
@@ -1692,9 +1795,9 @@ def test_freshness_breakdown_uses_managed_bucket_cutoffs():
     weights = {"freshness": 1.0}
 
     assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02), "Posted within the last 6 hours") == 10
-    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 2), "Posted within the last 3 days") == 5
-    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 10), "Still relatively recent") == 1
-    assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 20) == []
+    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.5), "Posted within the last day") == 8
+    assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 2) == []
+    assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 10) == []
 
 
 def test_repeated_listing_history_adds_candidate_warning():
@@ -1767,9 +1870,7 @@ def test_posted_display_shows_today_against_current_render_date():
     assert label == "22 Apr 2026 (today)"
 
 
-def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, []))
-
+def test_hard_blocked_job_still_shows_other_fit_evidence():
     record = {
         "title": "Business Analyst",
         "title_reason": "OK",
@@ -1792,9 +1893,7 @@ def test_hard_blocked_job_still_shows_other_fit_evidence(monkeypatch):
     assert any("fit" in label.lower() for label in labels)
 
 
-def test_score_equivalent_where_no_hard_blockers(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "capability_evidence_score", lambda record, profile=None: (0, []))
-
+def test_score_equivalent_where_no_hard_blockers():
     record = {
         "title": "Business Analyst",
         "title_reason": "OK",

@@ -32,6 +32,8 @@ from job_hunter_agent.profile_store import (
 
     KEY_WORK_MODE_PREFERENCE,
 
+    VALID_ENGAGEMENT_TYPES,
+
     VALID_WORK_MODE_PREFERENCES,
 
     get_scoring_rules,
@@ -78,7 +80,11 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
     selected_engagement_type_set = set(selected_engagement_types)
 
-    is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
+    raw_work_type = str(record.get("work_type") or "")
+
+    is_perm, is_contract = _parse_work_type_flags(raw_work_type)
+
+    is_full_time_contract = _is_full_time_contract(raw_work_type)
 
     if not is_perm and not is_contract:
 
@@ -108,13 +114,17 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
         logger.warning("%s\n%s", "[UNCERTAINTY] Unable to classify work_type", format_log_block("UNCERTAINTY", entry))
 
-    if selected_engagement_type_set != {Engagement.PERMANENT, Engagement.CONTRACT}:
+    if selected_engagement_type_set != VALID_ENGAGEMENT_TYPES:
 
-        if is_perm and selected_engagement_type_set == {Engagement.CONTRACT}:
+        if is_perm and Engagement.PERMANENT not in selected_engagement_type_set:
 
             return False, "PREF_CONTRACT_TYPE"
 
-        if not is_perm and is_contract and selected_engagement_type_set == {Engagement.PERMANENT}:
+        if is_full_time_contract and Engagement.FULL_TIME_CONTRACT not in selected_engagement_type_set:
+
+            return False, "PREF_CONTRACT_TYPE"
+
+        if is_contract and not is_full_time_contract and Engagement.CONTRACT not in selected_engagement_type_set:
 
             return False, "PREF_CONTRACT_TYPE"
 
@@ -388,7 +398,11 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
 
     selected_engagement_type_set = set(selected_engagement_types)
 
-    is_perm, is_contract = _parse_work_type_flags(str(record.get("work_type") or ""))
+    raw_work_type = str(record.get("work_type") or "")
+
+    is_perm, is_contract = _parse_work_type_flags(raw_work_type)
+
+    is_full_time_contract = _is_full_time_contract(raw_work_type)
 
 
 
@@ -398,7 +412,7 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
 
 
 
-    if not selected_engagement_type_set or selected_engagement_type_set == {Engagement.PERMANENT, Engagement.CONTRACT}:
+    if not selected_engagement_type_set or selected_engagement_type_set == VALID_ENGAGEMENT_TYPES:
 
         return {"label": label_all, "value": 0}
 
@@ -412,7 +426,7 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
 
     if is_perm:
 
-        if selected_engagement_type_set == {Engagement.PERMANENT}:
+        if Engagement.PERMANENT in selected_engagement_type_set:
 
             return {"label": f"{label_bonus}: Permanent role", "value": int(contract_rules["permanent_match"])}
 
@@ -421,6 +435,14 @@ def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> 
 
 
     if not is_contract:
+
+        return None
+
+    if is_full_time_contract and Engagement.FULL_TIME_CONTRACT not in selected_engagement_type_set:
+
+        return None
+
+    if not is_full_time_contract and Engagement.CONTRACT not in selected_engagement_type_set:
 
         return None
 
@@ -562,13 +584,21 @@ def _salary_has_non_comparable_period(salary_text: str) -> bool:
 
 
 
+def _is_full_time_contract(work_type: str) -> bool:
+
+    normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(work_type).lower()).strip()
+
+    return normalized in {"ftc", "full time contract", "fulltime contract", "full time/contract", "full-time contract"}
+
+
+
 def _parse_work_type_flags(work_type: str) -> tuple[bool, bool]:
 
     """Returns (is_perm, is_contract) from a raw work_type string."""
 
     normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(work_type).lower()).strip()
 
-    if normalized in {"ftc", "full time contract", "fulltime contract", "full time/contract", "full-time contract"}:
+    if _is_full_time_contract(work_type):
 
         return False, True
 

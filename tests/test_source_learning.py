@@ -27,7 +27,23 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": [],
+            "job_requirements": ["Stakeholder engagement", "Process mapping"],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "status": "met",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "stakeholder workshops",
+                    "candidate_evidence": ["stakeholder management"],
+                },
+                {
+                    "requirement": "Process mapping",
+                    "status": "partially_met",
+                    "capability_name": "process mapping",
+                    "matched_job_text": "process mapping",
+                    "candidate_evidence": ["process mapping"],
+                },
+            ],
         }
     }
 
@@ -82,7 +98,23 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": [],
+            "job_requirements": ["Stakeholder engagement", "Process mapping"],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "status": "met",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "stakeholder workshops",
+                    "candidate_evidence": ["stakeholder management"],
+                },
+                {
+                    "requirement": "Process mapping",
+                    "status": "partially_met",
+                    "capability_name": "process mapping",
+                    "matched_job_text": "process mapping",
+                    "candidate_evidence": ["process mapping"],
+                },
+            ],
         }
 
     monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
@@ -122,7 +154,30 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": [],
+            "job_requirements": ["Stakeholder engagement", "Process mapping", "UAT support"],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "status": "met",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "stakeholder workshops",
+                    "candidate_evidence": ["stakeholder management"],
+                },
+                {
+                    "requirement": "Process mapping",
+                    "status": "met",
+                    "capability_name": "process mapping",
+                    "matched_job_text": "process mapping",
+                    "candidate_evidence": ["process mapping"],
+                },
+                {
+                    "requirement": "UAT support",
+                    "status": "partially_met",
+                    "capability_name": "acceptance testing",
+                    "matched_job_text": "uat support",
+                    "candidate_evidence": ["user acceptance testing"],
+                },
+            ],
         }
 
     monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)

@@ -259,3 +259,89 @@ def build_full_seek_url(relative_or_full_url: Optional[str]) -> Optional[str]:
     if not relative_or_full_url:
         return None
     return urljoin("https://www.seek.com.au", relative_or_full_url)
+
+
+# ---------------------------------------------------------------------------
+# Async Playwright helpers — mirror of the sync versions above, used by
+# the parallel detail-fetch path in seek_runner.py.
+# ---------------------------------------------------------------------------
+
+async def _expand_detail_page_async(page) -> None:
+    for selector in [
+        'button:has-text("Show more")',
+        'button:has-text("Read more")',
+        'button:has-text("More")',
+        '[aria-expanded="false"]',
+    ]:
+        try:
+            locator = page.locator(selector)
+            max_clicks = min(await locator.count(), 5)
+            for index in range(max_clicks):
+                try:
+                    await locator.nth(index).click(timeout=700)
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+
+async def _read_visible_text_async(page, selector: str) -> str:
+    try:
+        await page.wait_for_selector(selector, timeout=8000)
+    except Exception:
+        return ""
+    for reader in ("inner_text", "text_content"):
+        try:
+            text = await getattr(page.locator(selector), reader)()
+            if text:
+                return str(text).strip()
+        except Exception:
+            continue
+    return ""
+
+
+async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2) -> dict:
+    """Async mirror of fetch_job_details_payload — use with async_playwright pages."""
+    last_status = "empty"
+    last_text = ""
+
+    try:
+        await page.goto(full_url, wait_until="domcontentloaded")
+    except Exception:
+        return {"text": "", "status": "navigation_error", "retryable": False}
+
+    for attempt_index in range(max(attempts, 1)):
+        await _expand_detail_page_async(page)
+
+        details_text = await _read_visible_text_async(page, SELECTOR_DETAILS)
+        details_status = classify_detail_page_text(details_text)
+        if details_text and details_status == "ok":
+            return {"text": details_text, "status": "ok", "source": "jobAdDetails", "retryable": False}
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=4000)
+        except Exception:
+            pass
+
+        body_text = await _read_visible_text_async(page, "body")
+        body_status = classify_detail_page_text(body_text)
+        if body_text and body_status == "ok":
+            return {"text": body_text, "status": "ok", "source": "body", "retryable": False}
+
+        last_text = body_text or details_text or ""
+        last_status = body_status if body_text else details_status
+        should_retry = last_status in {"challenge_page", "blocked_page"} and attempt_index < (attempts - 1)
+        if not should_retry:
+            break
+        try:
+            await page.wait_for_timeout(2500 * (attempt_index + 1))
+            await page.reload(wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            break
+
+    return {
+        "text": "",
+        "status": last_status,
+        "retryable": last_status in {"challenge_page", "blocked_page"},
+        "raw_text": last_text[:500],
+    }

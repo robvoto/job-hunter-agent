@@ -9,6 +9,7 @@ from job_hunter_agent.locations import resolve_location, find_nearest_location
 from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.source_documents import persist_uploaded_source_pack, run_onboarding, load_source_materials
+from job_hunter_agent.llm_gate import get_session_cost_usd
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_ENGAGEMENT_TYPE,
@@ -104,6 +105,7 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
         result = run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
         result["materials"] = materials
+        result["llm_cost_usd"] = round(get_session_cost_usd(), 6)
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(result)

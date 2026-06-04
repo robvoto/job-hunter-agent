@@ -122,7 +122,7 @@ def test_unknown_work_type_returns_neutral_signal():
 
         "match_preferences": {
 
-            "engagement_type": ["permanent", "contract"],
+            "engagement_type": ["permanent", "contract", "full_time_contract"],
 
             "preferred_contract_months": 12,
 
@@ -310,13 +310,37 @@ def test_permanent_only_rejects_ftc_work_type():
 
 
 
-def test_contract_only_accepts_ftc_work_type():
+def test_contract_only_rejects_ftc_work_type_when_ftc_is_not_selected():
 
     profile = {
 
         "match_preferences": {
 
             "engagement_type": ["contract"],
+
+        },
+
+    }
+
+
+
+    ok, reason = passes_preference_filters({"work_type": "Full Time Contract"}, profile)
+
+
+
+    assert ok is False
+
+    assert reason == "PREF_CONTRACT_TYPE"
+
+
+
+def test_ftc_only_accepts_ftc_work_type():
+
+    profile = {
+
+        "match_preferences": {
+
+            "engagement_type": ["full_time_contract"],
 
         },
 
@@ -454,7 +478,7 @@ def test_multiple_selected_work_types_are_neutral_for_scoring():
 
         "match_preferences": {
 
-            "engagement_type": ["permanent", "contract"],
+            "engagement_type": ["permanent", "contract", "full_time_contract"],
 
             "preferred_contract_months": 12,
 

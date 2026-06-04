@@ -54,7 +54,29 @@ class _FakeParsingResponses:
         self.calls.append(kwargs)
         text_format = kwargs["text_format"]
         if text_format.__name__ == "_LLMFitReviewPayload":
-            return _FakeParseResponse({"fit_review": {"decision": "KEEP", "grade": "SOLID"}})
+            return _FakeParseResponse(
+                {
+                    "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+                    "job_requirements": ["Stakeholder engagement", "Process mapping"],
+                    "requirement_coverage": [
+                        {
+                            "requirement": "Stakeholder engagement",
+                            "status": "met",
+                            "capability_name": "stakeholder management",
+                            "matched_job_text": "work with stakeholders",
+                            "candidate_evidence": ["stakeholder management"],
+                        },
+                        {
+                            "requirement": "Process mapping",
+                            "status": "partially_met",
+                            "capability_name": "process mapping",
+                            "matched_job_text": "map the current process",
+                            "candidate_evidence": ["process mapping"],
+                        },
+                    ],
+                    "contextual_capability_matches": [],
+                }
+            )
         return _FakeParseResponse(
             {
                 "fit_review": {"decision": "KEEP", "grade": "SOLID"},
@@ -293,31 +315,43 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
                 "Strong stakeholder engagement",
                 "Strong stakeholder engagement",
             ],
+            "requirement_coverage": [
+                {
+                    "requirement": "Strong stakeholder engagement",
+                    "status": "met",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "stakeholder engagement",
+                    "candidate_evidence": ["stakeholder management"],
+                },
+            ],
         },
-        valid_capability_names=frozenset(),
+        valid_capability_names={"stakeholder engagement": "Stakeholder engagement"},
     )
 
     assert payload == {
-        "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-        "learning_candidates": [
+        "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+        "decision_summary": "",
+        "positive_reasons": [],
+        "concerns": [],
+        "score_rationale": [],
+        "learning_candidates": [],
+        "contextual_capability_matches": [],
+        "requirement_coverage": [
             {
-                "signal": "platform engineer",
-                "suggested_category": "capability_concept",
-                "suggested_values": [],
-                "context_terms": [],
-                "confidence": "",
-                "needs_review": True,
-                "original_texts": ["platform engineer"],
+                "requirement": "Strong stakeholder engagement",
+                "status": "met",
+                "capability_name": "Stakeholder engagement",
+                "matched_job_text": "stakeholder engagement",
+                "candidate_evidence": ["stakeholder management"],
             }
         ],
-        "contextual_capability_matches": [],
         "job_requirements": ["Strong stakeholder engagement"],
     }
 
 
 def test_normalize_llm_review_payload_rejects_missing_grade():
     with pytest.raises(ValueError):
-        llm_gate.normalize_llm_review_payload({"decision": "KEEP"}, valid_capability_names=frozenset())
+        llm_gate.normalize_llm_review_payload({"decision": "KEEP"}, valid_capability_names={})
 
 
 def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
@@ -329,10 +363,40 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
     monkeypatch.setattr(
         llm_gate,
         "load_profile",
-        lambda: {"candidate_capabilities": [{"name": "stakeholder management", "level": "strong"}]},
+        lambda: {
+            "candidate_capabilities": [
+                {"name": "stakeholder management", "level": "strong"},
+                {"name": "process mapping", "level": "working"},
+            ]
+        },
     )
 
     payload = llm_gate._request_learning_payload("Example role description", fit_review=True)
 
-    assert payload == {"fit_review": {"decision": "KEEP", "grade": "SOLID"}, "learning_candidates": [], "contextual_capability_matches": [], "job_requirements": []}
+    assert payload == {
+        "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+        "decision_summary": "",
+        "positive_reasons": [],
+        "concerns": [],
+        "score_rationale": [],
+        "learning_candidates": [],
+        "contextual_capability_matches": [],
+        "requirement_coverage": [
+                    {
+                        "requirement": "Stakeholder engagement",
+                        "status": "met",
+                        "capability_name": "stakeholder management",
+                        "matched_job_text": "work with stakeholders",
+                "candidate_evidence": ["stakeholder management"],
+            },
+            {
+                "requirement": "Process mapping",
+                "status": "partially_met",
+                "capability_name": "process mapping",
+                "matched_job_text": "map the current process",
+                "candidate_evidence": ["process mapping"],
+            },
+        ],
+        "job_requirements": ["Stakeholder engagement", "Process mapping"],
+    }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"

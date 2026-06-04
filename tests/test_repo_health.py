@@ -10,7 +10,12 @@ import importlib
 
 from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 
-from job_hunter_agent.profile_store import DEFAULT_PROFILE, DEFAULT_SEARCH_SETTINGS, normalize_search_settings
+from job_hunter_agent.profile_store import (
+    DEFAULT_PROFILE,
+    DEFAULT_SEARCH_SETTINGS,
+    normalize_search_settings,
+    normalize_work_mode_preferences,
+)
 
 from job_hunter_agent import profile_store
 
@@ -148,11 +153,13 @@ def test_default_match_preferences_are_neutral():
 
     assert prefs["secondary_location"] == ""
 
-    assert prefs["work_mode_preference"] == []
+    assert prefs["work_mode_preference"] == ["remote", "hybrid", "onsite"]
 
     assert prefs["prefer_sector"] == []
 
     assert prefs["prefer_permanent"] is False
+
+    assert normalize_work_mode_preferences([]) == []
 
 
 

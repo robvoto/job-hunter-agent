@@ -4,7 +4,6 @@ import logging
 from typing import Dict, List, Optional
 
 from job_hunter_agent.capability_matching import (
-    evidence_tier_alignment_score,
     find_profile_capability_matches,
 )
 
@@ -22,14 +21,10 @@ from job_hunter_agent.preferences import (
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.profile_store import (
     KEY_CAPABILITY_CONTEXTUAL_LLM,
-    KEY_CAPABILITY_EVIDENCE,
-    KEY_CAPABILITY_LEVEL_WEIGHTS,
-    KEY_CANDIDATE_CAPABILITIES,
     KEY_CONVERGENCE,
     KEY_LLM_GRADE_BANDS,
     KEY_LLM_GRADE_POINTS,
     CapabilityLevel,
-    VALID_CAPABILITY_RULE_LEVELS,
     get_preference_weights,
     get_scoring_rules,
     load_profile,
@@ -42,7 +37,6 @@ from job_hunter_agent.role_analysis import (
 )
 from job_hunter_agent.scoring_utils import weighted_points
 from job_hunter_agent.signal_detection import (
-    _capability_rule_strength,
     competitive_fit_highlights,
     competitive_signal_assessments,
     hard_block_reasons,
@@ -50,6 +44,12 @@ from job_hunter_agent.signal_detection import (
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.signal_schema import SIGNAL_LABEL_KEY, TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+from job_hunter_agent.record_schema import (
+    RECORD_FIT_SCORE_KEY,
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
+)
 
 LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"
@@ -95,118 +95,13 @@ def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> d
     return {"label": label, "value": value}
 
 
-def capability_evidence_score(record: dict, profile: Optional[dict] = None) -> tuple[int, list[dict]]:
-    """Score capability matches from LLM-confirmed contextual_capability_matches only.
-
-    Each entry must name an exact capability group from the profile. Anything that slips
-    past the LLM gate validation is logged as an error and skipped — it is never silently credited.
-    """
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    level_weights = scoring_rules[KEY_CAPABILITY_LEVEL_WEIGHTS]
-    max_score = int(scoring_rules[KEY_CAPABILITY_EVIDENCE]["max_score"])
-    contextual_config = scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {})
-    levels_with_credit = set(contextual_config.get("confidence_levels_with_credit") or [])
-    if not levels_with_credit:
-        raise ValueError(
-            f"scoring_rules[{KEY_CAPABILITY_CONTEXTUAL_LLM!r}]['confidence_levels_with_credit'] is empty — "
-            "update scoring_rules.json before scoring"
-        )
-
-    profile_rules_by_name = {
-        str(r.get("name") or "").strip().lower(): r
-        for r in active_profile.get(KEY_CANDIDATE_CAPABILITIES, [])
-        if isinstance(r, dict) and str(r.get("name") or "").strip()
-    }
-
-    scored: list[dict] = []
-    credited_names: set[str] = set()
-
-    for match in (record.get("contextual_capability_matches") or []):
-        cap_name = str(match.get("capability_name") or "").strip().lower()
-        confidence = str(match.get("confidence") or "").strip().lower()
-        matched_text = str(match.get("matched_text") or "").strip()
-        reason = str(match.get("reason") or "").strip()
-
-        if cap_name in credited_names:
-            continue
-
-        rule = profile_rules_by_name.get(cap_name)
-        if rule is None:
-            logger.error(
-                "[CAPABILITY_SCORING][GATE_BREACH] LLM returned a capability name not in the profile — "
-                "valid_capability_names enforcement failed.\n"
-                "  job        : %s (%s)\n"
-                "  capability : %r\n"
-                "  confidence : %s\n"
-                "  matched_text: %s\n"
-                "  known names: %s",
-                record.get("job_key", "<unknown>"),
-                str(record.get("title") or "").strip(),
-                cap_name,
-                confidence,
-                matched_text or "(none)",
-                ", ".join(sorted(profile_rules_by_name.keys())),
-            )
-            continue
-
-        level = str(rule.get("level") or "").strip().lower()
-        if level not in VALID_CAPABILITY_RULE_LEVELS:
-            logger.error(
-                "[CAPABILITY_SCORING][INVALID_LEVEL] capability=%r level=%r job=%s — fix the profile rule",
-                cap_name, level, record.get("job_key", "<unknown>"),
-            )
-            continue
-
-        if confidence not in levels_with_credit:
-            logger.info(
-                "[CAPABILITY_SCORING][BELOW_THRESHOLD]\n"
-                "  capability  %s\n"
-                "  confidence  %s\n"
-                "  matched     %s\n"
-                "  reason      %s\n"
-                "  job         %s",
-                cap_name, confidence, matched_text, reason, record.get("job_key", "<unknown>"),
-            )
-            continue
-
-        rule_strength = _capability_rule_strength(rule)
-        profile_evidence = evidence_tier_alignment_score(active_profile, [cap_name])
-        combined = max(rule_strength, profile_evidence)
-        scored.append({
-            "name": str(rule.get("name") or ""),
-            "label": friendly_capability_label(str(rule.get("name") or "")),
-            "level": level,
-            "combined_strength": combined,
-            "match_type": "llm_confirmed",
-            "matched_text": matched_text,
-        })
-        credited_names.add(cap_name)
-
-    scored.sort(key=lambda m: int(level_weights.get(m["level"], 0)), reverse=True)
-
-    total = 0
-    credited: list[dict] = []
-    for m in scored:
-        weight = int(level_weights.get(m["level"], 0))
-        points = round(m["combined_strength"] * weight)
-        remaining = max_score - total
-        if remaining <= 0:
-            break
-        points = min(points, remaining)
-        if points <= 0:
-            continue
-        total += points
-        credited.append({**m, "points": points})
-
-    return total, credited
 
 
-def convergence_bonus_entry(record: dict, capability_matches: dict, profile: Optional[dict] = None) -> Optional[dict]:
+def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     """Award a bonus when multiple strong independent signals simultaneously confirm fit.
 
-    Conditions and bonus values come from scoring_rules.json so they stay managed
-    rather than hidden in feature code.
+    Convergence requires title match, description quality, grade, and LLM-evidenced capabilities
+    (high-confidence contextual matches). Conditions and bonus values come from scoring_rules.json.
     """
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     title_reason = str(record.get("title_reason") or "").strip().upper()
@@ -215,13 +110,16 @@ def convergence_bonus_entry(record: dict, capability_matches: dict, profile: Opt
     missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
     soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
     active_profile = profile or load_profile()
-    matches = capability_matches
     scoring_rules = get_scoring_rules(active_profile)
     convergence_rules = scoring_rules[KEY_CONVERGENCE]
-    positive_count = (
-        len(matches.get(CapabilityLevel.STRONG, []))
-        + len(matches.get(CapabilityLevel.WORKING, []))
-        + len(matches.get(CapabilityLevel.BASIC, []))
+    levels_with_credit = {
+        str(v).strip().lower()
+        for v in ((scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {}) or {}).get("confidence_levels_with_credit") or [])
+    }
+    positive_count = sum(
+        1 for item in (record.get("contextual_capability_matches") or [])
+        if isinstance(item, dict)
+        and str(item.get("confidence") or "").strip().lower() in levels_with_credit
     )
     if (
         title_reason != convergence_rules["required_title_reason"]
@@ -235,6 +133,98 @@ def convergence_bonus_entry(record: dict, capability_matches: dict, profile: Opt
         return None
     bonus = int(convergence_rules["bonus_no_soft_risks"] if not soft_risks else convergence_rules["bonus_with_soft_risks"])
     return {"label": convergence_rules["label"], "value": bonus}
+
+
+def requirement_coverage_entries(record: dict) -> List[dict]:
+    entries: List[dict] = []
+    coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
+    if not isinstance(coverage, list) or not coverage:
+        if record.get("review_source") == "llm" and record.get(RECORD_JOB_REQUIREMENTS_KEY):
+            entries.append({"label": "Requirement coverage not returned", "value": 0, "section": "llm_fit"})
+        return entries
+
+    for item in coverage:
+        if not isinstance(item, dict):
+            continue
+        requirement = str(item.get("requirement") or "").strip()
+        status = str(item.get("status") or "").strip().lower().replace("_", " ")
+        capability_name = str(item.get("capability_name") or "").strip()
+        matched_job_text = str(item.get("matched_job_text") or "").strip()
+        candidate_evidence = [
+            compact_whitespace(text)
+            for text in (item.get("candidate_evidence") or [])
+            if compact_whitespace(text)
+        ]
+        if not requirement:
+            continue
+        label = f"Requirement {status}: {requirement}"
+        details: list[str] = []
+        if capability_name:
+            details.append(f"capability: {friendly_capability_label(capability_name)}")
+        if matched_job_text:
+            details.append(f"job text: {matched_job_text}")
+        if candidate_evidence:
+            details.append(f"candidate evidence: {', '.join(candidate_evidence[:2])}")
+        if details:
+            label = f"{label} | " + " | ".join(details)
+        entries.append({"label": label, "value": 0, "section": "llm_fit"})
+    return entries
+
+
+def contextual_capability_transparency_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    """Transparency-only breakdown entries for LLM contextual capability matches.
+
+    Capabilities are evidence/explanation for the LLM grade, not a separate scoring path.
+    High-confidence matches are labelled as evidenced; below-threshold are labelled as found
+    but not confirmed. No points are assigned — the grade already captured the capability fit.
+    """
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    levels_with_credit = {
+        str(v).strip().lower()
+        for v in ((scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {}) or {}).get("confidence_levels_with_credit") or [])
+    }
+    evidenced: list[str] = []
+    low_confidence: list[str] = []
+    low_confidence_label = load_ui_labels().get("fit_highlight_labels", {}).get(
+        "possible_capability_match",
+        "Possible capability match — mentioned in the job, but not strong enough to affect the score.",
+    )
+
+    for item in (record.get("contextual_capability_matches") or []):
+        if not isinstance(item, dict):
+            continue
+        cap_name = str(item.get("capability_name") or "").strip()
+        confidence = str(item.get("confidence") or "").strip().lower()
+        if not cap_name:
+            continue
+        label = friendly_capability_label(cap_name)
+        if confidence in levels_with_credit:
+            evidenced.append(label)
+        else:
+            low_confidence.append(label)
+
+    logger.info(
+        "[CAPABILITY_EVIDENCE] job=%s evidenced=%s low_confidence=%s",
+        record.get("job_key", "<unknown>"),
+        ", ".join(dedupe_preserve_order(evidenced)) or "(none)",
+        ", ".join(dedupe_preserve_order(low_confidence)) or "(none)",
+    )
+
+    entries: List[dict] = []
+    if evidenced:
+        entries.append({
+            "label": f"LLM-evidenced capabilities: {', '.join(dedupe_preserve_order(evidenced))}",
+            "value": 0,
+            "section": "capability",
+        })
+    if low_confidence:
+        entries.append({
+            "label": low_confidence_label,
+            "value": 0,
+            "section": "capability",
+        })
+    return entries
 
 
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
@@ -289,7 +279,6 @@ def build_core_fit_breakdown(
     record: dict,
     scoring_rules: dict,
     weights: dict,
-    scored_matches: list[dict],
     title_family: str,
     title_reason: str,
     content_reason: str,
@@ -311,28 +300,15 @@ def build_core_fit_breakdown(
         })
     llm_entry = llm_description_fit_entry(record, active_profile)
     entries.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"]), "section": "llm_fit"})
+    entries.extend(requirement_coverage_entries(record))
     if content_reason == "OK":
         entries.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"]), "section": "content"})
     if full_description_confidence(record) == "LOW":
         entries.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"]), "section": "content"})
-    for m in scored_matches:
-        points = int(m.get("points") or 0)
-        if not points:
-            continue
-        match_type = m.get("match_type") or "canonical"
-        label_tag = f"[{match_type}]" if match_type != "alias" else f"[alias: {m.get('matched_text') or ''}]"
-        entries.append({
-            "label": f"{m['label']} {label_tag}",
-            "value": weighted_points(points, weights["fit"]),
-            "section": "capability",
-        })
-    if not scored_matches:
-        entries.append({"label": "No capability matches found", "value": 0, "section": "capability"})
-    capability_matches = {}
-    for m in scored_matches:
-        capability_matches.setdefault(m["level"], [])
-        capability_matches[m["level"]].append(m["name"])
-    convergence_entry = convergence_bonus_entry(record, capability_matches, active_profile)
+    entries.extend(contextual_capability_transparency_entries(record, active_profile))
+    if not (record.get("contextual_capability_matches") or []):
+        entries.append({"label": "No LLM contextual capability matches found", "value": 0, "section": "capability"})
+    convergence_entry = convergence_bonus_entry(record, active_profile)
     if convergence_entry:
         entries.append({
             "label": convergence_entry["label"],
@@ -462,14 +438,13 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     weights = get_preference_weights(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
     hard_block_labels = hard_block_reasons(record, active_profile)
-    _evidence_score, scored_matches = capability_evidence_score(record, active_profile)
     if not title_metadata and str(record.get("title") or "").strip():
         title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
     title_family = str(title_metadata.get("match_family") or "").strip().lower()
 
     # Build non-hard-block entries first so the band clamp does not interact with hard block penalties.
     non_hard_block = (
-        build_core_fit_breakdown(record, scoring_rules, weights, scored_matches, title_family, title_reason, content_reason, active_profile)
+        build_core_fit_breakdown(record, scoring_rules, weights, title_family, title_reason, content_reason, active_profile)
         + build_preference_breakdown(record, scoring_rules, weights, active_profile)
         + build_convenience_breakdown(record, scoring_rules, weights, posted_age_days)
     )
@@ -494,3 +469,73 @@ def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
 def fit_score(record: dict, profile: Optional[dict] = None) -> int:
     score = sum(item["value"] for item in fit_score_breakdown(record, profile))
     return max(min(score, 100), 0)
+
+
+def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    """Frozen breakdown computed once at scrape time — excludes freshness and viewed status.
+
+    Grade band is applied to core + preference only. Freshness and viewed are added at
+    display time by fit_score_and_breakdown_displayed.
+    """
+    review_state = llm_review_state(record)
+    if review_state["state"] != LLM_REVIEW_STATE_EVALUATED:
+        job_key = str(record.get("job_key") or "<unknown>")
+        title = str(record.get("title") or "").strip() or "<untitled>"
+        raise RuntimeError(
+            f"[FIT_SCORE] Cannot score job without LLM review — {review_state['detail']}\n"
+            f"  job: {job_key} ({title})\n"
+            "  Re-run the pipeline to generate a review before scoring."
+        )
+    title_reason = str(record.get("title_reason") or "")
+    content_reason = str(record.get("content_reason") or "")
+    title_metadata = record.get("title_match_metadata") if isinstance(record.get("title_match_metadata"), dict) else {}
+    active_profile = profile or load_profile()
+    weights = get_preference_weights(active_profile)
+    scoring_rules = get_scoring_rules(active_profile)
+    hard_block_labels = hard_block_reasons(record, active_profile)
+    if not title_metadata and str(record.get("title") or "").strip():
+        title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
+    title_family = str(title_metadata.get("match_family") or "").strip().lower()
+
+    non_hard_block = (
+        build_core_fit_breakdown(record, scoring_rules, weights, title_family, title_reason, content_reason, active_profile)
+        + build_preference_breakdown(record, scoring_rules, weights, active_profile)
+    )
+    grade = str(record.get("llm_fit_grade") or "").strip().upper()
+    grade_bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
+    raw_non_hard_block = sum(e["value"] for e in non_hard_block)
+    band_entry = _grade_band_adjustment(grade, raw_non_hard_block, grade_bands)
+    if band_entry is not None:
+        non_hard_block = non_hard_block + [band_entry]
+    return non_hard_block + build_risk_breakdown(scoring_rules, hard_block_labels)
+
+
+def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
+    """Frozen score — excludes freshness and viewed status. Stored on the record at scrape time."""
+    return max(min(sum(item["value"] for item in fit_score_breakdown_frozen(record, profile)), 100), 0)
+
+
+def fit_score_and_breakdown_displayed(record: dict, profile: Optional[dict] = None) -> tuple[int, List[dict]]:
+    """Displayed score and full breakdown: frozen base + current freshness + viewed status.
+
+    Falls back to full live scoring for records that predate score freezing.
+    """
+    if RECORD_FIT_SCORE_KEY not in record:
+        breakdown = fit_score_breakdown(record, profile)
+        return max(min(sum(e["value"] for e in breakdown), 100), 0), breakdown
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    weights = get_preference_weights(active_profile)
+    posted_age_days = current_posted_age_days(record)
+    live_entries: List[dict] = list(build_freshness_breakdown(scoring_rules, weights, posted_age_days))
+    if viewed_by_user(record) and not record.get("applied"):
+        live_entries.append({"label": "Already viewed by you", "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"])})
+    frozen_score = int(record[RECORD_FIT_SCORE_KEY])
+    frozen_breakdown = list(record.get(RECORD_FIT_SCORE_BREAKDOWN_KEY) or [])
+    total = max(min(frozen_score + sum(e["value"] for e in live_entries), 100), 0)
+    return total, frozen_breakdown + live_entries
+
+
+def fit_score_displayed(record: dict, profile: Optional[dict] = None) -> int:
+    """Displayed score for filtering and sorting: frozen base + current freshness + viewed status."""
+    return fit_score_and_breakdown_displayed(record, profile)[0]

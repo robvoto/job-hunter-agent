@@ -8,6 +8,13 @@ import re
 from fastapi import APIRouter, Body, Query
 
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.io_utils import load_job_history
+from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.profile_gaps import (
+    STATUS_CONFIRMED_DO_NOT_HAVE,
+    STATUS_CONFIRMED_HAVE,
+    classify_requirement_status,
+)
 from job_hunter_agent.review_history_service import (
     append_review_key,
     get_job_description,
@@ -16,6 +23,11 @@ from job_hunter_agent.review_history_service import (
     save_block_similar_feedback,
     save_not_for_me_feedback,
 )
+from job_hunter_agent.record_schema import (
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
+)
+from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
 
 from job_hunter_agent.routes.responses import json_response
 
@@ -228,46 +240,103 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
 
 
 _PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have", "decide_later"})
+_PROFILE_GAP_CONFIRMABLE_STATUSES = frozenset({"not_evidenced", "partially_met"})
+
+
+def _profile_gap_name_key(value: str) -> str:
+    return " ".join(str(value or "").split()).casefold()
+
+
+def _profile_gap_requirement_coverage(job_key: str) -> list[dict]:
+    normalized_job_key = normalize_job_key(job_key)
+    if not normalized_job_key:
+        return []
+    history = load_job_history()
+    entry = history.get(normalized_job_key)
+    if not isinstance(entry, dict):
+        return []
+    coverage = entry.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    if not isinstance(coverage, list):
+        snapshot = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY)
+        if isinstance(snapshot, dict):
+            coverage = snapshot.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    if not isinstance(coverage, list):
+        return []
+    return [item for item in coverage if isinstance(item, dict)]
+
+
+def _profile_gap_confirmable_capability(job_key: str, capability_name: str) -> str:
+    target_name = _profile_gap_name_key(capability_name)
+    if not target_name:
+        return ""
+    for item in _profile_gap_requirement_coverage(job_key):
+        if str(item.get("status") or "").strip().lower() not in _PROFILE_GAP_CONFIRMABLE_STATUSES:
+            continue
+        coverage_name = str(item.get("capability_name") or "").strip()
+        if _profile_gap_name_key(coverage_name) != target_name:
+            continue
+        return coverage_name
+    return ""
 
 
 @router.post("/api/profile-gap")
 def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     """Record a user response to a 'Needs confirmation' gap on a job card.
 
-    confirm_have        → add the requirement as a candidate_capabilities entry (level: working)
-    confirm_do_not_have → add the requirement to must_not_require_skills
+    confirm_have        → add the canonical capability_name as a candidate_capabilities entry
+    confirm_do_not_have → add the canonical capability_name to must_not_require_skills
     decide_later        → no-op; gap reappears on next page load
     """
     try:
         action = str(body.get("action", "")).strip()
-        requirement = str(body.get("requirement", "")).strip()
-        if not requirement:
-            raise ValueError("requirement is required")
+        capability_name = str(body.get("capability_name", "")).strip()
+        job_key = str(body.get("job_key", "")).strip()
         if action not in _PROFILE_GAP_VALID_ACTIONS:
             raise ValueError(f"invalid action: {action!r}")
 
         if action == "decide_later":
             return json_response({"ok": True})
 
+        if not job_key:
+            raise ValueError("job_key is required")
+        if not capability_name:
+            raise ValueError("capability_name is required")
+
+        canonical_capability_name = _profile_gap_confirmable_capability(job_key, capability_name)
+        if not canonical_capability_name:
+            raise ValueError("capability_name is not a confirmable requirement coverage item for this job")
+
         profile = srv.load_profile()
+        current_status = classify_requirement_status(
+            canonical_capability_name,
+            profile.get("candidate_capabilities") or [],
+            profile.get("must_not_require_skills") or [],
+        )
 
         if action == "confirm_have":
+            if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+                raise ValueError("capability_name is already saved as must_not_require_skills")
+            if current_status == STATUS_CONFIRMED_HAVE:
+                return json_response({"ok": True})
             rules = list(profile.get("candidate_capabilities") or [])
-            normalized_name = requirement.lower().strip()
-            if not any(str(r.get("name") or "").lower().strip() == normalized_name for r in rules):
-                rules.append({
-                    "name": normalized_name,
-                    "level": "working",
-                    "fit": "supporting",
-                    "aliases": [],
-                })
-                profile["candidate_capabilities"] = rules
-                srv.save_profile(profile)
+            rules.append({
+                "name": canonical_capability_name,
+                "level": "working",
+                "fit": "supporting",
+                "aliases": [],
+                "icon_key": CAPABILITY_ICON_GENERIC,
+            })
+            profile["candidate_capabilities"] = rules
+            srv.save_profile(profile)
 
         elif action == "confirm_do_not_have":
+            if current_status == STATUS_CONFIRMED_HAVE:
+                raise ValueError("capability_name is already saved as a candidate capability")
+            if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+                return json_response({"ok": True})
             skills = list(profile.get("must_not_require_skills") or [])
-            if requirement not in skills:
-                skills.append(requirement)
+            if canonical_capability_name not in skills:
+                skills.append(canonical_capability_name)
                 profile["must_not_require_skills"] = skills
                 srv.save_profile(profile)
 

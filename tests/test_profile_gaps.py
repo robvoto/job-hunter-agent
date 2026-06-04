@@ -1,11 +1,10 @@
 """Tests for profile_gaps: gap computation and requirement status classification."""
 
-import pytest
-
 from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     STATUS_UNKNOWN,
+    PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY,
     classify_requirement_status,
     compute_profile_gaps,
 )
@@ -18,8 +17,36 @@ _CAPABILITY_RULES = [
 ]
 _MUST_NOT_REQUIRE = ["payroll systems", "AHPRA registration"]
 
+_REQUIREMENT_COVERAGE = [
+    {
+        "requirement": "Cloud computing (AWS) experience",
+        "status": "not_evidenced",
+        "capability_name": "Cloud computing (AWS)",
+        "matched_job_text": "AWS platform experience",
+    },
+    {
+        "requirement": "Permanent full-time role",
+        "status": "not_evidenced",
+        "capability_name": "",
+        "matched_job_text": "Permanent full-time role",
+    },
+    {
+        "requirement": "Sydney",
+        "status": "not_evidenced",
+        "capability_name": "",
+        "matched_job_text": "Sydney",
+    },
+    {
+        "requirement": "Salary package",
+        "status": "not_evidenced",
+        "capability_name": "",
+        "matched_job_text": "Salary package",
+    },
+]
 
-# ── classify_requirement_status ────────────────────────────────────────────────
+
+# classify_requirement_status
+
 
 def test_classify_exact_name_match_returns_confirmed_have():
     status = classify_requirement_status("stakeholder engagement", _CAPABILITY_RULES, [])
@@ -62,42 +89,33 @@ def test_classify_case_insensitive():
     assert status == STATUS_CONFIRMED_HAVE
 
 
-# ── compute_profile_gaps ───────────────────────────────────────────────────────
+# compute_profile_gaps
 
-def test_compute_gaps_returns_only_unknown_requirements():
-    requirements = [
-        "stakeholder engagement",          # matched — confirmed_have
-        "payroll systems",                  # in must_not_require — confirmed_do_not_have
-        "specialist platform certification",  # unmatched — unknown
-    ]
-    gaps = compute_profile_gaps(requirements, _CAPABILITY_RULES, _MUST_NOT_REQUIRE)
+
+def test_compute_gaps_returns_only_uncertain_capability_requirement_coverage_items():
+    gaps = compute_profile_gaps(_REQUIREMENT_COVERAGE, [], [])
     assert len(gaps) == 1
-    assert gaps[0]["requirement"] == "specialist platform certification"
-    assert gaps[0]["status"] == STATUS_UNKNOWN
+    assert gaps[0]["capability_name"] == "Cloud computing (AWS)"
+    assert gaps[0]["raw_requirement"] == "Cloud computing (AWS) experience"
+    assert gaps[0]["matched_job_text"] == "AWS platform experience"
+    assert gaps[0][PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY] == "AWS platform experience"
+    assert gaps[0]["status"] == "not_evidenced"
 
 
-def test_compute_gaps_returns_empty_when_all_confirmed():
-    requirements = ["stakeholder engagement", "process mapping"]
-    gaps = compute_profile_gaps(requirements, _CAPABILITY_RULES, [])
+def test_compute_gaps_skips_non_capability_requirement_coverage_items():
+    gaps = compute_profile_gaps(_REQUIREMENT_COVERAGE[1:], [], [])
     assert gaps == []
 
 
-def test_compute_gaps_returns_all_when_no_profile():
-    requirements = ["term a", "term b"]
-    gaps = compute_profile_gaps(requirements, [], [])
-    assert len(gaps) == 2
-    assert all(g["status"] == STATUS_UNKNOWN for g in gaps)
+def test_compute_gaps_skips_requirement_coverage_when_capability_already_confirmed():
+    confirmed_rules = [{"name": "Cloud computing (AWS)", "level": "strong", "aliases": []}]
+    gaps = compute_profile_gaps(_REQUIREMENT_COVERAGE, confirmed_rules, [])
+    assert gaps == []
 
 
-def test_compute_gaps_skips_empty_strings():
-    gaps = compute_profile_gaps(["", "  ", "real requirement"], [], [])
-    assert len(gaps) == 1
-    assert gaps[0]["requirement"] == "real requirement"
-
-
-def test_compute_gaps_result_includes_evidence_equal_to_requirement():
-    gaps = compute_profile_gaps(["some requirement"], [], [])
-    assert gaps[0]["evidence"] == gaps[0]["requirement"]
+def test_compute_gaps_skips_requirement_coverage_when_capability_is_must_not_require():
+    gaps = compute_profile_gaps(_REQUIREMENT_COVERAGE, [], ["Cloud computing (AWS)"])
+    assert gaps == []
 
 
 def test_compute_gaps_empty_input_returns_empty():

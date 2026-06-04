@@ -1117,11 +1117,13 @@
       const btn = event.target.closest('.gap-btn');
       if (!btn) return;
       const action = String(btn.dataset.action || '').trim();
-      const requirement = String(btn.dataset.requirement || '').trim();
-      if (!requirement || !action) return;
+      const capabilityName = String(btn.dataset.capabilityName || '').trim();
+      const gapBlock = btn.closest('.job-gaps-block');
+      const jobKey = String(gapBlock && gapBlock.dataset ? gapBlock.dataset.jobKey || '' : '').trim();
+      if (!capabilityName || !action) return;
 
       const gapItem = btn.closest('.job-gap-item');
-      const gapsBlock = btn.closest('.job-gaps-block');
+      const gapsBlock = gapBlock;
 
       function hideGapItem() {
         if (gapItem) gapItem.hidden = true;
@@ -1135,6 +1137,7 @@
         hideGapItem();
         return;
       }
+      if (!jobKey) return;
 
       const allBtns = btn.closest('.job-gap-actions')
         ? Array.from(btn.closest('.job-gap-actions').querySelectorAll('button'))
@@ -1144,7 +1147,7 @@
       jobHunterFetch(`${API_BASE_URL}/api/profile-gap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requirement: requirement, action: action }),
+        body: JSON.stringify({ job_key: jobKey, capability_name: capabilityName, action: action }),
       }).then(function(resp) {
         if (!resp.ok) {
           allBtns.forEach(function(b) { b.disabled = false; });

@@ -22,7 +22,13 @@ from job_hunter_agent.record_schema import (
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
     RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_CONCERNS_KEY,
+    RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_DECISION_SUMMARY_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_POSITIVE_REASONS_KEY,
+    RECORD_LLM_SCORE_RATIONALE_KEY,
     RECORD_LOCATION_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
@@ -35,7 +41,6 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_TYPE_KEY,
 )
 from job_hunter_agent import source_learning
-from job_hunter_agent.scrapers import seek_runner
 
 
 def _review_profile():
@@ -97,6 +102,29 @@ def _base_record(source: str, description_source: str, work_mode_source: str) ->
         "teaser": "Business analyst role",
         "posted": "Today",
     }
+
+
+def _patch_llm_review_path(monkeypatch, payload):
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": True, "reason": "OK"},
+    )
+    monkeypatch.setattr(job_review_pipeline, "passes_quick_card_filters", lambda **kwargs: (True, "OK"))
+    monkeypatch.setattr(job_review_pipeline, "passes_content_filters", lambda details_text, card_location, title_reason: (True, "OK"))
+    monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
+    monkeypatch.setattr(job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK"))
+    monkeypatch.setattr(job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: [])
+    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_evidence", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
+    monkeypatch.setattr(job_review_pipeline, "deterministic_review_outcome", lambda record, profile, fit_highlights, missing_evidence, soft_risk_reasons: None)
+    monkeypatch.setattr(job_review_pipeline, "resolve_llm_review_payload", lambda record, llm_cache: payload)
+    monkeypatch.setattr(job_review_pipeline, "register_pending_learning_signals", lambda signals: None)
+    monkeypatch.setattr(job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: [])
+    monkeypatch.setattr(job_review_pipeline, "reviewed_signal_matches_for_text", lambda details_text: [])
+    monkeypatch.setattr(job_review_pipeline, "evaluate_competitive_signal_alignment", lambda signal, profile: signal)
+    monkeypatch.setattr(job_review_pipeline, "extract_skill_observations", lambda record, profile: [])
+    monkeypatch.setattr(job_review_pipeline, "build_ad_learning_signals", lambda record, details_text, profile: [])
+    monkeypatch.setattr(job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary")
 
 
 def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeypatch):
@@ -261,7 +289,6 @@ def test_hard_block_rejection_registers_learning_signal(monkeypatch):
 def test_seek_card_review_skips_detail_fetch_when_onet_confirms_far_occupation(monkeypatch):
     record = _base_record("seek", "seek_detail", "card")
     context = _review_context("SEEK")
-    fetch_called = []
 
     monkeypatch.setattr(
         job_review_pipeline,
@@ -275,23 +302,13 @@ def test_seek_card_review_skips_detail_fetch_when_onet_confirms_far_occupation(m
             result=RESULT_FAR, matched_occupation_code="35-1011.00", confidence=0.9, reason="far"
         ),
     )
-    monkeypatch.setattr(
-        seek_runner,
-        "fetch_job_details_payload",
-        lambda *args, **kwargs: fetch_called.append(True) or {},
-    )
 
-    outcome, updated_record, skill_observations = seek_runner.review_seek_card_record(
-        record,
-        detail_page=None,
-        review_context=context,
-    )
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
 
     assert outcome["decision"] == "REJECT"
     assert updated_record[RECORD_REJECT_REASON_KEY] == "ONET_FAR_OCCUPATION"
     assert updated_record[RECORD_ONET_CLASSIFICATION_KEY]["matched_occupation_code"] == "35-1011.00"
-    assert fetch_called == [], "detail fetch must not be called when O*NET confirms far occupation"
-    assert skill_observations == []
+    assert should_fetch is False, "detail fetch must not happen when O*NET confirms far occupation"
 
 
 def test_title_not_target_continues_to_description_when_onet_uncertain(monkeypatch):
@@ -407,57 +424,24 @@ def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
     assert onet_line is not None, "expected ONET_DECISION log with FETCH_DETAILS outcome"
 
 
-def test_seek_card_review_sets_broad_engagement_signal_before_pre_detail(monkeypatch):
-    record = _base_record("seek", "seek_detail", "card")
-    record[RECORD_WORK_TYPE_KEY] = "Full Time / Contract"
-    context = _review_context("SEEK")
-    captured = {}
-
-    def _pre_detail(current_record, current_context):
-        captured["signals"] = list(current_record.get("job_quality_signals") or [])
-        return {"decision": "REJECT", "reject_reason": "TITLE"}, current_record, [], False
-
-    monkeypatch.setattr(seek_runner, "review_pre_detail_normalized_job", _pre_detail)
-    monkeypatch.setattr(
-        seek_runner,
-        "_process_seek_job_details",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("detail fetch should not be called")),
-    )
-
-    seek_runner.review_seek_card_record(record, detail_page=None, review_context=context)
-
-    assert captured["signals"]
-    assert captured["signals"][0]["kind"] == "broad_engagement"
-
 
 def test_duplicate_job_key_is_skipped_before_detail_fetch(monkeypatch):
     record_one = _base_record("seek", "seek_detail", "card")
     record_two = _base_record("seek", "seek_detail", "card")
     record_two[RECORD_URL_KEY] = "https://example.com/seek/job/2"
     context = _review_context("SEEK")
-    fetch_calls = {"count": 0}
 
     monkeypatch.setattr(job_review_pipeline, "analyze_title_filters", lambda title, profile: {"ok": True, "reason": "OK"})
 
-    def _process(current_record, detail_page, review_context):
-        fetch_calls["count"] += 1
-        return (
-            {"decision": "KEEP", "reject_reason": None},
-            {**current_record, RECORD_DECISION_KEY: "KEEP"},
-            [],
-        )
+    first_outcome, _, first_obs, first_should_fetch = review_pre_detail_normalized_job(record_one, context)
+    second_outcome, _, second_obs, second_should_fetch = review_pre_detail_normalized_job(record_two, context)
 
-    monkeypatch.setattr(seek_runner, "_process_seek_job_details", _process)
-
-    first_outcome, _, first_skills = seek_runner.review_seek_card_record(record_one, detail_page=None, review_context=context)
-    second_outcome, _, second_skills = seek_runner.review_seek_card_record(record_two, detail_page=None, review_context=context)
-
-    assert first_outcome["decision"] == "KEEP"
+    assert first_should_fetch is True, "first record should proceed to detail fetch"
     assert second_outcome["decision"] == "SKIP"
     assert record_two[RECORD_REJECT_REASON_KEY] == "DUPLICATE_JOB_KEY"
-    assert fetch_calls["count"] == 1
-    assert first_skills == []
-    assert second_skills == []
+    assert second_should_fetch is False
+    assert first_obs == []
+    assert second_obs == []
 
 
 def test_linkedin_salary_is_preserved_by_post_detail_review(monkeypatch):
@@ -500,6 +484,75 @@ def test_linkedin_salary_is_preserved_by_post_detail_review(monkeypatch):
 
     assert outcome["decision"] == "KEEP"
     assert updated_record[RECORD_SALARY_KEY] == "AUD 120k"
+
+
+def test_llm_review_rationale_fields_persist_on_record(monkeypatch):
+    payload = {
+        "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+        "decision_summary": "Clear delivery fit with relevant capability evidence.",
+        "positive_reasons": [
+            "Matches technical BA and delivery work",
+            "AWS, REST API, and DevOps experience look relevant",
+        ],
+        "concerns": [
+            "AWS evidence is possible but not strongly proven",
+        ],
+        "score_rationale": [
+            "LLM grade placed this job in the Strong band.",
+            "Preferences and freshness moved the score within that band.",
+        ],
+        "job_requirements": ["Stakeholder engagement"],
+        "requirement_coverage": [
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "met",
+                "capability_name": "Stakeholder Engagement",
+                "matched_job_text": "work with stakeholders",
+                "candidate_evidence": ["stakeholder management"],
+            },
+        ],
+        "contextual_capability_matches": [],
+        "llm_cost_usd": 0.0123,
+    }
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, _review_context("SEEK"))
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_LLM_DECISION_SUMMARY_KEY] == payload["decision_summary"]
+    assert updated_record[RECORD_LLM_POSITIVE_REASONS_KEY] == payload["positive_reasons"]
+    assert updated_record[RECORD_LLM_CONCERNS_KEY] == payload["concerns"]
+    assert updated_record[RECORD_LLM_SCORE_RATIONALE_KEY] == payload["score_rationale"]
+    assert updated_record[RECORD_LLM_ELAPSED_MS_KEY] is not None
+    assert updated_record[RECORD_LLM_COST_USD_KEY] == 0.0123
+
+
+def test_llm_review_missing_rationale_fields_do_not_break_scoring(monkeypatch):
+    payload = {
+        "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+        "job_requirements": ["Stakeholder engagement"],
+        "requirement_coverage": [
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "met",
+                "capability_name": "Stakeholder Engagement",
+                "matched_job_text": "work with stakeholders",
+                "candidate_evidence": ["stakeholder management"],
+            },
+        ],
+        "contextual_capability_matches": [],
+    }
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, _review_context("SEEK"))
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_LLM_DECISION_SUMMARY_KEY] == ""
+    assert updated_record[RECORD_LLM_POSITIVE_REASONS_KEY] == []
+    assert updated_record[RECORD_LLM_CONCERNS_KEY] == []
+    assert updated_record[RECORD_LLM_SCORE_RATIONALE_KEY] == []
 
 
 # ── observability log events ──────────────────────────────────────────────────

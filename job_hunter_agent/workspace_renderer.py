@@ -30,7 +30,9 @@ from job_hunter_agent.filters import suggest_title_block_phrases
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     fit_score,
+    fit_score_and_breakdown_displayed,
     fit_score_breakdown,
+    fit_score_displayed,
 )
 from job_hunter_agent.history import (
     assess_history_warning_signals,
@@ -72,6 +74,14 @@ from job_hunter_agent.profile_gaps import (
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_LLM_CONCERNS_KEY,
+    RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_DECISION_SUMMARY_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
+    RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_POSITIVE_REASONS_KEY,
+    RECORD_LLM_SCORE_RATIONALE_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
 )
 from job_hunter_agent.source_registry import get_source_display_label
@@ -546,11 +556,11 @@ def render_job_card(
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
     display_record["missing_evidence"] = missing_evidence
-    fit_points = fit_score(display_record, scoring_profile)
+    fit_points = fit_score_displayed(display_record, scoring_profile)
     match_levels = get_match_levels(scoring_profile or load_profile())
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
-    score_breakdown = fit_score_breakdown(display_record, scoring_profile)
+    _, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
     visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=active_debug_mode)
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
@@ -1068,7 +1078,7 @@ def render_job_card(
             )
     if active_debug_mode and score_breakdown:
         score_breakdown_html = "".join(
-            f"<li>{safe_html(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip())}: {int(item['value']):+d}</li>"
+            f"<li>{safe_html(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip())}: {('0' if int(item['value']) == 0 else '{:+d}'.format(int(item['value'])) )}</li>"
             for item in score_breakdown
         )
         insight_sections.append(
@@ -1085,6 +1095,76 @@ def render_job_card(
         if insight_sections
         else ""
     )
+
+    llm_review_html = ""
+    if active_debug_mode and any(
+        record.get(key)
+        for key in (
+            RECORD_LLM_DECISION_KEY,
+            RECORD_LLM_FIT_GRADE_KEY,
+            RECORD_LLM_DECISION_SUMMARY_KEY,
+            RECORD_LLM_POSITIVE_REASONS_KEY,
+            RECORD_LLM_CONCERNS_KEY,
+            RECORD_LLM_SCORE_RATIONALE_KEY,
+            RECORD_LLM_ELAPSED_MS_KEY,
+            RECORD_LLM_COST_USD_KEY,
+        )
+    ):
+        llm_decision = str(record.get(RECORD_LLM_DECISION_KEY) or "").strip().upper()
+        final_decision = "KEPT" if llm_decision == "KEEP" else ("REJECTED" if llm_decision == "REJECT" else llm_decision or "UNKNOWN")
+        llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or "UNKNOWN"
+        decision_summary = str(record.get(RECORD_LLM_DECISION_SUMMARY_KEY) or "").strip()
+        positive_reasons = [str(item).strip() for item in (record.get(RECORD_LLM_POSITIVE_REASONS_KEY) or []) if str(item).strip()]
+        concerns = [str(item).strip() for item in (record.get(RECORD_LLM_CONCERNS_KEY) or []) if str(item).strip()]
+        score_rationale = [str(item).strip() for item in (record.get(RECORD_LLM_SCORE_RATIONALE_KEY) or []) if str(item).strip()]
+        elapsed_ms = record.get(RECORD_LLM_ELAPSED_MS_KEY)
+        cost_usd = record.get(RECORD_LLM_COST_USD_KEY)
+        llm_review_parts = []
+        if decision_summary:
+            llm_review_parts.append(
+                f'<div class="job-insight-group"><strong>Decision summary</strong><p>{safe_html(decision_summary)}</p></div>'
+            )
+        summary_items = [
+            f'<li>Final decision: {safe_html(final_decision)}</li>',
+            f'<li>Final score: {safe_html(str(fit_points))}</li>',
+            f'<li>LLM fit grade: {safe_html(llm_grade)}</li>',
+        ]
+        if isinstance(elapsed_ms, (int, float)):
+            summary_items.append(f'<li>Time taken: {safe_html(str(int(elapsed_ms)))} ms</li>')
+        if isinstance(cost_usd, (int, float)):
+            summary_items.append(f'<li>Estimated LLM cost: US${float(cost_usd):.4f}</li>')
+        llm_review_parts.append(
+            '<div class="job-insight-group is-secondary">'
+            f'<ul>{"".join(summary_items)}</ul>'
+            '</div>'
+        )
+        if positive_reasons:
+            llm_review_parts.append(
+                '<div class="job-insight-group is-secondary">'
+                '<strong>Positive reasons</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in positive_reasons)}</ul>'
+                '</div>'
+            )
+        if concerns:
+            llm_review_parts.append(
+                '<div class="job-insight-group is-secondary">'
+                '<strong>Concerns</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in concerns)}</ul>'
+                '</div>'
+            )
+        if score_rationale:
+            llm_review_parts.append(
+                '<div class="job-insight-group is-secondary">'
+                '<strong>Score rationale</strong>'
+                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in score_rationale)}</ul>'
+                '</div>'
+            )
+        llm_review_html = (
+            '<details class="job-insights job-llm-review">'
+            '<summary>LLM fit review</summary>'
+            f'{"".join(llm_review_parts)}'
+            '</details>'
+        )
 
     candidate_history_html = ""
     if _cand_hist_details:
@@ -1196,6 +1276,7 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{note_html}"
         f"{insight_html}"
+        f"{llm_review_html}"
         f"{job_requirements_html}"
         f"{profile_gaps_html}"
         f"{candidate_history_html}"
