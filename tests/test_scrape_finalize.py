@@ -450,3 +450,25 @@ def test_build_run_stats_counts_unique_pages_across_sources():
     assert stats["page_count"] == 3
     assert stats["onet_match_count"] == 1
 
+
+def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog):
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO)
+
+    scrape_finalize._print_run_summary(
+        {
+            "page_count": 3,
+            "cards_seen": 7,
+            "cards_read": 5,
+            "kept_count": 2,
+            "rejected_count": 3,
+            "cards_with_flags_count": 1,
+            "llm_total_cost_usd": 0.123456,
+        }
+    )
+
+    log_text = caplog.text
+    assert "Pages read: 3" in log_text
+    assert "Total LLM cost: $0.1235" in log_text
+

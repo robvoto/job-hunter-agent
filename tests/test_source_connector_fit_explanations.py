@@ -560,7 +560,7 @@ def test_fit_score_evidence_credits_llm_confirmed_matches():
         _capability_profile(),
     )
 
-    evidenced_entries = [item for item in breakdown if "LLM-evidenced capabilities" in item["label"]]
+    evidenced_entries = [item for item in breakdown if "LLM-supported capabilities" in item["label"]]
     assert len(evidenced_entries) == 1
     assert evidenced_entries[0]["value"] == 0
     assert "Agile methodologies" in evidenced_entries[0]["label"]
@@ -607,7 +607,7 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
         "salary": "N/A",
         "posted_age_days": 1,
         "competitive_signals": [],
-        "missing_evidence": [],
+        "missing_profile_support": [],
         "soft_risk_reasons": [],
         RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
         "description_source": "jobAdDetails",
@@ -650,7 +650,7 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
         "title_reason": "TITLE_POTENTIAL_MATCH",
         "content_reason": "DESC_OK",
         "llm_fit_grade": "SOLID",
-        "missing_evidence": [],
+        "missing_profile_support": [],
         "soft_risk_reasons": [],
         "contextual_capability_matches": [
             {"capability_name": "platform engineering", "confidence": "high", "matched_text": "platform work", "reason": "Clear."},
@@ -671,7 +671,7 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
             "reject_title_rules": [],
         },
     )
-    risks, missing = capability_matching.build_risk_and_missing_evidence(
+    risks, missing = capability_matching.build_risk_and_missing_profile_support(
         "ERP experience is desirable for this business analyst role.",
         "OK",
         {
@@ -843,7 +843,7 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
         _test_profile(),
     )
 
-    assert "<strong>Matched profile evidence</strong>" in html
+    assert "<strong>Matched profile support</strong>" in html
     assert "<li>Stakeholder management</li>" in html
     assert "<li>Jira</li>" in html
     assert "<strong>Filtered out</strong>" in html
@@ -1914,14 +1914,14 @@ def test_score_equivalent_where_no_hard_blockers():
     assert not any("Hard blocker" in item["label"] for item in breakdown)
 
 
-def test_build_risk_and_missing_evidence_uses_shared_partial_support_label(monkeypatch):
+def test_build_risk_and_missing_profile_support_uses_shared_partial_support_label(monkeypatch):
     monkeypatch.setattr(
         capability_matching,
         "find_profile_capability_matches",
         lambda details_text, profile: {"must_not": [], "limited_depth": []},
     )
 
-    risks, missing = capability_matching.build_risk_and_missing_evidence(
+    risks, missing = capability_matching.build_risk_and_missing_profile_support(
         "",
         None,
         _test_profile(),
@@ -1937,3 +1937,5 @@ def test_build_risk_and_missing_evidence_uses_shared_partial_support_label(monke
 
     assert missing == []
     assert risks == ["Role leans toward specialist depth is only partially supported by your profile"]
+
+

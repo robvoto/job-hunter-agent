@@ -1,8 +1,8 @@
 {
     "kind":  "ui_labels",
     "name":  "ui_labels",
-  "version": 26,
-    "updated_at":  "2026-06-04",
+  "version": 29,
+    "updated_at":  "2026-06-05",
     "work_mode_labels_description":  "Display labels used for inferred work mode values.",
     "work_mode_labels":  {
                              "remote_label":  "Remote",
@@ -23,28 +23,28 @@
                                   "Description capture incomplete":  "Job description wasn't fully captured",
                                   "Salary/rate below target":  "Salary is below your target",
                                   "Already viewed by you":  "You've already seen this one",
-                                  "Fit evidence bullets":  "Not enough evidence in description to score well",
+                                  "Fit support bullets":  "Not enough profile support in description to score well",
                                   "Passed content filters":  "Passed content filters"
                               },
     "work_mode_score_labels_description":  "Display labels for work-mode eligibility and scoring explanations.",
     "work_mode_score_labels":  {
                                   "selected_bonus":  "Work mode matches your preference",
-                                  "multiple_selected_neutral":  "Work mode neutral — you've selected multiple",
+                                   "multiple_selected_neutral":  "Work mode neutral — you've selected multiple",
                                   "all_selected_neutral":  "Work mode neutral because all work modes were selected",
-                                  "unknown_neutral":  "Work mode unknown — couldn't determine from ad"
+                                   "unknown_neutral":  "Work mode unknown — couldn't determine from ad"
                               },
     "work_type_score_labels_description":  "Display labels for work-type eligibility and scoring explanations.",
     "work_type_score_labels":  {
                                   "selected_bonus":  "Work type matches your preference",
-                                  "multiple_selected_neutral":  "Work type neutral — you've selected multiple",
+                                   "multiple_selected_neutral":  "Work type neutral — you've selected multiple",
                                   "all_selected_neutral":  "Work type neutral because all work types were selected",
-                                  "unknown_neutral":  "Work type unknown — couldn't determine from ad"
+                                   "unknown_neutral":  "Work type unknown — couldn't determine from ad"
                               },
     "sector_score_labels_description":  "Display labels for sector eligibility and scoring explanations.",
     "sector_score_labels":  {
                                   "selected_bonus":  "Sector matches your preference",
-                                  "multiple_selected_neutral":  "Sector neutral — you've selected multiple",
-                                  "all_selected_neutral":  "Sector neutral — you've selected both",
+                                   "multiple_selected_neutral":  "Sector neutral — you've selected multiple",
+                                   "all_selected_neutral":  "Sector neutral — you've selected both",
                                   "unknown_neutral":  "Sector couldn't be determined from ad"
                               },
     "title_match_labels_description":  "Display labels for preferred- and alternative-role score breakdown entries.",
@@ -207,7 +207,7 @@
     "onboarding_flow_labels_description":  "Display labels and copy used by the onboarding flow script.",
     "onboarding_flow_labels":  {
                                     "refresh_profile_confirm_title":  "Refresh your profile using this CV?",
-                                    "refresh_profile_confirm_body_1":  "This will re-extract your summaries, capability rules, and evidence tiers from the document.",
+                                    "refresh_profile_confirm_body_1":  "This will re-extract your summaries, capability rules, and profile support tiers from the document.",
                                     "refresh_profile_confirm_body_2":  "Your custom Decision Weights, Salary Preferences, and Search Settings will be preserved.",
                                     "create_profile_error":  "Could not create profile",
                                     "create_profile_ready_message":  "Your draft profile is ready. Review the role direction before you continue.",
@@ -243,8 +243,8 @@
                                     "capability_remove_label":  "Remove {name}",
                                     "capability_remove_title":  "Remove {name}",
                                     "capability_untitled_label":  "Untitled capability",
-                                    "capability_show_more_label":  "Show {count} more ˅",
-                                    "capability_show_fewer_label":  "Show fewer ˄",
+                                    "capability_show_more_label":  "Show {count} more Ë…",
+                                    "capability_show_fewer_label":  "Show fewer Ë„",
                                     "capability_shown_of_label":  "{shown} shown of {total}",
                                     "capability_count_with_selection_label":  "{total} capabilities, {selected} selected",
                                     "capability_count_label":  "{total} capabilities",
@@ -269,7 +269,7 @@
                                    "Description fit is weak":  "Description",
                                    "Description fit is a mismatch":  "Description",
                                    "Passed content filters":  "Filters",
-                                   "Fit evidence bullets":  "Evidence",
+                                   "Fit support bullets":  "Support",
                                    "Salary/rate signal":  "Salary",
                                    "Salary/rate below target":  "Salary",
                                    "Already viewed by you":  "Viewed",
@@ -342,10 +342,10 @@
                                 },
     "score_gap_labels_description":  "Display labels for workspace score-gap explanations.",
     "score_gap_labels":  {
-                              "capability_evidence_limited":  "Only {count} skill match found — scoring confidence is low",
-                              "no_recent_posted_signal":  "Posting date unclear — may be older than it looks",
-                              "no_comparable_salary_rate":  "No salary info found — couldn’t check pay fit",
-                              "limited_description_confidence":  "Job description wasn’t fully captured — scoring may be off"
+                               "capability_support_limited":  "Only {count} skill match found — scoring confidence is low",
+                               "no_recent_posted_signal":  "Posting date unclear — may be older than it looks",
+                               "no_comparable_salary_rate":  "No salary info found — couldn't check pay fit",
+                               "limited_description_confidence":  "Job description wasn't fully captured — scoring may be off"
                           },
     "duplicate_labels_description":  "Display labels and copy for workspace duplicate and related-job cards.",
     "duplicate_labels":  {
@@ -376,7 +376,7 @@
                                   "hard_blocked_badge":  "Hard blocked",
                                   "hard_blocked_tooltip":  "This role hit a hard blocker and would normally be excluded.",
                                   "debug_status_summary":  "Filter status",
-                                  "partial_evidence_risk_suffix":  "is only partially supported by your profile"
+                                  "partial_support_risk_suffix":  "is only partially supported by your profile"
                               },
     "workspace_page_labels_description": "Labels for the main workspace page (results.html).",
     "workspace_page_labels": {
@@ -407,7 +407,7 @@
         "sector_option_public": "Public sector",
         "sector_option_private": "Private sector",
         "match_level_label": "Match level",
-        "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn’t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
+        "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesnâ€™t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
         "results_helper_dismiss_button": "Dismiss",
         "applied_jobs_heading": "Applied Jobs",
         "applied_jobs_copy": "This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.",
@@ -431,7 +431,7 @@
         "run_efficiency_separator": ". ",
         "how_match_levels_work_summary": "How Match Levels Work",
         "how_match_levels_work_copy": "Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the workspace does not pretend to be more precise than it really is.",
-        "rejection_panel_title": "Why isn’t this a fit for you?",
+        "rejection_panel_title": "Why isn't this a fit for you?",
         "rejection_panel_copy": "Choose required terms you do not want the app to accept again.",
         "rejection_how_this_works_summary": "How this works",
         "rejection_how_this_works_body": "If you save a term here, future jobs are filtered only when it looks required. To block any mention, use global description blockers in Settings.",
@@ -503,8 +503,8 @@
         "max_permanent_salary_help": "Upper cap for annual salary inputs. Leave it high enough to cover any realistic target.",
         "max_contract_daily_rate_label": "Maximum contract daily rate",
         "max_contract_daily_rate_help": "Upper cap for daily rate inputs. Leave it high enough to cover any realistic target.",
-        "evidence_tier_weights_heading": "Evidence Tier Weights",
-        "evidence_tier_weights_copy": "These global weights control how much each profile tier contributes when evidence is scored.",
+        "evidence_tier_weights_heading": "Profile Support Tier Weights",
+        "evidence_tier_weights_copy": "These global weights control how much each profile tier contributes when profile support is scored.",
         "primary_profile_context_weight_label": "Primary profile context weight",
         "secondary_profile_context_weight_label": "Secondary profile context weight",
         "supplementary_profile_context_weight_label": "Supplementary profile context weight",
@@ -618,4 +618,6 @@
         "linkedin_toggle_help": "Select if you want to include LinkedIn in search runs."
     }
 }
+
+
 

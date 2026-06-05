@@ -43,7 +43,7 @@ That profile includes:
 - fit brief
 - CV/background text
 - one search location, chosen from the canonical AU states and capital cities list
-- evidence tiers
+- profile support tiers
 - capability rules
 - title targeting hints
 
@@ -98,7 +98,7 @@ Changes here affect the app globally, but users do not edit them from their own 
 - this should reflect what you uploaded during onboarding
 - you can edit it, but it should stay consistent with your real experience
 
-`Evidence tiers`
+`Profile support tiers`
 
 - primary, secondary, and background evidence blocks used for matching and LLM review
 - lets the profile weight recent direct evidence above older or optional context

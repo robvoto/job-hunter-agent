@@ -72,6 +72,17 @@
             <h2>Runtime defaults</h2>
             <p class="panel-copy">These shared defaults apply outside the candidate profile. They stay centrally managed for workspace rendering and scraper runtime settings.</p>
 
+            <label class="toggle-switch" for="playwright_headless">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">Run browser headless</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="playwright_headless" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">When enabled, the scraper browser runs invisibly in the background. Required on AWS and any server without a display. Disable only for local debugging to watch the browser.</div>
+
             <label for="default_country_suffix">Default country suffix</label>
             <input id="default_country_suffix" type="text" maxlength="64" autocomplete="off">
             <div class="field-help">Used when the workspace trims repeated location suffixes from display text.</div>
@@ -213,6 +224,30 @@
             <label for="description_trust_min_trusted_description_length">Minimum trusted description length</label>
             <input id="description_trust_min_trusted_description_length" type="number" min="1" max="100000" step="1">
             <div class="field-help">If the fallback text is shorter than this, the system will not treat it as a trusted full description.</div>
+          </section>
+
+          <section class="panel">
+            <h2>Description Compaction</h2>
+            <p class="panel-copy">Controls whether job description boilerplate is stripped before LLM review, and the safety thresholds for that stripping. Which sections to strip is governed by <code>data/knowledge/description_compaction_rules.json</code>.</p>
+
+            <label class="toggle-switch" for="description_compaction_enabled">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">Enable description compaction</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="description_compaction_enabled" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">When enabled, known boilerplate sections (privacy notices, EEO statements, how-to-apply text) are stripped from job descriptions before they are sent to the LLM reviewer.</div>
+
+            <label for="description_compaction_min_chars">Minimum compacted characters</label>
+            <input id="description_compaction_min_chars" type="number" min="100" max="10000" step="1">
+            <div class="field-help">If the compacted description would be shorter than this, the original is kept unchanged. Prevents stripping so much that the description becomes too short to review reliably.</div>
+
+            <label for="description_compaction_min_retention">Minimum retention ratio</label>
+            <input id="description_compaction_min_retention" type="number" min="0" max="1" step="0.05">
+            <div class="field-help">If compaction would remove more than this fraction of the original text, the original is kept. For example, 0.5 means at least 50% of the original must survive.</div>
           </section>
 
           <section class="panel">

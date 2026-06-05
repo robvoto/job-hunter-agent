@@ -9,7 +9,7 @@ The current deployment target is AWS EC2 with a small EBS-backed root volume, so
 The system:
 
 * scrapes jobs from multiple sources
-* extracts candidate evidence from onboarding and source documents
+* extracts candidate profile support from onboarding and source documents
 * filters jobs using deterministic and explainable rules
 * ranks jobs using configurable scoring
 * preserves uncertain evidence for review
@@ -42,7 +42,7 @@ Standard format: `source:platform_id` (e.g., `seek:7945621` or `linkedin:3984551
 | ----------------- | ------------------------------------------------ |
 | Scraping          | Collect raw jobs from SEEK and LinkedIn          |
 | Parsing           | Normalize job structure and extract signals      |
-| Candidate Profile | Store runtime candidate evidence and preferences |
+| Candidate Profile | Store runtime candidate profile support and preferences |
 | Filtering         | Deterministic rejection and fit gating           |
 | Scoring           | Weighted ranking and evidence evaluation         |
 | Learning          | Capture candidate-approved learned signals       |
@@ -90,7 +90,7 @@ Storage: SQLite `user_profile` table (per user). Accessed via `profile_store.loa
 
 Responsibilities:
 
-* maintain runtime candidate evidence
+* maintain runtime candidate profile support
 * preserve extracted capabilities
 * maintain preference weights
 * preserve learning state
@@ -117,7 +117,7 @@ Pipeline order:
 1. Source normalization
 2. Hard blockers
 3. Title analysis
-4. Capability evidence matching
+4. Capability support matching
 5. Description evaluation
 6. Competitive-fit analysis
 7. LLM constrained review
@@ -127,7 +127,7 @@ Rules:
 
 * deterministic filters run before LLM review
 * hidden rejection logic is forbidden
-* weak evidence should produce review signals instead of silent deletion
+* weak support should produce review signals instead of silent deletion
 * uncertain signals should be preserved where possible
 
 ---
@@ -146,14 +146,14 @@ Scoring characteristics:
 * weighted
 * explainable
 * configurable
-* evidence-based
+* support-based
 * bounded
 
 Scoring inputs include:
 
 * title alignment
-* capability evidence
-* profile evidence tiers
+* capability support
+* profile support tiers
 * description quality
 * competitive fit
 * salary alignment

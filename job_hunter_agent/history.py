@@ -114,7 +114,7 @@ KEEP_SNAPSHOT_FIELDS = (
 
     "soft_risk_reasons",
 
-    "missing_evidence",
+    "missing_profile_support",
 
     "competitive_signals",
 
@@ -272,9 +272,9 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
 
         record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []
 
-    if not record.get("missing_evidence"):
+    if not record.get("missing_profile_support"):
 
-        record["missing_evidence"] = snapshot.get("missing_evidence") or []
+        record["missing_profile_support"] = snapshot.get("missing_profile_support") or []
 
     if not record.get("competitive_signals"):
 

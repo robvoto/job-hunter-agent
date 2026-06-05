@@ -167,6 +167,11 @@
   "description_trust_settings": {
     "min_trusted_description_length": 600
   },
+  "description_compaction_settings": {
+    "enabled": true,
+    "default_min_compacted_chars": 400,
+    "min_retention_ratio": 0.5
+  },
   "source_document_settings": {
     "cv_chars_per_page": 3000,
     "allowed_suffixes": [
@@ -405,6 +410,7 @@
     "rule_suggestion_min_count": 2
   },
   "playwright_settings": {
+    "headless": true,
     "playwright_viewport_width": 1400,
     "playwright_viewport_height": 900,
     "playwright_selector_timeout": 8000,

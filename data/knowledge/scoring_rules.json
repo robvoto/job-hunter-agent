@@ -8,7 +8,7 @@
     "design": "Band-anchored scoring. The LLM grade defines the band (floor/ceiling); other signals adjust the score within that band. Grade and score cannot contradict — a MISMATCH grade always produces a low score; a STRONG grade always produces a good score.",
     "llm_grade_base_points": "Base additive contribution from the LLM grade before other signals are added. These are intentionally modest — the band floor and ceiling constrain the final score, not the base alone.",
     "llm_grade_bands": "Each grade has a floor (minimum attainable) and ceiling (maximum attainable) for the non-hard-block score. After summing all core/preference/convenience entries the result is clamped to the band. Hard block penalties are applied after band clamping and can push the score to zero regardless of grade.",
-    "other_signals": "Title match, preferences, freshness, and competitive signals move the score within the grade band. Capability evidence is captured in the grade via requirement_coverage — it is shown for transparency but does not add separate points. A STRONG grade with a clean title and preference signals reaches the upper end of the band; the same grade with no supporting signals floors at the grade minimum.",
+    "other_signals": "Title match, preferences, freshness, and competitive signals move the score within the grade band. Capability support is captured in the grade via requirement_coverage — it is shown for transparency but does not add separate points. A STRONG grade with a clean title and preference signals reaches the upper end of the band; the same grade with no supporting signals floors at the grade minimum.",
     "hard_blockers": "Applied after band clamping. A single hard blocker subtracts 100, overriding the grade band and forcing the score to near-zero.",
     "band_boundaries": {
       "EXCELLENT": "88-100 — reserved for exceptional alignment across all signals",
@@ -29,7 +29,7 @@
     "viewed_by_user": -3
   },
   "llm_grade_points": {
-    "description": "Base additive points for each LLM grade. These anchor the score in the correct band but are intentionally modest — supporting signals from title, capability evidence, and preferences move the score within the band defined by llm_grade_bands.",
+    "description": "Base additive points for each LLM grade. These anchor the score in the correct band but are intentionally modest — supporting signals from title, capability support, and preferences move the score within the band defined by llm_grade_bands.",
     "EXCELLENT": 78,
     "STRONG": 52,
     "SOLID": 32,
@@ -136,7 +136,7 @@
     "match_bonus": 4
   },
   "evidence_tier_weights": {
-    "description": "Managed defaults for evidence tier weighting. These correspond to the profile-side evidence weighting controls in Advanced Settings.",
+    "description": "Managed defaults for profile support tier weighting. These correspond to the profile-side support weighting controls in Advanced Settings.",
     "primary_current_evidence": 1.0,
     "secondary_older_evidence": 0.55,
     "background_optional_evidence": 0.25

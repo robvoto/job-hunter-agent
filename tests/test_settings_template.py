@@ -293,6 +293,8 @@ def test_settings_alerts_section_uses_shared_settings_shell(monkeypatch):
 
     assert 'id="settings_alerts_labels_json"' in html
 
+    assert 'id="telegram_enabled"' in html
+
     assert 'id="telegram_connect_panel"' in html
 
     assert 'Alerts &amp; AI' in html

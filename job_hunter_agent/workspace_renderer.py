@@ -17,7 +17,7 @@ from html import escape
 
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.capability_matching import (
-    build_risk_and_missing_evidence,
+    build_risk_and_missing_profile_support,
     capability_fit_highlights,
     reviewed_signal_match_summary,
 )
@@ -290,9 +290,9 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
     capability_entries = [item for item in score_breakdown if _is_capability_entry(compact_whitespace(item.get("label") or ""))]
     evidence_points = sum(int(item.get("value", 0) or 0) for item in capability_entries)
     gap_labels = _workspace_ui_labels().get("score_gap_labels", {})
-    capability_gap_label = "Capability evidence is limited: {count} matches contributed to scoring"
+    capability_gap_label = "Capability support is limited: {count} matches contributed to scoring"
     if isinstance(gap_labels, dict):
-        capability_gap_label = str(gap_labels.get("capability_evidence_limited") or capability_gap_label)
+        capability_gap_label = str(gap_labels.get("capability_support_limited") or capability_gap_label)
     gaps: List[str] = []
 
     if not any(label.startswith("Posted within") or label == "Still relatively recent" for label in labels):
@@ -528,7 +528,7 @@ def render_job_card(
         role_summary = build_role_summary(record, trusted_desc, active_profile)
         display_record["competitive_signals"] = competitive_signal_assessments(record, active_profile)
         fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
-        soft_risk_reasons, missing_evidence = build_risk_and_missing_evidence(
+        soft_risk_reasons, missing_profile_support = build_risk_and_missing_profile_support(
             trusted_desc,
             title_reason,
             active_profile,
@@ -536,14 +536,14 @@ def render_job_card(
         )
         blocking_reasons = hard_block_reasons(display_record, active_profile)
         if blocking_reasons:
-            missing_evidence = dedupe_preserve_order([*blocking_reasons, *missing_evidence])
+            missing_profile_support = dedupe_preserve_order([*blocking_reasons, *missing_profile_support])
     else:
         role_summary = stored_snapshot
         display_record["fit_confidence"] = "LOW"
         display_record["competitive_signals"] = []
         fit_highlights = []
         soft_risk_reasons = []
-        missing_evidence = [DESCRIPTION_CAPTURE_ISSUE]
+        missing_profile_support = [DESCRIPTION_CAPTURE_ISSUE]
         blocking_reasons = []
 
     similar_applied_record = None
@@ -555,12 +555,22 @@ def render_job_card(
     display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
-    display_record["missing_evidence"] = missing_evidence
-    fit_points = fit_score_displayed(display_record, scoring_profile)
+    display_record["missing_profile_support"] = missing_profile_support
+    try:
+        fit_points = fit_score_displayed(display_record, scoring_profile)
+        _, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
+    except RuntimeError as _score_exc:
+        logger.error(
+            "[RENDERER][SCORING_ERROR] job=%s title=%r — rendered with score 0: %s",
+            display_record.get("job_key", "<unknown>"),
+            str(display_record.get("title") or "").strip(),
+            _score_exc,
+        )
+        fit_points = 0
+        score_breakdown = []
     match_levels = get_match_levels(scoring_profile or load_profile())
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
-    _, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
     visible_reasons = visible_fit_reasons(fit_highlights, score_breakdown, include_values=active_debug_mode)
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
@@ -857,7 +867,7 @@ def render_job_card(
     if reviewed_signal_matches["matched"]:
         insight_sections.append(
             '<div class="job-insight-group">'
-            '<strong>Matched profile evidence</strong>'
+            '<strong>Matched profile support</strong>'
             f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in reviewed_signal_matches["matched"])}</ul>'
             '</div>'
         )
@@ -1011,7 +1021,7 @@ def render_job_card(
             if not item.startswith("Description capture incomplete")
         ]
     negative_items = dedupe_preserve_order([
-        *([] if description_issue else missing_evidence),
+        *([] if description_issue else missing_profile_support),
         *soft_risk_reasons,
     ])[:6]
     if description_issue:

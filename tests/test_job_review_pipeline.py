@@ -115,8 +115,8 @@ def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK"))
     monkeypatch.setattr(job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: [])
-    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_evidence", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
-    monkeypatch.setattr(job_review_pipeline, "deterministic_review_outcome", lambda record, profile, fit_highlights, missing_evidence, soft_risk_reasons: None)
+    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_profile_support", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
+    monkeypatch.setattr(job_review_pipeline, "deterministic_review_outcome", lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: None)
     monkeypatch.setattr(job_review_pipeline, "resolve_llm_review_payload", lambda record, llm_cache: payload)
     monkeypatch.setattr(job_review_pipeline, "register_pending_learning_signals", lambda signals: None)
     monkeypatch.setattr(job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: [])
@@ -148,13 +148,13 @@ def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeyp
     monkeypatch.setattr(job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: ["fit"])
     monkeypatch.setattr(
         job_review_pipeline,
-        "build_risk_and_missing_evidence",
+        "build_risk_and_missing_profile_support",
         lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
     )
     monkeypatch.setattr(
         job_review_pipeline,
         "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_evidence, soft_risk_reasons: {"decision": "KEEP", "grade": "SOLID"},
+        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {"decision": "KEEP", "grade": "SOLID"},
     )
     monkeypatch.setattr(job_review_pipeline, "llm_extract_job_requirements", lambda text: [])
     monkeypatch.setattr(job_review_pipeline, "register_pending_learning_signals", lambda signals: None)
@@ -454,8 +454,8 @@ def test_linkedin_salary_is_preserved_by_post_detail_review(monkeypatch):
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK"))
     monkeypatch.setattr(job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: ["fit"])
-    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_evidence", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
-    monkeypatch.setattr(job_review_pipeline, "deterministic_review_outcome", lambda record, profile, fit_highlights, missing_evidence, soft_risk_reasons: {"decision": "KEEP", "grade": "SOLID"})
+    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_profile_support", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
+    monkeypatch.setattr(job_review_pipeline, "deterministic_review_outcome", lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {"decision": "KEEP", "grade": "SOLID"})
     monkeypatch.setattr(job_review_pipeline, "llm_extract_job_requirements", lambda text: [])
     monkeypatch.setattr(job_review_pipeline, "register_pending_learning_signals", lambda signals: None)
     monkeypatch.setattr(job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: [])
@@ -505,10 +505,10 @@ def test_llm_review_rationale_fields_persist_on_record(monkeypatch):
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "status": "met",
+                "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
-                "candidate_evidence": ["stakeholder management"],
+                "profile_support": ["stakeholder management"],
             },
         ],
         "contextual_capability_matches": [],
@@ -535,10 +535,10 @@ def test_llm_review_missing_rationale_fields_do_not_break_scoring(monkeypatch):
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "status": "met",
+                "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
-                "candidate_evidence": ["stakeholder management"],
+                "profile_support": ["stakeholder management"],
             },
         ],
         "contextual_capability_matches": [],
@@ -600,7 +600,7 @@ def test_llm_call_error_log_emitted_with_structured_fields(caplog, monkeypatch):
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK"))
     monkeypatch.setattr(job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: [])
-    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_evidence", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
+    monkeypatch.setattr(job_review_pipeline, "build_risk_and_missing_profile_support", lambda details_text, title_reason, profile, competitive_signals=None: ([], []))
     monkeypatch.setattr(job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: [])
     monkeypatch.setattr(job_review_pipeline, "reviewed_signal_matches_for_text", lambda details_text: [])
     monkeypatch.setattr(job_review_pipeline, "evaluate_competitive_signal_alignment", lambda signal, profile: signal)
@@ -677,13 +677,13 @@ def _patch_review_post_detail_for_work_type_assertions(monkeypatch, expected_wor
     monkeypatch.setattr(job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: ["fit"])
     monkeypatch.setattr(
         job_review_pipeline,
-        "build_risk_and_missing_evidence",
+        "build_risk_and_missing_profile_support",
         lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
     )
     monkeypatch.setattr(
         job_review_pipeline,
         "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_evidence, soft_risk_reasons: {"decision": "KEEP", "grade": "SOLID"},
+        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {"decision": "KEEP", "grade": "SOLID"},
     )
     monkeypatch.setattr(job_review_pipeline, "llm_extract_job_requirements", lambda text: [])
     monkeypatch.setattr(job_review_pipeline, "register_pending_learning_signals", lambda signals: None)

@@ -21,6 +21,7 @@ Do not mask failures with fallback encoders, fallback parsers, fallback labels, 
 - Numeric caps/slices that affect business or display policy without config ownership
 
 ## Required
+- Before editing, inspect the relevant project files, docs, and skills for the area being changed.
 - Use managed config/profile/knowledge loaders.
 - Add named config only in the correct owner.
 - Validate required config at the producer/normalizer boundary.
@@ -28,6 +29,7 @@ Do not mask failures with fallback encoders, fallback parsers, fallback labels, 
 - If required data is missing, fix the producer; do not patch around it in consumers.
 - Do not add local fallback defaults for business values, decision labels, or display labels in feature code. If the owner does not provide the value, surface an explicit error or fix the owner.
 - If the same label or copy is reused across summary, tooltip, and debug views, put it in the owning JSON/data file once and read it from there.
+- Source-specific parsing and cleanup rules must live in data/config/knowledge and be loaded by the engine; do not embed them in Python constants.
 - Onboarding title-tier copy and validation messages must come from `data/knowledge/ui_labels.json` via the bootstrap label global; do not hardcode target/also-consider/search keyword text in templates or JS.
 - If the requested change would force a workaround, legacy pattern, anti-pattern, or unnecessary monolith, say so before editing: name the pattern, explain why it is suboptimal, and state the professional alternative. Ask before using the weaker approach if a better one is feasible within scope.
 

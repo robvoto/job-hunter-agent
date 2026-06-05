@@ -10,8 +10,8 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"concerns":["..."],'
     '"score_rationale":["..."],'
     '"contextual_capability_matches":[{"capability_name":"...","confidence":"high|medium|low","matched_text":"...","reason":"..."}],'
-    '"requirement_coverage":[{"requirement":"...","status":"met|partially_met|not_evidenced|mismatch",'
-    '"capability_name":"...","matched_job_text":"...","candidate_evidence":["..."]}],'
+    '"requirement_coverage":[{"requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
+    '"capability_name":"...","matched_job_text":"...","profile_support":["..."]}],'
     '"job_requirements":["..."]}'
 )
 LLM_PROMPT_FIT_REVIEW_RATIONALE_INTRO = (
@@ -31,9 +31,9 @@ LLM_PROMPT_FIT_REVIEW_ONLY_INTRO = (
     "For fit_review: focus only on candidate fit. Do not suggest learning signals, learning categories, or new taxonomy labels."
 )
 LLM_PROMPT_REQUIREMENT_COVERAGE_INTRO = (
-    "For requirement_coverage: review each important job requirement and classify it as met, partially_met, not_evidenced, or mismatch. "
-    "Use candidate capabilities as the structured evidence model. Link met and partially_met requirements to the exact profile capability name, "
-    "the matched job text, and candidate evidence when available. Leave capability_name empty only for not_evidenced or mismatch items."
+    "For requirement_coverage: review each important job requirement and classify it as supported, partially_supported, not_shown, or mismatch. "
+    "Use candidate capabilities as the structured support model. Link supported and partially_supported requirements to the exact profile capability name, "
+    "the matched job text, and profile support when available. Leave capability_name empty only for not_shown or mismatch items."
 )
 LLM_PROMPT_JOB_REQUIREMENTS_INTRO = (
     "For job_requirements: extract the job's explicit requirements as concise bullet-style phrases. "
@@ -66,9 +66,9 @@ LLM_PROMPT_CLUSTERS_HEADER = "Clusters:"
 LLM_PROMPT_SYSTEM_REVIEW_INTRO = "You are helping decide whether a candidate should apply for a job."
 LLM_PROMPT_FIT_REVIEW_GRADE_INTRO = (
     "Set fit_review.grade from requirement_coverage, not from a vague overall impression. "
-    "EXCELLENT is only for near-complete coverage with capability evidence, STRONG for mostly covered requirements with capability evidence, "
+    "EXCELLENT is only for near-complete coverage with capability support, STRONG for mostly covered requirements with capability support, "
     "SOLID for mixed but supported coverage, WEAK for sparse support, POOR for weak or unsupported coverage, and MISMATCH for explicit conflicts. "
-    "If no capability evidence supports the requirements, fit_review.grade cannot be STRONG or EXCELLENT."
+    "If no capability support is present, fit_review.grade cannot be STRONG or EXCELLENT."
 )
 LLM_PROMPT_REVIEW_OUTPUT_FORMAT = "Answer with exactly ONE line in uppercase using this format: DECISION|GRADE."
 LLM_PROMPT_JSON_ONLY = "Return JSON only."

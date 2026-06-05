@@ -69,6 +69,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
     KEY_ONBOARDING_SETTINGS,
+    KEY_PLAYWRIGHT_HEADLESS,
     KEY_PLAYWRIGHT_BROWSER_MODE,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
@@ -90,6 +91,11 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SOURCE_DOCUMENT_SETTINGS,
     KEY_SOURCE_DOCUMENT_SUFFIXES,
     KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
+    KEY_DESCRIPTION_COMPACTION_SETTINGS,
+    KEY_COMPACTION_ENABLED,
+    KEY_COMPACTION_MIN_CHARS,
+    KEY_COMPACTION_MIN_RETENTION,
+    DEFAULT_DESCRIPTION_COMPACTION_SETTINGS,
     ONBOARDING_SETTING_LIMITS,
     SEARCH_SETTING_LIMITS,
     KEY_SEEK_MAX_PAGES,
@@ -474,6 +480,7 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
     history_source = source.get(KEY_HISTORY_SETTINGS, {})
     description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
+    description_compaction_source = source.get(KEY_DESCRIPTION_COMPACTION_SETTINGS, {})
     source_document_source = source.get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
     default_country_suffix = str(source.get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)).strip()
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
@@ -497,6 +504,10 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
     if not isinstance(description_trust_source, dict):
         raise ValueError(
             f"global_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}"
+        )
+    if not isinstance(description_compaction_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_DESCRIPTION_COMPACTION_SETTINGS} must be a dict, got {type(description_compaction_source).__name__!r}"
         )
     if not isinstance(source_document_source, dict):
         raise ValueError(
@@ -657,6 +668,25 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
             100_000,
         ),
     }
+    normalized_description_compaction_settings = {
+        KEY_COMPACTION_ENABLED: bool(description_compaction_source.get(
+            KEY_COMPACTION_ENABLED, DEFAULT_DESCRIPTION_COMPACTION_SETTINGS[KEY_COMPACTION_ENABLED]
+        )),
+        KEY_COMPACTION_MIN_CHARS: _require_int(
+            description_compaction_source,
+            KEY_COMPACTION_MIN_CHARS,
+            int(DEFAULT_DESCRIPTION_COMPACTION_SETTINGS[KEY_COMPACTION_MIN_CHARS]),
+            100,
+            10_000,
+        ),
+        KEY_COMPACTION_MIN_RETENTION: _require_float(
+            description_compaction_source,
+            KEY_COMPACTION_MIN_RETENTION,
+            float(DEFAULT_DESCRIPTION_COMPACTION_SETTINGS[KEY_COMPACTION_MIN_RETENTION]),
+            0.0,
+            1.0,
+        ),
+    }
     normalized_source_document_settings = {
         KEY_CV_CHARS_PER_PAGE: _require_int(
             source_document_source,
@@ -771,6 +801,7 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
         KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
         KEY_HISTORY_SETTINGS: normalized_history_settings,
         KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
+        KEY_DESCRIPTION_COMPACTION_SETTINGS: normalized_description_compaction_settings,
         KEY_SOURCE_DOCUMENT_SETTINGS: normalized_source_document_settings,
         KEY_DEFAULT_COUNTRY_SUFFIX: default_country_suffix,
         KEY_ONBOARDING_SETTINGS: {
@@ -862,6 +893,7 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
                 1000,
                 60000,
             ),
+            KEY_PLAYWRIGHT_HEADLESS: bool(playwright_source.get(KEY_PLAYWRIGHT_HEADLESS, True)),
             KEY_PLAYWRIGHT_BROWSER_MODE: browser_mode,
         },
         KEY_CANDIDATE_APPLICATION_HISTORY: candidate_application_history_source

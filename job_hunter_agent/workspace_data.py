@@ -146,7 +146,7 @@ def build_history_workspace_record(
 
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
 
-        "missing_evidence": snapshot.get("missing_evidence") or [],
+        "missing_profile_support": snapshot.get("missing_profile_support") or [],
 
         "competitive_signals": snapshot.get("competitive_signals") or [],
 
@@ -320,7 +320,7 @@ def build_hidden_workspace_record(
 
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
 
-        "missing_evidence": snapshot.get("missing_evidence") or [],
+        "missing_profile_support": snapshot.get("missing_profile_support") or [],
 
         "competitive_signals": snapshot.get("competitive_signals") or [],
 
@@ -490,7 +490,7 @@ def build_applied_workspace_record(
 
         "soft_risk_reasons": snapshot.get("soft_risk_reasons") or [],
 
-        "missing_evidence": snapshot.get("missing_evidence") or [],
+        "missing_profile_support": snapshot.get("missing_profile_support") or [],
 
         "competitive_signals": snapshot.get("competitive_signals") or [],
 
@@ -926,9 +926,9 @@ def build_run_stats(
 
             _add_flag("soft_risk_reasons")
 
-        if row.get("missing_evidence"):
+        if row.get("missing_profile_support"):
 
-            _add_flag("missing_evidence")
+            _add_flag("missing_profile_support")
 
         if row.get("reviewed_signal_matches"):
 
@@ -980,7 +980,7 @@ def build_run_stats(
 
         or row.get("soft_risk_reasons")
 
-        or row.get("missing_evidence")
+        or row.get("missing_profile_support")
 
         or row.get("reviewed_signal_matches")
 

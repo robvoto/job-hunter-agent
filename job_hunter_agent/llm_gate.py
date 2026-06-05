@@ -28,7 +28,7 @@ import re
 import sys
 from typing import Any, Dict
 
-from openai import APIStatusError, OpenAI
+from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import BaseModel, Field
 
 from job_hunter_agent.config import DEBUG_MODE
@@ -283,7 +283,7 @@ class _LLMRequirementCoverageItem(BaseModel):
     status: str
     capability_name: str = ""
     matched_job_text: str = ""
-    candidate_evidence: list[str] = Field(default_factory=list)
+    profile_support: list[str] = Field(default_factory=list)
 
 
 class _LLMJobRequirementsPayload(BaseModel):
@@ -309,11 +309,12 @@ class _LLMFitReviewPayload(BaseModel):
 class LLMCallError(RuntimeError):
     """LLM API call failed. Carries metadata for structured pipeline logging."""
 
-    def __init__(self, message: str, *, purpose: str, model: str, status_code: int | None = None) -> None:
+    def __init__(self, message: str, *, purpose: str, model: str, status_code: int | None = None, is_timeout: bool = False) -> None:
         super().__init__(message)
         self.purpose = purpose
         self.model = model
         self.status_code = status_code
+        self.is_timeout = is_timeout
 
 
 _api_key = os.environ.get("OPENAI_API_KEY")
@@ -602,7 +603,7 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
 
 
 _ALLOWED_CONTEXTUAL_CONFIDENCES = frozenset({"high", "medium", "low"})
-_ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset({"met", "partially_met", "not_evidenced", "mismatch"})
+_ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset({"supported", "partially_supported", "not_shown", "mismatch"})
 
 
 def _build_valid_capability_lookup(
@@ -682,22 +683,22 @@ def normalize_llm_requirement_coverage(
         status = re.sub(r"\s+", " ", str(item.get("status") or "")).strip().lower()
         capability_name = _normalize_capability_name(item.get("capability_name"), valid_lookup)
         matched_job_text = re.sub(r"\s+", " ", str(item.get("matched_job_text") or item.get("matched_text") or "")).strip()
-        raw_evidence = item.get("candidate_evidence") or []
-        if isinstance(raw_evidence, str):
-            raw_evidence = [raw_evidence]
-        candidate_evidence: list[str] = []
-        seen_evidence: set[str] = set()
-        if isinstance(raw_evidence, list):
-            for text in raw_evidence:
+        raw_support = item.get("profile_support") or []
+        if isinstance(raw_support, str):
+            raw_support = [raw_support]
+        profile_support: list[str] = []
+        seen_support: set[str] = set()
+        if isinstance(raw_support, list):
+            for text in raw_support:
                 cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
                 lowered = cleaned.lower()
-                if not cleaned or lowered in seen_evidence:
+                if not cleaned or lowered in seen_support:
                     continue
-                seen_evidence.add(lowered)
-                candidate_evidence.append(cleaned)
+                seen_support.add(lowered)
+                profile_support.append(cleaned)
         if not requirement or status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
             continue
-        if status in {"met", "partially_met"} and not capability_name:
+        if status in {"supported", "partially_supported"} and not capability_name:
             logger.warning(
                 "[LLM][WARN] purpose=fit_review requirement_coverage_missing_capability requirement=%r status=%s",
                 requirement,
@@ -713,7 +714,7 @@ def normalize_llm_requirement_coverage(
             "status": status,
             "capability_name": capability_name,
             "matched_job_text": matched_job_text,
-            "candidate_evidence": candidate_evidence,
+            "profile_support": profile_support,
         })
         if len(results) >= max_items:
             break
@@ -728,23 +729,24 @@ def derive_fit_review_grade(
     if total_requirements <= 0:
         return "POOR"
 
-    met_count = 0
+    supported_count = 0
     partial_count = 0
     mismatch_count = 0
     for item in requirement_coverage:
         status = str(item.get("status") or "").strip().lower()
-        if status == "met":
-            met_count += 1
-        elif status == "partially_met":
+        if status == "supported":
+            supported_count += 1
+        elif status == "partially_supported":
             partial_count += 1
         elif status == "mismatch":
             mismatch_count += 1
 
-    supported_count = met_count + partial_count
-    support_score = met_count + (partial_count * 0.5)
+    support_score = supported_count + (partial_count * 0.5)
     support_ratio = support_score / total_requirements
 
-    if supported_count <= 0:
+    covered_count = supported_count + partial_count
+
+    if covered_count <= 0:
         return "MISMATCH" if mismatch_count else "POOR"
 
     if mismatch_count:
@@ -752,10 +754,10 @@ def derive_fit_review_grade(
             return "SOLID"
         return "WEAK"
 
-    if met_count == total_requirements and partial_count == 0:
+    if supported_count == total_requirements and partial_count == 0:
         return "EXCELLENT" if total_requirements >= 3 else "STRONG"
 
-    if support_ratio >= 0.8 and partial_count <= 1 and met_count >= max(2, total_requirements - 1):
+    if support_ratio >= 0.8 and partial_count <= 1 and supported_count >= max(2, total_requirements - 1):
         return "STRONG"
 
     if support_ratio >= 0.5:
@@ -857,24 +859,20 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: dict[str, s
             cited_capabilities = list(dict.fromkeys(
                 str(_item.get("capability_name") or "").strip()
                 for _item in requirement_coverage
-                if _item.get("capability_name") and _item.get("status") in {"met", "partially_met"}
+                if _item.get("capability_name") and _item.get("status") in {"supported", "partially_supported"}
             ))
-            # Only use derived_grade when coverage is non-empty. Empty coverage means the LLM
-            # didn't return requirement_coverage (old cache entry, prompt failure, or no
-            # requirements extracted) — fall back to the model's own grade rather than
-            # forcing every such job to POOR.
             grade_to_use = derived_grade if requirement_coverage else (fit_review_normalized.get("grade") or derived_grade)
             logger.info(
                 "[LLM][COVERAGE] purpose=fit_review grade_used=%s derived_grade=%s model_grade=%s"
-                " coverage_source=%s total=%d met=%d partial=%d not_evidenced=%d mismatch=%d capabilities=%s",
+                " coverage_source=%s total=%d supported=%d partial=%d not_shown=%d mismatch=%d capabilities=%s",
                 grade_to_use,
                 derived_grade,
                 fit_review_normalized["grade"],
                 "derived" if requirement_coverage else "model_fallback",
                 len(requirement_coverage),
-                status_counts.get("met", 0),
-                status_counts.get("partially_met", 0),
-                status_counts.get("not_evidenced", 0),
+                status_counts.get("supported", 0),
+                status_counts.get("partially_supported", 0),
+                status_counts.get("not_shown", 0),
                 status_counts.get("mismatch", 0),
                 ", ".join(cited_capabilities) or "(none)",
             )
@@ -1139,6 +1137,13 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
             text_format=_LLMFitReviewPayload if fit_review else _LLMReviewPayload,
         )
         _log_llm_call(resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model)
+    except APITimeoutError as exc:
+        raise LLMCallError(
+            f"APITimeoutError: Request timed out.",
+            purpose="fit_review" if fit_review else "learning_candidates",
+            model=model,
+            is_timeout=True,
+        ) from exc
     except APIStatusError as exc:
         raise LLMCallError(
             f"HTTP {exc.status_code} — {exc.message}",
@@ -1233,7 +1238,7 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
         return None
 
     system_prompt = "\n".join([
-        "You are routing a CV section heading to one of three evidence tiers for a job-match assistant.",
+        "You are routing a CV section heading to one of three profile support tiers for a job-match assistant.",
         "primary: current or recent work experience (roles, projects, achievements).",
         "secondary: older or supporting work experience.",
         "supplementary: education, certifications, training, or non-work background sections.",

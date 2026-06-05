@@ -160,7 +160,7 @@ def _format_issue_flag_summary(run_stats: dict) -> str:
 
         "soft_risk_reasons": "soft risk notes",
 
-        "missing_evidence": "missing or incomplete evidence",
+        "missing_profile_support": "missing or incomplete profile support",
 
         "hard_block_reasons": "explicit blocker notes",
 
@@ -291,18 +291,18 @@ def _print_run_summary(run_stats: dict) -> None:
     duration = _format_duration(run_stats)
 
     bar = "=" * 52
-    lines = [f"\n{bar}", "  Run complete", f"  Pages:      {pages}"]
+    lines = [f"\n{bar}", "  Run complete", f"  Pages read: {pages}"]
     lines.append(f"  Jobs seen:  {seen}  →  descriptions read: {read}  →  kept: {kept}  |  rejected: {rejected}")
     if flagged:
         lines.append(f"  Flagged:    {flagged}  (review suggestions available)")
-    lines.append(f"  LLM cost:   ${llm_cost:.4f}")
+    lines.append(f"  Total LLM cost: ${llm_cost:.4f}")
     if duration:
         lines.append(f"  Duration:   {duration}")
     flags = _format_issue_flag_summary(run_stats)
     if flags.strip():
         lines.append(f"  Flags:     {flags}")
     if DEBUG_MODE:
-        lines.append(f"  (debug) pages={pages} cards_seen={seen} cards_read={read} kept={kept} rejected={rejected} flags={flagged} cost=${llm_cost:.6f}")
+        lines.append(f"  (debug) pages_read={pages} cards_seen={seen} cards_read={read} kept={kept} rejected={rejected} flags={flagged} cost=${llm_cost:.6f}")
     lines.append(bar)
     logger.info("\n".join(lines))
 

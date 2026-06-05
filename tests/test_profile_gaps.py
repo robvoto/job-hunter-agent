@@ -20,25 +20,25 @@ _MUST_NOT_REQUIRE = ["payroll systems", "AHPRA registration"]
 _REQUIREMENT_COVERAGE = [
     {
         "requirement": "Cloud computing (AWS) experience",
-        "status": "not_evidenced",
+        "status": "not_shown",
         "capability_name": "Cloud computing (AWS)",
         "matched_job_text": "AWS platform experience",
     },
     {
         "requirement": "Permanent full-time role",
-        "status": "not_evidenced",
+        "status": "not_shown",
         "capability_name": "",
         "matched_job_text": "Permanent full-time role",
     },
     {
         "requirement": "Sydney",
-        "status": "not_evidenced",
+        "status": "not_shown",
         "capability_name": "",
         "matched_job_text": "Sydney",
     },
     {
         "requirement": "Salary package",
-        "status": "not_evidenced",
+        "status": "not_shown",
         "capability_name": "",
         "matched_job_text": "Salary package",
     },
@@ -99,7 +99,7 @@ def test_compute_gaps_returns_only_uncertain_capability_requirement_coverage_ite
     assert gaps[0]["raw_requirement"] == "Cloud computing (AWS) experience"
     assert gaps[0]["matched_job_text"] == "AWS platform experience"
     assert gaps[0][PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY] == "AWS platform experience"
-    assert gaps[0]["status"] == "not_evidenced"
+    assert gaps[0]["status"] == "not_shown"
 
 
 def test_compute_gaps_skips_non_capability_requirement_coverage_items():

@@ -640,9 +640,16 @@
                   <code class="workspace-error-card__code">${lastError.replace(/</g,'&lt;')}</code>
                 </div>
                 <div class="workspace-status-message__hint">Fix the issue above and run the search again.</div>
+                <button class="btn btn-primary" id="ws_error_run_search" type="button" style="margin-top:1rem;">Run search</button>
               </div>`;
+            document.getElementById('ws_error_run_search')?.addEventListener('click', startWorkspaceRunFromOverlay);
           } else {
-            resultsMount.innerHTML = '<div class="workspace-status-message"><div class="workspace-status-message__hint">No results yet - run a search first.</div></div>';
+            resultsMount.innerHTML = `
+              <div class="workspace-status-message">
+                <div class="workspace-status-message__hint">No results yet — run a search first.</div>
+                <button class="btn btn-primary" id="ws_no_results_run_search" type="button" style="margin-top:1rem;">Run search</button>
+              </div>`;
+            document.getElementById('ws_no_results_run_search')?.addEventListener('click', startWorkspaceRunFromOverlay);
           }
           return;
         }

@@ -102,7 +102,7 @@ def deterministic_review_outcome(
 
     fit_highlights: list[str], 
 
-    missing_evidence: list[str], 
+    missing_profile_support: list[str],
 
     soft_risk_reasons: list[str]
 
@@ -112,7 +112,7 @@ def deterministic_review_outcome(
 
     strong_signal_count = len([item for item in fit_highlights if item])
 
-    high_risks = len(missing_evidence)
+    high_risks = len(missing_profile_support)
 
     medium_risks = len(soft_risk_reasons)
 
@@ -428,7 +428,9 @@ def resolve_llm_review_payload(
 
     title_text = str(record.get(RECORD_TITLE_KEY) or "").strip()
 
-    body_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    # fit_source_text holds the compacted description (set by _apply_detail_payload_to_record).
+    # Fall back to full_description for records that predate compaction.
+    body_text = record.get(RECORD_FIT_SOURCE_TEXT_KEY) or record.get(RECORD_FULL_DESCRIPTION_KEY) or ""
 
     llm_input_text = "\n".join(part for part in [title_text, str(body_text).strip()] if part)
 

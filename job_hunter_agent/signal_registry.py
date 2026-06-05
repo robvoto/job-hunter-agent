@@ -91,7 +91,7 @@ CATEGORY_METADATA = {
     },
     CATEGORY_PROFILE_SECTION_LABEL: {
         "label": "Profile section label",
-        "description": "CV section headings that route profile text to primary, secondary, or supplementary evidence tiers. The suggested bucket shows where the LLM classified the section.",
+        "description": "CV section headings that route profile text to primary, secondary, or supplementary profile support tiers. The suggested bucket shows where the LLM classified the section.",
         "examples": ["Career History → primary", "Older Roles → secondary", "Certifications → supplementary"],
         "warning": None,
     },

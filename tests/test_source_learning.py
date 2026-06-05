@@ -1,4 +1,4 @@
-"""Tests for source learning payload resolution."""
+﻿"""Tests for source learning payload resolution."""
 
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
@@ -31,17 +31,17 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
-                    "candidate_evidence": ["stakeholder management"],
+                    "profile_support": ["stakeholder management"],
                 },
                 {
                     "requirement": "Process mapping",
-                    "status": "partially_met",
+                    "status": "partially_supported",
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
-                    "candidate_evidence": ["process mapping"],
+                    "profile_support": ["process mapping"],
                 },
             ],
         }
@@ -102,17 +102,17 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
-                    "candidate_evidence": ["stakeholder management"],
+                    "profile_support": ["stakeholder management"],
                 },
                 {
                     "requirement": "Process mapping",
-                    "status": "partially_met",
+                    "status": "partially_supported",
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
-                    "candidate_evidence": ["process mapping"],
+                    "profile_support": ["process mapping"],
                 },
             ],
         }
@@ -158,24 +158,24 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
-                    "candidate_evidence": ["stakeholder management"],
+                    "profile_support": ["stakeholder management"],
                 },
                 {
                     "requirement": "Process mapping",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
-                    "candidate_evidence": ["process mapping"],
+                    "profile_support": ["process mapping"],
                 },
                 {
                     "requirement": "UAT support",
-                    "status": "partially_met",
+                    "status": "partially_supported",
                     "capability_name": "acceptance testing",
                     "matched_job_text": "uat support",
-                    "candidate_evidence": ["user acceptance testing"],
+                    "profile_support": ["user acceptance testing"],
                 },
             ],
         }
@@ -188,3 +188,5 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
     assert called["count"] == 1
     assert payload["payload_source"] == "llm"
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
+
+

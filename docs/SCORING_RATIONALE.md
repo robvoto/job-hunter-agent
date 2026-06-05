@@ -54,8 +54,8 @@ The LLM fit grade defines the allowed score band. Other signals move the job wit
 |-----------|--------------|
 | Title match | Adds role-alignment evidence: direct target title = +15, secondary/potential title = +4. |
 | LLM grade | Primary semantic fit signal. Currently holistic; future redesign should derive it from mandatory requirement coverage. |
-| Capability evidence | Adds up to +20 from high-confidence contextual_capability_matches using exact profile capability names. |
-| Content passed | Adds +3 only for no content blocker found. This is weak data-quality evidence, not proof of fit. |
+| Capability support | Adds up to +20 from high-confidence contextual_capability_matches using exact profile capability names. |
+| Content passed | Adds +3 only for no content blocker found. This is weak data-quality support, not proof of fit. |
 | Location, work type, work mode, salary | Preference/logistics signals. They help ranking but should not prove mandatory fit. |
 | Freshness | Ranking urgency only. Current config gives +10 within 6 hours and +8 within 1 day. Older postings receive no freshness bonus. |
 | Convergence | Adds +5 or +3 only when multiple strong signals align. |
@@ -81,7 +81,7 @@ This model is still grade-driven. It is not yet fully mandatory-requirement-cove
 Target direction:
 
 1. Extract mandatory/core job requirements.
-2. Match each requirement to candidate capabilities and CV evidence.
+2. Match each requirement to candidate capabilities and profile support.
 3. Derive grade/score from requirement coverage.
 4. Use logistics and freshness only as ranking boosts, not proof of fit.
 
@@ -93,7 +93,7 @@ Current implemented model:
 - The LLM fit review returns fit_review decision plus grade, contextual_capability_matches, and job_requirements.
 - fit_scoring.py is a consumer only; it reads stored LLM output and does not call the LLM.
 - contextual_capability_matches must use exact candidate capability rule names. Invalid names are logged and skipped.
-- High-confidence contextual capability matches are credited using capability evidence scoring.
+- High-confidence contextual capability matches are credited using capability support scoring.
 - Medium confidence is logged only. Low confidence is ignored and logged separately.
 - The confidence lists are managed in scoring_rules.capability_contextual_llm and must preserve lowercase values.
 - The current grade bands are band-anchored: EXCELLENT, STRONG, SOLID, WEAK, POOR, MISMATCH.
@@ -101,9 +101,9 @@ Current implemented model:
 Known design limitation:
 - The current LLM grade is holistic. It is not yet derived from mandatory requirement coverage.
 - Location, work type, work mode, salary, and freshness are ranking/preference signals. They should not be treated as proof that the candidate meets mandatory requirements.
-- Content passed means no hard blocker was found. It is not strong positive evidence by itself.
+- Content passed means no hard blocker was found. It is not strong positive support by itself.
 
 Deferred architecture decision:
 - Move toward requirement-coverage scoring: extract mandatory job requirements, match them to candidate capabilities/CV evidence, then derive grade/score from coverage.
-- In that model, capabilities are the candidate-side evidence model used to prove requirements, not an independent bonus category.
+- In that model, capabilities are the candidate-side support model used to prove requirements, not an independent bonus category.
 - Do not redesign this opportunistically during bug fixes.

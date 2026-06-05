@@ -57,7 +57,7 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
             [
                 {
                     "requirement": "Cloud computing (AWS) experience",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                 }
@@ -97,7 +97,7 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
             [
                 {
                     "requirement": "Cloud computing (AWS) experience",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                 }
@@ -131,7 +131,7 @@ def test_profile_gap_confirm_have_rejects_non_capability_string(client, monkeypa
             [
                 {
                     "requirement": "Permanent full-time role",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "",
                     "matched_job_text": "Permanent full-time role",
                 }
@@ -164,7 +164,7 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
             [
                 {
                     "requirement": "AHPRA registration",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
                 }
@@ -197,7 +197,7 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
             [
                 {
                     "requirement": "AHPRA registration",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
                 }

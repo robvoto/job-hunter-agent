@@ -59,17 +59,17 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
-                    "candidate_evidence": ["stakeholder management"],
+                    "profile_support": ["stakeholder management"],
                 },
                 {
                     "requirement": "Process mapping",
-                    "status": "partially_met",
+                    "status": "partially_supported",
                     "capability_name": "process mapping",
                     "matched_job_text": "map the current process",
-                    "candidate_evidence": ["process mapping"],
+                    "profile_support": ["process mapping"],
                 },
             ],
         },
@@ -90,17 +90,17 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "status": "met",
+                "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
-                "candidate_evidence": ["stakeholder management"],
+                "profile_support": ["stakeholder management"],
             },
             {
                 "requirement": "Process mapping",
-                "status": "partially_met",
+                "status": "partially_supported",
                 "capability_name": "Process Mapping",
                 "matched_job_text": "map the current process",
-                "candidate_evidence": ["process mapping"],
+                "profile_support": ["process mapping"],
             },
         ],
         "job_requirements": ["Stakeholder engagement", "Process mapping"],
@@ -133,10 +133,10 @@ def test_normalize_llm_review_payload_caps_rationale_fields():
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
-                    "candidate_evidence": ["stakeholder management"],
+                    "profile_support": ["stakeholder management"],
                 },
             ],
         },
@@ -171,10 +171,10 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
-                        "status": "met",
+                        "status": "supported",
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
-                        "candidate_evidence": ["stakeholder management"],
+                        "profile_support": ["stakeholder management"],
                     },
                 ],
             }
@@ -209,17 +209,17 @@ def test_strong_grade_requires_requirement_capability_evidence():
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "",
                     "matched_job_text": "work with stakeholders",
-                    "candidate_evidence": [],
+                    "profile_support": [],
                 },
                 {
                     "requirement": "Process mapping",
-                    "status": "not_evidenced",
+                    "status": "not_shown",
                     "capability_name": "",
                     "matched_job_text": "map the current process",
-                    "candidate_evidence": [],
+                    "profile_support": [],
                 },
             ],
         },
@@ -242,24 +242,24 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "Stakeholder Engagement",
                     "matched_job_text": "stakeholder workshops",
-                    "candidate_evidence": ["stakeholder engagement"],
+                    "profile_support": ["stakeholder engagement"],
                 },
                 {
                     "requirement": "Process mapping",
-                    "status": "partially_met",
+                    "status": "partially_supported",
                     "capability_name": "Process Mapping",
                     "matched_job_text": "process mapping",
-                    "candidate_evidence": ["process mapping"],
+                    "profile_support": ["process mapping"],
                 },
                 {
                     "requirement": "UAT support",
-                    "status": "partially_met",
+                    "status": "partially_supported",
                     "capability_name": "Acceptance Testing",
                     "matched_job_text": "uat support",
-                    "candidate_evidence": ["user acceptance testing"],
+                    "profile_support": ["user acceptance testing"],
                 },
             ],
         },
@@ -271,3 +271,4 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
     )
 
     assert payload["fit_review"]["grade"] == "SOLID"
+

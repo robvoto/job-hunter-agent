@@ -108,7 +108,7 @@
 
 .help-drawer summary {
   padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
   color: var(--accent-secondary);
 }
 
@@ -137,7 +137,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  font-weight: 600;
+  font-weight: var(--text-role-status-font-weight);
   padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
   line-height: 1.15;
   color: var(--selection-accent);
@@ -218,7 +218,7 @@
   margin: 0;
   color: var(--text-muted);
   line-height: 1.5;
-  font-size: 0.95rem;
+  font-size: var(--text-role-body-font-size);
 }
 
 .results-helper-dismiss {
@@ -226,7 +226,7 @@
   border-radius: 999px;
   padding: 8px 12px;
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
   cursor: pointer;
   white-space: nowrap;
   background: var(--bg-surface);
@@ -367,7 +367,7 @@
   max-height: 82vh;
   display: flex;
   flex-direction: column;
-  font-size: 0.94rem;
+  font-size: var(--font-size-3xl);
 }
 
 .rejection-panel-header {
@@ -392,7 +392,7 @@
 .rejection-first-use summary {
   padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
   font-size: var(--help-copy-font-size);
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
   color: var(--state-info-text);
 }
 
@@ -409,7 +409,7 @@
   gap: var(--control-space-lg);
   margin: 0;
   border-radius: var(--control-radius-md);
-  font-weight: 500;
+  font-weight: var(--text-role-status-font-weight);
   cursor: pointer;
 }
 
@@ -436,8 +436,8 @@
   justify-content: center;
   text-align: center;
   color: var(--text-primary);
-  font-size: 0.88rem;
-  font-weight: 650;
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-status-font-weight);
   transition:
     background 120ms ease,
     border-color 120ms ease;
@@ -455,7 +455,7 @@
 
 .choice-strip > .choice-card--work-mode:has(input:checked) span {
   color: inherit;
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
 }
 
 .choice-strip > .choice-card--work-mode:hover {
@@ -473,8 +473,8 @@
   background: transparent;
   box-shadow: none;
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
-  font-size: 0.88rem;
-  font-weight: 650;
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-status-font-weight);
   transition:
     background 120ms ease,
     border-color 120ms ease,
@@ -502,7 +502,7 @@
 
 .choice-strip > .choice-card--strength:has(input:checked) span {
   color: inherit;
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
 }
 
 .choice-strip > .choice-card--strength:hover {
@@ -544,7 +544,7 @@
   background: transparent;
   border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
-  font-size: 0.78rem;
+  font-size: var(--text-role-caption-font-size);
   box-shadow: none;
 }
 
@@ -568,7 +568,7 @@
 #work_mode_preference.choice-strip > .choice-card--work-mode:has(input:checked) span,
 #prefer_sector_choices.choice-strip > .choice-card--work-mode:has(input:checked) span {
   color: inherit;
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
 }
 
 #seek_max_pages_choices.choice-strip > .choice-card--seek-pages {
@@ -581,8 +581,8 @@
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
   box-shadow: none;
   color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: var(--text-role-caption-font-size);
+  font-weight: var(--text-role-button-font-weight);
   font-variant-numeric: tabular-nums;
   justify-content: center;
   text-align: center;
@@ -618,6 +618,17 @@
   cursor: pointer;
 }
 
+.toggle-switch--compact {
+  display: inline-flex;
+  width: auto;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .toggle-switch-copy {
   display: grid;
   gap: 0;
@@ -625,9 +636,9 @@
 }
 
 .toggle-switch-title {
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
   color: var(--text-primary);
-  font-size: 0.88rem;
+  font-size: var(--text-role-body-compact-font-size);
 }
 
 .toggle-switch-control {
@@ -874,7 +885,7 @@
 }
 
 .search-source-panel .toggle-switch-title {
-  font-size: 1rem;
+  font-size: var(--text-role-button-font-size);
   line-height: 1.2;
 }
 
@@ -909,7 +920,7 @@
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-size: var(--workspace-control-title-font-size);
-  font-weight: 800;
+  font-weight: var(--text-role-overline-font-weight);
   letter-spacing: var(--workspace-control-title-letter-spacing);
   line-height: 1.2;
   text-transform: uppercase;
@@ -1036,8 +1047,8 @@
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: var(--text-role-micro-font-size);
+  font-weight: var(--text-role-micro-font-weight);
   font-style: italic;
   line-height: 1;
   cursor: pointer;
@@ -1098,7 +1109,7 @@
 }
 
 .need-help-link {
-  font-size: 0.83rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -1120,8 +1131,8 @@
   gap: var(--control-space-lg);
   cursor: pointer;
   color: var(--accent-secondary);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: var(--text-role-caption-font-size);
+  font-weight: var(--text-role-button-font-weight);
   list-style: none;
   user-select: none;
   padding: 0;
@@ -1140,7 +1151,7 @@
 .cap-alias-chip {
   max-width: 100%;
   align-items: flex-start;
-  font-size: 0.8rem;
+  font-size: var(--text-role-caption-font-size);
   line-height: 1.2;
 }
 
@@ -1161,7 +1172,7 @@
   color: var(--text-muted);
   cursor: pointer;
   padding: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-role-body-font-size);
   line-height: 1;
 }
 
@@ -1190,7 +1201,7 @@
 }
 
 .location-chip {
-  font-weight: 600;
+  font-weight: var(--text-role-status-font-weight);
 }
 
 .location-chip button {
@@ -1363,7 +1374,7 @@
   appearance: none;
   -webkit-appearance: none;
   color: var(--state-info-text);
-  font-size: 1.1rem;
+  font-size: var(--text-role-brand-font-size);
   line-height: 1;
   cursor: pointer;
 }
@@ -1427,8 +1438,8 @@
 
 .job-hunter-page-utility__brand-name {
   min-width: 0;
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: var(--text-role-brand-font-size);
+  font-weight: var(--text-role-brand-font-weight);
   letter-spacing: -0.02em;
 }
 
@@ -1447,7 +1458,7 @@
   background: var(--bg-muted);
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-role-micro-font-size);
   cursor: pointer;
   outline: none;
 }
@@ -1490,8 +1501,8 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 0.84rem;
-  font-weight: 700;
+  font-size: var(--font-size-md);
+  font-weight: var(--text-role-button-font-weight);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 0.15em;
@@ -1523,8 +1534,8 @@
 .account-bar-test-menu-title {
   padding: var(--control-space-xs) var(--control-space-sm) var(--control-space-sm);
   color: var(--text-muted);
-  font-size: 0.76rem;
-  font-weight: 800;
+  font-size: var(--font-size-xs);
+  font-weight: var(--text-role-overline-font-weight);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1543,8 +1554,8 @@
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-button-font-weight);
   text-align: left;
   cursor: pointer;
 }
@@ -1591,8 +1602,8 @@
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--text-role-button-font-size);
+  font-weight: var(--text-role-button-font-weight);
   line-height: 1;
   border: none;
   cursor: pointer;
@@ -1623,15 +1634,15 @@
 
 .job-hunter-account-bar__name {
   margin: 0;
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: var(--text-role-status-font-size);
+  font-weight: var(--text-role-button-font-weight);
   color: var(--text-primary);
 }
 
 .job-hunter-account-bar__email {
   margin: 2px 0 0;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-role-caption-font-size);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -1648,8 +1659,8 @@
   background: transparent;
   color: var(--selection-accent);
   font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: var(--text-role-button-font-size);
+  font-weight: var(--text-role-button-font-weight);
   text-align: left;
   cursor: pointer;
   appearance: none;
@@ -1752,11 +1763,11 @@
   min-height: 2.15rem;
   padding-top: 5px;
   padding-bottom: 5px;
-  font-size: 0.85rem;
+  font-size: var(--text-role-body-compact-font-size);
   border-color: color-mix(in srgb, var(--accent) 48%, var(--border-subtle));
   background-color: color-mix(in srgb, var(--accent) 9%, var(--bg-surface));
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
 }
 
 /* Shared icon-only action button for compact card actions such as edit pencils. */
@@ -1772,7 +1783,7 @@
   background: transparent;
   color: var(--accent);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
   line-height: 1;
   cursor: pointer;
   transition: background var(--interactive-motion-fast), border-color var(--interactive-motion-fast), transform var(--interactive-motion-fast);
@@ -1791,8 +1802,8 @@
 
 /* Shared compact typography for review cards, chips, and capability cards. */
 .review-capability-title {
-  font-size: 0.94rem;
-  font-weight: 700;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--text-role-button-font-weight);
 }
 
 .review-capability-title-row {
@@ -1822,13 +1833,13 @@
 
 .chip-list .chip-item,
 .badge-editor-list .chip-item {
-  font-size: 0.86rem;
-  font-weight: 650;
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-status-font-weight);
 }
 
 .badge-editor-form.token-input-group .token-input-field,
 .chip-editor-row.token-input-group .token-input-field {
-  font-size: 0.92rem;
+  font-size: var(--text-role-status-font-size);
 }
 
 /* Shared salary/compensation pair layout used by onboarding and settings forms. */
@@ -1853,7 +1864,7 @@
   margin: 0;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--text-role-button-font-weight);
   line-height: var(--field-label-line-height);
 }
 

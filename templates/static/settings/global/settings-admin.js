@@ -22,6 +22,7 @@ export const JobHunterAdminSettings = (function () {
     search_default_sort_newest_first: ['search_settings', 'sort_newest_first'],
     search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
     default_country_suffix: ['default_country_suffix', null],
+    playwright_headless: ['playwright_settings', 'headless'],
     playwright_viewport_width: ['playwright_settings', 'playwright_viewport_width'],
     playwright_viewport_height: ['playwright_settings', 'playwright_viewport_height'],
     playwright_selector_timeout: ['playwright_settings', 'playwright_selector_timeout'],
@@ -162,6 +163,7 @@ export const JobHunterAdminSettings = (function () {
     const preferenceWeights = settings.preference_weights || {};
     const historySettings = settings.history_settings || {};
     const descriptionTrustSettings = settings.description_trust_settings || {};
+    const descriptionCompactionSettings = settings.description_compaction_settings || {};
     const sourceDocumentSettings = settings.source_document_settings || {};
     const defaultCountrySuffix = settings.default_country_suffix || '';
     const salaryLimits = limits.salary || {};
@@ -192,6 +194,7 @@ export const JobHunterAdminSettings = (function () {
     setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
     setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
     document.getElementById('default_country_suffix').value = defaultCountrySuffix;
+    document.getElementById('playwright_headless').checked = playwrightSettings.headless !== false;
     document.getElementById('playwright_viewport_width').value = String(playwrightSettings.playwright_viewport_width ?? '');
     document.getElementById('playwright_viewport_height').value = String(playwrightSettings.playwright_viewport_height ?? '');
     document.getElementById('playwright_selector_timeout').value = String(playwrightSettings.playwright_selector_timeout ?? '');
@@ -236,6 +239,9 @@ export const JobHunterAdminSettings = (function () {
     document.getElementById('history_archive_stale_after_days').value = String(historySettings.archive_stale_after_days ?? '');
     document.getElementById('history_hidden_review_days').value = String(historySettings.hidden_review_days ?? '');
     document.getElementById('description_trust_min_trusted_description_length').value = String(descriptionTrustSettings.min_trusted_description_length ?? '');
+    document.getElementById('description_compaction_enabled').checked = !!descriptionCompactionSettings.enabled;
+    document.getElementById('description_compaction_min_chars').value = String(descriptionCompactionSettings.default_min_compacted_chars ?? '');
+    document.getElementById('description_compaction_min_retention').value = String(descriptionCompactionSettings.min_retention_ratio ?? '');
     document.getElementById('source_document_allowed_suffixes').value = (sourceDocumentSettings.allowed_suffixes || []).join('\n');
     document.getElementById('source_document_allowed_suffixes').setAttribute('readonly', 'readonly');
 
@@ -288,6 +294,7 @@ export const JobHunterAdminSettings = (function () {
     const currentSalaryLimits = currentLimitsGroup.salary || {};
     const currentHistory = current.history_settings || {};
     const currentDescriptionTrust = current.description_trust_settings || {};
+    const currentCompaction = current.description_compaction_settings || {};
     const currentSourceDocuments = current.source_document_settings || {};
     const currentEvidenceWeights = current.candidate_profile_tier_weights || {};
     const currentReviewSettings = current.review_settings || {};
@@ -378,6 +385,12 @@ export const JobHunterAdminSettings = (function () {
             currentDescriptionTrust.min_trusted_description_length,
           ),
         },
+        description_compaction_settings: {
+          ...currentCompaction,
+          enabled: document.getElementById('description_compaction_enabled').checked,
+          default_min_compacted_chars: readNumber('description_compaction_min_chars', currentCompaction.default_min_compacted_chars),
+          min_retention_ratio: readNumber('description_compaction_min_retention', currentCompaction.min_retention_ratio),
+        },
         source_document_settings: { ...currentSourceDocuments },
         onboarding_settings: {
           ...currentOnboarding,
@@ -401,6 +414,7 @@ export const JobHunterAdminSettings = (function () {
         review_settings: { ...currentReviewSettings },
         playwright_settings: {
           ...currentPlaywright,
+          headless: document.getElementById('playwright_headless').checked,
           playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
           playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
           playwright_selector_timeout: readNumber('playwright_selector_timeout', currentPlaywright.playwright_selector_timeout),

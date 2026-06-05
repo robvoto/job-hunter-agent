@@ -28,9 +28,9 @@ The system should find roles worth human attention, hide obvious mismatches, and
 
 - Avoid false positives, but do not create hidden false negatives.
 - Competitive fit is preferred over merely transferable fit.
-- Domain-heavy roles should not pass unless clearly supported by candidate evidence.
+- Domain-heavy roles should not pass unless clearly supported by candidate profile support.
 - Hard rejection is reserved for explicit blockers, not inferred weakness.
-- Weak, basic, old, or uncertain capability evidence should normally reduce score or create a review signal, not silently reject a job.
+- Weak, basic, old, or uncertain capability support should normally reduce score or create a review signal, not silently reject a job.
 - Questionable signals should be preserved with `needs_review: true` where relevant.
 
 ## Decision model

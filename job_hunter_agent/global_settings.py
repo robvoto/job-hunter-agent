@@ -199,6 +199,22 @@ def get_min_trusted_description_length() -> int:
     return int(load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
 
 
+def get_description_compaction_enabled() -> bool:
+    return bool(load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_ENABLED])
+
+
+def get_description_compaction_min_chars() -> int:
+    return int(load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_MIN_CHARS])
+
+
+def get_description_compaction_min_retention() -> float:
+    return float(load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_MIN_RETENTION])
+
+
+def get_playwright_headless() -> bool:
+    return bool(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_HEADLESS])
+
+
 def get_playwright_browser_mode() -> str:
     return str(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_BROWSER_MODE]).strip().lower()
 

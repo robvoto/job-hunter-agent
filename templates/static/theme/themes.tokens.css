@@ -255,6 +255,37 @@
   --border-chip-subtle: color-mix(in srgb, var(--border-subtle) 84%, var(--accent) 16%);
   --font-sans: "Segoe UI", Aptos, Arial, sans-serif;
   --font-serif: "Iowan Old Style", Georgia, serif;
+
+  /* Shared typography roles */
+  --text-role-page-title-font-size: 1.75rem;
+  --text-role-page-title-font-weight: 800;
+  --text-role-page-title-line-height: 1.15;
+  --text-role-brand-font-size: 1.25rem;
+  --text-role-brand-font-weight: 800;
+  --text-role-brand-line-height: 1.2;
+  --text-role-overline-font-size: 0.72rem;
+  --text-role-overline-font-weight: 800;
+  --text-role-overline-letter-spacing: 0.1em;
+  --text-role-nav-font-size: 0.95rem;
+  --text-role-nav-font-weight: 700;
+  --text-role-panel-title-font-size: 1.02rem;
+  --text-role-panel-title-font-weight: 700;
+  --text-role-body-font-size: 0.95rem;
+  --text-role-body-line-height: 1.5;
+  --text-role-body-compact-font-size: 0.9rem;
+  --text-role-body-compact-line-height: 1.45;
+  --text-role-caption-font-size: 0.8rem;
+  --text-role-caption-line-height: 1.32;
+  --text-role-micro-font-size: 0.72rem;
+  --text-role-micro-font-weight: 700;
+  --text-role-status-font-size: 0.92rem;
+  --text-role-status-font-weight: 600;
+  --text-role-chip-font-size: 0.82rem;
+  --text-role-chip-font-weight: 700;
+  --text-role-button-font-size: 0.875rem;
+  --text-role-button-font-weight: 700;
+  --text-role-control-label-font-size: 0.92rem;
+  --text-role-control-label-font-weight: 700;
 }
 
 /* Theme: Bold Aggressive

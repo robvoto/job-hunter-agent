@@ -100,14 +100,14 @@ def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> d
 def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     """Award a bonus when multiple strong independent signals simultaneously confirm fit.
 
-    Convergence requires title match, description quality, grade, and LLM-evidenced capabilities
+    Convergence requires title match, description quality, grade, and LLM-supported capabilities
     (high-confidence contextual matches). Conditions and bonus values come from scoring_rules.json.
     """
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     title_reason = str(record.get("title_reason") or "").strip().upper()
     content_reason = str(record.get("content_reason") or "").strip().upper()
     fit_confidence = full_description_confidence(record)
-    missing_evidence = [item for item in (record.get("missing_evidence") or []) if compact_whitespace(item)]
+    missing_profile_support = [item for item in (record.get("missing_profile_support") or []) if compact_whitespace(item)]
     soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
     active_profile = profile or load_profile()
     scoring_rules = get_scoring_rules(active_profile)
@@ -127,7 +127,7 @@ def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Opt
         or fit_confidence != convergence_rules["required_fit_confidence"]
     ):
         return None
-    if missing_evidence or grade not in set(convergence_rules["eligible_grades"]):
+    if missing_profile_support or grade not in set(convergence_rules["eligible_grades"]):
         return None
     if positive_count < int(convergence_rules["min_positive_matches"]):
         return None
@@ -150,9 +150,9 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
         status = str(item.get("status") or "").strip().lower().replace("_", " ")
         capability_name = str(item.get("capability_name") or "").strip()
         matched_job_text = str(item.get("matched_job_text") or "").strip()
-        candidate_evidence = [
+        profile_support = [
             compact_whitespace(text)
-            for text in (item.get("candidate_evidence") or [])
+            for text in (item.get("profile_support") or [])
             if compact_whitespace(text)
         ]
         if not requirement:
@@ -163,8 +163,8 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
             details.append(f"capability: {friendly_capability_label(capability_name)}")
         if matched_job_text:
             details.append(f"job text: {matched_job_text}")
-        if candidate_evidence:
-            details.append(f"candidate evidence: {', '.join(candidate_evidence[:2])}")
+        if profile_support:
+            details.append(f"profile support: {', '.join(profile_support[:2])}")
         if details:
             label = f"{label} | " + " | ".join(details)
         entries.append({"label": label, "value": 0, "section": "llm_fit"})
@@ -174,8 +174,8 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
 def contextual_capability_transparency_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
     """Transparency-only breakdown entries for LLM contextual capability matches.
 
-    Capabilities are evidence/explanation for the LLM grade, not a separate scoring path.
-    High-confidence matches are labelled as evidenced; below-threshold are labelled as found
+    Capabilities are support/explanation for the LLM grade, not a separate scoring path.
+    High-confidence matches are labelled as supported; below-threshold are labelled as found
     but not confirmed. No points are assigned — the grade already captured the capability fit.
     """
     active_profile = profile or load_profile()
@@ -184,7 +184,7 @@ def contextual_capability_transparency_entries(record: dict, profile: Optional[d
         str(v).strip().lower()
         for v in ((scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {}) or {}).get("confidence_levels_with_credit") or [])
     }
-    evidenced: list[str] = []
+    supported: list[str] = []
     low_confidence: list[str] = []
     low_confidence_label = load_ui_labels().get("fit_highlight_labels", {}).get(
         "possible_capability_match",
@@ -200,21 +200,21 @@ def contextual_capability_transparency_entries(record: dict, profile: Optional[d
             continue
         label = friendly_capability_label(cap_name)
         if confidence in levels_with_credit:
-            evidenced.append(label)
+            supported.append(label)
         else:
             low_confidence.append(label)
 
     logger.info(
-        "[CAPABILITY_EVIDENCE] job=%s evidenced=%s low_confidence=%s",
+        "[CAPABILITY_SUPPORT] job=%s supported=%s low_confidence=%s",
         record.get("job_key", "<unknown>"),
-        ", ".join(dedupe_preserve_order(evidenced)) or "(none)",
+        ", ".join(dedupe_preserve_order(supported)) or "(none)",
         ", ".join(dedupe_preserve_order(low_confidence)) or "(none)",
     )
 
     entries: List[dict] = []
-    if evidenced:
+    if supported:
         entries.append({
-            "label": f"LLM-evidenced capabilities: {', '.join(dedupe_preserve_order(evidenced))}",
+            "label": f"LLM-supported capabilities: {', '.join(dedupe_preserve_order(supported))}",
             "value": 0,
             "section": "capability",
         })

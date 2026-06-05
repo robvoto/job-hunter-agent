@@ -61,17 +61,17 @@ class _FakeParsingResponses:
                     "requirement_coverage": [
                         {
                             "requirement": "Stakeholder engagement",
-                            "status": "met",
+                            "status": "supported",
                             "capability_name": "stakeholder management",
                             "matched_job_text": "work with stakeholders",
-                            "candidate_evidence": ["stakeholder management"],
+                            "profile_support": ["stakeholder management"],
                         },
                         {
                             "requirement": "Process mapping",
-                            "status": "partially_met",
+                            "status": "partially_supported",
                             "capability_name": "process mapping",
                             "matched_job_text": "map the current process",
-                            "candidate_evidence": ["process mapping"],
+                            "profile_support": ["process mapping"],
                         },
                     ],
                     "contextual_capability_matches": [],
@@ -318,10 +318,10 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
             "requirement_coverage": [
                 {
                     "requirement": "Strong stakeholder engagement",
-                    "status": "met",
+                    "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder engagement",
-                    "candidate_evidence": ["stakeholder management"],
+                    "profile_support": ["stakeholder management"],
                 },
             ],
         },
@@ -339,10 +339,10 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
         "requirement_coverage": [
             {
                 "requirement": "Strong stakeholder engagement",
-                "status": "met",
+                "status": "supported",
                 "capability_name": "Stakeholder engagement",
                 "matched_job_text": "stakeholder engagement",
-                "candidate_evidence": ["stakeholder management"],
+                "profile_support": ["stakeholder management"],
             }
         ],
         "job_requirements": ["Strong stakeholder engagement"],
@@ -384,19 +384,21 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
         "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
-                        "status": "met",
+                        "status": "supported",
                         "capability_name": "stakeholder management",
                         "matched_job_text": "work with stakeholders",
-                "candidate_evidence": ["stakeholder management"],
+                "profile_support": ["stakeholder management"],
             },
             {
                 "requirement": "Process mapping",
-                "status": "partially_met",
+                "status": "partially_supported",
                 "capability_name": "process mapping",
                 "matched_job_text": "map the current process",
-                "candidate_evidence": ["process mapping"],
+                "profile_support": ["process mapping"],
             },
         ],
         "job_requirements": ["Stakeholder engagement", "Process mapping"],
     }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"
+
+

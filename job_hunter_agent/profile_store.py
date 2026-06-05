@@ -7,7 +7,7 @@ and normalising user-specific settings, preferences, and scoring rules.
 Key functionalities include:
 - Persistence management for the user profile (runtime source of truth).
 - Normalisation of search settings, salary preferences, and capability rules.
-- Evidence tier classification and weight management for fit scoring.
+- Profile-support tier classification and weight management for fit scoring.
 """
 
 from __future__ import annotations
@@ -244,6 +244,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
 
 DEFAULT_SCORING_RULES = _load_default_scoring_rules()
 
+# Candidate facts live here; the other keys are generated helpers or review state.
 DEFAULT_PROFILE = {
     "enabled_sources": ["seek", "linkedin"],
     "search_settings": {
@@ -579,12 +580,6 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     if primary_search_location and not merged["match_preferences"].get("home_location"):
         merged["match_preferences"]["home_location"] = primary_search_location
-    # Migrate legacy field name from capability_profile_rules → candidate_capabilities.
-    # Runs transparently on every load; committed on next save.
-    if "capability_profile_rules" in merged:
-        if KEY_CANDIDATE_CAPABILITIES not in merged or not merged[KEY_CANDIDATE_CAPABILITIES]:
-            merged[KEY_CANDIDATE_CAPABILITIES] = merged["capability_profile_rules"]
-        del merged["capability_profile_rules"]
     merged[KEY_CANDIDATE_CAPABILITIES] = normalize_capability_rules(
         merged.get(KEY_CANDIDATE_CAPABILITIES, []),
         merged.get("onboarding_settings", {}),

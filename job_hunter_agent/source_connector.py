@@ -44,8 +44,9 @@ WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 CONSOLE_BANNER_WIDTH = 60
 
 
-def scrape_jobs_direct(headless: bool = False) -> str:
+def scrape_jobs_direct() -> str:
     from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
+    from job_hunter_agent.global_settings import get_playwright_headless
     get_user_id_for_runtime()
     clear_run_stop_request()
     clear_run_progress()
@@ -91,7 +92,7 @@ def scrape_jobs_direct(headless: bool = False) -> str:
         "=" * CONSOLE_BANNER_WIDTH,
     )
 
-    context.headless = headless
+    context.headless = get_playwright_headless()
     kept_records, audit_rows, skill_observations = run_enabled_sources(context)
     return finalize_scrape_run(context, kept_records, audit_rows, skill_observations)
 

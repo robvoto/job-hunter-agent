@@ -251,7 +251,7 @@ def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
     ]
 
 
-def build_risk_and_missing_evidence(
+def build_risk_and_missing_profile_support(
     details_text: str,
     title_reason: Optional[str],
     profile: dict,
@@ -265,7 +265,7 @@ def build_risk_and_missing_evidence(
         risks.append("Secondary role-family match rather than direct target role")
 
     if capability_matches["must_not"]:
-        missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not evidenced")
+        missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not shown")
 
     if capability_matches["limited_depth"]:
         risks.append(
@@ -281,9 +281,9 @@ def build_risk_and_missing_evidence(
             risk_label = compact_whitespace(signal.get(SIGNAL_RISK_LABEL_KEY) or "") or fit_label
             if risk_label:
                 if alignment == "weak":
-                    missing.append(f"{risk_label} required but weakly evidenced")
+                    missing.append(f"{risk_label} required but weakly shown")
                 else:
-                    partial_suffix = str(_capability_ui_labels().get("partial_evidence_risk_suffix") or "is only partially supported by your profile")
+                    partial_suffix = str(_capability_ui_labels().get("partial_support_risk_suffix") or "is only partially supported by your profile")
                     risks.append(f"{risk_label} {partial_suffix}")
 
     return dedupe_preserve_order(risks)[:4], dedupe_preserve_order(missing)[:4]

@@ -32,6 +32,7 @@ _REASON_LABELS: dict[str, str] = {
     "CONTENT_REJECT": "description did not pass content filters",
     "LLM_REJECT": "LLM reviewer rejected",
     "LLM_ERROR": "LLM review failed with an error",
+    "REVIEW_FAILED_TIMEOUT": "LLM review timed out — not reviewed, will retry next run",
     "DET_REJECT": "deterministic reviewer rejected",
     "ALREADY_APPLIED": "you already applied to this one",
     "DUPLICATE_URL": "duplicate listing",
@@ -59,7 +60,8 @@ def _job_tag(source: str, title: str, company: str, job_key: str) -> str:
     key = f" [{job_key}]" if job_key and job_key != "unknown" else ""
     return f"{name}{co}  ({src}{key})"
 
-from job_hunter_agent.capability_matching import build_risk_and_missing_evidence, reviewed_signal_matches_for_text
+from job_hunter_agent.capability_matching import build_risk_and_missing_profile_support, reviewed_signal_matches_for_text
+from job_hunter_agent.description_compactor import compact_description
 from job_hunter_agent.description_trust import get_min_trusted_description_length, get_trusted_sources
 from job_hunter_agent.filters import analyze_title_filters, passes_content_filters, passes_quick_card_filters
 from job_hunter_agent.fit_scoring import (
@@ -104,6 +106,7 @@ from job_hunter_agent.record_schema import (
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_DESCRIPTION_COMPACTION_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_DECISION_SUMMARY_KEY,
@@ -113,7 +116,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LOCATION_KEY,
-    RECORD_MISSING_EVIDENCE_KEY,
+    RECORD_MISSING_PROFILE_SUPPORT_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
@@ -353,8 +356,28 @@ def _apply_detail_payload_to_record(record: dict, details_text: str, details_sta
         record[RECORD_CONTENT_REASON_KEY] = reject_reason
         return False, reject_reason
 
-    record[RECORD_FIT_SOURCE_TEXT_KEY] = details_text
     record[RECORD_FULL_DESCRIPTION_KEY] = details_text
+    compacted, compaction_meta = compact_description(
+        details_text, min_compacted_chars=get_min_trusted_description_length()
+    )
+    record[RECORD_FIT_SOURCE_TEXT_KEY] = compacted
+    record[RECORD_DESCRIPTION_COMPACTION_KEY] = compaction_meta
+    if compaction_meta["applied"]:
+        logger.info(
+            "[COMPACTION] job=%s original=%d compacted=%d removed=%s",
+            record.get(RECORD_JOB_KEY, "<unknown>"),
+            compaction_meta["original_char_count"],
+            compaction_meta["compacted_char_count"],
+            compaction_meta["removed_section_labels"],
+        )
+    elif compaction_meta.get("skip_reason"):
+        logger.info(
+            "[COMPACTION][SKIPPED] job=%s status=%s skip_reason=%s removed_candidates=%s",
+            record.get(RECORD_JOB_KEY, "<unknown>"),
+            compaction_meta.get("compaction_status", ""),
+            compaction_meta["skip_reason"],
+            compaction_meta["removed_section_labels"],
+        )
     record[RECORD_DESCRIPTION_SOURCE_KEY] = record.get(RECORD_DESCRIPTION_SOURCE_KEY) or ""
     source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
     is_trusted = source in get_trusted_sources() and len(details_text) >= get_min_trusted_description_length()
@@ -459,7 +482,7 @@ def _apply_preference_result(record: dict, profile: dict, context: ReviewPipelin
 def _apply_fit_summary_enrichment(record: dict, details_text: str, profile: dict, title_reason: str) -> None:
     record[RECORD_ROLE_SNAPSHOT_KEY] = build_role_summary(record, details_text, profile)
     record[RECORD_FIT_HIGHLIGHTS_KEY] = build_fit_highlights(record, details_text, profile)
-    record[RECORD_SOFT_RISK_REASONS_KEY], record[RECORD_MISSING_EVIDENCE_KEY] = build_risk_and_missing_evidence(
+    record[RECORD_SOFT_RISK_REASONS_KEY], record[RECORD_MISSING_PROFILE_SUPPORT_KEY] = build_risk_and_missing_profile_support(
         details_text,
         title_reason,
         profile,
@@ -472,7 +495,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record,
         profile,
         record[RECORD_FIT_HIGHLIGHTS_KEY],
-        record[RECORD_MISSING_EVIDENCE_KEY],
+        record[RECORD_MISSING_PROFILE_SUPPORT_KEY],
         record[RECORD_SOFT_RISK_REASONS_KEY],
     )
     record["llm_learning_candidates"] = []
@@ -529,9 +552,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record[RECORD_LLM_ELAPSED_MS_KEY] = llm_elapsed_ms
         record[RECORD_LLM_COST_USD_KEY] = llm_cost_usd
         coverage_counts = {
-            "met": 0,
-            "partially_met": 0,
-            "not_evidenced": 0,
+            "supported": 0,
+            "partially_supported": 0,
+            "not_shown": 0,
             "mismatch": 0,
         }
         credited_capabilities: list[str] = []
@@ -541,7 +564,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             if status in coverage_counts:
                 coverage_counts[status] += 1
             capability_name = str(item.get("capability_name") or "").strip()
-            if capability_name and status in {"met", "partially_met"}:
+            if capability_name and status in {"supported", "partially_supported"}:
                 credited_capabilities.append(capability_name)
         for item in contextual_capability_matches:
             capability_name = str(item.get("capability_name") or "").strip()
@@ -565,8 +588,8 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
                     ) or "(none)",
                     "contextual_matches_logged_only": ", ".join(ignored_capabilities) or "(none)",
                     "requirement_coverage": (
-                        f"met={coverage_counts['met']}, partial={coverage_counts['partially_met']}, "
-                        f"not_evidenced={coverage_counts['not_evidenced']}, mismatch={coverage_counts['mismatch']}"
+                        f"supported={coverage_counts['supported']}, partial={coverage_counts['partially_supported']}, "
+                        f"not_shown={coverage_counts['not_shown']}, mismatch={coverage_counts['mismatch']}"
                     ),
                 },
             )
@@ -805,6 +828,7 @@ def review_post_detail_normalized_job(
         fit_eval = _evaluate_job_fit(record, profile, context.llm_cache)
     except LLMCallError as llm_exc:
         _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
+        _reject_reason = "REVIEW_FAILED_TIMEOUT" if llm_exc.is_timeout else "LLM_ERROR"
         logger.error(format_log_block("PIPELINE][LLM_CALL_ERROR", {
             "source": context.source_name,
             "job_key": record.get(RECORD_JOB_KEY, ""),
@@ -820,9 +844,9 @@ def review_post_detail_normalized_job(
         record["_obs_llm_called"] = True
         record["_obs_llm_error"] = True
         record[RECORD_DECISION_KEY] = "REJECT"
-        record[RECORD_REJECT_REASON_KEY] = "LLM_ERROR"
+        record[RECORD_REJECT_REASON_KEY] = _reject_reason
         _finalize(record, context)
-        _pipeline_log("FINAL_DECISION", record, context.source_name, decision="REJECT", reason="LLM_ERROR")
+        _pipeline_log("FINAL_DECISION", record, context.source_name, decision="REJECT", reason=_reject_reason)
         return _build_outcome(record), record, skill_observations
     except Exception as llm_exc:
         _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
@@ -972,6 +996,9 @@ def print_job_human_summary(
             lines.append(f"  [✓] Review: KEEP{grade_note}  ·  via {src_label}{cost_note}")
         else:
             lines.append(f"  [✗] Review: REJECT{grade_note}  ·  via {src_label}{cost_note}")
+    elif reject_reason == "REVIEW_FAILED_TIMEOUT":
+        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
+        lines.append(f"  [~] Not reviewed — LLM timed out. Will retry next run.{cost_note}")
     elif reject_reason == "LLM_ERROR":
         cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
         lines.append(f"  [!] LLM review failed (API error){cost_note}")

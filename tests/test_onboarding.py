@@ -709,10 +709,6 @@ def test_normalize_full_profile_mirrors_primary_search_location_into_match_prefe
 
 def test_normalize_full_profile_preserves_candidate_capabilities():
     """normalize_full_profile must not wipe candidate_capabilities.
-
-    Regression test: commit 44c591f introduced a migration block that checked
-    "candidate_capabilities" (the current key) instead of "capability_profile_rules"
-    (the legacy key), causing capabilities to be deleted on every profile load/save.
     """
     caps = [
         {"name": "financial reporting", "level": "proficient", "aliases": [], "icon_key": "finance_commercial"},
@@ -724,15 +720,6 @@ def test_normalize_full_profile_preserves_candidate_capabilities():
     assert "accounts payable & receivable" in result_names
     assert len(normalized["candidate_capabilities"]) == 2
     assert all(rule["icon_key"] == "finance_commercial" for rule in normalized["candidate_capabilities"])
-
-
-def test_normalize_full_profile_migrates_legacy_capability_profile_rules_key():
-    """Legacy key capability_profile_rules must be migrated to candidate_capabilities."""
-    caps = [{"name": "stakeholder engagement", "level": "proficient", "aliases": [], "icon_key": "communication_stakeholders"}]
-    normalized = profile_store.normalize_full_profile({"capability_profile_rules": caps})
-    assert len(normalized["candidate_capabilities"]) == 1
-    assert normalized["candidate_capabilities"][0]["name"] == "stakeholder engagement"
-    assert "capability_profile_rules" not in normalized
 
 
 def test_user_settings_schedule_payload_is_sanitized_and_exposed():

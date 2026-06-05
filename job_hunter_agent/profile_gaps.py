@@ -12,7 +12,7 @@ import re
 STATUS_UNKNOWN = "unknown"
 STATUS_CONFIRMED_HAVE = "confirmed_have"
 STATUS_CONFIRMED_DO_NOT_HAVE = "confirmed_do_not_have"
-_CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_evidenced", "partially_met"})
+_CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_shown", "partially_supported"})
 PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY = "job_requirement_text"
 
 

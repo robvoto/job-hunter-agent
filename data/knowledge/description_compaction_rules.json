@@ -1,0 +1,47 @@
+{
+  "kind": "system_config",
+  "name": "description_compaction_rules",
+  "version": 1,
+  "updated_at": "2026-06-05",
+  "description": "Data-driven rules for conservative SEEK/LinkedIn job description compaction before LLM review. These are source/content cleanup rules, not scoring rules.",
+  "safety": {
+    "min_retention_ratio": 0.5,
+    "default_min_compacted_chars": 400
+  },
+  "removable_header_patterns": [
+    "(?:how\\s+to\\s+apply|to\\s+apply|apply\\s+now|applying\\s+for\\s+this\\s+(?:role|position|job))",
+    "application\\s+(?:process|instructions|steps)",
+    "equal\\s+(?:opportunity|employment\\s+opportunity)(?:\\s+employer)?",
+    "(?:diversity\\s+(?:and|&)\\s+inclusion|inclusion\\s+(?:and|&)\\s+diversity)",
+    "privacy\\s+(?:notice|policy|statement|information)",
+    "your\\s+privacy",
+    "(?:important\\s+)?(?:recruiter|consultant|agency)\\s+(?:note|notice|disclaimer)"
+  ],
+  "removable_content_patterns": [
+    "only\\s+(?:shortlisted|successful)\\s+candidates\\s+will\\s+be\\s+(?:contacted|notified)",
+    "we\\s+are\\s+an?\\s+equal\\s+(?:opportunity|employment\\s+opportunity)\\s+employer",
+    "by\\s+submitting\\s+(?:your\\s+)?(?:application|resume|cv),?\\s+you\\s+(?:agree|consent|acknowledge)",
+    "this\\s+(?:role|position|opportunity)\\s+is\\s+being\\s+(?:managed|represented|handled)\\s+by",
+    "to\\s+apply,?\\s+(?:please\\s+)?(?:click|submit|send|email|upload)\\b",
+    "click\\s+(?:apply|here)\\s+(?:now\\s+)?to\\s+(?:submit|apply|register)\\b",
+    "please\\s+note\\s+that\\s+only\\s+those\\s+(?:selected|shortlisted|invited)"
+  ],
+  "protected_signal_patterns": [
+    "\\$\\s*(?:\\d{1,3}(?:,\\d{3})+|\\d{5,}|\\d+[kK]\\b)",
+    "\\b(?:salary|package|remuneration|base\\s+salary|day\\s+rate|hourly\\s+rate|per\\s+(?:day|hour|annum|year))\\b",
+    "\\b(?:permanent|contract|ftc|fixed[\\s\\-]term|temporary|casual|part[\\s\\-]time)\\b",
+    "\\b\\d+[\\s\\-]+month\\b",
+    "\\b(?:remote|hybrid|on[\\s\\-]?site|work\\s+from\\s+home|wfh|flexible\\s+work)\\b"
+  ],
+  "protected_section_names": [
+    "about the role",
+    "responsibilities",
+    "what you'll do",
+    "requirements",
+    "skills",
+    "qualifications",
+    "about us",
+    "benefits",
+    "what we offer"
+  ]
+}

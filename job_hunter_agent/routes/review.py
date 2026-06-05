@@ -240,7 +240,7 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
 
 
 _PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have", "decide_later"})
-_PROFILE_GAP_CONFIRMABLE_STATUSES = frozenset({"not_evidenced", "partially_met"})
+_PROFILE_GAP_CONFIRMABLE_STATUSES = frozenset({"not_shown", "partially_supported"})
 
 
 def _profile_gap_name_key(value: str) -> str:

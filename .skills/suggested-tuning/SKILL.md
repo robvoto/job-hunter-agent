@@ -98,7 +98,7 @@ For UI shell changes, keep settings rendering tests aligned with current class n
 ## Guardrails
 
 - Do not auto-apply suggestions.
-- Do not suggest from rejected-role skills as useful capability evidence.
+- Do not suggest from rejected-role skills as useful capability support.
 - Do not lower thresholds to hide data issues.
 - Do not confuse this panel with onboarding capability review or admin signal registry.
 - Do not invent capabilities, aliases, or exclusions without evidence.

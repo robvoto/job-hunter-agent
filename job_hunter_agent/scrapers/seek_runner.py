@@ -331,7 +331,21 @@ async def _seek_detail_batch_on_context(
     results: dict[int, tuple] = {}
 
     async def _process_one(idx: int, rec: dict) -> None:
+        # Skip queued-but-not-yet-started jobs immediately when stop is requested.
+        # Jobs already holding the semaphore (in-flight LLM/fetch) run to completion.
+        if run_stop_requested():
+            rec[rs.RECORD_DECISION_KEY] = "REJECT"
+            rec[rs.RECORD_REJECT_REASON_KEY] = "STOP_REQUESTED"
+            finalize_record(review_context.job_history, review_context.audit_rows, rec, review_context.run_iso)
+            results[idx] = ({"decision": "REJECT", "reject_reason": "STOP_REQUESTED"}, rec, [], 0.0)
+            return
         async with semaphore:
+            if run_stop_requested():
+                rec[rs.RECORD_DECISION_KEY] = "REJECT"
+                rec[rs.RECORD_REJECT_REASON_KEY] = "STOP_REQUESTED"
+                finalize_record(review_context.job_history, review_context.audit_rows, rec, review_context.run_iso)
+                results[idx] = ({"decision": "REJECT", "reject_reason": "STOP_REQUESTED"}, rec, [], 0.0)
+                return
             page = await browser_context.new_page()
             t0 = time.monotonic()
             try:

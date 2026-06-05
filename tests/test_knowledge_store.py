@@ -118,7 +118,7 @@ def test_repo_knowledge_seeds_successfully(tmp_db):
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
     seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
-    assert len(seeded) == 18, f"Expected 18 knowledge files, got {len(seeded)}: {seeded}"
+    assert len(seeded) == 19, f"Expected 19 knowledge files, got {len(seeded)}: {seeded}"
 
 
 def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
@@ -311,6 +311,83 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
 
     html = build_bootstrap_script()
     assert "__JOB_HUNTER_SHARED_UI_LABELS__" in html
+
+
+def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
+    from pathlib import Path
+    from job_hunter_agent.knowledge_store import get_knowledge
+    from job_hunter_agent.workspace_renderer import load_workspace_page_labels, _workspace_ui_labels
+
+    repo_root = Path(__file__).resolve().parent.parent
+    knowledge_dir = repo_root / "data" / "knowledge"
+
+    stale = {
+        "kind": "ui_labels",
+        "name": "ui_labels",
+        "version": 20,
+        "workspace_page_labels": {
+            "hero_title": "Jobs Workspace",
+            "potential_jobs_tab": "Potential Jobs",
+            "applied_jobs_tab": "Applied",
+            "hidden_jobs_tab": "Hidden",
+            "match_controls_heading": "Match Controls",
+            "reset_all_filters_button": "Reset All Filters",
+            "sort_label": "Sort",
+            "sort_option_best_match": "Best match first",
+            "sort_option_newest": "Newest posted first",
+            "sort_option_highest_salary": "Highest salary first",
+            "jobs_per_page_label": "Jobs Per page",
+            "filters_label": "Filters",
+            "show_label": "Show",
+            "show_option_all_potential": "All potential jobs",
+            "show_option_matches_last_run": "Matches last run",
+            "posted_label": "Posted",
+            "type_label": "Type",
+            "work_mode_label": "Work mode",
+            "work_mode_option_any": "Any",
+            "work_mode_option_remote": "Remote",
+            "work_mode_option_hybrid": "Hybrid",
+            "work_mode_option_on_site": "On-site",
+            "sector_label": "Sector",
+            "sector_option_any": "Any sector",
+            "sector_option_public": "Public sector",
+            "sector_option_private": "Private sector",
+            "match_level_label": "Match level",
+            "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
+            "results_helper_dismiss_button": "Dismiss",
+            "applied_jobs_heading": "Applied Jobs",
+            "applied_jobs_copy": "This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.",
+            "hidden_jobs_heading": "Hidden Jobs",
+            "hidden_jobs_copy": "This area keeps roles you have intentionally pushed out of sight for now.",
+            "search_settings_heading": "Search Settings",
+            "search_settings_helper": "Shared search settings used across sources.",
+            "keywords_label": "Keywords",
+            "locations_label": "Locations",
+            "work_type_sidebar_label": "Work type",
+            "work_mode_sidebar_label": "Work mode",
+            "sector_sidebar_label": "Sector",
+            "salary_min_label": "Salary min",
+            "date_range_label": "Date range",
+            "last_run_heading": "Last Run",
+            "crawler_stats_heading": "Crawler Stats",
+            "applications_heading": "Applications",
+            "run_efficiency_summary": "Run Efficiency",
+            "show_hide_hint": "Show / hide",
+            "run_efficiency_intro": "Search targets this run: ",
+        },
+    }
+    set_knowledge("ui_labels", stale, isolated_db)
+
+    updated = upgrade_knowledge_from_dir(knowledge_dir, isolated_db)
+    assert "ui_labels" in updated
+
+    _workspace_ui_labels.cache_clear()
+    labels = load_workspace_page_labels()
+    assert labels["LABEL_WS_RUN_EFFICIENCY_SEPARATOR"] == "."
+    from pathlib import Path
+    import json
+    expected_version = json.loads((Path(__file__).parent.parent / "data" / "knowledge" / "ui_labels.json").read_text())["version"]
+    assert get_knowledge("ui_labels", isolated_db)["version"] == expected_version
 
 
 def test_create_app_bootstrap_refreshes_stale_ui_labels(isolated_db):

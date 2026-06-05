@@ -157,6 +157,14 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
                 record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
+                logger.info(
+                    "[PIPELINE][CARD_NORMALIZED] source=LINKEDIN job_key=%s title=%r company=%r url=%r description_chars=%d",
+                    record.get(RECORD_JOB_KEY),
+                    record.get(RECORD_TITLE_KEY),
+                    record.get(RECORD_COMPANY_KEY),
+                    record.get(RECORD_URL_KEY),
+                    len(record[RECORD_DETAILS_TEXT_KEY]),
+                )
 
                 pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(record, review_context)
                 if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
