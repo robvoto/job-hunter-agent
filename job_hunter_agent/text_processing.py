@@ -6,14 +6,12 @@ import re
 
 from typing import Dict, List, Optional, Set
 
-from job_hunter_agent.profile_learning import get_parsing_rule_set
-
 
 
 
 
 def _generic_summary_phrases() -> set[str]:
-
+    from job_hunter_agent.profile_learning import get_parsing_rule_set
     return get_parsing_rule_set("generic_summary_phrases")
 
 

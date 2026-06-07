@@ -10,6 +10,14 @@
 } from '../shared/settings-utils.js';
 
 export const JobHunterAdminSettings = (function () {
+  const PLAYWRIGHT_TIMEOUT_MS_PER_SECOND = 1000;
+  const PROMPT_TEMPLATE_FIELDS = [
+    ['compensation_target_yearly', 'llm_prompt_compensation_target_yearly'],
+    ['compensation_target_daily', 'llm_prompt_compensation_target_daily'],
+    ['home_location', 'llm_prompt_home_location'],
+    ['prefer_permanent', 'llm_prompt_prefer_permanent'],
+  ];
+
   const HELP_BY_CONTROL_ID = {
     highlight_strong_capability_count: ['fit_highlights', 'strong_capability_count'],
     highlight_working_capability_count: ['fit_highlights', 'working_capability_count'],
@@ -67,7 +75,6 @@ export const JobHunterAdminSettings = (function () {
     llm_model_options: ['llm_settings', 'model_options'],
     llm_max_llm_chars: ['llm_settings', 'max_llm_chars'],
     llm_pricing_per_1m: ['llm_settings', 'pricing_per_1m'],
-    llm_prompt_settings: ['llm_settings.llm_prompt_settings', null],
   };
 
   let globalSettingsHelp = null;
@@ -80,21 +87,39 @@ export const JobHunterAdminSettings = (function () {
     return String(group.description || '').trim();
   }
 
-  function promptSettingsFieldList(group) {
-    const fields = group?.fields || {};
-    const rows = Object.entries(fields).map(([key, value]) => (
-      `<li><strong>${escapeHtml(key)}</strong>: ${escapeHtml(String(value))}</li>`
-    ));
-    return rows.length ? `<ul>${rows.join('')}</ul>` : '';
-  }
-
   function findLabelForControl(controlId) {
     return document.querySelector(`label[for="${CSS.escape(controlId)}"]`);
   }
 
+  function requireElement(controlId) {
+    const element = document.getElementById(controlId);
+    if (!element) {
+      throw new Error(`Missing global settings element: ${controlId}`);
+    }
+    return element;
+  }
+
+  function setFieldValue(controlId, value) {
+    const element = requireElement(controlId);
+    element.value = String(value ?? '');
+  }
+
+  function setFieldText(controlId, value) {
+    const element = requireElement(controlId);
+    element.textContent = String(value ?? '');
+  }
+
+  function setOptionalFieldText(controlId, value) {
+    const element = document.getElementById(controlId);
+    if (!element) return;
+    element.textContent = String(value ?? '');
+  }
+
   function ensureHelpPanelForControl(controlId) {
     const label = findLabelForControl(controlId);
-    if (!label) return null;
+    if (!label) {
+      throw new Error(`Missing global settings label: ${controlId}`);
+    }
     const existingRow = label.closest('.field-label-row');
     let drawer = existingRow?.querySelector('details.field-info-drawer');
     if (!drawer) {
@@ -113,7 +138,11 @@ export const JobHunterAdminSettings = (function () {
       drawer.append(summary, panel);
       row.appendChild(drawer);
     }
-    return drawer.querySelector('.field-info-panel');
+    const panel = drawer.querySelector('.field-info-panel');
+    if (!panel) {
+      throw new Error(`Missing global settings help panel: ${controlId}`);
+    }
+    return panel;
   }
 
   function applyGlobalSettingsHelp() {
@@ -121,14 +150,9 @@ export const JobHunterAdminSettings = (function () {
     for (const [controlId, [groupKey, fieldKey]] of Object.entries(HELP_BY_CONTROL_ID)) {
       const panel = ensureHelpPanelForControl(controlId);
       if (!panel) continue;
-      const group = globalSettingsHelp.groups[groupKey];
       const text = helpTextFor(groupKey, fieldKey);
       if (!text) continue;
-      if (controlId === 'llm_prompt_settings') {
-        panel.innerHTML = `<p>${escapeHtml(text)}</p>${promptSettingsFieldList(group)}`;
-      } else {
-        panel.textContent = text;
-      }
+      panel.textContent = text;
     }
   }
 
@@ -177,82 +201,90 @@ export const JobHunterAdminSettings = (function () {
       if (bounds.max !== undefined) input.max = String(bounds.max);
     };
 
-    document.getElementById('highlight_strong_capability_count').value = String(fitHl.strong_capability_count ?? '');
-    document.getElementById('highlight_working_capability_count').value = String(fitHl.working_capability_count ?? '');
-    document.getElementById('highlight_basic_capability_count').value = String(fitHl.basic_capability_count ?? '');
-    document.getElementById('highlight_reviewed_signal_count').value = String(fitHl.reviewed_signal_count ?? '');
-    document.getElementById('highlight_max_highlights').value = String(fitHl.max_highlights ?? '');
+    setFieldValue('highlight_strong_capability_count', fitHl.strong_capability_count);
+    setFieldValue('highlight_working_capability_count', fitHl.working_capability_count);
+    setFieldValue('highlight_basic_capability_count', fitHl.basic_capability_count);
+    setFieldValue('highlight_reviewed_signal_count', fitHl.reviewed_signal_count);
+    setFieldValue('highlight_max_highlights', fitHl.max_highlights);
 
-    document.getElementById('search_default_date_range_days').value = String(searchDefaults.date_range_days ?? '');
+    setFieldValue('search_default_date_range_days', searchDefaults.date_range_days);
     setChoiceGroupValue('seek_max_pages', searchDefaults.seek_max_pages);
-    document.getElementById('search_default_linkedin_hours_old').value = String(searchDefaults.linkedin_hours_old ?? '');
-    document.getElementById('search_default_linkedin_results_per_search').value = String(searchDefaults.linkedin_results_per_search ?? '');
+    setFieldValue('search_default_linkedin_hours_old', searchDefaults.linkedin_hours_old);
+    setFieldValue('search_default_linkedin_results_per_search', searchDefaults.linkedin_results_per_search);
     setToggleChecked('search_default_sort_newest_first', searchDefaults.sort_newest_first !== false);
     const liEasyApply = searchDefaults[LINKEDIN_EASY_APPLY_ONLY];
-    document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value = (liEasyApply === null || liEasyApply === undefined) ? '' : String(liEasyApply);
+    setFieldValue('search_default_' + LINKEDIN_EASY_APPLY_ONLY, (liEasyApply === null || liEasyApply === undefined) ? '' : liEasyApply);
     setBounds('search_default_date_range_days', searchLimits.date_range_days);
     setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
     setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
-    document.getElementById('default_country_suffix').value = defaultCountrySuffix;
-    document.getElementById('playwright_headless').checked = playwrightSettings.headless !== false;
-    document.getElementById('playwright_viewport_width').value = String(playwrightSettings.playwright_viewport_width ?? '');
-    document.getElementById('playwright_viewport_height').value = String(playwrightSettings.playwright_viewport_height ?? '');
-    document.getElementById('playwright_selector_timeout').value = String(playwrightSettings.playwright_selector_timeout ?? '');
+    setFieldValue('default_country_suffix', defaultCountrySuffix);
+    requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
+    setFieldValue('playwright_viewport_width', playwrightSettings.playwright_viewport_width);
+    setFieldValue('playwright_viewport_height', playwrightSettings.playwright_viewport_height);
+    setFieldValue(
+      'playwright_selector_timeout',
+      playwrightSettings.playwright_selector_timeout === undefined
+        ? ''
+        : Number(playwrightSettings.playwright_selector_timeout) / PLAYWRIGHT_TIMEOUT_MS_PER_SECOND,
+    );
 
     const rangeText = (value) => value?.min !== undefined && value?.max !== undefined ? `${value.min} to ${value.max}` : 'managed by the server';
-    document.getElementById('search_default_date_range_days_bounds').textContent = rangeText(searchLimits.date_range_days);
-    document.getElementById('search_default_seek_max_pages_bounds').textContent = rangeText(searchLimits.seek_max_pages);
-    document.getElementById('search_default_linkedin_hours_old_bounds').textContent = rangeText(searchLimits.linkedin_hours_old);
-    document.getElementById('search_default_linkedin_results_per_search_bounds').textContent = rangeText(searchLimits.linkedin_results_per_search);
+    setOptionalFieldText('search_default_date_range_days_bounds', rangeText(searchLimits.date_range_days));
+    setOptionalFieldText('search_default_seek_max_pages_bounds', rangeText(searchLimits.seek_max_pages));
+    setOptionalFieldText('search_default_linkedin_hours_old_bounds', rangeText(searchLimits.linkedin_hours_old));
+    setOptionalFieldText('search_default_linkedin_results_per_search_bounds', rangeText(searchLimits.linkedin_results_per_search));
 
-    document.getElementById('evidence_primary_weight').value = String(evidenceWeights.primary_candidate_profile_context ?? '');
-    document.getElementById('evidence_secondary_weight').value = String(evidenceWeights.secondary_candidate_profile_context ?? '');
-    document.getElementById('evidence_supplementary_weight').value = String(evidenceWeights.supplementary_candidate_profile_context ?? '');
+    setFieldValue('evidence_primary_weight', evidenceWeights.primary_candidate_profile_context);
+    setFieldValue('evidence_secondary_weight', evidenceWeights.secondary_candidate_profile_context);
+    setFieldValue('evidence_supplementary_weight', evidenceWeights.supplementary_candidate_profile_context);
 
-    document.getElementById('preference_fit_weight').value = String(preferenceWeights.fit ?? '');
-    document.getElementById('preference_salary_weight').value = String(preferenceWeights.salary ?? '');
-    document.getElementById('preference_location_weight').value = String(preferenceWeights.location ?? '');
-    document.getElementById('preference_work_mode_weight').value = String(preferenceWeights.work_mode ?? '');
-    document.getElementById('preference_contract_weight').value = String(preferenceWeights.contract ?? '');
-    document.getElementById('preference_government_weight').value = String(preferenceWeights.government ?? '');
-    document.getElementById('preference_freshness_weight').value = String(preferenceWeights.freshness ?? '');
+    setFieldValue('preference_fit_weight', preferenceWeights.fit);
+    setFieldValue('preference_salary_weight', preferenceWeights.salary);
+    setFieldValue('preference_location_weight', preferenceWeights.location);
+    setFieldValue('preference_work_mode_weight', preferenceWeights.work_mode);
+    setFieldValue('preference_contract_weight', preferenceWeights.contract);
+    setFieldValue('preference_government_weight', preferenceWeights.government);
+    setFieldValue('preference_freshness_weight', preferenceWeights.freshness);
 
-    document.getElementById('history_repeated_listing_min_times_seen').value = String(historySettings.repeated_listing_min_times_seen ?? '');
-    document.getElementById('history_repeated_listing_min_span_days').value = String(historySettings.repeated_listing_min_span_days ?? '');
-    document.getElementById('history_multi_listing_red_flag_min_listings').value = String(historySettings.multi_listing_red_flag_min_listings ?? '');
-    document.getElementById('history_multi_listing_red_flag_min_span_days').value = String(historySettings.multi_listing_red_flag_min_span_days ?? '');
-    document.getElementById('onboarding_extraction_lookback_years').value = String(onboarding.extraction_lookback_years ?? '');
-    document.getElementById('onboarding_title_extraction_min_months').value = String(onboarding.title_extraction_min_months ?? '');
-    document.getElementById('onboarding_max_target_patterns').value = String(onboarding.max_target_patterns ?? '');
-    document.getElementById('onboarding_max_secondary_patterns').value = String(onboarding.max_secondary_patterns ?? '');
-    document.getElementById('onboarding_capability_alias_limit').value = String(onboarding.capability_alias_limit ?? '');
-    document.getElementById('onboarding_signal_cluster_min_alias_hits').value = String(onboarding.signal_cluster_min_alias_hits ?? '');
-    document.getElementById('onboarding_signal_cluster_min_snippet_hits').value = String(onboarding.signal_cluster_min_snippet_hits ?? '');
-    document.getElementById('onboarding_signal_cluster_dense_snippet_alias_hits').value = String(onboarding.signal_cluster_dense_snippet_alias_hits ?? '');
-    document.getElementById('onboarding_capability_strength_preset').value = onboarding.capability_strength_preset || '';
-    document.getElementById('llm_model_options').value = (llmSettings.model_options || []).join('\n');
+    setFieldValue('history_repeated_listing_min_times_seen', historySettings.repeated_listing_min_times_seen);
+    setFieldValue('history_repeated_listing_min_span_days', historySettings.repeated_listing_min_span_days);
+    setFieldValue('history_multi_listing_red_flag_min_listings', historySettings.multi_listing_red_flag_min_listings);
+    setFieldValue('history_multi_listing_red_flag_min_span_days', historySettings.multi_listing_red_flag_min_span_days);
+    setFieldValue('onboarding_extraction_lookback_years', onboarding.extraction_lookback_years);
+    setFieldValue('onboarding_title_extraction_min_months', onboarding.title_extraction_min_months);
+    setFieldValue('onboarding_max_target_patterns', onboarding.max_target_patterns);
+    setFieldValue('onboarding_max_secondary_patterns', onboarding.max_secondary_patterns);
+    setFieldValue('onboarding_capability_alias_limit', onboarding.capability_alias_limit);
+    setFieldValue('onboarding_signal_cluster_min_alias_hits', onboarding.signal_cluster_min_alias_hits);
+    setFieldValue('onboarding_signal_cluster_min_snippet_hits', onboarding.signal_cluster_min_snippet_hits);
+    setFieldValue('onboarding_signal_cluster_dense_snippet_alias_hits', onboarding.signal_cluster_dense_snippet_alias_hits);
+    setFieldValue('onboarding_capability_strength_preset', onboarding.capability_strength_preset || '');
+    setFieldValue('llm_model_options', (llmSettings.model_options || []).join('\n'));
     setBounds('llm_max_llm_chars', llmSettings.max_llm_chars_limits);
-    document.getElementById('llm_max_llm_chars').value = String(llmSettings.max_llm_chars ?? '');
-    document.getElementById('llm_pricing_per_1m').value = JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2);
-    document.getElementById('llm_prompt_settings').value = JSON.stringify(llmSettings.llm_prompt_settings || {}, null, 2);
+    setFieldValue('llm_max_llm_chars', llmSettings.max_llm_chars);
+    setFieldValue('llm_pricing_per_1m', JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2));
+    const promptTemplates = llmSettings.llm_prompt_settings?.match_preference_templates || {};
+    for (const [templateKey, fieldId] of PROMPT_TEMPLATE_FIELDS) {
+      setFieldValue(fieldId, promptTemplates[templateKey]);
+    }
 
-    document.getElementById('history_archive_stale_after_days').value = String(historySettings.archive_stale_after_days ?? '');
-    document.getElementById('history_hidden_review_days').value = String(historySettings.hidden_review_days ?? '');
-    document.getElementById('description_trust_min_trusted_description_length').value = String(descriptionTrustSettings.min_trusted_description_length ?? '');
-    document.getElementById('description_compaction_enabled').checked = !!descriptionCompactionSettings.enabled;
-    document.getElementById('description_compaction_min_chars').value = String(descriptionCompactionSettings.default_min_compacted_chars ?? '');
-    document.getElementById('description_compaction_min_retention').value = String(descriptionCompactionSettings.min_retention_ratio ?? '');
-    document.getElementById('source_document_allowed_suffixes').value = (sourceDocumentSettings.allowed_suffixes || []).join('\n');
-    document.getElementById('source_document_allowed_suffixes').setAttribute('readonly', 'readonly');
+    setFieldValue('history_archive_stale_after_days', historySettings.archive_stale_after_days);
+    setFieldValue('history_hidden_review_days', historySettings.hidden_review_days);
+    setFieldValue('description_trust_min_trusted_description_length', descriptionTrustSettings.min_trusted_description_length);
+    requireElement('description_compaction_enabled').checked = !!descriptionCompactionSettings.enabled;
+    setFieldValue('description_compaction_min_chars', descriptionCompactionSettings.default_min_compacted_chars);
+    setFieldValue('description_compaction_min_retention', descriptionCompactionSettings.min_retention_ratio);
+    setFieldValue('source_document_allowed_suffixes', (sourceDocumentSettings.allowed_suffixes || []).join('\n'));
+    requireElement('source_document_allowed_suffixes').setAttribute('readonly', 'readonly');
 
-    document.getElementById('search_limit_date_range_days_min').value = String(searchLimits.date_range_days?.min ?? '');
-    document.getElementById('search_limit_date_range_days_max').value = String(searchLimits.date_range_days?.max ?? '');
-    document.getElementById('search_limit_seek_max_pages_min').value = String(searchLimits.seek_max_pages?.min ?? '');
-    document.getElementById('search_limit_seek_max_pages_max').value = String(searchLimits.seek_max_pages?.max ?? '');
-    document.getElementById('search_limit_linkedin_hours_old_min').value = String(searchLimits.linkedin_hours_old?.min ?? '');
-    document.getElementById('search_limit_linkedin_hours_old_max').value = String(searchLimits.linkedin_hours_old?.max ?? '');
-    document.getElementById('search_limit_linkedin_results_per_search_min').value = String(searchLimits.linkedin_results_per_search?.min ?? '');
-    document.getElementById('search_limit_linkedin_results_per_search_max').value = String(searchLimits.linkedin_results_per_search?.max ?? '');
+    setFieldValue('search_limit_date_range_days_min', searchLimits.date_range_days?.min);
+    setFieldValue('search_limit_date_range_days_max', searchLimits.date_range_days?.max);
+    setFieldValue('search_limit_seek_max_pages_min', searchLimits.seek_max_pages?.min);
+    setFieldValue('search_limit_seek_max_pages_max', searchLimits.seek_max_pages?.max);
+    setFieldValue('search_limit_linkedin_hours_old_min', searchLimits.linkedin_hours_old?.min);
+    setFieldValue('search_limit_linkedin_hours_old_max', searchLimits.linkedin_hours_old?.max);
+    setFieldValue('search_limit_linkedin_results_per_search_min', searchLimits.linkedin_results_per_search?.min);
+    setFieldValue('search_limit_linkedin_results_per_search_max', searchLimits.linkedin_results_per_search?.max);
     setCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', salaryLimits.minimum_salary_yearly?.max ?? '');
     setCurrencyFieldValue('salary_limit_minimum_daily_rate_max', salaryLimits.minimum_daily_rate?.max ?? '');
 
@@ -300,9 +332,20 @@ export const JobHunterAdminSettings = (function () {
     const currentReviewSettings = current.review_settings || {};
     const currentPlaywright = current.playwright_settings || {};
     const currentOnboarding = current.onboarding_settings || {};
+    const currentLlmSettings = current.llm_settings || {};
+    const currentLlmPromptSettings = currentLlmSettings.llm_prompt_settings || {};
     const readNumber = (id, fallback) => {
       const raw = Number(document.getElementById(id).value);
       return Number.isNaN(raw) ? fallback : raw;
+    };
+    const readSecondsAsMilliseconds = (id, fallbackMilliseconds) => {
+      const fallbackSeconds = fallbackMilliseconds === undefined
+        ? undefined
+        : fallbackMilliseconds / PLAYWRIGHT_TIMEOUT_MS_PER_SECOND;
+      const secondsValue = readNumber(id, fallbackSeconds);
+      return secondsValue === undefined
+        ? fallbackMilliseconds
+        : secondsValue * PLAYWRIGHT_TIMEOUT_MS_PER_SECOND;
     };
     return {
       fit_highlights: {
@@ -405,11 +448,19 @@ export const JobHunterAdminSettings = (function () {
           capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
         },
         llm_settings: {
-          ...current.llm_settings,
+          ...currentLlmSettings,
           model_options: toLines(document.getElementById('llm_model_options').value),
-          max_llm_chars: readNumber('llm_max_llm_chars', current.llm_settings?.max_llm_chars),
+          max_llm_chars: readNumber('llm_max_llm_chars', currentLlmSettings.max_llm_chars),
           pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
-          llm_prompt_settings: JSON.parse(document.getElementById('llm_prompt_settings').value.trim() || '{}'),
+          llm_prompt_settings: {
+            ...currentLlmPromptSettings,
+            match_preference_templates: Object.fromEntries(
+              PROMPT_TEMPLATE_FIELDS.map(([templateKey, fieldId]) => [
+                templateKey,
+                document.getElementById(fieldId).value.trim(),
+              ]),
+            ),
+          },
         },
         review_settings: { ...currentReviewSettings },
         playwright_settings: {
@@ -417,7 +468,10 @@ export const JobHunterAdminSettings = (function () {
           headless: document.getElementById('playwright_headless').checked,
           playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
           playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
-          playwright_selector_timeout: readNumber('playwright_selector_timeout', currentPlaywright.playwright_selector_timeout),
+          playwright_selector_timeout: readSecondsAsMilliseconds(
+            'playwright_selector_timeout',
+            currentPlaywright.playwright_selector_timeout,
+          ),
         },
       },
     };

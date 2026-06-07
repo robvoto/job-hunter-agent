@@ -472,6 +472,66 @@
   background: var(--state-error-bg);
 }
 
+/* Coverage status variants (from LLM requirement_coverage) */
+.job-requirement-item--supported .job-requirement-status {
+  border-color: var(--state-success-border);
+  color: var(--state-success-text);
+  background: var(--state-success-bg);
+}
+
+.job-requirement-item--partially-supported .job-requirement-status {
+  border-color: var(--state-warning-border);
+  color: var(--state-warning-text);
+  background: var(--state-warning-bg);
+}
+
+.job-requirement-item--not-shown .job-requirement-status {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+  background: transparent;
+}
+
+/* mandatory + not_shown: same red urgency as mismatch — user needs to review this gap */
+.job-requirement-item--mandatory-not-shown {
+  background: color-mix(in srgb, var(--state-error-bg) 40%, transparent);
+}
+
+.job-requirement-item--mandatory-not-shown .job-requirement-status {
+  border-color: var(--state-error-border);
+  color: var(--state-error-text);
+  background: var(--state-error-bg);
+}
+
+.job-requirement-item--mismatch {
+  background: color-mix(in srgb, var(--state-error-bg) 55%, transparent);
+}
+
+.job-requirement-item--mismatch .job-requirement-status {
+  border-color: var(--state-error-border);
+  color: var(--state-error-text);
+  background: var(--state-error-bg);
+}
+
+.req-coverage-detail {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.job-req-importance {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: var(--control-radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  text-transform: uppercase;
+}
+
 .job-insight-unavailable strong {
   color: var(--text-muted);
 }

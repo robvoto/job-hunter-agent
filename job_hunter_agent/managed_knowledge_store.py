@@ -10,6 +10,8 @@ import re
 
 from typing import Any
 
+from job_hunter_agent.text_processing import compact_whitespace
+
 
 
 
@@ -18,7 +20,7 @@ def clean_knowledge_text(value: Any) -> str:
 
     """Normalize whitespace and coerce to a trimmed string."""
 
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return compact_whitespace(value)
 
 
 

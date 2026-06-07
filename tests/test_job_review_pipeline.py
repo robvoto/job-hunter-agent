@@ -22,13 +22,9 @@ from job_hunter_agent.record_schema import (
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
     RECORD_LLM_DECISION_KEY,
-    RECORD_LLM_CONCERNS_KEY,
     RECORD_LLM_COST_USD_KEY,
-    RECORD_LLM_DECISION_SUMMARY_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
-    RECORD_LLM_POSITIVE_REASONS_KEY,
-    RECORD_LLM_SCORE_RATIONALE_KEY,
     RECORD_LOCATION_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
@@ -486,21 +482,10 @@ def test_linkedin_salary_is_preserved_by_post_detail_review(monkeypatch):
     assert updated_record[RECORD_SALARY_KEY] == "AUD 120k"
 
 
-def test_llm_review_rationale_fields_persist_on_record(monkeypatch):
+def test_llm_review_fields_persist_on_record(monkeypatch):
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-        "decision_summary": "Clear delivery fit with relevant capability evidence.",
-        "positive_reasons": [
-            "Matches technical BA and delivery work",
-            "AWS, REST API, and DevOps experience look relevant",
-        ],
-        "concerns": [
-            "AWS evidence is possible but not strongly proven",
-        ],
-        "score_rationale": [
-            "LLM grade placed this job in the Strong band.",
-            "Preferences and freshness moved the score within that band.",
-        ],
+        "debug_reason": "Strong requirement coverage with capability support.",
         "job_requirements": ["Stakeholder engagement"],
         "requirement_coverage": [
             {
@@ -511,7 +496,6 @@ def test_llm_review_rationale_fields_persist_on_record(monkeypatch):
                 "profile_support": ["stakeholder management"],
             },
         ],
-        "contextual_capability_matches": [],
         "llm_cost_usd": 0.0123,
     }
     _patch_llm_review_path(monkeypatch, payload)
@@ -520,39 +504,8 @@ def test_llm_review_rationale_fields_persist_on_record(monkeypatch):
     outcome, updated_record, _ = review_post_detail_normalized_job(record, _review_context("SEEK"))
 
     assert outcome[RECORD_DECISION_KEY] == "KEEP"
-    assert updated_record[RECORD_LLM_DECISION_SUMMARY_KEY] == payload["decision_summary"]
-    assert updated_record[RECORD_LLM_POSITIVE_REASONS_KEY] == payload["positive_reasons"]
-    assert updated_record[RECORD_LLM_CONCERNS_KEY] == payload["concerns"]
-    assert updated_record[RECORD_LLM_SCORE_RATIONALE_KEY] == payload["score_rationale"]
     assert updated_record[RECORD_LLM_ELAPSED_MS_KEY] is not None
     assert updated_record[RECORD_LLM_COST_USD_KEY] == 0.0123
-
-
-def test_llm_review_missing_rationale_fields_do_not_break_scoring(monkeypatch):
-    payload = {
-        "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-        "job_requirements": ["Stakeholder engagement"],
-        "requirement_coverage": [
-            {
-                "requirement": "Stakeholder engagement",
-                "status": "supported",
-                "capability_name": "Stakeholder Engagement",
-                "matched_job_text": "work with stakeholders",
-                "profile_support": ["stakeholder management"],
-            },
-        ],
-        "contextual_capability_matches": [],
-    }
-    _patch_llm_review_path(monkeypatch, payload)
-
-    record = _base_record("seek", "seek_detail", "card")
-    outcome, updated_record, _ = review_post_detail_normalized_job(record, _review_context("SEEK"))
-
-    assert outcome[RECORD_DECISION_KEY] == "KEEP"
-    assert updated_record[RECORD_LLM_DECISION_SUMMARY_KEY] == ""
-    assert updated_record[RECORD_LLM_POSITIVE_REASONS_KEY] == []
-    assert updated_record[RECORD_LLM_CONCERNS_KEY] == []
-    assert updated_record[RECORD_LLM_SCORE_RATIONALE_KEY] == []
 
 
 # ── observability log events ──────────────────────────────────────────────────

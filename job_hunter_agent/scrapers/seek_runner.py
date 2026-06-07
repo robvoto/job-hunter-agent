@@ -57,6 +57,12 @@ from job_hunter_agent.work_mode_extraction import (
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 RUN_PROGRESS_ITEM_SEPARATOR = " | "
+
+# Chromium flags and init script applied to every browser launch to suppress the
+# navigator.webdriver fingerprint that automated browsers expose. Without these,
+# SEEK's bot detection serves a challenge page instead of job listings in headless mode.
+_BROWSER_ARGS = ["--disable-blink-features=AutomationControlled"]
+_WEBDRIVER_INIT = "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
 RUN_PROGRESS_TITLE_SEPARATOR = " @ "
 RUN_PROGRESS_ELAPSED_PREFIX = "elapsed "
 
@@ -395,10 +401,11 @@ class _AsyncDetailSession:
     async def _start(self, headless: bool, viewport_width: int, viewport_height: int) -> None:
         self._pw_cm = async_playwright_ctx()
         self._pw = await self._pw_cm.__aenter__()
-        self._browser = await self._pw.chromium.launch(headless=headless)
+        self._browser = await self._pw.chromium.launch(headless=headless, args=_BROWSER_ARGS)
         self._browser_context = await self._browser.new_context(
             viewport={"width": viewport_width, "height": viewport_height}
         )
+        await self._browser_context.add_init_script(_WEBDRIVER_INIT)
 
     def run_batch(self, needs_detail: list, review_context) -> dict:
         """Submit a batch of cards for parallel fetch + LLM. Blocking until complete."""
@@ -468,12 +475,16 @@ def seek_scrape_to_records(
                 user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
                 headless=headless,
                 viewport={"width": playwright_viewport_width, "height": playwright_viewport_height},
+                args=_BROWSER_ARGS,
             )
+            context.add_init_script(_WEBDRIVER_INIT)
             list_page = context.new_page()
         else:
-            browser = playwright.chromium.launch(headless=headless)
+            browser = playwright.chromium.launch(headless=headless, args=_BROWSER_ARGS)
+            bctx = browser.new_context(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height})
+            bctx.add_init_script(_WEBDRIVER_INIT)
+            list_page = bctx.new_page()
             context = browser
-            list_page = browser.new_page(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height})
 
         detail_session = _AsyncDetailSession(
             headless=headless,
@@ -514,9 +525,37 @@ def seek_scrape_to_records(
 
                     try:
                         list_page.goto(page_url, wait_until="domcontentloaded")
+                        # Cloudflare challenge ("Just a moment...") auto-resolves via JS, but takes
+                        # 3–5s before redirecting to the real SEEK page. Wait for it to clear first
+                        # so the card selector timeout counts from after the redirect, not from the
+                        # challenge page load.
+                        try:
+                            if "just a moment" in (list_page.title() or "").lower():
+                                logger.info("%s Cloudflare challenge detected; waiting for auto-resolve", page_tag)
+                                list_page.wait_for_function(
+                                    "() => !document.title.toLowerCase().includes('just a moment')",
+                                    timeout=15000,
+                                )
+                                logger.info("%s Cloudflare challenge resolved", page_tag)
+                        except Exception:
+                            pass
                         list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
                     except Exception as exc:
                         logger.info("%s no visible job cards; stopping target [%s]", page_tag, type(exc).__name__)
+                        try:
+                            page_title = list_page.title()
+                            page_url_actual = list_page.url
+                            body_text = (list_page.inner_text("body") or "")[:500].replace("\n", " ")
+                            logger.info(
+                                "%s page_title=%r actual_url=%s body_snippet=%r",
+                                page_tag, page_title, page_url_actual, body_text,
+                            )
+                            import pathlib
+                            screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
+                            list_page.screenshot(path=str(screenshot_path), full_page=False)
+                            logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
+                        except Exception as diag_exc:
+                            logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
                         break
 
                     job_cards = list_page.query_selector_all(SELECTOR_CARDS)

@@ -141,11 +141,6 @@ def get_llm_learning_candidates_max_items() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS)
 
 
-def get_llm_contextual_matches_max_items() -> int:
-    """Max contextual_capability_matches returned by the LLM per fit review."""
-    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS)
-
-
 def get_llm_job_requirements_max_items() -> int:
     """Max job_requirements returned by the LLM."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS)

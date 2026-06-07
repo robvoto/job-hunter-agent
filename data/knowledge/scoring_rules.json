@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 7,
+  "version": 8,
   "updated_at": "2026-06-02",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
@@ -39,16 +39,37 @@
   },
   "llm_grade_bands": {
     "description": "Floor and ceiling for the non-hard-block score per LLM grade. The score is clamped to this range before hard block penalties are applied. A band adjustment entry is added to the breakdown when clamping occurs.",
-    "EXCELLENT": {"floor": 88, "ceiling": 100},
-    "STRONG":    {"floor": 68, "ceiling": 87},
-    "SOLID":     {"floor": 48, "ceiling": 67},
-    "WEAK":      {"floor": 28, "ceiling": 47},
-    "POOR":      {"floor": 8,  "ceiling": 27},
-    "MISMATCH":  {"floor": 0,  "ceiling": 7}
+    "EXCELLENT": {
+      "floor": 88,
+      "ceiling": 100
+    },
+    "STRONG": {
+      "floor": 68,
+      "ceiling": 87
+    },
+    "SOLID": {
+      "floor": 48,
+      "ceiling": 67
+    },
+    "WEAK": {
+      "floor": 28,
+      "ceiling": 47
+    },
+    "POOR": {
+      "floor": 8,
+      "ceiling": 27
+    },
+    "MISMATCH": {
+      "floor": 0,
+      "ceiling": 7
+    }
   },
   "convergence": {
     "description": "Bonuses for strong multi-signal agreement between title, content, and evidence.",
-    "eligible_grades": ["EXCELLENT", "STRONG"],
+    "eligible_grades": [
+      "EXCELLENT",
+      "STRONG"
+    ],
     "min_positive_matches": 2,
     "required_title_reason": "OK",
     "required_content_reason": "OK",
@@ -150,10 +171,6 @@
     "contract": 1.0,
     "government": 1.0,
     "freshness": 1.0
-  },
-  "capability_contextual_llm": {
-    "description": "Defines which confidence levels count as LLM-evidenced for transparency and convergence bonus. High-confidence matches are shown as evidenced in the breakdown and count toward convergence. Lower confidence matches are shown as found but not confirmed. No separate scoring points are awarded — the grade already captures capability fit.",
-    "confidence_levels_with_credit": ["high"]
   },
   "deterministic_review_thresholds": {
     "description": "Controls the pre-LLM deterministic shortcut in source_learning.deterministic_review_outcome. When a job clears one of these rules it is decided without an LLM call (review_source='rule'). To calibrate, filter audit_records.json on review_source='rule' or 'rule+learning' and check whether the det_rule value matches your expectation.",

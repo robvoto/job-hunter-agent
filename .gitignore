@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.tmp
 .env
 
 # ---- Virtual environments ----
@@ -66,3 +67,8 @@ docs/archived-skills/
 /_*.txt
 
 .claudeignore
+b.txt
+repair_tmp.py
+tmp_check.py
+tmp_run_write.txt
+tmp.txt

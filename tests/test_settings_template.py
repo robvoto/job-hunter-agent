@@ -20,9 +20,15 @@ from job_hunter_agent.fastapi_app import create_app
 
 
 
+import re
+
+
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 SETTINGS_ADMIN_PARTIAL_PATH = ROOT_DIR / "templates" / "partials" / "settings" / "global" / "settings-admin.html"
+SETTINGS_PAGE_CSS_PATH = ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
+SETTINGS_ADMIN_JS_PATH = ROOT_DIR / "templates" / "static" / "settings" / "global" / "settings-admin.js"
 
 
 
@@ -69,6 +75,17 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert 'id="source_document_allowed_suffixes"' in html
 
     assert "__JOB_HUNTER_SETTINGS_SECTION_" not in html
+
+
+def test_global_settings_layout_css_prevents_panel_overflow():
+
+    css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
+
+    assert ".admin-settings-grid > .panel {" in css
+    assert "min-width: 0;" in css
+    assert ".panel-copy {" in css
+    assert "overflow-wrap: anywhere;" in css
+    assert ".subpanel .field-help {" in css
 
 
 
@@ -302,4 +319,31 @@ def test_settings_alerts_section_uses_shared_settings_shell(monkeypatch):
     assert '__JOB_HUNTER_SETTINGS_ALERTS_SECTION_TITLE__' not in html
 
     assert '__JOB_HUNTER_SETTINGS_ALERTS_TELEGRAM_HEADING__' not in html
+
+
+def test_global_settings_js_required_elements_exist_in_rendered_page(monkeypatch):
+    """Every element ID that settings-admin.js requires must exist in the rendered page.
+
+    This catches the class of bug where requireElement()/setFieldValue()/setFieldText()
+    references an ID that was removed or renamed in the HTML partial.
+    """
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "is_admin", lambda request: True)
+
+    js = SETTINGS_ADMIN_JS_PATH.read_text(encoding="utf-8")
+    # Extract static string literals passed to requireElement / setFieldValue / setFieldText.
+    # Dynamic IDs built with string concatenation (e.g. 'search_default_' + VAR) are excluded
+    # because the regex only captures single-quoted literals with no embedded +.
+    ids = set(re.findall(r"(?:requireElement|setFieldValue|setFieldText)\('([^']+)'", js))
+    # Remove dynamic IDs: only keep clean lowercase identifiers that don't end with '_'
+    # (trailing '_' indicates a prefix fragment that gets concatenated with a variable).
+    ids = {i for i in ids if re.match(r'^[a-z0-9_]+$', i) and not i.endswith('_')}
+
+    client = TestClient(create_app())
+    html = client.get("/global-settings").text
+
+    missing = [i for i in sorted(ids) if f'id="{i}"' not in html]
+    assert not missing, f"Elements required by settings-admin.js are missing from /global-settings: {missing}"
 

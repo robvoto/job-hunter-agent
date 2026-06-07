@@ -89,7 +89,6 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
-    RECORD_CONTEXTUAL_CAPABILITY_MATCHES_KEY,
     RECORD_DECISION_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_LENGTH_KEY,
@@ -109,10 +108,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DESCRIPTION_COMPACTION_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
-    RECORD_LLM_DECISION_SUMMARY_KEY,
-    RECORD_LLM_POSITIVE_REASONS_KEY,
-    RECORD_LLM_CONCERNS_KEY,
-    RECORD_LLM_SCORE_RATIONALE_KEY,
+    RECORD_LLM_DEBUG_REASON_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LOCATION_KEY,
@@ -329,7 +325,6 @@ def _build_outcome(record: dict) -> dict[str, Any]:
         "llm_decision": record.get(RECORD_LLM_DECISION_KEY),
         "llm_fit_grade": record.get(RECORD_LLM_FIT_GRADE_KEY),
         "review_source": record.get("review_source"),
-        RECORD_CONTEXTUAL_CAPABILITY_MATCHES_KEY: list(record.get(RECORD_CONTEXTUAL_CAPABILITY_MATCHES_KEY) or []),
         RECORD_REQUIREMENT_COVERAGE_KEY: list(record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []),
     }
 
@@ -501,13 +496,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     record["llm_learning_candidates"] = []
     record[RECORD_JOB_REQUIREMENTS_KEY] = []
     record[RECORD_REQUIREMENT_COVERAGE_KEY] = []
-    contextual_capability_matches: list = []
-    rationale_defaults = {
-        RECORD_LLM_DECISION_SUMMARY_KEY: "",
-        RECORD_LLM_POSITIVE_REASONS_KEY: [],
-        RECORD_LLM_CONCERNS_KEY: [],
-        RECORD_LLM_SCORE_RATIONALE_KEY: [],
-    }
+    debug_reason = ""
     llm_elapsed_ms = None
     llm_cost_usd = None
 
@@ -535,62 +524,37 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
                       elapsed_ms=llm_elapsed_ms,
                       payload_source=payload.get("payload_source", "llm"))
         review = payload["fit_review"]
-        record["llm_learning_candidates"] = payload.get("learning_candidates") or []
+        record["llm_learning_candidates"] = []
         record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
-        contextual_capability_matches = payload.get("contextual_capability_matches") or []
-        rationale_defaults = {
-            RECORD_LLM_DECISION_SUMMARY_KEY: payload.get("decision_summary") or "",
-            RECORD_LLM_POSITIVE_REASONS_KEY: payload.get("positive_reasons") or [],
-            RECORD_LLM_CONCERNS_KEY: payload.get("concerns") or [],
-            RECORD_LLM_SCORE_RATIONALE_KEY: payload.get("score_rationale") or [],
-        }
+        debug_reason = str(payload.get("debug_reason") or "")
         llm_cost_usd = float(payload.get("llm_cost_usd") or 0.0)
         source = str(payload.get("payload_source") or "llm")
         record["_obs_llm_called"] = True
         record["_obs_llm_cache_hit"] = (source == "cache")
         record[RECORD_LLM_ELAPSED_MS_KEY] = llm_elapsed_ms
         record[RECORD_LLM_COST_USD_KEY] = llm_cost_usd
-        coverage_counts = {
-            "supported": 0,
-            "partially_supported": 0,
-            "not_shown": 0,
-            "mismatch": 0,
-        }
         credited_capabilities: list[str] = []
-        ignored_capabilities: list[str] = []
+        imp_status_counts: dict[str, int] = {}
         for item in record[RECORD_REQUIREMENT_COVERAGE_KEY]:
-            status = str(item.get("status") or "").strip().lower()
-            if status in coverage_counts:
-                coverage_counts[status] += 1
+            status = str(item.get("status") or "not_shown").strip().lower()
+            importance = str(item.get("importance") or "preferred").strip().lower()
+            key = f"{importance}.{status}"
+            imp_status_counts[key] = imp_status_counts.get(key, 0) + 1
             capability_name = str(item.get("capability_name") or "").strip()
             if capability_name and status in {"supported", "partially_supported"}:
                 credited_capabilities.append(capability_name)
-        for item in contextual_capability_matches:
-            capability_name = str(item.get("capability_name") or "").strip()
-            confidence = str(item.get("confidence") or "").strip().lower()
-            if not capability_name:
-                continue
-            if confidence == "high":
-                continue
-            ignored_capabilities.append(f"{capability_name} ({confidence})")
         logger.info(
             format_log_block(
                 "fit-review",
                 {
                     "job_key": record.get(RECORD_JOB_KEY, ""),
                     "title": record.get(RECORD_TITLE_KEY, ""),
+                    "grade": review.get("grade", ""),
+                    "decision": review.get("decision", ""),
                     "capabilities_used": ", ".join(credited_capabilities) or "(none)",
-                    "contextual_matches_credited": ", ".join(
-                        str(item.get("capability_name") or "").strip()
-                        for item in contextual_capability_matches
-                        if str(item.get("confidence") or "").strip().lower() == "high"
-                    ) or "(none)",
-                    "contextual_matches_logged_only": ", ".join(ignored_capabilities) or "(none)",
-                    "requirement_coverage": (
-                        f"supported={coverage_counts['supported']}, partial={coverage_counts['partially_supported']}, "
-                        f"not_shown={coverage_counts['not_shown']}, mismatch={coverage_counts['mismatch']}"
-                    ),
+                    "requirement_breakdown": " ".join(f"{k}={v}" for k, v in sorted(imp_status_counts.items())) or "(empty)",
+                    "debug_reason": debug_reason or "(none)",
                 },
             )
         )
@@ -598,10 +562,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     return {
         "llm_decision": review["decision"],
         "llm_fit_grade": review["grade"],
+        RECORD_LLM_DEBUG_REASON_KEY: debug_reason,
         "review_source": source,
         "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
-        "contextual_capability_matches": contextual_capability_matches,
-        **rationale_defaults,
         RECORD_JOB_REQUIREMENTS_KEY: record[RECORD_JOB_REQUIREMENTS_KEY],
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
         RECORD_LLM_ELAPSED_MS_KEY: llm_elapsed_ms,
@@ -871,7 +834,6 @@ def review_post_detail_normalized_job(
         return _build_outcome(record), record, skill_observations
 
     record.update(fit_eval)
-    record[RECORD_CONTEXTUAL_CAPABILITY_MATCHES_KEY] = fit_eval.get("contextual_capability_matches") or []
     record[RECORD_JOB_REQUIREMENTS_KEY] = record.get(RECORD_JOB_REQUIREMENTS_KEY) or []
 
     if record[RECORD_DECISION_KEY] == "REJECT":

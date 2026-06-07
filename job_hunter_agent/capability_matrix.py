@@ -3,9 +3,11 @@
 import re
 from typing import Any
 
+from job_hunter_agent.text_processing import compact_whitespace
+
 
 def _clean_term(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    return compact_whitespace(value).lower()
 
 
 def expand_capability_terms(rule: dict[str, Any], max_terms: int = 10) -> list[str]:

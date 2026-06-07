@@ -180,7 +180,6 @@
         "capability_naming_guidance_max_chars": "Maximum managed capability-naming guidance characters included in prompts.",
         "capability_naming_aliases_max_items": "Maximum aliases included when naming capability clusters.",
         "raw_output_log_max_chars": "Maximum raw LLM output characters retained in logs when parsing fails.",
-        "contextual_matches_max_items": "Maximum contextual capability matches requested from the LLM.",
         "job_requirements_max_items": "Maximum extracted job requirements kept per job.",
         "learning_candidates_max_items": "Maximum learning candidates requested/kept per LLM call.",
         "rejection_blocker_suggestions_max_items": "Maximum rejection-blocker suggestions returned to the user.",

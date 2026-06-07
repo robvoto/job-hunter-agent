@@ -53,7 +53,7 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 **Full LLM path** (LLM is called for fit decision):
 - Only `ad_learning_signals` (deterministic) are registered — no LLM learning candidates
 - The fit review LLM schema (`_LLMFitReviewPayload`) has no `learning_candidates` field
-- Do not add learning category guidance to the fit review prompt; it causes category names to leak into `contextual_capability_matches`
+- Do not add learning category guidance to the fit review prompt; the fit-review schema has no learning fields and category names must not leak into capability names
 
 **Consequence:** `government_context_pattern`, `role_title_pattern`, and similar signals are only generated for jobs decided by the deterministic path. Jobs decided by the full LLM review produce no LLM-proposed learning candidates.
 

@@ -153,7 +153,10 @@ def format_score_breakdown_console(breakdown: List[dict]) -> List[str]:
             credited = [e for e in entries if int(e.get("value") or 0) > 0]
             total = sum(int(e.get("value") or 0) for e in entries)
             count = len(credited)
-            detail = entries[0].get("label", "No matches found") if count == 0 else f"{count} match{'es' if count != 1 else ''} found"
+            if count == 0:
+                detail = entries[0].get("label", "No matches found") if entries else "No matches found"
+            else:
+                detail = f"{count} match{'es' if count != 1 else ''} found"
             lines.append(f"  {i:2d}. {cat:<14}  {detail:<40}  {total:+d}")
         elif key == "risk":
             if not entries:

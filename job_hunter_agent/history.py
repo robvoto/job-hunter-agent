@@ -19,12 +19,8 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
-    RECORD_LLM_CONCERNS_KEY,
     RECORD_LLM_COST_USD_KEY,
-    RECORD_LLM_DECISION_SUMMARY_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
-    RECORD_LLM_POSITIVE_REASONS_KEY,
-    RECORD_LLM_SCORE_RATIONALE_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
@@ -80,10 +76,6 @@ KEEP_SNAPSHOT_FIELDS = (
     "llm_decision",
 
     "llm_fit_grade",
-    RECORD_LLM_DECISION_SUMMARY_KEY,
-    RECORD_LLM_POSITIVE_REASONS_KEY,
-    RECORD_LLM_CONCERNS_KEY,
-    RECORD_LLM_SCORE_RATIONALE_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_COST_USD_KEY,
 
@@ -121,8 +113,6 @@ KEEP_SNAPSHOT_FIELDS = (
     "hard_block_reasons",
 
     "reviewed_signal_matches",
-
-    "contextual_capability_matches",
 
 )
 
@@ -246,18 +236,6 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
     if RECORD_FIT_TONE_CLASS_KEY in snapshot:
         record[RECORD_FIT_TONE_CLASS_KEY] = snapshot.get(RECORD_FIT_TONE_CLASS_KEY) or ""
 
-    if not record.get(RECORD_LLM_DECISION_SUMMARY_KEY):
-        record[RECORD_LLM_DECISION_SUMMARY_KEY] = snapshot.get(RECORD_LLM_DECISION_SUMMARY_KEY) or ""
-
-    if not record.get(RECORD_LLM_POSITIVE_REASONS_KEY):
-        record[RECORD_LLM_POSITIVE_REASONS_KEY] = snapshot.get(RECORD_LLM_POSITIVE_REASONS_KEY) or []
-
-    if not record.get(RECORD_LLM_CONCERNS_KEY):
-        record[RECORD_LLM_CONCERNS_KEY] = snapshot.get(RECORD_LLM_CONCERNS_KEY) or []
-
-    if not record.get(RECORD_LLM_SCORE_RATIONALE_KEY):
-        record[RECORD_LLM_SCORE_RATIONALE_KEY] = snapshot.get(RECORD_LLM_SCORE_RATIONALE_KEY) or []
-
     if not record.get(RECORD_LLM_ELAPSED_MS_KEY):
         record[RECORD_LLM_ELAPSED_MS_KEY] = snapshot.get(RECORD_LLM_ELAPSED_MS_KEY)
 
@@ -283,10 +261,6 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
     if not record.get("hard_block_reasons"):
 
         record["hard_block_reasons"] = snapshot.get("hard_block_reasons") or []
-
-    if not record.get("contextual_capability_matches"):
-
-        record["contextual_capability_matches"] = snapshot.get("contextual_capability_matches") or []
 
     if not record.get(RECORD_REQUIREMENT_COVERAGE_KEY):
 

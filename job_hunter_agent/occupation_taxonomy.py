@@ -28,6 +28,7 @@ from typing import Any
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.onet_taxonomy_import import TAXONOMY_VERSION, normalize_title
 from job_hunter_agent.paths import ONET_TAXONOMY_DIR
+from job_hunter_agent.text_processing import compact_whitespace
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ def _profile_target_occupation_queries(profile: dict[str, Any]) -> list[str]:
     queries: list[str] = []
     seen: set[str] = set()
     for value in profile.get("target_occupation_queries") or []:
-        cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+        cleaned = compact_whitespace(value)
         if not cleaned:
             continue
         key = cleaned.lower()

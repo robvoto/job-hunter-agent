@@ -95,9 +95,9 @@
             <input id="playwright_viewport_height" type="number" min="100" max="4000" step="1">
             <div class="field-help">Shared browser viewport height used by the source connector runtime.</div>
 
-            <label for="playwright_selector_timeout">Playwright selector timeout</label>
-            <input id="playwright_selector_timeout" type="number" min="1000" max="60000" step="1">
-            <div class="field-help">How long the scraper waits for selectors before failing a browser interaction.</div>
+            <label for="playwright_selector_timeout">Playwright selector timeout (seconds)</label>
+            <input id="playwright_selector_timeout" type="number" min="1" max="60" step="1">
+            <div class="field-help">How long the scraper waits for selectors before failing a browser interaction. The UI shows seconds, but the runtime still stores milliseconds.</div>
           </section>
 
           <section class="panel">
@@ -261,7 +261,7 @@
             <div class="field-help">Read-only. One suffix per line, including the leading dot. Update this in the managed advanced settings source, not from the UI.</div>
           </section>
 
-          <section class="panel">
+          <section class="panel onboarding-defaults-panel">
             <h2>Onboarding Defaults</h2>
             <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
             <div class="field-help">These controls also shape how the learning pass keeps aliases and capability clusters when the system extracts your CV.</div>
@@ -328,28 +328,42 @@
             <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"model-id": {"input": 0, "output": 0}}'></textarea>
             <div class="field-help">Managed pricing used for cost logging. Keep it as JSON keyed by model id with `input` and `output` rates.</div>
 
-            <label for="llm_prompt_settings">Prompt settings</label>
-            <textarea id="llm_prompt_settings" rows="14" placeholder='{"match_preference_templates": {...}}'></textarea>
-            <div class="field-help">
-              Managed prompt policy stored as JSON. Setting a token limit too low truncates the LLM response mid-JSON and causes a CARD_EXCEPTION for that job. Setting it too high wastes API budget.
-              <ul class="field-help-list">
-                <li><code>fit_decision_max_output_tokens</code> — max output tokens for the per-job fit review (decision + contextual capability matches). Minimum needed: ~100. Default: 400. Hard limit: 2000.</li>
-                <li><code>learning_candidates_max_output_tokens</code> — max output tokens for the learning-candidate extraction pass. Default: 500. Hard limit: 2000.</li>
-                <li><code>rejection_blocker_suggestions_max_output_tokens</code> — max output tokens when the LLM suggests rejection blocker rules. Default: 300. Hard limit: 1000.</li>
-                <li><code>capability_naming_max_output_tokens</code> — max output tokens when the LLM generates capability names and aliases. Default: 500. Hard limit: 1500.</li>
-                <li><code>profile_extraction_max_output_tokens</code> — max output tokens for full CV profile extraction during onboarding. Default: 2000. Hard limit: 4000.</li>
-                <li><code>learning_candidates_max_items</code> — how many learning candidates the LLM is asked to return per job. Default: 6. Hard limit: 20.</li>
-                <li><code>rejection_blocker_suggestions_max_items</code> — how many blocker suggestions the LLM may return. Default: 6. Hard limit: 20.</li>
-                <li><code>job_description_max_chars</code> — characters of job text sent into each LLM review. Default: 5000. Hard limit: 20000.</li>
-                <li><code>cv_evidence_json_chars</code> — characters of structured CV evidence JSON included per review. Default: 12000. Hard limit: 30000.</li>
-                <li><code>cv_fallback_chars</code> — characters of plain CV text used when the JSON evidence is unavailable. Default: 3000. Hard limit: 10000.</li>
-                <li><code>profile_brief_max_chars</code> — characters of the profile brief injected into prompts. Default: 2500. Hard limit: 10000.</li>
-                <li><code>fit_guidance_max_chars</code> — characters of fit guidance included in the review prompt. Default: 1200. Hard limit: 5000.</li>
-                <li><code>capability_rules_max_items</code> — how many capability rules are injected into each review prompt. Default: 20. Hard limit: 50.</li>
-                <li><code>capability_rule_aliases_max_items</code> — how many aliases per rule are included. Default: 8. Hard limit: 20.</li>
-                <li><code>capability_naming_aliases_max_items</code> — how many aliases the LLM is asked to return per capability. Default: 6. Hard limit: 20.</li>
-                <li><code>raw_output_log_max_chars</code> — how many characters of raw LLM output are written to the log. Default: 1200. Hard limit: 5000.</li>
-              </ul>
+            <div class="settings-form-grid settings-form-grid--prompt-templates">
+              <div class="settings-form-field settings-form-field--full">
+                <p class="panel-copy">These are the plain text templates inserted into the LLM system prompt. Edit the wording here, not a raw JSON blob.</p>
+              </div>
+
+              <div class="settings-form-field settings-form-field--full">
+                <div class="field-label-row">
+                  <label for="llm_prompt_compensation_target_yearly">Annual compensation template</label>
+                </div>
+                <textarea id="llm_prompt_compensation_target_yearly" rows="3"></textarea>
+                <div class="field-help">Used when the profile has a yearly salary target.</div>
+              </div>
+
+              <div class="settings-form-field settings-form-field--full">
+                <div class="field-label-row">
+                  <label for="llm_prompt_compensation_target_daily">Daily rate template</label>
+                </div>
+                <textarea id="llm_prompt_compensation_target_daily" rows="3"></textarea>
+                <div class="field-help">Used when the profile has a contract or FTC daily rate target.</div>
+              </div>
+
+              <div class="settings-form-field settings-form-field--full">
+                <div class="field-label-row">
+                  <label for="llm_prompt_home_location">Home base template</label>
+                </div>
+                <textarea id="llm_prompt_home_location" rows="3"></textarea>
+                <div class="field-help">Used when the profile has a home location set.</div>
+              </div>
+
+              <div class="settings-form-field settings-form-field--full">
+                <div class="field-label-row">
+                  <label for="llm_prompt_prefer_permanent">Permanent preference template</label>
+                </div>
+                <textarea id="llm_prompt_prefer_permanent" rows="4"></textarea>
+                <div class="field-help">Used when the profile prefers permanent roles before contract or FTC work.</div>
+              </div>
             </div>
           </section>
 

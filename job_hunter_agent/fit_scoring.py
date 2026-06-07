@@ -13,14 +13,11 @@ from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.history import viewed_by_user
 from job_hunter_agent.posting_utils import current_posted_age_days
 from job_hunter_agent.preferences import (
-    assess_contract_preference,
     assess_location_preference,
-    assess_work_mode_preference,
     salary_fit_adjustment,
 )
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.profile_store import (
-    KEY_CAPABILITY_CONTEXTUAL_LLM,
     KEY_CONVERGENCE,
     KEY_LLM_GRADE_BANDS,
     KEY_LLM_GRADE_POINTS,
@@ -112,14 +109,10 @@ def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Opt
     active_profile = profile or load_profile()
     scoring_rules = get_scoring_rules(active_profile)
     convergence_rules = scoring_rules[KEY_CONVERGENCE]
-    levels_with_credit = {
-        str(v).strip().lower()
-        for v in ((scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {}) or {}).get("confidence_levels_with_credit") or [])
-    }
     positive_count = sum(
-        1 for item in (record.get("contextual_capability_matches") or [])
+        1 for item in (record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or [])
         if isinstance(item, dict)
-        and str(item.get("confidence") or "").strip().lower() in levels_with_credit
+        and str(item.get("status") or "").strip().lower() == "supported"
     )
     if (
         title_reason != convergence_rules["required_title_reason"]
@@ -147,6 +140,7 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
         if not isinstance(item, dict):
             continue
         requirement = str(item.get("requirement") or "").strip()
+        importance = str(item.get("importance") or "preferred").strip().lower()
         status = str(item.get("status") or "").strip().lower().replace("_", " ")
         capability_name = str(item.get("capability_name") or "").strip()
         matched_job_text = str(item.get("matched_job_text") or "").strip()
@@ -157,7 +151,7 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
         ]
         if not requirement:
             continue
-        label = f"Requirement {status}: {requirement}"
+        label = f"[{importance}] Requirement {status}: {requirement}"
         details: list[str] = []
         if capability_name:
             details.append(f"capability: {friendly_capability_label(capability_name)}")
@@ -171,37 +165,25 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
     return entries
 
 
-def contextual_capability_transparency_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    """Transparency-only breakdown entries for LLM contextual capability matches.
+def capability_support_log(record: dict) -> None:
+    """Log requirement-coverage capability support for debugging.
 
-    Capabilities are support/explanation for the LLM grade, not a separate scoring path.
-    High-confidence matches are labelled as supported; below-threshold are labelled as found
-    but not confirmed. No points are assigned — the grade already captured the capability fit.
+    Replaces the old contextual_capability_matches transparency log.
+    Source of truth is requirement_coverage — the single capability-matching mechanism.
     """
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    levels_with_credit = {
-        str(v).strip().lower()
-        for v in ((scoring_rules.get(KEY_CAPABILITY_CONTEXTUAL_LLM, {}) or {}).get("confidence_levels_with_credit") or [])
-    }
     supported: list[str] = []
     low_confidence: list[str] = []
-    low_confidence_label = load_ui_labels().get("fit_highlight_labels", {}).get(
-        "possible_capability_match",
-        "Possible capability match — mentioned in the job, but not strong enough to affect the score.",
-    )
-
-    for item in (record.get("contextual_capability_matches") or []):
+    for item in (record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []):
         if not isinstance(item, dict):
             continue
         cap_name = str(item.get("capability_name") or "").strip()
-        confidence = str(item.get("confidence") or "").strip().lower()
+        status = str(item.get("status") or "").strip().lower()
         if not cap_name:
             continue
         label = friendly_capability_label(cap_name)
-        if confidence in levels_with_credit:
+        if status == "supported":
             supported.append(label)
-        else:
+        elif status == "partially_supported":
             low_confidence.append(label)
 
     logger.info(
@@ -210,21 +192,6 @@ def contextual_capability_transparency_entries(record: dict, profile: Optional[d
         ", ".join(dedupe_preserve_order(supported)) or "(none)",
         ", ".join(dedupe_preserve_order(low_confidence)) or "(none)",
     )
-
-    entries: List[dict] = []
-    if supported:
-        entries.append({
-            "label": f"LLM-supported capabilities: {', '.join(dedupe_preserve_order(supported))}",
-            "value": 0,
-            "section": "capability",
-        })
-    if low_confidence:
-        entries.append({
-            "label": low_confidence_label,
-            "value": 0,
-            "section": "capability",
-        })
-    return entries
 
 
 def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
@@ -246,10 +213,6 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
         entry = f"{prefix}: {label}" if label else ""
         if entry and entry not in highlights:
             highlights.append(entry)
-
-    contract_signal = assess_contract_preference(record, active_profile)
-    if contract_signal and int(contract_signal.get("value", 0) or 0) > 0:
-        highlights.append(contract_signal["label"])
 
     location_signal = assess_location_preference(record, active_profile)
     if location_signal and int(location_signal.get("value", 0) or 0) > 0:
@@ -305,9 +268,7 @@ def build_core_fit_breakdown(
         entries.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"]), "section": "content"})
     if full_description_confidence(record) == "LOW":
         entries.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"]), "section": "content"})
-    entries.extend(contextual_capability_transparency_entries(record, active_profile))
-    if not (record.get("contextual_capability_matches") or []):
-        entries.append({"label": "No LLM contextual capability matches found", "value": 0, "section": "capability"})
+    capability_support_log(record)
     convergence_entry = convergence_bonus_entry(record, active_profile)
     if convergence_entry:
         entries.append({
@@ -331,24 +292,6 @@ def build_preference_breakdown(record: dict, scoring_rules: dict, weights: dict,
         })
     else:
         entries.append({"label": "Location: no preference set", "value": 0, "section": "location"})
-    contract_item = assess_contract_preference(record, active_profile)
-    if contract_item:
-        entries.append({
-            "label": contract_item["label"],
-            "value": weighted_points(int(contract_item["value"]), weights["contract"]),
-            "section": "work_type",
-        })
-    else:
-        entries.append({"label": "Work type: no preference set", "value": 0, "section": "work_type"})
-    work_mode_item = assess_work_mode_preference(record, active_profile)
-    if work_mode_item:
-        entries.append({
-            "label": work_mode_item["label"],
-            "value": weighted_points(int(work_mode_item["value"]), weights["work_mode"]),
-            "section": "work_mode",
-        })
-    else:
-        entries.append({"label": "Work mode: no preference set", "value": 0, "section": "work_mode"})
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
         entries.append({"label": "Salary/rate signal", "value": salary_score, "section": "salary"})

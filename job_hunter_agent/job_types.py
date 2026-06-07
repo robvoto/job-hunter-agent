@@ -4,6 +4,8 @@ import logging
 import re
 from typing import Dict, List, Optional
 
+from job_hunter_agent.text_processing import compact_whitespace
+
 """Manages job type normalization and filter groups.
 
 This module loads, caches, and persists mappings for various job type
@@ -18,7 +20,7 @@ _cached_inference_rules: Optional[List[dict]] = None
 
 
 def _clean_text(value: object) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return compact_whitespace(value)
 
 
 def _normalize_key(value: object) -> str:

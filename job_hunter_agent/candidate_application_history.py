@@ -34,6 +34,7 @@ from job_hunter_agent.paths import (
     CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
     get_candidate_application_history_path,
 )
+from job_hunter_agent.text_processing import compact_whitespace
 
 _SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab_name}"
 _CANDIDATE_APPLICATION_HISTORY_PATH = get_candidate_application_history_path()
@@ -127,7 +128,7 @@ _ALLOWED_CONFIDENCES = frozenset({"high", "medium", "low"})
 # ---------------------------------------------------------------------------
 
 def _clean(value: object) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return compact_whitespace(value)
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +253,7 @@ def _normalize_name(value: str) -> str:
     value = re.sub(
         r"\b(pty|ltd|limited|inc|co|corp|group|australia|au)\b", "", value
     )
-    return re.sub(r"\s+", " ", value).strip()
+    return compact_whitespace(value)
 
 
 def _company_match_score(job_company: str, rejection_company: str) -> float:

@@ -34,6 +34,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from job_hunter_agent import config as app_config
 from job_hunter_agent.auth import (
     OPEN_PATHS,
     configure_auth,
@@ -283,6 +284,8 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def csrf_protection(request: Request, call_next):  # type: ignore[no-untyped-def]
+        if app_config.DEBUG_MODE:
+            return await call_next(request)
         if request.method in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
         if request.url.path == "/api/debug/browser-log":

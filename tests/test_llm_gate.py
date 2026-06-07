@@ -29,11 +29,10 @@ def test_fit_review_prompt_excludes_learning_guidance():
     assert "role_title_pattern" not in prompt
     assert "capability_concept" not in prompt
     assert "learning_candidates" not in prompt
+    assert "Do not save anything" not in prompt
+    assert "Do not invent new categories" not in prompt
     assert "requirement_coverage" in prompt
     assert "fit_review.grade" in prompt
-    assert "decision_summary" in prompt
-    assert "positive_reasons" in prompt
-    assert "score_rationale" in prompt
 
 
 def test_learning_only_prompt_retains_learning_guidance():
@@ -42,6 +41,8 @@ def test_learning_only_prompt_retains_learning_guidance():
     assert "Learning categories available:" in prompt
     assert "capability_concept" in prompt
     assert "learning_candidates" in prompt
+    assert "Do not save anything" in prompt
+    assert "Do not invent new categories" in prompt
 
 
 def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
@@ -81,15 +82,11 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
 
     assert payload == {
         "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-        "decision_summary": "",
-        "positive_reasons": [],
-        "concerns": [],
-        "score_rationale": [],
-        "learning_candidates": [],
-        "contextual_capability_matches": [],
+        "debug_reason": "",
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
+                "importance": "preferred",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -97,6 +94,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
             },
             {
                 "requirement": "Process mapping",
+                "importance": "preferred",
                 "status": "partially_supported",
                 "capability_name": "Process Mapping",
                 "matched_job_text": "map the current process",
@@ -107,28 +105,11 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
     }
 
 
-def test_normalize_llm_review_payload_caps_rationale_fields():
+def test_normalize_llm_review_payload_debug_reason_is_capped():
     payload = llm_gate.normalize_llm_review_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-            "decision_summary": "  A" * 200,
-            "positive_reasons": [
-                "  Matches delivery leadership across the program  ",
-                "AWS and REST API experience look relevant to the role",
-                "No blocker found",
-                "ignored extra item",
-            ],
-            "concerns": [
-                "  Salary not found  ",
-                "AWS evidence is possible but not strongly proven",
-                "Concern about commute",
-                "ignored extra concern",
-            ],
-            "score_rationale": [
-                "LLM grade placed this job in the Strong band.",
-                "Preferences and freshness moved the score within that band.",
-                "ignored extra rationale",
-            ],
+            "debug_reason": "  A" * 200,
             "job_requirements": ["Stakeholder engagement"],
             "requirement_coverage": [
                 {
@@ -143,21 +124,7 @@ def test_normalize_llm_review_payload_caps_rationale_fields():
         valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
     )
 
-    assert len(payload["decision_summary"]) <= 240
-    assert payload["positive_reasons"] == [
-        "Matches delivery leadership across the program",
-        "AWS and REST API experience look relevant to the role",
-        "No blocker found",
-    ]
-    assert payload["concerns"] == [
-        "Salary not found",
-        "AWS evidence is possible but not strongly proven",
-        "Concern about commute",
-    ]
-    assert payload["score_rationale"] == [
-        "LLM grade placed this job in the Strong band.",
-        "Preferences and freshness moved the score within that band.",
-    ]
+    assert len(payload["debug_reason"]) <= 300
 
 
 def test_request_learning_payload_uses_single_llm_call(monkeypatch):
@@ -271,4 +238,209 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
     )
 
     assert payload["fit_review"]["grade"] == "SOLID"
+
+
+# ── derive_fit_review_grade contract ─────────────────────────────────────────
+
+def _cov(req: str, status: str, cap: str = "") -> dict:
+    return {"requirement": req, "status": status, "capability_name": cap, "matched_job_text": "", "profile_support": []}
+
+
+def test_all_supported_three_reqs_gives_excellent():
+    coverage = [_cov(f"req{i}", "supported", f"cap{i}") for i in range(3)]
+    assert llm_gate.derive_fit_review_grade(coverage) == "EXCELLENT"
+
+
+def test_all_supported_two_reqs_gives_strong():
+    coverage = [_cov("req1", "supported", "cap1"), _cov("req2", "supported", "cap2")]
+    assert llm_gate.derive_fit_review_grade(coverage) == "STRONG"
+
+
+def test_mostly_supported_no_mismatch_gives_strong():
+    # 3 supported + 1 partial out of 4 total → support_score=3.5/4=0.875 → STRONG
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "supported", "cap2"),
+        _cov("req3", "supported", "cap3"),
+        _cov("req4", "partially_supported", "cap4"),
+    ]
+    assert llm_gate.derive_fit_review_grade(coverage) == "STRONG"
+
+
+def test_mixed_partial_no_mismatch_gives_solid():
+    # 2 supported + 2 partial out of 4 → score=3/4=0.75 → SOLID (not STRONG: 2 partials)
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "supported", "cap2"),
+        _cov("req3", "partially_supported", "cap3"),
+        _cov("req4", "partially_supported", "cap4"),
+    ]
+    grade = llm_gate.derive_fit_review_grade(coverage)
+    assert grade == "SOLID"
+
+
+def test_low_support_gives_weak():
+    # 1 supported out of 4 → score=1/4=0.25 → WEAK
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "not_shown"),
+        _cov("req3", "not_shown"),
+        _cov("req4", "not_shown"),
+    ]
+    assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
+
+
+def test_no_support_gives_poor():
+    coverage = [_cov("req1", "not_shown"), _cov("req2", "not_shown")]
+    assert llm_gate.derive_fit_review_grade(coverage) == "POOR"
+
+
+def test_no_support_with_mismatch_gives_mismatch():
+    coverage = [_cov("req1", "mismatch"), _cov("req2", "not_shown")]
+    assert llm_gate.derive_fit_review_grade(coverage) == "MISMATCH"
+
+
+def test_mismatch_with_high_support_caps_at_weak():
+    # Even with 3 supported + 1 mismatch, grade must be WEAK
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "supported", "cap2"),
+        _cov("req3", "supported", "cap3"),
+        _cov("req4", "mismatch"),
+    ]
+    assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
+
+
+def test_mismatch_with_partial_support_caps_at_weak():
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "partially_supported", "cap2"),
+        _cov("req3", "mismatch"),
+    ]
+    assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
+
+
+def test_mismatch_cannot_become_solid():
+    # support_ratio=0.5 with mismatch → must stay WEAK, never SOLID
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "mismatch"),
+    ]
+    grade = llm_gate.derive_fit_review_grade(coverage)
+    assert grade not in {"SOLID", "STRONG", "EXCELLENT"}
+    assert grade == "WEAK"
+
+
+def test_mismatch_cannot_become_strong():
+    coverage = [
+        _cov("req1", "supported", "cap1"),
+        _cov("req2", "supported", "cap2"),
+        _cov("req3", "supported", "cap3"),
+        _cov("req4", "supported", "cap4"),
+        _cov("req5", "mismatch"),
+    ]
+    grade = llm_gate.derive_fit_review_grade(coverage)
+    assert grade not in {"STRONG", "EXCELLENT"}
+
+
+def test_empty_coverage_gives_poor():
+    assert llm_gate.derive_fit_review_grade([]) == "POOR"
+
+
+# ── importance-aware grade rules ──────────────────────────────────────────────
+
+def _cov_imp(req: str, status: str, importance: str, cap: str = "") -> dict:
+    return {
+        "requirement": req, "importance": importance, "status": status,
+        "capability_name": cap, "matched_job_text": "", "profile_support": [],
+    }
+
+
+def test_nice_to_have_not_shown_does_not_materially_penalise():
+    # 3 mandatory fully supported + 4 nice_to_have not_shown.
+    # nice_to_have weight is 0.25, so their not_shown barely reduces the ratio.
+    coverage = (
+        [_cov_imp(f"m{i}", "supported", "mandatory", f"cap{i}") for i in range(3)]
+        + [_cov_imp(f"n{i}", "not_shown", "nice_to_have") for i in range(4)]
+    )
+    grade = llm_gate.derive_fit_review_grade(coverage)
+    # mandatory support_score = 3*3 = 9; max_score = 3*3 + 4*0.25 = 10
+    # ratio = 0.9 → EXCELLENT not possible (total_items=7, not all supported)
+    # supported_count(3) >= max(2, 7-1=6)? NO → skip STRONG
+    # ratio(0.9) >= 0.5 → at least SOLID
+    assert grade in {"SOLID", "STRONG", "EXCELLENT"}
+    assert grade not in {"WEAK", "POOR", "MISMATCH"}
+
+
+def test_mandatory_not_shown_lowers_grade():
+    # 3 nice_to_have supported but 2 mandatory not_shown.
+    # mandatory gaps should keep grade low despite nice_to_have coverage.
+    coverage = (
+        [_cov_imp(f"n{i}", "supported", "nice_to_have", f"cap{i}") for i in range(3)]
+        + [_cov_imp(f"m{i}", "not_shown", "mandatory") for i in range(2)]
+    )
+    # support_score = 3*0.25 = 0.75; max_score = 3*0.25 + 2*3 = 6.75; ratio = 0.11
+    grade = llm_gate.derive_fit_review_grade(coverage)
+    assert grade in {"WEAK", "POOR", "MISMATCH"}
+
+
+def test_mandatory_mismatch_caps_at_weak():
+    coverage = [
+        _cov_imp("r1", "supported",   "mandatory", "cap1"),
+        _cov_imp("r2", "supported",   "mandatory", "cap2"),
+        _cov_imp("r3", "mismatch",    "mandatory"),
+    ]
+    assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
+
+
+def test_importance_defaults_to_preferred_when_missing():
+    # Items without importance should behave exactly as preferred (weight 1.0).
+    coverage_with = [_cov_imp(f"r{i}", "supported", "preferred", f"cap{i}") for i in range(3)]
+    coverage_without = [_cov(f"r{i}", "supported", f"cap{i}") for i in range(3)]
+    assert llm_gate.derive_fit_review_grade(coverage_with) == llm_gate.derive_fit_review_grade(coverage_without)
+
+
+def test_normalize_coverage_includes_importance_field():
+    items = [
+        {
+            "requirement": "Agile delivery",
+            "importance": "mandatory",
+            "status": "supported",
+            "capability_name": "agile methodologies",
+            "matched_job_text": "agile ceremonies",
+            "profile_support": [],
+        },
+        {
+            "requirement": "Nice portfolio",
+            "importance": "nice_to_have",
+            "status": "not_shown",
+            "capability_name": "",
+            "matched_job_text": "portfolio optional",
+            "profile_support": [],
+        },
+    ]
+    result = llm_gate.normalize_llm_requirement_coverage(
+        items,
+        valid_capability_names={"agile methodologies": "Agile Methodologies"},
+    )
+    assert result[0]["importance"] == "mandatory"
+    assert result[1]["importance"] == "nice_to_have"
+
+
+def test_normalize_coverage_defaults_invalid_importance_to_preferred():
+    items = [
+        {
+            "requirement": "Python experience",
+            "importance": "critical",  # not an allowed value
+            "status": "supported",
+            "capability_name": "python",
+            "matched_job_text": "Python required",
+            "profile_support": [],
+        },
+    ]
+    result = llm_gate.normalize_llm_requirement_coverage(
+        items,
+        valid_capability_names={"python": "Python"},
+    )
+    assert result[0]["importance"] == "preferred"
 

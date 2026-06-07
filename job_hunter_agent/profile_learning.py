@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import OUTPUT_DIR
+from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     KEY_CANDIDATE_CAPABILITIES,
@@ -49,7 +50,7 @@ KEY_NEEDS_REVIEW = "needs_review"
 
 def _simple_title(value: str) -> str:
     """Normalize a role title for onboarding: trim, lowercase, collapse whitespace only."""
-    return re.sub(r"\s+", " ", str(value or "").strip().lower()).strip()
+    return compact_whitespace(value).lower()
 
 from job_hunter_agent.signal_registry import register_signals, signal_in_approved_knowledge
 from job_hunter_agent.signal_schema import (
@@ -480,7 +481,7 @@ def build_learning_patch(
     raw_queries = extracted.get(KEY_TARGET_OCCUPATION_QUERIES) or []
     occupation_queries = list(
         dict.fromkeys(
-            re.sub(r"\s+", " ", str(value or "")).strip()
+            compact_whitespace(value)
             for value in raw_queries
             if str(value or "").strip()
         )

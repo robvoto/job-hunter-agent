@@ -223,9 +223,31 @@
       grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       align-items: start;
     }
+    .admin-settings-grid > .panel {
+      display: grid;
+      align-content: start;
+      gap: var(--field-label-control-gap);
+      min-width: 0;
+    }
+    .admin-settings-grid > .panel > .panel-copy {
+      margin: 0;
+    }
+    .onboarding-defaults-panel {
+      display: grid;
+      gap: var(--field-label-control-gap);
+    }
+    .onboarding-defaults-panel > input[type="number"] {
+      width: min(100%, var(--setting-control-width));
+    }
     .search-settings-grid {
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
+    }
+    .settings-form-grid--prompt-templates {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .settings-form-field--summary {
+      row-gap: var(--field-summary-gap);
     }
     .contract-duration-row[hidden] {
       display: none;
@@ -387,7 +409,13 @@
     .inline-status.loading { color: var(--text-muted); }
     .inline-status.success { color: var(--state-success-text); }
     .inline-status.error { color: var(--state-error-text); }
-    .panel-copy { margin: var(--title-help-gap) 0 0; color: var(--text-muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
+    .panel-copy {
+      margin: var(--title-help-gap) 0 0;
+      color: var(--text-muted);
+      font-size: var(--help-copy-font-size);
+      line-height: var(--help-copy-line-height);
+      overflow-wrap: anywhere;
+    }
     .help-box {
       margin-top: 10px;
       padding: var(--surface-pad-block-md) var(--surface-pad-inline-lg);
@@ -522,7 +550,10 @@
       font-size: var(--text-role-panel-title-font-size);
       font-weight: var(--text-role-panel-title-font-weight);
     }
-    .subpanel .field-help { margin-bottom: 6px; }
+    .subpanel .field-help {
+      margin-bottom: 6px;
+      overflow-wrap: anywhere;
+    }
     .advanced-rule-drawer {
       margin-top: var(--surface-gap-md);
     }
@@ -1058,6 +1089,9 @@
       .hero {
         gap: var(--surface-gap-md);
         flex-wrap: wrap;
+      }
+      .onboarding-defaults-panel > input[type="number"] {
+        width: 100%;
       }
     }
 

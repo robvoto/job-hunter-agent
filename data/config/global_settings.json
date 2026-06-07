@@ -393,7 +393,6 @@
       "capability_naming_guidance_max_chars": 1200,
       "capability_naming_aliases_max_items": 6,
       "raw_output_log_max_chars": 1200,
-      "contextual_matches_max_items": 8,
       "job_requirements_max_items": 8,
       "learning_candidates_max_items": 6,
       "rejection_blocker_suggestions_max_items": 6,

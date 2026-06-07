@@ -21,14 +21,10 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
-    RECORD_LLM_CONCERNS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
-    RECORD_LLM_DECISION_SUMMARY_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
-    RECORD_LLM_POSITIVE_REASONS_KEY,
-    RECORD_LLM_SCORE_RATIONALE_KEY,
 )
 from job_hunter_agent.profile_store import (
     KEY_EVIDENCE_TIERS,
@@ -538,8 +534,8 @@ def test_fit_score_evidence_ignores_display_only_fit_highlights():
     assert not any("[llm_confirmed]" in item["label"] for item in breakdown)
 
 
-def test_fit_score_evidence_credits_llm_confirmed_matches():
-    # High-confidence contextual matches appear as transparency entries (evidence/explanation only, no points).
+def test_fit_score_requirement_coverage_entries_are_transparency_only():
+    # requirement_coverage entries appear as transparency entries (evidence/explanation only, no points).
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
@@ -551,46 +547,29 @@ def test_fit_score_evidence_credits_llm_confirmed_matches():
             "work_mode": "Hybrid",
             "salary": "N/A",
             "competitive_signals": [],
-            "contextual_capability_matches": [
-                {"capability_name": "agile methodologies", "confidence": "high", "matched_text": "agile delivery ceremonies", "reason": "Agile is an alias."},
-                {"capability_name": "acceptance testing", "confidence": "high", "matched_text": "acceptance criteria", "reason": "Acceptance criteria is a related skill."},
-                {"capability_name": "primary stakeholder engagement", "confidence": "high", "matched_text": "facilitate workshops", "reason": "Facilitating workshops is a related skill."},
+            "requirement_coverage": [
+                {
+                    "requirement": "Agile delivery",
+                    "status": "supported",
+                    "capability_name": "agile methodologies",
+                    "matched_job_text": "agile delivery ceremonies",
+                    "profile_support": ["Agile methodologies"],
+                },
+                {
+                    "requirement": "Acceptance testing",
+                    "status": "partially_supported",
+                    "capability_name": "acceptance testing",
+                    "matched_job_text": "acceptance criteria",
+                    "profile_support": ["Acceptance Testing"],
+                },
             ],
         },
         _capability_profile(),
     )
 
-    evidenced_entries = [item for item in breakdown if "LLM-supported capabilities" in item["label"]]
-    assert len(evidenced_entries) == 1
-    assert evidenced_entries[0]["value"] == 0
-    assert "Agile methodologies" in evidenced_entries[0]["label"]
-
-
-def test_fit_score_evidence_is_transparency_only_no_points():
-    # Contextual capability matches are evidence/explanation for the grade — they add no scoring points.
-    breakdown = fit_scoring.fit_score_breakdown(
-        {
-            "title": "Lead Business Analyst",
-            "title_reason": "OK",
-            "content_reason": "OK",
-            "llm_fit_grade": "SOLID",
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "Hybrid",
-            "salary": "N/A",
-            "competitive_signals": [],
-            "contextual_capability_matches": [
-                {"capability_name": "agile methodologies", "confidence": "high", "matched_text": "agile delivery ceremonies", "reason": "Clear match."},
-                {"capability_name": "acceptance testing", "confidence": "low", "matched_text": "acceptance criteria", "reason": "Possible but not strong enough."},
-                {"capability_name": "primary stakeholder engagement", "confidence": "high", "matched_text": "stakeholder workshops", "reason": "Clear match."},
-            ],
-        },
-        _capability_profile(),
-    )
-
-    llm_evidence_points = sum(item["value"] for item in breakdown if "LLM" in item["label"])
-    assert llm_evidence_points == 0
-    assert any("Possible capability match" in item["label"] for item in breakdown)
+    coverage_entries = [item for item in breakdown if "Requirement" in item["label"] and "section" in item and item["section"] == "llm_fit"]
+    assert len(coverage_entries) == 2
+    assert all(entry["value"] == 0 for entry in coverage_entries)
 
 
 def test_strong_high_confidence_fit_gets_convergence_bonus():
@@ -612,10 +591,10 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
         RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
         "description_source": "jobAdDetails",
         "full_description": "Business analyst role driving agile delivery and stakeholder engagement. " * 20,
-        "contextual_capability_matches": [
-            {"capability_name": "agile methodologies", "confidence": "high", "matched_text": "agile delivery", "reason": "Clear match."},
-            {"capability_name": "acceptance testing", "confidence": "high", "matched_text": "acceptance criteria", "reason": "Clear match."},
-            {"capability_name": "primary stakeholder engagement", "confidence": "high", "matched_text": "stakeholder management workshops", "reason": "Clear match."},
+        "requirement_coverage": [
+            {"requirement": "Agile delivery", "status": "supported", "capability_name": "agile methodologies", "matched_job_text": "agile delivery", "profile_support": []},
+            {"requirement": "Acceptance testing", "status": "supported", "capability_name": "acceptance testing", "matched_job_text": "acceptance criteria", "profile_support": []},
+            {"requirement": "Stakeholder engagement", "status": "supported", "capability_name": "primary stakeholder engagement", "matched_job_text": "stakeholder workshops", "profile_support": []},
         ],
     }
 
@@ -641,9 +620,6 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
                 "bonus_with_soft_risks": 7,
                 "label": "Aligned",
             },
-            "capability_contextual_llm": {
-                "confidence_levels_with_credit": ["high"],
-            },
         },
     }
     record = {
@@ -652,8 +628,8 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
         "llm_fit_grade": "SOLID",
         "missing_profile_support": [],
         "soft_risk_reasons": [],
-        "contextual_capability_matches": [
-            {"capability_name": "platform engineering", "confidence": "high", "matched_text": "platform work", "reason": "Clear."},
+        "requirement_coverage": [
+            {"requirement": "Platform engineering", "status": "supported", "capability_name": "platform engineering", "matched_job_text": "platform work", "profile_support": []},
         ],
     }
 
@@ -687,51 +663,12 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
     assert missing == []
 
 
-def test_on_site_role_is_neutral_when_all_work_modes_are_selected():
-    breakdown = fit_scoring.fit_score_breakdown(
-        {
-            "title": "Business Analyst",
-            "title_reason": "OK",
-            "content_reason": "OK",
-            "llm_fit_grade": "SOLID",
-            "fit_highlights": [],
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "On-site",
-            "salary": "N/A",
-            "full_description": "Business analyst duties. " * 40,
-            "competitive_signals": [],
-        },
-        {
-            **_test_profile(),
-            "match_preferences": {
-                **_test_profile()["match_preferences"],
-                "work_mode_preference": ["remote", "hybrid", "onsite"],
-            },
-            "scoring_rules": {
-                "work_mode": {
-                    "selected_mode_match": 5,
-                },
-            },
-        },
-    )
-
-    assert _breakdown_value(breakdown, "Work mode neutral because all work modes were selected") == 0
-
-
 def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     profile = {
         **_test_profile(),
-        "match_preferences": {
-            **_test_profile()["match_preferences"],
-            "work_mode_preference": ["hybrid"],
-        },
         "scoring_rules": {
             "fit_breakdown": {
                 "title_direct": 20,
-            },
-            "work_mode": {
-                "selected_mode_match": 6,
             },
         },
     }
@@ -757,7 +694,6 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     )
 
     assert _breakdown_value(breakdown, "Preferred role-family match") == 20
-    assert _breakdown_value(breakdown, "Work mode matches your preference") == 6
 
 
 def test_fit_score_breakdown_keeps_secondary_role_family_clean():
@@ -1405,69 +1341,6 @@ def test_salary_fit_adjustment_can_use_profile_scoring_rule_overrides():
     assert salary_fit_adjustment({"salary": "$110k p.a."}, profile) == -2
 
 
-def test_contract_preference_treats_hyphenated_full_time_as_permanent():
-    from job_hunter_agent.preferences import assess_contract_preference
-    assert assess_contract_preference(
-        {"work_type": "Full-time", "salary": "N/A"},
-        {
-            **_test_profile(),
-            "match_preferences": {
-                **_test_profile()["match_preferences"],
-                "engagement_type": ["permanent"],
-            },
-        },
-    ) == {"label": "Work type matches your preference: Permanent role", "value": 10}
-
-
-def test_scoring_helpers_skip_contract_signal_when_both_selected():
-    profile = {
-        **_test_profile(),
-        "match_preferences": {
-            **_test_profile()["match_preferences"],
-        },
-    }
-    record = {
-        "title": "Lead Business Analyst",
-        "company": "Acme",
-        "location": "Sydney NSW",
-        "work_type": "Contract/Temp",
-        "work_mode": "Hybrid",
-        "fit_source_text": "12 month contract with extension option.",
-        "fit_highlights": [],
-    }
-
-    from job_hunter_agent.preferences import assess_contract_preference
-    assert assess_contract_preference(record, profile) == {
-        "label": "Work type neutral — you've selected multiple",
-        "value": 0,
-    }
-
-
-def test_contract_preference_scores_contract_roles_when_contract_only_selected():
-    profile = {
-        **_test_profile(),
-        "match_preferences": {
-            **_test_profile()["match_preferences"],
-            "engagement_type": ["contract"],
-        },
-    }
-    record = {
-        "title": "Lead Business Analyst",
-        "company": "Acme",
-        "location": "Sydney NSW",
-        "work_type": "Contract/Temp",
-        "work_mode": "Hybrid",
-        "fit_source_text": "Federal government department. 12 month contract with extension option.",
-        "fit_highlights": [],
-    }
-
-    from job_hunter_agent.preferences import assess_contract_preference
-    assert assess_contract_preference(record, profile) == {
-        "label": "Work type matches your preference: 12+ month contract with extension potential",
-        "value": 9,
-    }
-
-
 def test_profile_recency_multiplier_uses_tiered_evidence_dates():
     current_year = datetime.now().year
     profile = {
@@ -1703,7 +1576,7 @@ def test_render_job_card_debug_mode_shows_debug_only_label_for_non_blocker_rejec
     assert "Title outside target role family" in html
 
 
-def test_render_job_card_shows_llm_rationale_and_plain_language_transparency_note():
+def test_render_job_card_shows_llm_review_section_in_debug_mode():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-llm-rationale",
@@ -1715,6 +1588,7 @@ def test_render_job_card_shows_llm_rationale_and_plain_language_transparency_not
             "decision": "KEEP",
             "llm_decision": "KEEP",
             "llm_fit_grade": "STRONG",
+            "llm_debug_reason": "Strong requirement coverage — 3 supported requirements with direct capability links.",
             RECORD_FIT_SCORE_KEY: 72,
             RECORD_FIT_SCORE_BREAKDOWN_KEY: [
                 {"label": "Base fit", "value": 72, "section": "llm_fit"},
@@ -1724,29 +1598,8 @@ def test_render_job_card_shows_llm_rationale_and_plain_language_transparency_not
                     "section": "capability",
                 },
             ],
-            RECORD_LLM_DECISION_SUMMARY_KEY: "Clear delivery fit with relevant capability evidence.",
-            RECORD_LLM_POSITIVE_REASONS_KEY: [
-                "Matches technical BA and delivery work",
-                "AWS, REST API, and DevOps experience look relevant",
-            ],
-            RECORD_LLM_CONCERNS_KEY: [
-                "AWS evidence is possible but not strongly proven",
-                "Salary not found",
-            ],
-            RECORD_LLM_SCORE_RATIONALE_KEY: [
-                "LLM grade placed this job in the Strong band.",
-                "Preferences and freshness moved the score within that band.",
-            ],
             RECORD_LLM_ELAPSED_MS_KEY: 1234,
             RECORD_LLM_COST_USD_KEY: 0.0123,
-            "contextual_capability_matches": [
-                {
-                    "capability_name": "agile methodologies",
-                    "confidence": "low",
-                    "matched_text": "agile delivery",
-                    "reason": "Possible capability match only.",
-                },
-            ],
             "location": "Sydney NSW",
             "work_type": "Full Time",
             "work_mode": "Hybrid",
@@ -1760,16 +1613,14 @@ def test_render_job_card_shows_llm_rationale_and_plain_language_transparency_not
     )
 
     assert "LLM fit review" in html
-    assert "Decision summary" in html
     assert "Final decision: KEPT" in html
     assert "Final score" in html
     assert "LLM fit grade" in html
     assert "Time taken" in html
     assert "Estimated LLM cost" in html
+    assert "Debug reason" in html
     assert "Possible capability match — mentioned in the job, but not strong enough to affect the score." in html
     assert "Possible capability match — mentioned in the job, but not strong enough to affect the score.: +0" not in html
-    assert "medium confidence" not in html
-    assert "logged only due to confidence" not in html
 
 
 def test_posted_filter_options_show_explicit_day_windows():
@@ -1788,6 +1639,78 @@ def test_posted_filter_options_show_explicit_day_windows():
     assert "Last 7 days (3)" in options_html
     assert "Last 14 days (3)" in options_html
     #assert "Last 30 days (3)" in options_html
+
+
+def test_workspace_renders_requirement_coverage_with_status_classes():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "seek:req-cov-test",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "SOLID",
+            RECORD_FIT_SCORE_KEY: 65,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [{"label": "Base fit", "value": 65, "section": "llm_fit"}],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "importance": "mandatory",
+                    "status": "supported",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "work with stakeholders",
+                    "profile_support": ["stakeholder management"],
+                },
+                {
+                    "requirement": "Agile delivery",
+                    "importance": "strongly_preferred",
+                    "status": "partially_supported",
+                    "capability_name": "agile methodologies",
+                    "matched_job_text": "agile ceremonies",
+                    "profile_support": [],
+                },
+                {
+                    "requirement": "SAP certification",
+                    "importance": "mandatory",
+                    "status": "mismatch",
+                    "capability_name": "",
+                    "matched_job_text": "SAP mandatory",
+                    "profile_support": [],
+                },
+                {
+                    "requirement": "Financial reporting",
+                    "importance": "nice_to_have",
+                    "status": "not_shown",
+                    "capability_name": "",
+                    "matched_job_text": "",
+                    "profile_support": [],
+                },
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _capability_profile(),
+    )
+
+    assert "job-coverage-panel" in html
+    assert "job-requirement-item--supported" in html
+    assert "job-requirement-item--partially-supported" in html
+    assert "job-requirement-item--mismatch" in html
+    assert "job-requirement-item--not-shown" in html  # nice_to_have not_shown → grey
+    assert "Stakeholder engagement" in html
+    assert "SAP certification" in html
+    assert "Requirement coverage" in html
+    assert "job-req-importance" in html
+    assert "Required" in html   # mandatory label
+    assert "Bonus" in html      # nice_to_have label
 
 
 def test_freshness_breakdown_uses_managed_bucket_cutoffs():

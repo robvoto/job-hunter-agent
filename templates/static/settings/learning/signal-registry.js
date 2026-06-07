@@ -1,4 +1,6 @@
-﻿    let _srData = null;
+﻿import { escapeHtml } from '../shared/settings-utils.js';
+
+    let _srData = null;
     let _srLoaded = false;
     let _srSearch = '';
     let _srSearchDraft = '';

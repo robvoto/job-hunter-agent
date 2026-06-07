@@ -138,6 +138,8 @@ def test_onboarding_capability_cards_use_one_shared_generic_icon():
 
     assert "genericCapabilityIconHtml" in capability_ui_js
     assert "review-capability-title-row" in onboarding_flow_js
+    assert "const extractedSkillPreview" not in onboarding_flow_js
+    assert '<p class="help">${extractedSkillPreview}</p>' not in onboarding_flow_js
     assert "capability-card-icon" in theme_widgets
 
 
@@ -214,8 +216,7 @@ def test_onboarding_flow_import_summary_uses_shared_labels_and_skips_empty_outpu
 
     assert "window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__" in js_text
     assert "onboardingImportSummaryLabels.lead_in" in js_text
-    assert "onboardingImportSummaryLabels.llm_cost_label" in js_text
-    assert "formatImportSuccessSummary(payload)" in js_text
+    assert "formatImportSuccessSummary" in js_text
     assert "showStatus(extractionMessage, 'success')" in js_text
     assert "if (!parts.length)" in js_text
     assert "if (extractionMessage)" in js_text

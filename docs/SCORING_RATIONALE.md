@@ -54,7 +54,7 @@ The LLM fit grade defines the allowed score band. Other signals move the job wit
 |-----------|--------------|
 | Title match | Adds role-alignment evidence: direct target title = +15, secondary/potential title = +4. |
 | LLM grade | Primary semantic fit signal. Currently holistic; future redesign should derive it from mandatory requirement coverage. |
-| Capability support | Adds up to +20 from high-confidence contextual_capability_matches using exact profile capability names. |
+| Capability support | Requirement coverage entries (supported/partially_supported) appear as transparency entries (value 0). Convergence bonus uses supported count from requirement_coverage. |
 | Content passed | Adds +3 only for no content blocker found. This is weak data-quality support, not proof of fit. |
 | Location, work type, work mode, salary | Preference/logistics signals. They help ranking but should not prove mandatory fit. |
 | Freshness | Ranking urgency only. Current config gives +10 within 6 hours and +8 within 1 day. Older postings receive no freshness bonus. |
@@ -62,44 +62,32 @@ The LLM fit grade defines the allowed score band. Other signals move the job wit
 | Competitive signals | Specialist-domain adjustment outside the main score band. |
 | Hard blockers | Apply after band clamping and can force the score near zero. |
 
-### Capability confidence handling
+### Capability coverage
 
-capability_contextual_llm controls how LLM capability matches are treated:
+`requirement_coverage` is the single source of truth for capability support. Status values:
 
-| Confidence | Treatment |
-|------------|-----------|
-| high | Credited in scoring |
-| medium | Logged only / no score credit |
-| low | Ignored / no score credit |
+| Status | Meaning |
+|--------|---------|
+| supported | Requirement directly matched to a profile capability — must include capability_name |
+| partially_supported | Partial/indirect match — must include capability_name |
+| not_shown | No evidence found |
+| mismatch | Explicit conflict |
 
-Confidence values must remain lowercase. A previous normalisation bug uppercased these values and caused high-confidence matches to be dropped; that has been fixed.
-
-### Known limitation
-
-This model is still grade-driven. It is not yet fully mandatory-requirement-coverage-driven.
-
-Target direction:
-
-1. Extract mandatory/core job requirements.
-2. Match each requirement to candidate capabilities and profile support.
-3. Derive grade/score from requirement coverage.
-4. Use logistics and freshness only as ranking boosts, not proof of fit.
+Coverage entries appear in the score breakdown as transparency items (value 0). Convergence bonus requires `min_positive_matches` supported entries from `scoring_rules.convergence`.
 
 ---
 
 ## Current scoring status 2026-06-02
 
 Current implemented model:
-- The LLM fit review returns fit_review decision plus grade, contextual_capability_matches, and job_requirements.
+- The LLM fit review returns fit_review (decision + grade), job_requirements, requirement_coverage, and debug_reason.
 - fit_scoring.py is a consumer only; it reads stored LLM output and does not call the LLM.
-- contextual_capability_matches must use exact candidate capability rule names. Invalid names are logged and skipped.
-- High-confidence contextual capability matches are credited using capability support scoring.
-- Medium confidence is logged only. Low confidence is ignored and logged separately.
-- The confidence lists are managed in scoring_rules.capability_contextual_llm and must preserve lowercase values.
+- requirement_coverage is the single source for capability support. Entries with supported/partially_supported status must include capability_name.
+- Grade is derived from requirement_coverage via derive_fit_review_grade, not from the model's raw grade alone.
 - The current grade bands are band-anchored: EXCELLENT, STRONG, SOLID, WEAK, POOR, MISMATCH.
+- debug_reason is a short internal sentence for logs and admin debug views only — not rendered in the main workspace.
 
 Known design limitation:
-- The current LLM grade is holistic. It is not yet derived from mandatory requirement coverage.
 - Location, work type, work mode, salary, and freshness are ranking/preference signals. They should not be treated as proof that the candidate meets mandatory requirements.
 - Content passed means no hard blocker was found. It is not strong positive support by itself.
 

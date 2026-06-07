@@ -302,15 +302,11 @@ def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):
     assert "industry" in system_prompt
 
 
-def test_normalize_llm_review_payload_keeps_learning_candidates():
+def test_normalize_llm_review_payload_fit_review_shape():
     payload = llm_gate.normalize_llm_review_payload(
         {
             "decision": "KEEP",
             "grade": "SOLID",
-            "learning_candidates": [
-                {"signal": "platform engineer", "suggested_category": "capability_concept", "original_texts": ["Platform Engineer"]},
-                {"signal": "platform engineer", "suggested_category": "capability_concept", "original_texts": ["Platform Engineer"]},
-            ],
             "job_requirements": [
                 "Strong stakeholder engagement",
                 "Strong stakeholder engagement",
@@ -330,15 +326,11 @@ def test_normalize_llm_review_payload_keeps_learning_candidates():
 
     assert payload == {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-        "decision_summary": "",
-        "positive_reasons": [],
-        "concerns": [],
-        "score_rationale": [],
-        "learning_candidates": [],
-        "contextual_capability_matches": [],
+        "debug_reason": "",
         "requirement_coverage": [
             {
                 "requirement": "Strong stakeholder engagement",
+                "importance": "preferred",
                 "status": "supported",
                 "capability_name": "Stakeholder engagement",
                 "matched_job_text": "stakeholder engagement",
@@ -375,22 +367,19 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
 
     assert payload == {
         "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-        "decision_summary": "",
-        "positive_reasons": [],
-        "concerns": [],
-        "score_rationale": [],
-        "learning_candidates": [],
-        "contextual_capability_matches": [],
+        "debug_reason": "",
         "requirement_coverage": [
-                    {
-                        "requirement": "Stakeholder engagement",
-                        "status": "supported",
-                        "capability_name": "stakeholder management",
-                        "matched_job_text": "work with stakeholders",
+            {
+                "requirement": "Stakeholder engagement",
+                "importance": "preferred",
+                "status": "supported",
+                "capability_name": "stakeholder management",
+                "matched_job_text": "work with stakeholders",
                 "profile_support": ["stakeholder management"],
             },
             {
                 "requirement": "Process mapping",
+                "importance": "preferred",
                 "status": "partially_supported",
                 "capability_name": "process mapping",
                 "matched_job_text": "map the current process",

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
+from job_hunter_agent.text_processing import compact_whitespace
 
 from job_hunter_agent.job_types import load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.hard_blocker_rules import (
@@ -118,7 +119,7 @@ def _now_iso() -> str:
 
 
 def _clean_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return compact_whitespace(value)
 
 
 def _clean_term(value: Any) -> str:

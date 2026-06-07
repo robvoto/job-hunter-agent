@@ -50,20 +50,29 @@ For LLM review data:
 There are two separate LLM calls with different schemas. Do not conflate them.
 
 **Fit review** (`_LLMFitReviewPayload`, `fit_review=True`):
-- Returns: `fit_review` (decision + grade), `contextual_capability_matches`, `job_requirements`
-- No `learning_candidates` field exists in this schema
-- `contextual_capability_matches` entries must only use names from the profile capability rules list
-- Do NOT include learning category guidance (`LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE`) in this prompt - the model will leak category names into capability matches
+- Returns: `fit_review` (decision + grade), `job_requirements`, `requirement_coverage`, `debug_reason`
+- No `learning_candidates` field; the fit-review path does not extract learning signals
+- `requirement_coverage` is the single source for capability support — entries must link to profile capability rule names for `supported`/`partially_supported` status
+- Do NOT include learning category guidance (`LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE`) in this prompt
+- `debug_reason` is a short internal explanation for logs/admin only — not shown in the main UI
 
 **Learning-only** (`_LLMReviewPayload`, `fit_review=False`):
 - Returns: `learning_candidates` only
 - Called only when deterministic scoring fires AND high-value ambiguous learning candidates exist
 - This is where `role_title_pattern`, `government_context_pattern`, etc. belong
 
-**Consequence for `contextual_capability_matches` in scoring:**
+**Consequence for `requirement_coverage` in scoring:**
 - `fit_scoring.py` is a consumer only - it reads stored LLM output from the record, never calls the LLM
-- Entries in `contextual_capability_matches` that do not match a profile capability rule name are skipped for scoring (logged at WARNING with full context)
+- `requirement_coverage` entries with `supported`/`partially_supported` status that lack a `capability_name` are skipped (logged at WARNING)
+- Convergence bonus uses `requirement_coverage` supported count — `min_positive_matches` from `scoring_rules.convergence`
 - The learning pipeline handles signal routing via `build_ad_learning_signals` and the learning-only LLM call - do not route from `fit_scoring.py`
+
+**`derive_fit_review_grade` contract (in `llm_gate.py`):**
+- `supported` = 1.0, `partially_supported` = 0.5, `not_shown`/`mismatch` = 0.0
+- Any `mismatch` present + zero positive coverage → MISMATCH
+- Any `mismatch` present + some positive coverage → WEAK (hard cap, cannot be SOLID/STRONG/EXCELLENT)
+- No mismatch: EXCELLENT (all supported, ≥3 reqs), STRONG (≥80% support, ≤1 partial), SOLID (≥50% support), WEAK (some support), POOR (no support)
+- Grade derivation tests live in `tests/test_llm_gate.py` (section: derive_fit_review_grade contract)
 
 ## Government context scoring
 

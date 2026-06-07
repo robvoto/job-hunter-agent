@@ -46,7 +46,6 @@ from job_hunter_agent.posting_utils import (
     format_timestamp_label,
     posted_display_label,
 )
-from job_hunter_agent.preferences import assess_contract_preference
 from job_hunter_agent.preferences import display_work_type_label
 from job_hunter_agent.profile_store import ENGAGEMENT_TYPE_OPTIONS, get_match_levels, load_profile
 from job_hunter_agent.io_utils import load_ui_labels
@@ -74,14 +73,12 @@ from job_hunter_agent.profile_gaps import (
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
-    RECORD_LLM_CONCERNS_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_DEBUG_REASON_KEY,
     RECORD_LLM_DECISION_KEY,
-    RECORD_LLM_DECISION_SUMMARY_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
-    RECORD_LLM_POSITIVE_REASONS_KEY,
-    RECORD_LLM_SCORE_RATIONALE_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
 )
 from job_hunter_agent.source_registry import get_source_display_label
@@ -821,12 +818,6 @@ def render_job_card(
             *soft_risk_reasons,
             "Salary is below target range",
         ])
-    contract_item = assess_contract_preference(display_record, scoring_profile)
-    if contract_item and int(contract_item.get("value", 0)) < 0:
-        soft_risk_reasons = dedupe_preserve_order([
-            *soft_risk_reasons,
-            "Contract length is shorter than preferred",
-        ])
     if seen_by_you and record.get("last_viewed_at"):
         context_bits.append(f"Opened by you {format_timestamp_label(record.get('last_viewed_at'))}")
     if applied_record and record.get("last_applied_at"):
@@ -937,6 +928,65 @@ def render_job_card(
             f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
             '</details>'
         )
+    requirement_coverage_html = ""
+    raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    if isinstance(raw_coverage, list) and raw_coverage:
+        _coverage_status_label_keys = {
+            "supported":           "coverage_status_supported",
+            "partially_supported": "coverage_status_partially_supported",
+            "not_shown":           "coverage_status_not_shown",
+            "mismatch":            "coverage_status_mismatch",
+        }
+        _importance_label_keys = {
+            "mandatory":          "importance_mandatory",
+            "strongly_preferred": "importance_strongly_preferred",
+            "preferred":          "importance_preferred",
+            "nice_to_have":       "importance_nice_to_have",
+        }
+        coverage_items_html = ""
+        for item in raw_coverage:
+            if not isinstance(item, dict):
+                continue
+            req_text = compact_whitespace(str(item.get("requirement") or ""))
+            if not req_text:
+                continue
+            status = str(item.get("status") or "not_shown").strip().lower()
+            importance = str(item.get("importance") or "preferred").strip().lower()
+            cap_name = compact_whitespace(str(item.get("capability_name") or ""))
+            matched_text = compact_whitespace(str(item.get("matched_job_text") or ""))
+            status_label_key = _coverage_status_label_keys.get(status, "coverage_status_not_shown")
+            status_label = _workspace_label("workspace_card_labels", status_label_key, status.replace("_", " ").title())
+            importance_label_key = _importance_label_keys.get(importance, "importance_preferred")
+            importance_label = _workspace_label("workspace_card_labels", importance_label_key, importance.replace("_", " ").title())
+            # Compound CSS class: mandatory+not_shown is red (same visual weight as mismatch).
+            if status == "not_shown" and importance == "mandatory":
+                css_modifier = "mandatory-not-shown"
+            else:
+                css_modifier = status.replace("_", "-")
+            detail_parts = []
+            if cap_name:
+                detail_parts.append(cap_name)
+            if matched_text:
+                detail_parts.append(f'"{matched_text}"')
+            detail_html = (
+                f'<span class="req-coverage-detail">{safe_html(" · ".join(detail_parts))}</span>'
+                if detail_parts else ""
+            )
+            coverage_items_html += (
+                f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
+                f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
+                f'<span class="job-req-importance">{safe_html(importance_label)}</span>'
+                f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
+                f'</li>'
+            )
+        if coverage_items_html:
+            requirement_coverage_html = (
+                '<details class="job-insights job-coverage-panel">'
+                f'<summary>{safe_html(_workspace_label("workspace_card_labels", "requirement_coverage_summary", "Requirement coverage"))}</summary>'
+                f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{coverage_items_html}</ul></div>'
+                '</details>'
+            )
+
     profile_gaps_html = ""
     if profile_gaps:
         gap_items_html = "".join(
@@ -1112,10 +1162,6 @@ def render_job_card(
         for key in (
             RECORD_LLM_DECISION_KEY,
             RECORD_LLM_FIT_GRADE_KEY,
-            RECORD_LLM_DECISION_SUMMARY_KEY,
-            RECORD_LLM_POSITIVE_REASONS_KEY,
-            RECORD_LLM_CONCERNS_KEY,
-            RECORD_LLM_SCORE_RATIONALE_KEY,
             RECORD_LLM_ELAPSED_MS_KEY,
             RECORD_LLM_COST_USD_KEY,
         )
@@ -1123,17 +1169,9 @@ def render_job_card(
         llm_decision = str(record.get(RECORD_LLM_DECISION_KEY) or "").strip().upper()
         final_decision = "KEPT" if llm_decision == "KEEP" else ("REJECTED" if llm_decision == "REJECT" else llm_decision or "UNKNOWN")
         llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or "UNKNOWN"
-        decision_summary = str(record.get(RECORD_LLM_DECISION_SUMMARY_KEY) or "").strip()
-        positive_reasons = [str(item).strip() for item in (record.get(RECORD_LLM_POSITIVE_REASONS_KEY) or []) if str(item).strip()]
-        concerns = [str(item).strip() for item in (record.get(RECORD_LLM_CONCERNS_KEY) or []) if str(item).strip()]
-        score_rationale = [str(item).strip() for item in (record.get(RECORD_LLM_SCORE_RATIONALE_KEY) or []) if str(item).strip()]
+        debug_reason = str(record.get(RECORD_LLM_DEBUG_REASON_KEY) or "").strip()
         elapsed_ms = record.get(RECORD_LLM_ELAPSED_MS_KEY)
         cost_usd = record.get(RECORD_LLM_COST_USD_KEY)
-        llm_review_parts = []
-        if decision_summary:
-            llm_review_parts.append(
-                f'<div class="job-insight-group"><strong>Decision summary</strong><p>{safe_html(decision_summary)}</p></div>'
-            )
         summary_items = [
             f'<li>Final decision: {safe_html(final_decision)}</li>',
             f'<li>Final score: {safe_html(str(fit_points))}</li>',
@@ -1143,31 +1181,15 @@ def render_job_card(
             summary_items.append(f'<li>Time taken: {safe_html(str(int(elapsed_ms)))} ms</li>')
         if isinstance(cost_usd, (int, float)):
             summary_items.append(f'<li>Estimated LLM cost: US${float(cost_usd):.4f}</li>')
-        llm_review_parts.append(
+        llm_review_parts = [
             '<div class="job-insight-group is-secondary">'
             f'<ul>{"".join(summary_items)}</ul>'
             '</div>'
-        )
-        if positive_reasons:
+        ]
+        if debug_reason:
             llm_review_parts.append(
-                '<div class="job-insight-group is-secondary">'
-                '<strong>Positive reasons</strong>'
-                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in positive_reasons)}</ul>'
-                '</div>'
-            )
-        if concerns:
-            llm_review_parts.append(
-                '<div class="job-insight-group is-secondary">'
-                '<strong>Concerns</strong>'
-                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in concerns)}</ul>'
-                '</div>'
-            )
-        if score_rationale:
-            llm_review_parts.append(
-                '<div class="job-insight-group is-secondary">'
-                '<strong>Score rationale</strong>'
-                f'<ul>{"".join(f"<li>{safe_html(item)}</li>" for item in score_rationale)}</ul>'
-                '</div>'
+                f'<div class="job-insight-group is-secondary"><strong>Debug reason</strong>'
+                f'<p>{safe_html(debug_reason)}</p></div>'
             )
         llm_review_html = (
             '<details class="job-insights job-llm-review">'
@@ -1286,6 +1308,7 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{note_html}"
         f"{insight_html}"
+        f"{requirement_coverage_html}"
         f"{llm_review_html}"
         f"{job_requirements_html}"
         f"{profile_gaps_html}"

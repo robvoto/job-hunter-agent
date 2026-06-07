@@ -25,6 +25,7 @@ from job_hunter_agent.paths import (
     CV_FARMING_RULES_NAME,
     CV_FARMING_RULES_VERSION,
 )
+from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.signal_schema import CATEGORY_CV_FARMING_PATTERN
 
 SIGNAL_KIND_DATE_MISMATCH = "date_mismatch"
@@ -41,7 +42,7 @@ _MONTH_NAMES = {
 
 def _clean_text(value: object) -> str:
     """Normalize whitespace and coerce any value to a trimmed string."""
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return compact_whitespace(value)
 
 
 def _clean_aliases(values: object, *, canonical: str = "") -> list[str]:

@@ -475,10 +475,6 @@ function renderReviewCapabilities() {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     const displayName = titleCaseName || onboardingFlowLabels.capability_untitled_label;
     const extractedSkillsLabel = formatReviewCapabilitySkillsLabel(rule.aliases.length);
-    const extractedSkillPreview = rule.aliases
-      .slice(0, 3)
-      .map((alias) => escapeHtml(patternToLabel(alias) || alias))
-      .join(' · ');
     const aliasHtml = (() => {
       if (!rule.aliases.length) return '';
       const aliasChips = rule.aliases.map((alias) =>
@@ -488,7 +484,6 @@ function renderReviewCapabilities() {
         </span>`
       ).join('');
       return `
-        ${extractedSkillPreview ? `<p class="help">${extractedSkillPreview}</p>` : ''}
         <details class="capability-alias-drawer">
           <summary class="cap-alias-summary">
             <span class="capability-summary-label">${escapeHtml(extractedSkillsLabel)}</span>
@@ -649,19 +644,8 @@ function formatExtractionSummary(counts) {
   return `${onboardingImportSummaryLabels.lead_in} ${joined} ${onboardingImportSummaryLabels.source_suffix}`;
 }
 
-function formatImportSuccessSummary(payload) {
-  const parts = [];
-  const extractionMessage = payload?.fresh_onboarding_run_started
-    ? formatExtractionSummary(payload.extraction_counts || {})
-    : onboardingFlowLabels.create_profile_ready_message;
-  if (extractionMessage) {
-    parts.push(extractionMessage);
-  }
-  const llmCostUsd = Number(payload?.llm_cost_usd);
-  if (Number.isFinite(llmCostUsd)) {
-    parts.push(`${onboardingImportSummaryLabels.llm_cost_label} US$${llmCostUsd.toFixed(6)}`);
-  }
-  return parts.join('\n');
+function formatImportSuccessSummary() {
+  return onboardingFlowLabels.create_profile_ready_message;
 }
 
 async function createProfile() {

@@ -53,7 +53,6 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
-    KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
     KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
@@ -317,15 +316,6 @@ def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bo
         minimum=100,
         maximum=5_000,
     )
-    # fit_decision_max_output_tokens must cover:
-    #   base JSON (~22 tok) + contextual_matches_max_items * ~102 tok/match (worst-case field lengths).
-    # At the default of 8 matches: 22 + 8*102 = 838 tokens. Budget must exceed that.
-    contextual_matches_max_items = _prompt_int(
-        KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
-        KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS,
-        minimum=1,
-        maximum=20,
-    )
     job_requirements_max_items = _prompt_int(
         KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
         KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
@@ -397,7 +387,6 @@ def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bo
         KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS: fit_guidance_max_chars,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS: capability_naming_aliases_max_items,
         KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS: raw_output_log_max_chars,
-        KEY_LLM_PROMPT_CONTEXTUAL_MATCHES_MAX_ITEMS: contextual_matches_max_items,
         KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS: job_requirements_max_items,
         KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,

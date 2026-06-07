@@ -136,7 +136,27 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
         work_mode = _normalize_work_mode(record.get("work_mode") or "")
 
-        if work_mode and work_mode not in work_mode_prefs:
+        if not work_mode:
+
+            entry = build_uncertainty_entry(
+                reason_code="WORK_MODE_UNCLEAR",
+                stage="preference_filter",
+                field="work_mode",
+                raw_value=str(record.get("work_mode") or "<empty>"),
+                normalized_value="unknown",
+                detail="Could not determine work mode from job ad — letting through.",
+                source="passes_preference_filters",
+                job_key=str(record.get("job_key") or ""),
+            )
+
+            append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
+
+            logger.warning(
+                "[UNCERTAINTY] Unable to classify work_mode\n%s",
+                format_log_block("UNCERTAINTY", entry),
+            )
+
+        elif work_mode not in work_mode_prefs:
 
             return False, "PREF_WORK_MODE"
 
@@ -184,61 +204,6 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
 
 
-def assess_work_mode_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
-
-    active_profile = profile or load_profile()
-
-    preferences = get_match_preferences(active_profile)
-
-    selected_work_modes = normalize_work_mode_preferences(preferences.get(KEY_WORK_MODE_PREFERENCE))
-
-    selected_mode_set = set(selected_work_modes)
-
-    work_mode = _normalize_work_mode(record.get("work_mode") or "")
-
-    scoring_rules = get_scoring_rules(active_profile)
-
-    work_mode_rules = scoring_rules["work_mode"]
-
-    labels = load_ui_labels().get("work_mode_score_labels", {})
-
-    label_bonus = str(labels.get("selected_bonus") or "").strip()
-
-    label_multiple = str(labels.get("multiple_selected_neutral") or "").strip()
-
-    label_all = str(labels.get("all_selected_neutral") or "").strip()
-
-    label_unknown = str(labels.get("unknown_neutral") or "").strip()
-
-    if not label_bonus or not label_multiple or not label_all or not label_unknown:
-
-        raise ValueError("work_mode_score_labels are required in ui_labels")
-
-    if not selected_mode_set or selected_mode_set == VALID_WORK_MODE_PREFERENCES:
-
-        if work_mode:
-
-            return {"label": label_all, "value": 0}
-
-        return {"label": label_unknown, "value": 0}
-
-    if len(selected_mode_set) > 1:
-
-        if work_mode:
-
-            return {"label": label_multiple, "value": 0}
-
-        return {"label": label_unknown, "value": 0}
-
-    if not work_mode:
-
-        return {"label": label_unknown, "value": 0}
-
-    if work_mode in selected_mode_set:
-
-        return {"label": label_bonus, "value": int(work_mode_rules["selected_mode_match"])}
-
-    return None
 
 
 
@@ -364,109 +329,6 @@ def assess_location_preference(record: dict, profile: Optional[dict] = None) -> 
 
 
 
-def assess_contract_preference(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
-
-    active_profile = profile or load_profile()
-
-    preferences = get_match_preferences(active_profile)
-
-    scoring_rules = get_scoring_rules(active_profile)
-
-    contract_rules = scoring_rules["contract"]
-
-    labels = load_ui_labels().get("work_type_score_labels", {})
-
-    label_bonus = str(labels.get("selected_bonus") or "").strip()
-
-    label_multiple = str(labels.get("multiple_selected_neutral") or "").strip()
-
-    label_all = str(labels.get("all_selected_neutral") or "").strip()
-
-    label_unknown = str(labels.get("unknown_neutral") or "").strip()
-
-    if not label_bonus or not label_multiple or not label_all or not label_unknown:
-
-        raise ValueError("work_type_score_labels are required in ui_labels")
-
-    source_text = build_scoring_source_text(record)
-
-    preferred_contract_months = int(preferences["preferred_contract_months"])
-
-    short_contract_months = int(preferences["short_contract_months"])
-
-    selected_engagement_types = normalize_engagement_type_preferences(preferences["engagement_type"])
-
-    selected_engagement_type_set = set(selected_engagement_types)
-
-    raw_work_type = str(record.get("work_type") or "")
-
-    is_perm, is_contract = _parse_work_type_flags(raw_work_type)
-
-    is_full_time_contract = _is_full_time_contract(raw_work_type)
-
-
-
-    if not is_perm and not is_contract:
-
-        return {"label": label_unknown, "value": 0}
-
-
-
-    if not selected_engagement_type_set or selected_engagement_type_set == VALID_ENGAGEMENT_TYPES:
-
-        return {"label": label_all, "value": 0}
-
-
-
-    if len(selected_engagement_type_set) > 1:
-
-        return {"label": label_multiple, "value": 0}
-
-
-
-    if is_perm:
-
-        if Engagement.PERMANENT in selected_engagement_type_set:
-
-            return {"label": f"{label_bonus}: Permanent role", "value": int(contract_rules["permanent_match"])}
-
-        return None
-
-
-
-    if not is_contract:
-
-        return None
-
-    if is_full_time_contract and Engagement.FULL_TIME_CONTRACT not in selected_engagement_type_set:
-
-        return None
-
-    if not is_full_time_contract and Engagement.CONTRACT not in selected_engagement_type_set:
-
-        return None
-
-
-
-    contract_months = extract_contract_months(source_text)
-
-    if contract_months is None:
-
-        return {"label": label_unknown, "value": 0}
-
-    if contract_months >= preferred_contract_months:
-
-        if "extension" in source_text.lower():
-
-            return {"label": f"{label_bonus}: 12+ month contract with extension potential", "value": int(contract_rules["long_with_extension"])}
-
-        return {"label": f"{label_bonus}: 12+ month contract", "value": int(contract_rules["long_contract"])}
-
-    if contract_months >= short_contract_months:
-
-        return {"label": f"{label_bonus}: 6-12 month contract", "value": int(contract_rules["medium_contract"])}
-
-    return {"label": f"{label_bonus}: Contract is shorter than preferred", "value": int(contract_rules["short_contract"])}
 
 
 

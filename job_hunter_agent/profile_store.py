@@ -183,7 +183,6 @@ VALID_CAPABILITY_ICON_KEYS = frozenset({
 })
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
-KEY_CAPABILITY_CONTEXTUAL_LLM = "capability_contextual_llm"
 PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE = "Create your profile before reviewing jobs."
 PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
 
@@ -231,7 +230,6 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),
-        KEY_CAPABILITY_CONTEXTUAL_LLM: dict(payload.get(KEY_CAPABILITY_CONTEXTUAL_LLM) or {}),
         "deterministic_review_thresholds": dict(payload.get("deterministic_review_thresholds") or {}),
         "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
