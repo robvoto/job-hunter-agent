@@ -67,6 +67,24 @@ Do not open SSH to:
 0.0.0.0/0
 ```
 
+Connect from Windows PowerShell:
+
+```powershell
+ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
+```
+
+The helper script on the PC may contain the same command:
+
+```powershell
+.\connectAws.ps1
+```
+
+If PowerShell says the identity file is not accessible, check that the key exists at:
+
+```powershell
+Test-Path "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem"
+```
+
 ### Job Hunter runtime
 
 ```text
@@ -78,6 +96,11 @@ Persistent output: /var/lib/job-hunter/output
 Service: job-hunter.service
 Service command: /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 Local bind: 127.0.0.1:8765
+Docker: not used
+Xvfb: installed
+xvfb-run: installed
+xauth: installed
+Xvfb wired into service: no
 ```
 
 `/var/lib/job-hunter` is mounted on a separate data disk.
@@ -143,12 +166,12 @@ The production app runs on EC2, not on the local PC.
 Canonical production layout:
 
 ```text
-/home/ubuntu/job-hunter-agent              application code and .venv
-/var/lib/job-hunter/data         persistent DB and app data
-/var/lib/job-hunter/output       persistent runtime output if used
-/var/log/job-hunter              server logs
-/etc/job-hunter/job-hunter.env   production environment file
-/etc/systemd/system/job-hunter.service systemd service
+/home/ubuntu/job-hunter-agent                 application code and .venv
+/var/lib/job-hunter/data                      persistent DB and app data
+/var/lib/job-hunter/output                    persistent runtime output if used
+/var/log/job-hunter                           server logs
+/etc/job-hunter/job-hunter.env                production environment file
+/etc/systemd/system/job-hunter.service        systemd service
 ```
 
 All production diagnostics must be run on the EC2 host after connecting to the actual instance.
@@ -180,7 +203,7 @@ systemd service
 Nginx reverse proxy
 SQLite on EBS-backed persistent storage
 Playwright Chromium
-Xvfb for headed browser execution on Linux servers
+Xvfb available for headed browser execution on Linux servers
 ```
 
 No Docker baseline. Do not start Docker troubleshooting unless a future deployment explicitly moves to Docker.
@@ -194,7 +217,8 @@ Use:
 ```text
 EC2 instance: Ubuntu Server 24.04 LTS
 Instance type: t3.micro or equivalent for test/staging
-Public IP currently in use: 32.236.144.98. Elastic IP is still recommended for stable production access.
+Public IP currently in use: 32.236.144.98
+Elastic IP: recommended for stable production access
 EBS data volume: recommended for persistent app data
 Security group: SSH 22 from your IP only, HTTP 80, HTTPS 443
 ```
@@ -214,7 +238,7 @@ Internet/domain -> Nginx 80 -> 127.0.0.1:8765
 From Windows PowerShell:
 
 ```powershell
-ssh -i E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem ubuntu@<ec2-public-dns-or-elastic-ip>
+ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
 ```
 
 After login, confirm you are on the EC2 host:
@@ -244,7 +268,7 @@ Run on the EC2 host:
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip nginx tmux xvfb
+sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip nginx tmux xvfb xauth
 ```
 
 Check:
@@ -255,6 +279,8 @@ python3 --version
 nginx -v
 tmux -V
 which Xvfb
+which xvfb-run
+which xauth
 ```
 
 Expected Python on Ubuntu 24.04:
@@ -440,13 +466,7 @@ Optional, only when live LLM review is enabled:
 OPENAI_API_KEY=<server-side-key>
 ```
 
-Generate a session secret:
-
-```bash
-openssl rand -hex 32
-```
-
-Protect the env file:
+Protect the file:
 
 ```bash
 sudo chown root:ubuntu /etc/job-hunter/job-hunter.env
@@ -454,6 +474,12 @@ sudo chmod 640 /etc/job-hunter/job-hunter.env
 ```
 
 Never commit `.env` files or secrets to GitHub.
+
+Inspect environment variable names without printing values:
+
+```bash
+sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
+```
 
 ---
 
@@ -474,7 +500,56 @@ Use `--overwrite` only for a deliberate hard reset because it can wipe approved 
 
 ---
 
-## 13. Xvfb for non-headless Playwright on AWS
+## 13. Current systemd service
+
+View the live service file:
+
+```bash
+sudo systemctl cat job-hunter
+```
+
+Current verified service:
+
+```ini
+# /etc/systemd/system/job-hunter.service
+[Unit]
+Description=Job Hunter FastAPI App
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/job-hunter-agent
+EnvironmentFile=/etc/job-hunter/job-hunter.env
+Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin"
+Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
+Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
+Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
+ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Manage the service:
+
+```bash
+sudo systemctl status job-hunter --no-pager
+sudo systemctl restart job-hunter
+sudo journalctl -u job-hunter -n 80 --no-pager
+sudo journalctl -u job-hunter -f
+```
+
+Expected:
+
+```text
+Active: active (running)
+```
+
+---
+
+## 14. Xvfb for non-headless Playwright on AWS
 
 SEEK may behave differently when Playwright runs in normal headless mode. The preferred AWS setup is:
 
@@ -485,95 +560,72 @@ Linux server display: Xvfb virtual display
 
 This lets Chromium run as a headed browser even though the EC2 server has no physical screen.
 
-Install Xvfb:
-
-```bash
-sudo apt install -y xvfb
-which Xvfb
-```
-
-Create a wrapper script:
-
-```bash
-sudo nano /home/ubuntu/job-hunter-agent/scripts/ec2/start-job-hunter-with-xvfb.sh
-```
-
-Content:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-export DISPLAY=:99
-
-if ! pgrep -f "Xvfb :99" >/dev/null 2>&1; then
-  /usr/bin/Xvfb :99 -screen 0 1400x900x24 -ac >/var/log/job-hunter/xvfb.log 2>&1 &
-  sleep 1
-fi
-
-exec /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
-```
-
-Make executable:
-
-```bash
-chmod +x /home/ubuntu/job-hunter-agent/scripts/ec2/start-job-hunter-with-xvfb.sh
-```
-
-Why wrapper instead of `ExecStartPre`:
+Verified installed binaries:
 
 ```text
-Xvfb is a long-running process. Starting it directly in ExecStartPre can block or behave differently depending on systemd handling. A wrapper script is clearer and easier to diagnose.
+/usr/bin/Xvfb
+/usr/bin/xvfb-run
+/usr/bin/xauth
 ```
 
-Do not add Playwright stealth patches as the first fix. First make headed Chromium under Xvfb reliable.
+Current status:
 
----
-
-## 14. Create the systemd service
-
-Create:
-
-```bash
-sudo nano /etc/systemd/system/job-hunter.service
+```text
+Installed: yes
+Wired into job-hunter.service: no
 ```
 
-Service file:
+Current production service still starts FastAPI directly:
 
 ```ini
-[Unit]
-Description=Job Hunter FastAPI App
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/job-hunter-agent
-EnvironmentFile=/etc/job-hunter/job-hunter.env
-Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/start-job-hunter-with-xvfb.sh
-Restart=always
-RestartSec=5
-StandardOutput=append:/var/log/job-hunter/app.log
-StandardError=append:/var/log/job-hunter/app.log
-
-[Install]
-WantedBy=multi-user.target
+ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 ```
 
-Enable and start:
+Do not change this casually. When approved, back up the service file before wiring Xvfb.
+
+Approved change pattern:
 
 ```bash
+sudo cp /etc/systemd/system/job-hunter.service /etc/systemd/system/job-hunter.service.bak.$(date +%Y%m%d-%H%M%S)
+
+sudo sed -i 's|^ExecStart=.*|ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app|' /etc/systemd/system/job-hunter.service
+
 sudo systemctl daemon-reload
-sudo systemctl enable job-hunter
 sudo systemctl restart job-hunter
 sudo systemctl status job-hunter --no-pager
 ```
 
-Expected:
+Verify after restart:
+
+```bash
+sudo systemctl cat job-hunter
+ps auxww | grep -E 'Xvfb|xvfb|job_hunter|python' | grep -v grep
+```
+
+Expected `ExecStart` after Xvfb is wired:
+
+```ini
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+```
+
+Rollback:
+
+```bash
+ls -1 /etc/systemd/system/job-hunter.service.bak.*
+sudo cp /etc/systemd/system/job-hunter.service.bak.<timestamp> /etc/systemd/system/job-hunter.service
+sudo systemctl daemon-reload
+sudo systemctl restart job-hunter
+sudo systemctl status job-hunter --no-pager
+```
+
+Admin setting alignment after Xvfb is wired:
 
 ```text
-Active: active (running)
+Run browser headless = OFF
+Viewport = 1400 x 900
 ```
+
+Do not add Playwright stealth patches as the first fix. First make headed Chromium under Xvfb reliable.
 
 ---
 
@@ -585,12 +637,12 @@ Create:
 sudo nano /etc/nginx/sites-available/job-hunter
 ```
 
-Config:
+Recommended config:
 
 ```nginx
 server {
     listen 80;
-    server_name _;
+    server_name jobhunter.robvoto.com;
 
     location / {
         proxy_pass http://127.0.0.1:8765;
@@ -601,6 +653,12 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+}
+
+server {
+    listen 80 default_server;
+    server_name _;
+    return 404;
 }
 ```
 
@@ -620,11 +678,13 @@ curl -I http://127.0.0.1/
 curl -I http://127.0.0.1:8765/start
 ```
 
+Do not expose port `8765` directly to the internet.
+
 ---
 
 ## 16. ngrok temporary HTTPS path
 
-Use ngrok only for temporary testing. The preferred public route is jobhunter.robvoto.com through nginx.
+Use ngrok only for temporary testing. The preferred public route is `jobhunter.robvoto.com` through nginx.
 
 Flow:
 
@@ -681,7 +741,7 @@ git push
 AWS EC2:
 
 ```bash
-ssh -i E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem ubuntu@<ec2-host>
+ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
 cd /home/ubuntu/job-hunter-agent
 git pull
 source .venv/bin/activate
@@ -750,15 +810,14 @@ ps auxww | grep -E "job_hunter_agent|uvicorn|fastapi|python" | grep -v grep
 During a scrape run:
 
 ```bash
-ps auxww | grep -E "Xvfb|chromium|chrome|playwright" | grep -v grep
+ps auxww | grep -E "Xvfb|xvfb|chromium|chrome|playwright" | grep -v grep
 ```
 
-Expected for AWS non-headless scraping:
+Expected for AWS non-headless scraping after Xvfb is wired:
 
 ```text
-Xvfb :99 is running
+xvfb-run or Xvfb is active for the service
 Chromium appears during scrape
-DISPLAY=:99 exists in the app process environment
 ```
 
 Check environment names without leaking values:
@@ -858,10 +917,18 @@ Check through Nginx:
 curl -I http://127.0.0.1/
 ```
 
-Check Xvfb:
+Check Xvfb installation:
 
 ```bash
-pgrep -af "Xvfb :99"
+which Xvfb
+which xvfb-run
+which xauth
+```
+
+Check Xvfb process after it is wired:
+
+```bash
+pgrep -af "Xvfb|xvfb"
 ```
 
 Check Chromium during scrape:
@@ -881,13 +948,14 @@ Create a second AWS setup document
 Keep old updated/final copies beside the canonical file
 Use Docker unless the deployment model is deliberately changed
 Expose port 8765 publicly
-Store production state in /home/ubuntu accidentally
+Store production state in /home/ubuntu accidentally outside the repo and configured data paths
 Commit .env files or secrets
 Paste tokens into docs, tickets, screenshots, or chat
 Use AWS CloudShell diagnostics as proof of EC2 runtime state
 Use local VS Code terminal as proof of AWS runtime state
 Rely on headless Playwright for SEEK if headed + Xvfb is required
 Add stealth patches before validating Xvfb headed mode
+Move the production app path without documenting a migration
 ```
 
 ---
