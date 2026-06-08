@@ -99,7 +99,10 @@ export const JobHunterChipEditor = (function () {
   function buildChipValue(id, rawValue) {
     const raw = normalizePlainPhrase(rawValue);
     if (!raw) return null;
-    if (id === 'target_roles' || id === 'also_consider_roles') return titlePhraseToPattern(raw);
+    if (id === 'target_roles' || id === 'also_consider_roles') {
+      const tokens = normalizePlainPhrase(raw).toLowerCase().match(/[a-z0-9]+/g) || [];
+      return tokens.join(' ') || null;
+    }
     if (id === 'must_not_require_skills') return raw;
     if (id === 'reject_title_rules') {
       const phrase = normalizeTitleBlockPhrase(raw);

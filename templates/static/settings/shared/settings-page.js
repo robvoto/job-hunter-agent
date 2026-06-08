@@ -434,48 +434,105 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
   }
 });
 
+const pageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__;
+if (!pageLabels) {
+  throw new Error('Missing onboarding page labels.');
+}
+
+function minContractMonthSummaryText(value) {
+  const selected = String(value).trim();
+  if (!selected) {
+    return pageLabels.summary_any_length_label;
+  }
+  const option = Array.from(document.querySelectorAll('#min_contract_months option'))
+    .find((item) => String(item.value).trim() === selected);
+  if (!option || !option.textContent) {
+    throw new Error(`Missing contract month label for value: ${selected}`);
+  }
+  return String(option.textContent).trim();
+}
+
 function updateContractChipLabel() {
   const chipSpan = document.querySelector('input[name="engagement_type"][value="contract"]')
     ?.closest('label')?.querySelector('span');
   if (!chipSpan) return;
-  const contractEnabled = getEngagementTypeValues().includes('contract');
+  if (!chipSpan.dataset.baseLabel) {
+    chipSpan.dataset.baseLabel = chipSpan.textContent;
+  }
+  const contractEnabled = getEngagementTypeValues().includes('contract') || getEngagementTypeValues().includes('full_time_contract');
   const val = document.getElementById('min_contract_months')?.value || '';
   if (!contractEnabled) {
-    chipSpan.textContent = 'Contract';
+    chipSpan.textContent = chipSpan.dataset.baseLabel;
+  } else if (val) {
+    chipSpan.textContent = `${chipSpan.dataset.baseLabel} (${val}+)`;
   } else {
-    chipSpan.textContent = val ? `Contract (${val}+)` : 'Contract (All)';
+    chipSpan.textContent = `${chipSpan.dataset.baseLabel} (all)`;
   }
 }
 
+function positionContractDurationRow() {
+  const contractRow = document.getElementById('contract_duration_row');
+  const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
+  if (!contractRow || !contractChip) return;
+  const parent = contractRow.parentElement;
+  if (parent && getComputedStyle(parent).position === 'static') {
+    parent.style.position = 'relative';
+  }
+  const chipRect = contractChip.getBoundingClientRect();
+  const parentRect = parent ? parent.getBoundingClientRect() : { left: 0, top: 0 };
+  contractRow.style.left = `${Math.round(chipRect.left - parentRect.left)}px`;
+  contractRow.style.top = `${Math.round(chipRect.bottom - parentRect.top + 6)}px`;
+}
+
+function updateMinContractMonthState({ showRow = false } = {}) {
+  const minContractEl = document.getElementById('min_contract_months');
+  if (!minContractEl) return;
+  const contractEnabled = getEngagementTypeValues().includes('contract') || getEngagementTypeValues().includes('full_time_contract');
+  minContractEl.disabled = !contractEnabled;
+  const contractRow = document.getElementById('contract_duration_row');
+  if (!contractRow) {
+    updateContractChipLabel();
+    return;
+  }
+  if (!contractEnabled) {
+    minContractEl.value = '';
+    contractRow.hidden = true;
+  } else if (showRow) {
+    positionContractDurationRow();
+    contractRow.hidden = false;
+  } else if (!contractRow.hidden) {
+    positionContractDurationRow();
+  }
+  updateContractChipLabel();
+}
+
 function updateSearchPreferenceSummaries() {
-  const pageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__ || {};
-  const allChecked = (name) => Array.from(document.querySelectorAll(`input[name="${name}"]`)).every(i => i.checked);
+  const allChecked = (name) => {
+    const inputs = Array.from(document.querySelectorAll(`input[name="${name}"]`));
+    return inputs.length > 0 && inputs.every((i) => i.checked);
+  };
   const set = (id, text) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = text;
     el.hidden = !text;
   };
-  set('engagement_type_summary', allChecked('engagement_type') ? (pageLabels.work_type_summary_all_label || '') : '');
-  set('work_mode_preference_summary', allChecked('work_mode_preference') ? (pageLabels.work_mode_summary_all_label || '') : '');
-  set('sector_preference_summary', allChecked('prefer_sector') ? (pageLabels.sector_preference_summary_all_label || '') : '');
-}
-
-function updateContractDurationRow() {
-  const contractEnabled = getEngagementTypeValues().includes('contract');
-  const minContractEl = document.getElementById('min_contract_months');
-  const contractRow = document.getElementById('contract_duration_row');
-  if (!contractEnabled) {
-    if (minContractEl) { minContractEl.disabled = true; minContractEl.value = ''; }
-    if (contractRow) contractRow.hidden = true;
-    updateContractChipLabel();
-  }
+  const contractMonths = String(document.getElementById('min_contract_months')?.value || '').trim();
+  set(
+    'engagement_type_summary',
+    allChecked('engagement_type')
+      ? `${pageLabels.work_type_summary_all_label} \u00b7 ${pageLabels.work_type_summary_contract_length_label}: ${contractMonths ? minContractMonthSummaryText(contractMonths) : pageLabels.summary_any_length_label}`
+      : '',
+  );
+  set('work_mode_preference_summary', allChecked('work_mode_preference') ? pageLabels.work_mode_summary_all_label : '');
+  set('sector_preference_summary', allChecked('prefer_sector') ? pageLabels.sector_preference_summary_all_label : '');
 }
 
 document.getElementById('min_contract_months')?.addEventListener('change', () => {
   const contractRow = document.getElementById('contract_duration_row');
   if (contractRow) contractRow.hidden = true;
   updateContractChipLabel();
+  updateSearchPreferenceSummaries();
 });
 
 document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
@@ -487,12 +544,11 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
     const selectedEngagementTypes = getEngagementTypeValues();
     const hasContractDurationWorkType = selectedEngagementTypes.includes('contract') || selectedEngagementTypes.includes('full_time_contract');
     if (!hasContractDurationWorkType) {
-      updateContractDurationRow();
+      updateMinContractMonthState();
     } else if ((cb.value === 'contract' || cb.value === 'full_time_contract') && cb.checked) {
-      const minContractEl = document.getElementById('min_contract_months');
-      const contractRow = document.getElementById('contract_duration_row');
-      if (minContractEl) minContractEl.disabled = false;
-      if (contractRow) contractRow.hidden = false;
+      updateMinContractMonthState({ showRow: true });
+    } else {
+      updateMinContractMonthState();
     }
     updateSearchPreferenceSummaries();
   });
@@ -546,21 +602,6 @@ document.getElementById('open_telegram_connect')?.addEventListener('click', asyn
     if (!link) throw new Error('No Telegram connect link available yet.');
     showStatus('Opening Telegram... If it fails to open, copy the link from the panel below.', 'success', { autoHideMs: 5000 });
     window.open(link, '_blank', 'noopener');
-  } catch (error) {
-    showStatus(error.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalLabel;
-  }
-});
-
-document.getElementById('sync_telegram_subscribers')?.addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  const originalLabel = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Syncing...';
-  try {
-    await alertsSettings.syncTelegramSubscribers();
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {

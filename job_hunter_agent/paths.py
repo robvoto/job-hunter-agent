@@ -14,7 +14,6 @@ OUTPUT_DIR = Path(os.environ.get("JOB_HUNTER_OUTPUT_DIR", REPO_ROOT / "output"))
 TEMPLATES_DIR = REPO_ROOT / "templates"
 DOCS_DIR = REPO_ROOT / "docs"
 WORKSPACE_RESULTS_FILENAME = "workspace_results.html"
-LOCAL_USER_ID = "_local"
 
 # Per-user data lives under this directory.
 USERS_DIR = DATA_DIR / "users"

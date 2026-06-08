@@ -207,21 +207,12 @@ def test_ensure_user_row_is_idempotent(tmp_db):
     assert count == 1
 
 
-def test_ensure_user_row_skips_local_debug_user(tmp_db):
-    # init_db seeds the _local row (no email); ensure_user_row must not write to it
-    ensure_user_row("_local", email="local@example.com", db_path=tmp_db)
-    with db_conn(tmp_db) as conn:
-        row = conn.execute("SELECT email FROM users WHERE user_id = '_local'").fetchone()
-    assert row is None or row["email"] is None
-
-
 def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
     from job_hunter_agent import profile_store
-    from job_hunter_agent.paths import LOCAL_USER_ID
     from job_hunter_agent.user_context import set_user_id
 
     def write_profile(index: int) -> None:
-        set_user_id(LOCAL_USER_ID)
+        set_user_id("test_user")
         profile_store.save_profile({
             **profile_store.DEFAULT_PROFILE,
             "llm_profile_brief": f"brief-{index}",
@@ -233,7 +224,7 @@ def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
     with db_conn(isolated_db) as conn:
         row = conn.execute(
             "SELECT data FROM user_profile WHERE user_id = ?",
-            (LOCAL_USER_ID,),
+            ("test_user",),
         ).fetchone()
 
     assert row is not None
@@ -244,11 +235,10 @@ def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
 
 def test_concurrent_job_history_writes_do_not_corrupt_state(isolated_db):
     from job_hunter_agent.io_utils import load_job_history, save_job_history
-    from job_hunter_agent.paths import LOCAL_USER_ID
     from job_hunter_agent.user_context import set_user_id
 
     def write_job(index: int) -> None:
-        set_user_id(LOCAL_USER_ID)
+        set_user_id("test_user")
         save_job_history({
             f"seek:{index}": {
                 "title": f"Business Analyst {index}",
@@ -262,7 +252,7 @@ def test_concurrent_job_history_writes_do_not_corrupt_state(isolated_db):
     with ThreadPoolExecutor(max_workers=6) as executor:
         list(executor.map(write_job, range(20)))
 
-    set_user_id(LOCAL_USER_ID)
+    set_user_id("test_user")
     history = load_job_history()
 
     assert len(history) == 20

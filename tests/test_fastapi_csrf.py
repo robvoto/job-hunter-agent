@@ -75,7 +75,7 @@ def test_csrf_middleware_allows_valid_token(monkeypatch):
     monkeypatch.setattr(profile_materials.srv, "load_profile", lambda: {})
     monkeypatch.setattr(profile_materials.srv, "patch_profile", lambda patch: {"ok": True, "patched": patch})
     monkeypatch.setattr(profile_materials.srv.SettingsHandler, "_normalize_profile_patch_for_save", staticmethod(lambda current, body: {}))
-    monkeypatch.setattr(profile_materials.srv.SettingsHandler, "_patch_affects_matching_rules", staticmethod(lambda patch: False))
+    monkeypatch.setattr(profile_materials.srv.SettingsHandler, "_matching_rules_changed", staticmethod(lambda before, after: False))
 
     client = TestClient(app)
     client.cookies.set(session_cookie_name, session_cookie_value)

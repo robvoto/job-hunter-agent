@@ -64,7 +64,7 @@ def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
         updated = srv.patch_profile(patch)
 
-        if srv.SettingsHandler._patch_affects_matching_rules(patch):
+        if srv.SettingsHandler._matching_rules_changed(current, updated):
 
             srv.rebuild_workspace_after_rule_change("profile matching rules saved")
 

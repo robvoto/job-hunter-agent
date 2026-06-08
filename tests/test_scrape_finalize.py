@@ -18,7 +18,6 @@ from job_hunter_agent import scrape_finalize
 
 from job_hunter_agent import workspace_service
 
-from job_hunter_agent.paths import LOCAL_USER_ID
 from job_hunter_agent.record_schema import (
     RECORD_FIT_LABEL_KEY,
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
@@ -137,7 +136,7 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
 
     with db_conn() as conn:
 
-        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
 
 
@@ -232,7 +231,7 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(mon
 
     with db_conn() as conn:
 
-        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
 
 
@@ -313,7 +312,7 @@ def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_pat
 
     with db_conn() as conn:
 
-        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
 
 
@@ -374,7 +373,7 @@ def test_finalize_scrape_run_treats_stop_before_fresh_cards_as_cancellation(monk
     calls: list[tuple[str, object]] = []
 
     with db_conn() as conn:
-        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
     monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
     monkeypatch.setattr(scrape_finalize, "deduplicate_across_sources", lambda records: records)

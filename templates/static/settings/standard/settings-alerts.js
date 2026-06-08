@@ -60,17 +60,7 @@ export const JobHunterAlertsSettings = (function () {
       panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.telegram_connect_help_missing)}</p>`;
       return;
     }
-    if (!telegramConnectLink) {
-      panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.telegram_connect_help_ready)}</p>`;
-      return;
-    }
-    panel.innerHTML = `
-      <p class="panel-copy">
-        ${escapeHtml(labels.telegram_connect_link_label)}:
-        <a class="telegram-connect-link" href="${escapeHtml(telegramConnectLink)}" target="_blank" rel="noreferrer">${escapeHtml(telegramConnectLink)}</a>
-      </p>
-      <p class="panel-copy">${escapeHtml(labels.telegram_connect_help_ready)}</p>
-    `;
+    panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.telegram_connect_help_ready)}</p>`;
   }
 
   // Fills the alerts/schedule/LLM form. Calls renderLlmModelOptions() from
@@ -83,7 +73,12 @@ export const JobHunterAlertsSettings = (function () {
     const telegram = settings.telegram || {};
     setToggleChecked('telegram_enabled', Boolean(telegram.enabled));
     const botToken = document.getElementById('telegram_bot_token');
-    if (botToken) botToken.value = '';
+    if (botToken) {
+      botToken.value = '';
+      botToken.placeholder = telegram.bot_token_present
+        ? 'Token saved — enter a new value to replace'
+        : '123456:ABC...';
+    }
     const botUsername = document.getElementById('telegram_bot_username');
     if (botUsername) botUsername.value = telegram.bot_username || '';
     setToggleChecked('telegram_disable_link_preview', Boolean(telegram.disable_link_preview));
@@ -146,6 +141,25 @@ export const JobHunterAlertsSettings = (function () {
     return payload;
   }
 
+  async function pollForConnection(maxAttempts = 3, intervalMs = 8000) {
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      let payload;
+      try {
+        const response = await jobHunterFetch('/api/telegram/sync', { method: 'POST' });
+        payload = await response.json().catch(() => ({}));
+        if (!response.ok) break;
+      } catch {
+        break;
+      }
+      fillUserSettings(payload.settings || {});
+      renderTelegramConnectPanel(payload.settings || {});
+      const count = payload.settings?.telegram?.subscriber_count || 0;
+      if (count > 0) return true;
+    }
+    return false;
+  }
+
   async function sendTelegramTestMessage() {
     const response = await jobHunterFetch('/api/telegram/test-message', {
       method: 'POST',
@@ -164,6 +178,7 @@ export const JobHunterAlertsSettings = (function () {
     getTelegramConnectLink,
     loadTelegramConnectLink,
     syncTelegramSubscribers,
+    pollForConnection,
     sendTelegramTestMessage,
   };
 }());

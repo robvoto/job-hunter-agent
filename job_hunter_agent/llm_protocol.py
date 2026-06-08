@@ -47,10 +47,10 @@ LLM_LEARNING_ONLY_PROMPT_SHAPE = (
 LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
 
 
-LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER = "Candidate fit brief:"
-LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability levels:"
+LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER = "AI fit brief:"
+LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability matrix:"
 LLM_PROMPT_MATCH_PREFERENCES_HEADER = "Match preferences:"
-LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER = "Default fit review guidance:"
+LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER = "Fit review guidance:"
 LLM_PROMPT_CAPABILITY_NAMING_INTRO = (
     "You are reviewing and labelling candidate professional capability clusters extracted from a CV."
 )

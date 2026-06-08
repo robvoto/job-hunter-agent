@@ -201,16 +201,11 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
 
 def init_db(db_path: Path | None = None) -> None:
     """Create all tables if they do not exist. Safe to call on every startup."""
-    from job_hunter_agent.paths import LOCAL_USER_ID
     path = db_path or _default_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with db_conn(path) as conn:
         _apply_migrations(conn)
         conn.executescript(_SCHEMA)
-        conn.execute(
-            "INSERT INTO users (user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
-            (LOCAL_USER_ID,),
-        )
 
 
 EXPECTED_TABLES = {
@@ -239,9 +234,6 @@ def ensure_user_row(
     db_path: "Path | None" = None,
 ) -> None:
     """Upsert a user row. Updates email, display_name, and last_seen_at when provided."""
-    from job_hunter_agent.paths import LOCAL_USER_ID
-    if user_id == LOCAL_USER_ID:
-        return
     with db_conn(db_path) as conn:
         conn.execute(
             """

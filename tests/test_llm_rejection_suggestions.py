@@ -153,14 +153,27 @@ def test_managed_llm_prompt_knowledge_files_contain_lines():
     assert any(str(line).strip() for line in capability_payload["lines"])
 
 
+def test_build_fit_review_guidance_uses_current_header():
+    guidance = llm_gate.build_fit_review_guidance()
+
+    assert guidance.startswith("Fit review guidance:")
+
+
 def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
     monkeypatch.setattr(
         llm_gate,
         "load_profile",
         lambda: {
-            "llm_profile_brief": "",
+            "llm_profile_brief": "AI fit brief body",
             "star_evidence_text": "",
-            "candidate_capabilities": [],
+            "candidate_capabilities": [
+                {
+                    "name": "Python",
+                    "level": "strong",
+                    "fit": "good",
+                    "aliases": ["python"],
+                }
+            ],
             "salary_preferences": {
                 "minimum_salary_yearly": 150000,
                 "minimum_daily_rate": 900,
@@ -227,11 +240,15 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
 
     context = llm_gate.build_profile_prompt_context()
 
+    assert "AI fit brief:" in context
+    assert "AI fit brief body" in context
+    assert "Capability matrix:" in context
+    assert "Python: strong, good (python)" in context
     assert "Yearly target 150000." in context
     assert "Daily target 900." in context
     assert "Base Sydney." in context
     assert "Prefer permanent." in context
-    assert "Primary context (strongest weight 0.90):" in context
+    assert "Match preferences:" in context
     assert "Primary evidence" in context
 
 

@@ -22,7 +22,6 @@ import requests as http_client
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from job_hunter_agent import config as app_config
 from job_hunter_agent.config import (
     LOGIN_PATH,
     LOGOUT_PATH,
@@ -174,15 +173,6 @@ def validate_session_cookie_security_for_startup(host: str) -> None:
 def read_session_user(request: Request) -> dict | None:
     config = getattr(request.app.state, "auth_config", None)
     if not isinstance(config, GoogleOAuthConfig) or not config.session_secret:
-        if app_config.DEBUG_MODE:
-            from job_hunter_agent.paths import LOCAL_USER_ID
-
-            return {
-                "user_id": LOCAL_USER_ID,
-                "email": "local@job-hunter.local",
-                "role": "admin",
-                "name": "Local",
-            }
         return None
     token = _read_session_cookie_value(request)
     if not token:

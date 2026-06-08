@@ -330,8 +330,6 @@ if __name__ == "__main__":
 
     from job_hunter_agent import server_helpers as srv
     from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
-    from job_hunter_agent.paths import LOCAL_USER_ID
-
     parser = argparse.ArgumentParser(description="Job Hunter Agent local server")
     parser.add_argument(
         "--debug",
@@ -348,14 +346,16 @@ if __name__ == "__main__":
         "--user-id",
         dest="user_id",
         default=None,
-        help="User ID to rebuild for when using --rebuild. Defaults to the local user.",
+        help="User ID to rebuild for when using --rebuild.",
     )
     args = parser.parse_args()
 
     _configure_server_logging()
 
     if args.rebuild:
-        srv._rebuild_workspace_on_startup(args.user_id or LOCAL_USER_ID)
+        if not args.user_id:
+            raise SystemExit("--user-id is required when using --rebuild.")
+        srv._rebuild_workspace_on_startup(args.user_id)
 
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")

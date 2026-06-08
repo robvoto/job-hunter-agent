@@ -888,6 +888,9 @@
 .search-source-panel .toggle-switch-title {
   font-size: var(--text-role-button-font-size);
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .settings-form-field .contract-duration-row {

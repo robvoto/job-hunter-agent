@@ -12,14 +12,13 @@ from job_hunter_agent.io_utils import write_review_data
 from job_hunter_agent import workspace_service
 from job_hunter_agent import source_connector
 import job_hunter_agent.routes.workspace_api as workspace_api
-from job_hunter_agent.paths import LOCAL_USER_ID
 from pathlib import Path
 
 
 def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db):
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": LOCAL_USER_ID, "email": "test@example.com", "role": "candidate"})
+    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "candidate"})
     with db_conn() as conn:
-        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (LOCAL_USER_ID,))
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
     write_review_data(
         {

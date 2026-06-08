@@ -146,7 +146,7 @@
       background: var(--bg-surface);
     }
     .nav-item-admin {
-      color: var(--selection-accent);
+      color: var(--text-muted);
       border-color: var(--border-subtle);
       background: var(--bg-muted);
       box-shadow: var(--shadow-soft);
@@ -154,7 +154,7 @@
       margin-bottom: 0;
     }
     .nav-item-admin:hover {
-      color: var(--selection-accent);
+      color: var(--text-primary);
       background: var(--bg-surface);
     }
     .nav-item-optimise { margin-top: var(--surface-gap-md); color: var(--text-muted); border-radius: 0; }
@@ -214,31 +214,6 @@
     .settings-section {
       margin-bottom: 28px;
     }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: var(--surface-gap-md);
-    }
-    .admin-settings-grid {
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      align-items: start;
-    }
-    .admin-settings-grid > .panel {
-      display: grid;
-      align-content: start;
-      gap: var(--field-label-control-gap);
-      min-width: 0;
-    }
-    .admin-settings-grid > .panel > .panel-copy {
-      margin: 0;
-    }
-    .onboarding-defaults-panel {
-      display: grid;
-      gap: var(--field-label-control-gap);
-    }
-    .onboarding-defaults-panel > input[type="number"] {
-      width: min(100%, var(--setting-control-width));
-    }
     .search-settings-grid {
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
@@ -246,8 +221,44 @@
     .settings-form-grid--prompt-templates {
       grid-template-columns: minmax(0, 1fr);
     }
-    .settings-form-field--summary {
-      row-gap: var(--field-summary-gap);
+    /* Local layout exception: keep search preference summaries compact and centered on the settings page only. */
+    .search-settings-grid .settings-form-field--summary {
+      position: relative;
+      row-gap: var(--field-label-control-gap);
+    }
+    .search-settings-grid .settings-form-field--summary > .summary-line {
+      text-align: center;
+    }
+    .search-settings-grid #seek_max_pages_choices.choice-strip {
+      min-height: var(--control-height-2xl);
+      align-items: center;
+    }
+    .search-settings-grid #contract_duration_row {
+      position: absolute;
+      z-index: 2;
+      margin-top: 0;
+    }
+    .search-settings-grid #contract_duration_row::before {
+      content: '';
+      position: absolute;
+      top: -7px;
+      left: 14px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 7px solid var(--border-subtle);
+    }
+    .search-settings-grid #contract_duration_row::after {
+      content: '';
+      position: absolute;
+      top: -5px;
+      left: 14px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 6px solid var(--bg-input, var(--bg-surface));
     }
     .contract-duration-row[hidden] {
       display: none;
@@ -318,7 +329,10 @@
       line-height: var(--field-label-line-height);
     }
     input, textarea {
+      box-sizing: border-box;
       width: 100%;
+      max-width: 100%;
+      min-width: 0;
       border: 1px solid var(--border-subtle);
       border-radius: var(--control-radius-md);
       padding: var(--control-pad-block-2xl) var(--control-pad-inline-lg);
@@ -332,6 +346,10 @@
       border-color: var(--accent);
     }
     textarea { min-height: 120px; resize: vertical; }
+    .field-help {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
     .actions {
       display: flex;
       gap: var(--surface-gap-sm);
@@ -1089,9 +1107,6 @@
       .hero {
         gap: var(--surface-gap-md);
         flex-wrap: wrap;
-      }
-      .onboarding-defaults-panel > input[type="number"] {
-        width: 100%;
       }
     }
 

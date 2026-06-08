@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 31,
+  "version": 32,
   "updated_at": "2026-06-05",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -574,8 +574,8 @@
     "telegram_bot_token_help": "Paste the bot token from BotFather.",
     "telegram_bot_username_label": "Bot username",
     "telegram_bot_username_help": "Used to build the connect link. Leave off the @ symbol.",
-    "telegram_disable_link_preview_label": "Disable workspace link preview",
-    "telegram_disable_link_preview_help": "If enabled, Telegram sends the workspace link without a preview card.",
+    "telegram_disable_link_preview_label": "Suppress link preview card",
+    "telegram_disable_link_preview_help": "When on, Telegram sends workspace links without an inline preview card. When off, Telegram shows the preview.",
     "telegram_connect_heading": "Connect your Telegram account",
     "telegram_connect_help": "Save the bot token and username, then open the connect link in Telegram and press Start once.",
     "telegram_connect_help_missing": "Save the bot token and username to unlock the connect link.",

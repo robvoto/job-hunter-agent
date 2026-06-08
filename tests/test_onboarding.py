@@ -180,6 +180,7 @@ def test_shared_ui_styles_are_centralised():
     assert ".page input," in theme_primitives
     assert ".currency-input-wrap input," in theme_primitives
     assert ".summary-line {" in theme_widgets
+    assert ".settings-form-field--summary" not in theme_widgets
     assert ".help {" in theme_widgets
     assert ".check-card-head h3" not in theme_widgets
     assert ".check-list dd" not in theme_widgets
@@ -193,6 +194,32 @@ def test_shared_ui_styles_are_centralised():
     assert ".currency-input-wrap input" not in onboarding_review_css
     assert ".help {" not in settings_page_css
     assert ".currency-input-wrap input" not in settings_page_css
+    assert ".nav-item-admin {" in settings_page_css
+    assert "color: var(--text-muted);" in settings_page_css
+    assert ".search-settings-grid .settings-form-field--summary" in settings_page_css
+    assert "row-gap: var(--field-label-control-gap);" in settings_page_css
+    assert "#seek_max_pages_choices.choice-strip" in settings_page_css
+    assert "min-height: var(--control-height-2xl);" in settings_page_css
+    assert "#contract_duration_row" in settings_page_css
+    assert "position: absolute;" in settings_page_css
+    assert "text-align: center;" in settings_page_css
+    assert ".search-source-panel .toggle-switch" in theme_widgets
+    assert ".search-source-panel .toggle-switch-title" in theme_widgets
+    assert "white-space: nowrap;" in theme_widgets
+
+
+def test_settings_search_work_type_popup_uses_shared_labels_and_local_layout():
+    repo_root = Path(__file__).resolve().parents[1]
+    settings_html = (repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html").read_text(encoding="utf-8")
+    settings_js = (repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js").read_text(encoding="utf-8")
+
+    assert settings_html.index('id="contract_duration_row"') < settings_html.index('id="engagement_type_summary"')
+    assert "__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__" in settings_html
+    assert "window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__" in settings_js
+    assert "positionContractDurationRow" in settings_js
+    assert "updateMinContractMonthState" in settings_js
+    assert "work_type_summary_contract_length_label" in settings_js
+    assert "summary_any_length_label" in settings_js
 
 
 def test_onboarding_contract_duration_row_floats_and_hides_on_blur():
@@ -835,8 +862,12 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     assert str(events[1][0][0]).startswith("rebuild:review action saved: unapply")
 
 
-def test_patch_affects_matching_rules_includes_capability_matrix():
-    assert server_helpers.SettingsHandler._patch_affects_matching_rules({"candidate_capabilities": []}) is True
+def test_matching_rules_changed_detects_capability_matrix_change():
+    assert server_helpers.SettingsHandler._matching_rules_changed({}, {"candidate_capabilities": [{"name": "x"}]}) is True
+
+def test_matching_rules_changed_ignores_identical_values():
+    caps = [{"name": "x"}]
+    assert server_helpers.SettingsHandler._matching_rules_changed({"candidate_capabilities": caps}, {"candidate_capabilities": caps}) is False
 
 
 def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp_path):
@@ -888,7 +919,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     cleared = []
 
     fake_users_dir = tmp_path / "users"
-    fake_local_dir = fake_users_dir / "_local"
+    fake_local_dir = fake_users_dir / "test_user"
     fake_local_dir.mkdir(parents=True, exist_ok=True)
 
     workspace_path = tmp_path / "workspace.html"

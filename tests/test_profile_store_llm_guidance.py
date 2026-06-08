@@ -22,13 +22,13 @@ def test_save_profile_strips_legacy_guidance_key(isolated_db):
 
 def test_save_profile_does_not_persist_scoring_rules(isolated_db):
     from job_hunter_agent.database import db_conn
-    from job_hunter_agent.paths import LOCAL_USER_ID
+    from job_hunter_agent.user_context import get_user_id_for_runtime
 
     profile_store.save_profile({**profile_store.DEFAULT_PROFILE})
 
     with db_conn() as conn:
         row = conn.execute(
-            "SELECT data FROM user_profile WHERE user_id = ?", (LOCAL_USER_ID,)
+            "SELECT data FROM user_profile WHERE user_id = ?", (get_user_id_for_runtime(),)
         ).fetchone()
     persisted = json.loads(row["data"])
     assert "scoring_rules" not in persisted
@@ -36,15 +36,16 @@ def test_save_profile_does_not_persist_scoring_rules(isolated_db):
 
 def test_load_profile_drops_legacy_guidance_key(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
-    from job_hunter_agent.paths import LOCAL_USER_ID
+    from job_hunter_agent.user_context import get_user_id_for_runtime
 
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
-    ensure_user_row(LOCAL_USER_ID)
+    user_id = get_user_id_for_runtime()
+    ensure_user_row(user_id)
     with db_conn() as conn:
         conn.execute(
             """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
-            (LOCAL_USER_ID, json.dumps({legacy_key: "Prefer labels close to business analysis."})),
+            (user_id, json.dumps({legacy_key: "Prefer labels close to business analysis."})),
         )
 
     loaded = profile_store.load_profile()
@@ -54,14 +55,15 @@ def test_load_profile_drops_legacy_guidance_key(isolated_db):
 
 def test_load_profile_raises_for_non_object_data(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
-    from job_hunter_agent.paths import LOCAL_USER_ID
+    from job_hunter_agent.user_context import get_user_id_for_runtime
 
-    ensure_user_row(LOCAL_USER_ID)
+    user_id = get_user_id_for_runtime()
+    ensure_user_row(user_id)
     with db_conn() as conn:
         conn.execute(
             """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
-            (LOCAL_USER_ID, json.dumps([1, 2, 3])),
+            (user_id, json.dumps([1, 2, 3])),
         )
 
     with pytest.raises(profile_store.ProfileLoadError):

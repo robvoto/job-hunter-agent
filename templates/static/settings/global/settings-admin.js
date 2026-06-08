@@ -406,73 +406,73 @@ export const JobHunterAdminSettings = (function () {
             max: readCurrencyFieldValue('salary_limit_minimum_daily_rate_max', currentSalaryLimits.minimum_daily_rate?.max),
           },
         },
-        candidate_profile_tier_weights: {
-          ...currentEvidenceWeights,
-          primary_candidate_profile_context: readNumber('evidence_primary_weight', currentEvidenceWeights.primary_candidate_profile_context),
-          secondary_candidate_profile_context: readNumber('evidence_secondary_weight', currentEvidenceWeights.secondary_candidate_profile_context),
-          supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', currentEvidenceWeights.supplementary_candidate_profile_context),
-        },
-        history_settings: {
-          ...currentHistory,
-          archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
-          hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
-          repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
-          repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
-          multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),
-          multi_listing_red_flag_min_span_days: readNumber('history_multi_listing_red_flag_min_span_days', currentHistory.multi_listing_red_flag_min_span_days),
-        },
-        description_trust_settings: {
-          ...currentDescriptionTrust,
-          min_trusted_description_length: readNumber(
-            'description_trust_min_trusted_description_length',
-            currentDescriptionTrust.min_trusted_description_length,
+      },
+      candidate_profile_tier_weights: {
+        ...currentEvidenceWeights,
+        primary_candidate_profile_context: readNumber('evidence_primary_weight', currentEvidenceWeights.primary_candidate_profile_context),
+        secondary_candidate_profile_context: readNumber('evidence_secondary_weight', currentEvidenceWeights.secondary_candidate_profile_context),
+        supplementary_candidate_profile_context: readNumber('evidence_supplementary_weight', currentEvidenceWeights.supplementary_candidate_profile_context),
+      },
+      history_settings: {
+        ...currentHistory,
+        archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
+        hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
+        repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
+        repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
+        multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),
+        multi_listing_red_flag_min_span_days: readNumber('history_multi_listing_red_flag_min_span_days', currentHistory.multi_listing_red_flag_min_span_days),
+      },
+      description_trust_settings: {
+        ...currentDescriptionTrust,
+        min_trusted_description_length: readNumber(
+          'description_trust_min_trusted_description_length',
+          currentDescriptionTrust.min_trusted_description_length,
+        ),
+      },
+      description_compaction_settings: {
+        ...currentCompaction,
+        enabled: document.getElementById('description_compaction_enabled').checked,
+        default_min_compacted_chars: readNumber('description_compaction_min_chars', currentCompaction.default_min_compacted_chars),
+        min_retention_ratio: readNumber('description_compaction_min_retention', currentCompaction.min_retention_ratio),
+      },
+      source_document_settings: { ...currentSourceDocuments },
+      onboarding_settings: {
+        ...currentOnboarding,
+        extraction_lookback_years: readNumber('onboarding_extraction_lookback_years', currentOnboarding.extraction_lookback_years),
+        title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
+        max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
+        max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
+        capability_alias_limit: readNumber('onboarding_capability_alias_limit', currentOnboarding.capability_alias_limit),
+        signal_cluster_min_alias_hits: readNumber('onboarding_signal_cluster_min_alias_hits', currentOnboarding.signal_cluster_min_alias_hits),
+        signal_cluster_min_snippet_hits: readNumber('onboarding_signal_cluster_min_snippet_hits', currentOnboarding.signal_cluster_min_snippet_hits),
+        signal_cluster_dense_snippet_alias_hits: readNumber('onboarding_signal_cluster_dense_snippet_alias_hits', currentOnboarding.signal_cluster_dense_snippet_alias_hits),
+        capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
+      },
+      llm_settings: {
+        ...currentLlmSettings,
+        model_options: toLines(document.getElementById('llm_model_options').value),
+        max_llm_chars: readNumber('llm_max_llm_chars', currentLlmSettings.max_llm_chars),
+        pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
+        llm_prompt_settings: {
+          ...currentLlmPromptSettings,
+          match_preference_templates: Object.fromEntries(
+            PROMPT_TEMPLATE_FIELDS.map(([templateKey, fieldId]) => [
+              templateKey,
+              document.getElementById(fieldId).value.trim(),
+            ]),
           ),
         },
-        description_compaction_settings: {
-          ...currentCompaction,
-          enabled: document.getElementById('description_compaction_enabled').checked,
-          default_min_compacted_chars: readNumber('description_compaction_min_chars', currentCompaction.default_min_compacted_chars),
-          min_retention_ratio: readNumber('description_compaction_min_retention', currentCompaction.min_retention_ratio),
-        },
-        source_document_settings: { ...currentSourceDocuments },
-        onboarding_settings: {
-          ...currentOnboarding,
-          extraction_lookback_years: readNumber('onboarding_extraction_lookback_years', currentOnboarding.extraction_lookback_years),
-          title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
-          max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
-          max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
-          capability_alias_limit: readNumber('onboarding_capability_alias_limit', currentOnboarding.capability_alias_limit),
-          signal_cluster_min_alias_hits: readNumber('onboarding_signal_cluster_min_alias_hits', currentOnboarding.signal_cluster_min_alias_hits),
-          signal_cluster_min_snippet_hits: readNumber('onboarding_signal_cluster_min_snippet_hits', currentOnboarding.signal_cluster_min_snippet_hits),
-          signal_cluster_dense_snippet_alias_hits: readNumber('onboarding_signal_cluster_dense_snippet_alias_hits', currentOnboarding.signal_cluster_dense_snippet_alias_hits),
-          capability_strength_preset: document.getElementById('onboarding_capability_strength_preset').value || currentOnboarding.capability_strength_preset,
-        },
-        llm_settings: {
-          ...currentLlmSettings,
-          model_options: toLines(document.getElementById('llm_model_options').value),
-          max_llm_chars: readNumber('llm_max_llm_chars', currentLlmSettings.max_llm_chars),
-          pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
-          llm_prompt_settings: {
-            ...currentLlmPromptSettings,
-            match_preference_templates: Object.fromEntries(
-              PROMPT_TEMPLATE_FIELDS.map(([templateKey, fieldId]) => [
-                templateKey,
-                document.getElementById(fieldId).value.trim(),
-              ]),
-            ),
-          },
-        },
-        review_settings: { ...currentReviewSettings },
-        playwright_settings: {
-          ...currentPlaywright,
-          headless: document.getElementById('playwright_headless').checked,
-          playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
-          playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
-          playwright_selector_timeout: readSecondsAsMilliseconds(
-            'playwright_selector_timeout',
-            currentPlaywright.playwright_selector_timeout,
-          ),
-        },
+      },
+      review_settings: { ...currentReviewSettings },
+      playwright_settings: {
+        ...currentPlaywright,
+        headless: document.getElementById('playwright_headless').checked,
+        playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
+        playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
+        playwright_selector_timeout: readSecondsAsMilliseconds(
+          'playwright_selector_timeout',
+          currentPlaywright.playwright_selector_timeout,
+        ),
       },
     };
   }

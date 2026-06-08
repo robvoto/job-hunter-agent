@@ -5,7 +5,7 @@ All per-user path helpers in paths.py read from this context to resolve the
 correct data directory for the active user.
 
 Non-request code (agent_runner, CLI) must call set_user_id() explicitly before
-performing file operations. Debug/auth-disabled mode uses LOCAL_USER_ID from paths.py.
+performing file operations.
 """
 
 from __future__ import annotations
