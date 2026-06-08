@@ -66,9 +66,7 @@ def _set_test_user_context():
 
     from job_hunter_agent.user_context import set_user_id
 
-    from job_hunter_agent.paths import LOCAL_USER_ID
-
-    set_user_id(LOCAL_USER_ID)
+    set_user_id("test_user")
 
     yield
 
