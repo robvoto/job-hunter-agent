@@ -1,635 +1,154 @@
 # AWS EC2 Setup Guide for Job Hunter
 
-This guide describes the clean test/staging setup for running Job Hunter on AWS EC2.
+This is the single canonical AWS operations document for Job Hunter.
 
-The deployment model assumes a small EBS-backed root volume and a production-style service lifecycle, so keep storage, logging, and recovery choices simple and explicit.
+Do not create parallel copies such as `aws-ec2-setup.updated.md`, `aws-ec2-setup.final.md`, or one-off notes. Update this file only.
 
-## Current tested status
+---
 
-This setup has been proven to run through this path:
+## Current production status
 
-```text
-EC2 Ubuntu 24.04 LTS
-FastAPI app running under systemd
-Nginx reverse proxy on port 80
-EBS mounted at /var/lib/job-hunter
-server env stored under /etc/job-hunter/job-hunter.env
-ngrok HTTPS tunnel forwarding to EC2 localhost:80
-public ngrok URL reaches the Job Hunter site
-```
-
-## Directory layout
+Last verified from the real EC2 host over SSH.
 
 ```text
-/opt/job-hunter/app        application code and virtualenv
-/var/lib/job-hunter/data   persistent app data (EBS-backed)
-/var/log/job-hunter        application logs
-AWS EC2 Ubuntu 24.04 LTS server
-Python 3.12
-Project virtual environment in .venv
-Private GitHub repo cloned from GitHub
-Persistent app data on a separate EBS volume mounted at /var/lib/job-hunter
-SQLite database stored on the EBS data volume
-systemd runs the FastAPI app as a service
-Nginx exposes the app internally on HTTP port 80
-ngrok exposes the test site over temporary HTTPS for Google OAuth testing
-Later: real domain + HTTPS + package-based deployment + backups
+Host OS: Ubuntu 24.04.4 LTS
+EC2 private host: ip-172-31-18-71
+Production app path: /home/ubuntu/job-hunter-agent
+Python runtime: /home/ubuntu/job-hunter-agent/.venv/bin/python
+FastAPI entry point: python -m job_hunter_agent.fastapi_app
+systemd service: job-hunter.service
+App bind: http://127.0.0.1:8765
+Persistent data: /var/lib/job-hunter
+Environment file: /etc/job-hunter/job-hunter.env
+Log directory: /var/log/job-hunter
+Docker: not used
+Xvfb: installed
+xvfb-run: installed
+xauth: installed
+Xvfb wired into service: no
 ```
 
-These are the only three locations the app touches at runtime. Nothing lives in the home directory.
-
-## Required platform
-Use:
-
-```text
-Ubuntu Server 24.04 LTS
-Python 3.12
-pandas 2.x
-Playwright Chromium
-```
-
-Do not choose preview/non-LTS Ubuntu releases. Use Ubuntu 24.04 LTS so Python and Playwright stay on a supported path.
-
-## 1. AWS account safety
-
-Create a budget before building services.
-
-```text
-Billing and Cost Management → Budgets → Create budget
-```
-
-Recommended starter budget:
-
-```text
-Budget type: Cost budget
-Period: Monthly
-Amount: $1 USD
-Alert: 80% actual spend
-Optional alert: 100% forecasted spend
-```
-
-A budget does not block spending. It only warns early.
-
-## 2. Create EC2 instance
-
-```text
-EC2 → Instances → Launch instance
-```
-
-Recommended settings:
-
-```text
-Name: job-hunter-ec2
-AMI: Ubuntu Server 24.04 LTS
-Instance type: t3.micro or free-tier equivalent
-Key pair: KeyPair-JobHunter
-Storage: small EBS root volume is enough for the current workload
-
-```
-
-Ubuntu SSH username:
-
-```text
-ubuntu
-```
-
-## 3. Security group
-
-Create or select a security group with these inbound rules:
-
-```text
-SSH    TCP 22   Source: your public IP /32 only
-HTTP   TCP 80   Source: 0.0.0.0/0 for the test site or ngrok target
-HTTPS  TCP 443  Source: 0.0.0.0/0 later, when TLS is configured on the server
-```
-
-Do not expose the app port `8765` publicly. The app should stay private behind Nginx.
-
-Target path:
-
-```text
-Internet/ngrok → Nginx 80/443 → app on 127.0.0.1:8765
-```
-
-## 4. Allocate a stable public address
-
-Do not rely on the default EC2 public IP because it can change.
-
-For this test instance, allocate an Elastic IP:
-
-```text
-EC2 → Network & Security → Elastic IPs → Allocate Elastic IP address
-```
-
-Associate it with the EC2 instance:
-
-```text
-Select Elastic IP → Actions → Associate Elastic IP address → choose the Job Hunter EC2 instance
-```
-
-Use the Elastic IP for stable server access and DNS later.
-
-Important OAuth note: Google OAuth should not be configured permanently against a raw IP address. Use either:
-
-```text
-Temporary test path: ngrok HTTPS URL
-Proper public path: real domain + HTTPS
-```
-
-## 5. Create persistent EBS data volume
-
-The EC2 root disk is not the right place for application data. Use a separate EBS volume for persistent Job Hunter data.
-
-Create the volume:
-
-```text
-EC2 → Elastic Block Store → Volumes → Create volume
-```
-
-Recommended settings:
-
-```text
-Volume type: gp3
-Size: 10 GiB for learning/test
-IOPS: 3000 baseline
-Throughput: 125 MiB/s baseline
-Availability Zone: same as the EC2 instance
-Name tag: job-hunter-data
-Encryption: enabled if available
-```
-
-Attach it:
-
-```text
-Select volume → Actions → Attach volume
-Instance: job-hunter EC2 instance
-Device name: /dev/sdf
-```
-
-`/dev/sdf` is the AWS attach label. On Ubuntu/Nitro EC2 it usually appears as `/dev/nvme1n1`.
-
-Identify the new disk:
-
-```bash
-lsblk
-```
-
-Expected shape:
-
-```text
-nvme0n1      8G   disk   root disk
-nvme1n1     10G   disk   new EBS data disk
-```
-
-Format the new EBS disk once:
-
-```bash
-sudo mkfs.ext4 /dev/nvme1n1
-```
-
-Create the application data mount point and mount it:
-
-```bash
-sudo mkdir -p /var/lib/job-hunter
-sudo mount /dev/nvme1n1 /var/lib/job-hunter
-df -h /var/lib/job-hunter
-```
-
-Expected: the filesystem should be `/dev/nvme1n1`, not `/dev/root`.
-
-```text
-/dev/nvme1n1   10G   ...   /var/lib/job-hunter
-```
-
-## 6. Make the EBS mount survive reboot
-
-Get the EBS filesystem UUID:
-
-```bash
-sudo blkid /dev/nvme1n1
-```
-
-Example output:
-
-```text
-/dev/nvme1n1: UUID="8c180247-0d33-4769-89a9-84135a414f34" BLOCK_SIZE="4096" TYPE="ext4"
-```
-
-Add the mount to `/etc/fstab` using the actual UUID:
-
-```bash
-echo 'UUID=8c180247-0d33-4769-89a9-84135a414f34 /var/lib/job-hunter ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
-```
-
-Test the mount entry:
-
-```bash
-sudo umount /var/lib/job-hunter
-sudo mount -a
-sudo systemctl daemon-reload
-df -h /var/lib/job-hunter
-```
-
-Expected:
-
-```text
-/dev/nvme1n1   10G   ...   /var/lib/job-hunter
-```
-
-`nofail` lets the instance boot even if the data volume is temporarily missing.
-
-## 7. Create data and log folders
-
-```bash
-sudo mkdir -p /var/lib/job-hunter/data
-sudo mkdir -p /var/lib/job-hunter/output
-sudo mkdir -p /var/log/job-hunter
-sudo chown -R ubuntu:ubuntu /var/lib/job-hunter /var/log/job-hunter
-```
-
-Verify permissions:
-
-```bash
-ls -ld /var/lib/job-hunter /var/lib/job-hunter/data /var/log/job-hunter
-```
-
-Expected owner:
-
-```text
-ubuntu ubuntu
-```
-
-Optional write test:
-
-```bash
-touch /var/lib/job-hunter/data/write-test.txt
-ls -l /var/lib/job-hunter/data/write-test.txt
-rm /var/lib/job-hunter/data/write-test.txt
-```
-
-## 8. Optional IAM role for Session Manager
-
-Session Manager is useful when SSH is blocked by a corporate network.
-
-Attach an IAM role to the EC2 instance with this AWS managed policy:
-
-```text
-AmazonSSMManagedInstanceCore
-```
-
-Attach role path:
-
-```text
-EC2 → Instances → select instance → Actions → Security → Modify IAM role
-```
-
-Connect path:
-
-```text
-EC2 → Instances → select instance → Connect → Session Manager
-```
-
-## 9. Connect with SSH from Windows PowerShell
-
-Example:
-
-```powershell
-ssh -i E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem ubuntu@ec2-public-dns.amazonaws.com
-```
-
-If prompted about host authenticity, type:
-
-```text
-yes
-```
-
-If SSH rejects the key with an unprotected private key warning, fix permissions from PowerShell:
-
-```powershell
-cd E:\Programming\job-hunter-agent
-icacls .\KeyPair-JobHunter.pem /inheritance:r
-icacls .\KeyPair-JobHunter.pem /remove:g "Users" "Authenticated Users" "Everyone"
-icacls .\KeyPair-JobHunter.pem /grant:r "$($env:USERNAME):R"
-```
-
-## 10. Install base Ubuntu packages
-
-On the EC2 instance:
-
-```bash
-sudo apt update
-sudo apt upgrade -y
-sudo apt install -y git curl wget build-essential python3 python3-venv python3-pip nginx tmux
-```
-
-Check:
-
-```bash
-git --version
-python3 --version
-nginx -v
-tmux -V
-```
-
-Expected Python version on Ubuntu 24.04 LTS:
-
-```text
-Python 3.12.x
-```
-
-## 8. Create the directory layout
-
-Create all three directories and set ownership before cloning or creating data:
-
-```bash
-sudo mkdir -p /opt/job-hunter/app
-sudo mkdir -p /var/lib/job-hunter/data
-sudo mkdir -p /var/log/job-hunter
-sudo chown -R ubuntu:ubuntu /opt/job-hunter
-sudo chown -R ubuntu:ubuntu /var/lib/job-hunter
-sudo chown -R ubuntu:ubuntu /var/log/job-hunter
-```
-
-Check:
-
-```bash
-ls -ld /opt/job-hunter/app /var/lib/job-hunter/data /var/log/job-hunter
-```
-
-Expected: all three directories exist and are owned by `ubuntu`.
-
-## 9. Clone the private GitHub repo
-
-Repository:
-
-```text
-https://github.com/robvoto/job-hunter-agent.git
-```
-
-Create a GitHub personal access token with repository read access.
-
-Recommended fine-grained token:
-
-```text
-Repository access: Only selected repositories
-Selected repository: job-hunter-agent
-Repository permissions:
-  Contents: Read-only
-  Metadata: Read-only
-Expiration: 90 days for learning
-```
-
-Clone directly into `/opt/job-hunter/app`:
-
-```bash
-git clone https://github.com/robvoto/job-hunter-agent.git /opt/job-hunter/app
-```
-
-For a private repo, use a GitHub credential with read access when prompted.
-
-```text
-Username: robvoto
-Password: paste GitHub token
-```
-
-Never paste the token into chat or screenshots. If exposed, revoke it.
-
-## 10. Git credential handling on EC2
-
-Windows Git Credential Manager is not available on Ubuntu EC2.
-
-For short-term learning on EC2:
-
-```bash
-git config --global credential.helper store
-```
-
-Then run a pull and enter the token once:
-
-```bash
-cd /opt/job-hunter/app
-git pull
-```
-
-Check:
-
-```bash
-git config --global --get credential.helper
-```
-
-Expected:
-
-```text
-store
-```
-
-Later, replace this with a deploy key or cleaner deployment process.
-
-## 11. Create the project virtual environment
-Later, replace this with a deploy key or cleaner deployment process.
-
-## 12. Create the project virtual environment
-
-```bash
-cd /opt/job-hunter/app
-python3 -m venv .venv
-source .venv/bin/activate
-python --version
-which python
-```
-
-Expected:
-
-```text
-Python 3.12.x
-/opt/job-hunter/app/.venv/bin/python
-```
- 
-## 12. Install project dependencies
-
-With `.venv` active:
-
-```bash
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
-```
-
-For this project, `python-jobspy` requires pandas below version 3, so `requirements.txt` uses pandas 2.x:
-
-```text
-pandas>=2.0.0,<3
-```
-
-Check:
-
-```bash
-which pip
-```
-
-Expected:
-
-```text
-/opt/job-hunter/app/.venv/bin/pip
-```
-
-## 13. Install Playwright browser 
-With `.venv` active, install the Chromium browser:
-
-```bash
-python -m playwright install chromium
-```
-
-Then install the required Ubuntu shared libraries for Chromium:
-
-```bash
-sudo /opt/job-hunter/app/.venv/bin/python -m playwright install-deps chromium
-python -m playwright install chromium
-```
-
-## 14. Smoke test the app
-
-The smoke test requires the environment variables to be set. Export them for this session only before running:
-
-```bash
-export JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
-export JOB_HUNTER_OUTPUT_DIR=/var/log/job-hunter
-export JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db
-
-cd /opt/job-hunter/app
-source .venv/bin/activate
-python -m job_hunter_agent.fastapi_app
-```
-
-In another SSH session:
-
-```bash
-curl http://127.0.0.1:8765/start
-```
-
-Expected: HTML response.
-
-Do not use `export` in normal operation. Env vars belong in the systemd service file only.
-
-## 15. Create the systemd service
-
-This is how the app runs in production. All configuration lives here — never in Python files.
-
-Create the service unit file:
-
-```bash
-sudo nano /etc/systemd/system/job-hunter.service
-```
-
-Paste this content exactly:
+Current service command:
 
 ```ini
-[Unit]
-Description=Job Hunter Agent
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/opt/job-hunter/app
-Environment=JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
-Environment=JOB_HUNTER_OUTPUT_DIR=/var/log/job-hunter
-Environment=JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db
-ExecStart=/opt/job-hunter/app/.venv/bin/uvicorn job_hunter_agent.fastapi_app:app --host 127.0.0.1 --port 8765
-Restart=on-failure
-RestartSec=5
-StandardOutput=append:/var/log/job-hunter/app.log
-StandardError=append:/var/log/job-hunter/app.log
-
-[Install]
-WantedBy=multi-user.target
+ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 ```
 
-Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable job-hunter
-sudo systemctl start job-hunter
-sudo systemctl status job-hunter
-```
-
-Expected: `active (running)`.
-
-### To change any configuration
-
-Edit the service file and reload. Never edit a Python file:
-
-```bash
-sudo nano /etc/systemd/system/job-hunter.service
-sudo systemctl daemon-reload
-sudo systemctl restart job-hunter
-```
-
-### Environment variables
-
-| Variable | Purpose | Value on EC2 |
-|---|---|---|
-| `JOB_HUNTER_DATA_DIR` | Persistent app data | `/var/lib/job-hunter/data` |
-| `JOB_HUNTER_OUTPUT_DIR` | Log output directory | `/var/log/job-hunter` |
-| `JOB_HUNTER_DB_PATH` | SQLite database file | `/var/lib/job-hunter/data/app.db` |
-| `JOB_HUNTER_CORS_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins | `https://example.com` |
-
-The first three must be set. The app raises an explicit error if `JOB_HUNTER_DB_PATH` is missing.
-
-`JOB_HUNTER_CORS_ALLOWED_ORIGINS` is required in production. If unset, all cross-origin requests are rejected (no CORS headers returned) and a WARN is logged per rejected origin. In debug/auth-disabled mode this variable is ignored and the wildcard origin is used.
-
-## 16. Production-style next steps
-
-After the service is running:
+Current process check showed:
 
 ```text
-Configure Nginx reverse proxy
-Expose only 80/443 publicly (keep app bound to 127.0.0.1:8765)
-Add HTTPS / domain via Certbot
+/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 ```
 
-After installing browser dependencies, restart the app:
+No `Xvfb` process was running at the time of verification.
 
-```bash
-sudo systemctl restart job-hunter
-```
+---
 
-## 15. Configure secrets and environment
+## Local versus production boundary
 
-Do not commit `.env` to GitHub.
-
-Use this server-only env file:
+Local development happens on the PC:
 
 ```text
-/etc/job-hunter/job-hunter.env
+Windows path: E:\Programming\job-hunter-agent
+WSL path: /mnt/e/Programming/job-hunter-agent
+IDE: VS Code
 ```
 
-Create the folder:
+Production runs on AWS EC2:
 
-```bash
-sudo mkdir -p /etc/job-hunter
+```text
+/home/ubuntu/job-hunter-agent
 ```
 
-Copy values from the local/dev `.env` as needed, then remove any repo-local `.env` from EC2.
+Do not diagnose production from local VS Code paths. Do not diagnose production from AWS CloudShell. Production checks must run inside the real EC2 instance shell.
 
-The environment file should define these values:
+If an AWS assistant, CloudShell session, or generic terminal cannot see `/home/ubuntu/job-hunter-agent`, it is not inspecting the production app.
 
-```env
-JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
-JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
-JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
-JOB_HUNTER_BASE_URL=<public-ngrok-url-or-domain>
-JOB_HUNTER_GOOGLE_CLIENT_ID=<google-client-id>
-JOB_HUNTER_GOOGLE_CLIENT_SECRET=<google-client-secret>
-JOB_HUNTER_ADMIN_EMAIL=<admin-email>
-JOB_HUNTER_AUTH_SESSION_SECRET=<random-secret>
-JOB_HUNTER_CORS_ALLOWED_ORIGINS=https://<your-domain>
+---
+
+## SSH access
+
+SSH is intentionally restricted to the owner current public IP as a `/32` rule.
+
+Latest known working public IP:
+
+```text
+202.92.118.81/32
 ```
 
-Generate a session secret:
+The ISP public IP can change. When it changes, SSH may time out even when the EC2 server is healthy.
 
-```bash
-openssl rand -hex 32
+If SSH times out:
+
+1. Open AWS Console.
+2. Go to EC2 → Instances → select the Job Hunter instance.
+3. Open Security → Security Group → Inbound rules.
+4. Update the SSH rule:
+
+```text
+Type: SSH
+Protocol: TCP
+Port: 22
+Source: current My IP /32
 ```
+
+Do not open SSH to `0.0.0.0/0`.
+
+Connect from Windows PowerShell:
+
+```powershell
+ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
+```
+
+The helper script on the PC may contain the same command:
+
+```powershell
+.\connectAws.ps1
+```
+
+If PowerShell says the identity file is not accessible, check that the key exists at:
+
+```powershell
+Test-Path "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem"
+```
+
+---
+
+## Canonical production layout
+
+Use this layout for the current production instance:
+
+```text
+/home/ubuntu/job-hunter-agent        application code and virtual environment
+/home/ubuntu/job-hunter-agent/.venv  Python virtual environment
+/var/lib/job-hunter/data             persistent app data
+/var/lib/job-hunter/output           persistent app output
+/var/log/job-hunter                  log directory
+/etc/job-hunter/job-hunter.env       server-only environment file
+/etc/systemd/system/job-hunter.service systemd service file
+```
+
+Do not introduce a second production app path unless performing a deliberate migration.
+
+---
+
+## Environment file
+
+Current service uses:
+
+```ini
+EnvironmentFile=/etc/job-hunter/job-hunter.env
+```
+
+The service also sets the core paths explicitly:
+
+```ini
+Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
+Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
+Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
+```
+
+Never commit secrets or `.env` files to GitHub.
 
 Protect the env file:
 
@@ -638,46 +157,26 @@ sudo chown root:ubuntu /etc/job-hunter/job-hunter.env
 sudo chmod 640 /etc/job-hunter/job-hunter.env
 ```
 
-## 16. Configure Google OAuth
-
-Keep separate OAuth clients for local development and EC2/test if possible.
-
-Local VS Code development client:
-
-```text
-Authorized JavaScript origin: http://localhost:8765
-Authorized redirect URI: http://localhost:8765/api/auth/google/callback
-```
-
-EC2/test with ngrok:
-
-```text
-JOB_HUNTER_BASE_URL=https://<ngrok-host>
-Authorized redirect URI: https://<ngrok-host>/api/auth/google/callback
-```
-
-EC2/proper public setup:
-
-```text
-JOB_HUNTER_BASE_URL=https://<real-domain>
-Authorized redirect URI: https://<real-domain>/api/auth/google/callback
-```
-
-Do not use localhost for EC2. `localhost` points to the user's own computer, not the EC2 instance.
-
-Do not rely on a raw IP address for Google OAuth. Use ngrok for temporary HTTPS testing, or a real domain for a stable deployment.
-
-## 17. Run app with systemd
-
-Create the service file:
+Inspect environment variable names without printing values:
 
 ```bash
-sudo nano /etc/systemd/system/job-hunter.service
+sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
 ```
 
-Service file:
+---
+
+## Current systemd service
+
+View the live service file:
+
+```bash
+sudo systemctl cat job-hunter
+```
+
+Current verified service:
 
 ```ini
+# /etc/systemd/system/job-hunter.service
 [Unit]
 Description=Job Hunter FastAPI App
 After=network.target
@@ -687,6 +186,9 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/job-hunter-agent
 EnvironmentFile=/etc/job-hunter/job-hunter.env
 Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin"
+Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
+Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
+Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
 ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 Restart=always
 RestartSec=5
@@ -695,405 +197,237 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Start and enable the service:
+Manage the service:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable job-hunter
-sudo systemctl start job-hunter
 sudo systemctl status job-hunter --no-pager
-```
-
-Expected:
-
-```text
-Active: active (running)
-```
-
-Check that environment variables reached the running app without printing values:
-
-```bash
-sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
-```
-
-Expected names include:
-
-```text
-JOB_HUNTER_DATA_DIR=***
-JOB_HUNTER_OUTPUT_DIR=***
-JOB_HUNTER_DB_PATH=***
-JOB_HUNTER_BASE_URL=***
-JOB_HUNTER_GOOGLE_CLIENT_ID=***
-JOB_HUNTER_GOOGLE_CLIENT_SECRET=***
-JOB_HUNTER_ADMIN_EMAIL=***
-JOB_HUNTER_AUTH_SESSION_SECRET=***
-```
-
-## 18. View logs
-
-Live app logs:
-
-```bash
+sudo systemctl restart job-hunter
+sudo journalctl -u job-hunter -n 80 --no-pager
 sudo journalctl -u job-hunter -f
 ```
 
-Last 50 app log lines:
+---
+
+## Quick production health check
+
+Run this only inside the real EC2 host:
 
 ```bash
-sudo journalctl -u job-hunter -n 50 --no-pager
+pwd
+whoami
+hostname
+cat /etc/os-release | head -20
+
+echo "---- app paths ----"
+ls -la /home/ubuntu/job-hunter-agent 2>&1
+ls -la /etc/job-hunter 2>&1
+ls -la /var/lib/job-hunter 2>&1
+ls -la /var/log/job-hunter 2>&1
+
+echo "---- service ----"
+sudo systemctl status job-hunter --no-pager 2>&1
+
+echo "---- ports ----"
+sudo ss -tlnp | grep -E ':80|:443|:8765|:8000' || true
+
+echo "---- processes ----"
+ps auxww | grep -E 'job_hunter|uvicorn|fastapi|playwright|chromium|nginx|ngrok|Xvfb|xvfb' | grep -v grep || true
 ```
 
-Recent app logs:
+Expected core result:
 
-```bash
-sudo journalctl -u job-hunter --since "10 minutes ago" --no-pager
+```text
+job-hunter.service active/running
+python -m job_hunter_agent.fastapi_app
+app listening on 127.0.0.1:8765
 ```
 
-Nginx logs:
+---
 
-```bash
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
+## Nginx boundary
+
+The app should stay bound to localhost:
+
+```text
+127.0.0.1:8765
 ```
 
-Later, production should send logs to CloudWatch Logs.
+External traffic should go through Nginx and/or a tunnel/domain:
 
-## 19. Configure Nginx reverse proxy
-
-Create the Nginx site:
-
-```bash
-sudo nano /etc/nginx/sites-available/job-hunter
+```text
+Internet/ngrok/domain → Nginx 80/443 → 127.0.0.1:8765 app
 ```
 
-Config:
-
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    location / {
-        proxy_pass http://127.0.0.1:8765;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Enable the site:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/job-hunter /etc/nginx/sites-enabled/job-hunter
-```
-
-Remove the default site if Nginx warns about a conflicting `_` server name:
-
-```bash
-sudo rm /etc/nginx/sites-enabled/default
-```
-
-Test Nginx config:
+Check Nginx:
 
 ```bash
 sudo nginx -t
+sudo systemctl status nginx --no-pager
+sudo ss -tlnp | grep -E ':80|:443'
 ```
 
-Expected:
+Do not expose port `8765` directly to the internet.
+
+---
+
+## Playwright and Xvfb
+
+Reason for Xvfb:
+
+SEEK appears more reliable when Playwright runs Chromium in non-headless mode. EC2 has no physical screen. Xvfb provides a virtual display so Chromium can run as a headed browser without a monitor.
+
+Verified installed binaries:
 
 ```text
-syntax is ok
-test is successful
+/usr/bin/Xvfb
+/usr/bin/xvfb-run
+/usr/bin/xauth
 ```
 
-Reload Nginx:
-
-```bash
-sudo systemctl reload nginx
-```
-
-Local test from EC2:
-
-```bash
-curl -I http://127.0.0.1/
-```
-
-Expected: response from Nginx and redirect or HTML from the app.
-
-## 20. Expose test site with ngrok
-
-ngrok is the temporary no-domain path for Google OAuth testing. It creates a public HTTPS URL and forwards it to Nginx on EC2.
-
-Flow:
+Current status:
 
 ```text
-Google/browser → https://<ngrok-host> → EC2 localhost:80 → Nginx → 127.0.0.1:8765 app
+Installed: yes
+Wired into job-hunter.service: no
 ```
 
-Install or verify ngrok on EC2:
+Current production service still starts FastAPI directly:
+
+```ini
+ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+```
+
+Do not change this casually. When approved, back up the service file before wiring Xvfb.
+
+Approved change pattern:
 
 ```bash
-ngrok version
-```
+sudo cp /etc/systemd/system/job-hunter.service /etc/systemd/system/job-hunter.service.bak.$(date +%Y%m%d-%H%M%S)
 
-Register the EC2 ngrok install with your ngrok account. Copy the authtoken command from the ngrok dashboard and run it on EC2:
+sudo sed -i 's|^ExecStart=.*|ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app|' /etc/systemd/system/job-hunter.service
 
-```bash
-ngrok config add-authtoken <token>
-```
-
-Do not commit or share the token.
-
-Start the tunnel manually:
-
-```bash
-ngrok http 80
-```
-
-Expected output includes:
-
-```text
-Forwarding  https://<ngrok-host> -> http://localhost:80
-```
-
-Set the server env file:
-
-```env
-JOB_HUNTER_BASE_URL=https://<ngrok-host>
-```
-
-Set Google OAuth redirect URI:
-
-```text
-https://<ngrok-host>/api/auth/google/callback
-```
-
-Restart the app after changing the env file:
-
-```bash
+sudo systemctl daemon-reload
 sudo systemctl restart job-hunter
-```
-
-Open:
-
-```text
-https://<ngrok-host>
-```
-
-Expected: the site is online and the login flow uses the ngrok callback URL.
-
-Free ngrok URLs can change when the tunnel restarts. If the URL changes, update both `JOB_HUNTER_BASE_URL` and the Google OAuth redirect URI.
-
-## 21. Manage ngrok with tmux and helper scripts
-
-Run ngrok inside `tmux` so it keeps running after detaching from the terminal.
-
-Create helper scripts:
-
-```bash
-mkdir -p ~/job-hunter-agent/scripts/ec2
-
-cat > ~/job-hunter-agent/scripts/ec2/start-ngrok.sh <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-SESSION_NAME="ngrok"
-PORT="80"
-if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-  echo "ngrok tmux session already running: $SESSION_NAME"
-  echo "Attach with: tmux attach -t $SESSION_NAME"
-  exit 0
-fi
-tmux new-session -d -s "$SESSION_NAME" "ngrok http $PORT"
-echo "Started ngrok in tmux session: $SESSION_NAME"
-echo "Attach with: tmux attach -t $SESSION_NAME"
-echo "Detach with: Ctrl+B then D"
-EOF
-
-cat > ~/job-hunter-agent/scripts/ec2/stop-ngrok.sh <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-SESSION_NAME="ngrok"
-if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-  tmux kill-session -t "$SESSION_NAME"
-  echo "Stopped ngrok tmux session: $SESSION_NAME"
-else
-  echo "ngrok tmux session is not running."
-fi
-EOF
-
-cat > ~/job-hunter-agent/scripts/ec2/status-ngrok.sh <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-SESSION_NAME="ngrok"
-if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-  echo "ngrok is running in tmux session: $SESSION_NAME"
-  echo "Attach with: tmux attach -t $SESSION_NAME"
-else
-  echo "ngrok is not running."
-fi
-EOF
-
-chmod +x ~/job-hunter-agent/scripts/ec2/*.sh
-```
-
-Create short commands available from anywhere:
-
-```bash
-sudo ln -sf /home/ubuntu/job-hunter-agent/scripts/ec2/start-ngrok.sh /usr/local/bin/jh-ngrok-start
-sudo ln -sf /home/ubuntu/job-hunter-agent/scripts/ec2/status-ngrok.sh /usr/local/bin/jh-ngrok-status
-sudo ln -sf /home/ubuntu/job-hunter-agent/scripts/ec2/stop-ngrok.sh /usr/local/bin/jh-ngrok-stop
-```
-
-Use:
-
-```bash
-jh-ngrok-start
-jh-ngrok-status
-jh-ngrok-stop
-```
-
-To see the ngrok HTTPS URL:
-
-```bash
-tmux attach -t ngrok
-```
-
-Detach without stopping ngrok:
-
-```text
-Ctrl+B then D
-```
-
-Turn ngrok off later:
-
-```bash
-jh-ngrok-stop
-```
-
-If `jh-ngrok-status` appears to hang, use:
-
-```bash
-Ctrl+C
-tmux ls
-tmux attach -t ngrok
-```
-
-## 22. Useful EC2 metadata checks
-
-If IMDSv1 returns blank, use IMDSv2.
-
-Get token:
-
-```bash
-TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-```
-
-Get public IP:
-
-```bash
-curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4
-```
-
-## 23. Quick checks
-
-Confirm OS:
-
-```bash
-lsb_release -a
-```
-
-Confirm Python:
-
-```bash
-python3 --version
-```
-
-Confirm EBS mount:
-
-```bash
-source /opt/job-hunter/app/.venv/bin/activate
-python --version
-which python
-```
-
-Confirm service:
-
-```bash
 sudo systemctl status job-hunter --no-pager
 ```
 
-Confirm Nginx:
+Verify after restart:
 
 ```bash
-sudo nginx -t
-curl -I http://127.0.0.1/
+sudo systemctl cat job-hunter
+ps auxww | grep -E 'Xvfb|xvfb|job_hunter|python' | grep -v grep
 ```
 
-Confirm Playwright dependencies:
+Expected `ExecStart` after Xvfb is wired:
+
+```ini
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+```
+
+Rollback:
 
 ```bash
-python -m playwright install chromium
-sudo .venv/bin/python -m playwright install-deps chromium
+ls -1 /etc/systemd/system/job-hunter.service.bak.*
+sudo cp /etc/systemd/system/job-hunter.service.bak.<timestamp> /etc/systemd/system/job-hunter.service
+sudo systemctl daemon-reload
+sudo systemctl restart job-hunter
+sudo systemctl status job-hunter --no-pager
 ```
 
-Confirm app env names:
-
-```bash
-sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/environ | grep '^JOB_HUNTER_' | sed 's/=.*/=***/'
-```
-
-Confirm ngrok tunnel:
-
-```bash
-jh-ngrok-status
-tmux attach -t ngrok
-```
-
-Expected: `Forwarding https://<ngrok-host> -> http://localhost:80`.
-
-Confirm public site:
+Admin setting alignment after Xvfb is wired:
 
 ```text
-Python 3.12.x
-/opt/job-hunter/app/.venv/bin/python
+Run browser headless = OFF
+Viewport = 1400 x 900
 ```
 
-Check service logs:
+---
+
+## Updating production code
+
+Run from the real EC2 host:
 
 ```bash
-tail -f /var/log/job-hunter/app.log
+cd /home/ubuntu/job-hunter-agent
+git status
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m job_hunter_agent.db_seed --upgrade
+sudo systemctl restart job-hunter
+sudo systemctl status job-hunter --no-pager
 ```
 
-Expected: the Job Hunter site is online and redirects to login or shows the login page.
+Only run `db_seed --overwrite` for a deliberate reset because it can wipe user-approved additions.
 
-## Do not do yet
+---
 
-Until this test deployment is stable:
+## Logs
 
-```text
-Do not create RDS
-Do not create Lambda
-Do not create Lightsail
-Do not expose port 8765 publicly
-Do not commit .env or secrets to GitHub
-Do not use the local development Google OAuth client for EC2 public testing
-Do not rely on the default public EC2 IP for OAuth
+Service logs:
+
+```bash
+sudo journalctl -u job-hunter -n 100 --no-pager
+sudo journalctl -u job-hunter -f
 ```
 
-## Later improvements
+Application log directory:
+
+```bash
+ls -la /var/log/job-hunter
+```
+
+Runtime output directory:
+
+```bash
+ls -la /var/lib/job-hunter/output
+```
+
+---
+
+## Common failure interpretations
+
+### SSH timeout
+
+Likely cause: the EC2 Security Group SSH rule is still restricted to an old home IP.
+
+Fix: update SSH TCP 22 source to current `My IP /32`.
+
+### `KeyPair-JobHunter.pem not accessible`
+
+Likely cause: running SSH from the wrong Windows directory or using a relative key path.
+
+Fix: use the full key path:
+
+```powershell
+ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
+```
+
+### AWS CloudShell cannot find the app
+
+Expected. CloudShell is not the EC2 host.
+
+Fix: connect to the real EC2 instance using SSH or Session Manager.
+
+### `System has not been booted with systemd`
+
+You are not in the normal EC2 host OS, or you are in a container-like shell. Do not use that shell for production diagnosis.
+
+### Headless OFF fails on AWS
+
+If Xvfb is not wired into the service, headed Playwright has no display. Wire Xvfb only after approval and with backup/rollback.
+
+---
+
+## Do not do
 
 ```text
-Move from repo clone to package/artifact deployment
-Use /opt/job-hunter/app for installed application code
-Keep /var/lib/job-hunter/data for persistent data
-Keep /var/log/job-hunter for logs
-Add HTTPS using a real domain and certificate
-Replace ngrok with a real domain for stable deployment
-Add CloudWatch Logs
-Add EBS snapshots or S3 backups
-Consider RDS PostgreSQL when the data model stabilizes
+Do not keep multiple AWS setup docs.
+Do not diagnose production from CloudShell.
+Do not diagnose production from local VS Code paths.
+Do not expose port 8765 publicly.
+Do not open SSH to 0.0.0.0/0.
+Do not commit .env files or secrets.
+Do not introduce Docker unless a future architecture decision explicitly changes the deployment model.
+Do not move the production app path from /home/ubuntu/job-hunter-agent without documenting a migration.
 ```
