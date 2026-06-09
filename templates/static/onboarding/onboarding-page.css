@@ -378,6 +378,7 @@ body {
 
 .onb-field {
   margin-top: 0;
+  position: relative;
 }
 
 .onb-field .contract-duration-row {

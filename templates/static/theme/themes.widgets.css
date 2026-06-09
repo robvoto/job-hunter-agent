@@ -424,11 +424,11 @@
   box-shadow: var(--shadow-soft);
 }
 
-/* Shared soft-chip selector styling */
+/* Shared chip selector styling — applies to all choice-card variants */
 
-.choice-strip > .choice-card--work-mode {
-  flex: 1;
-  min-height: var(--control-height-sm);
+.choice-strip > .choice-card--work-mode,
+.choice-strip > .choice-card--strength {
+  min-height: var(--control-height-lg);
   padding: var(--control-pad-block-md) var(--control-pad-inline-xl);
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
   border-radius: var(--control-radius-lg);
@@ -441,46 +441,16 @@
   font-weight: var(--text-role-status-font-weight);
   transition:
     background 120ms ease,
-    border-color 120ms ease;
-}
-
-.choice-strip > .choice-card--work-mode input {
-  display: none;
-}
-
-.choice-strip > .choice-card--work-mode:has(input:checked) {
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-subtle));
-  color: var(--accent);
-}
-
-.choice-strip > .choice-card--work-mode:has(input:checked) span {
-  color: inherit;
-  font-weight: var(--text-role-button-font-weight);
-}
-
-.choice-strip > .choice-card--work-mode:hover {
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle));
-}
-
-.choice-strip > .choice-card--strength {
-  flex: 0 0 auto;
-  min-height: var(--control-height-sm);
-  min-width: 86px;
-  padding: var(--control-pad-block-md) var(--control-pad-inline-xl);
-  border: 1px solid color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
-  border-radius: var(--control-radius-lg);
-  background: transparent;
-  box-shadow: none;
-  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
-  font-size: var(--text-role-body-compact-font-size);
-  font-weight: var(--text-role-status-font-weight);
-  transition:
-    background 120ms ease,
     border-color 120ms ease,
     color 120ms ease;
 }
+
+/* Layout variants */
+.choice-strip > .choice-card--work-mode { flex: 1; }
+.choice-strip > .choice-card--strength  { flex: 0 0 auto; min-width: 86px; }
+
+/* Hide checkbox inputs inside work-mode chips (strength uses visually-hidden radio) */
+.choice-strip > .choice-card--work-mode input { display: none; }
 
 .choice-strip > .choice-card--strength input {
   position: absolute;
@@ -495,21 +465,25 @@
   clip-path: inset(50%);
 }
 
+/* Selected state — shared */
+.choice-strip > .choice-card--work-mode:has(input:checked),
 .choice-strip > .choice-card--strength:has(input:checked) {
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 62%, var(--border-subtle));
   color: var(--accent);
 }
 
+.choice-strip > .choice-card--work-mode:has(input:checked) span,
 .choice-strip > .choice-card--strength:has(input:checked) span {
   color: inherit;
   font-weight: var(--text-role-button-font-weight);
 }
 
+/* Hover state — shared */
+.choice-strip > .choice-card--work-mode:hover,
 .choice-strip > .choice-card--strength:hover {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-  border-color: color-mix(in srgb, var(--text-muted) 32%, var(--border-subtle));
-  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle));
 }
 
 .choice-strip > .choice-card--strength:focus-within {
@@ -888,9 +862,6 @@
 .search-source-panel .toggle-switch-title {
   font-size: var(--text-role-button-font-size);
   line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .settings-form-field .contract-duration-row {
@@ -961,7 +932,7 @@
 
 .settings-form-grid {
   display: grid;
-  gap: var(--field-stack-gap) var(--surface-gap-md);
+  gap: var(--field-body-gap) var(--surface-gap-md);
   align-items: start;
   margin-top: var(--surface-gap-md);
 }
@@ -992,8 +963,24 @@
 .settings-form-field .field-control-shell,
 .settings-form-field > input,
 .settings-form-field > textarea,
-.settings-form-field > .jh-select {
-  min-height: var(--control-height-2xl);
+.onb-field > input,
+.onb-field > textarea {
+  min-height: var(--control-height-lg);
+}
+
+.settings-form-field > input,
+.settings-form-field > textarea,
+.onb-field > input,
+.onb-field > textarea {
+  font-size: var(--control-font-size);
+  font-weight: var(--control-font-weight);
+  font-family: inherit;
+}
+
+/* Choice strips self-size — the control min-height does not apply. */
+.settings-form-field .field-control-shell:has(> .choice-strip),
+.onb-field .field-control-shell:has(> .choice-strip) {
+  min-height: 0;
 }
 
 .settings-form-field > .field-control-shell,
@@ -1010,7 +997,7 @@
 
 /* Shared inline summary line under choice strips and chip groups. */
 .summary-line {
-  margin: calc(var(--field-summary-gap) + 0px) 0 0;
+  margin: var(--field-summary-gap) 0 0;
   color: var(--text-muted);
   font-size: var(--help-copy-font-size);
   line-height: var(--help-copy-line-height);
@@ -1018,6 +1005,14 @@
 
 .summary-line:empty {
   display: none;
+}
+
+/* When summary-line is a direct grid child of settings-form-field or onb-field, the parent's
+   row-gap (--field-label-control-gap, 12px) already fires above it. Cancel that gap so only
+   --field-summary-gap (4px) of space remains between the choice strip and the summary. */
+.settings-form-field > .summary-line,
+.onb-field > .summary-line {
+  margin-top: calc(var(--field-summary-gap) - var(--field-label-control-gap));
 }
 
 /* Shared helper copy shown under form controls and descriptive blocks. */
@@ -1221,7 +1216,7 @@
 .jh-select {
   display: block;
   width: 100%;
-  min-height: var(--control-height-2xl);
+  min-height: var(--control-height-lg);
   padding: var(--control-pad-block-2xl) calc(var(--control-pad-inline-xl) + var(--control-pad-inline-lg)) var(--control-pad-block-2xl) var(--control-pad-inline-lg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--control-radius-lg);

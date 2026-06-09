@@ -42,7 +42,7 @@ Operational commands, flags, recovery, and diagnostics are owned by `docs/OPERAT
 Do not read everything. Load the most relevant skill before acting, then read only the linked details, docs, code files, or git history needed for the task.
 
 ## Skill routing
-
+can you 
 Do not read all skills. Choose the single best matching skill from this index, then open only that `SKILL.md` before acting.
 
 | Skill | Use when | File |
@@ -83,7 +83,7 @@ Do not read all skills. Choose the single best matching skill from this index, t
 
 ## Backlog rules
 
-- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/`.
+- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0`.
 - The Google Sheet is the backlog source of truth; local Excel/markdown backlog files are reference only unless explicitly requested.
 - Do not select or implement rows where `Implementation State = Done` unless the human explicitly asks to audit, reopen, correct, or revise that row.
 - For backlog work, read `.skills/backlog-management/SKILL.md` before acting.

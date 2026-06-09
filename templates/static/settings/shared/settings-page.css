@@ -134,10 +134,7 @@
     .nav-item:hover { background: var(--bg-muted); color: var(--text-primary); }
     .nav-item.is-active { background: var(--bg-surface); color: var(--selection-accent); border-color: var(--border-subtle); box-shadow: var(--shadow-soft); }
     .nav-item-workspace {
-      color: var(--text-primary);
-      border-color: var(--border-subtle);
-      background: var(--bg-muted);
-      box-shadow: var(--shadow-soft);
+      color: var(--text-muted);
       text-decoration: none;
       margin-bottom: 0;
     }
@@ -147,9 +144,6 @@
     }
     .nav-item-admin {
       color: var(--text-muted);
-      border-color: var(--border-subtle);
-      background: var(--bg-muted);
-      box-shadow: var(--shadow-soft);
       text-decoration: none;
       margin-bottom: 0;
     }
@@ -157,8 +151,6 @@
       color: var(--text-primary);
       background: var(--bg-surface);
     }
-    .nav-item-optimise { margin-top: var(--surface-gap-md); color: var(--text-muted); border-radius: 0; }
-
     .settings-main { flex: 1; min-width: 0; background: var(--bg-page); padding-bottom: 120px; }
     .settings-content-area { max-width: 1100px; margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
     .settings-group { display: none; }
@@ -221,13 +213,9 @@
     .settings-form-grid--prompt-templates {
       grid-template-columns: minmax(0, 1fr);
     }
-    /* Local layout exception: keep search preference summaries compact and centered on the settings page only. */
+    /* Local layout exception: contract-duration popover anchoring on the settings page only. */
     .search-settings-grid .settings-form-field--summary {
       position: relative;
-      row-gap: var(--field-label-control-gap);
-    }
-    .search-settings-grid .settings-form-field--summary > .summary-line {
-      text-align: center;
     }
     .search-settings-grid #seek_max_pages_choices.choice-strip {
       min-height: var(--control-height-2xl);
@@ -259,9 +247,6 @@
       border-left: 6px solid transparent;
       border-right: 6px solid transparent;
       border-bottom: 6px solid var(--bg-input, var(--bg-surface));
-    }
-    .contract-duration-row[hidden] {
-      display: none;
     }
     .contract-duration-label {
       font-size: var(--text-role-caption-font-size);
@@ -312,6 +297,9 @@
     }
     .panel {
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-xl);
+    }
+    .admin-settings-grid > .panel {
+      min-width: 0;
     }
     .subpanel {
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-xl);
@@ -581,6 +569,14 @@
     .rule-chips { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
     .subpanel .settings-form-field + .settings-form-field {
       margin-top: var(--surface-gap-md);
+    }
+    /* Local layout exception: search-source-panel uses CSS grid gap; the adjacent-sibling margin above is asymmetric here because a hidden div breaks the selector on the SEEK side. */
+    .search-source-panel .settings-form-field + .settings-form-field {
+      margin-top: 0;
+    }
+    /* settings-form-grid uses CSS grid gap for spacing — cancel the adjacent-sibling margin. */
+    .settings-form-grid .settings-form-field + .settings-form-field {
+      margin-top: 0;
     }
     .capability-editor {
       display: grid;
@@ -1077,11 +1073,6 @@
         flex: 0 0 auto;
         margin-bottom: 0;
       }
-      .nav-item-optimise {
-        margin-top: 0;
-        padding-top: var(--surface-pad-block-xs);
-        border-top: 0;
-      }
       .nav-item-workspace {
         margin-top: var(--surface-gap-sm);
       }
@@ -1186,7 +1177,7 @@
       cursor: not-allowed;
     }
     .sr-select {
-      min-height: 50px;
+      min-width: 140px;
     }
     .sr-list {
       display: flex;
@@ -1397,11 +1388,7 @@
     .signal-category-select {
       width: 100%;
       min-width: 0;
-      min-height: 34px;
-      padding: 0 12px;
       border-radius: 999px;
-      font-size: var(--font-size-md);
-      font-weight: var(--text-role-button-font-weight);
     }
     .signal-action-btn {
       display: inline-flex;

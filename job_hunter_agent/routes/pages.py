@@ -339,6 +339,14 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
 
         ),
 
+        )
+
+    html = html.replace(
+
+        "__JOB_HUNTER_WORKSPACE_LINK_LABEL__",
+
+        shared_labels["account_menu_workspace_shortcut_label"],
+
     )
 
     if template_path == SETTINGS_HTML_PATH:
@@ -648,8 +656,6 @@ def page_workspace(request: Request):  # type: ignore[no-untyped-def]
 
     if WORKSPACE_HTML_PATH.exists():
 
-        shared_labels = srv.load_shared_ui_labels()
-
         html = _render_template_with_locations(
 
             request,
@@ -704,12 +710,6 @@ def page_admin_profile(request: Request):  # type: ignore[no-untyped-def]
 
             global_settings=srv.load_global_settings(),
 
-            account_shortcut_href="/",
-
-            account_shortcut_label=shared_labels["account_menu_workspace_shortcut_label"],
-
-            account_shortcut_aria_label=shared_labels["account_menu_workspace_shortcut_aria_label"],
-
         )
 
         return html_response(html)
@@ -744,8 +744,6 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
 
     if SETTINGS_HTML_PATH.exists():
 
-        shared_labels = srv.load_shared_ui_labels()
-
         html = _render_template_with_locations(
 
             request,
@@ -759,12 +757,6 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
             page_heading="Settings",
 
             page_copy="Configure your candidate search and profile settings here.",
-
-            account_shortcut_href="/",
-
-            account_shortcut_label=shared_labels["account_menu_workspace_shortcut_label"],
-
-            account_shortcut_aria_label=shared_labels["account_menu_workspace_shortcut_aria_label"],
 
         )
 

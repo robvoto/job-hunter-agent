@@ -216,6 +216,7 @@ def test_ui_labels_json_version_bumps_when_contents_change():
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout
     head = json.loads(head_text)
 

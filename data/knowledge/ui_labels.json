@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 32,
-  "updated_at": "2026-06-05",
+  "version": 33,
+  "updated_at": "2026-06-08",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -72,9 +72,9 @@
     "account_menu_aria_label": "Account",
     "account_menu_title": "Account",
     "account_menu_logout_label": "Log out",
-    "account_menu_settings_shortcut_label": "⚙",
+    "account_menu_settings_shortcut_label": "⚙ Settings",
     "account_menu_settings_shortcut_aria_label": "Open settings",
-    "account_menu_workspace_shortcut_label": "↩",
+    "account_menu_workspace_shortcut_label": "↩ Workspace",
     "account_menu_workspace_shortcut_aria_label": "Open workspace",
     "account_menu_test_label": "Test",
     "account_menu_test_actions_label": "Test actions",

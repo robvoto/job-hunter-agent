@@ -19,6 +19,7 @@ See `.skills/dashboard-ui/DETAILS.md` for component maps, layout patterns, and l
 - Do not hardcode display counts, labels, thresholds, fallback text, or business decisions in templates, JS, or renderer code.
 - Missing/invalid UI data should fail clearly or be fixed at the owning source; do not invent silent UI fallbacks.
 - Reuse existing theme tokens, widgets, switches, choice strips, chips, cards, drawers, and help patterns before creating new variants.
+- Before changing any token value or control height, read `docs/UI_COMPONENT_MAP.md` — the design standards section documents touch-target minimums, intentional size hierarchy, and the token ownership chain. Some values are accessibility constraints, not style preferences.
 - Do not create page-local CSS for reusable UI components. Reusable visual styling belongs in `templates/static/theme/themes.widgets.css` or the relevant central theme/token file.
 - Page CSS may only define page-specific layout/positioning/responsive exceptions. If adding CSS outside `templates/static/theme/`, document why it is a real local exception.
 - Keep labels and copy consistent across the app. If the same text appears in more than one place, centralise it in the owning label/config source.

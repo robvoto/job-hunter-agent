@@ -18,6 +18,7 @@ See `.skills/onboarding-ui/DETAILS.md` for module ownership notes, UI component 
 - Preserve the single-term search keyword rule. Do not auto-join title lists or create synthetic search phrases.
 - Preserve reset flow: `?fresh=1` clears user-scoped onboarding draft state, blanks search/salary fields, then loads fresh defaults.
 - Reuse shared theme tokens, widgets, field-label rows, choice strips, and helper functions first.
+- Before changing any token value or control height, read `docs/UI_COMPONENT_MAP.md` — the design standards section documents touch-target minimums, intentional size hierarchy, and the token ownership chain. Some values are accessibility constraints, not style preferences.
 - Do not create onboarding-local CSS for reusable UI components. Reusable visual styling belongs in `templates/static/theme/themes.widgets.css` or the relevant central theme/token file.
 - Onboarding CSS may only define onboarding-specific layout, wizard flow placement, and responsive exceptions. If adding local CSS, add a comment explaining why it cannot be central.
 - Keep onboarding and settings patterns separate where the repo already intentionally does so.

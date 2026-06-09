@@ -86,7 +86,7 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - Do not remove the `window.__JOB_HUNTER_LLM_MODEL_OPTIONS__` bootstrap injection — it is the only model-options source for non-admin users.
 
 ### Choice-strip summaries (engagement type, work mode, sector preference)
-- Each choice strip (`input[name="engagement_type"]`, `input[name="work_mode_preference"]`, `input[name="prefer_sector"]`) has a sibling `<p id="*_summary" class="search-basics-summary">` that shows an "all selected" label when every option is checked.
+- Each choice strip (`input[name="engagement_type"]`, `input[name="work_mode_preference"]`, `input[name="prefer_sector"]`) has a sibling `<p id="*_summary" class="summary-line">` that shows an "all selected" label when every option is checked.
 - `updateSearchPreferenceSummaries()` in `settings-page.js` drives this. Label strings come from `window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__` keys: `work_type_summary_all_label`, `work_mode_summary_all_label`, `sector_preference_summary_all_label`. Do not hardcode these strings in JS — they are owned by `ui_labels.json`.
 - Called on every change event for those inputs and once after `Promise.all(pageLoads)` on initial load.
 

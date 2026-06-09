@@ -70,7 +70,7 @@
   --field-stack-gap: 20px;
   --field-body-gap: 18px;
   --field-label-control-gap: var(--surface-gap-md);
-  --field-summary-gap: var(--control-space-2xs);
+  --field-summary-gap: var(--control-space-sm);
   --field-label-font-size: 0.92rem;
   --field-label-line-height: 1.25;
   --field-label-font-weight: 700;
@@ -107,9 +107,9 @@
   --control-knob-size: 18px;
   --control-knob-offset: 3px;
   --control-knob-shift: 18px;
-  --control-font-size: var(--font-size-5xl);
+  --control-font-size: var(--text-role-control-label-font-size);
   --control-line-height: 1.35;
-  --control-font-weight: 500;
+  --control-font-weight: 400;
   --chip-font-size: var(--font-size-md);
   --chip-line-height: 1.2;
   --chip-font-weight: 600;

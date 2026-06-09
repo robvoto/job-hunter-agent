@@ -304,7 +304,7 @@
     ${srSignalContextHtml(signal)}
   </div>
   <div class="signal-category-wrapper">
-    <select class="signal-category-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
+    <select class="signal-category-select jh-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
       <option value="">Choose category</option>
       ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
     </select>
@@ -336,11 +336,11 @@
 </div>
 <div class="sr-toolbar">
   <input id="sr_search" class="sr-search" type="search" value="${escapeHtml(_srSearchDraft || _srSearch)}" placeholder="Search signals">
-  <select id="sr_sort" class="sr-select">
+  <select id="sr_sort" class="sr-select jh-select">
     <option value="recently_updated"${_srSort === 'recently_updated' ? ' selected' : ''}>Recently updated</option>
     <option value="name_az"${_srSort === 'name_az' ? ' selected' : ''}>A-Z</option>
   </select>
-  <select id="sr_filter" class="sr-select" aria-label="Filter signals">
+  <select id="sr_filter" class="sr-select jh-select" aria-label="Filter signals">
     <option value="all"${_srFilter === 'all' ? ' selected' : ''}>All Signals</option>
     <option value="needs_review"${_srFilter === 'needs_review' ? ' selected' : ''}>Needs Review Only</option>
     <option value="uncategorized"${_srFilter === 'uncategorized' ? ' selected' : ''}>Uncategorized Only</option>

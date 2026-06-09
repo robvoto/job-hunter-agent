@@ -74,6 +74,10 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
 
     assert 'id="source_document_allowed_suffixes"' in html
 
+    assert 'account-bar-shortcut' not in html
+
+    assert 'class="nav-item nav-item-workspace">↩ Workspace</a>' in html
+
     assert "__JOB_HUNTER_SETTINGS_SECTION_" not in html
 
 

@@ -194,18 +194,20 @@ def test_shared_ui_styles_are_centralised():
     assert ".currency-input-wrap input" not in onboarding_review_css
     assert ".help {" not in settings_page_css
     assert ".currency-input-wrap input" not in settings_page_css
+    assert ".nav-item.is-active {" in settings_page_css
+    assert "color: var(--selection-accent);" in settings_page_css
+    assert ".nav-item-workspace {" in settings_page_css
+    assert "color: var(--text-muted);" in settings_page_css
     assert ".nav-item-admin {" in settings_page_css
     assert "color: var(--text-muted);" in settings_page_css
+    assert ".nav-item-optimise" not in settings_page_css
     assert ".search-settings-grid .settings-form-field--summary" in settings_page_css
-    assert "row-gap: var(--field-label-control-gap);" in settings_page_css
     assert "#seek_max_pages_choices.choice-strip" in settings_page_css
     assert "min-height: var(--control-height-2xl);" in settings_page_css
     assert "#contract_duration_row" in settings_page_css
     assert "position: absolute;" in settings_page_css
     assert "text-align: center;" in settings_page_css
     assert ".search-source-panel .toggle-switch" in theme_widgets
-    assert ".search-source-panel .toggle-switch-title" in theme_widgets
-    assert "white-space: nowrap;" in theme_widgets
 
 
 def test_settings_search_work_type_popup_uses_shared_labels_and_local_layout():

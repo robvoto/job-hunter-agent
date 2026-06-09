@@ -4,6 +4,61 @@ Quick reference for every interactive widget pattern in settings and onboarding.
 
 ---
 
+## Design standards and token rationale
+
+These rules exist for accessibility and visual-hierarchy reasons. Do not change token values without understanding the rationale below.
+
+### Touch target minimums
+
+| Token | Value | Applies to |
+|---|---|---|
+| `--control-height-lg` | 40px | All interactive form controls: inputs, selects, textareas, and choice-strip chips |
+
+**40px is the chosen standard for all form-context interactive controls.** Chips and inputs that appear in the same form row share the same height — this follows the Atlassian design system pattern where filter chips, dropdowns, and inputs align on a single baseline. WCAG 2.5.8 (Level AA) requires only 24px; 40px is well above that. Do not reduce below 36px without re-checking accessibility.
+
+### Chip height is intentionally smaller than form controls
+
+Chips (~34px) are always shorter than inputs/selects (~44px). This is correct and follows every major design system — Material Design chips are 32dp vs 56dp inputs (a 24dp gap). The difference signals visual hierarchy: chips are compact selection tokens; inputs and dropdowns are primary form controls. Do not attempt to equalise them.
+
+### Typography scale
+
+| Token | Resolved value | Used on |
+|---|---|---|
+| `--control-font-size` → `--text-role-control-label-font-size` | 0.92rem | All inputs, selects, textareas |
+| `--field-label-font-size` | 0.92rem | Field labels — intentionally matches control text |
+| `--text-role-chip-font-size` | 0.82rem | Chip labels — intentionally smaller than controls |
+| `--help-copy-font-size` | 0.8rem | Help text / summary lines |
+
+Chip text is smaller by design. Do not raise `--text-role-chip-font-size` to match controls — it would make chips visually indistinguishable from inputs.
+
+### Token ownership chain
+
+```
+themes.tokens.css        ← primitive values only (sizes, colours, spacing)
+       ↓
+themes.widgets.css       ← component rules (min-height, font-size, padding on inputs/selects/chips)
+       ↓
+page CSS (settings-page.css, onboarding-page.css)
+                         ← page-scoped layout exceptions only
+```
+
+**Cascade rule:** same specificity = later file wins. A rule in `themes.widgets.css` that is overridden by `settings-page.css` must be re-declared in `settings-page.css` after the conflicting rule, not in `themes.widgets.css` where it will lose.
+
+**Reusable component styles always go in `themes.widgets.css`.** Page CSS only adds layout exceptions that are genuinely scoped to one page.
+
+### Key spacing tokens
+
+| Token | Value | Used for |
+|---|---|---|
+| `--field-label-control-gap` | 12px | Row-gap inside each field (label → control) |
+| `--field-body-gap` | 18px | Gap between fields in `.settings-form-grid` |
+| `--field-summary-gap` | 8px | Gap between control and summary/help line below chips |
+| `--surface-gap-md` | 12px | Panel padding and subpanel field spacing |
+
+`--field-label-control-gap` is also the grid row-gap inside every `.settings-form-field` and `.onb-field`. A `.summary-line` as a direct grid child receives this gap from above — compensate with `calc(var(--field-summary-gap) - var(--field-label-control-gap))` margin-top to achieve the intended gap.
+
+---
+
 ## Choice strip (styled toggle buttons)
 
 Used for: Work mode, Engagement type, Sector preference (settings)
