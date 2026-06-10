@@ -8,7 +8,7 @@ description: Use ONLY for backlog work: Google Sheet rows, JH IDs, priorities, d
 Use when creating, updating, deduplicating, or analysing backlog items.
 
 ## Source of truth
-- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/`.
+- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/edit?gid=218702820#gid=218702820`.
 - This Google Sheet is the backlog source of truth because it supports concurrent editing.
 - Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless the human explicitly asks to update it.
 - Read the sheet header row first and update by column name, never by fixed position.
@@ -20,6 +20,13 @@ The HUMAN MCP SERVER provides three Sheets tools. Always use these — do not us
 
 **Spreadsheet ID:** `1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0`  
 **Sheet name:** `Backlog`
+
+### Required tool availability
+If the HUMAN MCP Sheets tools are unavailable, misconfigured, or a write fails:
+- Stop backlog work.
+- Do not claim the sheet was updated.
+- Do not use local exports, docs, or archive files as a substitute backlog.
+- Report the blocker and the exact backlog action that could not be completed.
 
 ### Read a single row by ID (preferred — low token cost)
 ```
