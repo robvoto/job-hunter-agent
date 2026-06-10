@@ -118,7 +118,7 @@ def test_repo_knowledge_seeds_successfully(tmp_db):
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
     seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
-    assert len(seeded) == 19, f"Expected 19 knowledge files, got {len(seeded)}: {seeded}"
+    assert len(seeded) == 24, f"Expected 24 knowledge files, got {len(seeded)}: {seeded}"
 
 
 def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):

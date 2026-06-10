@@ -1,0 +1,12 @@
+{
+  "kind": "system_config",
+  "name": "llm_learning_defaults",
+  "version": 1,
+  "updated_at": "2026-06-10",
+  "description": "Managed default guidance for LLM learning signal extraction behaviour.",
+  "lines": [
+    "Learning categories available: capability_concept, cv_farming_pattern.",
+    "capability_concept: skills, tools, methods, or domain concepts visible in the job ad. Use only concise terms already present in the ad text.",
+    "cv_farming_pattern: wording that suggests the employer is collecting CVs rather than advertising a live role."
+  ]
+}

@@ -46,20 +46,14 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER,
     LLM_PROMPT_DO_NOT_INVENT,
     LLM_PROMPT_DO_NOT_SAVE,
-    LLM_PROMPT_FIT_REVIEW_GRADE_INTRO,
     LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
     LLM_PROMPT_JOB_DESCRIPTION_PREFIX,
-    LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
     LLM_PROMPT_JSON_ONLY,
     LLM_PROMPT_LEARNING_PENDING_ONLY,
-    LLM_PROMPT_REQUIREMENT_COVERAGE_INTRO,
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
-
-    LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
-
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
@@ -340,6 +334,11 @@ def _load_managed_prompt_lines(key: str) -> tuple[str, ...]:
 
 FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_defaults")
 CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines("llm_capability_naming_defaults")
+JOB_REQUIREMENTS_DEFAULT_LINES = _load_managed_prompt_lines("llm_job_requirements_defaults")
+LEARNING_DEFAULT_LINES = _load_managed_prompt_lines("llm_learning_defaults")
+REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines("llm_rejection_suggestions_defaults")
+REQUIREMENT_COVERAGE_DEFAULT_LINES = _load_managed_prompt_lines("llm_requirement_coverage_defaults")
+FIT_REVIEW_GRADE_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_grade_defaults")
 
 
 def llm_is_enabled() -> bool:
@@ -443,7 +442,7 @@ def build_job_requirements_prompt() -> str:
         LLM_PROMPT_JSON_ONLY,
         LLM_PROMPT_DO_NOT_INVENT,
         LLM_PROMPT_USE_VISIBLE_STRINGS,
-        LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+        build_job_requirements_guidance(),
         f"Return exactly this shape: {LLM_JOB_REQUIREMENTS_PROMPT_SHAPE}",
         f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
     ]
@@ -454,6 +453,26 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
     parts = [LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER]
     parts.extend(f"- {line}" for line in FIT_REVIEW_DEFAULT_LINES)
     return "\n".join(parts)
+
+
+def build_requirement_coverage_guidance() -> str:
+    return "\n".join(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
+
+
+def build_job_requirements_guidance() -> str:
+    return "\n".join(f"- {line}" for line in JOB_REQUIREMENTS_DEFAULT_LINES)
+
+
+def build_fit_review_grade_guidance() -> str:
+    return "\n".join(f"- {line}" for line in FIT_REVIEW_GRADE_DEFAULT_LINES)
+
+
+def build_learning_guidance() -> str:
+    return "\n".join(LEARNING_DEFAULT_LINES)
+
+
+def build_rejection_suggestions_guidance() -> str:
+    return "\n".join(f"- {line}" for line in REJECTION_SUGGESTIONS_DEFAULT_LINES)
 
 
 def build_capability_naming_guidance() -> str:
@@ -891,12 +910,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
 
     system_prompt = "\n".join(
         part for part in [
-        "You suggest candidate-controlled blocker terms for a job-search assistant.",
-        "The user will explicitly approve any suggestion before it is saved. Do not decide or save anything.",
-        "Use the candidate profile context to avoid suggesting requirements already evidenced by the candidate.",
-        "Suggest only concise blocker terms that appear to be hard requirements for this specific job and are not clearly evidenced by the candidate profile.",
-        "Hard blockers can be from any field: credentials, clearances, licences, work authorization, language, location, regulated/domain experience, industry background, products, platforms, tools, or specialist experience.",
-        "Do not suggest desirable, preferred, nice-to-have, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs.",
+            build_rejection_suggestions_guidance(),
             f"{LLM_PROMPT_JSON_ONLY}, in this exact shape: {LLM_REJECTION_SUGGESTIONS_JSON_SHAPE}. Return an empty array if unsure.",
             build_profile_prompt_context(),
         ]
@@ -1012,9 +1026,9 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
             build_fit_review_guidance(),
             LLM_PROMPT_DEBUG_REASON_INTRO,
             f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
-            LLM_PROMPT_REQUIREMENT_COVERAGE_INTRO,
-            LLM_PROMPT_FIT_REVIEW_GRADE_INTRO,
-            LLM_PROMPT_JOB_REQUIREMENTS_INTRO,
+            build_requirement_coverage_guidance(),
+            build_fit_review_grade_guidance(),
+            build_job_requirements_guidance(),
             f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
         ])
     else:
@@ -1025,7 +1039,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
         ])
         parts.append(LLM_PROMPT_LEARNING_PENDING_ONLY)
         parts.extend([
-            LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE,
+            build_learning_guidance(),
             f"Return exactly this shape: {LLM_LEARNING_ONLY_PROMPT_SHAPE}",
             LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
             f"Use at most {get_llm_learning_candidates_max_items()} learning candidates.",

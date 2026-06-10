@@ -1,5 +1,7 @@
 """Tests for llm gate."""
 
+import pytest
+
 from job_hunter_agent import llm_gate
 
 
@@ -443,4 +445,48 @@ def test_normalize_coverage_defaults_invalid_importance_to_preferred():
         valid_capability_names={"python": "Python"},
     )
     assert result[0]["importance"] == "preferred"
+
+
+# ── managed prompt line loading ───────────────────────────────────────────────
+
+def test_load_managed_prompt_lines_raises_on_missing_key(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.knowledge_store.get_knowledge", lambda key: None)
+    with pytest.raises(RuntimeError, match="seed the DB first"):
+        llm_gate._load_managed_prompt_lines("nonexistent_key")
+
+
+def test_load_managed_prompt_lines_raises_on_empty_lines(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.knowledge_store.get_knowledge", lambda key: {"lines": []})
+    with pytest.raises(ValueError, match="at least one prompt line"):
+        llm_gate._load_managed_prompt_lines("any_key")
+
+
+def test_build_requirement_coverage_guidance_includes_key_phrases():
+    guidance = llm_gate.build_requirement_coverage_guidance()
+    assert "requirement_coverage" in guidance
+    assert "atomic" in guidance
+
+
+def test_build_job_requirements_guidance_includes_work_types():
+    guidance = llm_gate.build_job_requirements_guidance()
+    assert "Permanent" in guidance
+    assert "Full Time Contract / FTC" in guidance
+    assert "Unknown when the work type is unclear" in guidance
+
+
+def test_build_fit_review_grade_guidance_includes_key_phrase():
+    guidance = llm_gate.build_fit_review_grade_guidance()
+    assert "fit_review.grade" in guidance
+    assert "MISMATCH" in guidance
+
+
+def test_build_learning_guidance_includes_categories():
+    guidance = llm_gate.build_learning_guidance()
+    assert "capability_concept" in guidance
+    assert "cv_farming_pattern" in guidance
+
+
+def test_build_rejection_suggestions_guidance_includes_key_phrase():
+    guidance = llm_gate.build_rejection_suggestions_guidance()
+    assert "blocker" in guidance.lower()
 

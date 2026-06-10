@@ -1,0 +1,14 @@
+{
+  "kind": "system_config",
+  "name": "llm_job_requirements_defaults",
+  "version": 1,
+  "updated_at": "2026-06-10",
+  "description": "Managed default guidance for LLM job requirements extraction behaviour.",
+  "lines": [
+    "For job_requirements: extract the job's explicit requirements as concise bullet-style phrases.",
+    "Use only visible ad text, prefer the employer's own wording, keep each item short, and do not invent anything.",
+    "Capture the requirements the user would want to read before opening the ad.",
+    "If the ad states the work type explicitly, preserve it as one of: Permanent, Contract, Full Time Contract / FTC, Temporary.",
+    "Use Unknown when the work type is unclear."
+  ]
+}

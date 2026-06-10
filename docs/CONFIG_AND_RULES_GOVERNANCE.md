@@ -38,6 +38,19 @@ Examples:
 
 These settings should be visible in the Admin/global console when they affect runtime behaviour.
 
+### Prompt copy
+
+Use `data/knowledge/llm_*_defaults.json` for all behavioural guidance text sent to the LLM.
+
+Each file has a `"lines"` array. `llm_gate.py` loads them at import time via `_load_managed_prompt_lines()` and assembles them into prompts through named builder functions (`build_fit_review_guidance()`, `build_requirement_coverage_guidance()`, etc.).
+
+Ownership:
+- Behavioural guidance lines → `data/knowledge/llm_*_defaults.json`
+- Protocol constants (allowed output values, JSON output shapes, short headers, single-line control strings) → `llm_protocol.py`
+- Operational knobs (model, max tokens, pricing, timeouts) → `global_settings.json` / Admin
+
+Python code enforces allowed output values. It does not own the guidance text.
+
 ### data/knowledge
 
 Use `data/knowledge` for governed rule libraries and reusable knowledge.
