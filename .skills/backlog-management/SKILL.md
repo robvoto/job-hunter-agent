@@ -5,65 +5,38 @@ description: Use ONLY for backlog work: Google Sheet rows, JH IDs, priorities, d
 
 # Skill: Backlog Management
 
-Use when creating, updating, deduplicating, or analysing backlog items.
+Use when creating, updating, deduplicating, grooming, or analysing backlog items.
 
 ## Source of truth
-- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/`.
-- This Google Sheet is the backlog source of truth because it supports concurrent editing.
+- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/edit?gid=218702820#gid=218702820`.
+- This Google Sheet is the only backlog source of truth.
 - Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless the human explicitly asks to update it.
 - Read the sheet header row first and update by column name, never by fixed position.
 - Do not add, remove, or rename columns unless explicitly agreed.
 
-## How to read and write the sheet (MCP tools)
+## How to read and write the sheet
 
-The HUMAN MCP SERVER provides three Sheets tools. Always use these — do not use the built-in Google Drive connector for backlog writes.
+Use the authorised live Google Sheets tool available in the current runtime. This may be a local MCP Sheets tool, a cloud Sheets connector, or another approved runtime-specific Sheets integration.
 
 **Spreadsheet ID:** `1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0`  
 **Sheet name:** `Backlog`
 
-### Read a single row by ID (preferred — low token cost)
-```
-sheets_read_row_by_id(
-    spreadsheet_id="1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0",
-    sheet_name="Backlog",
-    row_id="JH-001"
-)
-```
-Returns the row as a dict keyed by header. Use this when you only need one row.
+### Required access rule
+If no authorised tool can read and write the live Google Sheet, or a write fails:
+- Stop backlog work.
+- Do not claim the sheet was updated.
+- Do not use local exports, docs, copied spreadsheets, or archive files as a substitute backlog.
+- Report the blocker and the exact backlog action that could not be completed.
 
-### Append a new row
-```
-sheets_append_row(
-    spreadsheet_id="1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0",
-    sheet_name="Backlog",
-    values=["JH-191", "Agent", "Title here", ...]
-)
-```
-Values must be in column order matching the header row. Safe for concurrent agents — no read-modify-write needed.
-
-### Update a single cell
-```
-sheets_update_cell(
-    spreadsheet_id="1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0",
-    sheet_name="Backlog",
-    row=5,      # 1-based, row 1 is the header
-    col=15,     # 1-based, col 15 = Implementation State
-    value="Done"
-)
-```
-Use this to update a specific field on an existing row. Get the row number from `sheets_read_row_by_id`.
-
-### Read all rows (use sparingly — high token cost)
-```
-sheets_read_rows(
-    spreadsheet_id="1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0",
-    sheet_name="Backlog"
-)
-```
-Only call this when you genuinely need the full backlog (e.g. deduplication scan, next ID lookup). Avoid in tight loops.
+### Required operations
+Use the equivalent live-Sheets operations for the current runtime:
+- Read row by `ID` when inspecting one item.
+- Append a row when creating a new item.
+- Update a single cell or row fields when changing an existing item.
+- Read all rows only when needed for deduplication, next-ID lookup, or bounded grooming.
 
 ### Getting the next JH ID
-Call `sheets_read_rows`, extract all values in column A, find the highest JH-### number, increment by 1.
+Read existing IDs from the live `Backlog` sheet, find the highest valid `JH-###` number, and increment by 1. Ignore malformed placeholders such as `JH-NEXT`.
 
 ## Column order (as of 2026-05-26)
 1. ID, 2. Creator, 3. Title, 4. Epic, 5. Type, 6. Priority, 7. Size, 8. Problem, 9. Outcome, 10. Acceptance Criteria, 11. Original Source, 12. Duplicate Of, 13. Depends On, 14. Notes, 15. Implementation State, 16. Implementation Date, 17. Implemented By, 18. Evidence, 19. Human Review Needed, 20. Review Category, 21. Review Reason
@@ -93,6 +66,24 @@ Fill the columns that exist in the sheet:
 - Do not pick or implement rows where `Implementation State = Done`.
 - Done rows may only be touched when the human explicitly asks to audit, reopen, correct evidence, or revise that specific row.
 - Normal agent task selection must use rows where `Implementation State` is not `Done`, preferably `Not Done` or `Partially Done` after confirming scope.
+
+## Grooming existing rows
+Grooming means improving backlog quality, not implementing product code.
+
+For each row, check only what can be proven from the live sheet and, when needed, the repo:
+- duplicate or near-duplicate item;
+- invalid `Implementation State` value;
+- malformed or shifted columns;
+- stale references to removed files, old JSON paths, or obsolete architecture;
+- weak rows with missing Problem, Outcome, or Acceptance Criteria;
+- rows marked `Done` without file/function/test evidence.
+
+Update conservatively:
+- Do not delete rows unless the human explicitly agrees.
+- Prefer marking duplicates with `Duplicate Of` and evidence.
+- Mark obsolete only when architecture/code evidence proves it.
+- If unsure, use `Human Review Needed`, `Review Category`, and `Review Reason` instead of rewriting the row.
+- For large grooming, work in small ID ranges and report exactly what changed.
 
 ## Human review marking
 Use review columns to flag items that need the human's judgement because the agent cannot safely resolve them alone. Examples of useful review reasons include unclear intent, missing information, possible duplicates, possibly old/obsolete items, or items that seem wrong or inconsistent.
