@@ -5,7 +5,7 @@ description: Use ONLY for backlog work: Google Sheet rows, JH IDs, priorities, d
 
 # Skill: Backlog Management
 
-Use when creating, updating, deduplicating, or analysing backlog items.
+Use when creating, updating, deduplicating, grooming, or analysing backlog items.
 
 ## Source of truth
 - Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/edit?gid=218702820#gid=218702820`.
@@ -33,7 +33,7 @@ Use the equivalent live-Sheets operations for the current runtime:
 - Read row by `ID` when inspecting one item.
 - Append a row when creating a new item.
 - Update a single cell or row fields when changing an existing item.
-- Read all rows only when needed for deduplication or next-ID lookup.
+- Read all rows only when needed for deduplication, next-ID lookup, or bounded grooming.
 
 ### Getting the next JH ID
 Read existing IDs from the live `Backlog` sheet, find the highest valid `JH-###` number, and increment by 1. Ignore malformed placeholders such as `JH-NEXT`.
@@ -66,6 +66,24 @@ Fill the columns that exist in the sheet:
 - Do not pick or implement rows where `Implementation State = Done`.
 - Done rows may only be touched when the human explicitly asks to audit, reopen, correct evidence, or revise that specific row.
 - Normal agent task selection must use rows where `Implementation State` is not `Done`, preferably `Not Done` or `Partially Done` after confirming scope.
+
+## Grooming existing rows
+Grooming means improving backlog quality, not implementing product code.
+
+For each row, check only what can be proven from the live sheet and, when needed, the repo:
+- duplicate or near-duplicate item;
+- invalid `Implementation State` value;
+- malformed or shifted columns;
+- stale references to removed files, old JSON paths, or obsolete architecture;
+- weak rows with missing Problem, Outcome, or Acceptance Criteria;
+- rows marked `Done` without file/function/test evidence.
+
+Update conservatively:
+- Do not delete rows unless the human explicitly agrees.
+- Prefer marking duplicates with `Duplicate Of` and evidence.
+- Mark obsolete only when architecture/code evidence proves it.
+- If unsure, use `Human Review Needed`, `Review Category`, and `Review Reason` instead of rewriting the row.
+- For large grooming, work in small ID ranges and report exactly what changed.
 
 ## Human review marking
 Use review columns to flag items that need the human's judgement because the agent cannot safely resolve them alone. Examples of useful review reasons include unclear intent, missing information, possible duplicates, possibly old/obsolete items, or items that seem wrong or inconsistent.
