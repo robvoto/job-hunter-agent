@@ -1134,3 +1134,131 @@ Prerequisites:
 - Nginx routes `jobhunter.robvoto.com` to `127.0.0.1:8765`.
 
 Do not expose FastAPI port `8765` publicly. HTTPS terminates at Nginx; FastAPI remains private on EC2 localhost.
+
+---
+
+## Current AWS access and OAuth truth - 2026-06-10
+
+### Access method
+
+Primary AWS access is now **AWS Systems Manager Session Manager**, not direct SSH.
+
+Reason:
+
+- the home/client IP changes frequently
+- SSH allowlisting becomes unreliable
+- SSM avoids opening SSH broadly
+- SSM gives direct access to the EC2 host without changing the security group every time
+
+Normal access flow:
+
+```bash
+use-ubuntu
+cd /home/ubuntu/job-hunter-agent
+```
+
+Session Manager logs in as `ssm-user`. `use-ubuntu` switches to the `ubuntu` app owner.
+
+SSH is now a fallback/emergency path only. Do not make SSH the default operational workflow. Do not open SSH to `0.0.0.0/0`.
+
+### Current Job Hunter production URLs
+
+```text
+Public app:      https://jobhunter.robvoto.com/start
+Internal app:    http://127.0.0.1:8765/start  # only from inside EC2
+Public HTTP:     http://jobhunter.robvoto.com/start redirects/serves through Nginx
+```
+
+FastAPI must remain private on EC2 localhost. Nginx is the public front door and handles HTTPS.
+
+### HTTPS state
+
+Job Hunter HTTPS has been enabled for:
+
+```text
+jobhunter.robvoto.com
+```
+
+Browser access should use:
+
+```text
+https://jobhunter.robvoto.com/start
+```
+
+Do not test Job Hunter by using `knowme.robvoto.com`. KnowMe is a separate subdomain and requires its own app deployment, Nginx route, and certificate.
+
+### KnowMe state
+
+`knowme.robvoto.com` is reserved but is not the Job Hunter route.
+
+If `https://knowme.robvoto.com` shows `NET::ERR_CERT_COMMON_NAME_INVALID`, that does not mean Job Hunter is broken. It means the certificate/subdomain does not match KnowMe yet.
+
+KnowMe needs a separate deployment before it can be considered healthy.
+
+### Google OAuth production redirect
+
+Google login must redirect back to Job Hunter production, not ngrok and not KnowMe.
+
+Required Google OAuth redirect URI:
+
+```text
+https://jobhunter.robvoto.com/api/auth/google/callback
+```
+
+Required Google OAuth JavaScript origin:
+
+```text
+https://jobhunter.robvoto.com
+```
+
+Old ngrok callback URLs such as this are not production-safe:
+
+```text
+https://griminess-magazine-landowner.ngrok-free.dev/api/auth/google/callback
+```
+
+If login sends the browser to an ngrok URL, the Google OAuth client still has the old callback selected or the production environment still has an old base URL.
+
+Check AWS env without exposing secrets:
+
+```bash
+sudo grep -E "JOB_HUNTER_BASE_URL|JOB_HUNTER_CORS_ALLOWED_ORIGINS|GOOGLE" /etc/job-hunter/job-hunter.env | sed 's/CLIENT_SECRET=.*/CLIENT_SECRET=***/'
+```
+
+Expected:
+
+```text
+JOB_HUNTER_BASE_URL=https://jobhunter.robvoto.com
+JOB_HUNTER_CORS_ALLOWED_ORIGINS=https://jobhunter.robvoto.com
+```
+
+After changing `/etc/job-hunter/job-hunter.env`, restart and check:
+
+```bash
+sudo systemctl restart job-hunter
+jobhunter-status
+```
+
+### Latest production health checks
+
+Run from EC2:
+
+```bash
+jobhunter-status
+```
+
+Or manually:
+
+```bash
+curl -I http://127.0.0.1:8765/start
+curl -I https://jobhunter.robvoto.com/start
+```
+
+Expected healthy result is a redirect to login:
+
+```text
+HTTP 302
+location: /login?next=%2Fstart
+```
+
+That means the app is alive and auth is enforcing login correctly.
