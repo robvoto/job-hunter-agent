@@ -972,3 +972,95 @@ Use a deploy key or GitHub Actions deployment flow
 Move from repo clone to packaged release
 Consider PostgreSQL/RDS only after the data model stabilizes
 ```
+
+---
+
+## Production deploy command
+
+The standard AWS update command is:
+
+```bash
+deploy-jobhunter
+```
+
+Run it from the EC2 host after switching to the app owner:
+
+```bash
+use-ubuntu
+deploy-jobhunter
+```
+
+`deploy-jobhunter` is an update/deploy command, not a first-install command. It is expected to:
+
+1. change to `/home/ubuntu/job-hunter-agent`
+2. show `git status --short`
+3. pull latest code with `git pull --ff-only`
+4. activate `/home/ubuntu/job-hunter-agent/.venv`
+5. install dependencies with `pip install -r requirements.txt`
+6. load `/etc/job-hunter/job-hunter.env`
+7. run `python -m job_hunter_agent.db_seed --upgrade`
+8. restart `job-hunter.service`
+9. show service status and recent logs
+
+Do not use `INSTALL` as the command name for normal updates. This is a deployment/update workflow.
+
+## AWS Session Manager access
+
+Preferred access is AWS Systems Manager Session Manager because the home IP changes frequently and SSH client-IP allowlisting becomes unreliable.
+
+Session Manager initially logs in as `ssm-user`. Switch to the app owner before running app commands:
+
+```bash
+use-ubuntu
+```
+
+If the helper does not exist yet, the equivalent command is:
+
+```bash
+sudo -iu ubuntu
+```
+
+Do not open SSH to `0.0.0.0/0`.
+
+## AWS health-check helper
+
+Create a helper command named:
+
+```bash
+jobhunter-status
+```
+
+It should run:
+
+```bash
+sudo systemctl status job-hunter --no-pager
+sudo journalctl -u job-hunter -n 80 --no-pager
+curl -I http://127.0.0.1:8765/start
+```
+
+Meaning:
+
+- `systemctl status` checks whether systemd thinks the service is alive.
+- `journalctl` shows why Python failed or what the app logged.
+- `curl` proves the web app is actually listening on port `8765`.
+
+`Active: active (running)` alone is not enough proof immediately after restart. Always confirm with `curl`.
+
+## Runtime seed and dependency rules
+
+The app reads production runtime files from `JOB_HUNTER_DATA_DIR`, currently:
+
+```text
+/var/lib/job-hunter/data
+```
+
+Versioned source JSON files live in the repo under `/home/ubuntu/job-hunter-agent/data`. Deployment must not rely on manual copying.
+
+`python -m job_hunter_agent.db_seed --upgrade` is responsible for syncing required runtime-managed files into `JOB_HUNTER_DATA_DIR`, including:
+
+```text
+config/global_settings.json
+defaults/user_settings.json
+```
+
+If code imports a Python package, that package must be declared in `requirements.txt`. Do not manually install packages on AWS as the permanent solution. Fix `requirements.txt`, commit, push, then run `deploy-jobhunter`.

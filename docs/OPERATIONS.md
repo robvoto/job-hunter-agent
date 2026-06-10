@@ -535,3 +535,57 @@ Expansion must preserve:
 * deterministic inspection
 * explainable filtering
 * controlled learning
+
+---
+
+# AWS Deployment Operations
+
+## Standard AWS deploy
+
+Use the AWS-side deploy helper:
+
+```bash
+use-ubuntu
+deploy-jobhunter
+```
+
+`deploy-jobhunter` updates the EC2 app from GitHub, installs declared dependencies, loads production environment variables, runs `db_seed --upgrade`, restarts `job-hunter.service`, and prints status/logs.
+
+This is the correct path for production updates. Do not manually install Python packages on AWS as a permanent fix. Missing packages must be added to `requirements.txt` and deployed through Git.
+
+## AWS status check
+
+Preferred helper:
+
+```bash
+jobhunter-status
+```
+
+Equivalent commands:
+
+```bash
+sudo systemctl status job-hunter --no-pager
+sudo journalctl -u job-hunter -n 80 --no-pager
+curl -I http://127.0.0.1:8765/start
+```
+
+Interpretation:
+
+- `systemctl status` checks service state.
+- `journalctl` shows startup/runtime errors.
+- `curl` proves FastAPI is listening and serving requests.
+
+If `curl` cannot connect, inspect the latest traceback in `journalctl` before making changes.
+
+## Runtime files during deploy
+
+Production uses `JOB_HUNTER_DATA_DIR` for live runtime data. On AWS this is `/var/lib/job-hunter/data`.
+
+`db_seed --upgrade` must ensure required repo-managed runtime files exist there, including:
+
+```text
+config/global_settings.json
+defaults/user_settings.json
+```
+
+Manual copying is only an emergency diagnostic step, not the designed deployment path.
