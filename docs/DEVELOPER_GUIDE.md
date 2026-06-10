@@ -217,3 +217,12 @@ Do not accidentally commit:
 ## Testing Workflow
 
 Follow `docs/OPERATIONS.md` for validation scope and commands.
+
+The standard local formatting and linting workflow is:
+
+```powershell
+pip install -r requirements-dev.txt
+python -m ruff check .
+python -m ruff format <file-or-folder>
+python -m ruff check . --fix
+```

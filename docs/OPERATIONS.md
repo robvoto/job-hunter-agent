@@ -435,6 +435,36 @@ Run the full suite before merging into `main`.
 
 ---
 
+# Python Formatting and Linting
+
+Install dev tools:
+
+```powershell
+pip install -r requirements-dev.txt
+```
+
+Check formatting and linting:
+
+```powershell
+python -m ruff check .
+```
+
+Format changed Python files:
+
+```powershell
+python -m ruff format <file-or-folder>
+```
+
+Fix safe lint issues:
+
+```powershell
+python -m ruff check . --fix
+```
+
+Use these commands on the files you are actively changing unless the task explicitly calls for a wider cleanup.
+
+---
+
 # Operational Constraints
 
 The runtime must:
