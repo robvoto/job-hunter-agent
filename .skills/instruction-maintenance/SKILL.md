@@ -22,7 +22,7 @@ Keep agent instructions useful, small, current, and non-contradictory.
 - Prefer deleting or moving noise over adding more instructions.
 - Keep `SKILL.md` files concise. If a skill grows too large, move detailed examples/patterns to `DETAILS.md` and keep `SKILL.md` as the loader/rule summary.
 - Remove stale architecture claims when verified wrong.
-- Do not edit agent-specific files to redefine rules owned by `AGENTS.md`; point back to `AGENTS.md` instead.
+- Do not edit agent-specific files to redefine rules owned by `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or `.skills/*/SKILL.md`; point back to the owning file instead.
 - Avoid duplicating the same rule across many files.
 - Preserve important project constraints: no hardcoding, Google Sheet backlog source of truth, Excel export compatibility only when explicitly used, Definition of Done, and do-not-pick-Done-items.
 - If unsure whether information is stale, mark it for review instead of rewriting as fact.
@@ -48,7 +48,7 @@ When cleaning instructions, check:
 - If a rule is universal, keep it short in `AGENTS.md`.
 - If a rule is area-specific, move it to the relevant skill.
 - If a rule needs examples or long explanation, move those details to `DETAILS.md` or `docs/*`.
-- After any instruction-structure cleanup, update `docs/AGENT_INSTRUCTION_STRUCTURE.md` if the structure changed.
+- After any instruction-structure cleanup, update `docs/AGENT_OPERATING_MODEL.md` and `docs/DOC_INDEX.md` if ownership or structure changed.
 
 ## Do not
 - Do not rewrite all instructions in one pass.

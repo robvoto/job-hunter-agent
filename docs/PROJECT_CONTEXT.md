@@ -12,11 +12,16 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 ## Runtime truth
 
+- Windows project path: `E:\Programming\job-hunter-agent`.
+- WSL project path: `/mnt/e/Programming/job-hunter-agent`.
+- OpenClaw/coding-agent workspace path: `/home/robvoto/.openclaw/workspace/coding-agent`.
 - Runtime state lives in SQLite via `JOB_HUNTER_DB_PATH`.
 - Per-user rendered workspace output lives under `data/users/<user_id>/`.
 - Approved knowledge seeds live in `data/knowledge/*.json`.
 - Global admin settings seed lives in `data/config/global_settings.json`.
 - Runtime signal files live in `data/signals/*.json` and are gitignored.
+- Use `config/projects.json` in the coding-agent workspace to resolve this repo for OpenClaw runtime work.
+- Treat `instruction_file` and `instruction_skills` as project metadata references, not automatically injected runtime instructions.
 
 ## Project reference docs
 

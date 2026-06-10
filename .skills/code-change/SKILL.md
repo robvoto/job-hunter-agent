@@ -25,13 +25,14 @@ Use before modifying existing code.
 - When a symptom is visible in the UI, inspect the rendered template, injected bootstrap data, and owning normaliser in parallel before editing.
 
 ## Testing
-Use the testing rule in `AGENTS.md`.
+Use risk-based validation for code changes.
 
-Professional default:
-- Run targeted tests that directly cover the changed behaviour.
-- Add adjacent/integration validation when the change crosses module, UI, auth, persistence, routing, startup, shared template/bootstrap, scoring/filtering, or common utility boundaries.
+Rules:
+- Run the smallest relevant tests that directly cover the changed behaviour.
+- Add adjacent/integration validation when the change crosses shared infrastructure, auth, persistence, routing, startup, global settings, shared templates/bootstrap, scoring/filtering core, common utilities, or multiple modules.
 - Run the full suite for broad/risky/shared changes or release/merge preparation.
-- Record the exact validation command before marking work done.
+- Add or update tests when behaviour changes.
+- Record exact validation commands and results before claiming done.
 
 ## Text utility changes
 Use this section for reusable text normalization, matching/parsing helpers, scoring source text, and description-trust utilities.
@@ -54,6 +55,14 @@ Owners:
 - Server log: `output/server.log`. Check it before grep-hunting for UI or runtime bugs.
 - Find the last relevant log line before a hang/error, then read the code that runs next.
 - Geolocation lookup (`/api/onboarding/lookup-location-by-geolocation`) is a separate network call and can appear to delay extraction.
+
+## Definition of Done
+A code change is done only when:
+1. Implementation is tested according to the testing rule.
+2. Tests are added or updated when behaviour changes.
+3. The solution is not an unapproved fallback, hardcoding, heuristic, compatibility shim, or dead path.
+4. Current project patterns are followed.
+5. Relevant docs, skills, backlog evidence, or operations notes are updated when affected.
 
 ## Finish format
 Report:
