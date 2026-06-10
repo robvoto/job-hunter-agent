@@ -650,6 +650,8 @@ def _render_template_with_locations(request: Request, template_path: Path, *, pa
 
 def page_workspace(request: Request):  # type: ignore[no-untyped-def]
 
+    shared_labels = srv.load_shared_ui_labels()
+
     if not srv._onboarding_complete():
 
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
