@@ -1064,3 +1064,73 @@ defaults/user_settings.json
 ```
 
 If code imports a Python package, that package must be declared in `requirements.txt`. Do not manually install packages on AWS as the permanent solution. Fix `requirements.txt`, commit, push, then run `deploy-jobhunter`.
+
+## Version-controlled EC2 helper scripts
+
+EC2 helper scripts are version-controlled under:
+
+```text
+scripts/ec2/
+```
+
+Current helpers:
+
+```text
+scripts/ec2/deploy-jobhunter.sh        # deploy/update from GitHub and health-check
+scripts/ec2/jobhunter-status.sh        # inspect service, logs, local health, public health
+scripts/ec2/install-helpers.sh         # install wrappers into /usr/local/bin
+scripts/ec2/enable-https-jobhunter.sh  # enable HTTPS with certbot/nginx for jobhunter.robvoto.com
+```
+
+Install or refresh helper commands on EC2:
+
+```bash
+cd /home/ubuntu/job-hunter-agent
+sudo bash scripts/ec2/install-helpers.sh
+```
+
+Installed commands:
+
+```text
+/usr/local/bin/deploy-jobhunter
+/usr/local/bin/jobhunter-status
+/usr/local/bin/use-ubuntu
+```
+
+After installing helpers, normal deployment remains:
+
+```bash
+use-ubuntu
+deploy-jobhunter
+```
+
+`deploy-jobhunter` intentionally waits briefly after restart before checking health because `systemctl` can report `active` before Python has finished importing and binding to port `8765`.
+
+## HTTPS enablement
+
+The app is currently healthy over HTTP when this check succeeds:
+
+```bash
+curl -I http://jobhunter.robvoto.com/start
+```
+
+For production, browser access should use HTTPS:
+
+```text
+https://jobhunter.robvoto.com/start
+```
+
+Enable HTTPS on EC2 with:
+
+```bash
+cd /home/ubuntu/job-hunter-agent
+sudo bash scripts/ec2/enable-https-jobhunter.sh
+```
+
+Prerequisites:
+
+- `jobhunter.robvoto.com` DNS points to the EC2 public IP.
+- AWS security group allows inbound `80` and `443`.
+- Nginx routes `jobhunter.robvoto.com` to `127.0.0.1:8765`.
+
+Do not expose FastAPI port `8765` publicly. HTTPS terminates at Nginx; FastAPI remains private on EC2 localhost.
