@@ -51,6 +51,10 @@ def sync_required_runtime_files() -> list[str]:
     required_files = [
         (REPO_ROOT / "data" / "config" / "global_settings.json", GLOBAL_SETTINGS_PATH),
         (REPO_ROOT / "data" / "defaults" / "user_settings.json", DEFAULT_USER_SETTINGS_PATH),
+        (
+            REPO_ROOT / "data" / "knowledge" / "locations_au.json",
+            DATA_DIR / "knowledge" / "locations_au.json",
+        ),
     ]
 
     updated: list[str] = []
