@@ -1,4 +1,4 @@
-"""Seed the database from the repo's bundled JSON files.
+"""Seed the database and runtime-managed files from the repo's bundled JSON files.
 
 Run once on first deployment (or after a DB reset):
 
@@ -19,6 +19,8 @@ Upgrade flags:
 """
 
 import argparse
+import shutil
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -27,7 +29,37 @@ load_dotenv()
 from job_hunter_agent.database import init_db
 from job_hunter_agent.global_settings import seed_global_settings_from_file
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir, upgrade_knowledge_from_dir
-from job_hunter_agent.paths import REPO_ROOT
+from job_hunter_agent.paths import DATA_DIR, DEFAULT_USER_SETTINGS_PATH, GLOBAL_SETTINGS_PATH, REPO_ROOT
+
+
+def _copy_required_runtime_file(source: Path, target: Path) -> bool:
+    """Copy a required repo-managed JSON file into JOB_HUNTER_DATA_DIR.
+
+    Runtime on AWS reads from JOB_HUNTER_DATA_DIR, while the repo keeps the
+    versioned source files under data/. The deploy/seed step must keep those
+    runtime copies present so application startup is deterministic.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists() and target.read_bytes() == source.read_bytes():
+        return False
+    shutil.copy2(source, target)
+    return True
+
+
+def sync_required_runtime_files() -> list[str]:
+    """Ensure required repo-managed runtime files exist under DATA_DIR."""
+    required_files = [
+        (REPO_ROOT / "data" / "config" / "global_settings.json", GLOBAL_SETTINGS_PATH),
+        (REPO_ROOT / "data" / "defaults" / "user_settings.json", DEFAULT_USER_SETTINGS_PATH),
+    ]
+
+    updated: list[str] = []
+    for source, target in required_files:
+        if not source.exists():
+            raise FileNotFoundError(f"Required bundled seed file is missing from repo: {source}")
+        if _copy_required_runtime_file(source, target):
+            updated.append(str(target.relative_to(DATA_DIR)))
+    return updated
 
 
 def run(overwrite: bool = False, upgrade: bool = False) -> None:
@@ -37,6 +69,10 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
 
     print("Initialising database...")
     init_db()
+
+    print(f"Syncing required runtime files into {DATA_DIR} ...")
+    synced_files = sync_required_runtime_files()
+    print(f"  {len(synced_files)} runtime files updated: {synced_files or '(none - all current)'}")
 
     if upgrade:
         print(f"Upgrading knowledge from {knowledge_dir} ...")
