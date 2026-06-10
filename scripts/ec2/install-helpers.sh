@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
@@ -8,6 +8,9 @@ echo "Teaching: these wrappers keep AWS commands consistent and version-controll
 
 sudo install -m 0755 "$APP_DIR/scripts/ec2/deploy-jobhunter.sh" /usr/local/bin/deploy-jobhunter
 sudo install -m 0755 "$APP_DIR/scripts/ec2/jobhunter-status.sh" /usr/local/bin/jobhunter-status
+
+# Defend Ubuntu from Windows-edited files that may carry a UTF-8 BOM.
+sudo sed -i '1s/^\xEF\xBB\xBF//' /usr/local/bin/deploy-jobhunter /usr/local/bin/jobhunter-status
 
 sudo tee /usr/local/bin/use-ubuntu >/dev/null <<'EOS'
 #!/usr/bin/env bash

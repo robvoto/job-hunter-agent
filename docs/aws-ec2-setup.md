@@ -1262,3 +1262,53 @@ location: /login?next=%2Fstart
 ```
 
 That means the app is alive and auth is enforcing login correctly.
+
+---
+
+## Deployment runtime path fix - 2026-06-10
+
+The live `job-hunter.service` defines these production runtime paths inline in systemd:
+
+```text
+JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
+JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
+```
+
+These values may not appear in `/etc/job-hunter/job-hunter.env`, because that file mainly holds secrets and public URL settings.
+
+`deploy-jobhunter` must therefore apply the same production runtime path defaults before running:
+
+```bash
+python -m job_hunter_agent.db_seed --upgrade
+```
+
+Otherwise the seed step writes required runtime files into the repo `data/` folder instead of the real production data directory.
+
+The symptom was onboarding crashing with:
+
+```text
+RuntimeError: locations_au.json is missing
+```
+
+Root cause:
+
+```text
+locations_au.json existed in the repo, but not in /var/lib/job-hunter/data/knowledge/
+```
+
+Permanent fix:
+
+- `db_seed.py` includes `data/knowledge/locations_au.json` in required runtime file sync.
+- `deploy-jobhunter` exports the production runtime path defaults before seed.
+- `deploy-jobhunter` verifies `/var/lib/job-hunter/data/knowledge/locations_au.json` exists before restarting the service.
+- `install-helpers.sh` strips any UTF-8 BOM from installed helper scripts so Ubuntu executes the shebang correctly.
+
+Do not manually copy `locations_au.json` as the permanent fix. Fix repo seed/deploy logic, then run:
+
+```bash
+cd /home/ubuntu/job-hunter-agent
+git pull --ff-only
+sudo bash scripts/ec2/install-helpers.sh
+deploy-jobhunter
+```

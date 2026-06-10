@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
@@ -17,9 +17,10 @@ What this does:
   4. activates the project virtual environment
   5. installs dependencies from requirements.txt
   6. loads /etc/job-hunter/job-hunter.env
-  7. runs db_seed --upgrade to sync runtime seed/config files
-  8. restarts job-hunter.service
-  9. waits briefly, then proves the app is alive with curl
+  7. applies the same production runtime path defaults used by systemd
+  8. runs db_seed --upgrade so runtime files land in the real production data dir
+  9. restarts job-hunter.service
+  10. waits briefly, then proves the app is alive with curl
 
 Usage:
   deploy-jobhunter
@@ -28,7 +29,8 @@ Usage:
 Important:
   - This is the normal update/deploy command, not a first-install script.
   - Do not manually pip install production dependencies on AWS.
-  - Add dependencies to requirements.txt, commit, push, then run this command.
+  - Do not manually copy runtime JSON files as the permanent solution.
+  - Add dependencies/runtime seed rules to the repo, commit, push, then run this command.
 HELP
 }
 
@@ -55,7 +57,7 @@ source "$APP_DIR/.venv/bin/activate"
 echo "==> Install/update dependencies"
 python -m pip install -r requirements.txt
 
-echo "==> Load production environment"
+echo "==> Load production secrets/env file"
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ERROR: Missing environment file: $ENV_FILE" >&2
   exit 1
@@ -65,13 +67,27 @@ set -a
 source "$ENV_FILE"
 set +a
 
-echo "==> Confirm runtime paths"
-echo "JOB_HUNTER_DATA_DIR=${JOB_HUNTER_DATA_DIR:-<unset>}"
-echo "JOB_HUNTER_OUTPUT_DIR=${JOB_HUNTER_OUTPUT_DIR:-<unset>}"
-echo "JOB_HUNTER_DB_PATH=${JOB_HUNTER_DB_PATH:-<unset>}"
+echo "==> Apply production runtime path defaults"
+echo "Teaching: systemd defines these runtime paths for the live service. The seed step must use the same paths."
+export JOB_HUNTER_DATA_DIR="${JOB_HUNTER_DATA_DIR:-/var/lib/job-hunter/data}"
+export JOB_HUNTER_OUTPUT_DIR="${JOB_HUNTER_OUTPUT_DIR:-/var/lib/job-hunter/output}"
+export JOB_HUNTER_DB_PATH="${JOB_HUNTER_DB_PATH:-/var/lib/job-hunter/data/job_hunter.db}"
+
+echo "JOB_HUNTER_DATA_DIR=$JOB_HUNTER_DATA_DIR"
+echo "JOB_HUNTER_OUTPUT_DIR=$JOB_HUNTER_OUTPUT_DIR"
+echo "JOB_HUNTER_DB_PATH=$JOB_HUNTER_DB_PATH"
+
+echo "==> Ensure runtime directories exist"
+sudo mkdir -p "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
+sudo chown -R ubuntu:ubuntu "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 
 echo "==> Upgrade DB/config seed"
+echo "Teaching: this copies repo-managed runtime files, including locations_au.json, into JOB_HUNTER_DATA_DIR."
 python -m job_hunter_agent.db_seed --upgrade
+
+echo "==> Verify required runtime files"
+test -f "$JOB_HUNTER_DATA_DIR/knowledge/locations_au.json"
+echo "Found: $JOB_HUNTER_DATA_DIR/knowledge/locations_au.json"
 
 echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
