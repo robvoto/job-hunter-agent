@@ -4,15 +4,15 @@ __pycache__/
 *.pyo
 *.tmp
 .env
+.pytest_cache/
+.ruff_cache/
+.sixth/
 
 # ---- Virtual environments ----
 venv/
 .venv/
 env/
 ENV/
-lib/
-bin/
-include/
 
 # Ignore temporary onboarding CV text files
 .tmp_onboarding_cv*.txt
@@ -26,10 +26,7 @@ data/playwright_user_data/
 data/runtime/
 data/users/
 data/signals/
-
-data/app.db
-data/app.db-shm
-data/app.db-wal
+data/*.db*
 docs/signals/
 
 # ---- OS / IDE ----
@@ -37,6 +34,7 @@ docs/signals/
 .vscode/
 .idea/
 *.code-workspace
+*.log
 
 # ---- Local-only files ----
 .claude/settings.json
@@ -45,14 +43,11 @@ BACKLOG.md
 GEMINI.md
 appData-dontupload.txt
 debug/
-tmp-fastapi.err.log
-tmp-fastapi.out.log
 *.ps1
 *.lnk
 pytest.ini
 *.pem
 docs/backlog/
-debug.log
 test_tmp.db
 ignore/
 fix_xlsx_view.py
@@ -72,4 +67,4 @@ repair_tmp.py
 tmp_check.py
 tmp_run_write.txt
 tmp.txt
-data/*.db
+tmp-test.db

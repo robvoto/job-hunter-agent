@@ -328,7 +328,6 @@ if __name__ == "__main__":
 
     import uvicorn
 
-    from job_hunter_agent import server_helpers as srv
     from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
     parser = argparse.ArgumentParser(description="Job Hunter Agent local server")
     parser.add_argument(
@@ -351,6 +350,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     _configure_server_logging()
+    _bootstrap_runtime_knowledge()
+
+    from job_hunter_agent import server_helpers as srv
 
     if args.rebuild:
         if not args.user_id:
