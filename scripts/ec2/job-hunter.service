@@ -1,0 +1,18 @@
+[Unit]
+Description=Job Hunter FastAPI App
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/job-hunter-agent
+EnvironmentFile=/etc/job-hunter/job-hunter.env
+Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
+Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
+Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

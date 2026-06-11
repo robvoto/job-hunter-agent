@@ -20,8 +20,9 @@ What this does:
   7. applies the same production runtime path defaults used by systemd
   8. runs db_seed --upgrade so runtime files land in the real production data dir
   9. verifies required production knowledge files, including salary and O*NET taxonomy
-  10. restarts job-hunter.service
-  11. waits briefly, then proves the app is alive with curl
+  10. verifies the repo-managed AWS service contract is installed
+  11. restarts job-hunter.service
+  12. waits briefly, then proves the app is alive with curl
 
 Usage:
   deploy-jobhunter
@@ -99,6 +100,18 @@ for required_file in "${required_runtime_files[@]}"; do
   test -f "$required_file"
   echo "Found: $required_file"
 done
+
+echo "==> Verify AWS service contract"
+echo "Teaching: deploy must fail if the live service drifts from the repo-managed production runtime contract."
+service_cat="$(sudo systemctl cat "$SERVICE")"
+if ! grep -q '^ExecStart=/usr/bin/xvfb-run ' <<<"$service_cat"; then
+  echo "ERROR: $SERVICE.service is not using /usr/bin/xvfb-run. Run: sudo -E $APP_DIR/scripts/ec2/install-jobhunter-service.sh" >&2
+  exit 1
+fi
+if ! grep -q '^Environment="PATH=.*/usr/bin' <<<"$service_cat"; then
+  echo "ERROR: $SERVICE.service PATH does not include system binary paths. Run: sudo -E $APP_DIR/scripts/ec2/install-jobhunter-service.sh" >&2
+  exit 1
+fi
 
 echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
