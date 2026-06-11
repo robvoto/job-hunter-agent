@@ -46,15 +46,30 @@ def _copy_required_runtime_file(source: Path, target: Path) -> bool:
     return True
 
 
+def _copy_required_runtime_tree(source_dir: Path, target_dir: Path) -> list[str]:
+    """Copy all repo-managed JSON files from a bundled tree into DATA_DIR.
+
+    The runtime reads file-backed knowledge from JOB_HUNTER_DATA_DIR. A fresh
+    AWS install must therefore receive every repo-managed knowledge JSON file,
+    including nested generated artefacts such as the O*NET taxonomy index.
+    """
+    if not source_dir.exists():
+        raise FileNotFoundError(f"Required bundled seed directory is missing from repo: {source_dir}")
+
+    updated: list[str] = []
+    for source in sorted(source_dir.rglob("*.json")):
+        relative_path = source.relative_to(source_dir)
+        target = target_dir / relative_path
+        if _copy_required_runtime_file(source, target):
+            updated.append(str(target.relative_to(DATA_DIR)))
+    return updated
+
+
 def sync_required_runtime_files() -> list[str]:
     """Ensure required repo-managed runtime files exist under DATA_DIR."""
     required_files = [
         (REPO_ROOT / "data" / "config" / "global_settings.json", GLOBAL_SETTINGS_PATH),
         (REPO_ROOT / "data" / "defaults" / "user_settings.json", DEFAULT_USER_SETTINGS_PATH),
-        (
-            REPO_ROOT / "data" / "knowledge" / "locations_au.json",
-            DATA_DIR / "knowledge" / "locations_au.json",
-        ),
     ]
 
     updated: list[str] = []
@@ -63,6 +78,13 @@ def sync_required_runtime_files() -> list[str]:
             raise FileNotFoundError(f"Required bundled seed file is missing from repo: {source}")
         if _copy_required_runtime_file(source, target):
             updated.append(str(target.relative_to(DATA_DIR)))
+
+    updated.extend(
+        _copy_required_runtime_tree(
+            REPO_ROOT / "data" / "knowledge",
+            DATA_DIR / "knowledge",
+        )
+    )
     return updated
 
 

@@ -19,8 +19,9 @@ What this does:
   6. loads /etc/job-hunter/job-hunter.env
   7. applies the same production runtime path defaults used by systemd
   8. runs db_seed --upgrade so runtime files land in the real production data dir
-  9. restarts job-hunter.service
-  10. waits briefly, then proves the app is alive with curl
+  9. verifies required production knowledge files, including salary and O*NET taxonomy
+  10. restarts job-hunter.service
+  11. waits briefly, then proves the app is alive with curl
 
 Usage:
   deploy-jobhunter
@@ -82,12 +83,22 @@ sudo mkdir -p "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 sudo chown -R ubuntu:ubuntu "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 
 echo "==> Upgrade DB/config seed"
-echo "Teaching: this copies repo-managed runtime files, including locations_au.json, into JOB_HUNTER_DATA_DIR."
+echo "Teaching: this copies all repo-managed runtime knowledge files into JOB_HUNTER_DATA_DIR, including salary rules and O*NET taxonomy indexes."
 python -m job_hunter_agent.db_seed --upgrade
 
 echo "==> Verify required runtime files"
-test -f "$JOB_HUNTER_DATA_DIR/knowledge/locations_au.json"
-echo "Found: $JOB_HUNTER_DATA_DIR/knowledge/locations_au.json"
+required_runtime_files=(
+  "$JOB_HUNTER_DATA_DIR/knowledge/locations_au.json"
+  "$JOB_HUNTER_DATA_DIR/knowledge/salary.json"
+  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_index.json"
+  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_occupations.json"
+  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_alternate_titles.json"
+)
+
+for required_file in "${required_runtime_files[@]}"; do
+  test -f "$required_file"
+  echo "Found: $required_file"
+done
 
 echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
