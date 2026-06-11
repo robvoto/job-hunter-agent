@@ -8,6 +8,7 @@ by the frontend. No scraping or pipeline logic belongs here.
 """
 
 import json
+import logging
 import re
 from functools import lru_cache
 from datetime import datetime
@@ -92,6 +93,8 @@ from job_hunter_agent.text_processing import (
 )
 from job_hunter_agent.utils import safe_html
 from job_hunter_agent.work_mode_extraction import extract_from_text, WORK_MODE_UNKNOWN
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
 
@@ -557,7 +560,7 @@ def render_job_card(
         fit_points = fit_score_displayed(display_record, scoring_profile)
         _, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
     except RuntimeError as _score_exc:
-        logger.error(
+        logger.exception(
             "[RENDERER][SCORING_ERROR] job=%s title=%r — rendered with score 0: %s",
             display_record.get("job_key", "<unknown>"),
             str(display_record.get("title") or "").strip(),

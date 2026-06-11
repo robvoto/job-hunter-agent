@@ -1,4 +1,4 @@
-﻿"""Helpers for fit scoring."""
+"""Helpers for fit scoring."""
 
 import logging
 from typing import Dict, List, Optional
@@ -92,8 +92,6 @@ def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> d
     return {"label": label, "value": value}
 
 
-
-
 def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
     """Award a bonus when multiple strong independent signals simultaneously confirm fit.
 
@@ -104,15 +102,19 @@ def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Opt
     title_reason = str(record.get("title_reason") or "").strip().upper()
     content_reason = str(record.get("content_reason") or "").strip().upper()
     fit_confidence = full_description_confidence(record)
-    missing_profile_support = [item for item in (record.get("missing_profile_support") or []) if compact_whitespace(item)]
-    soft_risks = [item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)]
+    missing_profile_support = [
+        item for item in (record.get("missing_profile_support") or []) if compact_whitespace(item)
+    ]
+    soft_risks = [
+        item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)
+    ]
     active_profile = profile or load_profile()
     scoring_rules = get_scoring_rules(active_profile)
     convergence_rules = scoring_rules[KEY_CONVERGENCE]
     positive_count = sum(
-        1 for item in (record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or [])
-        if isinstance(item, dict)
-        and str(item.get("status") or "").strip().lower() == "supported"
+        1
+        for item in (record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or [])
+        if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "supported"
     )
     if (
         title_reason != convergence_rules["required_title_reason"]
@@ -124,7 +126,11 @@ def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Opt
         return None
     if positive_count < int(convergence_rules["min_positive_matches"]):
         return None
-    bonus = int(convergence_rules["bonus_no_soft_risks"] if not soft_risks else convergence_rules["bonus_with_soft_risks"])
+    bonus = int(
+        convergence_rules["bonus_no_soft_risks"]
+        if not soft_risks
+        else convergence_rules["bonus_with_soft_risks"]
+    )
     return {"label": convergence_rules["label"], "value": bonus}
 
 
@@ -133,7 +139,9 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
     if not isinstance(coverage, list) or not coverage:
         if record.get("review_source") == "llm" and record.get(RECORD_JOB_REQUIREMENTS_KEY):
-            entries.append({"label": "Requirement coverage not returned", "value": 0, "section": "llm_fit"})
+            entries.append(
+                {"label": "Requirement coverage not returned", "value": 0, "section": "llm_fit"}
+            )
         return entries
 
     for item in coverage:
@@ -173,7 +181,7 @@ def capability_support_log(record: dict) -> None:
     """
     supported: list[str] = []
     low_confidence: list[str] = []
-    for item in (record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []):
+    for item in record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []:
         if not isinstance(item, dict):
             continue
         cap_name = str(item.get("capability_name") or "").strip()
@@ -194,7 +202,9 @@ def capability_support_log(record: dict) -> None:
     )
 
 
-def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict] = None) -> List[str]:
+def build_fit_highlights(
+    record: dict, details_text: str, profile: Optional[dict] = None
+) -> List[str]:
     highlights: List[str] = []
     active_profile = profile or load_profile()
     highlight_labels = load_ui_labels()["fit_highlight_labels"]
@@ -204,9 +214,24 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     capability_matches = find_profile_capability_matches(role_bundle, active_profile)
 
     matched_profile_areas = (
-        [(highlight_labels["strong_capability_match"], area) for area in capability_matches[CapabilityLevel.STRONG][:hl_config["strong_capability_count"]]]
-        + [(highlight_labels["capability_match"], area) for area in capability_matches[CapabilityLevel.WORKING][:hl_config["working_capability_count"]]]
-        + [(highlight_labels["capability_match"], area) for area in capability_matches[CapabilityLevel.BASIC][:hl_config["basic_capability_count"]]]
+        [
+            (highlight_labels["strong_capability_match"], area)
+            for area in capability_matches[CapabilityLevel.STRONG][
+                : hl_config["strong_capability_count"]
+            ]
+        ]
+        + [
+            (highlight_labels["capability_match"], area)
+            for area in capability_matches[CapabilityLevel.WORKING][
+                : hl_config["working_capability_count"]
+            ]
+        ]
+        + [
+            (highlight_labels["capability_match"], area)
+            for area in capability_matches[CapabilityLevel.BASIC][
+                : hl_config["basic_capability_count"]
+            ]
+        ]
     )
     for prefix, area in matched_profile_areas:
         label = friendly_capability_label(area)
@@ -218,11 +243,13 @@ def build_fit_highlights(record: dict, details_text: str, profile: Optional[dict
     if location_signal and int(location_signal.get("value", 0) or 0) > 0:
         label = location_signal["label"]
         if not label:
-            raise ValueError(f"assess_location_preference returned signal with empty label: {location_signal!r}")
+            raise ValueError(
+                f"assess_location_preference returned signal with empty label: {location_signal!r}"
+            )
         highlights.append(label)
 
     highlights.extend(competitive_fit_highlights(record, active_profile))
-    return dedupe_preserve_order(highlights)[:hl_config["max_highlights"]]
+    return dedupe_preserve_order(highlights)[: hl_config["max_highlights"]]
 
 
 def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -232,9 +259,15 @@ def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -
         adjustment = int(signal.get("adjustment", 0) or 0)
         if adjustment == 0:
             continue
-        prefix = hl_labels["competitive_signal_aligns"] if adjustment > 0 else hl_labels["competitive_signal_elsewhere"]
+        prefix = (
+            hl_labels["competitive_signal_aligns"]
+            if adjustment > 0
+            else hl_labels["competitive_signal_elsewhere"]
+        )
         entries.append({"label": f"{prefix}: {signal[SIGNAL_LABEL_KEY]}", "value": adjustment})
-    entries.sort(key=lambda item: (abs(int(item.get("value", 0))), item.get("label", "")), reverse=True)
+    entries.sort(
+        key=lambda item: (abs(int(item.get("value", 0))), item.get("label", "")), reverse=True
+    )
     return entries[:2]
 
 
@@ -250,60 +283,113 @@ def build_core_fit_breakdown(
     title_match_labels = load_ui_labels().get("title_match_labels", {})
     entries: List[dict] = []
     if title_family == "primary" or (not title_family and title_reason == "OK"):
-        entries.append({
-            "label": title_match_labels["primary_match"],
-            "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"]),
-            "section": "title",
-        })
-    elif title_family == "secondary" or (not title_family and title_reason == TITLE_REASON_POTENTIAL_MATCH):
-        entries.append({
-            "label": title_match_labels["secondary_match"],
-            "value": weighted_points(int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"]),
-            "section": "title",
-        })
+        entries.append(
+            {
+                "label": title_match_labels["primary_match"],
+                "value": weighted_points(
+                    int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"]
+                ),
+                "section": "title",
+            }
+        )
+    elif title_family == "secondary" or (
+        not title_family and title_reason == TITLE_REASON_POTENTIAL_MATCH
+    ):
+        entries.append(
+            {
+                "label": title_match_labels["secondary_match"],
+                "value": weighted_points(
+                    int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"]
+                ),
+                "section": "title",
+            }
+        )
     llm_entry = llm_description_fit_entry(record, active_profile)
-    entries.append({"label": llm_entry["label"], "value": weighted_points(int(llm_entry["value"]), weights["fit"]), "section": "llm_fit"})
+    entries.append(
+        {
+            "label": llm_entry["label"],
+            "value": weighted_points(int(llm_entry["value"]), weights["fit"]),
+            "section": "llm_fit",
+        }
+    )
     entries.extend(requirement_coverage_entries(record))
     if content_reason == "OK":
-        entries.append({"label": "Passed content filters", "value": weighted_points(int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"]), "section": "content"})
+        entries.append(
+            {
+                "label": "Passed content filters",
+                "value": weighted_points(
+                    int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"]
+                ),
+                "section": "content",
+            }
+        )
     if full_description_confidence(record) == "LOW":
-        entries.append({"label": "Description capture incomplete", "value": weighted_points(int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]), weights["fit"]), "section": "content"})
+        entries.append(
+            {
+                "label": "Description capture incomplete",
+                "value": weighted_points(
+                    int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]),
+                    weights["fit"],
+                ),
+                "section": "content",
+            }
+        )
     capability_support_log(record)
     convergence_entry = convergence_bonus_entry(record, active_profile)
     if convergence_entry:
-        entries.append({
-            "label": convergence_entry["label"],
-            "value": weighted_points(int(convergence_entry["value"]), weights["fit"]),
-            "section": "capability",
-        })
+        entries.append(
+            {
+                "label": convergence_entry["label"],
+                "value": weighted_points(int(convergence_entry["value"]), weights["fit"]),
+                "section": "capability",
+            }
+        )
     for item in competitive_signal_breakdown(record, active_profile):
-        entries.append({"label": item["label"], "value": weighted_points(int(item["value"]), weights["fit"]), "section": "other"})
+        entries.append(
+            {
+                "label": item["label"],
+                "value": weighted_points(int(item["value"]), weights["fit"]),
+                "section": "other",
+            }
+        )
     return entries
 
 
-def build_preference_breakdown(record: dict, scoring_rules: dict, weights: dict, active_profile: dict) -> List[dict]:
+def build_preference_breakdown(
+    record: dict, scoring_rules: dict, weights: dict, active_profile: dict
+) -> List[dict]:
     entries: List[dict] = []
     location_item = assess_location_preference(record, active_profile)
     if location_item:
-        entries.append({
-            "label": location_item["label"],
-            "value": weighted_points(int(location_item["value"]), weights["location"]),
-            "section": "location",
-        })
+        entries.append(
+            {
+                "label": location_item["label"],
+                "value": weighted_points(int(location_item["value"]), weights["location"]),
+                "section": "location",
+            }
+        )
     else:
         entries.append({"label": "Location: no preference set", "value": 0, "section": "location"})
     salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
     if salary_score > 0:
         entries.append({"label": "Salary/rate signal", "value": salary_score, "section": "salary"})
     elif salary_score < 0:
-        entries.append({"label": "Salary/rate below target", "value": salary_score, "section": "salary"})
+        entries.append(
+            {"label": "Salary/rate below target", "value": salary_score, "section": "salary"}
+        )
     else:
-        no_salary_label = load_ui_labels().get("score_gap_labels", {}).get("no_comparable_salary_rate", "No salary info found")
+        no_salary_label = (
+            load_ui_labels()
+            .get("score_gap_labels", {})
+            .get("no_comparable_salary_rate", "No salary info found")
+        )
         entries.append({"label": no_salary_label, "value": 0, "section": "salary"})
     return entries
 
 
-def build_freshness_breakdown(scoring_rules: dict, weights: dict, posted_age_days: Optional[float]) -> List[dict]:
+def build_freshness_breakdown(
+    scoring_rules: dict, weights: dict, posted_age_days: Optional[float]
+) -> List[dict]:
     entries: List[dict] = []
     if posted_age_days is None:
         return entries
@@ -311,7 +397,12 @@ def build_freshness_breakdown(scoring_rules: dict, weights: dict, posted_age_day
     freshness_rules = scoring_rules["freshness"]
     buckets = freshness_rules["buckets"]
     bucket_order = freshness_rules["bucket_order"]
-    if not isinstance(buckets, dict) or not buckets or not isinstance(bucket_order, list) or not bucket_order:
+    if (
+        not isinstance(buckets, dict)
+        or not buckets
+        or not isinstance(bucket_order, list)
+        or not bucket_order
+    ):
         raise ValueError("freshness buckets are required in scoring_rules")
 
     for bucket_key in bucket_order:
@@ -320,28 +411,76 @@ def build_freshness_breakdown(scoring_rules: dict, weights: dict, posted_age_day
         if not isinstance(bucket, dict):
             raise ValueError(f"Invalid freshness bucket: {bucket_key}")
         if posted_age_days <= float(bucket["max_days"]):
-            entries.append({
-                "label": str(bucket["label"]),
-                "value": weighted_points(int(freshness_rules[lookup_key]), weights["freshness"]),
-                "section": "freshness",
-            })
+            entries.append(
+                {
+                    "label": str(bucket["label"]),
+                    "value": weighted_points(
+                        int(freshness_rules[lookup_key]), weights["freshness"]
+                    ),
+                    "section": "freshness",
+                }
+            )
             break
     return entries
 
 
-def build_convenience_breakdown(record: dict, scoring_rules: dict, weights: dict, posted_age_days: Optional[float]) -> List[dict]:
+def build_convenience_breakdown(
+    record: dict, scoring_rules: dict, weights: dict, posted_age_days: Optional[float]
+) -> List[dict]:
     entries: List[dict] = []
     entries.extend(build_freshness_breakdown(scoring_rules, weights, posted_age_days))
     if viewed_by_user(record) and not record.get("applied"):
-        entries.append({"label": "Already viewed by you", "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"])})
+        entries.append(
+            {
+                "label": "Already viewed by you",
+                "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"]),
+            }
+        )
     return entries
 
 
 def build_risk_breakdown(scoring_rules: dict, hard_block_labels: List[str]) -> List[dict]:
     return [
-        {"label": f"Hard blocker requirement mismatch: {label}", "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"]), "section": "risk"}
+        {
+            "label": f"Hard blocker requirement mismatch: {label}",
+            "value": int(scoring_rules["fit_breakdown"]["hard_block_penalty"]),
+            "section": "risk",
+        }
         for label in hard_block_labels
     ]
+
+
+def _score_bounds(scoring_rules: dict) -> tuple[int, int]:
+    bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
+    if not isinstance(bands, dict) or not bands:
+        raise ValueError("llm_grade_bands are required in scoring_rules")
+
+    floors: list[int] = []
+    ceilings: list[int] = []
+    for grade, band in bands.items():
+        if not isinstance(band, dict) or "floor" not in band or "ceiling" not in band:
+            continue
+        try:
+            floor = int(band["floor"])
+            ceiling = int(band["ceiling"])
+        except Exception as exc:
+            raise ValueError(f"Invalid grade band bounds for {grade}") from exc
+        if floor < 0 or ceiling < floor:
+            raise ValueError(
+                f"Invalid grade band range for {grade}: floor={floor}, ceiling={ceiling}"
+            )
+        floors.append(floor)
+        ceilings.append(ceiling)
+
+    if not floors or not ceilings:
+        raise ValueError("llm_grade_bands must define grade entries with floor and ceiling values")
+
+    return min(floors), max(ceilings)
+
+
+def _clamp_score(score: int, scoring_rules: dict) -> int:
+    minimum_score, maximum_score = _score_bounds(scoring_rules)
+    return max(min(score, maximum_score), minimum_score)
 
 
 def _grade_band_adjustment(grade: str, raw: int, bands: dict) -> Optional[dict]:
@@ -354,8 +493,11 @@ def _grade_band_adjustment(grade: str, raw: int, bands: dict) -> Optional[dict]:
     band = bands.get(grade)
     if not isinstance(band, dict):
         return None
-    floor = int(band.get("floor") or 0)
-    ceiling = int(band.get("ceiling") or 100)
+    try:
+        floor = int(band["floor"])
+        ceiling = int(band["ceiling"])
+    except Exception as exc:
+        raise ValueError(f"Invalid grade band bounds for {grade}") from exc
     if raw > ceiling:
         return {"label": f"Grade band ceiling ({grade} ≤ {ceiling})", "value": ceiling - raw}
     if raw < floor:
@@ -375,7 +517,11 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         )
     title_reason = str(record.get("title_reason") or "")
     content_reason = str(record.get("content_reason") or "")
-    title_metadata = record.get("title_match_metadata") if isinstance(record.get("title_match_metadata"), dict) else {}
+    title_metadata = (
+        record.get("title_match_metadata")
+        if isinstance(record.get("title_match_metadata"), dict)
+        else {}
+    )
     posted_age_days = current_posted_age_days(record)
     active_profile = profile or load_profile()
     weights = get_preference_weights(active_profile)
@@ -387,13 +533,21 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
 
     # Build non-hard-block entries first so the band clamp does not interact with hard block penalties.
     non_hard_block = (
-        build_core_fit_breakdown(record, scoring_rules, weights, title_family, title_reason, content_reason, active_profile)
+        build_core_fit_breakdown(
+            record,
+            scoring_rules,
+            weights,
+            title_family,
+            title_reason,
+            content_reason,
+            active_profile,
+        )
         + build_preference_breakdown(record, scoring_rules, weights, active_profile)
         + build_convenience_breakdown(record, scoring_rules, weights, posted_age_days)
     )
 
     # Apply grade band clamping: enforce floor and ceiling per LLM grade.
-    # Hard block penalties (-100 each) are applied after this step and override the floor.
+    # Hard block penalties are applied after this step and can override the floor.
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     grade_bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
     raw_non_hard_block = sum(e["value"] for e in non_hard_block)
@@ -411,7 +565,9 @@ def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
 
 def fit_score(record: dict, profile: Optional[dict] = None) -> int:
     score = sum(item["value"] for item in fit_score_breakdown(record, profile))
-    return max(min(score, 100), 0)
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    return _clamp_score(score, scoring_rules)
 
 
 def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -431,7 +587,11 @@ def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> 
         )
     title_reason = str(record.get("title_reason") or "")
     content_reason = str(record.get("content_reason") or "")
-    title_metadata = record.get("title_match_metadata") if isinstance(record.get("title_match_metadata"), dict) else {}
+    title_metadata = (
+        record.get("title_match_metadata")
+        if isinstance(record.get("title_match_metadata"), dict)
+        else {}
+    )
     active_profile = profile or load_profile()
     weights = get_preference_weights(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
@@ -440,10 +600,9 @@ def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> 
         title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
     title_family = str(title_metadata.get("match_family") or "").strip().lower()
 
-    non_hard_block = (
-        build_core_fit_breakdown(record, scoring_rules, weights, title_family, title_reason, content_reason, active_profile)
-        + build_preference_breakdown(record, scoring_rules, weights, active_profile)
-    )
+    non_hard_block = build_core_fit_breakdown(
+        record, scoring_rules, weights, title_family, title_reason, content_reason, active_profile
+    ) + build_preference_breakdown(record, scoring_rules, weights, active_profile)
     grade = str(record.get("llm_fit_grade") or "").strip().upper()
     grade_bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
     raw_non_hard_block = sum(e["value"] for e in non_hard_block)
@@ -455,27 +614,42 @@ def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> 
 
 def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
     """Frozen score — excludes freshness and viewed status. Stored on the record at scrape time."""
-    return max(min(sum(item["value"] for item in fit_score_breakdown_frozen(record, profile)), 100), 0)
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    return _clamp_score(
+        sum(item["value"] for item in fit_score_breakdown_frozen(record, profile)), scoring_rules
+    )
 
 
-def fit_score_and_breakdown_displayed(record: dict, profile: Optional[dict] = None) -> tuple[int, List[dict]]:
+def fit_score_and_breakdown_displayed(
+    record: dict, profile: Optional[dict] = None
+) -> tuple[int, List[dict]]:
     """Displayed score and full breakdown: frozen base + current freshness + viewed status.
 
     Falls back to full live scoring for records that predate score freezing.
     """
     if RECORD_FIT_SCORE_KEY not in record:
         breakdown = fit_score_breakdown(record, profile)
-        return max(min(sum(e["value"] for e in breakdown), 100), 0), breakdown
+        active_profile = profile or load_profile()
+        scoring_rules = get_scoring_rules(active_profile)
+        return _clamp_score(sum(e["value"] for e in breakdown), scoring_rules), breakdown
     active_profile = profile or load_profile()
     scoring_rules = get_scoring_rules(active_profile)
     weights = get_preference_weights(active_profile)
     posted_age_days = current_posted_age_days(record)
-    live_entries: List[dict] = list(build_freshness_breakdown(scoring_rules, weights, posted_age_days))
+    live_entries: List[dict] = list(
+        build_freshness_breakdown(scoring_rules, weights, posted_age_days)
+    )
     if viewed_by_user(record) and not record.get("applied"):
-        live_entries.append({"label": "Already viewed by you", "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"])})
+        live_entries.append(
+            {
+                "label": "Already viewed by you",
+                "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"]),
+            }
+        )
     frozen_score = int(record[RECORD_FIT_SCORE_KEY])
     frozen_breakdown = list(record.get(RECORD_FIT_SCORE_BREAKDOWN_KEY) or [])
-    total = max(min(frozen_score + sum(e["value"] for e in live_entries), 100), 0)
+    total = _clamp_score(frozen_score + sum(e["value"] for e in live_entries), scoring_rules)
     return total, frozen_breakdown + live_entries
 
 

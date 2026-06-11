@@ -1,17 +1,42 @@
 # O*NET occupation taxonomy
 
-This folder stores versioned local reference data generated from `OccupationalListings.zip`.
+Versioned local reference data generated from an O*NET source zip.
 
 Generated files:
 
-- `onet_occupations.json` — O*NET-SOC 2019 occupation codes, titles, normalized titles, and descriptions.
+- `onet_occupations.json` — O*NET-SOC 2019 occupation codes, titles, and descriptions.
 - `onet_alternate_titles.json` — alternate titles mapped to O*NET-SOC 2019 occupations.
 - `onet_index.json` — lookup index keyed by normalized title.
 
-Generate or refresh the files with:
+## Regenerating
+
+Run with either supported O*NET source zip:
 
 ```powershell
-python -m job_hunter_agent.onet_taxonomy_import "C:\path\to\OccupationalListings.zip"
+python -m job_hunter_agent.onet_taxonomy_import "C:\path\to\<source>.zip"
 ```
 
-Do not import the full O*NET taxonomy into SQLite yet. SQLite should only hold runtime/cache decisions in `occupation_title_cache`.
+The format is auto-detected. Output files are identical regardless of source.
+
+## Source options
+
+### Option A — Full O*NET database (recommended)
+
+~19,000 alternate titles. Much better title classification coverage.
+
+1. Go to https://www.onetcenter.org/database.html
+2. Download **Database** → select version → **Text** format → `db_XX_X_text.zip`
+3. Run the importer with that zip.
+
+### Option B — OccupationalListings.zip (limited)
+
+~1,680 alternate titles. Many common job titles (e.g. "Tax Accountant", "Property Manager")
+will not be recognised as far from target roles, causing unnecessary LLM calls.
+
+Use only if the full database is unavailable.
+
+## Notes
+
+- Do not import the taxonomy into SQLite. SQLite holds only runtime cache decisions in `occupation_title_cache`.
+- After regenerating, restart the server — the index is loaded once at startup via `lru_cache`.
+- The current files were generated from the OccupationalListings format (limited). Regenerate with the full database to fix coverage gaps.

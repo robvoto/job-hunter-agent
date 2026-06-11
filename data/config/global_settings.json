@@ -398,7 +398,7 @@
       "rejection_blocker_suggestions_max_items": 6,
       "rejection_blocker_suggestions_max_words": 6
     },
-    "max_llm_chars": 3000
+    "max_llm_chars": 5000
   },
   "review_settings": {
     "max_examples_per_skill": 3,

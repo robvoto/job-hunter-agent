@@ -9,6 +9,7 @@ Design contract:
 These tests do NOT rely on the DB being seeded — they pass scoring_rules from the JSON file
 directly through the profile so the bands are always present.
 """
+
 import json
 import pytest
 
@@ -46,6 +47,7 @@ def _band(grade: str) -> dict:
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _score(record: dict, profile: dict | None = None) -> int:
     return fit_scoring.fit_score(record, profile or _profile())
@@ -90,6 +92,7 @@ def test_strong_with_supporting_evidence_reaches_upper_strong_band():
 
 # ── Scenario 2: STRONG LLM + weak title + missing preferences ─────────────────
 
+
 def test_strong_with_weak_signals_floors_at_strong_minimum():
     """STRONG + no title match + no content + no preferences → floors at STRONG band minimum."""
     band = _band("STRONG")
@@ -120,6 +123,7 @@ def test_strong_grade_cannot_produce_95_without_evidence():
 
 
 # ── Scenario 3: SOLID LLM + good supporting signals ──────────────────────────
+
 
 def test_solid_with_good_signals_stays_in_solid_band():
     """SOLID + good supporting signals must stay within the SOLID band ceiling."""
@@ -153,10 +157,13 @@ def test_solid_with_weak_signals_floors_at_solid_minimum():
         "llm_fit_grade": "SOLID",
     }
     score = _score(record)
-    assert score == band["floor"], f"SOLID + minimal signals should floor at {band['floor']}, got {score}"
+    assert score == band["floor"], (
+        f"SOLID + minimal signals should floor at {band['floor']}, got {score}"
+    )
 
 
 # ── Scenario 4: MISMATCH cannot be rescued by small bonuses ───────────────────
+
 
 def test_mismatch_capped_regardless_of_title_and_content():
     """MISMATCH grade must stay ≤ 7 even with clean title and content OK."""
@@ -171,9 +178,7 @@ def test_mismatch_capped_regardless_of_title_and_content():
         "contextual_capability_matches": [],
     }
     score = _score(record)
-    assert score <= band["ceiling"], (
-        f"MISMATCH must be capped at {band['ceiling']}, got {score}"
-    )
+    assert score <= band["ceiling"], f"MISMATCH must be capped at {band['ceiling']}, got {score}"
 
 
 def test_poor_capped_below_solid():
@@ -193,12 +198,11 @@ def test_poor_capped_below_solid():
     assert score <= poor_band["ceiling"], (
         f"POOR must be capped at {poor_band['ceiling']}, got {score}"
     )
-    assert score < solid_floor, (
-        f"POOR must not reach SOLID territory ({solid_floor}+), got {score}"
-    )
+    assert score < solid_floor, f"POOR must not reach SOLID territory ({solid_floor}+), got {score}"
 
 
 # ── Scenario 5: Hard blocker forces near-zero ─────────────────────────────────
+
 
 def test_hard_blocker_overrides_strong_grade_to_near_zero():
     """A hard blocker (-100) must override the STRONG band floor and push score to near-zero."""
@@ -213,10 +217,12 @@ def test_hard_blocker_overrides_strong_grade_to_near_zero():
         "must_not_require_skills": ["NV1 security clearance"],
         "contextual_capability_matches": [],
     }
-    profile = _profile({
-        "candidate_capabilities": [],
-        "must_not_require_skills": ["NV1 security clearance"],
-    })
+    profile = _profile(
+        {
+            "candidate_capabilities": [],
+            "must_not_require_skills": ["NV1 security clearance"],
+        }
+    )
     score = _score(record, profile)
     assert score <= 10, f"Hard blocker + STRONG must score near-zero, got {score}"
 
@@ -241,6 +247,7 @@ def test_hard_blocker_overrides_any_grade():
 
 
 # ── Band transparency: clamping is visible in the breakdown ───────────────────
+
 
 def test_band_ceiling_adjustment_appears_in_breakdown_when_clamped():
     """When supporting signals push above the ceiling, a breakdown entry must appear."""
@@ -277,6 +284,7 @@ def test_band_floor_adjustment_appears_in_breakdown_when_lifted():
 
 # ── Grade bands are non-overlapping and cover 0-100 ──────────────────────────
 
+
 def test_grade_bands_are_non_overlapping_and_complete():
     """The grade bands must be non-overlapping and cover 0-100 without gaps."""
     rules = _scoring_rules()
@@ -297,3 +305,15 @@ def test_grade_bands_are_non_overlapping_and_complete():
         prev_ceiling = ceiling
 
     assert prev_ceiling == 100, f"Highest band ceiling must be 100, got {prev_ceiling}"
+
+
+def test_score_bounds_are_derived_from_grade_bands():
+    bounds = fit_scoring._score_bounds(
+        {
+            "llm_grade_bands": {
+                "LOW": {"floor": 3, "ceiling": 19},
+                "HIGH": {"floor": 20, "ceiling": 88},
+            }
+        }
+    )
+    assert bounds == (3, 88)

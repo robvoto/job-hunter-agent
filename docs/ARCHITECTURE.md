@@ -374,3 +374,5 @@ The current fit review has two layers. The LLM returns a holistic decision/grade
 Ongoing architecture direction: mandatory job requirements should become the main scoring spine. Candidate capabilities should be used as evidence to prove those requirements. The current implementation is not fully requirement-coverage-driven yet.
 
 O*NET is used as a conservative occupation-family helper. It uses onboarding-generated target_occupation_queries to derive target occupation codes. Uncertain O*NET results continue to detail/LLM review rather than rejecting the job.
+
+Taxonomy matching must not discard useful embedded phrase evidence just because one phrase maps to multiple O*NET codes. If all candidate occupation codes for an embedded phrase are outside the candidate target occupation set, the title may be classified as `far`. If candidate codes are mixed, missing, or target context is unavailable, the result remains `uncertain`. See `docs/OCCUPATION_TAXONOMY_RATIONALE.md`.

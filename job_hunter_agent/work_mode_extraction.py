@@ -89,6 +89,18 @@ def _lookup_label(text: str) -> Optional[str]:
     return _LABEL_TO_CANONICAL.get(_normalise_label(text))
 
 
+def _extract_parenthetical_mode(line: str) -> Optional[str]:
+    """Return a canonical mode if the line contains a parenthesised work mode token.
+
+    Matches patterns like 'Sydney NSW (Hybrid)' or 'Melbourne VIC (Remote)'.
+    The parenthetical must be the last token on the line (how SEEK renders it).
+    """
+    m = re.search(r"\(([^)]+)\)\s*$", line)
+    if not m:
+        return None
+    return _lookup_label(m.group(1))
+
+
 @lru_cache(maxsize=1)
 def _work_mode_display_labels() -> dict[str, str]:
     labels = load_ui_labels().get("work_mode_labels", {})
@@ -211,7 +223,7 @@ def extract_from_seek_card(card_text: str, filter_state: Optional[dict] = None) 
     for line in lines[:15]:
         if len(line) > 80:
             break
-        mode = _lookup_label(line)
+        mode = _lookup_label(line) or _extract_parenthetical_mode(line)
         if mode:
             result = _build_result(mode, "seek_card", line, False)
             _log_result("seek", result)
@@ -298,7 +310,7 @@ def extract_from_seek_detail(redux_payload: Any, visible_text: str) -> dict:
     for line in lines[:20]:
         if len(line) > 80:
             break
-        mode = _lookup_label(line)
+        mode = _lookup_label(line) or _extract_parenthetical_mode(line)
         if mode:
             result = _build_result(mode, "seek_detail_visible", line, False)
             _log_result("seek", result)
@@ -361,10 +373,11 @@ def extract_from_linkedin(raw_fields: dict) -> dict:
             _log_result("linkedin", result)
             return result
 
-    # Location exactly "Remote" is a reliable per-job signal on LinkedIn.
+    # Location "Remote" (exact) or a parenthetical work mode e.g. "Sydney NSW (Hybrid)".
     location = str(fields.get("location") or "").strip()
-    if location.lower() == "remote":
-        result = _build_result(WORK_MODE_REMOTE, "linkedin_structured", f"location={location}", False)
+    location_mode = _lookup_label(location) or _extract_parenthetical_mode(location)
+    if location_mode:
+        result = _build_result(location_mode, "linkedin_structured", f"location={location}", False)
         _log_result("linkedin", result)
         return result
 
