@@ -773,6 +773,11 @@ def test_user_settings_schedule_payload_is_sanitized_and_exposed():
         "loop_sleep_seconds": 60,
     }
 
+    defaulted = server_helpers.SettingsHandler._sanitize_user_settings_payload({})
+    assert defaulted["workspace"] == {
+        "minimum_score": 30,
+    }
+
     public_payload = server_helpers.SettingsHandler._public_user_settings_payload(
         {
             "workspace": {

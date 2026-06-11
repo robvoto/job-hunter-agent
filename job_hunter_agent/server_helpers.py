@@ -1183,7 +1183,19 @@ class SettingsHandler:
         schedule_payload = payload.get(KEY_SCHEDULE) if isinstance(payload, dict) else None
         sanitized = {
             KEY_WORKSPACE: {
-                "minimum_score": max(0, min(int(workspace.get("minimum_score", 55) or 55), 100)),
+                "minimum_score": max(
+                    0,
+                    min(
+                        int(
+                            workspace.get(
+                                "minimum_score",
+                                DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"],
+                            )
+                            or DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"]
+                        ),
+                        100,
+                    ),
+                ),
             },
             KEY_TELEGRAM: {
                 "enabled": bool(telegram.get("enabled", False)),

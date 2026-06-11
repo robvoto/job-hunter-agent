@@ -1,7 +1,7 @@
 {
   "workspace_url": "http://127.0.0.1:8765/workspace",
   "workspace": {
-    "minimum_score": 55
+    "minimum_score": 30
   },
   "schedule": {
     "daily_time_local": "08:30",
