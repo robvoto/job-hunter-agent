@@ -55,6 +55,10 @@ angular-log-prj-7cc59b5b73a0.json
 CLAUDE.md
 docs/archived-skills/
 
+# ---- Desktop installer build output ----
+installer/dist/
+data/*.exe
+
 # ---- Agent local adapters / scratch ----
 /_*.py
 /_*.ps1

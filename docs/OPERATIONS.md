@@ -64,6 +64,78 @@ python -m job_hunter_agent.agent_runner --loop
 
 ---
 
+### Desktop Launcher (Windows)
+
+System tray app — starts the FastAPI server locally and opens the browser automatically.
+
+#### Install (recommended)
+
+Run the installer — no admin rights required, installs per-user:
+
+```
+installer\dist\JobHunterAgent-Setup.exe
+```
+
+Post-install the setup script creates a `.venv`, installs all dependencies, and installs
+Playwright Chromium automatically (~3 min on first install).
+
+After install: **Start Menu → Job Hunter Agent** or double-click the desktop shortcut.
+
+Uninstall: **Start Menu → Job Hunter Agent → Uninstall Job Hunter Agent**
+(or Settings → Apps).
+
+Install layout:
+
+| Location | Contents |
+| -------- | -------- |
+| `%LOCALAPPDATA%\Programs\JobHunterAgent\` | app code, templates, seed data, `.venv` |
+| `%APPDATA%\JobHunterAgent\data\` | user DB, knowledge, config, runtime (`JOB_HUNTER_DATA_DIR`) |
+| `%APPDATA%\JobHunterAgent\output\` | logs and artefacts (`JOB_HUNTER_OUTPUT_DIR`) |
+| Start Menu | Launch + Uninstall shortcuts |
+
+#### Run from repo (development only)
+
+```powershell
+.venv\Scripts\pythonw.exe desktop\launcher.py
+```
+
+Data is written to `%APPDATA%\JobHunterAgent\` in both modes.
+
+Behaviour:
+
+- Tray icon shows in the system tray; left-click or double-click to open the app.
+- Right-click → Quit stops the server and exits.
+- A single-instance mutex prevents double-launches.
+- `JOB_HUNTER_PORT` controls the port (default `8765`).
+- On first launch the server cold-starts in up to 60 s; subsequent starts are faster.
+- If Playwright Chromium is missing a notification appears on launch; SEEK scraping will
+  fail until it is installed.
+
+#### Build the installer (developer task)
+
+Requires [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`).
+
+```powershell
+# From repo root
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\setup.iss
+# Output: installer\dist\JobHunterAgent-Setup.exe
+```
+
+Regenerate the tray/shortcut icon from the PNG source (run once after icon changes):
+
+```powershell
+.venv\Scripts\python.exe -c "
+from PIL import Image
+import numpy as np
+img = Image.open('templates/static/assets/job_hunter_img.png').convert('RGBA')
+d = np.array(img); m = (d[:,:,0]>230)&(d[:,:,1]>230)&(d[:,:,2]>230); d[m,3]=0
+Image.fromarray(d).save('installer/job_hunter_agent.ico', format='ICO',
+    sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
+"
+```
+
+---
+
 ### FastAPI Runtime
 
 Local operational UI.

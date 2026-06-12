@@ -1,4 +1,4 @@
-﻿"""FastAPI ASGI application for the local workspace and settings server.
+"""FastAPI ASGI application for the local workspace and settings server.
 
 Route handlers live under ``job_hunter_agent.routes``; this module wires the app,
 exception handlers, and CORS-style middleware.
@@ -24,10 +24,10 @@ import logging
 import logging.config
 import os
 import sys
-
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import FastAPI, Request
@@ -45,11 +45,11 @@ from job_hunter_agent.config import (
     JOB_HUNTER_BASE_URL,
     LOGIN_PATH,
     LOGOUT_PATH,
-    ONBOARDING_PATH,
     ONBOARDING_DEBUG_ALIAS_PATH,
+    ONBOARDING_PATH,
 )
-from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
+from job_hunter_agent.user_context import set_user_id
 
 _logger = logging.getLogger(__name__)
 
@@ -91,6 +91,7 @@ def _cors_origin(request: Request) -> str | None:
     )
     return None
 
+
 class _LineLoggingStream:
     def __init__(self, logger: logging.Logger, level: int) -> None:
         self._logger = logger
@@ -117,10 +118,12 @@ class _LineLoggingStream:
         return False
 
 
-_SUPPRESSED_ACCESS_PATHS = frozenset([
-    "/api/run-status",
-    "/api/run-status/",
-])
+_SUPPRESSED_ACCESS_PATHS = frozenset(
+    [
+        "/api/run-status",
+        "/api/run-status/",
+    ]
+)
 
 
 class _AccessLogFilter(logging.Filter):
@@ -131,9 +134,7 @@ class _AccessLogFilter(logging.Filter):
         return not any(path in msg for path in _SUPPRESSED_ACCESS_PATHS)
 
 
-_CONSOLE_SUPPRESSED_FRAGMENTS = (
-    "[CAPABILITY_SCORING][BELOW_THRESHOLD]",
-)
+_CONSOLE_SUPPRESSED_FRAGMENTS = ("[CAPABILITY_SCORING][BELOW_THRESHOLD]",)
 
 
 class _ConsoleNoiseFilter(logging.Filter):
@@ -209,8 +210,11 @@ def _configure_server_logging() -> None:
     # Console-only noise filter — applied to the handler, not the logger,
     # so the file handler still receives everything at INFO.
     console_handler = next(
-        (h for h in logging.getLogger().handlers if isinstance(h, logging.StreamHandler)
-         and not isinstance(h, logging.FileHandler)),
+        (
+            h
+            for h in logging.getLogger().handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ),
         None,
     )
     if console_handler:
@@ -234,10 +238,10 @@ def _bootstrap_runtime_knowledge() -> None:
 
 
 def create_app() -> FastAPI:
+    _bootstrap_runtime_knowledge()
+
     from job_hunter_agent.routes import register_routes
     from job_hunter_agent.routes.responses import json_response
-
-    _bootstrap_runtime_knowledge()
 
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
     app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc")
@@ -328,7 +332,9 @@ if __name__ == "__main__":
 
     import uvicorn
 
-    from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT
+    from job_hunter_agent.config import SERVER_HOST as HOST
+    from job_hunter_agent.config import SERVER_PORT as PORT
+
     parser = argparse.ArgumentParser(description="Job Hunter Agent local server")
     parser.add_argument(
         "--debug",
@@ -363,7 +369,9 @@ if __name__ == "__main__":
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")
     print(f"Workspace:   http://{HOST}:{PORT}/")
     print(f"Settings:    http://{HOST}:{PORT}/settings")
-    print(f"Onboarding:  http://{HOST}:{PORT}{ONBOARDING_PATH} (alias {ONBOARDING_DEBUG_ALIAS_PATH})")
+    print(
+        f"Onboarding:  http://{HOST}:{PORT}{ONBOARDING_PATH} (alias {ONBOARDING_DEBUG_ALIAS_PATH})"
+    )
     print(f"Docs API:    http://{HOST}:{PORT}/docs")
     print(f"Swagger UI:  http://{HOST}:{PORT}/swagger-ui")
 
@@ -375,4 +383,3 @@ if __name__ == "__main__":
         access_log=srv.DEBUG_MODE,
         log_config=None,
     )
-
