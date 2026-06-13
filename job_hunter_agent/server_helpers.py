@@ -20,12 +20,6 @@ from job_hunter_agent.config import (
     ALLOWED_DOC_REL_PATHS,
     DEBUG_MODE,
 )
-from job_hunter_agent.config import (
-    SERVER_HOST as HOST,
-)
-from job_hunter_agent.config import (
-    SERVER_PORT as PORT,
-)
 from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     KEY_CAPABILITY_ALIAS_LIMIT,
@@ -50,22 +44,14 @@ from job_hunter_agent.io_utils import (
     clear_review_data,
     clear_run_stats,
     clear_user_settings,
-    clear_workspace_pool,
-    load_job_history,
+    clear_workspace_pool, 
     load_run_stats,
     load_ui_labels,
     write_run_stats,
 )
 from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
 from job_hunter_agent.locations import resolve_location
-from job_hunter_agent.notifiers.telegram_notifier import (
-    build_telegram_connect_link,
-    send_telegram_notification,
-    sync_telegram_subscribers,
-)
 from job_hunter_agent.paths import (
-    DATA_DIR,
     USERS_DIR,
     get_workspace_results_path,
 )
@@ -82,7 +68,6 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CV_MAX_PAGES,
     KEY_ENGAGEMENT_TYPE,
-    KEY_EVIDENCE_TIERS,
     KEY_KEYWORDS,
     KEY_LOCATIONS,
     KEY_LOOKBACK_YEARS,
@@ -110,10 +95,6 @@ from job_hunter_agent.profile_store import (
     normalize_onboarding_settings,
     normalize_search_settings,
     normalize_work_mode_preferences,
-    patch_profile,
-    profile_exists,
-    profile_review_status,
-    require_profile_ready_for_review,
     save_profile,
 )
 from job_hunter_agent.run_control import (
@@ -136,7 +117,6 @@ from job_hunter_agent.user_settings import (
     load_agent_state,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
-from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
 
 _run_in_progress = False
 _run_state_lock = threading.Lock()

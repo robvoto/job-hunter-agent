@@ -59,6 +59,9 @@ docs/archived-skills/
 installer/dist/
 data/*.exe
 
+# ---- Tests must not live inside the package directory ----
+job_hunter_agent/test_*.py
+
 # ---- Agent local adapters / scratch ----
 /_*.py
 /_*.ps1
