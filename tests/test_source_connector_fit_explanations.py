@@ -1,21 +1,36 @@
-﻿"""Tests for source connector fit explanations."""
+"""Tests for source connector fit explanations."""
 
-from datetime import datetime
 import json
-import pytest
+from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
-from job_hunter_agent import fit_scoring, workspace_service
-from job_hunter_agent import capability_matching, workspace_renderer, signal_detection, source_connector
-from job_hunter_agent import role_analysis, source_learning, description_trust
-from job_hunter_agent.scrapers.seek import build_seek_search_targets
+import pytest
+
+from job_hunter_agent import (
+    capability_matching,
+    description_trust,
+    fit_scoring,
+    role_analysis,
+    signal_detection,
+    source_connector,
+    source_learning,
+    workspace_renderer,
+    workspace_service,
+)
+from job_hunter_agent.paths import SCORING_RULES_PATH
+from job_hunter_agent.profile_store import (
+    KEY_EVIDENCE_TIERS,
+    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+)
 from job_hunter_agent.record_schema import (
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
     DETAILS_STATUS_OK,
     RECORD_DETAILS_STATUS_KEY,
-    RECORD_FIT_LABEL_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_LABEL_KEY,
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
@@ -26,14 +41,13 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
 )
-from job_hunter_agent.profile_store import (
-    KEY_EVIDENCE_TIERS,
-    KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
-    KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
-    KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
+from job_hunter_agent.scrapers.seek import build_seek_search_targets
+from job_hunter_agent.signal_schema import (
+    SIGNAL_ADJUSTMENT_KEY,
+    SIGNAL_ALIGNMENT_KEY,
+    SIGNAL_LABEL_KEY,
+    SIGNAL_RISK_LABEL_KEY,
 )
-from job_hunter_agent.signal_schema import SIGNAL_ADJUSTMENT_KEY, SIGNAL_ALIGNMENT_KEY, SIGNAL_LABEL_KEY, SIGNAL_RISK_LABEL_KEY
-from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.work_mode_extraction import extract_from_text
 
 
@@ -50,6 +64,7 @@ def _test_profile():
         },
         "preference_weights": {},
         "salary_preferences": {},
+        "scoring_rules": json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8")),
     }
 
 
@@ -73,7 +88,11 @@ def _capability_profile():
                 "name": "Primary stakeholder engagement",
                 "level": "strong",
                 "fit": "supporting",
-                "aliases": ["stakeholder engagement", "stakeholder management", "facilitate workshops"],
+                "aliases": [
+                    "stakeholder engagement",
+                    "stakeholder management",
+                    "facilitate workshops",
+                ],
             },
         ],
     }
@@ -162,6 +181,7 @@ def test_infer_posting_channel_returns_fallback_text_evidence():
 
 def test_score_to_match_label_uses_central_match_band_mapping():
     from job_hunter_agent.match_labels import score_to_match_label
+
     assert score_to_match_label(92) == "Strong match"
     assert score_to_match_label(74) == "Good match"
     assert score_to_match_label(61) == "Possible fit"
@@ -207,8 +227,10 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
     assert workspace_renderer.score_filter_option_label(90, profile) == "Top tier only"
     assert workspace_renderer.score_filter_option_label(65, profile) == "Review next or better"
     from job_hunter_agent.match_labels import score_to_match_label
+
     assert score_to_match_label(67, profile["match_levels"]) == "Review next"
     from job_hunter_agent.score_labels import score_to_tone_class
+
     assert score_to_tone_class(67, profile) == "tone-good"
 
 
@@ -297,7 +319,6 @@ def test_seek_search_targets_use_seek_location_code():
     assert parse_qs(urlparse(targets[0]["url"]).query)["where"] == ["NSW"]
 
 
-
 def test_build_ad_learning_signals_does_not_infer_hard_blockers_from_raw_text(monkeypatch):
     monkeypatch.setattr(
         source_learning,
@@ -326,7 +347,9 @@ def test_fit_confidence_does_not_override_trusted_description_calculation():
     }
 
     assert description_trust.full_description_confidence(record) == CONFIDENCE_HIGH
-    assert description_trust.get_trusted_full_description(record).startswith("Business analyst duties.")
+    assert description_trust.get_trusted_full_description(record).startswith(
+        "Business analyst duties."
+    )
     assert description_trust.is_description_trusted(record)
 
 
@@ -380,8 +403,10 @@ def test_render_job_card_does_not_claim_private_sector_by_default():
             "work_type": "Full Time",
             "work_mode": "Hybrid",
             "salary": "N/A",
-            "full_description": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. " * 20,
-            "fit_source_text": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. " * 20,
+            "full_description": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. "
+            * 20,
+            "fit_source_text": "Coordinate delivery planning, stakeholder updates, and standards publication schedules across multiple teams. "
+            * 20,
             "description_source": "jobAdDetails",
             RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
             "fit_highlights": [],
@@ -451,11 +476,19 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
 
 def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
     _registry = lambda: {
-        "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
+        "stakeholder management": {
+            "signal": "stakeholder management",
+            "decision": "use",
+            "original_texts": ["stakeholder management"],
+        },
         "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
         "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
         "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
-        "delivery": {"signal": "delivery", "decision": "evidence_only", "original_texts": ["delivery"]},
+        "delivery": {
+            "signal": "delivery",
+            "decision": "evidence_only",
+            "original_texts": ["delivery"],
+        },
     }
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
@@ -567,7 +600,11 @@ def test_fit_score_requirement_coverage_entries_are_transparency_only():
         _capability_profile(),
     )
 
-    coverage_entries = [item for item in breakdown if "Requirement" in item["label"] and "section" in item and item["section"] == "llm_fit"]
+    coverage_entries = [
+        item
+        for item in breakdown
+        if "Requirement" in item["label"] and "section" in item and item["section"] == "llm_fit"
+    ]
     assert len(coverage_entries) == 2
     assert all(entry["value"] == 0 for entry in coverage_entries)
 
@@ -590,11 +627,30 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
         "soft_risk_reasons": [],
         RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
         "description_source": "jobAdDetails",
-        "full_description": "Business analyst role driving agile delivery and stakeholder engagement. " * 20,
+        "full_description": "Business analyst role driving agile delivery and stakeholder engagement. "
+        * 20,
         "requirement_coverage": [
-            {"requirement": "Agile delivery", "status": "supported", "capability_name": "agile methodologies", "matched_job_text": "agile delivery", "profile_support": []},
-            {"requirement": "Acceptance testing", "status": "supported", "capability_name": "acceptance testing", "matched_job_text": "acceptance criteria", "profile_support": []},
-            {"requirement": "Stakeholder engagement", "status": "supported", "capability_name": "primary stakeholder engagement", "matched_job_text": "stakeholder workshops", "profile_support": []},
+            {
+                "requirement": "Agile delivery",
+                "status": "supported",
+                "capability_name": "agile methodologies",
+                "matched_job_text": "agile delivery",
+                "profile_support": [],
+            },
+            {
+                "requirement": "Acceptance testing",
+                "status": "supported",
+                "capability_name": "acceptance testing",
+                "matched_job_text": "acceptance criteria",
+                "profile_support": [],
+            },
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "supported",
+                "capability_name": "primary stakeholder engagement",
+                "matched_job_text": "stakeholder workshops",
+                "profile_support": [],
+            },
         ],
     }
 
@@ -629,7 +685,13 @@ def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypa
         "missing_profile_support": [],
         "soft_risk_reasons": [],
         "requirement_coverage": [
-            {"requirement": "Platform engineering", "status": "supported", "capability_name": "platform engineering", "matched_job_text": "platform work", "profile_support": []},
+            {
+                "requirement": "Platform engineering",
+                "status": "supported",
+                "capability_name": "platform engineering",
+                "matched_job_text": "platform work",
+                "profile_support": [],
+            },
         ],
     }
 
@@ -748,7 +810,11 @@ def test_job_card_shows_negative_score_factors_without_debug_mode():
 
 def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
     _registry = lambda: {
-        "stakeholder management": {"signal": "stakeholder management", "decision": "use", "original_texts": ["stakeholder management"]},
+        "stakeholder management": {
+            "signal": "stakeholder management",
+            "decision": "use",
+            "original_texts": ["stakeholder management"],
+        },
         "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
         "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
         "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
@@ -827,7 +893,8 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
             "work_type": "Full Time",
             "work_mode": "Hybrid",
             "salary": "N/A",
-            "full_description": "Our client is seeking a business analyst. Contact our recruitment team for details. " * 20,
+            "full_description": "Our client is seeking a business analyst. Contact our recruitment team for details. "
+            * 20,
             "fit_highlights": [],
             "job_requirements": [
                 "Strong stakeholder engagement and communication skills",
@@ -836,7 +903,10 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
             "source": "seek",
             "posting_channel_evidence": {
                 "trusted_metadata": [],
-                "weak_text_matches": ["our client", "contact (?:our )?(?:consultant|recruiter|recruitment team)"],
+                "weak_text_matches": [
+                    "our client",
+                    "contact (?:our )?(?:consultant|recruiter|recruitment team)",
+                ],
                 "needs_review": True,
             },
         },
@@ -855,13 +925,14 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
     assert "Strong stakeholder engagement and communication skills" in html
     assert "In profile" in html
     assert "Not in profile" in html
-    assert 'job-requirement-item--confirmed-have' in html
-    assert 'job-requirement-item--confirmed-do-not-have' in html
+    assert "job-requirement-item--confirmed-have" in html
+    assert "job-requirement-item--confirmed-do-not-have" in html
     assert "badge-sector-government" not in html
 
 
 def test_score_to_tone_class_uses_same_bands_as_match_labels():
     from job_hunter_agent.score_labels import score_to_tone_class
+
     assert score_to_tone_class(84) == "tone-good"
     assert score_to_tone_class(69) == "tone-borderline"
     assert score_to_tone_class(54) == "tone-low"
@@ -885,8 +956,12 @@ def test_applied_and_hidden_cards_render_undo_actions():
         "source": "seek",
     }
 
-    applied_html = workspace_renderer.render_job_card({**base_record, "applied": True}, _test_profile())
-    hidden_html = workspace_renderer.render_job_card({**base_record, "hidden": True}, _test_profile())
+    applied_html = workspace_renderer.render_job_card(
+        {**base_record, "applied": True}, _test_profile()
+    )
+    hidden_html = workspace_renderer.render_job_card(
+        {**base_record, "hidden": True}, _test_profile()
+    )
 
     assert 'data-review-action="unapply"' in applied_html
     assert "Undo Applied" in applied_html
@@ -968,7 +1043,10 @@ def test_candidate_application_history_renders_warning_badges_without_changing_s
 
     assert 'data-fit-score="' in plain_html
     assert 'data-fit-score="' in history_html
-    assert plain_html.split('data-fit-score="', 1)[1].split('"', 1)[0] == history_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
+    assert (
+        plain_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
+        == history_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
+    )
     assert "Rejected before" in history_html
     assert "Needs review" in history_html
     assert 'title="Company mismatch needs a manual check."' in history_html
@@ -1192,7 +1270,8 @@ def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
             "work_type": "Full Time",
             "work_mode": "Hybrid",
             "salary": "N/A",
-            "full_description": "Requirements elicitation across multiple client transition projects. " * 40,
+            "full_description": "Requirements elicitation across multiple client transition projects. "
+            * 40,
             "fit_highlights": [],
             "source": "seek",
         },
@@ -1232,6 +1311,7 @@ def test_low_confidence_card_shows_single_description_issue_section():
 
 def test_deterministic_review_counts_only_capability_highlights():
     from job_hunter_agent.source_learning import deterministic_review_outcome
+
     assert deterministic_review_outcome(
         {"title_reason": "OK"},
         {},
@@ -1283,6 +1363,7 @@ def test_salary_fit_label_marks_scores_above_target_as_meets():
     }
 
     from job_hunter_agent.score_labels import salary_fit_label
+
     assert salary_fit_label({"salary": "$130k-$145k p.a."}, profile) == "meets"
     assert salary_fit_label({"salary": "$750 per day"}, profile) == "meets"
     assert salary_fit_label({"salary": "$100k p.a."}, profile) == "below"
@@ -1299,6 +1380,7 @@ def test_salary_fit_ignores_non_comparable_hourly_and_monthly_rates():
     }
 
     from job_hunter_agent.preferences import salary_fit_adjustment
+
     assert salary_fit_adjustment({"salary": "$90/hr"}, profile) == 0
     assert salary_fit_adjustment({"salary": "$8,000 per month"}, profile) == 0
     assert salary_fit_adjustment({"salary": "$650 p/d"}, profile) < 0
@@ -1314,9 +1396,11 @@ def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
     }
 
     from job_hunter_agent.preferences import salary_fit_adjustment
+
     assert salary_fit_adjustment({"salary": "$130k package"}, profile) == 0
     assert salary_fit_adjustment({"salary": "$130k incl super"}, profile) == 0
     from job_hunter_agent.score_labels import salary_fit_label
+
     assert salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
 
 
@@ -1337,6 +1421,7 @@ def test_salary_fit_adjustment_can_use_profile_scoring_rule_overrides():
     }
 
     from job_hunter_agent.preferences import salary_fit_adjustment
+
     assert salary_fit_adjustment({"salary": "$130k-$145k p.a."}, profile) == 11
     assert salary_fit_adjustment({"salary": "$110k p.a."}, profile) == -2
 
@@ -1353,17 +1438,30 @@ def test_profile_recency_multiplier_uses_tiered_evidence_dates():
         },
     }
 
-    from job_hunter_agent.scoring_utils import find_profile_experience_year_in_text, profile_recency_multiplier
-    assert find_profile_experience_year_in_text(
-        profile[KEY_EVIDENCE_TIERS][KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT],
-        ["delivery leadership"],
-    ) == current_year
+    from job_hunter_agent.scoring_utils import (
+        find_profile_experience_year_in_text,
+        profile_recency_multiplier,
+    )
+
+    assert (
+        find_profile_experience_year_in_text(
+            profile[KEY_EVIDENCE_TIERS][KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT],
+            ["delivery leadership"],
+        )
+        == current_year
+    )
     assert profile_recency_multiplier(profile, ["delivery leadership"]) == 1.0
 
 
 def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypatch):
-    monkeypatch.setattr(workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(workspace_service, "is_workspace_eligible", lambda record, profile=None, workspace_min_score=None: True)
+    monkeypatch.setattr(
+        workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"])
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "is_workspace_eligible",
+        lambda record, profile=None, workspace_min_score=None: True,
+    )
 
     records = [
         {"job_key": "fresh-low", "score": 55, "posted_age_days": 0.1, "times_viewed": 0},
@@ -1388,12 +1486,30 @@ def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypa
 
 
 def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(monkeypatch):
-    monkeypatch.setattr(workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"]))
-    monkeypatch.setattr(workspace_service, "is_workspace_eligible", lambda record, profile=None, workspace_min_score=None: int(record["score"]) >= 55)
+    monkeypatch.setattr(
+        workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"])
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "is_workspace_eligible",
+        lambda record, profile=None, workspace_min_score=None: int(record["score"]) >= 55,
+    )
 
     records = [
-        {"job_key": "fresh-high", "score": 90, "posted_age_days": 0.1, "times_viewed": 0, "decision": "KEEP"},
-        {"job_key": "fresh-low", "score": 40, "posted_age_days": 0.2, "times_viewed": 0, "decision": "KEEP"},
+        {
+            "job_key": "fresh-high",
+            "score": 90,
+            "posted_age_days": 0.1,
+            "times_viewed": 0,
+            "decision": "KEEP",
+        },
+        {
+            "job_key": "fresh-low",
+            "score": 40,
+            "posted_age_days": 0.2,
+            "times_viewed": 0,
+            "decision": "KEEP",
+        },
     ]
     audit_rows = [
         {
@@ -1439,17 +1555,24 @@ def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(m
         "fresh-low",
         "filtered-role",
     ]
-    filtered_record = next(record for record in debug_records["current_records"] if record["job_key"] == "filtered-role")
+    filtered_record = next(
+        record
+        for record in debug_records["current_records"]
+        if record["job_key"] == "filtered-role"
+    )
     assert filtered_record["reject_reason"] == "TITLE_NOT_TARGET"
     assert filtered_record["decision"] == "REJECT"
 
 
 def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
     monkeypatch.setattr(workspace_service, "passes_title_filters", lambda title: (True, "OK"))
-    monkeypatch.setattr(workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"]))
+    monkeypatch.setattr(
+        workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"])
+    )
     monkeypatch.setattr(workspace_service, "get_workspace_minimum_score", lambda: 60)
 
     from job_hunter_agent.workspace_service import is_workspace_eligible
+
     assert is_workspace_eligible({"title": "Business Analyst", "score": 60}) is True
     assert is_workspace_eligible({"title": "Business Analyst", "score": 59}) is False
 
@@ -1619,8 +1742,14 @@ def test_render_job_card_shows_llm_review_section_in_debug_mode():
     assert "Time taken" in html
     assert "Estimated LLM cost" in html
     assert "Debug reason" in html
-    assert "Possible capability match — mentioned in the job, but not strong enough to affect the score." in html
-    assert "Possible capability match — mentioned in the job, but not strong enough to affect the score.: +0" not in html
+    assert (
+        "Possible capability match — mentioned in the job, but not strong enough to affect the score."
+        in html
+    )
+    assert (
+        "Possible capability match — mentioned in the job, but not strong enough to affect the score.: +0"
+        not in html
+    )
 
 
 def test_posted_filter_options_show_explicit_day_windows():
@@ -1638,7 +1767,7 @@ def test_posted_filter_options_show_explicit_day_windows():
     assert "Last 3 days (2)" in options_html
     assert "Last 7 days (3)" in options_html
     assert "Last 14 days (3)" in options_html
-    #assert "Last 30 days (3)" in options_html
+    # assert "Last 30 days (3)" in options_html
 
 
 def test_workspace_renders_requirement_coverage_with_status_classes():
@@ -1654,7 +1783,9 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
             "llm_decision": "KEEP",
             "llm_fit_grade": "SOLID",
             RECORD_FIT_SCORE_KEY: 65,
-            RECORD_FIT_SCORE_BREAKDOWN_KEY: [{"label": "Base fit", "value": 65, "section": "llm_fit"}],
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 65, "section": "llm_fit"}
+            ],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -1709,16 +1840,28 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "SAP certification" in html
     assert "Requirement coverage" in html
     assert "job-req-importance" in html
-    assert "Required" in html   # mandatory label
-    assert "Bonus" in html      # nice_to_have label
+    assert "Required" in html  # mandatory label
+    assert "Bonus" in html  # nice_to_have label
 
 
 def test_freshness_breakdown_uses_managed_bucket_cutoffs():
     scoring_rules = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
     weights = {"freshness": 1.0}
 
-    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02), "Posted within the last 6 hours") == 10
-    assert _breakdown_value(fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.5), "Posted within the last day") == 8
+    assert (
+        _breakdown_value(
+            fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02),
+            "Posted within the last 6 hours",
+        )
+        == 10
+    )
+    assert (
+        _breakdown_value(
+            fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.5),
+            "Posted within the last day",
+        )
+        == 8
+    )
     assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 2) == []
     assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 10) == []
 
@@ -1753,6 +1896,7 @@ def test_repeated_listing_history_adds_candidate_warning():
 
 def test_posted_display_anchors_relative_text_to_retrieval_date():
     from job_hunter_agent.posting_utils import posted_display_label
+
     label = posted_display_label(
         {
             "posted": "2d ago",
@@ -1767,6 +1911,7 @@ def test_posted_display_anchors_relative_text_to_retrieval_date():
 
 def test_posted_display_converts_today_to_retrieved_date():
     from job_hunter_agent.posting_utils import posted_display_label
+
     label = posted_display_label(
         {
             "posted": "today",
@@ -1781,6 +1926,7 @@ def test_posted_display_converts_today_to_retrieved_date():
 
 def test_posted_display_shows_today_against_current_render_date():
     from job_hunter_agent.posting_utils import posted_display_label
+
     label = posted_display_label(
         {
             "posted": "3h ago",
@@ -1859,6 +2005,6 @@ def test_build_risk_and_missing_profile_support_uses_shared_partial_support_labe
     )
 
     assert missing == []
-    assert risks == ["Role leans toward specialist depth is only partially supported by your profile"]
-
-
+    assert risks == [
+        "Role leans toward specialist depth is only partially supported by your profile"
+    ]

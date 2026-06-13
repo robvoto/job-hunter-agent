@@ -1,22 +1,24 @@
-﻿"""Tests for workspace api."""
+"""Tests for workspace api."""
 
+from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime
 
+import job_hunter_agent.routes.workspace_api as workspace_api
+from job_hunter_agent import source_connector, workspace_service
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.fastapi_app import create_app
 from job_hunter_agent.io_utils import write_review_data
-from job_hunter_agent import workspace_service
-from job_hunter_agent import source_connector
-import job_hunter_agent.routes.workspace_api as workspace_api
-from pathlib import Path
 
 
 def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db):
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "candidate"})
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "candidate"},
+    )
     with db_conn() as conn:
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
@@ -71,13 +73,22 @@ def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db
 
 
 def test_api_results_html_surfaces_last_run_error(monkeypatch, tmp_path):
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"},
+    )
     workspace_path = tmp_path / "workspace_results.html"
     workspace_path.write_text("<html><body>stale</body></html>", encoding="utf-8")
     monkeypatch.setattr(workspace_api, "get_workspace_results_path", lambda: workspace_path)
-    monkeypatch.setattr(workspace_api, "load_run_stats", lambda: {"last_run_error": "ValueError: broken scraper"})
+    monkeypatch.setattr(
+        workspace_api, "load_run_stats", lambda: {"last_run_error": "ValueError: broken scraper"}
+    )
     rebuild_calls = []
-    monkeypatch.setattr(workspace_api, "rebuild_workspace_results", lambda *args, **kwargs: rebuild_calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        workspace_api,
+        "rebuild_workspace_results",
+        lambda *args, **kwargs: rebuild_calls.append((args, kwargs)),
+    )
 
     client = TestClient(create_app())
     response = client.get("/api/results-html")
@@ -88,7 +99,10 @@ def test_api_results_html_surfaces_last_run_error(monkeypatch, tmp_path):
 
 
 def test_api_results_html_rebuilds_when_no_error_and_file_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"},
+    )
     workspace_path = tmp_path / "workspace_results.html"
     monkeypatch.setattr(workspace_api, "get_workspace_results_path", lambda: workspace_path)
     monkeypatch.setattr(workspace_api, "load_run_stats", lambda: {})
@@ -106,7 +120,10 @@ def test_api_results_html_rebuilds_when_no_error_and_file_missing(monkeypatch, t
 
 
 def test_api_results_html_rebuild_excludes_records_without_llm_grade(monkeypatch, tmp_path):
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"})
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"},
+    )
     workspace_path = tmp_path / "workspace_results.html"
     monkeypatch.setattr(workspace_api, "get_workspace_results_path", lambda: workspace_path)
     monkeypatch.setattr(workspace_api, "load_run_stats", lambda: {})
@@ -219,14 +236,24 @@ def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch
     with pytest.raises(ValueError) as exc:
         source_connector.scrape_jobs_direct()
 
-    assert str(exc.value) == "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+    assert (
+        str(exc.value)
+        == "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+    )
     assert called == []
 
 
 def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.read_session_user", lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"})
-    monkeypatch.setattr("job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True)
-    monkeypatch.setattr(workspace_api.srv, "_read_last_run_timestamp", lambda: "2026-05-26T00:00:00+10:00")
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True
+    )
+    monkeypatch.setattr(
+        workspace_api.srv, "_read_last_run_timestamp", lambda: "2026-05-26T00:00:00+10:00"
+    )
     monkeypatch.setattr(workspace_api.srv, "_is_run_in_progress", lambda: True)
     monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "SEEK page 1/3")
     monkeypatch.setattr(workspace_api, "run_stop_requested", lambda: True)

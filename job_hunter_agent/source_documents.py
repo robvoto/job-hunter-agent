@@ -1,8 +1,8 @@
-﻿"""Source document processing and onboarding orchestration.
+"""Source document processing and onboarding orchestration.
 
-This module handles the extraction of text from source files (such as CVs 
-in .docx or .txt format) and coordinates the multi-step onboarding process 
-to build an initial candidate profile. It manages the persistence of 
+This module handles the extraction of text from source files (such as CVs
+in .docx or .txt format) and coordinates the multi-step onboarding process
+to build an initial candidate profile. It manages the persistence of
 uploaded source packs and ensures clean resets for fresh onboarding runs.
 """
 
@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_cv_chars_per_page
+from job_hunter_agent.global_settings import (
+    get_allowed_source_document_suffixes,
+    get_cv_chars_per_page,
+)
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -31,15 +34,15 @@ from job_hunter_agent.profile_learning import (
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
-    build_candidate_profile_tiers_from_sections,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CV_MAX_PAGES,
     KEY_EVIDENCE_TIERS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_ONBOARDING_COMPLETE,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
-    KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_TARGET_OCCUPATION_QUERIES,
+    build_candidate_profile_tiers_from_sections,
     load_profile,
     normalize_engagement_type_preferences,
     patch_profile,
@@ -67,12 +70,12 @@ ONBOARDING_RESET_FIELDS = (
 DEFAULT_SOURCE_MATERIALS = {
     "profile_sources": [],
     "cv_variants": [],
-} 
+}
 
 UPLOAD_SLOT_MAP = {
     "primary cv": "primary_cv",
 }
- 
+
 
 def _format_count(count: int, singular: str, plural: str) -> str:
     if count == 0:
@@ -106,13 +109,15 @@ def _normalize_cv_variants(items: Any) -> list[dict[str, Any]]:
         filename = str(item.get("filename") or "").strip()
         use_for = [str(value).strip() for value in item.get("use_for", []) if str(value).strip()]
         if key and label and content:
-            normalized.append({
-                "key": key,
-                "label": label,
-                "filename": filename,
-                "content": content,
-                "use_for": use_for,
-            })
+            normalized.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "filename": filename,
+                    "content": content,
+                    "use_for": use_for,
+                }
+            )
     return normalized
 
 
@@ -128,6 +133,7 @@ def normalize_source_materials(payload: Any) -> dict[str, Any]:
 def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         row = conn.execute(
@@ -144,6 +150,7 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
 def save_source_materials(payload: Any) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     normalized = normalize_source_materials(payload)
     ensure_user_row(user_id)
@@ -160,6 +167,7 @@ def save_source_materials(payload: Any) -> dict[str, Any]:
 def _read_docx_text_from_bytes(raw_bytes: bytes) -> str:
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
     import io
+
     with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
         document_xml = archive.read("word/document.xml")
     root = ET.fromstring(document_xml)
@@ -172,7 +180,9 @@ def _read_docx_text_from_bytes(raw_bytes: bytes) -> str:
     return "\n".join(paragraphs)
 
 
-def persist_uploaded_source_pack(files_payload: list[dict[str, Any]], extra_text: str = "") -> dict[str, Any]:
+def persist_uploaded_source_pack(
+    files_payload: list[dict[str, Any]], extra_text: str = ""
+) -> dict[str, Any]:
     profile_sources: list[dict[str, str]] = []
 
     for index, item in enumerate(files_payload or [], start=1):
@@ -207,7 +217,9 @@ def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
     return [item for item in sources if item.get("label") and item.get("content")]
 
 
-def build_onboarding_reset_patch(onboarding_settings: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_onboarding_reset_patch(
+    onboarding_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     patch: dict[str, Any] = {
         field: copy.deepcopy(DEFAULT_PROFILE[field])
         for field in ONBOARDING_RESET_FIELDS
@@ -220,6 +232,7 @@ def build_onboarding_reset_patch(onboarding_settings: dict[str, Any] | None = No
 
 def clear_onboarding_runtime_outputs() -> None:
     from job_hunter_agent.io_utils import clear_review_data, clear_run_stats
+
     for label, fn in [("review_data", clear_review_data), ("run_stats", clear_run_stats)]:
         try:
             fn()
@@ -232,21 +245,34 @@ def _norm_term(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
 
 
-def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | None = None, onboarding_settings: dict | None = None) -> dict[str, Any]:
+def run_onboarding(
+    source_materials: dict[str, Any],
+    search_preferences: dict | None = None,
+    onboarding_settings: dict | None = None,
+) -> dict[str, Any]:
     """Collect source documents, reset onboarding fields, re-extract everything, save.
 
     This is the single shared path for both initial onboarding and the Danger Rebuild.
     Non-onboarding fields (search settings, salary, preferences, review controls, etc.)
     are preserved unchanged.
     """
-    resolved = normalize_source_materials(source_materials or load_source_materials(create_if_missing=True))
+    resolved = normalize_source_materials(
+        source_materials or load_source_materials(create_if_missing=True)
+    )
     import_sources = _collect_import_sources(resolved)
     prefs = search_preferences or {}
     if not import_sources:
         raise ValueError("No onboarding input provided. Please upload your CV first.")
 
     active_settings = onboarding_settings or {}
-    cv_max_pages = max(1, int(active_settings.get(KEY_CV_MAX_PAGES) or DEFAULT_ONBOARDING_SETTINGS.get(KEY_CV_MAX_PAGES) or 5))
+    cv_max_pages = max(
+        1,
+        int(
+            active_settings.get(KEY_CV_MAX_PAGES)
+            or DEFAULT_ONBOARDING_SETTINGS.get(KEY_CV_MAX_PAGES)
+            or 5
+        ),
+    )
     cv_max_chars = cv_max_pages * get_cv_chars_per_page()
     cv_chars_per_page = get_cv_chars_per_page()
     logger.info(
@@ -281,8 +307,12 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
         approx_pages = max(1, (raw_chars + cv_chars_per_page - 1) // cv_chars_per_page)
         if len(text) > cv_max_chars:
             text = text[:cv_max_chars]
-            page_limit_notice = f"CV was truncated to approximately {cv_max_pages} page(s) for processing."
-            print(f"[ONBOARDING] CV truncated to {cv_max_chars} chars ({cv_max_pages} pages) for {label}")
+            page_limit_notice = (
+                f"CV was truncated to approximately {cv_max_pages} page(s) for processing."
+            )
+            print(
+                f"[ONBOARDING] CV truncated to {cv_max_chars} chars ({cv_max_pages} pages) for {label}"
+            )
             logger.info(
                 format_log_block(
                     "ONBOARDING_SOURCE_READ",
@@ -302,15 +332,21 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
                 raw_chars,
                 approx_pages,
             )
-        print(f"[ONBOARDING] CV source read: {label} chars read={raw_chars} approx pages={approx_pages}")
-        imported_sources.append({"label": label, "filename": source.get("filename", ""), "characters": len(text)})
+        print(
+            f"[ONBOARDING] CV source read: {label} chars read={raw_chars} approx pages={approx_pages}"
+        )
+        imported_sources.append(
+            {"label": label, "filename": source.get("filename", ""), "characters": len(text)}
+        )
         combined_sections.append(f"## {label}\n{text}")
         source_sections.append({"label": label, "text": text})
 
     if not combined_sections:
         if import_sources:
             raise ValueError("Could not read any configured CV files.")
-        raise ValueError("No onboarding input provided. Upload files, paste CV text, or configure profile CV files first.")
+        raise ValueError(
+            "No onboarding input provided. Upload files, paste CV text, or configure profile CV files first."
+        )
 
     combined_text = "\n\n".join(combined_sections).strip()
     print(
@@ -326,7 +362,11 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
 
     # Load current profile to preserve non-onboarding fields and read onboarding_settings.
     current_profile = load_profile()
-    active_onboarding_settings = onboarding_settings or current_profile.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
+    active_onboarding_settings = (
+        onboarding_settings
+        or current_profile.get("onboarding_settings")
+        or dict(DEFAULT_ONBOARDING_SETTINGS)
+    )
 
     # --- Reset persisted onboarding-owned fields before fresh extraction starts ---
     patch_profile(build_onboarding_reset_patch(active_onboarding_settings))
@@ -339,7 +379,9 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     # Evidence buckets are derived from source section headings during onboarding.
     patch[KEY_EVIDENCE_TIERS] = build_candidate_profile_tiers_from_sections(source_sections)
 
-    learning_patch = build_learning_patch(combined_text, active_onboarding_settings, source_sections)
+    learning_patch = build_learning_patch(
+        combined_text, active_onboarding_settings, source_sections
+    )
     patch.update(learning_patch)
 
     brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CANDIDATE_CAPABILITIES) or [])
@@ -357,7 +399,7 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
     manual_keywords = str(prefs.get("keywords") or "").strip()
     if manual_keywords:
         search_settings["keywords"] = manual_keywords
-    
+
     # 2. Locations
     manual_locations = [str(l).strip() for l in prefs.get("locations", []) if str(l).strip()][:1]
     if manual_locations:
@@ -368,9 +410,13 @@ def run_onboarding(source_materials: dict[str, Any], search_preferences: dict | 
             search_settings["locations"] = [llm_location]
 
     # 3. Engagement
-    match_preferences["engagement_type"] = normalize_engagement_type_preferences(prefs.get("engagement_type"))
+    match_preferences["engagement_type"] = normalize_engagement_type_preferences(
+        prefs.get("engagement_type")
+    )
 
-    search_settings["locations"] = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()][:1]
+    search_settings["locations"] = [
+        str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()
+    ][:1]
 
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
@@ -427,8 +473,3 @@ def build_llm_profile_brief(
         lines.append("Capability profile: " + "; ".join(preferred_rules[:20]))
 
     return "\n".join(lines).strip()[:3000]
- 
-
-
-
-

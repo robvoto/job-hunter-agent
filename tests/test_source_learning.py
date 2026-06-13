@@ -1,15 +1,17 @@
-﻿"""Tests for source learning payload resolution."""
+"""Tests for source learning payload resolution."""
 
+from job_hunter_agent import source_learning
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_JOB_KEY,
     RECORD_TITLE_KEY,
 )
-from job_hunter_agent import source_learning
 
 
-def _build_record(title: str = "Title", company: str = "Company", description: str = "Description") -> dict:
+def _build_record(
+    title: str = "Title", company: str = "Company", description: str = "Description"
+) -> dict:
     return {
         RECORD_JOB_KEY: "job-1",
         RECORD_TITLE_KEY: title,
@@ -48,8 +50,16 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
     }
 
     monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
-    monkeypatch.setattr(source_learning, "llm_should_consider_with_learning", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")))
-    monkeypatch.setattr(source_learning, "llm_should_consider_learning_candidates", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")))
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")),
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_learning_candidates",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")),
+    )
 
     payload = source_learning.resolve_llm_review_payload(record, llm_cache)
 
@@ -77,8 +87,16 @@ def test_resolve_llm_review_payload_learning_only_cache_hit_skips_llm(monkeypatc
     }
 
     monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
-    monkeypatch.setattr(source_learning, "llm_should_consider_with_learning", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")))
-    monkeypatch.setattr(source_learning, "llm_should_consider_learning_candidates", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")))
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")),
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_learning_candidates",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")),
+    )
 
     payload = source_learning.resolve_llm_review_payload(record, llm_cache, learning_only=True)
 
@@ -188,5 +206,3 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
     assert called["count"] == 1
     assert payload["payload_source"] == "llm"
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
-
-

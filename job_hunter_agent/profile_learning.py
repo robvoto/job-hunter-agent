@@ -1,4 +1,4 @@
-﻿"""Profile learning helpers.
+"""Profile learning helpers.
 
 This module provides utilities for processing and learning from candidate CV text.
 It focuses on extracting structured information, such as capabilities, role titles,
@@ -13,12 +13,13 @@ The module integrates with LLMs for advanced extraction tasks and includes
 mechanisms for caching LLM responses to improve efficiency. It also handles
 the normalization and validation of extracted data to ensure consistency.
 """
+
 import hashlib
 import logging
 import re
 import traceback
-from functools import lru_cache
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
@@ -27,47 +28,50 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import OUTPUT_DIR
-from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
+    KEY_ALIASES,
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_ICON_KEY,
+    KEY_LEVEL,
+    KEY_LOOKBACK_YEARS,
     KEY_MATCH_PREFS,
+    KEY_MAX_SECONDARY,
+    KEY_MAX_TARGET,
+    KEY_NAME,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
     KEY_TARGET_OCCUPATION_QUERIES,
-    KEY_LOOKBACK_YEARS,
-    KEY_MAX_TARGET,
-    KEY_MAX_SECONDARY,
-    KEY_NAME,
-    KEY_LEVEL,
-    KEY_ALIASES,
-    KEY_ICON_KEY,
     VALID_CAPABILITY_ICON_KEYS,
-    WorkMode,
     CapabilityLevel,
+    WorkMode,
 )
+from job_hunter_agent.text_processing import compact_whitespace
+
 KEY_NEEDS_REVIEW = "needs_review"
+
 
 def _simple_title(value: str) -> str:
     """Normalize a role title for onboarding: trim, lowercase, collapse whitespace only."""
     return compact_whitespace(value).lower()
 
+
+from job_hunter_agent.global_settings import (
+    KEY_CAPABILITY_ALIAS_LIMIT,
+    get_llm_profile_extraction_max_output_tokens,
+)
 from job_hunter_agent.signal_registry import register_signals, signal_in_approved_knowledge
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
     LEARNING_CATEGORY_KEY,
+    LEARNING_CONTEXT_KEY,
     LEARNING_EVIDENCE_KEY,
     LEARNING_KNOWLEDGE_MATCH_KEY,
-    LEARNING_CONTEXT_KEY,
     LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
     SIGNAL_ALIASES_KEY,
     SOURCE_CV_PARSING,
-)
-from job_hunter_agent.global_settings import (
-    KEY_CAPABILITY_ALIAS_LIMIT,
-    get_llm_profile_extraction_max_output_tokens,
 )
 
 CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
@@ -110,8 +114,6 @@ _cv_extraction_cache: dict[str, dict[str, Any]] = {}
 _cv_extraction_cache_loaded = False
 
 
-
-
 class _CapabilityExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -134,12 +136,15 @@ class _CvExtractionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
-    match_preferences: _MatchPreferenceExtraction = Field(default_factory=_MatchPreferenceExtraction)
+    match_preferences: _MatchPreferenceExtraction = Field(
+        default_factory=_MatchPreferenceExtraction
+    )
     role_titles: list[str] = Field(default_factory=list)
     target_occupation_queries: list[str] = Field(default_factory=list)
 
 
 # ── Text repair ────────────────────────────────────────────────────────────────
+
 
 def repair_text(text: str) -> str:
     if not text:
@@ -158,6 +163,7 @@ def repair_text(text: str) -> str:
 
 
 # ── Settings resolution ────────────────────────────────────────────────────────
+
 
 def _resolve_onboarding_int(
     onboarding_settings: dict[str, Any] | None,
@@ -181,6 +187,7 @@ def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | Non
 
 # ── Text utilities ─────────────────────────────────────────────────────────────
 
+
 def _clean_line(text: str) -> str:
     cleaned = re.sub(r"[*_`#]+", " ", str(text or ""))
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" -:\t")
@@ -191,7 +198,12 @@ def _normalize_token(token: str) -> str:
     cleaned = re.sub(r"[^a-z0-9+#/&-]", "", str(token or "").lower()).strip("-/")
     if cleaned.endswith("ies") and len(cleaned) > 4:
         cleaned = cleaned[:-3] + "y"
-    elif cleaned.endswith("s") and len(cleaned) > 4 and not cleaned.endswith("ss") and not cleaned.endswith("is"):
+    elif (
+        cleaned.endswith("s")
+        and len(cleaned) > 4
+        and not cleaned.endswith("ss")
+        and not cleaned.endswith("is")
+    ):
         cleaned = cleaned[:-1]
     return cleaned
 
@@ -202,6 +214,7 @@ def _normalize_phrase(text: str) -> str:
 
 
 # ── Structural parsing helpers ─────────────────────────────────────────────────
+
 
 def _is_bullet_line(text: str) -> bool:
     return bool(_BULLET_PREFIX_RE.match(str(text or "").lstrip()))
@@ -221,10 +234,13 @@ def _is_plain_section_label(text: str) -> bool:
     words = cleaned.split()
     return bool(letters) and cleaned == cleaned.upper() and len(words) <= 4
 
+
 @lru_cache(maxsize=1)
 def _load_parsing_rules() -> dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     return get_knowledge("parsing_rules") or {}
+
 
 def get_parsing_rule_set(key: str) -> set[str]:
     rules = _load_parsing_rules()
@@ -240,6 +256,7 @@ def _strip_bullet_prefix(text: str) -> str:
 
 # ── LLM extraction ─────────────────────────────────────────────────────────────
 
+
 def _ensure_cv_extraction_cache_loaded() -> None:
     global _cv_extraction_cache_loaded
     if _cv_extraction_cache_loaded:
@@ -247,6 +264,7 @@ def _ensure_cv_extraction_cache_loaded() -> None:
     _cv_extraction_cache_loaded = True
     try:
         from job_hunter_agent.io_utils import load_cv_extraction_cache
+
         _cv_extraction_cache.update(load_cv_extraction_cache())
     except Exception:
         pass
@@ -255,12 +273,14 @@ def _ensure_cv_extraction_cache_loaded() -> None:
 def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int) -> dict[str, Any]:
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
     _ensure_cv_extraction_cache_loaded()
-    cache_key = hashlib.sha256(f"icon-v2:{lookback_years}:{alias_limit}:{source_text}".encode()).hexdigest()[:16]
+    cache_key = hashlib.sha256(
+        f"icon-v2:{lookback_years}:{alias_limit}:{source_text}".encode()
+    ).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
         return _cv_extraction_cache[cache_key]
 
     try:
-        from job_hunter_agent.llm_gate import client, get_llm_model, _log_llm_call
+        from job_hunter_agent.llm_gate import _log_llm_call, client, get_llm_model
     except Exception:
         return {}
 
@@ -305,13 +325,16 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         parsed = resp.output_parsed
         result = parsed.model_dump() if parsed is not None else {}
     except Exception as exc:
-        _cap_log(f"[ONBOARDING][LLM_CALL_ERROR] purpose=cv_extraction cache_key={cache_key} error={exc}")
+        _cap_log(
+            f"[ONBOARDING][LLM_CALL_ERROR] purpose=cv_extraction cache_key={cache_key} error={exc}"
+        )
         traceback.print_exc()
         raise
 
     _cv_extraction_cache[cache_key] = result
     try:
         from job_hunter_agent.io_utils import save_cv_extraction_cache
+
         save_cv_extraction_cache(_cv_extraction_cache)
     except Exception:
         pass
@@ -338,13 +361,15 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
             rejected.append("<empty name>")
             continue
         needs_review = bool(item.get(KEY_NEEDS_REVIEW))
-        result.append({
-            KEY_NAME: name,
-            KEY_LEVEL: level if level in _VALID_LEVELS else CapabilityLevel.BASIC,
-            KEY_ALIASES: aliases[:6],
-            KEY_ICON_KEY: icon_key,
-            KEY_NEEDS_REVIEW: needs_review,
-        })
+        result.append(
+            {
+                KEY_NAME: name,
+                KEY_LEVEL: level if level in _VALID_LEVELS else CapabilityLevel.BASIC,
+                KEY_ALIASES: aliases[:6],
+                KEY_ICON_KEY: icon_key,
+                KEY_NEEDS_REVIEW: needs_review,
+            }
+        )
     capped = result[:20]
     cap_overflow = result[20:]
     if cap_overflow:
@@ -366,7 +391,10 @@ def _capability_context_sections(
     if not source_sections:
         return []
 
-    terms = [str(capability_name or "").strip(), *(str(alias or "").strip() for alias in aliases or [])]
+    terms = [
+        str(capability_name or "").strip(),
+        *(str(alias or "").strip() for alias in aliases or []),
+    ]
     terms = [term for term in terms if term]
     if not terms:
         return []
@@ -409,20 +437,26 @@ def _split_learning_capabilities(
 
     for item in capabilities:
         name = str(item.get(KEY_NAME) or "").strip()
-        aliases = [str(alias).strip() for alias in (item.get(KEY_ALIASES) or []) if str(alias).strip()]
+        aliases = [
+            str(alias).strip() for alias in (item.get(KEY_ALIASES) or []) if str(alias).strip()
+        ]
         needs_review = bool(item.get(KEY_NEEDS_REVIEW))
         known_signal, knowledge_match = signal_in_approved_knowledge(CAT_CAPABILITY, name, aliases)
 
         if needs_review and not known_signal:
-            review_signals.append({
-                LEARNING_SIGNAL_KEY: name,
-                LEARNING_CATEGORY_KEY: CAT_CAPABILITY,
-                LEARNING_SOURCE_KEY: SOURCE_CV_PARSING,
-                LEARNING_CONTEXT_KEY: _capability_context_sections(name, aliases, source_sections),
-                LEARNING_EVIDENCE_KEY: [name, *aliases],
-                SIGNAL_ALIASES_KEY: aliases,
-                LEARNING_NEEDS_REVIEW_KEY: True,
-            })
+            review_signals.append(
+                {
+                    LEARNING_SIGNAL_KEY: name,
+                    LEARNING_CATEGORY_KEY: CAT_CAPABILITY,
+                    LEARNING_SOURCE_KEY: SOURCE_CV_PARSING,
+                    LEARNING_CONTEXT_KEY: _capability_context_sections(
+                        name, aliases, source_sections
+                    ),
+                    LEARNING_EVIDENCE_KEY: [name, *aliases],
+                    SIGNAL_ALIASES_KEY: aliases,
+                    LEARNING_NEEDS_REVIEW_KEY: True,
+                }
+            )
             continue
 
         cleaned = dict(item)
@@ -445,7 +479,10 @@ def build_learning_patch(
 
     lookback_years = _resolve_extraction_lookback_years(onboarding_settings)
     alias_limit = _resolve_onboarding_int(onboarding_settings or {}, KEY_CAPABILITY_ALIAS_LIMIT)
-    preset_name = str((onboarding_settings or {}).get("capability_strength_preset") or "").strip() or "(default)"
+    preset_name = (
+        str((onboarding_settings or {}).get("capability_strength_preset") or "").strip()
+        or "(default)"
+    )
     _cap_log(
         format_log_block(
             "BUILD_LEARNING_PATCH",
@@ -464,30 +501,32 @@ def build_learning_patch(
     patch: dict[str, Any] = {}
 
     raw_caps = extracted.get(KEY_CAPABILITIES, [])
-    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capability candidate(s) before validation")
+    _cap_log(
+        f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capability candidate(s) before validation"
+    )
     capabilities = _validate_capabilities(raw_caps)
-    approved_capabilities, review_signals = _split_learning_capabilities(capabilities, source_sections=source_sections)
+    approved_capabilities, review_signals = _split_learning_capabilities(
+        capabilities, source_sections=source_sections
+    )
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
 
     raw_titles = extracted.get("role_titles") or []
     extracted_titles = list(
-        dict.fromkeys(
-            _simple_title(value)
-            for value in raw_titles
-            if _simple_title(value)
-        )
+        dict.fromkeys(_simple_title(value) for value in raw_titles if _simple_title(value))
     )
     raw_queries = extracted.get(KEY_TARGET_OCCUPATION_QUERIES) or []
     occupation_queries = list(
         dict.fromkeys(
-            compact_whitespace(value)
-            for value in raw_queries
-            if str(value or "").strip()
+            compact_whitespace(value) for value in raw_queries if str(value or "").strip()
         )
     )
-    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)")
-    _cap_log(f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(occupation_queries)} target occupation query(ies)")
+    _cap_log(
+        f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)"
+    )
+    _cap_log(
+        f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(occupation_queries)} target occupation query(ies)"
+    )
 
     missing: list[str] = []
     if not approved_capabilities:
@@ -512,7 +551,7 @@ def build_learning_patch(
     max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
     max_secondary = _resolve_onboarding_int(onboarding_settings, KEY_MAX_SECONDARY)
     patch[KEY_PRIMARY_PATTERNS] = extracted_titles[:max_target]
-    patch[KEY_SECONDARY_PATTERNS] = extracted_titles[max_target:max_target + max_secondary]
+    patch[KEY_SECONDARY_PATTERNS] = extracted_titles[max_target : max_target + max_secondary]
     patch[KEY_TARGET_OCCUPATION_QUERIES] = occupation_queries
 
     raw_prefs = extracted.get(KEY_MATCH_PREFS) or {}

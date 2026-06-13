@@ -24,8 +24,12 @@ def _python_executable() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the local pytest suite.")
-    parser.add_argument("-k", dest="keyword", default="", help="Only run tests matching this expression.")
-    parser.add_argument("-m", dest="marker", default="", help="Only run tests matching this marker expression.")
+    parser.add_argument(
+        "-k", dest="keyword", default="", help="Only run tests matching this expression."
+    )
+    parser.add_argument(
+        "-m", dest="marker", default="", help="Only run tests matching this marker expression."
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Run pytest in verbose mode.")
     parser.add_argument("pytest_args", nargs="*", help="Additional arguments passed to pytest.")
     args, extra_pytest_args = parser.parse_known_args()

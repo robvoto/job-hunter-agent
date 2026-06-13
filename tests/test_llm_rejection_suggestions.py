@@ -1,8 +1,10 @@
-﻿"""Tests for llm rejection suggestions."""
+"""Tests for llm rejection suggestions."""
+
+import json
+
+import pytest
 
 from job_hunter_agent import llm_gate
-import json
-import pytest
 
 
 class _FakeResponse:
@@ -123,7 +125,7 @@ def test_normalize_rejection_blocker_suggestions_accepts_json_shape():
         '{"term":"restricted platform"},'
         '{"term":"specialist certification"},'
         '{"term":"restricted platform"}'
-        ']}'
+        "]}"
     )
 
     assert suggestions == ["restricted platform", "specialist certification"]
@@ -135,7 +137,7 @@ def test_normalize_rejection_blocker_suggestions_deduplicates_and_limits_words()
         '{"term":"regulated sector experience"},'
         '{"term":"regulated sector experience"},'
         '{"term":"ahpra registration"}'
-        ']}',
+        "]}",
         max_items=5,
     )
 
@@ -144,6 +146,7 @@ def test_normalize_rejection_blocker_suggestions_deduplicates_and_limits_words()
 
 def test_managed_llm_prompt_knowledge_files_contain_lines():
     from job_hunter_agent.knowledge_store import get_knowledge
+
     fit_payload = get_knowledge("llm_fit_review_defaults")
     capability_payload = get_knowledge("llm_capability_naming_defaults")
 
@@ -302,7 +305,9 @@ def test_normalize_rejection_blocker_suggestions_uses_managed_max_items(monkeypa
 
 
 def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):
-    monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
+    monkeypatch.setattr(
+        llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context"
+    )
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "test-model")
     monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
     fake_client = _FakeClient('{"blockers":[{"term":"specialist platform","kind":"platform"}]}')
@@ -368,7 +373,9 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
     monkeypatch.setattr(llm_gate, "client", fake_client)
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "test-model")
     monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
-    monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
+    monkeypatch.setattr(
+        llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context"
+    )
     monkeypatch.setattr(
         llm_gate,
         "load_profile",
@@ -406,5 +413,3 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
         "job_requirements": ["Stakeholder engagement", "Process mapping"],
     }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"
-
-

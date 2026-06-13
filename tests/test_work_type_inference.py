@@ -1,8 +1,7 @@
 """Tests for work-type inference from description text."""
 
+from job_hunter_agent.job_types import infer_work_type_from_description, save_job_type
 from job_hunter_agent.knowledge_store import get_knowledge
-from job_hunter_agent.job_types import save_job_type
-from job_hunter_agent.job_types import infer_work_type_from_description
 
 # Minimal rules fixture matching the shape in data/knowledge/job_type.json.
 _RULES = [
@@ -27,6 +26,7 @@ _RULES = [
 
 # ── no-contract descriptions → Permanent ─────────────────────────────────────
 
+
 def test_full_time_no_contract_signal_infers_permanent():
     desc = "This is a great business analyst opportunity. You will work with stakeholders."
     result = infer_work_type_from_description("Full time", desc, _rules=_RULES)
@@ -49,6 +49,7 @@ def test_full_time_empty_description_returns_none():
 
 
 # ── contract-signal descriptions → Full Time Contract ─────────────────────────
+
 
 def test_full_time_contract_role_keyword_infers_full_time_contract():
     desc = "This is a contract role for an experienced BA to join our team."
@@ -90,6 +91,7 @@ def test_keyword_matching_is_case_insensitive():
 
 # ── non-trigger work types → no inference ─────────────────────────────────────
 
+
 def test_contract_work_type_not_in_trigger_list_returns_none():
     desc = "This is a great role with no contract mentions at all."
     result = infer_work_type_from_description("Contract", desc, _rules=_RULES)
@@ -109,6 +111,7 @@ def test_empty_work_type_returns_none():
 
 
 # ── disabled rule → no inference ──────────────────────────────────────────────
+
 
 def test_disabled_rule_is_ignored():
     disabled_rules = [{**_RULES[0], "enabled": False}]

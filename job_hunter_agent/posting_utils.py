@@ -34,6 +34,7 @@ def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
         print(f"[POSTING_UTILS][WARN] Failed to calculate days_since: {exc}")
         return None
 
+
 def get_manual_skip_sets(profile: dict) -> tuple[Set[str], Set[str]]:
     review_controls = profile.get("review_controls", {})
     applied = {
@@ -59,7 +60,9 @@ def format_timestamp_label(value: Optional[str]) -> str:
         return value
 
 
-def posted_datetime_from_age(posted_age_days: Optional[float], reference_time: Optional[datetime]) -> Optional[datetime]:
+def posted_datetime_from_age(
+    posted_age_days: Optional[float], reference_time: Optional[datetime]
+) -> Optional[datetime]:
     if posted_age_days is None or reference_time is None:
         return None
     try:
@@ -69,7 +72,9 @@ def posted_datetime_from_age(posted_age_days: Optional[float], reference_time: O
         return None
 
 
-def format_posted_date_label(posted_text: Optional[str], posted_age_days: Optional[float], reference_time: Optional[datetime]) -> str:
+def format_posted_date_label(
+    posted_text: Optional[str], posted_age_days: Optional[float], reference_time: Optional[datetime]
+) -> str:
     normalized_posted = normalize_posted_text(posted_text)
     if normalized_posted.lower() == "today" and reference_time is None:
         return "Today"
@@ -88,7 +93,11 @@ def relative_posted_age_label(posted_at: Optional[datetime], now: Optional[datet
         return ""
     current = now or datetime.now().astimezone()
     try:
-        local_posted = posted_at.astimezone(current.tzinfo) if posted_at.tzinfo and current.tzinfo else posted_at
+        local_posted = (
+            posted_at.astimezone(current.tzinfo)
+            if posted_at.tzinfo and current.tzinfo
+            else posted_at
+        )
         days_old = max((current.date() - local_posted.date()).days, 0)
     except Exception as exc:
         print(f"[POSTING_UTILS][WARN] Failed to calculate relative age label: {exc}")
@@ -127,7 +136,11 @@ def posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
         reference_time,
     )
 
-    if posted_date_label != "Unknown" and posted_age_days is not None and is_relative_posted_text(posted_text):
+    if (
+        posted_date_label != "Unknown"
+        and posted_age_days is not None
+        and is_relative_posted_text(posted_text)
+    ):
         return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
     if posted_age_days is not None and posted_age_days >= 1 and posted_text not in ("N/A", ""):
         if posted_date_label != "Unknown" and posted_date_label != posted_text:

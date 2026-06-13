@@ -1,4 +1,4 @@
-﻿"""Tests for review insights."""
+"""Tests for review insights."""
 
 from job_hunter_agent.global_settings import (
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
@@ -8,13 +8,13 @@ from job_hunter_agent.global_settings import (
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
 )
-from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_review_data
 from job_hunter_agent.profile_store import (
     KEY_ALIASES,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_LEVEL,
     KEY_NAME,
 )
+from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_review_data
 
 
 def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monkeypatch):
@@ -59,7 +59,7 @@ def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monke
                         "fit_label": "Do not keep me",
                         "adjustment": -1,
                         "alignment": "weak",
-                    }
+                    },
                 ],
                 "fit_highlights": [
                     "Strong capability match: Process mapping",
@@ -83,16 +83,24 @@ def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monke
     )
 
     assert result["kept_job_urls"] == ["https://example.test/job-1"]
-    assert [item["skill"] for item in result["skill_observations"]] == ["Process mapping", "Stakeholder engagement"]
+    assert [item["skill"] for item in result["skill_observations"]] == [
+        "Process mapping",
+        "Stakeholder engagement",
+    ]
     assert result["suggested_tuning"]["summary"] == {
         "capability_count": 2,
         "requirement_count": 0,
         "optimization_count": 0,
         "rule_count": 0,
     }
-    capability_skills = [item["skill"] for item in result["suggested_tuning"]["capability_suggestions"]]
+    capability_skills = [
+        item["skill"] for item in result["suggested_tuning"]["capability_suggestions"]
+    ]
     assert capability_skills == ["Process mapping", "Stakeholder engagement"]
-    assert result["suggested_tuning"]["capability_suggestions"][0]["examples"][0]["url"] == "https://example.test/job-1"
+    assert (
+        result["suggested_tuning"]["capability_suggestions"][0]["examples"][0]["url"]
+        == "https://example.test/job-1"
+    )
 
 
 def test_build_review_data_ignores_rejected_job_capabilities(monkeypatch):
@@ -236,7 +244,9 @@ def test_build_review_data_exposes_uncertain_title_optimisation_suggestions(monk
     assert optimisation[0]["samples"][0]["url"] == "https://example.test/job-1"
 
 
-def test_build_review_data_keeps_clear_title_hard_block_suggestions_when_bucket_is_mixed(monkeypatch):
+def test_build_review_data_keeps_clear_title_hard_block_suggestions_when_bucket_is_mixed(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "job_hunter_agent.review_insights.get_review_settings",
         lambda: {
@@ -338,14 +348,19 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
 
     requirement_suggestions = result["suggested_tuning"]["requirement_suggestions"]
     assert result["suggested_tuning"]["summary"]["requirement_count"] == 2
-    chinese = next(item for item in requirement_suggestions if item["skill"] == "Chinese language proficiency")
+    chinese = next(
+        item for item in requirement_suggestions if item["skill"] == "Chinese language proficiency"
+    )
     assert chinese["count"] == 2
     assert chinese["recommended_choice"] == "basic"
     assert chinese["aliases"] == [
         "Native or near-native level Chinese language proficiency required",
         "Chinese language proficiency required",
     ]
-    assert chinese["prompt"] == "Chinese language proficiency is required in several kept roles. Do you have this capability?"
+    assert (
+        chinese["prompt"]
+        == "Chinese language proficiency is required in several kept roles. Do you have this capability?"
+    )
 
 
 def test_apply_capability_tuning_decisions_adds_confirmed_capability():
@@ -369,7 +384,12 @@ def test_apply_capability_tuning_decisions_adds_confirmed_capability():
 def test_apply_capability_tuning_decisions_preserves_existing_icon_key():
     profile = {
         KEY_CANDIDATE_CAPABILITIES: [
-            {KEY_NAME: "Process mapping", KEY_LEVEL: "basic", KEY_ALIASES: [], "icon_key": "operations_process"}
+            {
+                KEY_NAME: "Process mapping",
+                KEY_LEVEL: "basic",
+                KEY_ALIASES: [],
+                "icon_key": "operations_process",
+            }
         ]
     }
 

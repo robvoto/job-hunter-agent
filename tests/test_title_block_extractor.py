@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from job_hunter_agent.filters import suggest_title_block_phrase
 
-
 CASES = [
     ("Senior Delivery Manager - Guidewire", "guidewire"),
     ("Senior Analyst - Payments", "payments"),
@@ -43,7 +42,7 @@ def run_tests():
         else:
             passed += 1
             print(f"  {status}  {title!r}  -> {result!r}")
-    print(f"\n{passed}/{passed+failed} passed")
+    print(f"\n{passed}/{passed + failed} passed")
     return failed == 0
 
 
@@ -109,7 +108,10 @@ def test_government_protected():
 
 
 def test_government_digital_segment():
-    assert suggest_title_block_phrase("Operations Analyst - Government Digital") == "government digital"
+    assert (
+        suggest_title_block_phrase("Operations Analyst - Government Digital")
+        == "government digital"
+    )
 
 
 def test_numeric_fragment_skipped():

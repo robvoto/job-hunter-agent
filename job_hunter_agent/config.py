@@ -1,14 +1,10 @@
 """Helpers for config."""
 
 
-
 # config.py
 
-import os
-
 import argparse
-
-
+import os
 
 # Server settings
 
@@ -16,8 +12,9 @@ SERVER_HOST = os.getenv("JOB_HUNTER_HOST", "127.0.0.1")
 
 SERVER_PORT = int(os.getenv("JOB_HUNTER_PORT", "8765"))
 
-JOB_HUNTER_BASE_URL = os.getenv("JOB_HUNTER_BASE_URL", f"http://localhost:{SERVER_PORT}").rstrip("/")
-
+JOB_HUNTER_BASE_URL = os.getenv("JOB_HUNTER_BASE_URL", f"http://localhost:{SERVER_PORT}").rstrip(
+    "/"
+)
 
 
 def _resolve_debug_mode() -> bool:
@@ -33,11 +30,7 @@ def _resolve_debug_mode() -> bool:
     return bool(args.debug)
 
 
-
 DEBUG_MODE = _resolve_debug_mode()
-
-
-
 
 
 # Shared URL paths
@@ -59,7 +52,6 @@ GOOGLE_AUTH_PATH = "/login/google"
 GOOGLE_AUTH_CALLBACK_PATH = "/api/auth/google/callback"
 
 
-
 # Security and encoding constants
 
 AUTH_ALGO_SHA256 = "sha256"
@@ -75,22 +67,13 @@ SESSION_COOKIE_PATH = "/"
 SESSION_COOKIE_DEFAULT_NAME = "job_hunter_session"
 
 
-
 # Allowed documentation paths for the API
 
 ALLOWED_DOC_REL_PATHS = (
-
     "README.md",
-
     "docs/ARCHITECTURE.md",
-
     "docs/DEVELOPER_GUIDE.md",
-
     "docs/OPERATIONS.md",
-
     "docs/USER_GUIDE.md",
-
     "docs/SCORING_RATIONALE.md",
-
 )
-

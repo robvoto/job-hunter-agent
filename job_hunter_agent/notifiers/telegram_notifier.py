@@ -3,21 +3,19 @@
 import json
 import logging
 from datetime import datetime
-from urllib.error import HTTPError
 from urllib import parse, request
+from urllib.error import HTTPError
 
 logger = logging.getLogger(__name__)
 
 
-def _telegram_api_request(bot_token: str, method: str, payload: dict | None = None, timeout: int = 30) -> dict:
+def _telegram_api_request(
+    bot_token: str, method: str, payload: dict | None = None, timeout: int = 30
+) -> dict:
     if not bot_token:
         raise ValueError("Telegram bot token is missing")
 
-    form_fields = {
-        key: value
-        for key, value in (payload or {}).items()
-        if value not in (None, "")
-    }
+    form_fields = {key: value for key, value in (payload or {}).items() if value not in (None, "")}
     encoded = parse.urlencode(form_fields).encode("utf-8")
     endpoint = f"https://api.telegram.org/bot{bot_token}/{method}"
     req = request.Request(endpoint, data=encoded, method="POST")
@@ -27,7 +25,9 @@ def _telegram_api_request(bot_token: str, method: str, payload: dict | None = No
         with request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
             if not data.get("ok"):
-                logger.warning("[TELEGRAM][WARN] Telegram API returned a non-ok response for %s.", method)
+                logger.warning(
+                    "[TELEGRAM][WARN] Telegram API returned a non-ok response for %s.", method
+                )
                 raise ValueError(f"Telegram API error: {data}")
             return data
     except HTTPError as exc:
@@ -49,7 +49,9 @@ def get_telegram_bot_profile(settings: dict) -> dict:
     result = payload.get("result") or {}
     if isinstance(result, dict):
         return result
-    logger.warning("[TELEGRAM][WARN] Telegram getMe returned a missing or non-dict result; returning an empty profile.")
+    logger.warning(
+        "[TELEGRAM][WARN] Telegram getMe returned a missing or non-dict result; returning an empty profile."
+    )
     return {}
 
 
@@ -87,7 +89,9 @@ def sync_telegram_subscribers(settings: dict) -> dict:
     )
     updates = payload.get("result") or []
     if not isinstance(updates, list):
-        logger.warning("[TELEGRAM][WARN] Telegram getUpdates returned a non-list result; returning an empty update list.")
+        logger.warning(
+            "[TELEGRAM][WARN] Telegram getUpdates returned a non-list result; returning an empty update list."
+        )
         updates = []
 
     subscribers = {
@@ -122,9 +126,15 @@ def sync_telegram_subscribers(settings: dict) -> dict:
         text = str(message.get("text") or "").strip()
         existing = subscribers.get(chat_id)
         if existing:
-            existing["username"] = str(sender.get("username") or existing.get("username") or "").strip()
-            existing["first_name"] = str(sender.get("first_name") or existing.get("first_name") or "").strip()
-            existing["last_name"] = str(sender.get("last_name") or existing.get("last_name") or "").strip()
+            existing["username"] = str(
+                sender.get("username") or existing.get("username") or ""
+            ).strip()
+            existing["first_name"] = str(
+                sender.get("first_name") or existing.get("first_name") or ""
+            ).strip()
+            existing["last_name"] = str(
+                sender.get("last_name") or existing.get("last_name") or ""
+            ).strip()
             existing["last_seen_at"] = now_text
             continue
 

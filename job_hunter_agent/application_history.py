@@ -12,19 +12,21 @@ from typing import Optional
 
 from job_hunter_agent.record_schema import RECORD_APPLICATION_HISTORY_KEY
 
-_NOISE_TOKENS = frozenset({
-    "oraclecloud",
-    "workflow",
-    "workday",
-    "greenhouse",
-    "smartrecruiters",
-    "seek",
-    "pageuppeople",
-    "workablemail",
-    "no-reply",
-    "noreply",
-    "donotreply",
-})
+_NOISE_TOKENS = frozenset(
+    {
+        "oraclecloud",
+        "workflow",
+        "workday",
+        "greenhouse",
+        "smartrecruiters",
+        "seek",
+        "pageuppeople",
+        "workablemail",
+        "no-reply",
+        "noreply",
+        "donotreply",
+    }
+)
 
 # Patterns yielding (role, company) — ordered most-specific first.
 # Use non-greedy role capture (.+?) and greedy company capture (.+)
@@ -175,7 +177,9 @@ def derive_company_and_role(subject: str, content: str, raw_company: str) -> dic
                 company_confidence = "medium"
                 company_evidence = f"{src}: {ev}"
 
-    combined_evidence = "; ".join(filter(None, [role_evidence, company_evidence])) or "no pattern matched"
+    combined_evidence = (
+        "; ".join(filter(None, [role_evidence, company_evidence])) or "no pattern matched"
+    )
 
     return {
         "derived_company": derived_company,
@@ -207,12 +211,38 @@ def normalize_rejection_row(row: dict) -> dict:
     }
 
 
-_MATCH_STOPS = frozenset({
-    "the", "a", "an", "and", "or", "of", "for", "in", "at", "with", "to", "s",
-    # common business entity suffixes that add no discriminating value
-    "corp", "corporation", "pty", "ltd", "limited", "inc", "llc", "co", "company",
-    "group", "holdings", "services", "solutions", "australia", "global",
-})
+_MATCH_STOPS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "of",
+        "for",
+        "in",
+        "at",
+        "with",
+        "to",
+        "s",
+        # common business entity suffixes that add no discriminating value
+        "corp",
+        "corporation",
+        "pty",
+        "ltd",
+        "limited",
+        "inc",
+        "llc",
+        "co",
+        "company",
+        "group",
+        "holdings",
+        "services",
+        "solutions",
+        "australia",
+        "global",
+    }
+)
 
 
 def _normalize_tokens(text: str) -> set[str]:
@@ -262,11 +292,12 @@ def match_application_history(job_record: dict, rejection_rows: list[dict]) -> d
     return dict(best)
 
 
-def enrich_records_with_application_history(records: list[dict], rejection_rows: list[dict]) -> list[dict]:
+def enrich_records_with_application_history(
+    records: list[dict], rejection_rows: list[dict]
+) -> list[dict]:
     """Add application_history to matching records. Records are not removed or reordered."""
     normalized_rows = [
-        row if "derived_company" in row else normalize_rejection_row(row)
-        for row in rejection_rows
+        row if "derived_company" in row else normalize_rejection_row(row) for row in rejection_rows
     ]
 
     enriched = []

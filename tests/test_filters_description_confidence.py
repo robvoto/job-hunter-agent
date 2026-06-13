@@ -1,10 +1,7 @@
-﻿"""Tests for filters description confidence."""
+"""Tests for filters description confidence."""
 
-from job_hunter_agent import filters
-from job_hunter_agent import hard_blocker_rules
-from job_hunter_agent import signal_registry
+from job_hunter_agent import filters, hard_blocker_rules, signal_registry
 from job_hunter_agent.paths import HARD_BLOCKER_RULES_PATH
-
 
 REQUIREMENTS_ELICITATION_RULE = {
     "name": "requirements elicitation",
@@ -28,7 +25,13 @@ AGILE_METHODS_RULE = {
 }
 
 
-def _load_profile(*, candidate_capabilities=None, reject_description_phrase_rules=None, must_not_require_skills=None, extra=None):
+def _load_profile(
+    *,
+    candidate_capabilities=None,
+    reject_description_phrase_rules=None,
+    must_not_require_skills=None,
+    extra=None,
+):
     profile = {
         "candidate_capabilities": candidate_capabilities or [],
         "reject_description_phrase_rules": reject_description_phrase_rules or [],
@@ -53,16 +56,20 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
     monkeypatch.setattr(
         filters,
         "load_profile",
-        lambda: _load_profile(extra={
-            "target_roles": [r"\bbusiness\ analyst\b"],
-            "also_consider_roles": [],
-            "reject_title_rules": [],
-        }),
+        lambda: _load_profile(
+            extra={
+                "target_roles": [r"\bbusiness\ analyst\b"],
+                "also_consider_roles": [],
+                "reject_title_rules": [],
+            }
+        ),
     )
 
     ok_plain, reason_plain = filters.passes_title_filters("Business Analyst")
     ok_lead, reason_lead = filters.passes_title_filters("Lead Business Analyst")
-    ok_ai, reason_ai = filters.passes_title_filters("Senior Business Analyst Senior (AI Foundations)")
+    ok_ai, reason_ai = filters.passes_title_filters(
+        "Senior Business Analyst Senior (AI Foundations)"
+    )
 
     assert ok_plain is True
     assert reason_plain == "OK"

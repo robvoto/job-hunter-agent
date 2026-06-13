@@ -40,9 +40,7 @@ def page_login(request: Request, error: str | None = None):  # type: ignore[no-u
     login_html = TEMPLATES_DIR / "login.html"
     if login_html.exists():
         return HTMLResponse(login_html.read_text(encoding="utf-8"))
-    return HTMLResponse(
-        "<h1>Job Hunter</h1><p><a href='/login/google'>Sign in with Google</a></p>"
-    )
+    return HTMLResponse("<h1>Job Hunter</h1><p><a href='/login/google'>Sign in with Google</a></p>")
 
 
 @router.get(GOOGLE_AUTH_PATH)

@@ -1,4 +1,4 @@
-﻿"""Helpers for filters."""
+"""Helpers for filters."""
 
 # filters.py
 
@@ -11,9 +11,6 @@ from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import KEY_CANDIDATE_CAPABILITIES, load_profile
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import normalize_title_text
-
-
-
 
 TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\[\]]")
 
@@ -94,13 +91,17 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
 
     if is_direct_match:
         if _has_numeric_title_level(normalized_title):
-            result.update({"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "primary"})
+            result.update(
+                {"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "primary"}
+            )
             return result
         result.update({"ok": True, "reason": "OK", "match_family": "primary"})
         return result
 
     if is_adjacent_match:
-        result.update({"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"})
+        result.update(
+            {"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"}
+        )
         return result
 
     result.update({"ok": False, "reason": "TITLE_NOT_TARGET", "match_family": "none"})
@@ -122,11 +123,7 @@ def _phrase_from_segment(segment: str) -> str:
     if not cleaned:
         return ""
 
-    tokens = [
-        token
-        for token in cleaned.split()
-        if len(token) >= 2 and not token.isdigit()
-    ]
+    tokens = [token for token in cleaned.split() if len(token) >= 2 and not token.isdigit()]
     if not tokens:
         return ""
     return " ".join(tokens[:3])
@@ -138,7 +135,11 @@ def suggest_title_block_phrases(title: str) -> list[str]:
     if not raw_title:
         return []
     normalized = re.sub(r"\s+", " ", raw_title)
-    segments = [segment.strip() for segment in TITLE_BLOCK_SEGMENT_SPLIT_RE.split(normalized) if segment and segment.strip()]
+    segments = [
+        segment.strip()
+        for segment in TITLE_BLOCK_SEGMENT_SPLIT_RE.split(normalized)
+        if segment and segment.strip()
+    ]
     if len(segments) <= 1:
         return []
     ranked_groups: list[list[str]] = [[], []]
@@ -263,7 +264,9 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
     return bool(analysis["ok"]), str(analysis["reason"])
 
 
-def passes_content_filters(details_text: str, card_location: str = "", title_reason: str = "") -> Tuple[bool, str]:
+def passes_content_filters(
+    details_text: str, card_location: str = "", title_reason: str = ""
+) -> Tuple[bool, str]:
     """
     Description-based filtering.
     Returns (True, "OK") if description fits, else (False, "REASON").
@@ -279,7 +282,9 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
         if phrase and phrase in description_lower:
             return False, reason
 
-    hard_block_matches = find_hard_block_matches(details_text, profile.get("must_not_require_skills", []))
+    hard_block_matches = find_hard_block_matches(
+        details_text, profile.get("must_not_require_skills", [])
+    )
     for match in hard_block_matches:
         token = _normalize_reason_token(match.get("matched_term") or "")
         if token:
@@ -290,7 +295,10 @@ def passes_content_filters(details_text: str, card_location: str = "", title_rea
         return False, capability_reason
 
     if hard_block_matches:
-        return False, f"DESC_HARD_BLOCK_RULE:{_normalize_reason_token(hard_block_matches[0].get('matched_term') or '')}"
+        return (
+            False,
+            f"DESC_HARD_BLOCK_RULE:{_normalize_reason_token(hard_block_matches[0].get('matched_term') or '')}",
+        )
 
     if capability_reason != "OK":
         return True, capability_reason
@@ -310,7 +318,8 @@ def passes_quick_card_filters(
     profile = load_profile()
     teaser_lower = (teaser or "").strip().lower()
     title_context = "\n".join(
-        part for part in [
+        part
+        for part in [
             (title or "").strip(),
             teaser_lower,
             (company or "").strip().lower(),
@@ -323,7 +332,8 @@ def passes_quick_card_filters(
     )
     normalized_title = normalize_title_text(title, title_context)
     combined = "\n".join(
-        part for part in [
+        part
+        for part in [
             normalized_title,
             teaser_lower,
             (company or "").strip().lower(),
@@ -335,8 +345,12 @@ def passes_quick_card_filters(
         if part
     )
     counter_patterns = profile.get("cheap_keep_counter_patterns", [])
-    counter_hits = sum(1 for pattern in counter_patterns if pattern and re.search(pattern, combined))
-    direct_target_title = _matches_normalized_title(normalized_title, profile.get("target_roles", []))
+    counter_hits = sum(
+        1 for pattern in counter_patterns if pattern and re.search(pattern, combined)
+    )
+    direct_target_title = _matches_normalized_title(
+        normalized_title, profile.get("target_roles", [])
+    )
 
     for rule in profile.get("cheap_reject_metadata_rules", []):
         pattern = rule.get("pattern", "")
@@ -353,8 +367,10 @@ def passes_quick_card_filters(
         if not pattern or not haystack or not re.search(pattern, haystack):
             continue
 
-        title_has_specialist_signal = bool(re.search(pattern, normalized_title)) 
-        unusually_strong_counter = direct_target_title and counter_hits >= 4 and not title_has_specialist_signal
+        title_has_specialist_signal = bool(re.search(pattern, normalized_title))
+        unusually_strong_counter = (
+            direct_target_title and counter_hits >= 4 and not title_has_specialist_signal
+        )
         if unusually_strong_counter:
             continue
         return False, reason

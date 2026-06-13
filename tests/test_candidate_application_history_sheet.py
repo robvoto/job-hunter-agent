@@ -5,14 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from job_hunter_agent.candidate_application_history import (
-    fetch_job_rejection_sheet_rows,
     fetch_candidate_job_rejection_rows,
+    fetch_job_rejection_sheet_rows,
 )
 from job_hunter_agent.global_settings import (
     get_candidate_application_history_spreadsheet_id,
     get_candidate_application_history_tab_name,
 )
-
 
 _VALID_CSV = (
     "Run Date,Company,From,Subject,Content,Thread ID,Message ID,Status\r\n"
@@ -38,6 +37,7 @@ def _mock_response(text: str, status_code: int = 200) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Successful fetch
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_returns_list_of_dicts():
     with patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get:
@@ -79,6 +79,7 @@ def test_fetch_accepts_custom_sheet_id_and_tab():
 # Missing headers raises ValueError
 # ---------------------------------------------------------------------------
 
+
 def test_missing_required_header_raises_value_error():
     with patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get:
         mock_get.return_value = _mock_response(_MISSING_HEADER_CSV)
@@ -96,6 +97,7 @@ def test_missing_header_error_names_the_missing_field():
 # ---------------------------------------------------------------------------
 # HTTP failure raises RuntimeError
 # ---------------------------------------------------------------------------
+
 
 def test_http_404_raises_runtime_error():
     with patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get:
@@ -115,6 +117,7 @@ def test_http_500_raises_runtime_error():
 # fetch_candidate_job_rejection_rows
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_candidate_returns_empty_when_disabled():
     with patch(
         "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
@@ -125,10 +128,13 @@ def test_fetch_candidate_returns_empty_when_disabled():
 
 
 def test_fetch_candidate_returns_rows_when_enabled():
-    with patch(
-        "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
-        return_value=True,
-    ), patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get:
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get,
+    ):
         mock_get.return_value = _mock_response(_VALID_CSV)
         result = fetch_candidate_job_rejection_rows()
 
@@ -138,10 +144,13 @@ def test_fetch_candidate_returns_rows_when_enabled():
 
 def test_fetch_candidate_reads_config_from_settings():
     """URL must use spreadsheet_id and tab_name from global settings, not hardcoded values."""
-    with patch(
-        "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
-        return_value=True,
-    ), patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get:
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get,
+    ):
         mock_get.return_value = _mock_response(_VALID_CSV)
         fetch_candidate_job_rejection_rows()
 

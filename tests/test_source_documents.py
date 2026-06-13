@@ -2,8 +2,7 @@
 
 import pytest
 
-from job_hunter_agent import profile_learning
-from job_hunter_agent import source_documents
+from job_hunter_agent import profile_learning, source_documents
 
 
 @pytest.fixture(autouse=True)
@@ -59,8 +58,20 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
         captured["alias_limit"] = alias_limit
         return {
             "capabilities": [
-                {"name": "agile delivery", "level": "strong", "aliases": ["scrum"], "icon_key": "delivery_project", "needs_review": False},
-                {"name": "stakeholder communication", "level": "working", "aliases": [], "icon_key": "communication_stakeholders", "needs_review": False},
+                {
+                    "name": "agile delivery",
+                    "level": "strong",
+                    "aliases": ["scrum"],
+                    "icon_key": "delivery_project",
+                    "needs_review": False,
+                },
+                {
+                    "name": "stakeholder communication",
+                    "level": "working",
+                    "aliases": [],
+                    "icon_key": "communication_stakeholders",
+                    "needs_review": False,
+                },
             ],
             "role_titles": ["Scrum Master", "Agile Project Coordinator"],
             "target_occupation_queries": ["Scrum Master", "Agile Project Coordinator"],
@@ -76,7 +87,10 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
     assert result["ok"] is True
     assert "Scrum Master\nCompany Name | 2022 - Present" in str(captured["text"])
     assert result["profile"]["target_roles"] == ["scrum master", "agile project coordinator"]
-    assert result["profile"]["target_occupation_queries"] == ["Scrum Master", "Agile Project Coordinator"]
+    assert result["profile"]["target_occupation_queries"] == [
+        "Scrum Master",
+        "Agile Project Coordinator",
+    ]
     assert result["profile"]["candidate_capabilities"]
     assert result["profile"]["candidate_capabilities"][0]["name"] == "agile delivery"
 
@@ -87,7 +101,13 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
         (
             {
                 "capabilities": [
-                    {"name": "agile delivery", "level": "strong", "aliases": [], "icon_key": "delivery_project", "needs_review": False},
+                    {
+                        "name": "agile delivery",
+                        "level": "strong",
+                        "aliases": [],
+                        "icon_key": "delivery_project",
+                        "needs_review": False,
+                    },
                 ],
                 "role_titles": [],
                 "target_occupation_queries": ["Scrum Master"],
@@ -123,5 +143,9 @@ def test_run_onboarding_fails_when_llm_omits_required_fields(monkeypatch, fixtur
 
     with pytest.raises(ValueError, match=expected):
         source_documents.run_onboarding(
-            {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": _CV_CONTENT}]}
+            {
+                "profile_sources": [
+                    {"label": "Primary CV", "filename": "cv.txt", "content": _CV_CONTENT}
+                ]
+            }
         )

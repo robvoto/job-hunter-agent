@@ -9,9 +9,9 @@ from typing import Any
 
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
-from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.scrapers.seek_runner import seek_scrape_to_records
+from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
 
 
 @dataclass
@@ -132,7 +132,9 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     li_enabled = SOURCE_LINKEDIN in context.enabled_sources
 
     print("[Seek] enabled" if seek_enabled else "[Seek] disabled in enabled_sources; skipping")
-    print("[LinkedIn] enabled" if li_enabled else "[LinkedIn] disabled in enabled_sources; skipping")
+    print(
+        "[LinkedIn] enabled" if li_enabled else "[LinkedIn] disabled in enabled_sources; skipping"
+    )
 
     if run_stop_requested():
         return kept_records, audit_rows, skill_observations

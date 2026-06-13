@@ -28,9 +28,7 @@ from job_hunter_agent.database import db_conn
 def get_knowledge(key: str, db_path: Path | None = None) -> Any | None:
     """Return parsed knowledge for key, or None if not seeded."""
     with db_conn(db_path) as conn:
-        row = conn.execute(
-            "SELECT data FROM knowledge WHERE key = ?", (key,)
-        ).fetchone()
+        row = conn.execute("SELECT data FROM knowledge WHERE key = ?", (key,)).fetchone()
     return json.loads(row["data"]) if row else None
 
 
@@ -63,6 +61,7 @@ def _is_additive_knowledge(data: dict) -> bool:
 def _merge_additive(db_data: dict, file_data: dict) -> dict:
     """Append entries from file_data that are not already in db_data (by value)."""
     import copy
+
     merged = copy.deepcopy(db_data)
     db_values = {
         str(e.get("value", "")).strip().lower()

@@ -3,20 +3,13 @@
 from __future__ import annotations
 
 import logging
-
-
 from datetime import datetime
-
 
 from job_hunter_agent import workspace_service
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.logging_utils import format_log_block
 
 logger = logging.getLogger(__name__)
-
-from job_hunter_agent.job_identity import deduplicate_across_sources
-
-from job_hunter_agent.paths import get_workspace_results_path
 
 from job_hunter_agent.io_utils import (
     save_job_history,
@@ -25,15 +18,12 @@ from job_hunter_agent.io_utils import (
     write_review_data,
     write_run_stats,
 )
-
-from job_hunter_agent.review_insights import build_review_data
-
-from job_hunter_agent.run_context import ScrapeRunContext
-
-from job_hunter_agent.run_control import run_stop_requested
-
+from job_hunter_agent.job_identity import deduplicate_across_sources
+from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
-
+from job_hunter_agent.review_insights import build_review_data
+from job_hunter_agent.run_context import ScrapeRunContext
+from job_hunter_agent.run_control import run_stop_requested
 
 NO_FRESH_CARDS_ERROR = "No fresh cards were captured in this run."
 
@@ -43,7 +33,6 @@ def _load_workspace_pool() -> list[dict]:
     import json as _json
 
     from job_hunter_agent.database import db_conn
-
     from job_hunter_agent.paths import get_active_user_id
 
     user_id = get_active_user_id()
@@ -66,7 +55,6 @@ def _save_workspace_pool(records: list[dict]) -> None:
     import json as _json
 
     from job_hunter_agent.database import db_conn, ensure_user_row
-
     from job_hunter_agent.paths import get_active_user_id
 
     user_id = get_active_user_id()

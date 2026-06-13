@@ -10,13 +10,14 @@ from job_hunter_agent.capability_matching import (
 logger = logging.getLogger(__name__)
 from job_hunter_agent.description_trust import full_description_confidence
 from job_hunter_agent.filters import analyze_title_filters
+from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.history import viewed_by_user
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.posting_utils import current_posted_age_days
 from job_hunter_agent.preferences import (
     assess_location_preference,
     salary_fit_adjustment,
 )
-from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.profile_store import (
     KEY_CONVERGENCE,
     KEY_LLM_GRADE_BANDS,
@@ -26,8 +27,12 @@ from job_hunter_agent.profile_store import (
     get_scoring_rules,
     load_profile,
 )
-
-
+from job_hunter_agent.record_schema import (
+    RECORD_FIT_SCORE_BREAKDOWN_KEY,
+    RECORD_FIT_SCORE_KEY,
+    RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
+)
 from job_hunter_agent.role_analysis import (
     friendly_capability_label,
     role_text_bundle,
@@ -38,15 +43,8 @@ from job_hunter_agent.signal_detection import (
     competitive_signal_assessments,
     hard_block_reasons,
 )
-from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.signal_schema import SIGNAL_LABEL_KEY, TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
-from job_hunter_agent.record_schema import (
-    RECORD_FIT_SCORE_KEY,
-    RECORD_FIT_SCORE_BREAKDOWN_KEY,
-    RECORD_JOB_REQUIREMENTS_KEY,
-    RECORD_REQUIREMENT_COVERAGE_KEY,
-)
 
 LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"

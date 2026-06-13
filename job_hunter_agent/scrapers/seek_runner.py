@@ -17,10 +17,11 @@ from playwright._impl._errors import TargetClosedError
 from playwright.async_api import async_playwright as async_playwright_ctx
 from playwright.sync_api import sync_playwright
 
+import job_hunter_agent.record_schema as rs
 from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 from job_hunter_agent.global_settings import get_playwright_browser_mode
-from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.history import finalize_record
+from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -32,9 +33,8 @@ from job_hunter_agent.job_review_pipeline import (
 )
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
-import job_hunter_agent.record_schema as rs
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
-from job_hunter_agent.scrapers.base import build_initial_flat_record, _build_initial_source_metadata
+from job_hunter_agent.scrapers.base import _build_initial_source_metadata, build_initial_flat_record
 from job_hunter_agent.scrapers.seek import (
     SELECTOR_CARDS,
     SELECTOR_COMPANY,
@@ -99,7 +99,6 @@ def _seek_run_progress(
     return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
 
 
-
 def _seek_nested_value(payload: object, key_names: tuple[str, ...]) -> object:
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -134,7 +133,9 @@ def _seek_json_safe_value(value: object):
     return value
 
 
-def _seek_source_metadata(detail_page, details_payload: dict, *, redux_payload=None) -> tuple[dict, object]:
+def _seek_source_metadata(
+    detail_page, details_payload: dict, *, redux_payload=None
+) -> tuple[dict, object]:
     if redux_payload is None and detail_page is not None:
         try:
             redux_payload = detail_page.evaluate("window.SEEK_REDUX_DATA || null")
@@ -144,13 +145,17 @@ def _seek_source_metadata(detail_page, details_payload: dict, *, redux_payload=N
     combined_payload = redux_payload if redux_payload not in (None, "", [], {}) else details_payload
     apply_url = _seek_string_value(combined_payload, ("shareLink",))
     company_profile_url = _seek_string_value(combined_payload, ("companySearchUrl",))
-    company_profile_name = _seek_string_value(combined_payload, ("normalisedOrganisationName", "companyProfileName"))
+    company_profile_name = _seek_string_value(
+        combined_payload, ("normalisedOrganisationName", "companyProfileName")
+    )
     advertiser_block = _seek_nested_value(combined_payload, ("advertiser",))
     if isinstance(advertiser_block, dict):
         poster_company = _seek_string_value(advertiser_block, ("name", "label", "value"))
     else:
         poster_company = _seek_string_value(combined_payload, ("advertiser", "name"))
-    hiring_company = _seek_string_value(combined_payload, ("normalisedOrganisationName", "companyProfileName", "name"))
+    hiring_company = _seek_string_value(
+        combined_payload, ("normalisedOrganisationName", "companyProfileName", "name")
+    )
     raw_source_fields = {}
     for key in [
         "seekPostingSourceCode",
@@ -166,8 +171,12 @@ def _seek_source_metadata(detail_page, details_payload: dict, *, redux_payload=N
         if value not in (None, "", [], {}):
             raw_source_fields[key] = _seek_json_safe_value(value)
 
-    ats_requisition_id = str(_seek_string_value(combined_payload, ("seekHirerJobReference",)) or "").strip()
-    platform_job_id = str(_seek_string_value(combined_payload, ("seekPostingSourceCode",)) or "").strip()
+    ats_requisition_id = str(
+        _seek_string_value(combined_payload, ("seekHirerJobReference",)) or ""
+    ).strip()
+    platform_job_id = str(
+        _seek_string_value(combined_payload, ("seekPostingSourceCode",)) or ""
+    ).strip()
     metadata = _build_initial_source_metadata(
         source="seek",
         raw_source_fields=raw_source_fields,
@@ -183,7 +192,9 @@ def _seek_source_metadata(detail_page, details_payload: dict, *, redux_payload=N
     return metadata, combined_payload
 
 
-def build_seek_card_record(card, search_target: dict, run_iso: str, page_num: int, filter_state=None) -> dict:
+def build_seek_card_record(
+    card, search_target: dict, run_iso: str, page_num: int, filter_state=None
+) -> dict:
     title_el = card.query_selector(SELECTOR_TITLE)
     company_el = card.query_selector(SELECTOR_COMPANY)
     posted_el = card.query_selector(SELECTOR_POSTED)
@@ -238,18 +249,23 @@ def apply_work_mode_enrichment(record: dict, raw_source_payload: object, details
         log_work_mode_result(str(record.get(rs.RECORD_JOB_KEY) or ""), "seek", record)
 
 
-def _build_seek_review_hooks(raw_html: str | None, raw_source_payload: object) -> ReviewPipelineHooks:
+def _build_seek_review_hooks(
+    raw_html: str | None, raw_source_payload: object
+) -> ReviewPipelineHooks:
     """Build review hooks from pre-captured page data.
 
     raw_html and raw_source_payload are captured in the main Playwright thread before
     any thread pool dispatch, so the hooks hold only plain Python objects — no live page.
     """
+
     def _after_description_loaded(record: dict, context: ReviewPipelineContext) -> None:
         if DEBUG_CAPTURE_SOURCE_PAYLOADS and raw_html is not None:
             try:
                 write_source_payload_debug(
                     "seek",
-                    str(record.get(rs.RECORD_JOB_KEY) or record.get(rs.RECORD_URL_KEY) or "unknown"),
+                    str(
+                        record.get(rs.RECORD_JOB_KEY) or record.get(rs.RECORD_URL_KEY) or "unknown"
+                    ),
                     raw_html=raw_html,
                     raw_json=raw_source_payload,
                     normalized_record=record,
@@ -258,13 +274,14 @@ def _build_seek_review_hooks(raw_html: str | None, raw_source_payload: object) -
                 pass
 
     def _after_preference_filters(record: dict, context: ReviewPipelineContext) -> None:
-        apply_work_mode_enrichment(record, raw_source_payload, str(record.get(rs.RECORD_FIT_SOURCE_TEXT_KEY) or ""))
+        apply_work_mode_enrichment(
+            record, raw_source_payload, str(record.get(rs.RECORD_FIT_SOURCE_TEXT_KEY) or "")
+        )
 
     return ReviewPipelineHooks(
         after_description_loaded=_after_description_loaded,
         after_preference_filters=_after_preference_filters,
     )
-
 
 
 def _review_seek_job_detail(
@@ -291,15 +308,27 @@ async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     job_key = str(record.get(rs.RECORD_JOB_KEY) or "unknown")
     title = str(record.get(rs.RECORD_TITLE_KEY) or "")
     company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
-    logger.info("[PIPELINE][DETAIL_FETCH_START] source=SEEK job_key=%s title=%r company=%r url=%r",
-                job_key, title, company, str(record.get(rs.RECORD_URL_KEY) or ""))
+    logger.info(
+        "[PIPELINE][DETAIL_FETCH_START] source=SEEK job_key=%s title=%r company=%r url=%r",
+        job_key,
+        title,
+        company,
+        str(record.get(rs.RECORD_URL_KEY) or ""),
+    )
     _t0 = time.monotonic()
     details_payload = await fetch_job_details_payload_async(page, record[rs.RECORD_URL_KEY])
     details_text = str(details_payload.get("text") or "")
     details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
     _fetch_ms = int((time.monotonic() - _t0) * 1000)
-    logger.info("[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
-                job_key, title, company, details_status, _fetch_ms, len(details_text))
+    logger.info(
+        "[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
+        job_key,
+        title,
+        company,
+        details_status,
+        _fetch_ms,
+        len(details_text),
+    )
     record["_obs_detail_fetch_ms"] = _fetch_ms
 
     redux_payload = None
@@ -342,15 +371,27 @@ async def _seek_detail_batch_on_context(
         if run_stop_requested():
             rec[rs.RECORD_DECISION_KEY] = "REJECT"
             rec[rs.RECORD_REJECT_REASON_KEY] = "STOP_REQUESTED"
-            finalize_record(review_context.job_history, review_context.audit_rows, rec, review_context.run_iso)
+            finalize_record(
+                review_context.job_history, review_context.audit_rows, rec, review_context.run_iso
+            )
             results[idx] = ({"decision": "REJECT", "reject_reason": "STOP_REQUESTED"}, rec, [], 0.0)
             return
         async with semaphore:
             if run_stop_requested():
                 rec[rs.RECORD_DECISION_KEY] = "REJECT"
                 rec[rs.RECORD_REJECT_REASON_KEY] = "STOP_REQUESTED"
-                finalize_record(review_context.job_history, review_context.audit_rows, rec, review_context.run_iso)
-                results[idx] = ({"decision": "REJECT", "reject_reason": "STOP_REQUESTED"}, rec, [], 0.0)
+                finalize_record(
+                    review_context.job_history,
+                    review_context.audit_rows,
+                    rec,
+                    review_context.run_iso,
+                )
+                results[idx] = (
+                    {"decision": "REJECT", "reject_reason": "STOP_REQUESTED"},
+                    rec,
+                    [],
+                    0.0,
+                )
                 return
             page = await browser_context.new_page()
             t0 = time.monotonic()
@@ -361,8 +402,18 @@ async def _seek_detail_batch_on_context(
             except Exception as exc:
                 rec[rs.RECORD_DECISION_KEY] = "REJECT"
                 rec[rs.RECORD_REJECT_REASON_KEY] = f"CARD_EXCEPTION:{type(exc).__name__}"
-                finalize_record(review_context.job_history, review_context.audit_rows, rec, review_context.run_iso)
-                results[idx] = ({"decision": "REJECT", "reject_reason": rec[rs.RECORD_REJECT_REASON_KEY]}, rec, [], 0.0)
+                finalize_record(
+                    review_context.job_history,
+                    review_context.audit_rows,
+                    rec,
+                    review_context.run_iso,
+                )
+                results[idx] = (
+                    {"decision": "REJECT", "reject_reason": rec[rs.RECORD_REJECT_REASON_KEY]},
+                    rec,
+                    [],
+                    0.0,
+                )
                 logger.warning(
                     "[SEEK] REJECTED (async detail) [CARD_EXCEPTION:%s] %s @ %s\n%s",
                     type(exc).__name__,
@@ -386,7 +437,9 @@ class _AsyncDetailSession:
     browser on every call.
     """
 
-    def __init__(self, headless: bool, viewport_width: int, viewport_height: int, n_workers: int) -> None:
+    def __init__(
+        self, headless: bool, viewport_width: int, viewport_height: int, n_workers: int
+    ) -> None:
         self._n_workers = n_workers
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(
@@ -481,7 +534,9 @@ def seek_scrape_to_records(
             list_page = context.new_page()
         else:
             browser = playwright.chromium.launch(headless=headless, args=_BROWSER_ARGS)
-            bctx = browser.new_context(viewport={"width": playwright_viewport_width, "height": playwright_viewport_height})
+            bctx = browser.new_context(
+                viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}
+            )
             bctx.add_init_script(_WEBDRIVER_INIT)
             list_page = bctx.new_page()
             context = browser
@@ -507,7 +562,8 @@ def seek_scrape_to_records(
 
                 logger.info(
                     "[SEEK] target %d/%d | location=%s | keywords=%s | classifications=%s | pages=1..%d",
-                    target_index, total_targets,
+                    target_index,
+                    total_targets,
                     search_location or "(all)",
                     search_keywords or "(unset)",
                     classification_ids or "(none)",
@@ -519,7 +575,11 @@ def seek_scrape_to_records(
                     if run_stop_requested():
                         logger.info("%s stop requested; ending scrape", page_tag)
                         break
-                    page_url = set_page_param(base_search_url, current_page_num) if current_page_num > 1 else base_search_url
+                    page_url = (
+                        set_page_param(base_search_url, current_page_num)
+                        if current_page_num > 1
+                        else base_search_url
+                    )
 
                     logger.info("%s url=%s", page_tag, page_url)
 
@@ -531,7 +591,10 @@ def seek_scrape_to_records(
                         # challenge page load.
                         try:
                             if "just a moment" in (list_page.title() or "").lower():
-                                logger.info("%s Cloudflare challenge detected; waiting for auto-resolve", page_tag)
+                                logger.info(
+                                    "%s Cloudflare challenge detected; waiting for auto-resolve",
+                                    page_tag,
+                                )
                                 list_page.wait_for_function(
                                     "() => !document.title.toLowerCase().includes('just a moment')",
                                     timeout=15000,
@@ -539,18 +602,30 @@ def seek_scrape_to_records(
                                 logger.info("%s Cloudflare challenge resolved", page_tag)
                         except Exception:
                             pass
-                        list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
+                        list_page.wait_for_selector(
+                            SELECTOR_CARDS, timeout=playwright_selector_timeout
+                        )
                     except Exception as exc:
-                        logger.info("%s no visible job cards; stopping target [%s]", page_tag, type(exc).__name__)
+                        logger.info(
+                            "%s no visible job cards; stopping target [%s]",
+                            page_tag,
+                            type(exc).__name__,
+                        )
                         try:
                             page_title = list_page.title()
                             page_url_actual = list_page.url
-                            body_text = (list_page.inner_text("body") or "")[:500].replace("\n", " ")
+                            body_text = (list_page.inner_text("body") or "")[:500].replace(
+                                "\n", " "
+                            )
                             logger.info(
                                 "%s page_title=%r actual_url=%s body_snippet=%r",
-                                page_tag, page_title, page_url_actual, body_text,
+                                page_tag,
+                                page_title,
+                                page_url_actual,
+                                body_text,
                             )
                             import pathlib
+
                             screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
                             list_page.screenshot(path=str(screenshot_path), full_page=False)
                             logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
@@ -575,20 +650,33 @@ def seek_scrape_to_records(
                             logger.info("%s stop requested; finishing current page", page_tag)
                             break
                         try:
-                            record = build_seek_card_record(card, search_target, run_iso, current_page_num, filter_state)
+                            record = build_seek_card_record(
+                                card, search_target, run_iso, current_page_num, filter_state
+                            )
                             record["job_quality_signals"] = detect_broad_engagement_signal(record)
                             card_records.append(record)
                         except TargetClosedError:
-                            logger.warning("%s browser target closed during card build; stopping page", page_tag)
+                            logger.warning(
+                                "%s browser target closed during card build; stopping page",
+                                page_tag,
+                            )
                             target_closed = True
                             break
                         except Exception as exc:
                             logger.warning(
                                 "%s REJECTED (card build) [%s]\n%s",
-                                page_tag, type(exc).__name__, traceback.format_exc(),
+                                page_tag,
+                                type(exc).__name__,
+                                traceback.format_exc(),
                             )
 
-                    set_run_progress(_seek_run_progress(current_page_num, configured_seek_max_pages, elapsed_s=time.monotonic() - target_t0))
+                    set_run_progress(
+                        _seek_run_progress(
+                            current_page_num,
+                            configured_seek_max_pages,
+                            elapsed_s=time.monotonic() - target_t0,
+                        )
+                    )
 
                     page_has_fresh_card = any(
                         r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) is None
@@ -600,7 +688,9 @@ def seek_scrape_to_records(
                     pre_decided: list[tuple[int, tuple]] = []
                     needs_detail: list[tuple[int, dict]] = []
                     for i, record in enumerate(card_records):
-                        pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(record, review_context)
+                        pre_outcome, record, _, should_fetch_details = (
+                            review_pre_detail_normalized_job(record, review_context)
+                        )
                         if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
                             pre_decided.append((i, (pre_outcome, record, [], 0.0)))
                         else:
@@ -611,9 +701,7 @@ def seek_scrape_to_records(
 
                     # Phase 3: parallel detail fetch + LLM via persistent async browser
                     if needs_detail and not run_stop_requested() and not target_closed:
-                        batch_results.update(
-                            detail_session.run_batch(needs_detail, review_context)
-                        )
+                        batch_results.update(detail_session.run_batch(needs_detail, review_context))
 
                     # Phase 4: process results in original card order
                     for i in range(len(card_records)):
@@ -627,24 +715,39 @@ def seek_scrape_to_records(
                         _job_breakdown: list | None = None
 
                         if _job_decision == "KEEP":
-                            _job_score, _job_breakdown = fit_score_and_breakdown_displayed(record, profile)
+                            _job_score, _job_breakdown = fit_score_and_breakdown_displayed(
+                                record, profile
+                            )
                             skill_observations.extend(record_skill_observations)
                             kept_records.append(record)
                             logger.info(
                                 "%s KEPT %s @ %s | %s",
-                                page_tag, title, company,
+                                page_tag,
+                                title,
+                                company,
                                 "SEEN_BEFORE" if record.get("seen_before") else "NEW",
                             )
 
                         if _job_decision in {"KEEP", "REJECT"}:
-                            print_job_human_summary(record, profile, elapsed_s=job_elapsed_s or None, score=_job_score, llm_cost=0.0, breakdown=_job_breakdown)
+                            print_job_human_summary(
+                                record,
+                                profile,
+                                elapsed_s=job_elapsed_s or None,
+                                score=_job_score,
+                                llm_cost=0.0,
+                                breakdown=_job_breakdown,
+                            )
                             close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
 
                     if target_closed:
                         break
 
                     if not page_has_fresh_card:
-                        logger.info("%s all cards were older than %d day(s); stopping target", page_tag, configured_date_range)
+                        logger.info(
+                            "%s all cards were older than %d day(s); stopping target",
+                            page_tag,
+                            configured_date_range,
+                        )
                         break
 
                     if run_stop_requested():

@@ -1,19 +1,22 @@
 """Tests for profile_gaps: gap computation and requirement status classification."""
 
 from job_hunter_agent.profile_gaps import (
+    PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY,
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     STATUS_UNKNOWN,
-    PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY,
     classify_requirement_status,
     compute_profile_gaps,
 )
 
-
 _CAPABILITY_RULES = [
     {"name": "stakeholder engagement", "level": "strong", "aliases": ["stakeholder management"]},
     {"name": "process mapping", "level": "working", "aliases": []},
-    {"name": "requirements analysis", "level": "strong", "aliases": ["requirements gathering", "business analysis"]},
+    {
+        "name": "requirements analysis",
+        "level": "strong",
+        "aliases": ["requirements gathering", "business analysis"],
+    },
 ]
 _MUST_NOT_REQUIRE = ["payroll systems", "AHPRA registration"]
 
@@ -59,12 +62,16 @@ def test_classify_alias_match_returns_confirmed_have():
 
 
 def test_classify_partial_name_contained_in_requirement_returns_confirmed_have():
-    status = classify_requirement_status("Strong process mapping skills required", _CAPABILITY_RULES, [])
+    status = classify_requirement_status(
+        "Strong process mapping skills required", _CAPABILITY_RULES, []
+    )
     assert status == STATUS_CONFIRMED_HAVE
 
 
 def test_classify_must_not_require_match_returns_confirmed_do_not_have():
-    status = classify_requirement_status("Payroll systems experience", _CAPABILITY_RULES, _MUST_NOT_REQUIRE)
+    status = classify_requirement_status(
+        "Payroll systems experience", _CAPABILITY_RULES, _MUST_NOT_REQUIRE
+    )
     assert status == STATUS_CONFIRMED_DO_NOT_HAVE
 
 
@@ -75,13 +82,17 @@ def test_classify_must_not_require_takes_precedence_over_capability_match():
 
 
 def test_classify_unknown_requirement_returns_unknown():
-    status = classify_requirement_status("exotic platform certification", _CAPABILITY_RULES, _MUST_NOT_REQUIRE)
+    status = classify_requirement_status(
+        "exotic platform certification", _CAPABILITY_RULES, _MUST_NOT_REQUIRE
+    )
     assert status == STATUS_UNKNOWN
 
 
 def test_classify_empty_requirement_returns_unknown():
     assert classify_requirement_status("", _CAPABILITY_RULES, _MUST_NOT_REQUIRE) == STATUS_UNKNOWN
-    assert classify_requirement_status("   ", _CAPABILITY_RULES, _MUST_NOT_REQUIRE) == STATUS_UNKNOWN
+    assert (
+        classify_requirement_status("   ", _CAPABILITY_RULES, _MUST_NOT_REQUIRE) == STATUS_UNKNOWN
+    )
 
 
 def test_classify_case_insensitive():

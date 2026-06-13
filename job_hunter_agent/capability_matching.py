@@ -1,22 +1,20 @@
-﻿"""Helpers for capability matching."""
+"""Helpers for capability matching."""
 
 import re
-from functools import lru_cache
 from datetime import datetime
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
 from job_hunter_agent.capability_matrix import expand_capability_terms
 from job_hunter_agent.description_trust import get_trusted_full_description
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_ui_labels
-
-
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
-    KEY_MUST_NOT_REQUIRED_SKILLS,
     CapabilityLevel,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
@@ -44,9 +42,10 @@ from job_hunter_agent.text_processing import (
     list_to_phrase,
 )
 
-
 _REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset()
-_REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {CATEGORY_HARD_BLOCKER_PATTERN}
+_REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {
+    CATEGORY_HARD_BLOCKER_PATTERN
+}
 
 
 @lru_cache(maxsize=1)
@@ -79,7 +78,9 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
             continue
         if not any(text_contains_term(lowered, term) for term in terms if str(term).strip()):
             continue
-        decision = compact_whitespace(record.get("decision") or record.get("learning_status") or record.get("status")).lower()
+        decision = compact_whitespace(
+            record.get("decision") or record.get("learning_status") or record.get("status")
+        ).lower()
         display_label = _display_review_signal_label(label)
         if not display_label:
             continue
@@ -96,7 +97,11 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
         label = compact_whitespace(item.get("label") or "")
         terms = item.get("terms") if isinstance(item, dict) else []
         category = compact_whitespace(item.get(LEARNING_CATEGORY_KEY) or "").lower()
-        if not label or not isinstance(terms, list) or category in _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS:
+        if (
+            not label
+            or not isinstance(terms, list)
+            or category in _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS
+        ):
             continue
         if not any(text_contains_term(lowered, term) for term in terms):
             continue
@@ -104,10 +109,7 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
         if display_label:
             buckets["matched"].append(display_label)
 
-    return {
-        key: dedupe_preserve_order(values)
-        for key, values in buckets.items()
-    }
+    return {key: dedupe_preserve_order(values) for key, values in buckets.items()}
 
 
 def _display_review_signal_label(value: str) -> str:
@@ -117,21 +119,49 @@ def _display_review_signal_label(value: str) -> str:
     return friendly_capability_label(cleaned)
 
 
-def reviewed_signal_match_summary(record: dict, profile: Optional[dict] = None) -> dict[str, list[str]]:
+def reviewed_signal_match_summary(
+    record: dict, profile: Optional[dict] = None
+) -> dict[str, list[str]]:
     existing = record.get("reviewed_signal_matches")
     if isinstance(existing, dict):
         return {
             "matched": dedupe_preserve_order(
-                [label for label in (_display_review_signal_label(item) for item in existing.get("matched") or []) if label]
+                [
+                    label
+                    for label in (
+                        _display_review_signal_label(item) for item in existing.get("matched") or []
+                    )
+                    if label
+                ]
             ),
             "evidence_only": dedupe_preserve_order(
-                [label for label in (_display_review_signal_label(item) for item in existing.get("evidence_only") or []) if label]
+                [
+                    label
+                    for label in (
+                        _display_review_signal_label(item)
+                        for item in existing.get("evidence_only") or []
+                    )
+                    if label
+                ]
             ),
             "ignored": dedupe_preserve_order(
-                [label for label in (_display_review_signal_label(item) for item in existing.get("ignored") or []) if label]
+                [
+                    label
+                    for label in (
+                        _display_review_signal_label(item) for item in existing.get("ignored") or []
+                    )
+                    if label
+                ]
             ),
             "unresolved": dedupe_preserve_order(
-                [label for label in (_display_review_signal_label(item) for item in existing.get("unresolved") or []) if label]
+                [
+                    label
+                    for label in (
+                        _display_review_signal_label(item)
+                        for item in existing.get("unresolved") or []
+                    )
+                    if label
+                ]
             ),
         }
     source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
@@ -178,8 +208,11 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
         if not cleaned_skill or not text_contains_term(lowered, cleaned_skill):
             continue
         pos = lowered.find(cleaned_skill)
-        context_window = lowered[max(0, pos - 90): pos + 90] if pos >= 0 else lowered
-        if re.search(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b", context_window):
+        context_window = lowered[max(0, pos - 90) : pos + 90] if pos >= 0 else lowered
+        if re.search(
+            r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b",
+            context_window,
+        ):
             continue
         matched_must_not.append(cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill)
 
@@ -213,13 +246,18 @@ def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
             continue
         label = cleaned_skill.upper() if cleaned_skill.isupper() else cleaned_skill
         pos = lowered.find(cleaned_skill)
-        context_window = lowered[max(0, pos - 90): pos + 90] if pos >= 0 else lowered
-        if re.search(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b", context_window):
+        context_window = lowered[max(0, pos - 90) : pos + 90] if pos >= 0 else lowered
+        if re.search(
+            r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b",
+            context_window,
+        ):
             watchouts.append(f"{label} appears desirable")
         else:
             watchouts.append(f"{label} appears required")
 
-    for match in find_hard_block_matches(details_text, profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, [])):
+    for match in find_hard_block_matches(
+        details_text, profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, [])
+    ):
         canonical = compact_whitespace(match.get("value") or "")
         matched_term = compact_whitespace(match.get("matched_term") or "")
         term_key = canonical.lower() or matched_term.lower()
@@ -240,7 +278,9 @@ def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
 
 def is_capability_fit_highlight(value: str) -> bool:
     normalized = compact_whitespace(value)
-    return normalized.startswith("Capability match:") or normalized.startswith("Strong capability match:")
+    return normalized.startswith("Capability match:") or normalized.startswith(
+        "Strong capability match:"
+    )
 
 
 def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
@@ -265,7 +305,9 @@ def build_risk_and_missing_profile_support(
         risks.append("Secondary role-family match rather than direct target role")
 
     if capability_matches["must_not"]:
-        missing.append(f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not shown")
+        missing.append(
+            f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not shown"
+        )
 
     if capability_matches["limited_depth"]:
         risks.append(
@@ -274,7 +316,7 @@ def build_risk_and_missing_profile_support(
 
     risks.extend(description_watchout_reasons(details_text, profile))
 
-    for signal in (competitive_signals or []):
+    for signal in competitive_signals or []:
         if int(signal.get(SIGNAL_ADJUSTMENT_KEY, 0)) < 0:
             alignment = compact_whitespace(signal.get(SIGNAL_ALIGNMENT_KEY) or "").lower()
             fit_label = compact_whitespace(signal.get(SIGNAL_LABEL_KEY) or "")
@@ -283,7 +325,10 @@ def build_risk_and_missing_profile_support(
                 if alignment == "weak":
                     missing.append(f"{risk_label} required but weakly shown")
                 else:
-                    partial_suffix = str(_capability_ui_labels().get("partial_support_risk_suffix") or "is only partially supported by your profile")
+                    partial_suffix = str(
+                        _capability_ui_labels().get("partial_support_risk_suffix")
+                        or "is only partially supported by your profile"
+                    )
                     risks.append(f"{risk_label} {partial_suffix}")
 
     return dedupe_preserve_order(risks)[:4], dedupe_preserve_order(missing)[:4]
@@ -291,7 +336,11 @@ def build_risk_and_missing_profile_support(
 
 def _normalized_aliases(values: List[str]) -> List[str]:
     return dedupe_preserve_order(
-        [compact_whitespace(str(value)).lower() for value in values if compact_whitespace(str(value))]
+        [
+            compact_whitespace(str(value)).lower()
+            for value in values
+            if compact_whitespace(str(value))
+        ]
     )
 
 

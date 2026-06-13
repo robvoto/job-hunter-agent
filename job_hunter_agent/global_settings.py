@@ -7,10 +7,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
-from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
-
 
 _DB_KEY = "global_settings"
 
@@ -28,15 +27,15 @@ def _load_managed_global_settings() -> dict[str, Any]:
 
 def _db_load(db_path: Path | None = None) -> dict[str, Any] | None:
     from job_hunter_agent.database import db_conn
+
     with db_conn(db_path) as conn:
-        row = conn.execute(
-            "SELECT value FROM global_settings WHERE key = ?", (_DB_KEY,)
-        ).fetchone()
+        row = conn.execute("SELECT value FROM global_settings WHERE key = ?", (_DB_KEY,)).fetchone()
     return json.loads(row["value"]) if row else None
 
 
 def _db_save(settings: dict[str, Any], db_path: Path | None = None) -> None:
     from job_hunter_agent.database import db_conn
+
     with db_conn(db_path) as conn:
         conn.execute(
             """
@@ -183,15 +182,21 @@ def get_repeated_listing_min_span_days() -> int:
 
 
 def get_multi_listing_red_flag_min_listings() -> int:
-    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS])
+    return int(
+        load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS]
+    )
 
 
 def get_multi_listing_red_flag_min_span_days() -> int:
-    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS])
+    return int(
+        load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]
+    )
 
 
 def get_min_trusted_description_length() -> int:
-    return int(load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH])
+    return int(
+        load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH]
+    )
 
 
 def get_description_compaction_enabled() -> bool:
@@ -199,11 +204,15 @@ def get_description_compaction_enabled() -> bool:
 
 
 def get_description_compaction_min_chars() -> int:
-    return int(load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_MIN_CHARS])
+    return int(
+        load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_MIN_CHARS]
+    )
 
 
 def get_description_compaction_min_retention() -> float:
-    return float(load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_MIN_RETENTION])
+    return float(
+        load_global_settings()[KEY_DESCRIPTION_COMPACTION_SETTINGS][KEY_COMPACTION_MIN_RETENTION]
+    )
 
 
 def get_playwright_headless() -> bool:
@@ -211,7 +220,11 @@ def get_playwright_headless() -> bool:
 
 
 def get_playwright_browser_mode() -> str:
-    return str(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_BROWSER_MODE]).strip().lower()
+    return (
+        str(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_BROWSER_MODE])
+        .strip()
+        .lower()
+    )
 
 
 def get_salary_limits() -> dict[str, dict[str, int]]:
@@ -220,11 +233,7 @@ def get_salary_limits() -> dict[str, dict[str, int]]:
 
 def get_allowed_source_document_suffixes() -> frozenset[str]:
     suffixes = load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_SOURCE_DOCUMENT_SUFFIXES]
-    return frozenset(
-        str(value).strip().lower()
-        for value in suffixes
-        if str(value).strip()
-    )
+    return frozenset(str(value).strip().lower() for value in suffixes if str(value).strip())
 
 
 def get_allowed_source_document_suffixes_label() -> str:
@@ -254,6 +263,14 @@ def get_candidate_application_history_tab_name() -> str:
 
 def get_candidate_application_history_required_headers() -> list[str]:
     return list(get_candidate_application_history_settings()["required_headers"])
+
+
+def get_candidate_application_history_sync_before_run() -> bool:
+    return bool(
+        get_candidate_application_history_settings().get(
+            KEY_CANDIDATE_APPLICATION_HISTORY_SYNC_BEFORE_RUN, False
+        )
+    )
 
 
 @lru_cache(maxsize=1)

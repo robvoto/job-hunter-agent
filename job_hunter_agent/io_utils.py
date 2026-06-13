@@ -5,21 +5,22 @@ handling file paths, and normalizing text for consistent processing
 across the job hunter agent. It centralizes common I/O patterns
 to ensure data integrity and error handling.
 """
+
+import io
 import json
 import logging
 import re
 import sys
-import io
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from job_hunter_agent.config import AUTH_ENCODING, DEBUG_MODE, DEFAULT_ERRORS
 from job_hunter_agent.paths import (
     CV_EXTRACTION_CACHE_PATH,
     DEBUG_SOURCE_PAYLOADS_DIR,
     LLM_CACHE_PATH,
 )
-from job_hunter_agent.config import AUTH_ENCODING, DEFAULT_ERRORS, DEBUG_MODE
 
 DEBUG_CAPTURE_SOURCE_PAYLOADS = DEBUG_MODE
 logger = logging.getLogger(__name__)
@@ -197,32 +198,39 @@ def save_cv_extraction_cache(cache: Dict[str, Any]) -> None:
 
 def load_parsing_rules() -> Dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     return get_knowledge("parsing_rules") or {}
 
 
 def load_ui_labels() -> Dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     return get_knowledge("ui_labels") or {}
 
 
 def load_work_mode_rules() -> Dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     return get_knowledge("work_mode_rules") or {}
 
 
 def load_signal_defaults() -> Dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     payload = get_knowledge("signal_defaults") or {}
     defaults = payload.get("signal_defaults")
     if isinstance(defaults, dict):
         return defaults
-    logger.warning("[IO_UTILS][WARN] signal_defaults missing or invalid in knowledge store; returning an empty dict.")
+    logger.warning(
+        "[IO_UTILS][WARN] signal_defaults missing or invalid in knowledge store; returning an empty dict."
+    )
     return {}
 
 
 def load_job_history() -> Dict[str, dict]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         rows = conn.execute(
@@ -235,6 +243,7 @@ def load_job_history() -> Dict[str, dict]:
 def save_job_history(history: Dict[str, dict]) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
+
     if not history:
         return
     user_id = get_active_user_id()
@@ -271,6 +280,7 @@ def save_job_history(history: Dict[str, dict]) -> None:
 def clear_job_history() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute("DELETE FROM job_history WHERE user_id = ?", (user_id,))
@@ -279,6 +289,7 @@ def clear_job_history() -> None:
 def clear_user_settings() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
@@ -287,6 +298,7 @@ def clear_user_settings() -> None:
 def clear_workspace_pool() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute("DELETE FROM workspace_pool WHERE user_id = ?", (user_id,))
@@ -295,6 +307,7 @@ def clear_workspace_pool() -> None:
 def clear_agent_state() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute("DELETE FROM agent_state WHERE user_id = ?", (user_id,))
@@ -303,6 +316,7 @@ def clear_agent_state() -> None:
 def load_audit_rows() -> List[dict]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         row = conn.execute(
@@ -318,6 +332,7 @@ def load_audit_rows() -> List[dict]:
 def write_debug_json(records: List[dict]) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     ensure_user_row(user_id)
     with db_conn() as conn:
@@ -334,6 +349,7 @@ def write_debug_json(records: List[dict]) -> None:
 def clear_audit_rows() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute(
@@ -349,16 +365,24 @@ def write_source_payload_debug(
     raw_json=None,
     normalized_record=None,
 ) -> None:
-    target_dir = DEBUG_SOURCE_PAYLOADS_DIR / _slugify_debug_component(source) / _slugify_debug_component(job_id)
+    target_dir = (
+        DEBUG_SOURCE_PAYLOADS_DIR
+        / _slugify_debug_component(source)
+        / _slugify_debug_component(job_id)
+    )
     target_dir.mkdir(parents=True, exist_ok=True)
     (target_dir / "raw.html").write_text(str(raw_html or ""), encoding=AUTH_ENCODING)
     save_json(target_dir / "raw.json", _json_safe_payload(raw_json if raw_json is not None else {}))
-    save_json(target_dir / "normalized.json", _json_safe_payload(normalized_record if normalized_record is not None else {}))
+    save_json(
+        target_dir / "normalized.json",
+        _json_safe_payload(normalized_record if normalized_record is not None else {}),
+    )
 
 
 def load_run_stats() -> dict:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         row = conn.execute(
@@ -374,6 +398,7 @@ def load_run_stats() -> dict:
 def write_run_stats(payload: dict) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     ensure_user_row(user_id)
     with db_conn() as conn:
@@ -394,6 +419,7 @@ def write_run_attempt(run_started_at: datetime) -> None:
 def clear_run_stats() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute("DELETE FROM run_stats WHERE user_id = ?", (user_id,))
@@ -402,6 +428,7 @@ def clear_run_stats() -> None:
 def load_review_data() -> dict:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         row = conn.execute(
@@ -417,6 +444,7 @@ def load_review_data() -> dict:
 def write_review_data(payload: dict) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     ensure_user_row(user_id)
     with db_conn() as conn:
@@ -431,6 +459,7 @@ def write_review_data(payload: dict) -> None:
 def clear_review_data() -> None:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         conn.execute("DELETE FROM review_data WHERE user_id = ?", (user_id,))

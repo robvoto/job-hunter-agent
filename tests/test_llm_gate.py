@@ -8,7 +8,10 @@ from job_hunter_agent import llm_gate
 def test_build_capability_naming_guidance_uses_managed_defaults_only():
     prompt = llm_gate.build_capability_naming_guidance()
 
-    assert "You are reviewing and labelling candidate professional capability clusters extracted from a CV." in prompt
+    assert (
+        "You are reviewing and labelling candidate professional capability clusters extracted from a CV."
+        in prompt
+    )
     assert "Default capability naming guidance:" in prompt
     assert "Clusters:" in prompt
     assert "skip" not in prompt
@@ -162,9 +165,15 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
 
     monkeypatch.setattr(llm_gate, "client", _FakeClient())
     monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
-    monkeypatch.setattr(llm_gate, "load_profile", lambda: {"candidate_capabilities": [{"name": "Stakeholder Engagement"}]})
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {"candidate_capabilities": [{"name": "Stakeholder Engagement"}]},
+    )
 
-    payload = llm_gate._request_learning_payload("Business analyst role supporting stakeholders.", fit_review=True)
+    payload = llm_gate._request_learning_payload(
+        "Business analyst role supporting stakeholders.", fit_review=True
+    )
 
     assert called["count"] == 1
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
@@ -244,8 +253,15 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
 
 # ── derive_fit_review_grade contract ─────────────────────────────────────────
 
+
 def _cov(req: str, status: str, cap: str = "") -> dict:
-    return {"requirement": req, "status": status, "capability_name": cap, "matched_job_text": "", "profile_support": []}
+    return {
+        "requirement": req,
+        "status": status,
+        "capability_name": cap,
+        "matched_job_text": "",
+        "profile_support": [],
+    }
 
 
 def test_all_supported_three_reqs_gives_excellent():
@@ -351,20 +367,24 @@ def test_empty_coverage_gives_poor():
 
 # ── importance-aware grade rules ──────────────────────────────────────────────
 
+
 def _cov_imp(req: str, status: str, importance: str, cap: str = "") -> dict:
     return {
-        "requirement": req, "importance": importance, "status": status,
-        "capability_name": cap, "matched_job_text": "", "profile_support": [],
+        "requirement": req,
+        "importance": importance,
+        "status": status,
+        "capability_name": cap,
+        "matched_job_text": "",
+        "profile_support": [],
     }
 
 
 def test_nice_to_have_not_shown_does_not_materially_penalise():
     # 3 mandatory fully supported + 4 nice_to_have not_shown.
     # nice_to_have weight is 0.25, so their not_shown barely reduces the ratio.
-    coverage = (
-        [_cov_imp(f"m{i}", "supported", "mandatory", f"cap{i}") for i in range(3)]
-        + [_cov_imp(f"n{i}", "not_shown", "nice_to_have") for i in range(4)]
-    )
+    coverage = [_cov_imp(f"m{i}", "supported", "mandatory", f"cap{i}") for i in range(3)] + [
+        _cov_imp(f"n{i}", "not_shown", "nice_to_have") for i in range(4)
+    ]
     grade = llm_gate.derive_fit_review_grade(coverage)
     # mandatory support_score = 3*3 = 9; max_score = 3*3 + 4*0.25 = 10
     # ratio = 0.9 → EXCELLENT not possible (total_items=7, not all supported)
@@ -377,10 +397,9 @@ def test_nice_to_have_not_shown_does_not_materially_penalise():
 def test_mandatory_not_shown_lowers_grade():
     # 3 nice_to_have supported but 2 mandatory not_shown.
     # mandatory gaps should keep grade low despite nice_to_have coverage.
-    coverage = (
-        [_cov_imp(f"n{i}", "supported", "nice_to_have", f"cap{i}") for i in range(3)]
-        + [_cov_imp(f"m{i}", "not_shown", "mandatory") for i in range(2)]
-    )
+    coverage = [_cov_imp(f"n{i}", "supported", "nice_to_have", f"cap{i}") for i in range(3)] + [
+        _cov_imp(f"m{i}", "not_shown", "mandatory") for i in range(2)
+    ]
     # support_score = 3*0.25 = 0.75; max_score = 3*0.25 + 2*3 = 6.75; ratio = 0.11
     grade = llm_gate.derive_fit_review_grade(coverage)
     assert grade in {"WEAK", "POOR", "MISMATCH"}
@@ -388,9 +407,9 @@ def test_mandatory_not_shown_lowers_grade():
 
 def test_mandatory_mismatch_caps_at_weak():
     coverage = [
-        _cov_imp("r1", "supported",   "mandatory", "cap1"),
-        _cov_imp("r2", "supported",   "mandatory", "cap2"),
-        _cov_imp("r3", "mismatch",    "mandatory"),
+        _cov_imp("r1", "supported", "mandatory", "cap1"),
+        _cov_imp("r2", "supported", "mandatory", "cap2"),
+        _cov_imp("r3", "mismatch", "mandatory"),
     ]
     assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
 
@@ -399,7 +418,9 @@ def test_importance_defaults_to_preferred_when_missing():
     # Items without importance should behave exactly as preferred (weight 1.0).
     coverage_with = [_cov_imp(f"r{i}", "supported", "preferred", f"cap{i}") for i in range(3)]
     coverage_without = [_cov(f"r{i}", "supported", f"cap{i}") for i in range(3)]
-    assert llm_gate.derive_fit_review_grade(coverage_with) == llm_gate.derive_fit_review_grade(coverage_without)
+    assert llm_gate.derive_fit_review_grade(coverage_with) == llm_gate.derive_fit_review_grade(
+        coverage_without
+    )
 
 
 def test_normalize_coverage_includes_importance_field():
@@ -449,6 +470,7 @@ def test_normalize_coverage_defaults_invalid_importance_to_preferred():
 
 # ── managed prompt line loading ───────────────────────────────────────────────
 
+
 def test_load_managed_prompt_lines_raises_on_missing_key(monkeypatch):
     monkeypatch.setattr("job_hunter_agent.knowledge_store.get_knowledge", lambda key: None)
     with pytest.raises(RuntimeError, match="seed the DB first"):
@@ -489,4 +511,3 @@ def test_build_learning_guidance_includes_categories():
 def test_build_rejection_suggestions_guidance_includes_key_phrase():
     guidance = llm_gate.build_rejection_suggestions_guidance()
     assert "blocker" in guidance.lower()
-

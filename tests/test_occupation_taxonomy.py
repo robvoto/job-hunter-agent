@@ -1,4 +1,5 @@
 """Tests for occupation_taxonomy.py: lookup, classification, and cache behaviour."""
+
 import pytest
 
 from job_hunter_agent.database import db_conn, init_db
@@ -213,6 +214,7 @@ _ICT_PROFILE = {
     "target_occupation_queries": ["help desk technician"],
 }
 
+
 @pytest.fixture()
 def tmp_db(tmp_path):
     db = tmp_path / "test.db"
@@ -222,8 +224,11 @@ def tmp_db(tmp_path):
 
 # ── exact title lookup ────────────────────────────────────────────────────────
 
+
 def test_exact_title_returns_near(tmp_db):
-    result = classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "13-1111.00"
     assert result.confidence > 0.5
@@ -231,7 +236,9 @@ def test_exact_title_returns_near(tmp_db):
 
 def test_title_normalisation_applied(tmp_db):
     # Uppercase and extra spaces should match after normalisation.
-    result = classify_title("Business  Analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "Business  Analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
 
 
@@ -244,8 +251,11 @@ def test_duplicate_entries_same_code_resolves_near(tmp_db):
 
 # ── alternate title lookup ────────────────────────────────────────────────────
 
+
 def test_alternate_title_returns_near(tmp_db):
-    result = classify_title("management consultant", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "management consultant", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "13-1111.00"
     assert result.match_type == "exact_title"
@@ -253,7 +263,12 @@ def test_alternate_title_returns_near(tmp_db):
 
 
 def test_embedded_software_engineer_phrase_returns_near(tmp_db):
-    result = classify_title("Senior Software Engineer - Java daily rates up to $1100!", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "Senior Software Engineer - Java daily rates up to $1100!",
+        _SOFTWARE_PROFILE,
+        db_path=tmp_db,
+        _index=_TEST_INDEX,
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "15-1252.00"
     assert result.match_type == "onet_phrase"
@@ -261,7 +276,9 @@ def test_embedded_software_engineer_phrase_returns_near(tmp_db):
 
 
 def test_embedded_accountant_preferred_title_returns_near(tmp_db):
-    result = classify_title("Senior Accountant", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "Senior Accountant", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "13-2011.00"
     assert result.match_type == "onet_phrase"
@@ -269,7 +286,9 @@ def test_embedded_accountant_preferred_title_returns_near(tmp_db):
 
 
 def test_one_word_alternate_title_is_not_used_for_embedded_match(tmp_db):
-    result = classify_title("AI Core Platform Engineer AWS", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "AI Core Platform Engineer AWS", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "no_match"
     assert result.match_type == "none"
@@ -278,8 +297,11 @@ def test_one_word_alternate_title_is_not_used_for_embedded_match(tmp_db):
 
 # ── no match → uncertain ──────────────────────────────────────────────────────
 
+
 def test_no_match_returns_uncertain(tmp_db):
-    result = classify_title("ict portfolio transformation lead", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "ict portfolio transformation lead", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_UNCERTAIN
     assert result.matched_occupation_code is None
     assert result.reason == "no_match"
@@ -287,6 +309,7 @@ def test_no_match_returns_uncertain(tmp_db):
 
 
 # ── ambiguous match → uncertain ───────────────────────────────────────────────
+
 
 def test_ambiguous_match_returns_uncertain(tmp_db):
     result = classify_title("coordinator", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
@@ -297,6 +320,7 @@ def test_ambiguous_match_returns_uncertain(tmp_db):
 
 # ── far occupation family ─────────────────────────────────────────────────────
 
+
 def test_far_occupation_returns_far(tmp_db):
     result = classify_title("chef", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_FAR
@@ -305,7 +329,9 @@ def test_far_occupation_returns_far(tmp_db):
 
 
 def test_data_engineer_remains_far_for_accounting_profile(tmp_db):
-    result = classify_title("Data Engineer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "Data Engineer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_FAR
     assert result.matched_occupation_code == "15-2051.00"
     assert result.match_type == "exact_title"
@@ -313,6 +339,7 @@ def test_data_engineer_remains_far_for_accounting_profile(tmp_db):
 
 
 # ── cache hit returns cached result ──────────────────────────────────────────
+
 
 def test_cache_hit_returns_cached_result(tmp_db):
     # First call classifies and writes to cache.
@@ -343,8 +370,12 @@ def test_cache_is_keyed_by_profile_hash(tmp_db):
 
 # ── no profile context → uncertain ───────────────────────────────────────────
 
+
 def test_no_profile_context_returns_uncertain(tmp_db):
-    empty_profile: dict = {"target_roles": ["business analyst"], "also_consider_roles": ["project manager"]}
+    empty_profile: dict = {
+        "target_roles": ["business analyst"],
+        "also_consider_roles": ["project manager"],
+    }
     result = classify_title("business analyst", empty_profile, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "no_profile_context"
@@ -366,16 +397,21 @@ def test_profile_with_queries_that_do_not_match_returns_uncertain(tmp_db):
 
 # ── target_occupation_queries ─────────────────────────────────────────────────
 
+
 def test_target_occupation_queries_used_for_classification(tmp_db):
     """target_occupation_queries codes must be included when deriving target occupations."""
-    result = classify_title("accounts payable officer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "accounts payable officer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "43-3031.00"
 
 
 def test_admin_profile_uses_occupation_queries(tmp_db):
     """Multiple target occupation queries should expand the target code set."""
-    result = classify_title("office administrator", _ADMIN_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "office administrator", _ADMIN_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "43-6014.00"
 
@@ -386,7 +422,9 @@ def test_missing_target_occupation_queries_does_not_fall_back_to_target_roles(tm
         "target_roles": ["business analyst"],
         "also_consider_roles": ["project manager"],
     }
-    result = classify_title("business analyst", profile_without_queries, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "business analyst", profile_without_queries, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "no_profile_context"
 
@@ -429,7 +467,9 @@ def test_healthcare_profile_uses_occupation_queries(tmp_db):
 
 
 def test_ict_profile_uses_occupation_queries(tmp_db):
-    result = classify_title("Help Desk Technician", _ICT_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    result = classify_title(
+        "Help Desk Technician", _ICT_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
+    )
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "15-1232.00"
 
@@ -443,11 +483,18 @@ def test_project_profile_marks_finance_roles_far(tmp_db):
 
 # ── ONET_TITLE_CLASSIFY log event ─────────────────────────────────────────────
 
+
 def test_onet_classify_log_emitted(tmp_db, caplog):
     """A structured ONET_TITLE_CLASSIFY log line must be written for every classification."""
     import logging
+
     with caplog.at_level(logging.INFO, logger="job_hunter_agent.occupation_taxonomy"):
-        classify_title("Senior Software Engineer - Java daily rates up to $1100!", _SOFTWARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+        classify_title(
+            "Senior Software Engineer - Java daily rates up to $1100!",
+            _SOFTWARE_PROFILE,
+            db_path=tmp_db,
+            _index=_TEST_INDEX,
+        )
     assert any("ONET_TITLE_CLASSIFY" in r.message for r in caplog.records)
     assert any("profile_target_occupation_queries" in r.message for r in caplog.records)
     assert any("derived_target_occupation_codes" in r.message for r in caplog.records)
@@ -455,6 +502,66 @@ def test_onet_classify_log_emitted(tmp_db, caplog):
     assert any("matched_phrase" in r.message for r in caplog.records)
     assert any("match_type" in r.message for r in caplog.records)
     assert any("reason" in r.message for r in caplog.records)
+
+
+def test_multicode_embedded_phrase_outside_target_returns_far(tmp_db):
+    index = dict(_TEST_INDEX)
+    index["accountant"] = [
+        {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "occupation_title"},
+        {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"},
+    ]
+    result = classify_title("Senior Tax Accountant", _ANALYST_PROFILE, db_path=tmp_db, _index=index)
+    assert result.result == RESULT_FAR
+    assert result.reason == RESULT_FAR
+    assert result.matched_occupation_code is None
+    assert result.match_type == "onet_phrase"
+
+
+def test_multicode_embedded_phrase_mixed_target_returns_uncertain(tmp_db):
+    index = dict(_TEST_INDEX)
+    index["accountant"] = [
+        {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "occupation_title"},
+        {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"},
+    ]
+    index["audit analyst"] = [
+        {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "alternate_title"}
+    ]
+    mixed_profile = {"target_occupation_queries": ["business analyst", "audit analyst"]}
+    result = classify_title("Senior Tax Accountant", mixed_profile, db_path=tmp_db, _index=index)
+    assert result.result == RESULT_UNCERTAIN
+    assert result.reason == "ambiguous"
+    assert result.matched_occupation_code is None
+    assert result.match_type == "onet_phrase"
+
+
+def test_multicode_embedded_phrase_without_target_context_returns_uncertain(tmp_db):
+    index = dict(_TEST_INDEX)
+    index["accountant"] = [
+        {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "occupation_title"},
+        {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"},
+    ]
+    result = classify_title("Senior Tax Accountant", {}, db_path=tmp_db, _index=index)
+    assert result.result == RESULT_UNCERTAIN
+    assert result.reason == "no_profile_context"
+    assert result.matched_occupation_code is None
+    assert result.match_type == "onet_phrase"
+
+
+def test_multicode_embedded_phrase_all_inside_target_returns_near(tmp_db):
+    index = dict(_TEST_INDEX)
+    index["accountant"] = [
+        {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "occupation_title"},
+        {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"},
+    ]
+    profile = {"target_occupation_queries": ["accountant", "tax preparers"]}
+    index["tax preparers"] = [
+        {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"}
+    ]
+    result = classify_title("Senior Tax Accountant", profile, db_path=tmp_db, _index=index)
+    assert result.result == RESULT_NEAR
+    assert result.reason == RESULT_NEAR
+    assert result.matched_occupation_code is None
+    assert result.match_type == "onet_phrase"
 
 
 def test_onet_classify_logs_fresh_and_cached_lookups(tmp_db, caplog):

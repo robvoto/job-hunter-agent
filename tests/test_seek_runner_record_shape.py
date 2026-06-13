@@ -8,10 +8,10 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
     RECORD_DECISION_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_LENGTH_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
-    RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
     RECORD_FIT_HIGHLIGHTS_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
@@ -33,11 +33,11 @@ from job_hunter_agent.record_schema import (
     RECORD_SALARY_KEY,
     RECORD_SEARCH_KEYWORDS_KEY,
     RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SOFT_RISK_REASONS_KEY,
     RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
-    RECORD_SOURCE_KEY,
-    RECORD_SOFT_RISK_REASONS_KEY,
     RECORD_TEASER_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_MATCH_METADATA_KEY,
@@ -50,7 +50,11 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_TYPE_KEY,
 )
 from job_hunter_agent.scrapers.base import normalize_jobspy_record
-from job_hunter_agent.scrapers.seek_runner import _seek_run_progress, _seek_source_metadata, build_seek_card_record
+from job_hunter_agent.scrapers.seek_runner import (
+    _seek_run_progress,
+    _seek_source_metadata,
+    build_seek_card_record,
+)
 
 
 class _FakeElement:
@@ -198,8 +202,14 @@ def test_seek_card_record_keeps_expected_shape_and_review_buckets(monkeypatch):
     }
 
     assert expected_keys.issubset(set(seek_record))
-    assert seek_record[RECORD_REVIEWED_SIGNAL_MATCHES_KEY] == jobspy_record[RECORD_REVIEWED_SIGNAL_MATCHES_KEY]
-    assert seek_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == jobspy_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
+    assert (
+        seek_record[RECORD_REVIEWED_SIGNAL_MATCHES_KEY]
+        == jobspy_record[RECORD_REVIEWED_SIGNAL_MATCHES_KEY]
+    )
+    assert (
+        seek_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
+        == jobspy_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
+    )
 
 
 def test_seek_source_metadata_preserves_platform_and_ats_ids():
@@ -231,4 +241,7 @@ def test_seek_source_metadata_omits_blank_ats_id():
 
 
 def test_seek_run_progress_includes_title_and_company():
-    assert _seek_run_progress(1, 3, "Senior Analyst", "Acme", elapsed_s=65) == "SEEK page 1/3 | Senior Analyst @ Acme | elapsed 1m 05s"
+    assert (
+        _seek_run_progress(1, 3, "Senior Analyst", "Acme", elapsed_s=65)
+        == "SEEK page 1/3 | Senior Analyst @ Acme | elapsed 1m 05s"
+    )

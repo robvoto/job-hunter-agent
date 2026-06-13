@@ -1,7 +1,7 @@
 """Tests for candidate application history."""
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 from unittest.mock import patch
 
 from job_hunter_agent.candidate_application_history import (
@@ -10,8 +10,8 @@ from job_hunter_agent.candidate_application_history import (
     import_candidate_rejections_from_sheet,
     load_candidate_application_history,
     load_candidate_job_rejection_history,
-    save_candidate_application_history,
     main,
+    save_candidate_application_history,
 )
 
 _CANDIDATE_APPLICATION_HISTORY_KEY = "candidate_application_history"
@@ -20,7 +20,12 @@ _CANDIDATE_APPLICATION_HISTORY_KEY = "candidate_application_history"
 def test_enrich_preserves_order_does_not_mutate_inputs_and_only_adds_matching_history():
     records = [
         {"job_key": "seek:1", "company": "No Match Corp", "title": "BA", "fit_score": 80},
-        {"job_key": "seek:2", "company": "Police Bank", "title": "Technical Business Analyst", "fit_score": 90},
+        {
+            "job_key": "seek:2",
+            "company": "Police Bank",
+            "title": "Technical Business Analyst",
+            "fit_score": 90,
+        },
     ]
     rows = [
         {
@@ -84,9 +89,19 @@ def test_load_candidate_history_reads_local_store_and_does_not_touch_sheet(tmp_p
         encoding="utf-8",
     )
 
-    with patch("job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH", store_path), \
-        patch("job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled", return_value=True), \
-        patch("job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows") as mock_fetch:
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
+            store_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows"
+        ) as mock_fetch,
+    ):
         rows = load_candidate_job_rejection_history()
 
     assert not mock_fetch.called
@@ -115,7 +130,10 @@ def test_save_and_load_candidate_application_history_use_local_store(tmp_path):
         }
     ]
 
-    with patch("job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH", store_path):
+    with patch(
+        "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
+        store_path,
+    ):
         save_candidate_application_history(payload)
         loaded = load_candidate_application_history()
 
@@ -159,13 +177,30 @@ def test_import_from_sheet_populates_local_store(tmp_path):
         "llm_review_reason": None,
     }
 
-    with patch("job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH", store_path), \
-        patch("job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH", cache_path), \
-        patch("job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled", return_value=True), \
-        patch("job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows", return_value=raw_rows), \
-        patch("job_hunter_agent.candidate_application_history._load_cache", return_value={}), \
-        patch("job_hunter_agent.candidate_application_history.normalize_job_rejection_row", return_value=normalized_row), \
-        patch("job_hunter_agent.candidate_application_history._save_cache") as mock_save_cache:
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
+            store_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH",
+            cache_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows",
+            return_value=raw_rows,
+        ),
+        patch("job_hunter_agent.candidate_application_history._load_cache", return_value={}),
+        patch(
+            "job_hunter_agent.candidate_application_history.normalize_job_rejection_row",
+            return_value=normalized_row,
+        ),
+        patch("job_hunter_agent.candidate_application_history._save_cache") as mock_save_cache,
+    ):
         summary = import_candidate_rejections_from_sheet()
 
     assert mock_save_cache.called
@@ -223,13 +258,30 @@ def test_import_from_sheet_dedupes_by_company_role_date_when_message_id_missing(
         "llm_review_reason": None,
     }
 
-    with patch("job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH", store_path), \
-        patch("job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH", cache_path), \
-        patch("job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled", return_value=True), \
-        patch("job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows", return_value=raw_rows), \
-        patch("job_hunter_agent.candidate_application_history._load_cache", return_value={}), \
-        patch("job_hunter_agent.candidate_application_history.normalize_job_rejection_row", return_value=normalized_row), \
-        patch("job_hunter_agent.candidate_application_history._save_cache"):
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
+            store_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH",
+            cache_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows",
+            return_value=raw_rows,
+        ),
+        patch("job_hunter_agent.candidate_application_history._load_cache", return_value={}),
+        patch(
+            "job_hunter_agent.candidate_application_history.normalize_job_rejection_row",
+            return_value=normalized_row,
+        ),
+        patch("job_hunter_agent.candidate_application_history._save_cache"),
+    ):
         first_summary = import_candidate_rejections_from_sheet()
         second_summary = import_candidate_rejections_from_sheet()
 
@@ -249,8 +301,16 @@ def test_add_candidate_rejection_record_appends_manual_rejection_to_local_store(
     store_path = tmp_path / "candidate_application_history.json"
     store_path.write_text("[]", encoding="utf-8")
 
-    with patch("job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH", store_path), \
-        patch("job_hunter_agent.candidate_application_history._candidate_history_now", return_value="2026-05-20T10:00:00+00:00"):
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
+            store_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history._candidate_history_now",
+            return_value="2026-05-20T10:00:00+00:00",
+        ),
+    ):
         stored = add_candidate_rejection_record(
             {
                 "date": "2026-05-20",
@@ -309,22 +369,38 @@ def test_candidate_history_debug_command_imports_from_sheet_and_prints_counts(ca
         "llm_review_reason": None,
     }
 
-    with patch("job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH", store_path), \
-        patch("job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH", cache_path), \
-        patch("job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled", return_value=True), \
-        patch("job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows", return_value=raw_rows), \
-        patch("job_hunter_agent.candidate_application_history._load_cache", return_value={}), \
-        patch("job_hunter_agent.candidate_application_history.normalize_job_rejection_row", return_value=normalized_row), \
-        patch("job_hunter_agent.candidate_application_history._save_cache"):
-        result = main(["--import-from-sheet"])
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
+            store_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH",
+            cache_path,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows",
+            return_value=raw_rows,
+        ),
+        patch("job_hunter_agent.candidate_application_history._load_cache", return_value={}),
+        patch(
+            "job_hunter_agent.candidate_application_history.normalize_job_rejection_row",
+            return_value=normalized_row,
+        ),
+        patch("job_hunter_agent.candidate_application_history._save_cache"),
+    ):
+        result = main(["import-from-sheet"])
 
     assert result == 0
     output = capsys.readouterr().out
-    assert "[candidate_application_history] rows fetched from sheet: 1" in output
-    assert "[candidate_application_history] rows loaded from cache: 0" in output
-    assert "[candidate_application_history] rows sent to LLM: 1" in output
-    assert "[candidate_application_history] rows marked rejection: 1" in output
-    assert "[candidate_application_history] rows needing review: 0" in output
-    assert "[candidate_application_history] records added: 1" in output
-    assert "[candidate_application_history] records updated: 0" in output
-    assert "[candidate_application_history] failures: 0" in output
+    assert "[candidate_application_history] rows_fetched: 1" in output
+    assert "[candidate_application_history] rows_loaded_from_cache: 0" in output
+    assert "[candidate_application_history] rows_sent_to_llm: 1" in output
+    assert "[candidate_application_history] rows_marked_rejection: 1" in output
+    assert "[candidate_application_history] rows_needing_review: 0" in output
+    assert "[candidate_application_history] records_added: 1" in output
+    assert "[candidate_application_history] records_updated: 0" in output

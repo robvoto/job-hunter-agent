@@ -14,9 +14,9 @@ Covers:
 - Edge cases: empty html, missing linkedin_age, whitespace noise
 """
 
+import json
 from datetime import date
 
-import json
 import pytest
 
 from job_hunter_agent import job_quality
@@ -47,6 +47,7 @@ def rules():
 # load_dodgy_job_rules — structure contract
 # ---------------------------------------------------------------------------
 
+
 class TestLoadDodgyJobRules:
     def test_loads_without_error(self, rules):
         assert isinstance(rules, dict)
@@ -74,67 +75,77 @@ class TestLoadDodgyJobRules:
 # CV farming — each pattern in the real JSON
 # ---------------------------------------------------------------------------
 
+
 class TestCvFarmingPatterns:
     """One test per pattern in dodgy_job_rules.json to ensure every regex fires."""
 
-    @pytest.mark.parametrize("text,desc", [
-        ("Please send us your resume to apply.", "send us your resume"),
-        ("Please send your cv to the team.", "send your cv"),
-        ("Please send your application to hr@company.com.", "send your application"),
-        ("Email your cv to jobs@company.com.", "email your cv to"),
-        ("Email your resume to our talent team.", "email your resume to"),
-        ("Email your application to this address.", "email your application to"),
-        ("Please forward your cv to the recruiter.", "forward your cv"),
-        ("Forward your resume for consideration.", "forward your resume"),
-        ("Submit your cv to the link below.", "submit your cv to"),
-        ("Submit your resume via email today.", "submit your resume via email"),
-        ("This is an expression of interest posting.", "expression of interest"),
-        ("You'll be joining our talent pool.", "talent pool"),
-        ("We are building a talent bank of skilled professionals.", "talent bank"),
-        ("This helps us build our talent pipeline.", "talent pipeline"),
-        ("We're always looking for talented people.", "we're always looking"),
-        ("We are always looking for passionate analysts.", "we are always looking"),
-        ("We're always on the lookout for great candidates.", "always on the lookout"),
-        ("This is an ongoing opportunity for the right person.", "ongoing opportunity"),
-        ("Please register your interest below.", "register your interest"),
-        ("There is no specific position available at this time.", "no specific position at this time"),
-        ("We are collecting resumes for future roles.", "collecting resumes"),
-        ("We are collecting cvs for our database.", "collecting cvs"),
-        ("We are building talent for the future.", "building talent"),
-        ("We are building our talent community.", "building our talent"),
-    ])
+    @pytest.mark.parametrize(
+        "text,desc",
+        [
+            ("Please send us your resume to apply.", "send us your resume"),
+            ("Please send your cv to the team.", "send your cv"),
+            ("Please send your application to hr@company.com.", "send your application"),
+            ("Email your cv to jobs@company.com.", "email your cv to"),
+            ("Email your resume to our talent team.", "email your resume to"),
+            ("Email your application to this address.", "email your application to"),
+            ("Please forward your cv to the recruiter.", "forward your cv"),
+            ("Forward your resume for consideration.", "forward your resume"),
+            ("Submit your cv to the link below.", "submit your cv to"),
+            ("Submit your resume via email today.", "submit your resume via email"),
+            ("This is an expression of interest posting.", "expression of interest"),
+            ("You'll be joining our talent pool.", "talent pool"),
+            ("We are building a talent bank of skilled professionals.", "talent bank"),
+            ("This helps us build our talent pipeline.", "talent pipeline"),
+            ("We're always looking for talented people.", "we're always looking"),
+            ("We are always looking for passionate analysts.", "we are always looking"),
+            ("We're always on the lookout for great candidates.", "always on the lookout"),
+            ("This is an ongoing opportunity for the right person.", "ongoing opportunity"),
+            ("Please register your interest below.", "register your interest"),
+            (
+                "There is no specific position available at this time.",
+                "no specific position at this time",
+            ),
+            ("We are collecting resumes for future roles.", "collecting resumes"),
+            ("We are collecting cvs for our database.", "collecting cvs"),
+            ("We are building talent for the future.", "building talent"),
+            ("We are building our talent community.", "building our talent"),
+        ],
+    )
     def test_pattern_fires(self, rules, text, desc):
         sigs = detect_cv_farming_signals(text, rules)
         assert sigs, f"Expected CV farming signal for: {desc!r}"
         assert sigs[0]["kind"] == SIGNAL_KIND_CV_FARMING
 
-    @pytest.mark.parametrize("text,desc", [
-        (
-            "We are seeking a Senior Business Analyst with 5+ years of experience. "
-            "Apply via our careers portal.",
-            "normal job ad",
-        ),
-        (
-            "Must have strong analytical skills and experience delivering digital projects.",
-            "regular requirements",
-        ),
-        (
-            "This is always an exciting team to be part of. Send a cover letter with your application.",
-            "cover letter not cv-farming",
-        ),
-        (
-            "Our talent is what sets us apart. We're looking forward to hearing from you.",
-            "talent used generically, not talent pool/bank/pipeline",
-        ),
-        (
-            "The application portal closes 30 May 2026.",
-            "application portal close date, not closed indicator",
-        ),
-        (
-            "Expressions of interest are welcome for permanent roles.",
-            "expression of interest in a different context",
-        ),
-    ])
+    @pytest.mark.parametrize(
+        "text,desc",
+        [
+            (
+                "We are seeking a Senior Business Analyst with 5+ years of experience. "
+                "Apply via our careers portal.",
+                "normal job ad",
+            ),
+            (
+                "Must have strong analytical skills and experience delivering digital projects.",
+                "regular requirements",
+            ),
+            (
+                "This is always an exciting team to be part of. Send a cover letter with your application.",
+                "cover letter not cv-farming",
+            ),
+            (
+                "Our talent is what sets us apart. We're looking forward to hearing from you.",
+                "talent used generically, not talent pool/bank/pipeline",
+            ),
+            (
+                "The application portal closes 30 May 2026.",
+                "application portal close date, not closed indicator",
+            ),
+            (
+                "Expressions of interest are welcome for permanent roles.",
+                "expression of interest in a different context",
+            ),
+        ],
+    )
     def test_pattern_does_not_fire_for_false_positives(self, rules, text, desc):
         # Only the last two should NOT be caught — first four are clearly benign
         # "expressions of interest" will still fire; this test documents intent
@@ -181,29 +192,36 @@ class TestCvFarmingPatterns:
 # Job-closed indicators — each indicator in the real JSON
 # ---------------------------------------------------------------------------
 
+
 class TestJobClosedIndicators:
-    @pytest.mark.parametrize("html,desc", [
-        ("Sorry, this job is no longer available.", "job no longer available"),
-        ("This job is no longer available on our site.", "job is no longer available"),
-        ("This job has expired, please browse other listings.", "this job has expired"),
-        ("This job has closed.", "this job has closed"),
-        ("This listing has expired.", "this listing has expired"),
-        ("This job listing has expired on 1 May 2026.", "this job listing has expired"),
-        ("The position has been filled.", "position has been filled"),
-        ("The vacancy has been closed.", "vacancy has been closed"),
-        ("The vacancy has been filled.", "vacancy has been filled"),
-        ("The vacancy closed last week.", "vacancy closed"),
-        ("Applications are closed.", "applications are closed"),
-        ("Application is closed.", "application is closed"),
-        ("Applications are no longer accepted.", "applications are no longer accepted"),
-        ("Applications are no longer being accepted.", "applications are no longer being accepted"),
-        ("This role is no longer available.", "this role is no longer available"),
-        ("This position has been closed.", "this position has been closed"),
-        ("This position has been filled.", "this position has been filled"),
-        ("We are no longer accepting applications.", "no longer accepting applications"),
-        ("Job expired 3 weeks ago.", "job expired"),
-        ("Listing expired.", "listing expired"),
-    ])
+    @pytest.mark.parametrize(
+        "html,desc",
+        [
+            ("Sorry, this job is no longer available.", "job no longer available"),
+            ("This job is no longer available on our site.", "job is no longer available"),
+            ("This job has expired, please browse other listings.", "this job has expired"),
+            ("This job has closed.", "this job has closed"),
+            ("This listing has expired.", "this listing has expired"),
+            ("This job listing has expired on 1 May 2026.", "this job listing has expired"),
+            ("The position has been filled.", "position has been filled"),
+            ("The vacancy has been closed.", "vacancy has been closed"),
+            ("The vacancy has been filled.", "vacancy has been filled"),
+            ("The vacancy closed last week.", "vacancy closed"),
+            ("Applications are closed.", "applications are closed"),
+            ("Application is closed.", "application is closed"),
+            ("Applications are no longer accepted.", "applications are no longer accepted"),
+            (
+                "Applications are no longer being accepted.",
+                "applications are no longer being accepted",
+            ),
+            ("This role is no longer available.", "this role is no longer available"),
+            ("This position has been closed.", "this position has been closed"),
+            ("This position has been filled.", "this position has been filled"),
+            ("We are no longer accepting applications.", "no longer accepting applications"),
+            ("Job expired 3 weeks ago.", "job expired"),
+            ("Listing expired.", "listing expired"),
+        ],
+    )
     def test_closed_indicator_fires(self, rules, html, desc):
         sigs = detect_external_date_signals(html, 2.0, rules, RUN_DATE)
         assert sigs, f"Expected job_closed signal for: {desc!r}"
@@ -224,12 +242,18 @@ class TestJobClosedIndicators:
         assert sig["evidence"]
         assert sig["needs_review"] is True
 
-    @pytest.mark.parametrize("html,desc", [
-        ("<p>Apply now! The application portal closes 30 May 2026.</p>", "portal close date"),
-        ("<p>No longer accepting excuses — we want great people.</p>", "figurative phrase"),
-        ("<p>This role has been re-posted with updated salary.</p>", "repost not closed"),
-        ("<p>We are not currently hiring but check back soon.</p>", "not currently hiring (no indicator)"),
-    ])
+    @pytest.mark.parametrize(
+        "html,desc",
+        [
+            ("<p>Apply now! The application portal closes 30 May 2026.</p>", "portal close date"),
+            ("<p>No longer accepting excuses — we want great people.</p>", "figurative phrase"),
+            ("<p>This role has been re-posted with updated salary.</p>", "repost not closed"),
+            (
+                "<p>We are not currently hiring but check back soon.</p>",
+                "not currently hiring (no indicator)",
+            ),
+        ],
+    )
     def test_closed_indicator_does_not_fire_for_benign_text(self, rules, html, desc):
         sigs = detect_external_date_signals(html, 2.0, rules, RUN_DATE)
         closed = [s for s in sigs if s["kind"] == SIGNAL_KIND_JOB_CLOSED]
@@ -239,6 +263,7 @@ class TestJobClosedIndicators:
 # ---------------------------------------------------------------------------
 # Date mismatch — threshold boundary
 # ---------------------------------------------------------------------------
+
 
 class TestDateMismatchThreshold:
     """Flag fires at exactly threshold, not below it."""
@@ -273,6 +298,7 @@ class TestDateMismatchThreshold:
 # ---------------------------------------------------------------------------
 # Date mismatch — arithmetic correctness
 # ---------------------------------------------------------------------------
+
 
 class TestDateMismatchArithmetic:
     def test_mismatch_days_field_is_correct(self, rules):
@@ -317,17 +343,21 @@ class TestDateMismatchArithmetic:
 # Relative date parsing
 # ---------------------------------------------------------------------------
 
+
 class TestApproxAgeDaysFromHtml:
-    @pytest.mark.parametrize("html,expected", [
-        ("Posted 1 day ago", 1),
-        ("Posted 5 days ago", 5),
-        ("Posted 30 days ago", 30),
-        ("Posted 1 week ago", 7),
-        ("Posted 3 weeks ago", 21),
-        ("Posted 1 month ago", 30),
-        ("Posted 2 months ago", 60),
-        ("Posted 6 months ago", 180),
-    ])
+    @pytest.mark.parametrize(
+        "html,expected",
+        [
+            ("Posted 1 day ago", 1),
+            ("Posted 5 days ago", 5),
+            ("Posted 30 days ago", 30),
+            ("Posted 1 week ago", 7),
+            ("Posted 3 weeks ago", 21),
+            ("Posted 1 month ago", 30),
+            ("Posted 2 months ago", 60),
+            ("Posted 6 months ago", 180),
+        ],
+    )
     def test_relative_units(self, html, expected):
         assert _approx_age_days_from_html(html) == expected
 
@@ -358,27 +388,31 @@ class TestApproxAgeDaysFromHtml:
 # Absolute date parsing
 # ---------------------------------------------------------------------------
 
+
 class TestAbsoluteDateFromHtml:
-    @pytest.mark.parametrize("html,expected", [
-        ("Posted: 2025-01-12", date(2025, 1, 12)),
-        ("Posted 2025-06-01", date(2025, 6, 1)),
-        ("Posted January 12, 2025", date(2025, 1, 12)),
-        ("Posted: February 3, 2025", date(2025, 2, 3)),
-        ("Posted March 31, 2025", date(2025, 3, 31)),
-        ("Posted April 1, 2025", date(2025, 4, 1)),
-        ("Posted May 15, 2025", date(2025, 5, 15)),
-        ("Posted June 30, 2025", date(2025, 6, 30)),
-        ("Posted July 4, 2025", date(2025, 7, 4)),
-        ("Posted August 20, 2025", date(2025, 8, 20)),
-        ("Posted September 9, 2025", date(2025, 9, 9)),
-        ("Posted October 10, 2025", date(2025, 10, 10)),
-        ("Posted November 11, 2025", date(2025, 11, 11)),
-        ("Posted December 25, 2025", date(2025, 12, 25)),
-        ("Posted on 12 January 2025", date(2025, 1, 12)),
-        ("Posted on 3 February 2025", date(2025, 2, 3)),
-        ("Posted on 1 July 2025", date(2025, 7, 1)),
-        ("Posted on 31 December 2025", date(2025, 12, 31)),
-    ])
+    @pytest.mark.parametrize(
+        "html,expected",
+        [
+            ("Posted: 2025-01-12", date(2025, 1, 12)),
+            ("Posted 2025-06-01", date(2025, 6, 1)),
+            ("Posted January 12, 2025", date(2025, 1, 12)),
+            ("Posted: February 3, 2025", date(2025, 2, 3)),
+            ("Posted March 31, 2025", date(2025, 3, 31)),
+            ("Posted April 1, 2025", date(2025, 4, 1)),
+            ("Posted May 15, 2025", date(2025, 5, 15)),
+            ("Posted June 30, 2025", date(2025, 6, 30)),
+            ("Posted July 4, 2025", date(2025, 7, 4)),
+            ("Posted August 20, 2025", date(2025, 8, 20)),
+            ("Posted September 9, 2025", date(2025, 9, 9)),
+            ("Posted October 10, 2025", date(2025, 10, 10)),
+            ("Posted November 11, 2025", date(2025, 11, 11)),
+            ("Posted December 25, 2025", date(2025, 12, 25)),
+            ("Posted on 12 January 2025", date(2025, 1, 12)),
+            ("Posted on 3 February 2025", date(2025, 2, 3)),
+            ("Posted on 1 July 2025", date(2025, 7, 1)),
+            ("Posted on 31 December 2025", date(2025, 12, 31)),
+        ],
+    )
     def test_parses_date(self, html, expected):
         assert _absolute_date_from_html(html) == expected
 
@@ -403,6 +437,7 @@ class TestAbsoluteDateFromHtml:
 # ---------------------------------------------------------------------------
 # Absolute date path through detect_external_date_signals
 # ---------------------------------------------------------------------------
+
 
 class TestAbsoluteDateViaDetect:
     """Ensure the absolute-date fallback path is exercised through the main function."""
@@ -432,6 +467,7 @@ class TestAbsoluteDateViaDetect:
 # ---------------------------------------------------------------------------
 # Real-world noisy HTML
 # ---------------------------------------------------------------------------
+
 
 class TestNoisyHtml:
     NOISY_CLOSED = """
@@ -494,6 +530,7 @@ class TestNoisyHtml:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_empty_html(self, rules):
         assert detect_external_date_signals("", 5.0, rules, RUN_DATE) == []
@@ -531,46 +568,63 @@ class TestEdgeCases:
 class TestManagedKnowledgeLoading:
     def test_load_dodgy_job_rules_requires_explicit_threshold(self, isolated_db):
         from job_hunter_agent.knowledge_store import set_knowledge
-        set_knowledge("dodgy_job_rules", {
-            "kind": "managed_knowledge",
-            "name": "dodgy_job_rules",
-            "version": 1,
-            "job_closed_indicators": ["job is no longer available"],
-        }, isolated_db)
+
+        set_knowledge(
+            "dodgy_job_rules",
+            {
+                "kind": "managed_knowledge",
+                "name": "dodgy_job_rules",
+                "version": 1,
+                "job_closed_indicators": ["job is no longer available"],
+            },
+            isolated_db,
+        )
 
         with pytest.raises(ValueError, match="external_date_mismatch_flag_days"):
             load_dodgy_job_rules()
 
     def test_load_dodgy_job_rules_uses_learned_cv_farming_patterns(self, isolated_db):
         from job_hunter_agent.knowledge_store import set_knowledge
-        set_knowledge("dodgy_job_rules", {
-            "kind": "managed_knowledge",
-            "name": "dodgy_job_rules",
-            "version": 1,
-            "job_closed_indicators": ["job is no longer available"],
-            "external_date_mismatch_flag_days": 14,
-        }, isolated_db)
-        set_knowledge("cv_farming_rules", {
-            "kind": "managed_knowledge",
-            "name": "cv_farming_rules",
-            "version": 1,
-            "description": "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role.",
-            "entries": [
-                {
-                    "value": "send (?:us |your )?(?:cv|resume)",
-                    "aliases": ["send your resume", "Send your resume"],
-                },
-                {
-                    "value": "send (?:us |your )?(?:cv|resume)",
-                    "aliases": ["send your cv"],
-                },
-            ],
-        }, isolated_db)
+
+        set_knowledge(
+            "dodgy_job_rules",
+            {
+                "kind": "managed_knowledge",
+                "name": "dodgy_job_rules",
+                "version": 1,
+                "job_closed_indicators": ["job is no longer available"],
+                "external_date_mismatch_flag_days": 14,
+            },
+            isolated_db,
+        )
+        set_knowledge(
+            "cv_farming_rules",
+            {
+                "kind": "managed_knowledge",
+                "name": "cv_farming_rules",
+                "version": 1,
+                "description": "Learned language patterns that suggest the employer is collecting CVs rather than advertising a live role.",
+                "entries": [
+                    {
+                        "value": "send (?:us |your )?(?:cv|resume)",
+                        "aliases": ["send your resume", "Send your resume"],
+                    },
+                    {
+                        "value": "send (?:us |your )?(?:cv|resume)",
+                        "aliases": ["send your cv"],
+                    },
+                ],
+            },
+            isolated_db,
+        )
 
         rules = load_dodgy_job_rules()
 
         assert rules["cv_farming_patterns"] == ["send (?:us |your )?(?:cv|resume)"]
-        assert detect_cv_farming_signals("Please send your resume to apply.", rules)[0]["signal"] == "send (?:us |your )?(?:cv|resume)"
+        assert (
+            detect_cv_farming_signals("Please send your resume to apply.", rules)[0]["signal"]
+            == "send (?:us |your )?(?:cv|resume)"
+        )
 
     def test_detect_cv_farming_signal_preserves_learned_regex_and_example_text(self):
         rules = {
@@ -580,12 +634,14 @@ class TestManagedKnowledgeLoading:
         }
         sigs = detect_cv_farming_signals("Email your resume to the recruiter.", rules)
 
-        assert sigs == [{
-            "kind": SIGNAL_KIND_CV_FARMING,
-            "label": "CV Farming",
-            "signal": "email (?:your )?(?:cv|resume|application) to",
-            "suggested_category": "cv_farming_pattern",
-            "original_texts": ["Email your resume to"],
-            "evidence": 'Description matches talent-pool pattern: "Email your resume to"',
-            "needs_review": True,
-        }]
+        assert sigs == [
+            {
+                "kind": SIGNAL_KIND_CV_FARMING,
+                "label": "CV Farming",
+                "signal": "email (?:your )?(?:cv|resume|application) to",
+                "suggested_category": "cv_farming_pattern",
+                "original_texts": ["Email your resume to"],
+                "evidence": 'Description matches talent-pool pattern: "Email your resume to"',
+                "needs_review": True,
+            }
+        ]

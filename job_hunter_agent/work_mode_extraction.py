@@ -12,10 +12,10 @@ Design principles:
 - No preference, scoring, or rejection logic belongs here. This module extracts
   and labels evidence only. Consumers decide what to do with the result.
 
-This module provides logic for identifying work arrangements (remote, hybrid, 
-onsite) from job listings. It prioritises structured metadata and platform-specific 
-fields (like SEEK's filter panel or LinkedIn's structured attributes) over 
-heuristic-based text analysis. Evidence is labeled and flagged for review 
+This module provides logic for identifying work arrangements (remote, hybrid,
+onsite) from job listings. It prioritises structured metadata and platform-specific
+fields (like SEEK's filter panel or LinkedIn's structured attributes) over
+heuristic-based text analysis. Evidence is labeled and flagged for review
 when derived from free-text fallbacks.
 """
 
@@ -67,9 +67,7 @@ _LABEL_TO_CANONICAL: dict[str, str] = {
 }
 
 
-def _build_result(
-    mode: str, source: str, evidence: str, needs_review: bool
-) -> dict:
+def _build_result(mode: str, source: str, evidence: str, needs_review: bool) -> dict:
     return {
         "work_mode": mode,
         "work_mode_source": source,
@@ -178,26 +176,30 @@ def extract_seek_filter_panel_state(list_page) -> Optional[dict]:
     try:
         if not container:
             return None
-    
+
         checked = container.query_selector_all(_SELECTOR_CHECKED)
         if not checked:
             return None
-    
+
         modes = []
         for el in checked:
             raw = (el.inner_text() or "").strip()
             mode = _lookup_label(raw)
             if mode:
                 modes.append((mode, raw))
-    
+
         if len(modes) != 1:
             return None
-    
+
         mode, evidence = modes[0]
-        return _build_result(mode, "seek_filter_panel", evidence, False)  
+        return _build_result(mode, "seek_filter_panel", evidence, False)
     except Exception as exc:
-      logger.warning("[work_mode] Failed to extract SEEK filter panel state (selectors may be out of date): %s", exc)
-      return None
+        logger.warning(
+            "[work_mode] Failed to extract SEEK filter panel state (selectors may be out of date): %s",
+            exc,
+        )
+        return None
+
 
 # ---------------------------------------------------------------------------
 # SEEK job card (per-card on search listing page)
@@ -266,12 +268,7 @@ def _find_work_arrangement_in_redux(payload: Any) -> Optional[str]:
                         if isinstance(item, str) and item.strip():
                             return item.strip()
                         if isinstance(item, dict):
-                            label = (
-                                item.get("label")
-                                or item.get("value")
-                                or item.get("text")
-                                or ""
-                            )
+                            label = item.get("label") or item.get("value") or item.get("text") or ""
                             if label:
                                 return str(label).strip()
             nested = _find_work_arrangement_in_redux(value)

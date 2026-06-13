@@ -6,21 +6,19 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
-from job_hunter_agent.text_processing import compact_whitespace
-
-from job_hunter_agent.job_types import load_job_type, save_job_type, upsert_job_type_entry
+from job_hunter_agent.capability_knowledge import (
+    load_capability_knowledge,
+    save_capability_knowledge,
+    upsert_capability_entry,
+)
 from job_hunter_agent.hard_blocker_rules import (
     load_hard_blocker_rules,
     save_hard_blocker_rules,
     upsert_hard_blocker_rule,
 )
 from job_hunter_agent.job_quality import upsert_cv_farming_rule
-from job_hunter_agent.capability_knowledge import (
-    load_capability_knowledge,
-    upsert_capability_entry,
-    save_capability_knowledge,
-)
+from job_hunter_agent.job_types import load_job_type, save_job_type, upsert_job_type_entry
+from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
     KEY_P_ROUTING_PRIMARY,
@@ -33,29 +31,28 @@ from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
     CATEGORY_PROFILE_SECTION_LABEL,
-
     LEARNING_CATEGORY_KEY,
     LEARNING_CONFIDENCE_KEY,
     LEARNING_CONTEXT_KEY,
     LEARNING_CONTEXT_TERMS_KEY,
-    LEARNING_HISTORY_KEY,
     LEARNING_EVIDENCE_KEY,
+    LEARNING_HISTORY_KEY,
     LEARNING_KNOWLEDGE_MATCH_KEY,
     LEARNING_NEEDS_REVIEW_KEY,
     LEARNING_NORMALIZED_KEY,
+    LEARNING_NOTES_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
-    SIGNAL_ALIASES_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
-    LEARNING_NOTES_KEY,
-    LEARNING_SUGGESTED_CATEGORY_KEY,
-    LEARNING_SUGGESTED_VALUES_KEY,
     LEARNING_STATUS_APPROVED,
     LEARNING_STATUS_IGNORED,
     LEARNING_STATUS_PENDING,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
+    SIGNAL_ALIASES_KEY,
     VALID_SIGNAL_CATEGORIES,
 )
-
+from job_hunter_agent.text_processing import compact_whitespace
 
 CATEGORY_LABELS = {
     CATEGORY_CAPABILITY_CONCEPT: "Capability",
@@ -75,25 +72,50 @@ CATEGORY_METADATA = {
     CATEGORY_CV_FARMING_PATTERN: {
         "label": "CV farming pattern",
         "description": "Wording that suggests recruiter spam, resume harvesting, fake/pipeline jobs, or low-trust ads. These phrases indicate the role may not be a real hire.",
-        "examples": ["expression of interest", "talent pool", "future opportunities", "upload CV", "register your details", "keep your profile active"],
+        "examples": [
+            "expression of interest",
+            "talent pool",
+            "future opportunities",
+            "upload CV",
+            "register your details",
+            "keep your profile active",
+        ],
         "warning": "⚠️ Approving CV farming patterns will cause matching jobs to be rejected.",
     },
     CATEGORY_HARD_BLOCKER_PATTERN: {
         "label": "Hard blocker pattern",
         "description": "Strong rejection patterns that disqualify a job. Hard blockers are mandatory dealbreakers that block matching jobs from processing.",
-        "examples": ["must hold CPA", "active NV2 required", "on-site 5 days mandatory", "requires current driving licence", "willing to work weekends"],
+        "examples": [
+            "must hold CPA",
+            "active NV2 required",
+            "on-site 5 days mandatory",
+            "requires current driving licence",
+            "willing to work weekends",
+        ],
         "warning": "⚠️ DANGER: Wrong approvals here can reject valid jobs. Only approve if the phrase is an absolute mandatory blocker.",
     },
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: {
         "label": "Job type",
         "description": "Employment structure and engagement terms. Helps normalize contract, permanent, casual, and part-time work arrangements.",
-        "examples": ["contract", "permanent", "casual", "part-time", "full-time", "fixed-term", "temporary"],
+        "examples": [
+            "contract",
+            "permanent",
+            "casual",
+            "part-time",
+            "full-time",
+            "fixed-term",
+            "temporary",
+        ],
         "warning": None,
     },
     CATEGORY_PROFILE_SECTION_LABEL: {
         "label": "Profile section label",
         "description": "CV section headings that route profile text to primary, secondary, or supplementary profile support tiers. The suggested bucket shows where the LLM classified the section.",
-        "examples": ["Career History → primary", "Older Roles → secondary", "Certifications → supplementary"],
+        "examples": [
+            "Career History → primary",
+            "Older Roles → secondary",
+            "Certifications → supplementary",
+        ],
         "warning": None,
     },
 }
@@ -173,7 +195,9 @@ def _clean_context_payload(record: dict[str, Any]) -> dict[str, Any]:
     if source:
         cleaned[LEARNING_SOURCE_KEY] = source
 
-    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=record.get(LEARNING_SIGNAL_KEY) or "")
+    aliases = _clean_aliases(
+        record.get(SIGNAL_ALIASES_KEY), canonical=record.get(LEARNING_SIGNAL_KEY) or ""
+    )
     if aliases:
         cleaned[SIGNAL_ALIASES_KEY] = aliases
 
@@ -238,7 +262,9 @@ def _signal_key(signal: Any) -> str:
     return _clean_term(signal)
 
 
-def _make_pending_record(signal: str, category: str = "", metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+def _make_pending_record(
+    signal: str, category: str = "", metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
     now = _now_iso()
     cleaned_signal = _clean_text(signal)
     metadata = metadata or {}
@@ -375,10 +401,12 @@ def _append_knowledge_entry(knowledge_key: str, value: str, aliases: list[str]) 
             entry["aliases"] = merged
             _save_approved_knowledge_payload(knowledge_key, payload)
             return
-    entries.append({
-        "value": canonical,
-        "aliases": aliases,
-    })
+    entries.append(
+        {
+            "value": canonical,
+            "aliases": aliases,
+        }
+    )
     _save_approved_knowledge_payload(knowledge_key, payload)
 
 
@@ -398,7 +426,9 @@ def _approved_signal_keys() -> set[str]:
     return keys
 
 
-def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> list[str | dict[str, Any]]:
+def filter_registerable_signals(
+    signal_names: list[str | dict[str, Any]],
+) -> list[str | dict[str, Any]]:
     if not signal_names:
         return []
     registry_keys = set(load_registry().keys())
@@ -411,8 +441,12 @@ def filter_registerable_signals(signal_names: list[str | dict[str, Any]]) -> lis
         suggested_values: list[str] | None = None
         context_terms: list[str] | None = None
         if isinstance(item, dict):
-            signal = _clean_text(item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name"))
-            item_category = _clean_term(item.get(LEARNING_CATEGORY_KEY) or item.get(LEARNING_SUGGESTED_CATEGORY_KEY) or "")
+            signal = _clean_text(
+                item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name")
+            )
+            item_category = _clean_term(
+                item.get(LEARNING_CATEGORY_KEY) or item.get(LEARNING_SUGGESTED_CATEGORY_KEY) or ""
+            )
             suggested_values = _clean_text_list(item.get(LEARNING_SUGGESTED_VALUES_KEY))
             context_terms = _clean_text_list(item.get(LEARNING_CONTEXT_TERMS_KEY))
         else:
@@ -438,7 +472,10 @@ def signal_in_approved_knowledge(
     context_terms: list[str] | None = None,
 ) -> tuple[bool, str]:
     category_key = _clean_term(category)
-    if category_key not in _CATEGORY_KNOWLEDGE_PATHS and category_key != CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE:
+    if (
+        category_key not in _CATEGORY_KNOWLEDGE_PATHS
+        and category_key != CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE
+    ):
         return False, ""
 
     query_terms = _clean_text_list([signal, *(aliases or [])])
@@ -478,7 +515,9 @@ def register_signals(signal_names: list[str | dict[str, Any]], category: str = "
     for name in signal_names:
         metadata: dict[str, Any] = {}
         if isinstance(name, dict):
-            signal = _clean_text(name.get(LEARNING_SIGNAL_KEY) or name.get("value") or name.get("name"))
+            signal = _clean_text(
+                name.get(LEARNING_SIGNAL_KEY) or name.get("value") or name.get("name")
+            )
             metadata = {
                 key: value
                 for key, value in name.items()
@@ -508,11 +547,13 @@ def register_signals(signal_names: list[str | dict[str, Any]], category: str = "
             changed = True
         if item_category and not _clean_term(existing.get(LEARNING_CATEGORY_KEY)):
             existing[LEARNING_CATEGORY_KEY] = item_category
-            existing.setdefault(LEARNING_HISTORY_KEY, []).append({
-                "action": "categorized",
-                "timestamp": _now_iso(),
-                LEARNING_CATEGORY_KEY: item_category,
-            })
+            existing.setdefault(LEARNING_HISTORY_KEY, []).append(
+                {
+                    "action": "categorized",
+                    "timestamp": _now_iso(),
+                    LEARNING_CATEGORY_KEY: item_category,
+                }
+            )
             changed = True
         if metadata:
             context = _clean_context_payload({**existing, **metadata})
@@ -538,11 +579,13 @@ def set_signal_category(key: str, category: str) -> dict[str, Any] | None:
     if current == category_key:
         return record
     record[LEARNING_CATEGORY_KEY] = category_key
-    record.setdefault(LEARNING_HISTORY_KEY, []).append({
-        "action": "categorized",
-        "timestamp": _now_iso(),
-        LEARNING_CATEGORY_KEY: category_key,
-    })
+    record.setdefault(LEARNING_HISTORY_KEY, []).append(
+        {
+            "action": "categorized",
+            "timestamp": _now_iso(),
+            LEARNING_CATEGORY_KEY: category_key,
+        }
+    )
     save_registry(registry)
     return record
 
@@ -587,12 +630,17 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
     if record is None:
         return None
 
-    category_key = _clean_term(category or record.get(LEARNING_CATEGORY_KEY) or record.get(LEARNING_SUGGESTED_CATEGORY_KEY))
+    category_key = _clean_term(
+        category or record.get(LEARNING_CATEGORY_KEY) or record.get(LEARNING_SUGGESTED_CATEGORY_KEY)
+    )
     if category_key not in VALID_SIGNAL_CATEGORIES:
         raise ValueError(f"Invalid category '{category_key}'.")
 
     explicit_value = _clean_text(value)
-    aliases = _clean_aliases(record.get(SIGNAL_ALIASES_KEY), canonical=explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key))
+    aliases = _clean_aliases(
+        record.get(SIGNAL_ALIASES_KEY),
+        canonical=explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key),
+    )
     if category_key == CATEGORY_CAPABILITY_CONCEPT:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         upsert_capability_entry(value, aliases)
@@ -617,7 +665,8 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
     approved_record = {
         LEARNING_SIGNAL_KEY: explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key),
         LEARNING_NORMALIZED_KEY: key,
-        LEARNING_ORIGINAL_TEXTS_KEY: record.get(LEARNING_ORIGINAL_TEXTS_KEY) or [explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)],
+        LEARNING_ORIGINAL_TEXTS_KEY: record.get(LEARNING_ORIGINAL_TEXTS_KEY)
+        or [explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)],
         LEARNING_CATEGORY_KEY: category_key,
     }
     if aliases:
@@ -637,10 +686,12 @@ def ignore_signal(key: str) -> dict[str, Any] | None:
         return None
     ignored_archive = get_knowledge("ignored_signal") or {}
     record = dict(record)
-    record.setdefault(LEARNING_HISTORY_KEY, []).append({
-        "action": "ignored",
-        "timestamp": _now_iso(),
-    })
+    record.setdefault(LEARNING_HISTORY_KEY, []).append(
+        {
+            "action": "ignored",
+            "timestamp": _now_iso(),
+        }
+    )
     ignored_archive[key] = record
     save_registry(registry)
     set_knowledge("ignored_signal", ignored_archive)
@@ -656,10 +707,13 @@ def clear_signal_learning_state() -> None:
     for category, knowledge_key in _CATEGORY_KNOWLEDGE_PATHS.items():
         if category in _SPECIALIZED_CLEAR_CATEGORIES:
             continue
-        _save_approved_knowledge_payload(knowledge_key, {
-            "kind": "managed_knowledge",
-            "entries": [],
-        })
+        _save_approved_knowledge_payload(
+            knowledge_key,
+            {
+                "kind": "managed_knowledge",
+                "entries": [],
+            },
+        )
 
 
 def load_approved_signal_catalog() -> list[dict[str, Any]]:
@@ -674,11 +728,13 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
                 terms = [cleaned_raw]
                 if cleaned_canonical.lower() != cleaned_raw.lower():
                     terms.append(cleaned_canonical)
-                catalog.append({
-                    "category": category,
-                    "label": cleaned_canonical,
-                    "terms": terms,
-                })
+                catalog.append(
+                    {
+                        "category": category,
+                        "label": cleaned_canonical,
+                        "terms": terms,
+                    }
+                )
             continue
         if category == CATEGORY_CAPABILITY_CONCEPT:
             entries = load_capability_knowledge()
@@ -699,11 +755,13 @@ def load_approved_signal_catalog() -> list[dict[str, Any]]:
             terms = _entry_terms(entry)
             if not terms:
                 continue
-            catalog.append({
-                "category": category,
-                "label": value,
-                "terms": terms,
-            })
+            catalog.append(
+                {
+                    "category": category,
+                    "label": value,
+                    "terms": terms,
+                }
+            )
     return catalog
 
 

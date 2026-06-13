@@ -1,156 +1,84 @@
 """Tests for global settings."""
 
-
-
 import json
 
 import pytest
 
-
-
 from job_hunter_agent import global_settings
-
 from job_hunter_agent.database import init_db
-
 from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
-
-
-
 
 
 def test_save_global_settings_normalizes_values(isolated_db):
 
     global_settings.load_global_settings.cache_clear()
 
-
-
-    saved = global_settings.save_global_settings({
-
-        "fit_highlights": {
-
-            "strong_capability_count": "4",
-
-            "working_capability_count": "3",
-
-            "basic_capability_count": "2",
-
-            "reviewed_signal_count": "1",
-
-            "max_highlights": "6",
-
-        },
-
-        "search_settings": {
-
-            "date_range_days": "5",
-
-            "seek_max_pages": "12",
-
-            "linkedin_hours_old": "48",
-
-            "linkedin_results_per_search": "40",
-
-            "sort_newest_first": "true",
-
-            KEY_LINKEDIN_EASY_APPLY_ONLY: "true",
-
-        },
-
-        "search_limits": {
-
-            "date_range_days": {"min": 1, "max": 9},
-
-            "seek_max_pages": {"min": 1, "max": 12},
-
-            "linkedin_hours_old": {"min": 1, "max": 72},
-
-            "linkedin_results_per_search": {"min": 5, "max": 40},
-
-        },
-
-        "preference_weights": {
-
-            "fit": "1.5",
-
-            "salary": "1.25",
-
-            "location": "1.1",
-
-            "work_mode": "0.9",
-
-            "contract": "0.8",
-
-            "government": "0.7",
-
-            "freshness": "1.6",
-
-        },
-
-        "candidate_profile_tier_weights": {
-
-            "primary_candidate_profile_context": "1",
-
-            "secondary_candidate_profile_context": "0.5",
-
-            "supplementary_candidate_profile_context": "0.25",
-
-        },
-
-        "onboarding_settings": {
-
-            "extraction_lookback_years": "9",
-
-            "title_extraction_min_months": "7",
-
-            "max_target_patterns": "9",
-
-            "max_secondary_patterns": "5",
-
-            "capability_alias_limit": "6",
-
-            "signal_cluster_min_alias_hits": "3",
-
-            "signal_cluster_min_snippet_hits": "4",
-
-            "signal_cluster_dense_snippet_alias_hits": "5",
-
-            "capability_strength_preset": "recent_focus",
-
-        },
-
-        "history_settings": {
-
-            "repeated_listing_min_times_seen": "5",
-
-            "repeated_listing_min_span_days": "14",
-
-            "multi_listing_red_flag_min_listings": "4",
-
-            "multi_listing_red_flag_min_span_days": "45",
-
-        },
-
-        "llm_settings": {
-
-            "model_options": [
-
-                "gpt-4o-mini",
-
-                "gpt-4.1-mini",
-
-                "gpt-4o",
-
-                "gpt-4o-mini",
-
-            ],
-
-        },
-
-    })
-
-
+    saved = global_settings.save_global_settings(
+        {
+            "fit_highlights": {
+                "strong_capability_count": "4",
+                "working_capability_count": "3",
+                "basic_capability_count": "2",
+                "reviewed_signal_count": "1",
+                "max_highlights": "6",
+            },
+            "search_settings": {
+                "date_range_days": "5",
+                "seek_max_pages": "12",
+                "linkedin_hours_old": "48",
+                "linkedin_results_per_search": "40",
+                "sort_newest_first": "true",
+                KEY_LINKEDIN_EASY_APPLY_ONLY: "true",
+            },
+            "search_limits": {
+                "date_range_days": {"min": 1, "max": 9},
+                "seek_max_pages": {"min": 1, "max": 12},
+                "linkedin_hours_old": {"min": 1, "max": 72},
+                "linkedin_results_per_search": {"min": 5, "max": 40},
+            },
+            "preference_weights": {
+                "fit": "1.5",
+                "salary": "1.25",
+                "location": "1.1",
+                "work_mode": "0.9",
+                "contract": "0.8",
+                "government": "0.7",
+                "freshness": "1.6",
+            },
+            "candidate_profile_tier_weights": {
+                "primary_candidate_profile_context": "1",
+                "secondary_candidate_profile_context": "0.5",
+                "supplementary_candidate_profile_context": "0.25",
+            },
+            "onboarding_settings": {
+                "extraction_lookback_years": "9",
+                "title_extraction_min_months": "7",
+                "max_target_patterns": "9",
+                "max_secondary_patterns": "5",
+                "capability_alias_limit": "6",
+                "signal_cluster_min_alias_hits": "3",
+                "signal_cluster_min_snippet_hits": "4",
+                "signal_cluster_dense_snippet_alias_hits": "5",
+                "capability_strength_preset": "recent_focus",
+            },
+            "history_settings": {
+                "repeated_listing_min_times_seen": "5",
+                "repeated_listing_min_span_days": "14",
+                "multi_listing_red_flag_min_listings": "4",
+                "multi_listing_red_flag_min_span_days": "45",
+            },
+            "llm_settings": {
+                "model_options": [
+                    "gpt-4o-mini",
+                    "gpt-4.1-mini",
+                    "gpt-4o",
+                    "gpt-4o-mini",
+                ],
+            },
+        }
+    )
 
     assert saved["fit_highlights"]["strong_capability_count"] == 4
 
@@ -194,50 +122,40 @@ def test_save_global_settings_normalizes_values(isolated_db):
 
     assert saved["llm_settings"]["llm_prompt_settings"]["learning_candidates_max_items"] == 6
 
-    assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_items"] == 6
+    assert (
+        saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_items"] == 6
+    )
 
-    assert saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_words"] == 6
+    assert (
+        saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_words"] == 6
+    )
 
     assert saved["source_document_settings"]["allowed_suffixes"] == [
-
         ".docx",
-
         ".md",
-
         ".txt",
-
     ]
-
-
-
 
 
 def test_save_global_settings_normalizes_source_document_suffixes(isolated_db):
 
     global_settings.load_global_settings.cache_clear()
 
-
-
-    saved = global_settings.save_global_settings({
-
-        "source_document_settings": {
-
-            "allowed_suffixes": [".DOCX", ".txt", ".docx", ".md"],
-
-        },
-
-    })
-
-
+    saved = global_settings.save_global_settings(
+        {
+            "source_document_settings": {
+                "allowed_suffixes": [".DOCX", ".txt", ".docx", ".md"],
+            },
+        }
+    )
 
     assert saved["source_document_settings"]["allowed_suffixes"] == [".docx", ".txt", ".md"]
 
-    assert global_settings.get_allowed_source_document_suffixes() == frozenset({".docx", ".txt", ".md"})
+    assert global_settings.get_allowed_source_document_suffixes() == frozenset(
+        {".docx", ".txt", ".md"}
+    )
 
     assert global_settings.get_allowed_source_document_suffixes_label() == ".docx, .md, .txt"
-
-
-
 
 
 def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
@@ -250,10 +168,9 @@ def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
 
     global_settings.load_global_settings.cache_clear()
 
-
-
-    with pytest.raises(global_settings.GlobalSettingsLoadError, match="global_settings table is empty"):
-
+    with pytest.raises(
+        global_settings.GlobalSettingsLoadError, match="global_settings table is empty"
+    ):
         global_settings.load_global_settings()
 
 
@@ -273,7 +190,9 @@ def test_managed_global_settings_rejects_invalid_job_requirements_output_tokens(
     payload = _load_managed_global_settings_payload()
     payload["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"] = 0
 
-    with pytest.raises(ValueError, match=r"job_requirements_max_output_tokens must be between 50 and 1000"):
+    with pytest.raises(
+        ValueError, match=r"job_requirements_max_output_tokens must be between 50 and 1000"
+    ):
         normalize_global_settings(payload, strict_managed=True)
 
 
@@ -283,5 +202,7 @@ def test_managed_global_settings_accepts_valid_job_requirements_output_tokens():
 
     normalized = normalize_global_settings(payload, strict_managed=True)
 
-    assert normalized["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"] == 300
-
+    assert (
+        normalized["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"]
+        == 300
+    )

@@ -9,7 +9,6 @@ from job_hunter_agent import profile_learning
 from job_hunter_agent.profile_learning import build_learning_patch
 from job_hunter_agent.profile_store import VALID_CAPABILITY_ICON_KEYS
 
-
 SAMPLE_CV = """
 # Professional Summary
 Senior Delivery Lead with experience across payments, process improvement, and delivery support.
@@ -37,19 +36,46 @@ Payments
 
 _LLM_FIXTURE = {
     "capabilities": [
-        {"name": "stakeholder engagement", "level": "strong", "fit": "core", "aliases": ["stakeholder management"], "icon_key": "communication_stakeholders"},
-        {"name": "process mapping", "level": "working", "fit": "core", "aliases": [], "icon_key": "operations_process"},
-        {"name": "requirements analysis", "level": "strong", "fit": "core", "aliases": ["requirements gathering"], "icon_key": "analysis_requirements"},
+        {
+            "name": "stakeholder engagement",
+            "level": "strong",
+            "fit": "core",
+            "aliases": ["stakeholder management"],
+            "icon_key": "communication_stakeholders",
+        },
+        {
+            "name": "process mapping",
+            "level": "working",
+            "fit": "core",
+            "aliases": [],
+            "icon_key": "operations_process",
+        },
+        {
+            "name": "requirements analysis",
+            "level": "strong",
+            "fit": "core",
+            "aliases": ["requirements gathering"],
+            "icon_key": "analysis_requirements",
+        },
     ],
     "role_titles": ["delivery lead", "project coordinator"],
     "target_occupation_queries": ["Delivery Lead", "Project Coordinator"],
-    "match_preferences": {"prefer_permanent": None, "work_mode_preference": None, "home_location": ""},
+    "match_preferences": {
+        "prefer_permanent": None,
+        "work_mode_preference": None,
+        "home_location": "",
+    },
 }
 
 
 def test_build_learning_patch_returns_titles_capabilities_and_queries_without_parser():
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE), \
-         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", return_value=(False, "")):
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+    ):
         patch_result = build_learning_patch(SAMPLE_CV)
 
     assert "cv_text" not in patch_result
@@ -70,7 +96,13 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
         (
             {
                 "capabilities": [
-                    {"name": "stakeholder engagement", "level": "strong", "aliases": [], "icon_key": "communication_stakeholders", "needs_review": False},
+                    {
+                        "name": "stakeholder engagement",
+                        "level": "strong",
+                        "aliases": [],
+                        "icon_key": "communication_stakeholders",
+                        "needs_review": False,
+                    },
                 ],
                 "role_titles": [],
                 "target_occupation_queries": ["Delivery Lead"],
@@ -90,7 +122,13 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
         (
             {
                 "capabilities": [
-                    {"name": "stakeholder engagement", "level": "strong", "aliases": [], "icon_key": "communication_stakeholders", "needs_review": False},
+                    {
+                        "name": "stakeholder engagement",
+                        "level": "strong",
+                        "aliases": [],
+                        "icon_key": "communication_stakeholders",
+                        "needs_review": False,
+                    },
                 ],
                 "role_titles": ["Delivery Lead"],
                 "target_occupation_queries": [],
@@ -101,8 +139,13 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
     ],
 )
 def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, expected):
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture), \
-         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", return_value=(False, "")):
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+    ):
         with pytest.raises(ValueError, match=expected):
             build_learning_patch(SAMPLE_CV)
 
@@ -112,7 +155,12 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
     [
         {
             "capabilities": [
-                {"name": "stakeholder engagement", "level": "strong", "aliases": [], "needs_review": False},
+                {
+                    "name": "stakeholder engagement",
+                    "level": "strong",
+                    "aliases": [],
+                    "needs_review": False,
+                },
             ],
             "role_titles": ["Delivery Lead"],
             "target_occupation_queries": ["Delivery Lead"],
@@ -120,7 +168,13 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
         },
         {
             "capabilities": [
-                {"name": "stakeholder engagement", "level": "strong", "aliases": [], "icon_key": "not_real", "needs_review": False},
+                {
+                    "name": "stakeholder engagement",
+                    "level": "strong",
+                    "aliases": [],
+                    "icon_key": "not_real",
+                    "needs_review": False,
+                },
             ],
             "role_titles": ["Delivery Lead"],
             "target_occupation_queries": ["Delivery Lead"],
@@ -129,8 +183,13 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
     ],
 )
 def test_build_learning_patch_rejects_missing_or_invalid_icon_key(fixture):
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture), \
-         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", return_value=(False, "")):
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+    ):
         with pytest.raises(ValueError, match="icon_key"):
             build_learning_patch(SAMPLE_CV)
 
@@ -141,27 +200,63 @@ def test_build_learning_patch_does_not_register_title_normalization_candidate_si
     def fake_register_signals(items):
         captured.extend(items)
 
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value={
-        "capabilities": [
-            {"name": "business analysis", "level": "working", "aliases": [], "icon_key": "analysis_requirements", "needs_review": False},
-        ],
-        "role_titles": ["Business Analyst"],
-        "target_occupation_queries": ["Business Analyst"],
-        "match_preferences": {},
-    }), \
-         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", return_value=(False, "")), \
-         patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
+    with (
+        patch(
+            "job_hunter_agent.profile_learning._llm_extract_from_cv",
+            return_value={
+                "capabilities": [
+                    {
+                        "name": "business analysis",
+                        "level": "working",
+                        "aliases": [],
+                        "icon_key": "analysis_requirements",
+                        "needs_review": False,
+                    },
+                ],
+                "role_titles": ["Business Analyst"],
+                "target_occupation_queries": ["Business Analyst"],
+                "match_preferences": {},
+            },
+        ),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+        patch(
+            "job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals
+        ),
+    ):
         build_learning_patch("CV text")
 
-    assert not any(item.get("suggested_category") == "title_normalization_candidate" for item in captured)
+    assert not any(
+        item.get("suggested_category") == "title_normalization_candidate" for item in captured
+    )
 
 
 def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry():
     fixture = {
         "capabilities": [
-            {"name": "business analysis", "level": "strong", "aliases": [], "icon_key": "analysis_requirements", "needs_review": False},
-            {"name": "unknown platform", "level": "working", "aliases": ["mystery platform"], "icon_key": "systems_platforms", "needs_review": True},
-            {"name": "api design", "level": "basic", "aliases": [], "icon_key": "technical_build", "needs_review": True},
+            {
+                "name": "business analysis",
+                "level": "strong",
+                "aliases": [],
+                "icon_key": "analysis_requirements",
+                "needs_review": False,
+            },
+            {
+                "name": "unknown platform",
+                "level": "working",
+                "aliases": ["mystery platform"],
+                "icon_key": "systems_platforms",
+                "needs_review": True,
+            },
+            {
+                "name": "api design",
+                "level": "basic",
+                "aliases": [],
+                "icon_key": "technical_build",
+                "needs_review": True,
+            },
         ],
         "role_titles": ["Business Analyst"],
         "target_occupation_queries": ["Business Analyst"],
@@ -177,10 +272,19 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
     def fake_register_signals(items):
         captured.extend(items)
 
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture), \
-         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", side_effect=fake_knowledge_match), \
-         patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
-        patch_result = build_learning_patch(SAMPLE_CV, source_sections=[{"label": "Skills", "text": "unknown platform"}])
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            side_effect=fake_knowledge_match,
+        ),
+        patch(
+            "job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals
+        ),
+    ):
+        patch_result = build_learning_patch(
+            SAMPLE_CV, source_sections=[{"label": "Skills", "text": "unknown platform"}]
+        )
 
     rules = patch_result.get("candidate_capabilities", [])
     assert [rule["name"] for rule in rules] == ["business analysis", "api design"]
@@ -201,7 +305,13 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
 def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
     fixture = {
         "capabilities": [
-            {"name": "unknown platform", "level": "working", "aliases": [], "icon_key": "systems_platforms", "needs_review": False},
+            {
+                "name": "unknown platform",
+                "level": "working",
+                "aliases": [],
+                "icon_key": "systems_platforms",
+                "needs_review": False,
+            },
         ],
         "role_titles": ["Business Analyst"],
         "target_occupation_queries": ["Business Analyst"],
@@ -212,10 +322,19 @@ def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
     def fake_register_signals(items):
         captured.extend(items)
 
-    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture), \
-         patch("job_hunter_agent.profile_learning.signal_in_approved_knowledge", return_value=(False, "")), \
-         patch("job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals):
-        build_learning_patch(SAMPLE_CV, source_sections=[{"label": "Skills", "text": "unknown platform"}])
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+        patch(
+            "job_hunter_agent.profile_learning.register_signals", side_effect=fake_register_signals
+        ),
+    ):
+        build_learning_patch(
+            SAMPLE_CV, source_sections=[{"label": "Skills", "text": "unknown platform"}]
+        )
 
     assert all(item.get("category") != "hard_blocker_pattern" for item in captured)
 
@@ -255,15 +374,21 @@ def test_llm_extract_from_cv_cache_hit_skips_save():
     """A cache hit must return the stored result without calling save."""
     cv_text = "Test CV for cache-hit test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"icon-v2:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[:16]
-    fake_result = {"capabilities": [{"name": "delivery management", "icon_key": "delivery_project"}]}
+    cache_key = _hashlib.sha256(f"icon-v2:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+        :16
+    ]
+    fake_result = {
+        "capabilities": [{"name": "delivery management", "icon_key": "delivery_project"}]
+    }
 
     _reset_cv_extraction_cache()
     profile_learning._cv_extraction_cache[cache_key] = fake_result
 
     saved = []
-    with patch("job_hunter_agent.profile_learning._ensure_cv_extraction_cache_loaded"), \
-         patch("job_hunter_agent.io_utils.save_cv_extraction_cache", side_effect=saved.append):
+    with (
+        patch("job_hunter_agent.profile_learning._ensure_cv_extraction_cache_loaded"),
+        patch("job_hunter_agent.io_utils.save_cv_extraction_cache", side_effect=saved.append),
+    ):
         result = profile_learning._llm_extract_from_cv(cv_text, lookback, alias_limit)
 
     assert result == fake_result
@@ -274,16 +399,24 @@ def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():
     """Simulates server restart: disk cache has a prior result; LLM must not be called."""
     cv_text = "My CV content for disk restore test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"icon-v2:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[:16]
-    prior_result = {"capabilities": [{"name": "stakeholder engagement", "icon_key": "communication_stakeholders"}]}
+    cache_key = _hashlib.sha256(f"icon-v2:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+        :16
+    ]
+    prior_result = {
+        "capabilities": [
+            {"name": "stakeholder engagement", "icon_key": "communication_stakeholders"}
+        ]
+    }
 
     _reset_cv_extraction_cache()
 
     def fake_load():
         return {cache_key: prior_result}
 
-    with patch("job_hunter_agent.io_utils.load_cv_extraction_cache", side_effect=fake_load), \
-         patch("job_hunter_agent.io_utils.save_cv_extraction_cache"):
+    with (
+        patch("job_hunter_agent.io_utils.load_cv_extraction_cache", side_effect=fake_load),
+        patch("job_hunter_agent.io_utils.save_cv_extraction_cache"),
+    ):
         profile_learning._cv_extraction_cache_loaded = False
         profile_learning._ensure_cv_extraction_cache_loaded()
 

@@ -55,13 +55,18 @@ def _li_result(**kwargs) -> SourceRunResult:
 # 1. SEEK only runs when only SEEK is enabled
 # ---------------------------------------------------------------------------
 
+
 def test_seek_only_runs_when_seek_enabled(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     seek_called = []
     li_called = []
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result())
-    monkeypatch.setattr(source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result())
+    monkeypatch.setattr(
+        source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result()
+    )
+    monkeypatch.setattr(
+        source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result()
+    )
 
     run_enabled_sources(context)
 
@@ -73,13 +78,18 @@ def test_seek_only_runs_when_seek_enabled(monkeypatch):
 # 2. LinkedIn only runs when only LinkedIn is enabled
 # ---------------------------------------------------------------------------
 
+
 def test_linkedin_only_runs_when_linkedin_enabled(monkeypatch):
     context = _make_context([SOURCE_LINKEDIN])
     seek_called = []
     li_called = []
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result())
-    monkeypatch.setattr(source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result())
+    monkeypatch.setattr(
+        source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result()
+    )
+    monkeypatch.setattr(
+        source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result()
+    )
 
     run_enabled_sources(context)
 
@@ -91,13 +101,18 @@ def test_linkedin_only_runs_when_linkedin_enabled(monkeypatch):
 # 3. Both run when both sources are enabled
 # ---------------------------------------------------------------------------
 
+
 def test_both_sources_run_when_both_enabled(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
     seek_called = []
     li_called = []
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result())
-    monkeypatch.setattr(source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result())
+    monkeypatch.setattr(
+        source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result()
+    )
+    monkeypatch.setattr(
+        source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result()
+    )
 
     run_enabled_sources(context)
 
@@ -108,6 +123,7 @@ def test_both_sources_run_when_both_enabled(monkeypatch):
 # ---------------------------------------------------------------------------
 # 4. Both sources are submitted concurrently when both enabled
 # ---------------------------------------------------------------------------
+
 
 def test_both_sources_run_concurrently_when_both_enabled(monkeypatch):
     """Verify both workers start before either blocks by using a barrier."""
@@ -136,12 +152,14 @@ def test_both_sources_run_concurrently_when_both_enabled(monkeypatch):
 # 5. Merge order is always SEEK then LinkedIn, even if LinkedIn finishes first
 # ---------------------------------------------------------------------------
 
+
 def test_merge_order_is_seek_then_linkedin_regardless_of_completion(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
 
     # LinkedIn returns a record immediately; SEEK returns after a brief delay.
     def _slow_seek(ctx):
         import time
+
         time.sleep(0.05)
         return _seek_result(kept_records=[{"job_key": "seek:1", "title": "Seek job"}])
 
@@ -162,13 +180,20 @@ def test_merge_order_is_seek_then_linkedin_regardless_of_completion(monkeypatch)
 # 6. LinkedIn exception prints and continues — does not raise
 # ---------------------------------------------------------------------------
 
+
 def test_linkedin_exception_prints_and_continues(monkeypatch, capsys):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
 
-    monkeypatch.setattr(source_runner, "_run_seek_source",
-                        lambda ctx: _seek_result(kept_records=[{"job_key": "seek:1"}]))
-    monkeypatch.setattr(source_runner, "_run_linkedin_source",
-                        lambda ctx: _li_result(error=RuntimeError("network error")))
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: _seek_result(kept_records=[{"job_key": "seek:1"}]),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: _li_result(error=RuntimeError("network error")),
+    )
 
     kept, _, _ = run_enabled_sources(context)
 
@@ -181,8 +206,10 @@ def test_seek_scraper_exception_is_caught_and_printed(monkeypatch, capsys):
     """Verify _run_seek_source catches exceptions, prints them, and returns an error result."""
     context = _make_context([SOURCE_SEEK])
 
-    with patch("job_hunter_agent.source_runner._run_seek_source",
-               return_value=_seek_result(error=RuntimeError("seek exploded"))):
+    with patch(
+        "job_hunter_agent.source_runner._run_seek_source",
+        return_value=_seek_result(error=RuntimeError("seek exploded")),
+    ):
         kept, _, _ = run_enabled_sources(context)
 
     assert kept == []
@@ -192,10 +219,16 @@ def test_seek_exception_printed_and_continued(monkeypatch, capsys):
     """SEEK exception is printed; LinkedIn still runs if enabled."""
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
 
-    monkeypatch.setattr(source_runner, "_run_seek_source",
-                        lambda ctx: _seek_result(error=RuntimeError("seek exploded")))
-    monkeypatch.setattr(source_runner, "_run_linkedin_source",
-                        lambda ctx: _li_result(kept_records=[{"job_key": "linkedin:1"}]))
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: _seek_result(error=RuntimeError("seek exploded")),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: _li_result(kept_records=[{"job_key": "linkedin:1"}]),
+    )
 
     kept, _, _ = run_enabled_sources(context)
 
@@ -223,14 +256,16 @@ def test_linkedin_scraper_exception_is_caught_and_printed(monkeypatch, capsys):
 # 7. Stop before LinkedIn does not start LinkedIn in serial path
 # ---------------------------------------------------------------------------
 
+
 def test_stop_before_linkedin_skips_linkedin_in_serial_path(monkeypatch):
     """When only LinkedIn is enabled and stop is requested, LinkedIn does not run."""
     context = _make_context([SOURCE_LINKEDIN])
     li_called = []
 
     monkeypatch.setattr(source_runner, "run_stop_requested", lambda: True)
-    monkeypatch.setattr(source_runner, "_run_linkedin_source",
-                        lambda ctx: li_called.append(True) or _li_result())
+    monkeypatch.setattr(
+        source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result()
+    )
 
     kept, audit, skills = run_enabled_sources(context)
 
@@ -243,6 +278,7 @@ def test_stop_before_linkedin_skips_linkedin_in_serial_path(monkeypatch):
 # ---------------------------------------------------------------------------
 # Mutable state isolation — each source gets its own copy
 # ---------------------------------------------------------------------------
+
 
 def test_context_vars_propagated_to_worker_threads(monkeypatch):
     """ContextVar values (e.g. active user id) must be visible inside worker threads."""

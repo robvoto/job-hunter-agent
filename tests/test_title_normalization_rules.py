@@ -9,11 +9,17 @@ from job_hunter_agent import title_normalization_rules
 
 
 def test_normalize_title_text_trims_and_lowercases():
-    assert title_normalization_rules.normalize_title_text("  Senior Business Analyst  ") == "senior business analyst"
+    assert (
+        title_normalization_rules.normalize_title_text("  Senior Business Analyst  ")
+        == "senior business analyst"
+    )
 
 
 def test_normalize_title_text_collapses_whitespace():
-    assert title_normalization_rules.normalize_title_text("Senior  Business   Analyst") == "senior business analyst"
+    assert (
+        title_normalization_rules.normalize_title_text("Senior  Business   Analyst")
+        == "senior business analyst"
+    )
 
 
 def test_normalize_title_text_does_not_expand_abbreviations():

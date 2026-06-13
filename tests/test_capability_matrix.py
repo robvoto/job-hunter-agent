@@ -1,23 +1,34 @@
-﻿"""Tests for capability matrix."""
+"""Tests for capability matrix."""
 
-from job_hunter_agent.capability_matrix import choose_capability_name, derive_job_description_aliases, expand_capability_terms
+from job_hunter_agent.capability_matching import (
+    find_profile_capability_matches,
+    reviewed_signal_matches_for_text,
+)
+from job_hunter_agent.capability_matrix import (
+    choose_capability_name,
+    derive_job_description_aliases,
+    expand_capability_terms,
+)
 from job_hunter_agent.profile_store import normalize_capability_rules
-from job_hunter_agent.capability_matching import find_profile_capability_matches, reviewed_signal_matches_for_text
 
 
 def test_expand_capability_terms_returns_name_and_aliases():
-    terms = expand_capability_terms({
-        "name": "requirements analysis",
-        "aliases": ["requirements gathering", "business requirements"],
-    })
+    terms = expand_capability_terms(
+        {
+            "name": "requirements analysis",
+            "aliases": ["requirements gathering", "business requirements"],
+        }
+    )
     assert terms == ["requirements analysis", "requirements gathering", "business requirements"]
 
 
 def test_expand_capability_terms_deduplicates():
-    terms = expand_capability_terms({
-        "name": "agile delivery",
-        "aliases": ["agile delivery", "scrum", "scrum"],
-    })
+    terms = expand_capability_terms(
+        {
+            "name": "agile delivery",
+            "aliases": ["agile delivery", "scrum", "scrum"],
+        }
+    )
     assert terms == ["agile delivery", "scrum"]
 
 
@@ -51,7 +62,10 @@ def test_choose_capability_name_returns_cleaned_name():
 
 
 def test_choose_capability_name_falls_back_to_first_alias():
-    assert choose_capability_name("", ["stakeholder engagement", "stakeholder management"]) == "stakeholder engagement"
+    assert (
+        choose_capability_name("", ["stakeholder engagement", "stakeholder management"])
+        == "stakeholder engagement"
+    )
 
 
 def test_choose_capability_name_empty_input():
@@ -59,14 +73,16 @@ def test_choose_capability_name_empty_input():
 
 
 def test_normalize_capability_rules_uses_choose_capability_name():
-    rules = normalize_capability_rules([
-        {
-            "name": "Stakeholder Engagement",
-            "level": "strong",
-            "fit": "core",
-            "aliases": ["stakeholder management"],
-        }
-    ])
+    rules = normalize_capability_rules(
+        [
+            {
+                "name": "Stakeholder Engagement",
+                "level": "strong",
+                "fit": "core",
+                "aliases": ["stakeholder management"],
+            }
+        ]
+    )
     assert rules[0]["name"] == "stakeholder engagement"
 
 

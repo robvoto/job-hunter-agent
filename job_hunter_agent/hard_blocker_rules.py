@@ -1,8 +1,8 @@
 """Hard blocker rule management and detection logic.
 
-This module handles the loading, normalisation, and persistence of rules used 
-to detect mandatory requirements in job ads that conflict with a candidate's 
-profile. It provides logic for matching these rules against job text to 
+This module handles the loading, normalisation, and persistence of rules used
+to detect mandatory requirements in job ads that conflict with a candidate's
+profile. It provides logic for matching these rules against job text to
 automatically identify dealbreakers using candidate-specific exclusion terms.
 """
 
@@ -12,12 +12,12 @@ import json
 import logging
 import re
 from typing import Any
+
 from job_hunter_agent.managed_knowledge_store import (
     clean_knowledge_aliases,
     clean_knowledge_text,
     merge_knowledge_entries,
 )
-
 from job_hunter_agent.signal_schema import (
     MANAGED_KNOWLEDGE_ALIASES_KEY,
     MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
@@ -30,11 +30,13 @@ from job_hunter_agent.signal_schema import (
 
 _TERM_PLACEHOLDER = "{term}"
 REJECTION_BLOCKER_MIN_LENGTH = 2
-REJECTION_BLOCKER_MAX_LENGTH = 80 
+REJECTION_BLOCKER_MAX_LENGTH = 80
 logger = logging.getLogger(__name__)
+
 
 def _load_payload() -> dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     return get_knowledge("hard_blocker_rules") or {MANAGED_KNOWLEDGE_ENTRIES_KEY: []}
 
 
@@ -46,7 +48,9 @@ def _normalize_entry(entry: Any) -> dict[str, Any] | None:
         return None
     return {
         MANAGED_KNOWLEDGE_VALUE_KEY: value,
-        MANAGED_KNOWLEDGE_ALIASES_KEY: clean_knowledge_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=value),
+        MANAGED_KNOWLEDGE_ALIASES_KEY: clean_knowledge_aliases(
+            entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=value
+        ),
     }
 
 
@@ -93,6 +97,7 @@ def save_hard_blocker_rules(entries: list[dict[str, Any]]) -> dict[str, Any]:
         MANAGED_KNOWLEDGE_ENTRIES_KEY: _merge_entries(entries),
     }
     from job_hunter_agent.knowledge_store import set_knowledge
+
     set_knowledge("hard_blocker_rules", payload)
     return payload
 
@@ -107,9 +112,14 @@ def upsert_hard_blocker_rule(value: str, aliases: list[str] | None = None) -> di
     entries = list(load_hard_blocker_rules())
     incoming_aliases = clean_knowledge_aliases(aliases or [], canonical=cleaned_value)
     for entry in entries:
-        if clean_knowledge_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower() != cleaned_value.lower():
+        if (
+            clean_knowledge_text(entry.get(MANAGED_KNOWLEDGE_VALUE_KEY)).lower()
+            != cleaned_value.lower()
+        ):
             continue
-        existing_aliases = clean_knowledge_aliases(entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=cleaned_value)
+        existing_aliases = clean_knowledge_aliases(
+            entry.get(MANAGED_KNOWLEDGE_ALIASES_KEY), canonical=cleaned_value
+        )
         merged: list[str] = []
         seen: set[str] = {cleaned_value.lower()}
         for alias in [*existing_aliases, *incoming_aliases]:
@@ -122,10 +132,12 @@ def upsert_hard_blocker_rule(value: str, aliases: list[str] | None = None) -> di
         entry[MANAGED_KNOWLEDGE_ALIASES_KEY] = merged
         return save_hard_blocker_rules(entries)
 
-    entries.append({
-        MANAGED_KNOWLEDGE_VALUE_KEY: cleaned_value,
-        MANAGED_KNOWLEDGE_ALIASES_KEY: incoming_aliases,
-    })
+    entries.append(
+        {
+            MANAGED_KNOWLEDGE_VALUE_KEY: cleaned_value,
+            MANAGED_KNOWLEDGE_ALIASES_KEY: incoming_aliases,
+        }
+    )
     return save_hard_blocker_rules(entries)
 
 
@@ -153,7 +165,10 @@ def _near_desirable_language(text: str, term: str, window: int = 90) -> bool:
         start = max(match.start() - window, 0)
         end = min(match.end() + window, len(cleaned_text))
         context = cleaned_text[start:end]
-        if re.search(r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b", context):
+        if re.search(
+            r"\b(desirable|preferred|highly regarded|nice to have|advantageous|beneficial)\b",
+            context,
+        ):
             return True
     return False
 
@@ -168,7 +183,9 @@ def normalize_rejection_blocker_suggestions(
         try:
             value = json.loads(value)
         except Exception as exc:
-            logger.warning("[HARD_BLOCKERS][WARN] Failed to parse blocker suggestions JSON: %s", exc)
+            logger.warning(
+                "[HARD_BLOCKERS][WARN] Failed to parse blocker suggestions JSON: %s", exc
+            )
             return []
     if isinstance(value, dict):
         blockers = value.get("blockers")

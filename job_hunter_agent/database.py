@@ -7,6 +7,7 @@ from pathlib import Path
 
 def _default_db_path() -> Path:
     from job_hunter_agent.paths import get_db_path
+
     return get_db_path()
 
 
@@ -188,11 +189,16 @@ CREATE INDEX IF NOT EXISTS idx_occupation_title_cache_result
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
     """One-time schema migrations applied in order on every startup (idempotent)."""
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    tables = {
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
     if "application_materials" in tables and "profile_documents" not in tables:
         conn.execute("ALTER TABLE application_materials RENAME TO profile_documents")
     if "occupation_title_cache" in tables:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(occupation_title_cache)").fetchall()}
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(occupation_title_cache)").fetchall()
+        }
         if "matched_phrase" not in columns:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN matched_phrase TEXT")
         if "match_type" not in columns:
@@ -250,7 +256,5 @@ def ensure_user_row(
 
 def get_table_names(db_path: Path | None = None) -> set[str]:
     with db_conn(db_path or _default_db_path()) as conn:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     return {row["name"] for row in rows}

@@ -1,4 +1,4 @@
-﻿"""Tests for signal defaults."""
+"""Tests for signal defaults."""
 
 from job_hunter_agent import io_utils, signal_detection
 from job_hunter_agent.profile_store import KEY_COMPETITIVE_SIGNAL_ALIGNMENT, KEY_EVIDENCE_TIERS

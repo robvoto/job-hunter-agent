@@ -32,9 +32,7 @@ def test_init_creates_db_file(tmp_path):
 
 def test_init_creates_all_tables(tmp_db):
     tables = get_table_names(tmp_db)
-    assert EXPECTED_TABLES.issubset(tables), (
-        f"Missing tables: {EXPECTED_TABLES - tables}"
-    )
+    assert EXPECTED_TABLES.issubset(tables), f"Missing tables: {EXPECTED_TABLES - tables}"
 
 
 def test_occupation_title_cache_schema(tmp_db):
@@ -130,7 +128,9 @@ def test_row_factory_returns_dict_like_rows(tmp_db):
 def test_db_conn_rolls_back_on_error(tmp_db):
     with pytest.raises(ValueError):
         with db_conn(tmp_db) as conn:
-            conn.execute("INSERT INTO global_settings (key, value) VALUES (?, ?)", ("rollback_key", '"x"'))
+            conn.execute(
+                "INSERT INTO global_settings (key, value) VALUES (?, ?)", ("rollback_key", '"x"')
+            )
             raise ValueError("simulated failure")
 
     with db_conn(tmp_db) as conn:
@@ -143,7 +143,7 @@ def test_foreign_key_constraint_enforced(tmp_db):
         with db_conn(tmp_db) as conn:
             conn.execute(
                 "INSERT INTO user_profile (user_id, data) VALUES (?, ?)",
-                ("nonexistent_user", '{}'),
+                ("nonexistent_user", "{}"),
             )
 
 
@@ -213,10 +213,12 @@ def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
 
     def write_profile(index: int) -> None:
         set_user_id("test_user")
-        profile_store.save_profile({
-            **profile_store.DEFAULT_PROFILE,
-            "llm_profile_brief": f"brief-{index}",
-        })
+        profile_store.save_profile(
+            {
+                **profile_store.DEFAULT_PROFILE,
+                "llm_profile_brief": f"brief-{index}",
+            }
+        )
 
     with ThreadPoolExecutor(max_workers=6) as executor:
         list(executor.map(write_profile, range(20)))
@@ -239,15 +241,17 @@ def test_concurrent_job_history_writes_do_not_corrupt_state(isolated_db):
 
     def write_job(index: int) -> None:
         set_user_id("test_user")
-        save_job_history({
-            f"seek:{index}": {
-                "title": f"Business Analyst {index}",
-                "company": "Example Co",
-                "state": "seen",
-                "first_seen_at": "2026-01-01T00:00:00",
-                "last_seen_at": "2026-01-01T00:00:00",
+        save_job_history(
+            {
+                f"seek:{index}": {
+                    "title": f"Business Analyst {index}",
+                    "company": "Example Co",
+                    "state": "seen",
+                    "first_seen_at": "2026-01-01T00:00:00",
+                    "last_seen_at": "2026-01-01T00:00:00",
+                }
             }
-        })
+        )
 
     with ThreadPoolExecutor(max_workers=6) as executor:
         list(executor.map(write_job, range(20)))

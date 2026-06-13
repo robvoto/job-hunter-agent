@@ -33,7 +33,9 @@ def _job_history_with_requirement_coverage(job_key, coverage_items):
 
 def test_profile_gap_decide_later_is_noop(client, monkeypatch):
     saved = []
-    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", lambda p: saved.append(p) or p)
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved.append(p) or p
+    )
 
     resp = client.post(
         "/api/profile-gap",
@@ -71,12 +73,20 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
         "must_not_require_skills": [],
     }
     saved_profiles = []
-    monkeypatch.setattr("job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile))
-    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p)
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
 
     resp = client.post(
         "/api/profile-gap",
-        json={"job_key": job_key, "capability_name": "cloud computing (aws)", "action": "confirm_have"},
+        json={
+            "job_key": job_key,
+            "capability_name": "cloud computing (aws)",
+            "action": "confirm_have",
+        },
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
@@ -111,12 +121,20 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
         "must_not_require_skills": [],
     }
     saved_profiles = []
-    monkeypatch.setattr("job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile))
-    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p)
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
 
     resp = client.post(
         "/api/profile-gap",
-        json={"job_key": job_key, "capability_name": "cloud computing (aws)", "action": "confirm_have"},
+        json={
+            "job_key": job_key,
+            "capability_name": "cloud computing (aws)",
+            "action": "confirm_have",
+        },
     )
     assert resp.status_code == 200
     assert saved_profiles == [], "no save when capability already exists"
@@ -143,12 +161,20 @@ def test_profile_gap_confirm_have_rejects_non_capability_string(client, monkeypa
         "must_not_require_skills": [],
     }
     saved_profiles = []
-    monkeypatch.setattr("job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile))
-    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p)
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
 
     resp = client.post(
         "/api/profile-gap",
-        json={"job_key": job_key, "capability_name": "Permanent full-time role", "action": "confirm_have"},
+        json={
+            "job_key": job_key,
+            "capability_name": "Permanent full-time role",
+            "action": "confirm_have",
+        },
     )
     assert resp.status_code == 400
     assert "confirmable requirement coverage item" in resp.json()["error"]
@@ -176,12 +202,20 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
         "must_not_require_skills": [],
     }
     saved_profiles = []
-    monkeypatch.setattr("job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile))
-    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p)
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
 
     resp = client.post(
         "/api/profile-gap",
-        json={"job_key": job_key, "capability_name": "AHPRA registration", "action": "confirm_do_not_have"},
+        json={
+            "job_key": job_key,
+            "capability_name": "AHPRA registration",
+            "action": "confirm_do_not_have",
+        },
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
@@ -209,12 +243,20 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
         "must_not_require_skills": ["AHPRA registration"],
     }
     saved_profiles = []
-    monkeypatch.setattr("job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile))
-    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p)
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
 
     resp = client.post(
         "/api/profile-gap",
-        json={"job_key": job_key, "capability_name": "AHPRA registration", "action": "confirm_do_not_have"},
+        json={
+            "job_key": job_key,
+            "capability_name": "AHPRA registration",
+            "action": "confirm_do_not_have",
+        },
     )
     assert resp.status_code == 200
     assert saved_profiles == [], "no save when term already in must_not_require_skills"

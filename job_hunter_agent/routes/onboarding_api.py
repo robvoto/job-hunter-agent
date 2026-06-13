@@ -1,15 +1,19 @@
-﻿"""Route handlers for onboarding api."""
+"""Route handlers for onboarding api."""
 
-from pathlib import Path
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Body
 
-from job_hunter_agent.locations import resolve_location, find_nearest_location
-from job_hunter_agent.global_settings import get_allowed_source_document_suffixes, get_allowed_source_document_suffixes_label
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.source_documents import persist_uploaded_source_pack, run_onboarding, load_source_materials
+from job_hunter_agent.global_settings import (
+    get_allowed_source_document_suffixes,
+    get_allowed_source_document_suffixes_label,
+    get_salary_limits,
+)
 from job_hunter_agent.llm_gate import get_session_cost_usd
+from job_hunter_agent.locations import find_nearest_location, resolve_location
+from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_ENGAGEMENT_TYPE,
@@ -19,11 +23,11 @@ from job_hunter_agent.profile_store import (
     KEY_MIN_DAILY_RATE,
     KEY_MIN_SALARY_YEARLY,
     KEY_ONBOARDING_COMPLETE,
-    KEY_PREFER_SECTOR,
-    KEY_WORK_MODE_PREFERENCE,
     KEY_ONBOARDING_SETTINGS,
+    KEY_PREFER_SECTOR,
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
+    KEY_WORK_MODE_PREFERENCE,
     MIN_CONTRACT_MONTH_OPTIONS,
     PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES,
     VALID_ENGAGEMENT_TYPES,
@@ -34,9 +38,12 @@ from job_hunter_agent.profile_store import (
     normalize_sector_preference_values,
     normalize_work_mode_preferences,
 )
-from job_hunter_agent.global_settings import get_salary_limits
-from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.routes.responses import json_response
+from job_hunter_agent.source_documents import (
+    load_source_materials,
+    persist_uploaded_source_pack,
+    run_onboarding,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -71,8 +78,12 @@ def api_lookup_location_by_geolocation(body: dict = Body(...)):  # type: ignore[
 def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:
         files = body.get(REQUEST_FILES_KEY, [])
-        search_prefs = srv._normalize_onboarding_search_preferences(body.get(REQUEST_SEARCH_PREFERENCES_KEY))
-        onboarding_settings = srv._normalize_onboarding_settings_payload(body.get(REQUEST_ONBOARDING_SETTINGS_KEY))
+        search_prefs = srv._normalize_onboarding_search_preferences(
+            body.get(REQUEST_SEARCH_PREFERENCES_KEY)
+        )
+        onboarding_settings = srv._normalize_onboarding_settings_payload(
+            body.get(REQUEST_ONBOARDING_SETTINGS_KEY)
+        )
         if not isinstance(files, list):
             raise ValueError("files must be a list")
         if not files:
@@ -85,9 +96,15 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
                 raise ValueError("Each uploaded file needs a filename.")
             suffix = Path(filename).suffix.lower()
             if suffix not in get_allowed_source_document_suffixes():
-                raise ValueError(f"Please upload CV files as {get_allowed_source_document_suffixes_label()}.")
+                raise ValueError(
+                    f"Please upload CV files as {get_allowed_source_document_suffixes_label()}."
+                )
         srv._validate_onboarding_settings_inputs(onboarding_settings)
-        materials = persist_uploaded_source_pack(files) if files else load_source_materials(create_if_missing=True)
+        materials = (
+            persist_uploaded_source_pack(files)
+            if files
+            else load_source_materials(create_if_missing=True)
+        )
         requested_preset = str(onboarding_settings.get("capability_strength_preset") or "").strip()
         preset_info = srv.describe_capability_strength_preset(requested_preset)
         resolved_preset = str(preset_info["capability_strength_preset"]).strip()
@@ -103,7 +120,9 @@ def api_onboarding_import(body: dict = Body(...)):  # type: ignore[no-untyped-de
             )
         )
         srv.patch_profile({REQUEST_ONBOARDING_SETTINGS_KEY: onboarding_settings})
-        result = run_onboarding(materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings)
+        result = run_onboarding(
+            materials, search_preferences=search_prefs, onboarding_settings=onboarding_settings
+        )
         result["materials"] = materials
         result["llm_cost_usd"] = round(get_session_cost_usd(), 6)
     except Exception as exc:
@@ -117,8 +136,14 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         target = [str(p).strip() for p in body.get(KEY_PRIMARY_PATTERNS, []) if str(p).strip()]
         secondary = [str(p).strip() for p in body.get(KEY_SECONDARY_PATTERNS, []) if str(p).strip()]
         keyword = str(body.get(REQUEST_SEARCH_KEYWORD_KEY) or "").strip()
-        locations = [str(value).strip() for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, []) if str(value).strip()]
-        engagement_type = normalize_engagement_type_preferences(body.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
+        locations = [
+            str(value).strip()
+            for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, [])
+            if str(value).strip()
+        ]
+        engagement_type = normalize_engagement_type_preferences(
+            body.get(KEY_ENGAGEMENT_TYPE), default_to_all=False
+        )
         work_mode_preference = normalize_work_mode_preferences(body.get(KEY_WORK_MODE_PREFERENCE))
         prefer_sector = normalize_sector_preference_values(body.get(KEY_PREFER_SECTOR))
         raw_min_contract_months = body.get("min_contract_months")
@@ -126,7 +151,9 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         raw_minimum_daily_rate = body.get(KEY_MIN_DAILY_RATE)
         current_onboarding = srv.load_profile().get(KEY_ONBOARDING_SETTINGS)
         # Keep the current onboarding limits in the learning path so profile saves do not drop them.
-        capability_rules = normalize_capability_rules(body.get(KEY_CANDIDATE_CAPABILITIES) or [], current_onboarding)
+        capability_rules = normalize_capability_rules(
+            body.get(KEY_CANDIDATE_CAPABILITIES) or [], current_onboarding
+        )
         if not capability_rules:
             raise ValueError(PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES)
         if not target:
@@ -141,7 +168,9 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         if not srv.LOCATION_NAME_RE.fullmatch(location):
             raise ValueError("Location should look like a normal city, state, or region name.")
         locations = [resolve_location(location)["name"]]
-        if not engagement_type or any(value not in VALID_ENGAGEMENT_TYPES for value in engagement_type):
+        if not engagement_type or any(
+            value not in VALID_ENGAGEMENT_TYPES for value in engagement_type
+        ):
             raise ValueError("Please choose what type of work you are open to.")
         if any(value not in VALID_WORK_MODE_PREFERENCES for value in work_mode_preference):
             raise ValueError("Please choose only remote, hybrid, or on-site.")
@@ -155,12 +184,16 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
                 min_contract_months = int(str(raw_min_contract_months).strip())
             except Exception as exc:
                 raise ValueError("Minimum contract length must be a whole number.") from exc
-            if min_contract_months not in {int(item["value"]) for item in MIN_CONTRACT_MONTH_OPTIONS}:
+            if min_contract_months not in {
+                int(item["value"]) for item in MIN_CONTRACT_MONTH_OPTIONS
+            }:
                 raise ValueError("Please choose a valid minimum contract length.")
         if "contract" not in engagement_type:
             min_contract_months = None
         try:
-            minimum_salary_yearly = int(str(raw_minimum_salary_yearly).replace(",", "").strip() or 0)
+            minimum_salary_yearly = int(
+                str(raw_minimum_salary_yearly).replace(",", "").strip() or 0
+            )
         except Exception as exc:
             raise ValueError("Minimum permanent salary must be a whole number.") from exc
         if minimum_salary_yearly < 0:
@@ -172,7 +205,9 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         if minimum_daily_rate < 0:
             raise ValueError("Minimum contract daily rate cannot be negative.")
         salary_limits = get_salary_limits()
-        yearly_cap = int(salary_limits.get(KEY_MIN_SALARY_YEARLY, {}).get("max", minimum_salary_yearly))
+        yearly_cap = int(
+            salary_limits.get(KEY_MIN_SALARY_YEARLY, {}).get("max", minimum_salary_yearly)
+        )
         daily_cap = int(salary_limits.get(KEY_MIN_DAILY_RATE, {}).get("max", minimum_daily_rate))
         if minimum_salary_yearly > yearly_cap:
             raise ValueError(f"Minimum permanent salary cannot exceed {yearly_cap:,}.")
@@ -206,4 +241,3 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response({"ok": True, "message": "Onboarding profile saved.", "profile": updated})
-

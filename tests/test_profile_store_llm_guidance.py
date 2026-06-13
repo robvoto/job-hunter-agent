@@ -1,20 +1,22 @@
-﻿"""Tests for profile store llm guidance."""
+"""Tests for profile store llm guidance."""
 
 import json
+
 import pytest
 
+from job_hunter_agent import profile_store, review_insights
 from job_hunter_agent.io_utils import load_ui_labels
-from job_hunter_agent import profile_store
-from job_hunter_agent import review_insights
 
 
 def test_save_profile_strips_legacy_guidance_key(isolated_db):
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
 
-    saved = profile_store.save_profile({
-        **profile_store.DEFAULT_PROFILE,
-        legacy_key: "  Prefer stable business-analysis style labels.  ",
-    })
+    saved = profile_store.save_profile(
+        {
+            **profile_store.DEFAULT_PROFILE,
+            legacy_key: "  Prefer stable business-analysis style labels.  ",
+        }
+    )
 
     assert legacy_key not in saved
     assert legacy_key not in profile_store.load_profile()
@@ -77,14 +79,16 @@ def test_default_profile_does_not_include_legacy_guidance_key():
 
 
 def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():
-    rules = profile_store.normalize_capability_rules([
-        {
-            "name": "Agile delivery",
-            "level": "working",
-            "aliases": ["scrum"],
-            "needs_review": False,
-        }
-    ])
+    rules = profile_store.normalize_capability_rules(
+        [
+            {
+                "name": "Agile delivery",
+                "level": "working",
+                "aliases": ["scrum"],
+                "needs_review": False,
+            }
+        ]
+    )
 
     assert rules[0]["aliases"] == ["scrum"]
     assert rules[0]["needs_review"] is True
@@ -147,9 +151,18 @@ _ROUTING_FIXTURE = {
 def test_classify_candidate_profile_section_label_uses_parsing_rules(monkeypatch):
     monkeypatch.setattr(profile_store, "load_parsing_rules", lambda: _ROUTING_FIXTURE)
 
-    assert profile_store.classify_candidate_profile_section_label("Supporting Background") == "secondary_candidate_profile_context"
-    assert profile_store.classify_candidate_profile_section_label("Education") == "supplementary_candidate_profile_context"
-    assert profile_store.classify_candidate_profile_section_label("Main CV") == "primary_candidate_profile_context"
+    assert (
+        profile_store.classify_candidate_profile_section_label("Supporting Background")
+        == "secondary_candidate_profile_context"
+    )
+    assert (
+        profile_store.classify_candidate_profile_section_label("Education")
+        == "supplementary_candidate_profile_context"
+    )
+    assert (
+        profile_store.classify_candidate_profile_section_label("Main CV")
+        == "primary_candidate_profile_context"
+    )
 
 
 def test_classify_unknown_section_label_llm_confident(monkeypatch):
@@ -165,7 +178,9 @@ def test_classify_unknown_section_label_llm_confident(monkeypatch):
         captured["upserted"] = (word, bucket)
 
     monkeypatch.setattr("job_hunter_agent.llm_gate.llm_classify_section_label", fake_classify)
-    monkeypatch.setattr("job_hunter_agent.signal_registry.upsert_profile_section_label", fake_upsert)
+    monkeypatch.setattr(
+        "job_hunter_agent.signal_registry.upsert_profile_section_label", fake_upsert
+    )
 
     result = profile_store.classify_candidate_profile_section_label("Career History")
     assert result == "secondary_candidate_profile_context"
@@ -195,7 +210,9 @@ def test_classify_unknown_section_label_llm_uncertain(monkeypatch):
 
 def test_classify_unknown_section_label_llm_unavailable(monkeypatch):
     monkeypatch.setattr(profile_store, "load_parsing_rules", lambda: _ROUTING_FIXTURE)
-    monkeypatch.setattr("job_hunter_agent.llm_gate.llm_classify_section_label", lambda label, llm_client=None: None)
+    monkeypatch.setattr(
+        "job_hunter_agent.llm_gate.llm_classify_section_label", lambda label, llm_client=None: None
+    )
 
     result = profile_store.classify_candidate_profile_section_label("Overview")
     assert result == "primary_candidate_profile_context"

@@ -29,11 +29,7 @@ def canonical_capability_term(rule: dict[str, Any]) -> str:
 
 
 def _term_tokens(value: Any) -> list[str]:
-    return [
-        token
-        for token in re.findall(r"[a-z0-9]+", _clean_term(value))
-        if token
-    ]
+    return [token for token in re.findall(r"[a-z0-9]+", _clean_term(value)) if token]
 
 
 def _is_structurally_valid_alias(raw_alias: Any) -> bool:
@@ -61,7 +57,7 @@ def derive_job_description_aliases(
     """Return clean, deduplicated aliases excluding the canonical name."""
     excluded = {_clean_term(name)}
     result: list[str] = []
-    for alias in (raw_aliases or []):
+    for alias in raw_aliases or []:
         cleaned = _clean_term(alias)
         if cleaned and cleaned not in excluded and _is_structurally_valid_alias(alias):
             excluded.add(cleaned)

@@ -3,7 +3,6 @@
 from datetime import date
 from types import SimpleNamespace
 
-from job_hunter_agent.scrapers.base import normalize_jobspy_record
 from job_hunter_agent.record_schema import (
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
@@ -11,6 +10,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
 )
+from job_hunter_agent.scrapers.base import normalize_jobspy_record
 
 
 def test_normalize_jobspy_record_sets_expected_shape():

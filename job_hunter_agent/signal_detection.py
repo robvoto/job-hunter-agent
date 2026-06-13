@@ -1,14 +1,24 @@
-﻿"""Helpers for signal detection."""
+"""Helpers for signal detection."""
 
 import re
 from typing import Any, List, Optional, Set
 
-from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.capability_matching import (
     _normalized_aliases,
     evidence_tier_alignment_score,
 )
-
+from job_hunter_agent.capability_matrix import canonical_capability_term
+from job_hunter_agent.io_utils import load_parsing_rules, load_signal_defaults
+from job_hunter_agent.job_quality import detect_cv_farming_signals, load_dodgy_job_rules
+from job_hunter_agent.parsing_schema import (
+    PARSING_DEFAULT_KEY,
+    PARSING_JUNK_KEYWORDS_KEY,
+    PARSING_MAX_DISCOVERY_TERMS_KEY,
+    PARSING_MIN_TERM_LENGTH_KEY,
+    PARSING_SKILL_DISCOVERY_CONFIG_KEY,
+    PARSING_STOPWORDS_KEY,
+    PARSING_STRENGTH_COEFFICIENTS_KEY,
+)
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_COMPETITIVE_SIGNAL_ALIGNMENT,
@@ -16,17 +26,6 @@ from job_hunter_agent.profile_store import (
     KEY_SIGNAL_CLUSTERS,
     get_scoring_rules,
     load_profile,
-)
-from job_hunter_agent.role_analysis import text_contains_term
-from job_hunter_agent.scoring_utils import build_scoring_source_text, profile_recency_multiplier
-from job_hunter_agent.parsing_schema import (
-    PARSING_DEFAULT_KEY,
-    PARSING_JUNK_KEYWORDS_KEY,
-    PARSING_MAX_DISCOVERY_TERMS_KEY,
-    PARSING_MIN_TERM_LENGTH_KEY,
-    PARSING_SKILL_DISCOVERY_CONFIG_KEY,
-    PARSING_STRENGTH_COEFFICIENTS_KEY,
-    PARSING_STOPWORDS_KEY,
 )
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
@@ -36,6 +35,9 @@ from job_hunter_agent.record_schema import (
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
 )
+from job_hunter_agent.role_analysis import text_contains_term
+from job_hunter_agent.scoring_utils import build_scoring_source_text, profile_recency_multiplier
+from job_hunter_agent.signal_registry import signal_in_approved_knowledge
 from job_hunter_agent.signal_schema import (
     ALIGNMENT_PARTIAL,
     ALIGNMENT_STRONG,
@@ -43,6 +45,9 @@ from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_CV_FARMING_PATTERN,
     CATEGORY_HARD_BLOCKER_PATTERN,
+    COMPETITIVE_SIGNALS_KEY,
+    HARD_BLOCK_REASONS_KEY,
+    HARD_BLOCK_TEXT_KEY,
     LEARNING_CATEGORY_KEY,
     LEARNING_CONTEXT_KEY,
     LEARNING_EVIDENCE_KEY,
@@ -51,13 +56,11 @@ from job_hunter_agent.signal_schema import (
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SOURCE_KEY,
-    COMPETITIVE_SIGNALS_KEY,
-    HARD_BLOCK_REASONS_KEY,
-    HARD_BLOCK_TEXT_KEY,
+    OBSERVATION_SKILL_KEY,
     SIGNAL_ADJUSTMENT_KEY,
     SIGNAL_ALIAS_HITS_KEY,
-    SIGNAL_ALIGNMENT_KEY,
     SIGNAL_ALIASES_KEY,
+    SIGNAL_ALIGNMENT_KEY,
     SIGNAL_DOMINANCE_LEVEL_KEY,
     SIGNAL_FIT_LABEL_KEY,
     SIGNAL_LABEL_KEY,
@@ -68,11 +71,7 @@ from job_hunter_agent.signal_schema import (
     SOURCE_JOB_PARSING,
     TITLE_REASON_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
-    OBSERVATION_SKILL_KEY,
 )
-from job_hunter_agent.signal_registry import signal_in_approved_knowledge
-from job_hunter_agent.job_quality import detect_cv_farming_signals, load_dodgy_job_rules
-from job_hunter_agent.io_utils import load_parsing_rules, load_signal_defaults
 from job_hunter_agent.text_processing import (
     compact_whitespace,
     dedupe_preserve_order,
@@ -160,12 +159,16 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
         snippet_hits = 0
         max_aliases_in_snippet = 0
         for snippet in snippets:
-            alias_hits_in_snippet = sum(1 for alias in matched_aliases if text_contains_term(snippet, alias))
+            alias_hits_in_snippet = sum(
+                1 for alias in matched_aliases if text_contains_term(snippet, alias)
+            )
             max_aliases_in_snippet = max(max_aliases_in_snippet, alias_hits_in_snippet)
             if alias_hits_in_snippet > 0:
                 snippet_hits += 1
         min_snippet_hits = int(raw_cluster.get(CLUSTER_MIN_SNIPPET_HITS_KEY, 2) or 2)
-        dense_snippet_alias_hits = int(raw_cluster.get(CLUSTER_DENSE_SNIPPET_ALIAS_HITS_KEY, 4) or 4)
+        dense_snippet_alias_hits = int(
+            raw_cluster.get(CLUSTER_DENSE_SNIPPET_ALIAS_HITS_KEY, 4) or 4
+        )
         if snippet_hits < min_snippet_hits and max_aliases_in_snippet >= dense_snippet_alias_hits:
             snippet_hits = min_snippet_hits
         if snippet_hits < min_snippet_hits:
@@ -180,9 +183,15 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
         detected.append(
             {
                 SIGNAL_NAME_KEY: _resolved_signal_text(raw_cluster, SIGNAL_NAME_KEY, defaults),
-                SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(raw_cluster, SIGNAL_FIT_LABEL_KEY, defaults),
-                SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(raw_cluster, SIGNAL_WATCHOUT_LABEL_KEY, defaults),
-                SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(raw_cluster, SIGNAL_RISK_LABEL_KEY, defaults),
+                SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(
+                    raw_cluster, SIGNAL_FIT_LABEL_KEY, defaults
+                ),
+                SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(
+                    raw_cluster, SIGNAL_WATCHOUT_LABEL_KEY, defaults
+                ),
+                SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(
+                    raw_cluster, SIGNAL_RISK_LABEL_KEY, defaults
+                ),
                 SIGNAL_ALIASES_KEY: matched_aliases,
                 SIGNAL_ALIAS_HITS_KEY: len(matched_aliases),
                 SIGNAL_SNIPPET_HITS_KEY: snippet_hits,
@@ -190,7 +199,13 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
             }
         )
 
-    detected.sort(key=lambda item: (-int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 0)), -int(item.get(SIGNAL_ALIAS_HITS_KEY, 0)), item.get(SIGNAL_NAME_KEY, "")))
+    detected.sort(
+        key=lambda item: (
+            -int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 0)),
+            -int(item.get(SIGNAL_ALIAS_HITS_KEY, 0)),
+            item.get(SIGNAL_NAME_KEY, ""),
+        )
+    )
     return detected[:3]
 
 
@@ -208,12 +223,19 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
         rule_aliases = _normalized_aliases([canonical])
         if not canonical:
             continue
-        overlap = sum(1 for alias in aliases if alias in rule_aliases or any(alias in rule_alias or rule_alias in alias for rule_alias in rule_aliases))
+        overlap = sum(
+            1
+            for alias in aliases
+            if alias in rule_aliases
+            or any(alias in rule_alias or rule_alias in alias for rule_alias in rule_aliases)
+        )
         if overlap <= 0:
             continue
         rule_strength = _capability_rule_strength(rule)
         overlap_bonus = float(alignment_rules[ALIGNMENT_OVERLAP_BONUS_PER_EXTRA_ALIAS_KEY])
-        max_overlap_bonus_steps = int(alignment_rules[ALIGNMENT_OVERLAP_BONUS_MAX_EXTRA_ALIASES_KEY])
+        max_overlap_bonus_steps = int(
+            alignment_rules[ALIGNMENT_OVERLAP_BONUS_MAX_EXTRA_ALIASES_KEY]
+        )
         max_capability_best = float(alignment_rules[ALIGNMENT_MAX_CAPABILITY_BEST_KEY])
         capability_best = max(
             capability_best,
@@ -225,7 +247,9 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
 
     tiered_evidence_score = evidence_tier_alignment_score(profile, aliases)
     recency_multiplier = profile_recency_multiplier(profile, aliases)
-    if recency_multiplier == 0.0 and capability_best >= float(alignment_rules[ALIGNMENT_RECENCY_FALLBACK_MIN_CAPABILITY_BEST_KEY]):
+    if recency_multiplier == 0.0 and capability_best >= float(
+        alignment_rules[ALIGNMENT_RECENCY_FALLBACK_MIN_CAPABILITY_BEST_KEY]
+    ):
         recency_multiplier = float(alignment_rules[ALIGNMENT_RECENCY_FALLBACK_MULTIPLIER_KEY])
 
     dominant_alignment_score = max(
@@ -234,9 +258,18 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     )
 
     dominance_level = int(signal.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1)
-    positive_bonus = int(signal.get(CLUSTER_POSITIVE_BONUS_KEY) or alignment_rules[ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY][str(dominance_level)])
-    partial_penalty = int(signal.get(CLUSTER_PARTIAL_PENALTY_KEY) or alignment_rules[ALIGNMENT_PARTIAL_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)])
-    weak_penalty = int(signal.get(CLUSTER_WEAK_PENALTY_KEY) or alignment_rules[ALIGNMENT_WEAK_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)])
+    positive_bonus = int(
+        signal.get(CLUSTER_POSITIVE_BONUS_KEY)
+        or alignment_rules[ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY][str(dominance_level)]
+    )
+    partial_penalty = int(
+        signal.get(CLUSTER_PARTIAL_PENALTY_KEY)
+        or alignment_rules[ALIGNMENT_PARTIAL_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)]
+    )
+    weak_penalty = int(
+        signal.get(CLUSTER_WEAK_PENALTY_KEY)
+        or alignment_rules[ALIGNMENT_WEAK_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)]
+    )
     if dominant_alignment_score >= float(alignment_rules[ALIGNMENT_STRONG_THRESHOLD_KEY]):
         adjustment = positive_bonus
         alignment = ALIGNMENT_STRONG
@@ -249,12 +282,16 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
 
     label = _resolved_signal_text(signal, SIGNAL_FIT_LABEL_KEY, defaults)
     if not label:
-        raise ValueError(f"competitive signal missing fit_label and no default available: {signal!r}")
+        raise ValueError(
+            f"competitive signal missing fit_label and no default available: {signal!r}"
+        )
     return {
         SIGNAL_LABEL_KEY: label,
         SIGNAL_NAME_KEY: signal_name,
         SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(signal, SIGNAL_FIT_LABEL_KEY, defaults),
-        SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(signal, SIGNAL_WATCHOUT_LABEL_KEY, defaults),
+        SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(
+            signal, SIGNAL_WATCHOUT_LABEL_KEY, defaults
+        ),
         SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(signal, SIGNAL_RISK_LABEL_KEY, defaults),
         SIGNAL_ALIASES_KEY: aliases,
         SIGNAL_DOMINANCE_LEVEL_KEY: dominance_level,
@@ -278,12 +315,22 @@ def competitive_signal_assessments(record: dict, profile: Optional[dict] = None)
                 {
                     SIGNAL_LABEL_KEY: label,
                     SIGNAL_NAME_KEY: _resolved_signal_text(item, SIGNAL_NAME_KEY, defaults),
-                    SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(item, SIGNAL_FIT_LABEL_KEY, defaults),
-                    SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(item, SIGNAL_WATCHOUT_LABEL_KEY, defaults),
-                    SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(item, SIGNAL_RISK_LABEL_KEY, defaults),
-                    SIGNAL_ALIASES_KEY: _normalized_aliases(list(item.get(SIGNAL_ALIASES_KEY) or [])),
+                    SIGNAL_FIT_LABEL_KEY: _resolved_signal_text(
+                        item, SIGNAL_FIT_LABEL_KEY, defaults
+                    ),
+                    SIGNAL_WATCHOUT_LABEL_KEY: _resolved_signal_text(
+                        item, SIGNAL_WATCHOUT_LABEL_KEY, defaults
+                    ),
+                    SIGNAL_RISK_LABEL_KEY: _resolved_signal_text(
+                        item, SIGNAL_RISK_LABEL_KEY, defaults
+                    ),
+                    SIGNAL_ALIASES_KEY: _normalized_aliases(
+                        list(item.get(SIGNAL_ALIASES_KEY) or [])
+                    ),
                     SIGNAL_DOMINANCE_LEVEL_KEY: int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1),
-                    SIGNAL_ALIGNMENT_KEY: _dedupe_key(item.get(SIGNAL_ALIGNMENT_KEY) or ALIGNMENT_PARTIAL),
+                    SIGNAL_ALIGNMENT_KEY: _dedupe_key(
+                        item.get(SIGNAL_ALIGNMENT_KEY) or ALIGNMENT_PARTIAL
+                    ),
                     SIGNAL_ADJUSTMENT_KEY: int(item.get(SIGNAL_ADJUSTMENT_KEY, 0) or 0),
                 }
             )
@@ -344,10 +391,18 @@ def build_job_learning_signals(
 
     # 1. Process explicit observations (from existing clusters)
     for observation in skill_observations:
-        _add_to_pending(observation.get(OBSERVATION_SKILL_KEY), CATEGORY_CAPABILITY_CONCEPT, record, pending, seen)
+        _add_to_pending(
+            observation.get(OBSERVATION_SKILL_KEY),
+            CATEGORY_CAPABILITY_CONCEPT,
+            record,
+            pending,
+            seen,
+        )
 
     # 2. Discovery: scan for UNKNOWN skills in the description
-    details_text = record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    details_text = (
+        record.get(RECORD_FULL_DESCRIPTION_KEY) or record.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+    )
     if details_text:
         new_skills = _extract_capability_learning_signals(details_text, profile or load_profile())
         for skill in new_skills:
@@ -365,7 +420,8 @@ def build_job_learning_signals(
             pending.append(
                 {
                     LEARNING_SIGNAL_KEY: sig,
-                    LEARNING_CATEGORY_KEY: item.get("suggested_category") or CATEGORY_CV_FARMING_PATTERN,
+                    LEARNING_CATEGORY_KEY: item.get("suggested_category")
+                    or CATEGORY_CV_FARMING_PATTERN,
                     LEARNING_SOURCE_KEY: SOURCE_JOB_PARSING,
                     LEARNING_CONTEXT_KEY: [
                         compact_whitespace(record.get(RECORD_TITLE_KEY) or ""),
@@ -384,7 +440,9 @@ def build_job_learning_signals(
     return pending
 
 
-def _add_to_pending(value: str, category: str, record: dict, pending: list, seen: set, context: list = None) -> None:
+def _add_to_pending(
+    value: str, category: str, record: dict, pending: list, seen: set, context: list = None
+) -> None:
     val = compact_whitespace(value or "")
     key = _dedupe_key(val)
     if not val or key in seen:
@@ -397,7 +455,8 @@ def _add_to_pending(value: str, category: str, record: dict, pending: list, seen
             LEARNING_SIGNAL_KEY: val,
             LEARNING_CATEGORY_KEY: category,
             LEARNING_SOURCE_KEY: SOURCE_JOB_PARSING,
-            LEARNING_CONTEXT_KEY: context or [
+            LEARNING_CONTEXT_KEY: context
+            or [
                 compact_whitespace(record.get(RECORD_TITLE_KEY) or ""),
                 compact_whitespace(record.get(RECORD_COMPANY_KEY) or ""),
             ],
@@ -412,13 +471,17 @@ def _add_to_pending(value: str, category: str, record: dict, pending: list, seen
 def _extract_capability_learning_signals(text: str, profile: dict) -> List[str]:
     rules = load_parsing_rules()
     config = rules.get(PARSING_SKILL_DISCOVERY_CONFIG_KEY, {})
-    junk = {_dedupe_key(item) for item in config.get(PARSING_JUNK_KEYWORDS_KEY, []) if _dedupe_key(item)}
+    junk = {
+        _dedupe_key(item) for item in config.get(PARSING_JUNK_KEYWORDS_KEY, []) if _dedupe_key(item)
+    }
     sw = set(rules.get(PARSING_STOPWORDS_KEY, []))
 
     tokens = [t for t in re.findall(r"[a-z]{3,}", text.lower()) if t not in sw and t not in junk]
     # Basic n-gram extraction (discovery only)
     max_discovery_terms = int(config.get(PARSING_MAX_DISCOVERY_TERMS_KEY, 10) or 10)
-    return list(set(t for t in tokens if len(t) >= config.get(PARSING_MIN_TERM_LENGTH_KEY, 3)))[:max_discovery_terms]
+    return list(set(t for t in tokens if len(t) >= config.get(PARSING_MIN_TERM_LENGTH_KEY, 3)))[
+        :max_discovery_terms
+    ]
 
 
 def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -428,7 +491,10 @@ def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dic
         if compact_whitespace(item)
     ]
     if existing:
-        return [{HARD_BLOCK_TEXT_KEY: item, LEARNING_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN} for item in dedupe_preserve_order(existing)[:3]]
+        return [
+            {HARD_BLOCK_TEXT_KEY: item, LEARNING_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN}
+            for item in dedupe_preserve_order(existing)[:3]
+        ]
 
     active_profile = profile or load_profile()
     cluster_by_name = {
@@ -440,12 +506,16 @@ def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dic
     entries: List[dict] = []
     for assessment in competitive_signal_assessments(record, active_profile):
         cluster = cluster_by_name.get(_dedupe_key(assessment.get(SIGNAL_NAME_KEY) or ""))
-        if not isinstance(cluster, dict) or not bool(cluster.get(CLUSTER_HARD_BLOCK_ON_MISMATCH_KEY)):
+        if not isinstance(cluster, dict) or not bool(
+            cluster.get(CLUSTER_HARD_BLOCK_ON_MISMATCH_KEY)
+        ):
             continue
 
         allowed_alignments = {
             compact_whitespace(str(value)).lower()
-            for value in (cluster.get(CLUSTER_HARD_BLOCK_ALIGNMENT_LEVELS_KEY) or ["partial", "weak"])
+            for value in (
+                cluster.get(CLUSTER_HARD_BLOCK_ALIGNMENT_LEVELS_KEY) or ["partial", "weak"]
+            )
             if compact_whitespace(str(value))
         } or {"partial", "weak"}
         alignment = compact_whitespace(str(assessment.get(SIGNAL_ALIGNMENT_KEY) or "")).lower()
@@ -460,7 +530,9 @@ def hard_block_entries(record: dict, profile: Optional[dict] = None) -> List[dic
         )
         if not text:
             continue
-        entries.append({HARD_BLOCK_TEXT_KEY: text, LEARNING_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN})
+        entries.append(
+            {HARD_BLOCK_TEXT_KEY: text, LEARNING_CATEGORY_KEY: CATEGORY_HARD_BLOCKER_PATTERN}
+        )
 
     deduped: List[dict] = []
     seen_keys: Set[str] = set()

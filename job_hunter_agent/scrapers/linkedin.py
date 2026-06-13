@@ -10,6 +10,9 @@ from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
+import sys
+
+from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
@@ -26,6 +29,8 @@ from job_hunter_agent.job_review_pipeline import (
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
+from job_hunter_agent.job_types import load_job_type
+from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
@@ -39,18 +44,17 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
 )
-from job_hunter_agent.salary import load_salary
-from job_hunter_agent.job_types import load_job_type
-from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
-from job_hunter_agent.source_registry import SOURCE_LINKEDIN
-from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_text, log_work_mode_result
-from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
-
-from job_hunter_agent.locations import resolve_location
-from job_hunter_agent.scrapers.location_adapters import to_jobspy
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
-import sys
+from job_hunter_agent.salary import load_salary
+from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
+from job_hunter_agent.scrapers.location_adapters import to_jobspy
+from job_hunter_agent.source_registry import SOURCE_LINKEDIN
+from job_hunter_agent.work_mode_extraction import (
+    WORK_MODE_UNKNOWN,
+    extract_from_text,
+    log_work_mode_result,
+)
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
@@ -64,10 +68,7 @@ def _fetch_job_html(record: dict) -> str:
     if not isinstance(raw_fields, dict):
         raw_fields = {}
     url = str(
-        raw_fields.get("job_url_direct")
-        or raw_fields.get("job_url")
-        or record.get("url")
-        or ""
+        raw_fields.get("job_url_direct") or raw_fields.get("job_url") or record.get("url") or ""
     ).strip()
     if not url:
         return ""
@@ -166,12 +167,16 @@ class LinkedInScraper(BaseJobScraper):
                     len(record[RECORD_DETAILS_TEXT_KEY]),
                 )
 
-                pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(record, review_context)
+                pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
+                    record, review_context
+                )
                 if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
                     continue
 
                 hooks = self._build_review_hooks()
-                outcome, record, record_skill_observations = review_post_detail_normalized_job(record, review_context, hooks=hooks)
+                outcome, record, record_skill_observations = review_post_detail_normalized_job(
+                    record, review_context, hooks=hooks
+                )
                 if outcome["decision"] != "KEEP":
                     continue
                 skill_observations.extend(record_skill_observations)
@@ -180,13 +185,16 @@ class LinkedInScraper(BaseJobScraper):
                 logger.info(
                     "%s KEPT %s @ %s | %s | %s | %s | %s",
                     target_tag,
-                    record.get(RECORD_TITLE_KEY), record.get(RECORD_COMPANY_KEY),
+                    record.get(RECORD_TITLE_KEY),
+                    record.get(RECORD_COMPANY_KEY),
                     record.get("posted"),
                     record.get(RECORD_LOCATION_KEY),
                     record.get("work_type"),
                     record.get(RECORD_SALARY_KEY) or "N/A",
                 )
-                print_job_human_summary(record, self.profile, score=_li_score, breakdown=_li_breakdown)
+                print_job_human_summary(
+                    record, self.profile, score=_li_score, breakdown=_li_breakdown
+                )
 
         logger.info("[LinkedIn] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
         set_run_progress("LinkedIn complete")
@@ -195,19 +203,26 @@ class LinkedInScraper(BaseJobScraper):
     def _build_search_targets(self, search_settings: dict) -> List[dict]:
         keywords = str(search_settings.get("keywords") or "").strip()
         locations = [
-            str(loc).strip()
-            for loc in search_settings.get("locations", [])
-            if str(loc).strip()
+            str(loc).strip() for loc in search_settings.get("locations", []) if str(loc).strip()
         ]
         hours_old = int(
-            search_settings.get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD])
+            search_settings.get(
+                KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+            )
             or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
         )
         results_wanted = int(
-            search_settings.get(KEY_LINKEDIN_RESULTS_PER_SEARCH, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH])
+            search_settings.get(
+                KEY_LINKEDIN_RESULTS_PER_SEARCH,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
+            )
             or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
         )
-        sort_newest_first = bool(search_settings.get(KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]))
+        sort_newest_first = bool(
+            search_settings.get(
+                KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]
+            )
+        )
         easy_apply = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
 
         targets = []
@@ -232,15 +247,23 @@ class LinkedInScraper(BaseJobScraper):
                 try:
                     write_source_payload_debug(
                         "linkedin",
-                        str(current_record.get(RECORD_JOB_KEY) or current_record.get(RECORD_URL_KEY) or "unknown"),
+                        str(
+                            current_record.get(RECORD_JOB_KEY)
+                            or current_record.get(RECORD_URL_KEY)
+                            or "unknown"
+                        ),
                         raw_html=_fetch_job_html(current_record),
-                        raw_json=current_record.get("source_metadata", {}).get("raw_source_fields", {}),
+                        raw_json=current_record.get("source_metadata", {}).get(
+                            "raw_source_fields", {}
+                        ),
                         normalized_record=current_record,
                     )
                 except Exception:
                     pass
 
-        def _before_preference_filters(current_record: dict, context: ReviewPipelineContext) -> None:
+        def _before_preference_filters(
+            current_record: dict, context: ReviewPipelineContext
+        ) -> None:
             from job_hunter_agent.job_quality import (  # noqa: PLC0415
                 detect_broad_engagement_signal,
                 detect_cv_farming_signals,
@@ -249,7 +272,11 @@ class LinkedInScraper(BaseJobScraper):
                 load_dodgy_job_rules,
             )
 
-            details_text = str(current_record.get(RECORD_DETAILS_TEXT_KEY) or current_record.get("full_description") or "")
+            details_text = str(
+                current_record.get(RECORD_DETAILS_TEXT_KEY)
+                or current_record.get("full_description")
+                or ""
+            )
             rules = load_dodgy_job_rules()
             signals: list = []
             signals.extend(detect_cv_farming_signals(details_text, rules))
@@ -257,7 +284,9 @@ class LinkedInScraper(BaseJobScraper):
 
             raw_fields = current_record.get("source_metadata", {}).get("raw_source_fields", {})
             is_easy_apply = bool(raw_fields.get("easy_apply"))
-            apply_url = str(current_record.get("source_metadata", {}).get("apply_url") or "").strip()
+            apply_url = str(
+                current_record.get("source_metadata", {}).get("apply_url") or ""
+            ).strip()
             linkedin_url = str(current_record.get(RECORD_URL_KEY) or "").strip()
             if not is_easy_apply and apply_url and apply_url != linkedin_url:
                 ext_html = fetch_external_html(apply_url)
@@ -279,7 +308,9 @@ class LinkedInScraper(BaseJobScraper):
                     current_record["work_mode_source"] = text_result["work_mode_source"]
                     current_record["work_mode_evidence"] = text_result["work_mode_evidence"]
                     current_record["work_mode_needs_review"] = text_result["work_mode_needs_review"]
-            log_work_mode_result(str(current_record.get(RECORD_JOB_KEY) or ""), "linkedin", current_record)
+            log_work_mode_result(
+                str(current_record.get(RECORD_JOB_KEY) or ""), "linkedin", current_record
+            )
 
         return ReviewPipelineHooks(
             after_description_loaded=_after_description_loaded,

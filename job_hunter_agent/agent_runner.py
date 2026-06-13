@@ -5,12 +5,11 @@ Main goals:
 - build a compact daily digest from the latest results
 - send that digest through configured local notification channels
 
-This module orchestrates the execution of job scrapers, processes the results 
-to build daily digests, and sends notifications via email or Telegram. It 
-manages the agent's scheduled runs, maintains runtime state, and ensures 
+This module orchestrates the execution of job scrapers, processes the results
+to build daily digests, and sends notifications via email or Telegram. It
+manages the agent's scheduled runs, maintains runtime state, and ensures
 consistent delivery of match summaries to the user.
 """
-
 
 import argparse
 import html
@@ -22,48 +21,52 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
+from job_hunter_agent.fit_scoring import fit_score_displayed
+from job_hunter_agent.history import viewed_by_user
+from job_hunter_agent.io_utils import configure_console_output, load_job_history, load_run_stats
+from job_hunter_agent.job_identity import find_confirmed_duplicate, normalize_job_key
+from job_hunter_agent.match_labels import score_to_match_label
+from job_hunter_agent.notifiers.email_notifier import send_email_notification
+from job_hunter_agent.notifiers.telegram_notifier import (
+    send_telegram_notification,
+    sync_telegram_subscribers,
+)
+from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
+from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
+from job_hunter_agent.profile_store import load_profile
+from job_hunter_agent.record_schema import (
+    RECORD_COMPANY_KEY,
+    RECORD_JOB_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_POSTED_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_SOURCE_NAME_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+)
+from job_hunter_agent.source_connector import (
+    scrape_jobs_direct,
+)
 from job_hunter_agent.user_settings import (
-    load_user_settings,
-    load_agent_state,
-    save_user_settings,
-    save_agent_state,
-    DEFAULT_WORKSPACE_URL,
     DEFAULT_DAILY_TIME_LOCAL,
     DEFAULT_SUBJECT_PREFIX,
+    DEFAULT_WORKSPACE_URL,
     KEY_EMAIL,
     KEY_LLM,
     KEY_NOTIFICATION_RULES,
     KEY_ONLY_IF_NEW_MATCHES,
     KEY_TELEGRAM,
+    load_agent_state,
+    load_user_settings,
+    save_agent_state,
+    save_user_settings,
 )
-from job_hunter_agent.notifiers.email_notifier import send_email_notification
-from job_hunter_agent.notifiers.telegram_notifier import send_telegram_notification, sync_telegram_subscribers
-from job_hunter_agent.fit_scoring import fit_score_displayed
-from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
-from job_hunter_agent.io_utils import load_job_history, load_run_stats, configure_console_output
-from job_hunter_agent.history import viewed_by_user
-from job_hunter_agent.match_labels import score_to_match_label
-from job_hunter_agent.profile_store import load_profile
-from job_hunter_agent.workspace_service import build_workspace_record_sets, load_last_kept_records
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
-from job_hunter_agent.source_connector import (
-    scrape_jobs_direct,
-)
-from job_hunter_agent.job_identity import normalize_job_key, find_confirmed_duplicate
-from job_hunter_agent.record_schema import (
-    RECORD_JOB_KEY,
-    RECORD_SOURCE_KEY,
-    RECORD_SOURCE_NAME_KEY,
-    RECORD_URL_KEY,
-    RECORD_POSTED_KEY,
-    RECORD_COMPANY_KEY,
-    RECORD_TITLE_KEY,
-    RECORD_LOCATION_KEY,
-    RECORD_POSTED_AGE_DAYS_KEY,
-)
-from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
+from job_hunter_agent.workspace_service import build_workspace_record_sets, load_last_kept_records
 
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
 
@@ -89,12 +92,16 @@ KEY_DS_STALE_ARCHIVE = "stale_archive_records"
 # Summary labels
 LABEL_NEW_MATCHES = "New matches"
 LABEL_TOP_MATCHES = "Top current matches"
-MSG_NO_NEW_MATCHES = "No new strong matches found this run. Your workspace was refreshed and kept current."
+MSG_NO_NEW_MATCHES = (
+    "No new strong matches found this run. Your workspace was refreshed and kept current."
+)
+
 
 def _job_key(record: dict) -> str:
     val = record.get(RECORD_JOB_KEY) or record.get(RECORD_URL_KEY)
     source = record.get(RECORD_SOURCE_KEY) or record.get(RECORD_SOURCE_NAME_KEY)
     return normalize_job_key(str(val or ""), source=source)
+
 
 def _safe_job_key(record: dict) -> str | None:
     key = _job_key(record)
@@ -118,7 +125,9 @@ def _resolve_collection_timestamps(run_stats: dict[str, Any]) -> tuple[str, str]
     run_finished_at = parse_timestamp(str(run_stats.get("run_finished_at") or ""))
     fallback = datetime.now().astimezone().isoformat(timespec="seconds")
     started_text = run_started_at.isoformat(timespec="seconds") if run_started_at else fallback
-    finished_text = run_finished_at.isoformat(timespec="seconds") if run_finished_at else started_text
+    finished_text = (
+        run_finished_at.isoformat(timespec="seconds") if run_finished_at else started_text
+    )
     return started_text, finished_text
 
 
@@ -140,33 +149,44 @@ def build_digest_payload(
     previous_keys = {k for r in previous_records if (k := _safe_job_key(r))}
     current_keys_list = [k for r in current_records if (k := _safe_job_key(r))]
     current_keys = set(current_keys_list)
-    
+
     new_records = [r for r in current_records if (k := _safe_job_key(r)) and k not in previous_keys]
 
     # Deduplication safety net: skip notifying for confirmed duplicates already known
     # (previous run, archive, applied) or repeated in this batch.
     existing_pool = (
-        previous_records +
-        workspace_records.get(KEY_DS_APPLIED, []) +
-        workspace_records.get(KEY_DS_RECENT_ARCHIVE, []) +
-        workspace_records.get(KEY_DS_STALE_ARCHIVE, [])
+        previous_records
+        + workspace_records.get(KEY_DS_APPLIED, [])
+        + workspace_records.get(KEY_DS_RECENT_ARCHIVE, [])
+        + workspace_records.get(KEY_DS_STALE_ARCHIVE, [])
     )
     unique_new = []
     for record in new_records:
-        if not find_confirmed_duplicate(record, existing_pool) and not find_confirmed_duplicate(record, unique_new):
+        if not find_confirmed_duplicate(record, existing_pool) and not find_confirmed_duplicate(
+            record, unique_new
+        ):
             unique_new.append(record)
     new_records = unique_new
 
-    saved_records = workspace_records.get(KEY_DS_RECENT_ARCHIVE, []) + workspace_records.get(KEY_DS_STALE_ARCHIVE, [])
+    saved_records = workspace_records.get(KEY_DS_RECENT_ARCHIVE, []) + workspace_records.get(
+        KEY_DS_STALE_ARCHIVE, []
+    )
     visible_workspace_records = workspace_records.get(KEY_DS_CURRENT, []) + saved_records
-    workspace_unopened_records = [record for record in visible_workspace_records if not viewed_by_user(record)]
+    workspace_unopened_records = [
+        record for record in visible_workspace_records if not viewed_by_user(record)
+    ]
     minimum_fit_score = int(settings[KEY_NOTIFICATION_RULES]["minimum_fit_score"])
     max_jobs = int(settings[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"])
     run_started_at, run_finished_at = _resolve_collection_timestamps(run_stats)
 
     strongest_records = sorted(
         [record for record in current_records if fit_score_displayed(record) >= minimum_fit_score],
-        key=lambda record: (-fit_score_displayed(record), record.get(RECORD_POSTED_AGE_DAYS_KEY) if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None else 9999),
+        key=lambda record: (
+            -fit_score_displayed(record),
+            record.get(RECORD_POSTED_AGE_DAYS_KEY)
+            if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None
+            else 9999,
+        ),
     )[:max_jobs]
     featured_records = new_records[:max_jobs]
     featured_heading = LABEL_NEW_MATCHES
@@ -184,9 +204,7 @@ def build_digest_payload(
         KEY_DIGEST_STRONGEST_RECORDS: strongest_records,
         KEY_DIGEST_FEATURED_RECORDS: featured_records,
         KEY_DIGEST_FEATURED_HEADING: featured_heading,
-        KEY_DIGEST_STATUS_MESSAGE: (
-            MSG_NO_NEW_MATCHES if not new_records else ""
-        ),
+        KEY_DIGEST_STATUS_MESSAGE: (MSG_NO_NEW_MATCHES if not new_records else ""),
         KEY_DIGEST_WORKSPACE_REF: build_workspace_reference(settings),
         "current_keys": sorted(current_keys),
     }
@@ -241,7 +259,9 @@ def format_daily_summary(payload: dict[str, Any]) -> str:
     featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
     if featured_records:
         lines.append(f"{payload.get(KEY_DIGEST_FEATURED_HEADING, LABEL_TOP_MATCHES)}:")
-        lines.extend(format_job_line(record, index + 1) for index, record in enumerate(featured_records))
+        lines.extend(
+            format_job_line(record, index + 1) for index, record in enumerate(featured_records)
+        )
         lines.append("")
     elif payload.get(KEY_DIGEST_STATUS_MESSAGE):
         lines.append(str(payload.get(KEY_DIGEST_STATUS_MESSAGE)))
@@ -252,9 +272,13 @@ def format_daily_summary(payload: dict[str, Any]) -> str:
 
 
 def format_daily_summary_html(payload: dict[str, Any]) -> str:
-    run_started_at = html.escape(_format_summary_timestamp(str(payload.get("run_started_at", "Unknown"))))
+    run_started_at = html.escape(
+        _format_summary_timestamp(str(payload.get("run_started_at", "Unknown")))
+    )
     run_finished_at = html.escape(
-        _format_summary_timestamp(str(payload.get("run_finished_at", payload.get("run_started_at", "Unknown"))))
+        _format_summary_timestamp(
+            str(payload.get("run_finished_at", payload.get("run_started_at", "Unknown")))
+        )
     )
     summary_line = (
         f"Matches last run: <b>{payload.get(KEY_DIGEST_CURRENT_COUNT, 0)}</b> | "
@@ -275,8 +299,12 @@ def format_daily_summary_html(payload: dict[str, Any]) -> str:
     featured_records = payload.get(KEY_DIGEST_FEATURED_RECORDS, [])
     if featured_records:
         parts.append("")
-        parts.append(f"<b>{html.escape(str(payload.get(KEY_DIGEST_FEATURED_HEADING, LABEL_TOP_MATCHES)))}:</b>")
-        parts.extend(format_job_html(record, index + 1) for index, record in enumerate(featured_records))
+        parts.append(
+            f"<b>{html.escape(str(payload.get(KEY_DIGEST_FEATURED_HEADING, LABEL_TOP_MATCHES)))}:</b>"
+        )
+        parts.extend(
+            format_job_html(record, index + 1) for index, record in enumerate(featured_records)
+        )
     elif payload.get(KEY_DIGEST_STATUS_MESSAGE):
         parts.append("")
         parts.append(html.escape(str(payload.get(KEY_DIGEST_STATUS_MESSAGE) or "")))
@@ -297,15 +325,23 @@ def write_last_summary(summary_text: str) -> None:
     AGENT_SUMMARY_PATH.write_text(summary_text, encoding="utf-8")
 
 
-def send_daily_notifications(summary_text: str, summary_html: str, settings: dict[str, Any]) -> list[dict[str, Any]]:
+def send_daily_notifications(
+    summary_text: str, summary_html: str, settings: dict[str, Any]
+) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    subject_prefix = str(settings[KEY_EMAIL].get("subject_prefix") or DEFAULT_SUBJECT_PREFIX).strip()
+    subject_prefix = str(
+        settings[KEY_EMAIL].get("subject_prefix") or DEFAULT_SUBJECT_PREFIX
+    ).strip()
     subject = f"{subject_prefix} Daily Job Summary"
 
     if settings[KEY_EMAIL].get("enabled"):
-        results.append(send_email_notification(subject, summary_text, summary_html, settings[KEY_EMAIL]))
+        results.append(
+            send_email_notification(subject, summary_text, summary_html, settings[KEY_EMAIL])
+        )
     if settings[KEY_TELEGRAM].get("enabled"):
-        results.append(send_telegram_notification(summary_text, summary_html, settings[KEY_TELEGRAM]))
+        results.append(
+            send_telegram_notification(summary_text, summary_html, settings[KEY_TELEGRAM])
+        )
     return results
 
 
@@ -337,11 +373,16 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
         load_job_history(),
         applied_job_keys,
         hidden_job_keys,
-        parse_timestamp(str(run_stats.get("run_finished_at") or run_stats.get("run_started_at") or "")) or datetime.now().astimezone(),
+        parse_timestamp(
+            str(run_stats.get("run_finished_at") or run_stats.get("run_started_at") or "")
+        )
+        or datetime.now().astimezone(),
         profile,
     )
     print("Building daily digest...")
-    payload = build_digest_payload(previous_records, current_records, workspace_records, settings, run_stats)
+    payload = build_digest_payload(
+        previous_records, current_records, workspace_records, settings, run_stats
+    )
     summary_text = format_daily_summary(payload)
     summary_html = format_daily_summary_html(payload)
     write_last_summary(summary_text)
@@ -354,7 +395,9 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
             try:
                 sync_result = sync_telegram_subscribers(settings[KEY_TELEGRAM])
                 save_user_settings(None, settings)
-                print(f"[AGENT_RUNNER][INFO] Telegram subscribers synced: {sync_result['total_subscribers']}")
+                print(
+                    f"[AGENT_RUNNER][INFO] Telegram subscribers synced: {sync_result['total_subscribers']}"
+                )
             except Exception as exc:
                 print(f"[AGENT_RUNNER][WARN] Telegram subscriber sync failed: {exc}")
         print("Sending notifications...")
@@ -363,13 +406,17 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
     else:
         print("Notifications skipped because there were no new matches to send.")
 
-    state.update({
-        "last_agent_run_at": payload["run_finished_at"],
-        "last_notified_run_at": payload["run_finished_at"] if notification_results else state.get("last_notified_run_at"),
-        "last_current_keys": payload["current_keys"],
-        "last_summary_path": str(AGENT_SUMMARY_PATH),
-        "last_workspace_reference": payload[KEY_DIGEST_WORKSPACE_REF],
-    })
+    state.update(
+        {
+            "last_agent_run_at": payload["run_finished_at"],
+            "last_notified_run_at": payload["run_finished_at"]
+            if notification_results
+            else state.get("last_notified_run_at"),
+            "last_current_keys": payload["current_keys"],
+            "last_summary_path": str(AGENT_SUMMARY_PATH),
+            "last_workspace_reference": payload[KEY_DIGEST_WORKSPACE_REF],
+        }
+    )
     save_agent_state(state)
 
     return {
@@ -387,7 +434,9 @@ def should_run_now(state: dict[str, Any], daily_time_local: str, now: datetime) 
         scheduled_hour = int(hour_text)
         scheduled_minute = int(minute_text)
     except Exception as exc:
-        print(f"[AGENT_RUNNER][WARN] Failed to parse scheduled time '{daily_time_local}', using default: {exc}")
+        print(
+            f"[AGENT_RUNNER][WARN] Failed to parse scheduled time '{daily_time_local}', using default: {exc}"
+        )
         hour_text, minute_text = DEFAULT_DAILY_TIME_LOCAL.split(":", 1)
         scheduled_hour = int(hour_text)
         scheduled_minute = int(minute_text)
@@ -404,7 +453,9 @@ def run_agent_loop() -> None:
     while True:
         settings = load_user_settings(None, create_if_missing=True)
         sleep_seconds = int(settings["schedule"]["loop_sleep_seconds"])
-        daily_time_local = str(settings["schedule"]["daily_time_local"] or DEFAULT_DAILY_TIME_LOCAL).strip()
+        daily_time_local = str(
+            settings["schedule"]["daily_time_local"] or DEFAULT_DAILY_TIME_LOCAL
+        ).strip()
 
         now = datetime.now().astimezone()
         state = load_agent_state()
@@ -417,10 +468,12 @@ def run_agent_loop() -> None:
 
 def _set_admin_user_context() -> None:
     import os
+
     admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
     if admin_email:
         from job_hunter_agent.auth import user_id_from_email
         from job_hunter_agent.user_context import set_user_id
+
         set_user_id(user_id_from_email(admin_email))
 
 
@@ -429,6 +482,7 @@ def main() -> None:
     from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
     from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+
     init_db()
     seed_global_settings_from_file()
     for _subdir in ("knowledge", "signals"):
@@ -437,9 +491,21 @@ def main() -> None:
     _set_admin_user_context()
     configure_console_output()
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")
-    parser.add_argument("--loop", action="store_true", help="Keep running and trigger once per day at the configured local time.")
-    parser.add_argument("--send-notification-no-scrape", action="store_true", help="Do not fetch new jobs; just rebuild the workspace and send a digest from current local state.")
-    parser.add_argument("--no-notify", action="store_true", help="Build the digest without sending email or Telegram notifications.")
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Keep running and trigger once per day at the configured local time.",
+    )
+    parser.add_argument(
+        "--send-notification-no-scrape",
+        action="store_true",
+        help="Do not fetch new jobs; just rebuild the workspace and send a digest from current local state.",
+    )
+    parser.add_argument(
+        "--no-notify",
+        action="store_true",
+        help="Build the digest without sending email or Telegram notifications.",
+    )
     args = parser.parse_args()
 
     if args.loop:
@@ -449,10 +515,16 @@ def main() -> None:
     result = run_agent_once(no_scrape=args.send_notification_no_scrape, notify=not args.no_notify)
     print(result["summary_text"])
     print("")
-    print(json.dumps({
-        "summary_path": result["summary_path"],
-        "notifications": result["notifications"],
-    }, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "summary_path": result["summary_path"],
+                "notifications": result["notifications"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

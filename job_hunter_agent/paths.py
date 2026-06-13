@@ -3,14 +3,15 @@
 import os
 from pathlib import Path
 
-
 PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_DIR.parent
 DATA_DIR = Path(os.environ.get("JOB_HUNTER_DATA_DIR", REPO_ROOT / "data")).expanduser().resolve()
 DEFAULTS_DIR = DATA_DIR / "defaults"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 RUNTIME_DIR = DATA_DIR / "runtime"
-OUTPUT_DIR = Path(os.environ.get("JOB_HUNTER_OUTPUT_DIR", REPO_ROOT / "output")).expanduser().resolve()
+OUTPUT_DIR = (
+    Path(os.environ.get("JOB_HUNTER_OUTPUT_DIR", REPO_ROOT / "output")).expanduser().resolve()
+)
 TEMPLATES_DIR = REPO_ROOT / "templates"
 DOCS_DIR = REPO_ROOT / "docs"
 WORKSPACE_RESULTS_FILENAME = "workspace_results.html"
@@ -38,6 +39,7 @@ ONBOARDING_HTML_PATH = TEMPLATES_DIR / "onboarding.html"
 
 def get_active_user_id() -> str:
     from job_hunter_agent.user_context import get_user_id
+
     uid = get_user_id()
     if uid:
         return uid
@@ -53,8 +55,10 @@ def _active_user_dir() -> Path:
 def get_workspace_results_path() -> Path:
     return _active_user_dir() / WORKSPACE_RESULTS_FILENAME
 
+
 def get_candidate_application_history_path() -> Path:
     return RUNTIME_DIR / "candidate_application_history.json"
+
 
 def get_db_path() -> Path:
     val = os.environ.get("JOB_HUNTER_DB_PATH")
@@ -64,6 +68,7 @@ def get_db_path() -> Path:
             "Set it in the systemd service file: Environment=JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/app.db"
         )
     return Path(val).expanduser().resolve()
+
 
 GLOBAL_SETTINGS_PATH = DATA_DIR / "config" / "global_settings.json"
 DEFAULT_USER_SETTINGS_PATH = DEFAULTS_DIR / "user_settings.json"

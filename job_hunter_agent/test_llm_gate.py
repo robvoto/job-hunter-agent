@@ -45,14 +45,20 @@ def test_request_learning_payload_uses_parsed_output(monkeypatch, fit_review):
 
     monkeypatch.setattr(llm_gate, "client", fake_client)
     monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "gpt-test")
-    monkeypatch.setattr(llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context")
+    monkeypatch.setattr(
+        llm_gate, "build_profile_prompt_context", lambda: "Candidate profile context"
+    )
     if fit_review:
-        monkeypatch.setattr(llm_gate, "load_profile", lambda: {"candidate_capabilities": [{"name": "python"}]})
+        monkeypatch.setattr(
+            llm_gate, "load_profile", lambda: {"candidate_capabilities": [{"name": "python"}]}
+        )
 
     payload = llm_gate._request_learning_payload("job description", fit_review=fit_review)
 
     assert fake_client.responses.calls
-    assert fake_client.responses.calls[0]["text_format"] is (llm_gate._LLMFitReviewPayload if fit_review else llm_gate._LLMReviewPayload)
+    assert fake_client.responses.calls[0]["text_format"] is (
+        llm_gate._LLMFitReviewPayload if fit_review else llm_gate._LLMReviewPayload
+    )
     if fit_review:
         assert payload["fit_review"] == {"decision": "KEEP", "grade": "SOLID"}
         assert payload["learning_candidates"] == []
@@ -64,7 +70,9 @@ def test_request_learning_payload_uses_parsed_output(monkeypatch, fit_review):
 
 
 def test_llm_extract_job_requirements_uses_parsed_output(monkeypatch):
-    parsed = llm_gate._LLMJobRequirementsPayload(job_requirements=["Strong stakeholder engagement", "Experience across BA activities"])
+    parsed = llm_gate._LLMJobRequirementsPayload(
+        job_requirements=["Strong stakeholder engagement", "Experience across BA activities"]
+    )
     fake_client = _FakeClient(parsed)
 
     monkeypatch.setattr(llm_gate, "client", fake_client)
@@ -83,5 +91,8 @@ def test_request_learning_payload_requires_candidate_capabilities_for_fit_review
     monkeypatch.setattr(llm_gate, "client", SimpleNamespace())
     monkeypatch.setattr(llm_gate, "load_profile", lambda: {"candidate_capabilities": []})
 
-    with pytest.raises(ValueError, match="Fit review cannot run because the candidate profile has no capability rules"):
+    with pytest.raises(
+        ValueError,
+        match="Fit review cannot run because the candidate profile has no capability rules",
+    ):
         llm_gate._request_learning_payload("job description", fit_review=True)

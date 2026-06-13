@@ -25,6 +25,7 @@ def rebuild_workspace_after_rule_change(reason: str = "matching rule change") ->
         reason: The trigger reason, logged in the rebuild summary.
     """
     from job_hunter_agent.io_utils import load_run_stats
+
     if not get_workspace_results_path().exists() and not load_run_stats():
         return
 

@@ -1,4 +1,4 @@
-﻿"""Server-side helper functions for the Job Hunter Agent web application.
+"""Server-side helper functions for the Job Hunter Agent web application.
 
 This module provides utilities for handling server-specific logic,
 including user authentication, settings management, data normalization,
@@ -6,27 +6,43 @@ and interaction with core agent functionalities like job scraping and
 workspace rebuilding. It centralizes common server-side operations
 to ensure consistency and maintainability.
 """
-import json
+
 import hashlib
-from html import escape
+import json
 import re
 import shutil
 import threading
+from html import escape
 from pathlib import Path
 from typing import Any
-from job_hunter_agent.config import SERVER_HOST as HOST, SERVER_PORT as PORT, DEBUG_MODE, ALLOWED_DOC_REL_PATHS
-from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request, run_stop_requested
-from job_hunter_agent.user_settings import (
-    DEFAULT_USER_SETTINGS,
-    load_agent_state,
-    KEY_WORKSPACE,
-    KEY_TELEGRAM,
-    KEY_SCHEDULE,
-    KEY_LLM,
+
+from job_hunter_agent.config import (
+    ALLOWED_DOC_REL_PATHS,
+    DEBUG_MODE,
 )
-from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
-from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.notifiers.telegram_notifier import build_telegram_connect_link, send_telegram_notification, sync_telegram_subscribers
+from job_hunter_agent.config import (
+    SERVER_HOST as HOST,
+)
+from job_hunter_agent.config import (
+    SERVER_PORT as PORT,
+)
+from job_hunter_agent.global_settings import (
+    CAPABILITY_STRENGTH_PRESETS,
+    KEY_CAPABILITY_ALIAS_LIMIT,
+    KEY_DATE_RANGE_DAYS,
+    KEY_LIMITS,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_LLM_SETTINGS,
+    KEY_MODEL_OPTIONS,
+    KEY_SEARCH_SETTINGS,
+    KEY_SEEK_MAX_PAGES,
+    KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
+    KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
+    KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
+    get_salary_limits,
+    load_global_settings,
+)
 from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
@@ -40,83 +56,88 @@ from job_hunter_agent.io_utils import (
     load_ui_labels,
     write_run_stats,
 )
+from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.llm_gate import llm_suggest_rejection_blockers
+from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.notifiers.telegram_notifier import (
+    build_telegram_connect_link,
+    send_telegram_notification,
+    sync_telegram_subscribers,
+)
 from job_hunter_agent.paths import (
     DATA_DIR,
     USERS_DIR,
-    REPO_ROOT as ROOT_DIR,
     get_workspace_results_path,
 )
+from job_hunter_agent.paths import (
+    REPO_ROOT as ROOT_DIR,
+)
 from job_hunter_agent.profile_store import (
-    BriefMode,
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
-    ENGAGEMENT_TYPE_OPTIONS,
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
-    MIN_CONTRACT_MONTH_OPTIONS,
+    ENGAGEMENT_TYPE_OPTIONS,
+    KEY_BRIEF,
+    KEY_BRIEF_MODE,
+    KEY_CANDIDATE_CAPABILITIES,
+    KEY_CV_MAX_PAGES,
+    KEY_ENGAGEMENT_TYPE,
+    KEY_EVIDENCE_TIERS,
+    KEY_KEYWORDS,
+    KEY_LOCATIONS,
+    KEY_LOOKBACK_YEARS,
+    KEY_MAX_SECONDARY,
+    KEY_MAX_TARGET,
+    KEY_MIN_DAILY_RATE,
+    KEY_MIN_MONTHS,
+    KEY_MIN_SALARY_YEARLY,
+    KEY_ONBOARDING_COMPLETE,
+    KEY_ONBOARDING_SETTINGS,
+    KEY_STAR_EVIDENCE,
+    MATCHING_RULE_PROFILE_KEYS,
     MIN_CONTRACT_MONTH_NONE_LABEL,
-    GovPref,
+    MIN_CONTRACT_MONTH_OPTIONS,
     SECTOR_PREFERENCE_CHOICE_OPTIONS,
     SECTOR_PREFERENCE_OPTIONS,
     VALID_ENGAGEMENT_TYPES,
-    WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_DEFAULT_VALUES,
+    WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
+    BriefMode,
+    GovPref,
     load_profile,
     normalize_engagement_type_preferences,
     normalize_onboarding_settings,
     normalize_search_settings,
     normalize_work_mode_preferences,
-    profile_review_status,
+    patch_profile,
     profile_exists,
+    profile_review_status,
     require_profile_ready_for_review,
     save_profile,
-    KEY_KEYWORDS,
-    KEY_LOCATIONS,
-    KEY_ENGAGEMENT_TYPE,
-    KEY_MIN_SALARY_YEARLY,
-    KEY_MIN_DAILY_RATE,
-    KEY_LOOKBACK_YEARS,
-    KEY_MIN_MONTHS,
-    KEY_MAX_TARGET,
-    KEY_MAX_SECONDARY,
-    KEY_CV_MAX_PAGES,
-    KEY_BRIEF_MODE,
-    KEY_BRIEF,
-    KEY_STAR_EVIDENCE,
-    KEY_EVIDENCE_TIERS,
-    KEY_CANDIDATE_CAPABILITIES,
-    KEY_ONBOARDING_COMPLETE,
-    KEY_ONBOARDING_SETTINGS,
-    MATCHING_RULE_PROFILE_KEYS,
-    patch_profile,
 )
-from job_hunter_agent.locations import resolve_location
-
-from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
-from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+from job_hunter_agent.run_control import (
+    clear_run_progress,
+    clear_run_stop_request,
+    run_stop_requested,
+)
 from job_hunter_agent.source_connector import scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
     build_llm_profile_brief,
     save_source_materials,
 )
-from job_hunter_agent.global_settings import (
-    CAPABILITY_STRENGTH_PRESETS,
-    KEY_LIMITS,
-    KEY_CAPABILITY_ALIAS_LIMIT,
-    KEY_DATE_RANGE_DAYS,
-    KEY_LLM_SETTINGS,
-    KEY_LINKEDIN_HOURS_OLD,
-    KEY_LINKEDIN_RESULTS_PER_SEARCH,
-    KEY_SEARCH_SETTINGS,
-    KEY_MODEL_OPTIONS,
-    KEY_SEEK_MAX_PAGES,
-    KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
-    KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
-    KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
-    load_global_settings,
-    get_salary_limits,
+from job_hunter_agent.user_settings import (
+    DEFAULT_USER_SETTINGS,
+    KEY_LLM,
+    KEY_SCHEDULE,
+    KEY_TELEGRAM,
+    KEY_WORKSPACE,
+    load_agent_state,
 )
+from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
+
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
@@ -144,7 +165,7 @@ _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS = (
     "capabilities_singular",
     "capabilities_plural",
     "llm_cost_label",
-    "source_suffix"
+    "source_suffix",
 )
 _CAPABILITY_UI_LABEL_KEYS = (
     "settings_title",
@@ -504,9 +525,13 @@ def load_onboarding_title_tier_labels() -> dict[str, str]:
     labels = load_ui_labels().get("title_tier_labels", {})
     if not isinstance(labels, dict):
         raise ValueError("ui_labels.json is missing title_tier_labels")
-    missing = [key for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    missing = [
+        key for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS if not str(labels.get(key, "")).strip()
+    ]
     if missing:
-        raise ValueError(f"ui_labels.json is missing title_tier_labels values: {', '.join(missing)}")
+        raise ValueError(
+            f"ui_labels.json is missing title_tier_labels values: {', '.join(missing)}"
+        )
     return {key: str(labels[key]).strip() for key in _ONBOARDING_TITLE_TIER_LABEL_KEYS}
 
 
@@ -514,13 +539,19 @@ def load_onboarding_import_summary_labels() -> dict:
     labels = load_ui_labels().get("onboarding_import_summary_labels", {})
     if not isinstance(labels, dict):
         raise ValueError("ui_labels.json is missing onboarding_import_summary_labels")
-    missing = [key for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    missing = [
+        key for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS if not str(labels.get(key, "")).strip()
+    ]
     if missing:
-        raise ValueError(f"ui_labels.json is missing onboarding_import_summary_labels values: {', '.join(missing)}")
+        raise ValueError(
+            f"ui_labels.json is missing onboarding_import_summary_labels values: {', '.join(missing)}"
+        )
     result: dict = {key: str(labels[key]).strip() for key in _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS}
     raw = labels.get("capability_preview_rows")
     if not isinstance(raw, int) or raw < 1:
-        raise ValueError("ui_labels.json onboarding_import_summary_labels.capability_preview_rows must be a positive integer")
+        raise ValueError(
+            "ui_labels.json onboarding_import_summary_labels.capability_preview_rows must be a positive integer"
+        )
     result["capability_preview_rows"] = raw
     return result
 
@@ -531,7 +562,9 @@ def load_capability_ui_labels() -> dict[str, str]:
         raise ValueError("ui_labels.json is missing capability_ui_labels")
     missing = [key for key in _CAPABILITY_UI_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
-        raise ValueError(f"ui_labels.json is missing capability_ui_labels values: {', '.join(missing)}")
+        raise ValueError(
+            f"ui_labels.json is missing capability_ui_labels values: {', '.join(missing)}"
+        )
     return {key: str(labels[key]).strip() for key in _CAPABILITY_UI_LABEL_KEYS}
 
 
@@ -551,7 +584,9 @@ def load_search_source_labels() -> dict[str, str]:
         raise ValueError("ui_labels.json is missing search_source_labels")
     missing = [key for key in _SEARCH_SOURCE_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
-        raise ValueError(f"ui_labels.json is missing search_source_labels values: {', '.join(missing)}")
+        raise ValueError(
+            f"ui_labels.json is missing search_source_labels values: {', '.join(missing)}"
+        )
     return {key: str(labels[key]).strip() for key in _SEARCH_SOURCE_LABEL_KEYS}
 
 
@@ -561,7 +596,9 @@ def load_settings_alerts_labels() -> dict[str, str]:
         raise ValueError("ui_labels.json is missing settings_alerts_labels")
     missing = [key for key in _SETTINGS_ALERTS_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
-        raise ValueError(f"ui_labels.json is missing settings_alerts_labels values: {', '.join(missing)}")
+        raise ValueError(
+            f"ui_labels.json is missing settings_alerts_labels values: {', '.join(missing)}"
+        )
     return {key: str(labels[key]).strip() for key in _SETTINGS_ALERTS_LABEL_KEYS}
 
 
@@ -576,7 +613,7 @@ def load_onboarding_flow_labels() -> dict[str, str]:
 def load_global_settings_labels() -> dict[str, str]:
     return _load_required_ui_labels("global_settings_labels", _GLOBAL_SETTINGS_LABEL_KEYS)
 
- 
+
 def get_docs() -> list[dict[str, str]]:
     """Return allowed markdown docs under the repo root (for /docs API)."""
     docs: list[dict[str, str]] = []
@@ -639,6 +676,7 @@ def _enforce_salary_caps(value: int, *, label: str, limit_key: str) -> int:
 def _render_template(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
+
 def build_bootstrap_script(
     *,
     csrf_token: str | None = None,
@@ -650,94 +688,98 @@ def build_bootstrap_script(
     resume_step: int | None = None,
     user_id: str | None = None,
 ) -> str:
-    parts = [f'<script>window.__JOB_HUNTER_DEBUG_MODE__ = {"true" if DEBUG_MODE else "false"};</script>']
+    parts = [
+        f"<script>window.__JOB_HUNTER_DEBUG_MODE__ = {'true' if DEBUG_MODE else 'false'};</script>"
+    ]
     if user_id is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_USER_ID__ = {json.dumps(user_id, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_USER_ID__ = {json.dumps(user_id, ensure_ascii=True)};</script>"
         )
     if onboarding_defaults is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ = {json.dumps(onboarding_defaults, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_ONBOARDING_DEFAULTS__ = {json.dumps(onboarding_defaults, ensure_ascii=True)};</script>"
         )
     if onboarding_copy is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_ONBOARDING_COPY__ = {json.dumps(onboarding_copy, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_ONBOARDING_COPY__ = {json.dumps(onboarding_copy, ensure_ascii=True)};</script>"
         )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ = {json.dumps(load_onboarding_flow_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ = {json.dumps(load_onboarding_flow_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__ = {json.dumps(load_onboarding_page_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__ = {json.dumps(load_onboarding_page_labels(), ensure_ascii=True)};</script>"
     )
     if resume_step is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_ONBOARDING_RESUME_STEP__ = {json.dumps(resume_step, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_ONBOARDING_RESUME_STEP__ = {json.dumps(resume_step, ensure_ascii=True)};</script>"
         )
     if csrf_token is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_CSRF_TOKEN__ = {json.dumps(csrf_token, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_CSRF_TOKEN__ = {json.dumps(csrf_token, ensure_ascii=True)};</script>"
         )
     if location_options is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = {json.dumps(location_options, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_LOCATION_OPTIONS__ = {json.dumps(location_options, ensure_ascii=True)};</script>"
         )
     if default_location is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = {json.dumps(default_location, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_DEFAULT_LOCATION__ = {json.dumps(default_location, ensure_ascii=True)};</script>"
         )
     if global_settings is not None:
         parts.append(
-            f'<script>window.__JOB_HUNTER_GLOBAL_SETTINGS__ = {json.dumps(global_settings, ensure_ascii=True)};</script>'
+            f"<script>window.__JOB_HUNTER_GLOBAL_SETTINGS__ = {json.dumps(global_settings, ensure_ascii=True)};</script>"
         )
     parts.append(
-        f'<script>window.__JOB_HUNTER_TITLE_TIER_LABELS__ = {json.dumps(load_onboarding_title_tier_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_TITLE_TIER_LABELS__ = {json.dumps(load_onboarding_title_tier_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_CAPABILITY_UI_LABELS__ = {json.dumps(load_capability_ui_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_CAPABILITY_UI_LABELS__ = {json.dumps(load_capability_ui_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_SHARED_UI_LABELS__ = {json.dumps(load_shared_ui_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_SHARED_UI_LABELS__ = {json.dumps(load_shared_ui_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__ = {json.dumps(load_settings_alerts_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__ = {json.dumps(load_settings_alerts_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_SALARY_LIMITS__ = {json.dumps(get_salary_limits(), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__ = {json.dumps(MIN_CONTRACT_MONTH_OPTIONS, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__ = {json.dumps(MIN_CONTRACT_MONTH_OPTIONS, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__ = {json.dumps(ENGAGEMENT_TYPE_OPTIONS, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_OPTIONS__ = {json.dumps(ENGAGEMENT_TYPE_OPTIONS, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT_VALUES__ = {json.dumps(ENGAGEMENT_TYPE_DEFAULT_VALUES, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_ENGAGEMENT_TYPE_DEFAULT_VALUES__ = {json.dumps(ENGAGEMENT_TYPE_DEFAULT_VALUES, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__ = {json.dumps(WORK_MODE_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_OPTIONS__ = {json.dumps(WORK_MODE_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(list(WORK_MODE_PREFERENCE_DEFAULT_VALUES), ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_DEFAULT__ = {json.dumps(list(WORK_MODE_PREFERENCE_DEFAULT_VALUES), ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__ = {json.dumps(WORK_MODE_PREFERENCE_NONE_LABEL, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_WORK_MODE_PREFERENCE_NONE_LABEL__ = {json.dumps(WORK_MODE_PREFERENCE_NONE_LABEL, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__ = {json.dumps(SECTOR_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_OPTIONS__ = {json.dumps(SECTOR_PREFERENCE_OPTIONS, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__ = {json.dumps(GovPref.ANY, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_SECTOR_PREFERENCE_DEFAULT__ = {json.dumps(GovPref.ANY, ensure_ascii=True)};</script>"
     )
     parts.append(
-        f'<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ = {json.dumps(MIN_CONTRACT_MONTH_NONE_LABEL, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ = {json.dumps(MIN_CONTRACT_MONTH_NONE_LABEL, ensure_ascii=True)};</script>"
     )
     _gs = load_global_settings()
-    _model_options = _gs.get(KEY_LLM_SETTINGS, {}).get(KEY_MODEL_OPTIONS, []) if isinstance(_gs, dict) else []
+    _model_options = (
+        _gs.get(KEY_LLM_SETTINGS, {}).get(KEY_MODEL_OPTIONS, []) if isinstance(_gs, dict) else []
+    )
     parts.append(
-        f'<script>window.__JOB_HUNTER_LLM_MODEL_OPTIONS__ = {json.dumps(_model_options, ensure_ascii=True)};</script>'
+        f"<script>window.__JOB_HUNTER_LLM_MODEL_OPTIONS__ = {json.dumps(_model_options, ensure_ascii=True)};</script>"
     )
     return "\n  ".join(parts)
 
@@ -756,7 +798,9 @@ LOCATION_NAME_RE = re.compile(r"^[A-Za-z\s,'()-]+$")
 
 def _normalize_choice_values(values: object) -> list[str]:
     if isinstance(values, str):
-        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+        source_values = [
+            part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()
+        ]
     elif isinstance(values, (list, tuple, set)):
         source_values = [str(value).strip().lower() for value in values if str(value).strip()]
     else:
@@ -770,17 +814,33 @@ def _normalize_choice_values(values: object) -> list[str]:
     return selected
 
 
-def render_choice_strip(*, name: str, options: list[dict[str, str]], selected_values: object, input_type: str, group_id: str, label_id: str, card_class: str) -> str:
+def render_choice_strip(
+    *,
+    name: str,
+    options: list[dict[str, str]],
+    selected_values: object,
+    input_type: str,
+    group_id: str,
+    label_id: str,
+    card_class: str,
+) -> str:
     input_type = str(input_type or "radio").strip().lower()
     selected = _normalize_choice_values(selected_values)
     selected_set = set(selected)
-    selected_value = selected[0] if selected else str(options[0]["value"] if options else "").strip().lower()
+    selected_value = (
+        selected[0] if selected else str(options[0]["value"] if options else "").strip().lower()
+    )
     if input_type == "radio" and not selected_value:
         selected_value = str(options[0]["value"] if options else "").strip().lower()
     rendered_options = []
     for item in options:
         value = str(item["value"]).strip().lower()
-        checked = " checked" if (input_type == "radio" and value == selected_value) or (input_type != "radio" and value in selected_set) else ""
+        checked = (
+            " checked"
+            if (input_type == "radio" and value == selected_value)
+            or (input_type != "radio" and value in selected_set)
+            else ""
+        )
         rendered_options.append(
             f'<label class="choice-card {escape(card_class)}"><input type="{escape(input_type)}" name="{escape(name)}" value="{escape(value)}"{checked}><span>{escape(item["label"])}</span></label>'
         )
@@ -821,7 +881,9 @@ def render_sector_preference_select_options(*, selected_value: str) -> str:
 
 def render_sector_preference_choices(*, selected_values: object) -> str:
     valid_values = {item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS}
-    selected = [value for value in _normalize_choice_values(selected_values) if value in valid_values]
+    selected = [
+        value for value in _normalize_choice_values(selected_values) if value in valid_values
+    ]
     if not selected:
         selected = [item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS]
     return render_choice_strip(
@@ -848,19 +910,35 @@ def render_work_mode_preference_choices(*, selected_values: object) -> str:
     )
 
 
-def render_seek_max_pages_choices(*, selected_value: object | None = None, label_id: str = "seek_max_pages_label") -> str:
+def render_seek_max_pages_choices(
+    *, selected_value: object | None = None, label_id: str = "seek_max_pages_label"
+) -> str:
     global_settings = load_global_settings()
-    search_settings = global_settings.get(KEY_SEARCH_SETTINGS, {}) if isinstance(global_settings, dict) else {}
-    search_limits = global_settings.get(KEY_LIMITS, {}).get("search", {}) if isinstance(global_settings, dict) else {}
+    search_settings = (
+        global_settings.get(KEY_SEARCH_SETTINGS, {}) if isinstance(global_settings, dict) else {}
+    )
+    search_limits = (
+        global_settings.get(KEY_LIMITS, {}).get("search", {})
+        if isinstance(global_settings, dict)
+        else {}
+    )
     bounds = search_limits.get(KEY_SEEK_MAX_PAGES, {})
     min_value = int(bounds.get("min", 1))
     max_value = int(bounds.get("max", 10))
     if min_value > max_value:
         raise ValueError("global_settings.limits.search.seek_max_pages.min must be <= max")
-    options = [{"value": str(value), "label": str(value)} for value in range(min_value, max_value + 1)]
-    selected = str(selected_value if selected_value is not None else search_settings.get(KEY_SEEK_MAX_PAGES, max_value)).strip()
+    options = [
+        {"value": str(value), "label": str(value)} for value in range(min_value, max_value + 1)
+    ]
+    selected = str(
+        selected_value
+        if selected_value is not None
+        else search_settings.get(KEY_SEEK_MAX_PAGES, max_value)
+    ).strip()
     if selected not in {option["value"] for option in options}:
-        raise ValueError(f"global_settings.search_settings.{KEY_SEEK_MAX_PAGES} must be between {min_value} and {max_value}")
+        raise ValueError(
+            f"global_settings.search_settings.{KEY_SEEK_MAX_PAGES} must be between {min_value} and {max_value}"
+        )
     return render_choice_strip(
         name=KEY_SEEK_MAX_PAGES,
         options=options,
@@ -879,7 +957,9 @@ def _normalize_onboarding_search_preferences(payload: dict | None) -> dict[str, 
     normalized = {
         KEY_KEYWORDS: keywords,
         KEY_LOCATIONS: locations,
-        KEY_ENGAGEMENT_TYPE: normalize_engagement_type_preferences(source.get(KEY_ENGAGEMENT_TYPE), default_to_all=False),
+        KEY_ENGAGEMENT_TYPE: normalize_engagement_type_preferences(
+            source.get(KEY_ENGAGEMENT_TYPE), default_to_all=False
+        ),
     }
     if KEY_MIN_SALARY_YEARLY in source:
         normalized[KEY_MIN_SALARY_YEARLY] = source.get(KEY_MIN_SALARY_YEARLY)
@@ -894,7 +974,9 @@ def _validate_required_onboarding_inputs(
 ) -> None:
     keywords = str(search_preferences.get(KEY_KEYWORDS) or "").strip()
     locations = _parse_locations_override(search_preferences.get(KEY_LOCATIONS))
-    engagement_type = normalize_engagement_type_preferences(search_preferences.get(KEY_ENGAGEMENT_TYPE), default_to_all=False)
+    engagement_type = normalize_engagement_type_preferences(
+        search_preferences.get(KEY_ENGAGEMENT_TYPE), default_to_all=False
+    )
 
     if keywords and (len(keywords) < 2 or len(keywords) > 120):
         raise ValueError("Please keep the primary search title between 2 and 120 characters.")
@@ -912,14 +994,20 @@ def _validate_required_onboarding_inputs(
     raw_yearly = search_preferences.get(KEY_MIN_SALARY_YEARLY)
     if raw_yearly not in (None, ""):
         yearly = _parse_non_negative_salary_value(raw_yearly, label="Minimum permanent salary")
-        _enforce_salary_caps(yearly, label="Minimum permanent salary", limit_key=KEY_MIN_SALARY_YEARLY)
+        _enforce_salary_caps(
+            yearly, label="Minimum permanent salary", limit_key=KEY_MIN_SALARY_YEARLY
+        )
 
     raw_daily = search_preferences.get(KEY_MIN_DAILY_RATE)
     if raw_daily not in (None, ""):
         daily = _parse_non_negative_salary_value(raw_daily, label="Minimum contract daily rate")
-        _enforce_salary_caps(daily, label="Minimum contract daily rate", limit_key=KEY_MIN_DAILY_RATE)
+        _enforce_salary_caps(
+            daily, label="Minimum contract daily rate", limit_key=KEY_MIN_DAILY_RATE
+        )
 
-    raw_settings = onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
+    raw_settings = (
+        onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
+    )
     if isinstance(raw_settings.get(KEY_ONBOARDING_SETTINGS), dict):
         raw_settings = raw_settings.get(KEY_ONBOARDING_SETTINGS) or {}
 
@@ -997,15 +1085,15 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
 
 def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, int]:
     allowed_keys = (
-            KEY_CAPABILITY_ALIAS_LIMIT,
-            KEY_LOOKBACK_YEARS,
-            KEY_MIN_MONTHS,
-            KEY_MAX_TARGET,
-            KEY_MAX_SECONDARY,
-            KEY_CV_MAX_PAGES,
-            KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
-            KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
-            KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
+        KEY_CAPABILITY_ALIAS_LIMIT,
+        KEY_LOOKBACK_YEARS,
+        KEY_MIN_MONTHS,
+        KEY_MAX_TARGET,
+        KEY_MAX_SECONDARY,
+        KEY_CV_MAX_PAGES,
+        KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
+        KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
+        KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     )
     source = payload if isinstance(payload, dict) else {}
     if isinstance(source.get(KEY_ONBOARDING_SETTINGS), dict):
@@ -1098,10 +1186,14 @@ class SettingsHandler:
     def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:
         normalized = dict(patch or {})
         current = current or load_profile()
-        brief_mode = str(
-            normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, BriefMode.AUTO))
-            or BriefMode.AUTO
-        ).strip().lower()
+        brief_mode = (
+            str(
+                normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, BriefMode.AUTO))
+                or BriefMode.AUTO
+            )
+            .strip()
+            .lower()
+        )
         if brief_mode != BriefMode.MANUAL:
             brief_mode = BriefMode.AUTO
         normalized[KEY_BRIEF_MODE] = brief_mode
@@ -1124,7 +1216,9 @@ class SettingsHandler:
     @classmethod
     def _reset_current_user_state(cls) -> dict[str, Any]:
         if _is_run_in_progress():
-            raise ValueError("A scrape is currently running. Wait for it to finish before resetting.")
+            raise ValueError(
+                "A scrape is currently running. Wait for it to finish before resetting."
+            )
         # Wipe every per-user data directory under data/users/
         if USERS_DIR.exists():
             try:
@@ -1139,7 +1233,9 @@ class SettingsHandler:
                     else:
                         user_dir.unlink(missing_ok=True)
                 except Exception as exc:
-                    print(f"[SERVER_HELPERS][WARN] Failed to remove user directory {user_dir}: {exc}")
+                    print(
+                        f"[SERVER_HELPERS][WARN] Failed to remove user directory {user_dir}: {exc}"
+                    )
                     continue
 
         save_profile(DEFAULT_PROFILE)
@@ -1209,9 +1305,7 @@ class SettingsHandler:
             allowed_models = [
                 str(value).strip()
                 for value in (
-                    load_global_settings()
-                    .get(KEY_LLM_SETTINGS, {})
-                    .get(KEY_MODEL_OPTIONS, [])
+                    load_global_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_MODEL_OPTIONS, [])
                 )
                 if str(value).strip()
             ]
@@ -1240,7 +1334,9 @@ class SettingsHandler:
                     or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]
                 )
             except (TypeError, ValueError) as exc:
-                raise ValueError("Schedule polling interval must be a whole number of seconds.") from exc
+                raise ValueError(
+                    "Schedule polling interval must be a whole number of seconds."
+                ) from exc
             sanitized[KEY_SCHEDULE] = {
                 "daily_time_local": daily_time_local,
                 "loop_sleep_seconds": max(60, loop_sleep_seconds),
@@ -1256,11 +1352,35 @@ class SettingsHandler:
         subscribers = telegram.get("subscribers", []) if isinstance(telegram, dict) else []
         return {
             KEY_WORKSPACE: {
-                "minimum_score": max(0, min(int(workspace.get("minimum_score", DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"]) or DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"]), 100)),
+                "minimum_score": max(
+                    0,
+                    min(
+                        int(
+                            workspace.get(
+                                "minimum_score",
+                                DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"],
+                            )
+                            or DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"]
+                        ),
+                        100,
+                    ),
+                ),
             },
             KEY_SCHEDULE: {
-                "daily_time_local": str(schedule.get("daily_time_local") or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip(),
-                "loop_sleep_seconds": max(60, int(schedule.get("loop_sleep_seconds", DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]) or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"])),
+                "daily_time_local": str(
+                    schedule.get("daily_time_local")
+                    or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]
+                ).strip(),
+                "loop_sleep_seconds": max(
+                    60,
+                    int(
+                        schedule.get(
+                            "loop_sleep_seconds",
+                            DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"],
+                        )
+                        or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]
+                    ),
+                ),
             },
             KEY_TELEGRAM: {
                 "enabled": bool(telegram.get("enabled", False)),
@@ -1271,13 +1391,15 @@ class SettingsHandler:
                 "subscriber_count": len(subscribers),
                 "subscribers": subscribers,
             },
-            KEY_LLM: { # Use llm_settings here to avoid shadowing the imported KEY_LLM
+            KEY_LLM: {  # Use llm_settings here to avoid shadowing the imported KEY_LLM
                 "model": str(llm_settings.get("model") or "").strip(),
             },
         }
 
     @staticmethod
-    def _issue_rejection_suggestion_approval_tokens(job_id: str, suggestions: list[str]) -> dict[str, str]:
+    def _issue_rejection_suggestion_approval_tokens(
+        job_id: str, suggestions: list[str]
+    ) -> dict[str, str]:
         normalized_job_id = normalize_job_key(job_id) or str(job_id or "").strip()
         tokens: dict[str, str] = {}
         for suggestion in suggestions:
@@ -1307,7 +1429,9 @@ class SettingsHandler:
         if not suggested_terms:
             return
 
-        provided = approved_suggestion_tokens if isinstance(approved_suggestion_tokens, dict) else {}
+        provided = (
+            approved_suggestion_tokens if isinstance(approved_suggestion_tokens, dict) else {}
+        )
         expected_tokens = SettingsHandler._issue_rejection_suggestion_approval_tokens(
             normalized_job_id,
             list(suggested_terms),
@@ -1322,27 +1446,29 @@ class SettingsHandler:
 
 
 def _validate_onboarding_settings_inputs(onboarding_settings_payload: dict | None) -> None:
-    raw_settings = onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
+    raw_settings = (
+        onboarding_settings_payload if isinstance(onboarding_settings_payload, dict) else {}
+    )
     if isinstance(raw_settings.get(KEY_ONBOARDING_SETTINGS), dict):
         raw_settings = raw_settings.get(KEY_ONBOARDING_SETTINGS) or {}
 
     raw_lookback = raw_settings.get(KEY_LOOKBACK_YEARS)
     raw_min_months = raw_settings.get(KEY_MIN_MONTHS)
-    if raw_lookback in (None, ''):
-        raise ValueError('Please choose how far back we should look.')
-    if raw_min_months in (None, ''):
-        raise ValueError('Please choose when a role is too short to count as a main signal.')
+    if raw_lookback in (None, ""):
+        raise ValueError("Please choose how far back we should look.")
+    if raw_min_months in (None, ""):
+        raise ValueError("Please choose when a role is too short to count as a main signal.")
 
     try:
         lookback = int(raw_lookback)
     except Exception as exc:
-        raise ValueError('Lookback must be a whole number of years.') from exc
+        raise ValueError("Lookback must be a whole number of years.") from exc
     try:
         min_months = int(raw_min_months)
     except Exception as exc:
-        raise ValueError('Short-role threshold must be a whole number of months.') from exc
+        raise ValueError("Short-role threshold must be a whole number of months.") from exc
 
     if lookback < 1 or lookback > 20:
-        raise ValueError('Please enter a lookback between 1 and 20 years.')
+        raise ValueError("Please enter a lookback between 1 and 20 years.")
     if min_months < 1 or min_months > 24:
-        raise ValueError('Please enter a short-role threshold between 1 and 24 months.')
+        raise ValueError("Please enter a short-role threshold between 1 and 24 months.")

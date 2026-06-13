@@ -1,37 +1,37 @@
-﻿"""Helpers for review insights."""
+"""Helpers for review insights."""
 
 import re
 from typing import Any
 
-
 from job_hunter_agent.global_settings import (
-    get_review_settings,
-    KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
-    KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
     KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
-    KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+    KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
+    KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
+    KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+    get_review_settings,
 )
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.occupation_taxonomy import RESULT_UNCERTAIN
+from job_hunter_agent.profile_store import (
+    CAPABILITY_ICON_GENERIC,
+    KEY_ALIASES,
+    KEY_CANDIDATE_CAPABILITIES,
+    KEY_ICON_KEY,
+    KEY_LEVEL,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
+    KEY_NAME,
+    VALID_CAPABILITY_ICON_KEYS,
+)
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_SEARCH_LOCATION_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
 )
-from job_hunter_agent.io_utils import load_ui_labels
-from job_hunter_agent.profile_store import (
-    CAPABILITY_ICON_GENERIC,
-    KEY_CANDIDATE_CAPABILITIES,
-    KEY_MUST_NOT_REQUIRED_SKILLS,
-    KEY_ALIASES,
-    KEY_ICON_KEY,
-    KEY_NAME,
-    KEY_LEVEL,
-    VALID_CAPABILITY_ICON_KEYS,
-)
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+
 
 def _normalize_term(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
@@ -55,7 +55,9 @@ def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
     return known_terms
 
 
-def build_unknown_skill_review(skill_observations: list[dict], profile: dict[str, Any]) -> list[dict]:
+def build_unknown_skill_review(
+    skill_observations: list[dict], profile: dict[str, Any]
+) -> list[dict]:
     settings = get_review_settings()
     max_examples = settings[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL]
     known_terms = _collect_known_terms(profile)
@@ -114,7 +116,9 @@ def build_rejection_review(audit_rows: list[dict]) -> list[dict]:
             if onet_result and onet_result not in entry["onet_results"]:
                 entry["onet_results"].append(onet_result)
             if onet_result:
-                entry["onet_result_counts"][onet_result] = int(entry["onet_result_counts"].get(onet_result, 0)) + 1
+                entry["onet_result_counts"][onet_result] = (
+                    int(entry["onet_result_counts"].get(onet_result, 0)) + 1
+                )
         if len(entry["samples"]) < max_samples:
             entry["samples"].append(
                 {
@@ -189,7 +193,7 @@ def _skill_label_from_highlight(text: Any) -> str:
     lowered = cleaned.lower()
     for prefix in _CAPABILITY_HIGHLIGHT_PREFIXES:
         if lowered.startswith(prefix):
-            return str(cleaned[len(prefix):]).strip()
+            return str(cleaned[len(prefix) :]).strip()
     return ""
 
 
@@ -286,7 +290,7 @@ def _canonical_requirement_label(value: Any) -> str:
             break
     for prefix in _REQUIREMENT_LABEL_PREFIXES:
         if lowered.startswith(prefix):
-            cleaned = compact_whitespace(cleaned[len(prefix):])
+            cleaned = compact_whitespace(cleaned[len(prefix) :])
             lowered = cleaned.lower()
             break
 
@@ -309,7 +313,9 @@ def _requirement_entry_from_label(label: str, source_requirement: str) -> tuple[
     return canonical, alias
 
 
-def build_requirement_tuning_suggestions(audit_rows: list[dict], profile: dict[str, Any]) -> list[dict]:
+def build_requirement_tuning_suggestions(
+    audit_rows: list[dict], profile: dict[str, Any]
+) -> list[dict]:
     settings = get_review_settings()
     min_count = settings[KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT]
     working_min_count = settings[KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT]
@@ -572,7 +578,10 @@ def build_title_optimization_suggestions(audit_rows: list[dict]) -> list[dict]:
         if title_reason != "TITLE_NOT_TARGET":
             continue
         onet = row.get("onet_classification") or {}
-        if not isinstance(onet, dict) or str(onet.get("result") or "").strip().lower() != RESULT_UNCERTAIN:
+        if (
+            not isinstance(onet, dict)
+            or str(onet.get("result") or "").strip().lower() != RESULT_UNCERTAIN
+        ):
             continue
         title = compact_whitespace(str(row.get(RECORD_TITLE_KEY) or ""))
         normalized = _normalize_term(title)
@@ -627,7 +636,9 @@ def build_suggested_tuning(
     skill_observations: list[dict],
     profile: dict[str, Any],
 ) -> dict[str, Any]:
-    capability_suggestions = build_capability_tuning_suggestions(skill_observations, audit_rows, profile)
+    capability_suggestions = build_capability_tuning_suggestions(
+        skill_observations, audit_rows, profile
+    )
     requirement_suggestions = build_requirement_tuning_suggestions(audit_rows, profile)
     optimization_suggestions = build_title_optimization_suggestions(audit_rows)
     rule_suggestions = build_rule_tuning_suggestions(audit_rows)
@@ -645,7 +656,9 @@ def build_suggested_tuning(
     }
 
 
-def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], _profile: dict[str, Any]) -> list[dict]:
+def _kept_skill_observations_from_audit_rows(
+    audit_rows: list[dict], _profile: dict[str, Any]
+) -> list[dict]:
     observations: list[dict] = []
     for row in audit_rows:
         if not isinstance(row, dict) or row.get("decision") != "KEEP":
@@ -654,7 +667,9 @@ def _kept_skill_observations_from_audit_rows(audit_rows: list[dict], _profile: d
     return observations
 
 
-def build_review_data(audit_rows: list[dict], skill_observations: list[dict], profile: dict[str, Any]) -> dict:
+def build_review_data(
+    audit_rows: list[dict], skill_observations: list[dict], profile: dict[str, Any]
+) -> dict:
     kept_skill_observations = _kept_skill_observations_from_audit_rows(audit_rows, profile)
     kept_job_urls = sorted(
         {
@@ -672,7 +687,9 @@ def build_review_data(audit_rows: list[dict], skill_observations: list[dict], pr
     }
 
 
-def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[dict[str, str]]) -> dict[str, Any]:
+def apply_capability_tuning_decisions(
+    profile: dict[str, Any], decisions: list[dict[str, str]]
+) -> dict[str, Any]:
     capability_rules = list(profile.get(KEY_CANDIDATE_CAPABILITIES, []))
     existing_index = _capability_rule_index_lookup(capability_rules)
 
@@ -680,9 +697,7 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
         skill = str(item.get("skill") or "").strip()
         choice = str(item.get("choice") or "").strip().lower()
         incoming_aliases = [
-            str(alias).strip()
-            for alias in (item.get(KEY_ALIASES) or [])
-            if str(alias).strip()
+            str(alias).strip() for alias in (item.get(KEY_ALIASES) or []) if str(alias).strip()
         ]
         normalized = _normalize_term(skill)
         if not normalized or not choice:
@@ -725,7 +740,9 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
             }
             icon_key = str(existing_rule.get(KEY_ICON_KEY) or "").strip().lower()
             if icon_key not in VALID_CAPABILITY_ICON_KEYS:
-                raise ValueError(f"Capability {canonical_name!r} has missing or invalid icon_key: {icon_key!r}")
+                raise ValueError(
+                    f"Capability {canonical_name!r} has missing or invalid icon_key: {icon_key!r}"
+                )
             capability_rules[existing_index[normalized]][KEY_ICON_KEY] = icon_key
         else:
             rule[KEY_ICON_KEY] = CAPABILITY_ICON_GENERIC
@@ -734,4 +751,3 @@ def apply_capability_tuning_decisions(profile: dict[str, Any], decisions: list[d
 
     profile[KEY_CANDIDATE_CAPABILITIES] = capability_rules
     return profile
-

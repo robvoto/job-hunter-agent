@@ -1,14 +1,17 @@
 """
 Maintain the local candidate application history store.
-The runtime workspace reads from the local store only.
+The runtime workspace reads from the local JSON file only.
 Google Sheet access exists only as an explicit import utility.
+
+Use `python -m job_hunter_agent.candidate_application_history import-from-sheet`
+to refresh the local store from the configured Job_Rejections sheet.
 
 Company/role extraction is delegated to the LLM via extract_job_rejection_with_llm.
 Sheet data is fetched via Google Sheets CSV export URL (no OAuth, no Google API client).
 """
 
-import csv
 import argparse
+import csv
 import hashlib
 import io
 import json as _json
@@ -18,17 +21,19 @@ from datetime import datetime, timezone
 import requests
 
 from job_hunter_agent.global_settings import (
-    is_candidate_application_history_enabled,
+    get_candidate_application_history_required_headers,
     get_candidate_application_history_spreadsheet_id,
     get_candidate_application_history_tab_name,
-    get_candidate_application_history_required_headers,
+    is_candidate_application_history_enabled,
 )
 from job_hunter_agent.io_utils import load_json_list, save_json
 from job_hunter_agent.llm_gate import (
-    client as _llm_client,
-    get_llm_model,
     _log_llm_call,
     _strip_json_fence,
+    get_llm_model,
+)
+from job_hunter_agent.llm_gate import (
+    client as _llm_client,
 )
 from job_hunter_agent.paths import (
     CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
@@ -36,11 +41,36 @@ from job_hunter_agent.paths import (
 )
 from job_hunter_agent.text_processing import compact_whitespace
 
-_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab_name}"
+_SHEET_CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab_name}"
+)
 _CANDIDATE_APPLICATION_HISTORY_PATH = get_candidate_application_history_path()
 _CANDIDATE_HISTORY_STATUS_REJECTION = "rejection"
 _CANDIDATE_HISTORY_SOURCE_MANUAL = "manual"
 _CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT = "sheet_import"
+_CLI_COMMAND_IMPORT_FROM_SHEET = "import-from-sheet"
+_CLI_COMMAND_STATUS = "status"
+_OUTPUT_PREFIX = "[candidate_application_history]"
+_SUMMARY_FIELD_ORDER = (
+    "rows_fetched",
+    "rows_loaded_from_cache",
+    "rows_sent_to_llm",
+    "rows_marked_rejection",
+    "rows_needing_review",
+    "records_added",
+    "records_updated",
+    "records_total",
+)
+_CACHE_KEY_FIELDS = (
+    "Message ID",
+    "Thread ID",
+    "Run Date",
+    "Company",
+    "From",
+    "Subject",
+    "Content",
+    "Status",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -81,9 +111,7 @@ def fetch_job_rejection_sheet_rows(
     headers = reader.fieldnames or []
     missing = [h for h in required_headers if h not in headers]
     if missing:
-        raise ValueError(
-            f"Job_Rejections sheet is missing required headers: {missing}"
-        )
+        raise ValueError(f"Job_Rejections sheet is missing required headers: {missing}")
 
     return list(reader)
 
@@ -117,15 +145,21 @@ _LLM_EXTRACTION_DEGRADED: dict = {
     "review_reason": "LLM extraction unavailable or invalid",
 }
 
-_ALLOWED_APPLICATION_STATUSES = frozenset({
-    "rejection", "possible_rejection", "not_rejection", "unknown",
-})
+_ALLOWED_APPLICATION_STATUSES = frozenset(
+    {
+        "rejection",
+        "possible_rejection",
+        "not_rejection",
+        "unknown",
+    }
+)
 _ALLOWED_CONFIDENCES = frozenset({"high", "medium", "low"})
 
 
 # ---------------------------------------------------------------------------
 # Text cleaning helpers
 # ---------------------------------------------------------------------------
+
 
 def _clean(value: object) -> str:
     return compact_whitespace(value)
@@ -134,6 +168,7 @@ def _clean(value: object) -> str:
 # ---------------------------------------------------------------------------
 # LLM extraction
 # ---------------------------------------------------------------------------
+
 
 def _validate_llm_extraction(data: dict) -> dict:
     is_rejection = bool(data.get("is_rejection", False))
@@ -245,14 +280,13 @@ def normalize_job_rejection_row(row: dict) -> dict:
 # Matching
 # ---------------------------------------------------------------------------
 
+
 def _normalize_name(value: str) -> str:
     """Lower-case, strip punctuation and common noise words for loose comparison."""
     value = value.lower()
     value = re.sub(r"[^\w\s]", " ", value)
     # Strip common legal / org suffixes that differ between job ads and emails.
-    value = re.sub(
-        r"\b(pty|ltd|limited|inc|co|corp|group|australia|au)\b", "", value
-    )
+    value = re.sub(r"\b(pty|ltd|limited|inc|co|corp|group|australia|au)\b", "", value)
     return compact_whitespace(value)
 
 
@@ -293,9 +327,7 @@ def _role_match_score(job_title: str, rejection_role: str) -> float:
     return overlap / max(len(words_a), len(words_b))
 
 
-def match_job_application_history(
-    job_record: dict, rejection_rows: list[dict]
-) -> dict | None:
+def match_job_application_history(job_record: dict, rejection_rows: list[dict]) -> dict | None:
     """
     Find the best-matching rejection row for a job record.
 
@@ -392,11 +424,7 @@ def build_job_rejection_extraction_prompt(row: dict) -> dict:
     content = str(row.get("content") or row.get("Content") or "").strip()
     sender = str(row.get("from") or row.get("From") or "").strip()
 
-    user_message = (
-        f"Sender: {sender}\n"
-        f"Subject: {subject}\n\n"
-        f"Content:\n{content[:3000]}"
-    )
+    user_message = f"Sender: {sender}\nSubject: {subject}\n\nContent:\n{content[:3000]}"
 
     return {
         "system": _EXTRACTION_SYSTEM_PROMPT,
@@ -411,15 +439,8 @@ def build_job_rejection_extraction_prompt(row: dict) -> dict:
 
 
 def _make_cache_key(raw_row: dict) -> str:
-    msg_id = str(raw_row.get("Message ID") or "").strip()
-    if msg_id:
-        return f"msg:{msg_id}"
-    parts = "|".join([
-        str(raw_row.get("Thread ID") or ""),
-        str(raw_row.get("Subject") or ""),
-        str(raw_row.get("Content") or ""),
-    ])
-    return f"hash:{hashlib.sha256(parts.encode()).hexdigest()[:16]}"
+    parts = "|".join(str(raw_row.get(field) or "").strip() for field in _CACHE_KEY_FIELDS)
+    return f"row:{hashlib.sha256(parts.encode()).hexdigest()[:16]}"
 
 
 def _load_cache() -> dict:
@@ -489,24 +510,28 @@ def _candidate_history_store_entry_id(entry: dict) -> str:
     current_id = _clean(entry.get("id"))
     if current_id:
         return current_id
-    parts = "|".join([
-        _clean(entry.get("date")),
-        _clean(entry.get("company")),
-        _clean(entry.get("role")),
-        _clean(entry.get("source")),
-        _clean(entry.get("job_key")),
-        _clean(entry.get("evidence")),
-    ])
+    parts = "|".join(
+        [
+            _clean(entry.get("date")),
+            _clean(entry.get("company")),
+            _clean(entry.get("role")),
+            _clean(entry.get("source")),
+            _clean(entry.get("job_key")),
+            _clean(entry.get("evidence")),
+        ]
+    )
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()[:16]
 
 
 def _candidate_history_import_record_keys(record: dict) -> tuple[str, str]:
     message_id = _clean(record.get("message_id"))
-    parts = "|".join([
-        _clean(record.get("date")),
-        _clean(record.get("company")),
-        _clean(record.get("role")),
-    ])
+    parts = "|".join(
+        [
+            _clean(record.get("date")),
+            _clean(record.get("company")),
+            _clean(record.get("role")),
+        ]
+    )
     fallback_key = f"company_role_date:{hashlib.sha256(parts.encode('utf-8')).hexdigest()[:16]}"
     if message_id:
         return f"message_id:{message_id}", fallback_key
@@ -531,12 +556,24 @@ def _candidate_history_store_entry_to_runtime(entry: dict) -> dict:
         "needs_review": bool(entry.get("needs_review", False)),
         "review_reason": _clean(entry.get("review_reason")) or None,
     }
-    if not normalized["id"] or not normalized["date"] or not normalized["company"] or not normalized["role"]:
+    if (
+        not normalized["id"]
+        or not normalized["date"]
+        or not normalized["company"]
+        or not normalized["role"]
+    ):
         raise ValueError("candidate history store entry is missing required fields")
     if normalized["status"] != _CANDIDATE_HISTORY_STATUS_REJECTION:
-        raise ValueError(f"candidate history store entry has unsupported status: {normalized['status']!r}")
-    if normalized["source"] not in {_CANDIDATE_HISTORY_SOURCE_MANUAL, _CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT}:
-        raise ValueError(f"candidate history store entry has unsupported source: {normalized['source']!r}")
+        raise ValueError(
+            f"candidate history store entry has unsupported status: {normalized['status']!r}"
+        )
+    if normalized["source"] not in {
+        _CANDIDATE_HISTORY_SOURCE_MANUAL,
+        _CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT,
+    }:
+        raise ValueError(
+            f"candidate history store entry has unsupported source: {normalized['source']!r}"
+        )
 
     runtime = dict(normalized)
     runtime.update(
@@ -590,7 +627,9 @@ def _candidate_history_sheet_row_to_store_entry(normalized_row: dict, *, source:
         "recruiter": None,
         "source": source,
         "evidence": evidence,
-        "job_key": normalized_row.get("job_key") if normalized_row.get("job_key") is not None else None,
+        "job_key": normalized_row.get("job_key")
+        if normalized_row.get("job_key") is not None
+        else None,
         "created_at": created_at,
         "updated_at": created_at,
         "confidence": confidence,
@@ -665,7 +704,11 @@ def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
                 extracted_count += 1
             cache[cache_key] = normalized_row
             updated = True
-        imported_store_rows.append(_candidate_history_sheet_row_to_store_entry(normalized_row, source=_CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT))
+        imported_store_rows.append(
+            _candidate_history_sheet_row_to_store_entry(
+                normalized_row, source=_CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT
+            )
+        )
 
     if updated:
         _save_cache(cache)
@@ -675,8 +718,12 @@ def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
         "rows_fetched": len(raw_rows),
         "rows_loaded_from_cache": cache_hits,
         "rows_sent_to_llm": extracted_count,
-        "rows_marked_rejection": sum(1 for row in imported_store_rows if row["status"] == _CANDIDATE_HISTORY_STATUS_REJECTION),
-        "rows_needing_review": sum(1 for row in imported_store_rows if bool(row.get("needs_review"))),
+        "rows_marked_rejection": sum(
+            1 for row in imported_store_rows if row["status"] == _CANDIDATE_HISTORY_STATUS_REJECTION
+        ),
+        "rows_needing_review": sum(
+            1 for row in imported_store_rows if bool(row.get("needs_review"))
+        ),
         "failures": failure_count,
     }
     return imported_store_rows, summary
@@ -708,7 +755,9 @@ def import_candidate_rejections_from_sheet() -> dict:
     records_updated = 0
     for row in imported_rows:
         primary_key, fallback_key = _candidate_history_import_record_keys(row)
-        existing = existing_by_primary_key.get(primary_key) or existing_by_fallback_key.get(fallback_key)
+        existing = existing_by_primary_key.get(primary_key) or existing_by_fallback_key.get(
+            fallback_key
+        )
         if existing is None:
             merged_rows.append(row)
             existing_by_primary_key[primary_key] = row
@@ -781,44 +830,72 @@ def enrich_records_with_application_history(
     return enriched
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Inspect or import candidate application history.")
-    parser.add_argument(
-        "--import-from-sheet",
-        action="store_true",
-        help="Refresh the local runtime store from the configured Google Sheet import path.",
+def _print_summary(summary: dict, field_order: tuple[str, ...]) -> None:
+    for field in field_order:
+        print(f"{_OUTPUT_PREFIX} {field}: {summary.get(field, 0)}")
+
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Inspect the local candidate application history store or sync it "
+            "from the configured Job_Rejections Google Sheet."
+        )
     )
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.required = False
+
+    import_parser = subparsers.add_parser(
+        _CLI_COMMAND_IMPORT_FROM_SHEET,
+        help="Refresh the local JSON store from the configured Job_Rejections sheet.",
+    )
+    import_parser.set_defaults(command=_CLI_COMMAND_IMPORT_FROM_SHEET)
+
+    status_parser = subparsers.add_parser(
+        _CLI_COMMAND_STATUS,
+        help="Print a summary of the local JSON store.",
+    )
+    status_parser.set_defaults(command=_CLI_COMMAND_STATUS)
+    return parser
+
+
+def _print_local_store_summary() -> dict:
+    rows = load_candidate_application_history()
+    summary = {
+        "rows_fetched": 0,
+        "rows_loaded_from_cache": 0,
+        "rows_sent_to_llm": 0,
+        "rows_marked_rejection": sum(
+            1 for row in rows if row.get("status") == _CANDIDATE_HISTORY_STATUS_REJECTION
+        ),
+        "rows_needing_review": sum(1 for row in rows if bool(row.get("needs_review"))),
+        "records_added": 0,
+        "records_updated": 0,
+        "records_total": len(rows),
+    }
+    _print_summary(summary, _SUMMARY_FIELD_ORDER)
+    return summary
+
+
+def _print_import_summary() -> dict:
+    summary = import_candidate_rejections_from_sheet()
+    _print_summary(summary, _SUMMARY_FIELD_ORDER)
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_argument_parser()
     args = parser.parse_args(argv)
-    exit_code = 0
     try:
-        if args.import_from_sheet:
-            summary = import_candidate_rejections_from_sheet()
-            print(f"[candidate_application_history] rows fetched from sheet: {summary['rows_fetched']}")
-            print(f"[candidate_application_history] rows loaded from cache: {summary['rows_loaded_from_cache']}")
-            print(f"[candidate_application_history] rows sent to LLM: {summary['rows_sent_to_llm']}")
-            print(f"[candidate_application_history] rows marked rejection: {summary['rows_marked_rejection']}")
-            print(f"[candidate_application_history] rows needing review: {summary['rows_needing_review']}")
-            print(f"[candidate_application_history] records added: {summary['records_added']}")
-            print(f"[candidate_application_history] records updated: {summary['records_updated']}")
-            print(f"[candidate_application_history] failures: {summary['failures']}")
+        if args.command == _CLI_COMMAND_IMPORT_FROM_SHEET:
+            _print_import_summary()
         else:
-            rows = load_candidate_job_rejection_history()
-            print(f"[candidate_application_history] rows loaded from local store: {len(rows)}")
-            print(f"[candidate_application_history] rows marked rejection: {sum(1 for row in rows if bool(row.get('llm_is_rejection')))}")
-            print(f"[candidate_application_history] rows needing review: {sum(1 for row in rows if bool(row.get('llm_needs_review')))}")
-            print("[candidate_application_history] failures: 0")
+            _print_local_store_summary()
     except Exception as exc:
-        print(f"[candidate_application_history] unavailable: {exc}")
-        exit_code = 1
-        print("[candidate_application_history] rows fetched from sheet: 0")
-        print("[candidate_application_history] rows loaded from cache: 0")
-        print("[candidate_application_history] rows sent to LLM: 0")
-        print("[candidate_application_history] rows marked rejection: 0")
-        print("[candidate_application_history] rows needing review: 0")
-        print("[candidate_application_history] records added: 0")
-        print("[candidate_application_history] records updated: 0")
-        print("[candidate_application_history] failures: 1")
-    return exit_code
+        print(f"{_OUTPUT_PREFIX} unavailable: {exc}")
+        _print_summary({field: 0 for field in _SUMMARY_FIELD_ORDER}, _SUMMARY_FIELD_ORDER)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

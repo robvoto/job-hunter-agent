@@ -11,6 +11,7 @@ directly through the profile so the bands are always present.
 """
 
 import json
+
 import pytest
 
 from job_hunter_agent import fit_scoring

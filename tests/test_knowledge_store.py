@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+
 import pytest
 
 from job_hunter_agent.database import init_db
@@ -19,7 +20,6 @@ from job_hunter_agent.server_helpers import (
     _SHARED_UI_LABEL_KEYS,
     load_onboarding_flow_labels,
 )
-
 
 _UI_LABEL_SECTION_KEYS = {
     "onboarding_flow_labels": _ONBOARDING_FLOW_LABEL_KEYS,
@@ -115,6 +115,7 @@ def test_seed_handles_list_payload(tmp_db, knowledge_dir):
 
 def test_repo_knowledge_seeds_successfully(tmp_db):
     from pathlib import Path
+
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
     seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
@@ -122,7 +123,9 @@ def test_repo_knowledge_seeds_successfully(tmp_db):
 
 
 def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
-    (knowledge_dir / "rules.json").write_text('{"version": 1, "entries": [{"value": "A"}]}', encoding="utf-8")
+    (knowledge_dir / "rules.json").write_text(
+        '{"version": 1, "entries": [{"value": "A"}]}', encoding="utf-8"
+    )
     updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
     assert updated == ["rules"]
     assert get_knowledge("rules", tmp_db)["entries"][0]["value"] == "A"
@@ -131,7 +134,9 @@ def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
 def test_upgrade_skips_when_version_current(tmp_db, knowledge_dir):
     data = {"version": 2, "entries": [{"value": "A"}]}
     set_knowledge("rules", data, tmp_db)
-    (knowledge_dir / "rules.json").write_text('{"version": 2, "entries": [{"value": "B"}]}', encoding="utf-8")
+    (knowledge_dir / "rules.json").write_text(
+        '{"version": 2, "entries": [{"value": "B"}]}', encoding="utf-8"
+    )
     updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
     assert updated == []
     assert get_knowledge("rules", tmp_db)["entries"][0]["value"] == "A"
@@ -139,7 +144,9 @@ def test_upgrade_skips_when_version_current(tmp_db, knowledge_dir):
 
 def test_upgrade_skips_when_db_version_ahead(tmp_db, knowledge_dir):
     set_knowledge("rules", {"version": 5, "entries": [{"value": "A"}]}, tmp_db)
-    (knowledge_dir / "rules.json").write_text('{"version": 3, "entries": [{"value": "B"}]}', encoding="utf-8")
+    (knowledge_dir / "rules.json").write_text(
+        '{"version": 3, "entries": [{"value": "B"}]}', encoding="utf-8"
+    )
     updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
     assert updated == []
 
@@ -156,7 +163,9 @@ def test_upgrade_additive_appends_new_entries(tmp_db, knowledge_dir):
 
 
 def test_upgrade_additive_preserves_user_approved_entries(tmp_db, knowledge_dir):
-    set_knowledge("rules", {"version": 1, "entries": [{"value": "A"}, {"value": "UserApproved"}]}, tmp_db)
+    set_knowledge(
+        "rules", {"version": 1, "entries": [{"value": "A"}, {"value": "UserApproved"}]}, tmp_db
+    )
     (knowledge_dir / "rules.json").write_text(
         '{"version": 2, "entries": [{"value": "A"}, {"value": "B"}]}', encoding="utf-8"
     )
@@ -195,7 +204,9 @@ def test_ui_labels_json_contains_required_onboarding_and_server_keys():
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parent.parent
-    data = json.loads((repo_root / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    data = json.loads(
+        (repo_root / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8")
+    )
     missing = {
         section: [key for key in keys if not str(data.get(section, {}).get(key, "")).strip()]
         for section, keys in _UI_LABEL_SECTION_KEYS.items()
@@ -212,7 +223,13 @@ def test_ui_labels_json_version_bumps_when_contents_change():
     ui_labels_path = repo_root / "data" / "knowledge" / "ui_labels.json"
     current = json.loads(ui_labels_path.read_text(encoding="utf-8"))
     head_text = subprocess.run(
-        ["git", "-C", str(repo_root), "show", f"HEAD:{ui_labels_path.relative_to(repo_root).as_posix()}"],
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "show",
+            f"HEAD:{ui_labels_path.relative_to(repo_root).as_posix()}",
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -221,11 +238,14 @@ def test_ui_labels_json_version_bumps_when_contents_change():
     head = json.loads(head_text)
 
     if current != head:
-        assert int(current["version"]) > int(head["version"]), "ui_labels.json changed but its version was not bumped"
+        assert int(current["version"]) > int(head["version"]), (
+            "ui_labels.json changed but its version was not bumped"
+        )
 
 
 def test_match_level_defaults_loaded_from_db(tmp_db):
     from pathlib import Path
+
     repo_root = Path(__file__).resolve().parent.parent
     seed_knowledge_from_dir(repo_root / "data" / "knowledge", tmp_db)
     data = get_knowledge("match_level_defaults", tmp_db)
@@ -236,6 +256,7 @@ def test_match_level_defaults_loaded_from_db(tmp_db):
 
 def test_upgrade_fixes_stale_ui_labels_missing_settings_alerts(isolated_db):
     from pathlib import Path
+
     from job_hunter_agent.server_helpers import build_bootstrap_script, load_settings_alerts_labels
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -265,6 +286,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_settings_alerts(isolated_db):
 
 def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
     from pathlib import Path
+
     from job_hunter_agent.server_helpers import build_bootstrap_script, load_shared_ui_labels
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -316,8 +338,9 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
 
 def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
     from pathlib import Path
+
     from job_hunter_agent.knowledge_store import get_knowledge
-    from job_hunter_agent.workspace_renderer import load_workspace_page_labels, _workspace_ui_labels
+    from job_hunter_agent.workspace_renderer import _workspace_ui_labels, load_workspace_page_labels
 
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
@@ -385,14 +408,18 @@ def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
     _workspace_ui_labels.cache_clear()
     labels = load_workspace_page_labels()
     assert labels["LABEL_WS_RUN_EFFICIENCY_SEPARATOR"] == "."
-    from pathlib import Path
     import json
-    expected_version = json.loads((Path(__file__).parent.parent / "data" / "knowledge" / "ui_labels.json").read_text())["version"]
+    from pathlib import Path
+
+    expected_version = json.loads(
+        (Path(__file__).parent.parent / "data" / "knowledge" / "ui_labels.json").read_text()
+    )["version"]
     assert get_knowledge("ui_labels", isolated_db)["version"] == expected_version
 
 
 def test_create_app_bootstrap_refreshes_stale_ui_labels(isolated_db):
     from pathlib import Path
+
     from job_hunter_agent.fastapi_app import create_app
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -413,7 +440,10 @@ def test_create_app_bootstrap_refreshes_stale_ui_labels(isolated_db):
 
     refreshed = get_knowledge("ui_labels", isolated_db)
     assert refreshed["version"] == current_version
-    assert load_onboarding_flow_labels()["review_capability_helper_copy"] == "Review the capability groups extracted from your CV."
+    assert (
+        load_onboarding_flow_labels()["review_capability_helper_copy"]
+        == "Review the capability groups extracted from your CV."
+    )
 
 
 def test_build_bootstrap_script_includes_all_ui_label_sections():

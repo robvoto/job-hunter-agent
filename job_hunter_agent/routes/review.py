@@ -1,4 +1,4 @@
-﻿"""Route handlers for review."""
+"""Route handlers for review."""
 
 import hashlib
 import json
@@ -15,6 +15,11 @@ from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_HAVE,
     classify_requirement_status,
 )
+from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
+from job_hunter_agent.record_schema import (
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
+)
 from job_hunter_agent.review_history_service import (
     append_review_key,
     get_job_description,
@@ -23,12 +28,6 @@ from job_hunter_agent.review_history_service import (
     save_block_similar_feedback,
     save_not_for_me_feedback,
 )
-from job_hunter_agent.record_schema import (
-    RECORD_LAST_KEPT_SNAPSHOT_KEY,
-    RECORD_REQUIREMENT_COVERAGE_KEY,
-)
-from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
-
 from job_hunter_agent.routes.responses import json_response
 
 logger = logging.getLogger(__name__)
@@ -48,14 +47,18 @@ def api_rejection_suggestions(job_id: str = Query("")):  # type: ignore[no-untyp
     if isinstance(cached, dict) and cached.get("description_hash") == description_hash:
         suggestions = cached.get("suggestions") or []
         if not isinstance(cached.get("approval_tokens"), dict):
-            cached["approval_tokens"] = srv.SettingsHandler._issue_rejection_suggestion_approval_tokens(
-                job_id,
-                suggestions,
+            cached["approval_tokens"] = (
+                srv.SettingsHandler._issue_rejection_suggestion_approval_tokens(
+                    job_id,
+                    suggestions,
+                )
             )
         print(f"[LLM][REJECTION_SUGGESTIONS][CACHE_HIT] job_id={job_id} suggestions={suggestions}")
     else:
         suggestions = srv.llm_suggest_rejection_blockers(description)
-        approval_tokens = srv.SettingsHandler._issue_rejection_suggestion_approval_tokens(job_id, suggestions)
+        approval_tokens = srv.SettingsHandler._issue_rejection_suggestion_approval_tokens(
+            job_id, suggestions
+        )
         srv._rejection_suggestions_cache[job_id] = {
             "description_hash": description_hash,
             "suggestions": list(suggestions),
@@ -108,7 +111,9 @@ def api_rule_phrase(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             updated = profile
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
-    return json_response({"ok": True, "message": f"Phrase rule added: {phrase}", "profile": updated})
+    return json_response(
+        {"ok": True, "message": f"Phrase rule added: {phrase}", "profile": updated}
+    )
 
 
 @router.post("/api/rejection-feedback/mandatory-blockers")
@@ -151,12 +156,12 @@ def api_rejection_feedback_mandatory_blockers(body: dict = Body(...)):  # type: 
     return json_response(result)
 
 
-
 @router.post("/api/title-block-preview")
 def api_title_block_preview(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:
         phrases = [str(p).strip() for p in (body.get("phrases") or []) if str(p).strip()]
         from job_hunter_agent.io_utils import load_audit_rows
+
         rows = load_audit_rows()
         titles = [str(r.get("title") or "").lower() for r in rows if r.get("title")]
         counts: dict[str, int] = {}
@@ -304,7 +309,9 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
         canonical_capability_name = _profile_gap_confirmable_capability(job_key, capability_name)
         if not canonical_capability_name:
-            raise ValueError("capability_name is not a confirmable requirement coverage item for this job")
+            raise ValueError(
+                "capability_name is not a confirmable requirement coverage item for this job"
+            )
 
         profile = srv.load_profile()
         current_status = classify_requirement_status(
@@ -319,13 +326,15 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             if current_status == STATUS_CONFIRMED_HAVE:
                 return json_response({"ok": True})
             rules = list(profile.get("candidate_capabilities") or [])
-            rules.append({
-                "name": canonical_capability_name,
-                "level": "working",
-                "fit": "supporting",
-                "aliases": [],
-                "icon_key": CAPABILITY_ICON_GENERIC,
-            })
+            rules.append(
+                {
+                    "name": canonical_capability_name,
+                    "level": "working",
+                    "fit": "supporting",
+                    "aliases": [],
+                    "icon_key": CAPABILITY_ICON_GENERIC,
+                }
+            )
             profile["candidate_capabilities"] = rules
             srv.save_profile(profile)
 

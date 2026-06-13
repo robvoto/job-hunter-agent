@@ -16,28 +16,29 @@ import logging
 import sys
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from job_hunter_agent.user_settings import get_workspace_minimum_score
+from job_hunter_agent.profile_store import (
+    load_profile,
+    require_profile_ready_for_review,
+)
+from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
     CLI_FLAG_NO_LLM,
     CLI_FLAG_REBUILD_WORKSPACE,
     has_cli_flag,
 )
-from job_hunter_agent.profile_store import (
-    load_profile,
-    require_profile_ready_for_review,
-)
-from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request
+from job_hunter_agent.user_settings import get_workspace_minimum_score
 
 logger = logging.getLogger(__name__)
 
 from job_hunter_agent.run_context import build_scrape_run_context
 from job_hunter_agent.scrape_finalize import finalize_scrape_run
 from job_hunter_agent.source_runner import run_enabled_sources
-from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
+from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
@@ -45,8 +46,9 @@ CONSOLE_BANNER_WIDTH = 60
 
 
 def scrape_jobs_direct() -> str:
-    from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
     from job_hunter_agent.global_settings import get_playwright_headless
+    from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
+
     get_user_id_for_runtime()
     clear_run_stop_request()
     clear_run_progress()
@@ -59,7 +61,11 @@ def scrape_jobs_direct() -> str:
         for value in context.search_settings.get("locations", [])
         if str(value).strip()
     ]
-    llm_model_line = "  LLM Model          : disabled" if context.no_llm_mode else f"  LLM Model          : {get_llm_model()}"
+    llm_model_line = (
+        "  LLM Model          : disabled"
+        if context.no_llm_mode
+        else f"  LLM Model          : {get_llm_model()}"
+    )
     logger.info(
         "\n%s\n  JOB HUNTER AGENT - SCRAPE RUN\n%s\n"
         "  Trigger            : manual scrape command\n"
@@ -99,11 +105,13 @@ def scrape_jobs_direct() -> str:
 
 if __name__ == "__main__":
     from job_hunter_agent.logging_utils import setup_cli_logging
+
     setup_cli_logging()
     from job_hunter_agent.database import init_db
     from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
     from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+
     init_db()
     seed_global_settings_from_file()
     for _subdir in ("knowledge", "signals"):

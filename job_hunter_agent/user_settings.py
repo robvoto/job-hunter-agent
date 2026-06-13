@@ -1,10 +1,11 @@
 """Per-user settings and agent state helpers.
 
-This module manages user-specific configurations and the persistent state of the agent. 
+This module manages user-specific configurations and the persistent state of the agent.
 It provides functions for loading, normalizing, and saving user settings, including
 workspace preferences, scheduling, notification rules (email, Telegram), and LLM model choices.
 It also handles the loading and saving of the agent's runtime state.
 """
+
 from __future__ import annotations
 
 import copy
@@ -46,6 +47,7 @@ MAX_MAX_JOBS_IN_DIGEST = 20
 
 MAX_TELEGRAM_UPDATE_ID = 2147483647
 
+
 def _load_default_user_settings_seed() -> dict[str, Any]:
     payload = json.loads(DEFAULT_USER_SETTINGS_PATH.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -59,9 +61,13 @@ DEFAULT_WORKSPACE_URL = str(DEFAULT_USER_SETTINGS.get("workspace_url") or "").st
 DEFAULT_WORKSPACE_MIN_SCORE = int(DEFAULT_USER_SETTINGS[KEY_WORKSPACE]["minimum_score"])
 DEFAULT_DAILY_TIME_LOCAL = str(DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip()
 DEFAULT_LOOP_SLEEP_SECONDS = int(DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"])
-DEFAULT_MAX_JOBS_IN_DIGEST = int(DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"])
+DEFAULT_MAX_JOBS_IN_DIGEST = int(
+    DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES]["max_jobs_in_digest"]
+)
 DEFAULT_MINIMUM_FIT_SCORE = int(DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES]["minimum_fit_score"])
-DEFAULT_ONLY_IF_NEW_MATCHES = bool(DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES][KEY_ONLY_IF_NEW_MATCHES])
+DEFAULT_ONLY_IF_NEW_MATCHES = bool(
+    DEFAULT_USER_SETTINGS[KEY_NOTIFICATION_RULES][KEY_ONLY_IF_NEW_MATCHES]
+)
 DEFAULT_SMTP_PORT = int(DEFAULT_USER_SETTINGS[KEY_EMAIL]["smtp_port"])
 DEFAULT_SUBJECT_PREFIX = str(DEFAULT_USER_SETTINGS[KEY_EMAIL]["subject_prefix"]).strip()
 DEFAULT_LLM_MODEL = str(DEFAULT_USER_SETTINGS[KEY_LLM]["model"]).strip()
@@ -85,7 +91,9 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
 
     schedule = settings.get(KEY_SCHEDULE, {})
     settings[KEY_SCHEDULE] = {
-        "daily_time_local": str(schedule.get("daily_time_local") or defaults[KEY_SCHEDULE]["daily_time_local"]).strip(),
+        "daily_time_local": str(
+            schedule.get("daily_time_local") or defaults[KEY_SCHEDULE]["daily_time_local"]
+        ).strip(),
         "loop_sleep_seconds": coerce_int(
             schedule.get("loop_sleep_seconds"),
             defaults[KEY_SCHEDULE]["loop_sleep_seconds"],
@@ -108,7 +116,11 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
             MIN_SCORE,
             MAX_SCORE,
         ),
-        KEY_ONLY_IF_NEW_MATCHES: bool(notification_rules.get(KEY_ONLY_IF_NEW_MATCHES, defaults[KEY_NOTIFICATION_RULES][KEY_ONLY_IF_NEW_MATCHES])),
+        KEY_ONLY_IF_NEW_MATCHES: bool(
+            notification_rules.get(
+                KEY_ONLY_IF_NEW_MATCHES, defaults[KEY_NOTIFICATION_RULES][KEY_ONLY_IF_NEW_MATCHES]
+            )
+        ),
     }
 
     email = settings.get(KEY_EMAIL, {})
@@ -116,12 +128,25 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
         "enabled": bool(email.get("enabled", defaults[KEY_EMAIL]["enabled"])),
         "smtp_host": str(email.get("smtp_host") or defaults[KEY_EMAIL]["smtp_host"]).strip(),
         "smtp_port": coerce_int(email.get("smtp_port"), defaults[KEY_EMAIL]["smtp_port"], 1, 65535),
-        "smtp_username": str(email.get("smtp_username") or defaults[KEY_EMAIL]["smtp_username"]).strip(),
-        "smtp_password": str(email.get("smtp_password") or defaults[KEY_EMAIL]["smtp_password"]).strip(),
+        "smtp_username": str(
+            email.get("smtp_username") or defaults[KEY_EMAIL]["smtp_username"]
+        ).strip(),
+        "smtp_password": str(
+            email.get("smtp_password") or defaults[KEY_EMAIL]["smtp_password"]
+        ).strip(),
         "use_tls": bool(email.get("use_tls", defaults[KEY_EMAIL]["use_tls"])),
-        "from_address": str(email.get("from_address") or defaults[KEY_EMAIL]["from_address"]).strip(),
-        "to_addresses": [str(value).strip() for value in email.get("to_addresses", defaults[KEY_EMAIL]["to_addresses"]) if str(value).strip()],
-        "subject_prefix": str(email.get("subject_prefix") or defaults[KEY_EMAIL]["subject_prefix"]).strip() or defaults[KEY_EMAIL]["subject_prefix"],
+        "from_address": str(
+            email.get("from_address") or defaults[KEY_EMAIL]["from_address"]
+        ).strip(),
+        "to_addresses": [
+            str(value).strip()
+            for value in email.get("to_addresses", defaults[KEY_EMAIL]["to_addresses"])
+            if str(value).strip()
+        ],
+        "subject_prefix": str(
+            email.get("subject_prefix") or defaults[KEY_EMAIL]["subject_prefix"]
+        ).strip()
+        or defaults[KEY_EMAIL]["subject_prefix"],
     }
 
     telegram = settings.get(KEY_TELEGRAM, {})
@@ -134,20 +159,26 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
             chat_id = str(item.get("chat_id") or "").strip()
             if not chat_id:
                 continue
-            normalized_subscribers.append({
-                "chat_id": chat_id,
-                "username": str(item.get("username") or "").strip(),
-                "first_name": str(item.get("first_name") or "").strip(),
-                "last_name": str(item.get("last_name") or "").strip(),
-                "connected_at": str(item.get("connected_at") or "").strip(),
-                "last_seen_at": str(item.get("last_seen_at") or "").strip(),
-            })
+            normalized_subscribers.append(
+                {
+                    "chat_id": chat_id,
+                    "username": str(item.get("username") or "").strip(),
+                    "first_name": str(item.get("first_name") or "").strip(),
+                    "last_name": str(item.get("last_name") or "").strip(),
+                    "connected_at": str(item.get("connected_at") or "").strip(),
+                    "last_seen_at": str(item.get("last_seen_at") or "").strip(),
+                }
+            )
     settings[KEY_TELEGRAM] = {
         "enabled": bool(telegram.get("enabled", defaults[KEY_TELEGRAM]["enabled"])),
         "bot_token": str(telegram.get("bot_token") or defaults[KEY_TELEGRAM]["bot_token"]).strip(),
-        "bot_username": str(telegram.get("bot_username") or defaults[KEY_TELEGRAM]["bot_username"]).strip().lstrip("@"),
+        "bot_username": str(telegram.get("bot_username") or defaults[KEY_TELEGRAM]["bot_username"])
+        .strip()
+        .lstrip("@"),
         "chat_id": str(telegram.get("chat_id") or defaults[KEY_TELEGRAM]["chat_id"]).strip(),
-        "disable_link_preview": bool(telegram.get("disable_link_preview", defaults[KEY_TELEGRAM]["disable_link_preview"])),
+        "disable_link_preview": bool(
+            telegram.get("disable_link_preview", defaults[KEY_TELEGRAM]["disable_link_preview"])
+        ),
         "last_update_id": coerce_int(
             telegram.get("last_update_id"),
             defaults[KEY_TELEGRAM]["last_update_id"],
@@ -164,11 +195,13 @@ def _resolve_user_id(user_id: str | None) -> str:
     if user_id is not None:
         return user_id
     from job_hunter_agent.paths import get_active_user_id
+
     return get_active_user_id()
 
 
 def load_user_settings(user_id: str | None, create_if_missing: bool = False) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn
+
     uid = _resolve_user_id(user_id)
     with db_conn() as conn:
         row = conn.execute("SELECT data FROM user_settings WHERE user_id = ?", (uid,)).fetchone()
@@ -182,6 +215,7 @@ def load_user_settings(user_id: str | None, create_if_missing: bool = False) -> 
 
 def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn, ensure_user_row
+
     uid = _resolve_user_id(user_id)
     normalized = normalize_user_settings(payload)
     ensure_user_row(uid)
@@ -205,6 +239,7 @@ def get_workspace_minimum_score(settings: Any | None = None, *, user_id: str | N
 
 def load_agent_state(user_id: str | None = None) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn
+
     uid = _resolve_user_id(user_id)
     with db_conn() as conn:
         row = conn.execute("SELECT data FROM agent_state WHERE user_id = ?", (uid,)).fetchone()
@@ -216,6 +251,7 @@ def load_agent_state(user_id: str | None = None) -> dict[str, Any]:
 
 def save_agent_state(payload: dict[str, Any], user_id: str | None = None) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn, ensure_user_row
+
     uid = _resolve_user_id(user_id)
     data = payload or {}
     ensure_user_row(uid)

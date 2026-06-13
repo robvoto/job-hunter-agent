@@ -19,10 +19,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _RULES_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "data"
-    / "knowledge"
-    / "description_compaction_rules.json"
+    Path(__file__).resolve().parents[1] / "data" / "knowledge" / "description_compaction_rules.json"
 )
 
 
@@ -112,7 +109,9 @@ def _base_metadata(original_len: int) -> dict[str, Any]:
     }
 
 
-def compact_description(text: str, min_compacted_chars: int | None = None) -> tuple[str, dict[str, Any]]:
+def compact_description(
+    text: str, min_compacted_chars: int | None = None
+) -> tuple[str, dict[str, Any]]:
     """Return a cheaper LLM input description plus audit metadata.
 
     Thresholds (enabled, min_compacted_chars, min_retention_ratio) are read from global
@@ -137,7 +136,11 @@ def compact_description(text: str, min_compacted_chars: int | None = None) -> tu
         meta["skip_reason"] = "disabled"
         return original, meta
 
-    min_chars = int(min_compacted_chars) if min_compacted_chars is not None else get_description_compaction_min_chars()
+    min_chars = (
+        int(min_compacted_chars)
+        if min_compacted_chars is not None
+        else get_description_compaction_min_chars()
+    )
     min_retention = get_description_compaction_min_retention()
 
     if original_len < min_chars:

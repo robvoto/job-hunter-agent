@@ -1,14 +1,17 @@
 """Tests for results runtime config."""
 
-from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from job_hunter_agent import workspace_service
-from job_hunter_agent import workspace_renderer
+from job_hunter_agent import workspace_renderer, workspace_service
+
+
 def test_results_page_uses_runtime_workspace_config():
     root = Path(__file__).resolve().parent.parent
-    results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(encoding="utf-8")
+    results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
+        encoding="utf-8"
+    )
     results_html = (root / "templates" / "results.html").read_text(encoding="utf-8")
 
     assert "window.__JOB_HUNTER_WORKSPACE__" in results_html
@@ -39,6 +42,132 @@ def test_candidate_application_history_loader_failure_returns_original_records(c
     assert "[candidate_application_history] unavailable: boom" in output
 
 
+def test_candidate_application_history_sync_runs_before_enrichment_when_enabled():
+    records = [{"job_key": "seek:1"}]
+    calls = []
+
+    def fake_sync():
+        calls.append("sync")
+
+    def fake_load():
+        calls.append("load")
+        return [
+            {
+                "llm_company": "Acme",
+                "llm_role": "Business Analyst",
+                "llm_is_rejection": True,
+                "llm_application_status": "rejection",
+                "llm_confidence": "high",
+                "llm_evidence": "Thanks for applying",
+                "llm_needs_review": False,
+            }
+        ]
+
+    def fake_enrich(items, history):
+        calls.append("enrich")
+        assert history
+        return [{**items[0], "candidate_application_history": history[0]}]
+
+    with (
+        patch(
+            "job_hunter_agent.workspace_service.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.workspace_service.get_candidate_application_history_sync_before_run",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet",
+            side_effect=fake_sync,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+            side_effect=fake_load,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.enrich_records_with_application_history",
+            side_effect=fake_enrich,
+        ),
+    ):
+        result = workspace_service._enrich_records_with_candidate_application_history(records)
+
+    assert calls == ["sync", "load", "enrich"]
+    assert result[0]["candidate_application_history"]["llm_company"] == "Acme"
+
+
+def test_candidate_application_history_sync_is_skipped_when_disabled():
+    records = [{"job_key": "seek:1"}]
+
+    with (
+        patch(
+            "job_hunter_agent.workspace_service.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.workspace_service.get_candidate_application_history_sync_before_run",
+            return_value=False,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet"
+        ) as mock_sync,
+        patch(
+            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+            return_value=[],
+        ),
+    ):
+        result = workspace_service._enrich_records_with_candidate_application_history(records)
+
+    assert result is records
+    assert not mock_sync.called
+
+
+def test_candidate_application_history_sync_failure_logs_warning_and_uses_local_store():
+    records = [{"job_key": "seek:1"}]
+
+    def fake_enrich(items, history):
+        return [{**items[0], "candidate_application_history": history[0]}]
+
+    with (
+        patch(
+            "job_hunter_agent.workspace_service.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.workspace_service.get_candidate_application_history_sync_before_run",
+            return_value=True,
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet",
+            side_effect=RuntimeError("sheet unavailable"),
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+            return_value=[
+                {
+                    "llm_company": "Acme",
+                    "llm_role": "Business Analyst",
+                    "llm_is_rejection": True,
+                    "llm_application_status": "rejection",
+                    "llm_confidence": "high",
+                    "llm_evidence": "Thanks for applying",
+                    "llm_needs_review": False,
+                }
+            ],
+        ),
+        patch(
+            "job_hunter_agent.candidate_application_history.enrich_records_with_application_history",
+            side_effect=fake_enrich,
+        ),
+        patch.object(workspace_service.logger, "warning") as mock_warning,
+    ):
+        result = workspace_service._enrich_records_with_candidate_application_history(records)
+
+    assert result[0]["candidate_application_history"]["llm_company"] == "Acme"
+    mock_warning.assert_called_once()
+    assert "sheet unavailable" in str(mock_warning.call_args.args[1])
+
+
 def test_rendered_workspace_html_content():
     mock_output_path = Path("mock_rendered_workspace.html")
     mock_run_started_at = datetime.now()
@@ -64,7 +193,7 @@ def test_rendered_workspace_html_content():
         "salary_preferences": {
             "minimum_salary_yearly": 100000,
             "minimum_daily_rate": 0,
-        }
+        },
     }
 
     mock_ui_labels_content = {
@@ -138,29 +267,68 @@ def test_rendered_workspace_html_content():
 
     captured_tools = {}
 
-    def fake_render_section(title, records, empty_message, scoring_profile=None, applied_pool=None, history_clusters=None, debug_mode=None, header_tools_html=""):
+    def fake_render_section(
+        title,
+        records,
+        empty_message,
+        scoring_profile=None,
+        applied_pool=None,
+        history_clusters=None,
+        debug_mode=None,
+        header_tools_html="",
+    ):
         if title == "Job Results":
             captured_tools["header_tools_html"] = header_tools_html
         return "<section>Rendered Section</section>"
 
     with (
-        patch('job_hunter_agent.profile_store.load_profile', return_value=mock_profile),
-        patch('job_hunter_agent.user_settings.get_workspace_minimum_score', return_value=55),
-        patch('job_hunter_agent.workspace_data.build_workspace_record_sets', return_value={
-            "shortlist_records": [], "current_records": [], "archive_records": [],
-            "recent_archive_records": [], "stale_archive_records": [],
-            "applied_records": [], "hidden_records": []
-        }),
-        patch('job_hunter_agent.history.build_history_cluster_index', return_value={}),
-        patch('job_hunter_agent.workspace_renderer.render_score_filter_options', return_value="<option>Score Options</option>"),
-        patch('job_hunter_agent.workspace_renderer.render_posted_filter_options', return_value="<option>Posted Options</option>"),
-        patch('job_hunter_agent.workspace_renderer.render_work_type_filter_options', return_value="<option>Work Type Options</option>"),
-        patch('job_hunter_agent.workspace_service.render_section', side_effect=fake_render_section),
-        patch('job_hunter_agent.workspace_renderer.render_match_level_guide_html', return_value="<div>Match Level Guide</div>"),
-        patch('job_hunter_agent.workspace_service._format_common_search_preferences', return_value=("Permanent", "Remote", "Any")),
-        patch('job_hunter_agent.workspace_service._format_salary_min_label', return_value="$100,000/yr"),
-        patch('job_hunter_agent.workspace_renderer._workspace_ui_labels', return_value=mock_ui_labels_content),
-        patch('job_hunter_agent.paths.RESULTS_TEMPLATE_PATH', new_callable=MagicMock) as mock_results_template_path,
+        patch("job_hunter_agent.profile_store.load_profile", return_value=mock_profile),
+        patch("job_hunter_agent.user_settings.get_workspace_minimum_score", return_value=55),
+        patch(
+            "job_hunter_agent.workspace_data.build_workspace_record_sets",
+            return_value={
+                "shortlist_records": [],
+                "current_records": [],
+                "archive_records": [],
+                "recent_archive_records": [],
+                "stale_archive_records": [],
+                "applied_records": [],
+                "hidden_records": [],
+            },
+        ),
+        patch("job_hunter_agent.history.build_history_cluster_index", return_value={}),
+        patch(
+            "job_hunter_agent.workspace_renderer.render_score_filter_options",
+            return_value="<option>Score Options</option>",
+        ),
+        patch(
+            "job_hunter_agent.workspace_renderer.render_posted_filter_options",
+            return_value="<option>Posted Options</option>",
+        ),
+        patch(
+            "job_hunter_agent.workspace_renderer.render_work_type_filter_options",
+            return_value="<option>Work Type Options</option>",
+        ),
+        patch("job_hunter_agent.workspace_service.render_section", side_effect=fake_render_section),
+        patch(
+            "job_hunter_agent.workspace_renderer.render_match_level_guide_html",
+            return_value="<div>Match Level Guide</div>",
+        ),
+        patch(
+            "job_hunter_agent.workspace_service._format_common_search_preferences",
+            return_value=("Permanent", "Remote", "Any"),
+        ),
+        patch(
+            "job_hunter_agent.workspace_service._format_salary_min_label",
+            return_value="$100,000/yr",
+        ),
+        patch(
+            "job_hunter_agent.workspace_renderer._workspace_ui_labels",
+            return_value=mock_ui_labels_content,
+        ),
+        patch(
+            "job_hunter_agent.paths.RESULTS_TEMPLATE_PATH", new_callable=MagicMock
+        ) as mock_results_template_path,
     ):
         mock_results_template_path.read_text.return_value = (
             Path(__file__).parent.parent / "templates" / "results.html"
@@ -182,11 +350,26 @@ def test_rendered_workspace_html_content():
         rendered_html = mock_output_path.read_text(encoding="utf-8")
 
         assert '<h1 class="ws-hero-title">Jobs Workspace</h1>' in rendered_html
-        assert "<button class=\"scope-tab is-active\" type=\"button\" data-workspace-target=\"potential\">Potential Jobs (0)</button>" in rendered_html
-        assert "<span class=\"snapshot-meta-label\">Work type</span><span class=\"snapshot-meta-value\">Permanent</span>" in rendered_html
-        assert "<span class=\"snapshot-meta-label\">Work mode</span><span class=\"snapshot-meta-value\">Remote</span>" in rendered_html
-        assert "<span class=\"snapshot-meta-label\">Sector</span><span class=\"snapshot-meta-value\">Any</span>" in rendered_html
-        assert "<span class=\"snapshot-meta-label\">Salary min</span><span class=\"snapshot-meta-value\">$100,000/yr</span>" in rendered_html
+        assert (
+            '<button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs (0)</button>'
+            in rendered_html
+        )
+        assert (
+            '<span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">Permanent</span>'
+            in rendered_html
+        )
+        assert (
+            '<span class="snapshot-meta-label">Work mode</span><span class="snapshot-meta-value">Remote</span>'
+            in rendered_html
+        )
+        assert (
+            '<span class="snapshot-meta-label">Sector</span><span class="snapshot-meta-value">Any</span>'
+            in rendered_html
+        )
+        assert (
+            '<span class="snapshot-meta-label">Salary min</span><span class="snapshot-meta-value">$100,000/yr</span>'
+            in rendered_html
+        )
         assert "Sort and display" not in rendered_html
         assert '<h3 class="workspace-control-group-title">Sort</h3>' in rendered_html
         assert '<h3 class="workspace-control-group-title">Filters</h3>' in rendered_html

@@ -29,7 +29,12 @@ load_dotenv()
 from job_hunter_agent.database import init_db
 from job_hunter_agent.global_settings import seed_global_settings_from_file
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir, upgrade_knowledge_from_dir
-from job_hunter_agent.paths import DATA_DIR, DEFAULT_USER_SETTINGS_PATH, GLOBAL_SETTINGS_PATH, REPO_ROOT
+from job_hunter_agent.paths import (
+    DATA_DIR,
+    DEFAULT_USER_SETTINGS_PATH,
+    GLOBAL_SETTINGS_PATH,
+    REPO_ROOT,
+)
 
 
 def _copy_required_runtime_file(source: Path, target: Path) -> bool:
@@ -54,7 +59,9 @@ def _copy_required_runtime_tree(source_dir: Path, target_dir: Path) -> list[str]
     including nested generated artefacts such as the O*NET taxonomy index.
     """
     if not source_dir.exists():
-        raise FileNotFoundError(f"Required bundled seed directory is missing from repo: {source_dir}")
+        raise FileNotFoundError(
+            f"Required bundled seed directory is missing from repo: {source_dir}"
+        )
 
     updated: list[str] = []
     for source in sorted(source_dir.rglob("*.json")):
@@ -107,7 +114,9 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
 
         print(f"Upgrading signals config from {signals_dir} ...")
         updated = upgrade_knowledge_from_dir(signals_dir)
-        print(f"  {len(updated)} signal config entries updated: {updated or '(none - all current)'}")
+        print(
+            f"  {len(updated)} signal config entries updated: {updated or '(none - all current)'}"
+        )
 
         print(f"Seeding global settings from {global_settings_path} ...")
         # Global settings has no per-entry user approvals, so upgrade always overwrites.
@@ -116,11 +125,15 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
     else:
         print(f"Seeding knowledge from {knowledge_dir} ...")
         seeded = seed_knowledge_from_dir(knowledge_dir, overwrite=overwrite)
-        print(f"  {len(seeded)} knowledge entries written: {seeded or '(none - all already present)'}")
+        print(
+            f"  {len(seeded)} knowledge entries written: {seeded or '(none - all already present)'}"
+        )
 
         print(f"Seeding signals config from {signals_dir} ...")
         seeded = seed_knowledge_from_dir(signals_dir, overwrite=overwrite)
-        print(f"  {len(seeded)} signal config entries written: {seeded or '(none - all already present)'}")
+        print(
+            f"  {len(seeded)} signal config entries written: {seeded or '(none - all already present)'}"
+        )
 
         print(f"Seeding global settings from {global_settings_path} ...")
         written = seed_global_settings_from_file(overwrite=overwrite)
@@ -130,7 +143,9 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed the Job Hunter database from bundled JSON files.")
+    parser = argparse.ArgumentParser(
+        description="Seed the Job Hunter database from bundled JSON files."
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--upgrade",

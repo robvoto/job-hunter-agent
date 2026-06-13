@@ -3,11 +3,14 @@
 import smtplib
 from email.message import EmailMessage
 
-#HARCODED
+
+# HARCODED
 def send_email_notification(subject: str, body_text: str, body_html: str, settings: dict) -> dict:
     smtp_host = str(settings.get("smtp_host") or "").strip()
     from_address = str(settings.get("from_address") or "").strip()
-    to_addresses = [str(value).strip() for value in settings.get("to_addresses", []) if str(value).strip()]
+    to_addresses = [
+        str(value).strip() for value in settings.get("to_addresses", []) if str(value).strip()
+    ]
     if not smtp_host or not from_address or not to_addresses:
         raise ValueError("Email notifier is missing smtp_host, from_address, or to_addresses")
 

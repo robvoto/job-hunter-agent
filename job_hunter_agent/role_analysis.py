@@ -1,19 +1,10 @@
 """Helpers for role analysis."""
 
-
-
 import re
-
 from typing import Any, Optional
 
-
-
 from job_hunter_agent.knowledge_store import get_knowledge
-
 from job_hunter_agent.text_processing import compact_whitespace
-
-
-
 
 
 def friendly_capability_label(name: str) -> str:
@@ -23,33 +14,21 @@ def friendly_capability_label(name: str) -> str:
     return normalized[:1].upper() + normalized[1:] if normalized else ""
 
 
+# HARCODED
 
-#HARCODED
 
 def role_text_bundle(record: dict, details_text: str) -> str:
 
     return "\n".join(
-
         compact_whitespace(part)
-
         for part in [
-
             record.get("title"),
-
             record.get("company"),
-
             record.get("teaser"),
-
             details_text,
-
         ]
-
         if compact_whitespace(part)
-
     )
-
-
-
 
 
 def text_contains_term(text: str, term: str) -> bool:
@@ -59,17 +38,11 @@ def text_contains_term(text: str, term: str) -> bool:
     cleaned_term = compact_whitespace(term).lower()
 
     if not cleaned_text or not cleaned_term:
-
         return False
 
     pattern = rf"(?<!\w){re.escape(cleaned_term)}(?!\w)"
 
     return re.search(pattern, cleaned_text) is not None
-
-
-
-
-
 
 
 def _source_metadata(record: dict) -> dict:
@@ -79,17 +52,11 @@ def _source_metadata(record: dict) -> dict:
     return metadata if isinstance(metadata, dict) else {}
 
 
-
-
-
 def _raw_source_fields(metadata: dict) -> dict:
 
     raw_fields = metadata.get("raw_source_fields")
 
     return raw_fields if isinstance(raw_fields, dict) else {}
-
-
-
 
 
 def _dedupe_strings(values: list[str]) -> list[str]:
@@ -99,11 +66,9 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     result: list[str] = []
 
     for value in values:
-
         cleaned = compact_whitespace(value)
 
         if not cleaned or cleaned in seen:
-
             continue
 
         seen.add(cleaned)
@@ -113,45 +78,39 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     return result
 
 
-
-
-
 def _build_weak_text_matches(details_text: str) -> list[str]:
 
-    rules = (get_knowledge("posting_channel_indicators") or {}).get("posting_channel_indicators", {})
+    rules = (get_knowledge("posting_channel_indicators") or {}).get(
+        "posting_channel_indicators", {}
+    )
 
-    recruiter_keywords = [str(value or "").strip() for value in rules.get("recruiter_keywords", []) if str(value or "").strip()]
+    recruiter_keywords = [
+        str(value or "").strip()
+        for value in rules.get("recruiter_keywords", [])
+        if str(value or "").strip()
+    ]
 
-    recruiter_copy_patterns = [str(value or "").strip() for value in rules.get("recruiter_copy_patterns", []) if str(value or "").strip()]
+    recruiter_copy_patterns = [
+        str(value or "").strip()
+        for value in rules.get("recruiter_copy_patterns", [])
+        if str(value or "").strip()
+    ]
 
     description = compact_whitespace(details_text).lower()
 
     matches: list[str] = []
 
-
-
     for keyword in recruiter_keywords:
-
         pattern = rf"(?<!\w){re.escape(keyword.lower())}(?!\w)"
 
         if re.search(pattern, description, re.IGNORECASE):
-
             matches.append(keyword)
 
-
-
     for pattern_text in recruiter_copy_patterns:
-
         if re.search(pattern_text, description, re.IGNORECASE):
-
             matches.append(pattern_text)
 
-
-
     return _dedupe_strings(matches)
-
-
-
 
 
 def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], bool, bool]:
@@ -163,160 +122,98 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
     trusted_metadata: list[str] = []
 
     recruiter_keys = (
-
         "seekPostingSourceCode",
-
         "seekPartnerMetadata",
-
         "recruiter_badge",
-
         "recruiterBadge",
-
         "agency_specific_reference",
-
         "agencySpecificReferences",
-
     )
 
     employer_keys = (
-
         "seekHirerJobReference",
-
         "hirer",
-
         "hirer_relationship",
-
         "hirerRelationship",
-
         "company_url",
-
         "company_url_direct",
-
         "job_url_direct",
-
     )
 
-
-
     for key in recruiter_keys:
-
         value = raw_fields.get(key)
 
         if value is not None and compact_whitespace(value):
-
             trusted_metadata.append(key)
-
-
 
     for key in employer_keys:
-
         value = raw_fields.get(key)
 
         if value is not None and compact_whitespace(value):
-
             trusted_metadata.append(key)
-
-
 
     apply_domain = compact_whitespace(metadata.get("apply_domain") or "")
 
     company_profile_url = compact_whitespace(metadata.get("company_profile_url") or "")
 
     if apply_domain:
-
         trusted_metadata.append(f"apply domain = {apply_domain}")
 
     if company_profile_url:
-
         trusted_metadata.append(f"company profile link = {company_profile_url}")
-
-
 
     trusted_metadata = _dedupe_strings(trusted_metadata)
 
-    trusted_recruiter = any(key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in recruiter_keys)
+    trusted_recruiter = any(
+        key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in recruiter_keys
+    )
 
-    trusted_employer = any(key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in employer_keys)
+    trusted_employer = any(
+        key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in employer_keys
+    )
 
     return trusted_metadata, trusted_recruiter, trusted_employer
 
 
-
-
-
 def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
 
-    trusted_metadata, trusted_recruiter, trusted_employer = _collect_trusted_posting_channel_metadata(record)
+    trusted_metadata, trusted_recruiter, trusted_employer = (
+        _collect_trusted_posting_channel_metadata(record)
+    )
 
     weak_text_matches = _build_weak_text_matches(details_text)
 
-
-
     if trusted_recruiter:
-
         return {
-
             "kind": "agency_or_recruiter",
-
             "source": "metadata_first",
-
             "trusted_metadata": trusted_metadata,
-
             "weak_text_matches": weak_text_matches,
-
             "needs_review": False,
-
         }
-
-
 
     if trusted_employer:
-
         return {
-
             "kind": "direct_employer",
-
             "source": "metadata_first",
-
             "trusted_metadata": trusted_metadata,
-
             "weak_text_matches": weak_text_matches,
-
             "needs_review": False,
-
         }
-
-
 
     if weak_text_matches:
-
         return {
-
             "kind": "unknown",
-
             "source": "fallback_text_evidence",
-
             "trusted_metadata": trusted_metadata,
-
             "weak_text_matches": weak_text_matches,
-
             "needs_review": True,
-
         }
 
-
-
     return {
-
         "kind": "unknown",
-
         "source": "metadata_first",
-
         "trusted_metadata": trusted_metadata,
-
         "weak_text_matches": [],
-
         "needs_review": False,
-
     }
-

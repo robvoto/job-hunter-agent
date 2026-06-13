@@ -6,6 +6,7 @@ authentication URLs, exchange of authorization codes for user information,
 and the creation/retrieval of user records. Session cookies are managed
 securely with HMAC-SHA256 signatures and CSRF protection.
 """
+
 from __future__ import annotations
 
 import base64
@@ -23,16 +24,16 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from job_hunter_agent.config import (
-    LOGIN_PATH,
-    LOGOUT_PATH,
-    HEALTH_CHECK_PATH,
-    GOOGLE_AUTH_PATH,
-    GOOGLE_AUTH_CALLBACK_PATH,
     AUTH_ALGO_SHA256,
     AUTH_ENCODING,
     CSRF_TOKEN_CONTEXT,
-    SESSION_COOKIE_PATH,
+    GOOGLE_AUTH_CALLBACK_PATH,
+    GOOGLE_AUTH_PATH,
+    HEALTH_CHECK_PATH,
+    LOGIN_PATH,
+    LOGOUT_PATH,
     SESSION_COOKIE_DEFAULT_NAME,
+    SESSION_COOKIE_PATH,
 )
 
 OPEN_PATHS = {
@@ -94,8 +95,11 @@ def user_id_from_email(email: str) -> str:
     return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()[:16]
 
 
-def get_or_create_user(email: str, admin_email: str | None, display_name: str | None = None) -> dict:
+def get_or_create_user(
+    email: str, admin_email: str | None, display_name: str | None = None
+) -> dict:
     from job_hunter_agent.database import ensure_user_row
+
     email = email.strip().lower()
     user_id = user_id_from_email(email)
     # Role is always re-derived from env — admin_email may change without a DB update.
@@ -106,14 +110,16 @@ def get_or_create_user(email: str, admin_email: str | None, display_name: str | 
 
 def build_google_auth_url(config: GoogleOAuthConfig, state: str) -> str:
     callback_url = f"{config.base_url}{GOOGLE_AUTH_CALLBACK_PATH}"
-    params = urlencode({
-        "client_id": config.client_id,
-        "redirect_uri": callback_url,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": state,
-        "access_type": "online",
-    })
+    params = urlencode(
+        {
+            "client_id": config.client_id,
+            "redirect_uri": callback_url,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "access_type": "online",
+        }
+    )
     return f"{GOOGLE_AUTH_URL}?{params}"
 
 
@@ -159,8 +165,7 @@ def validate_session_cookie_security_for_startup(host: str) -> None:
     secure_mode = _session_cookie_secure_mode()
     if secure_mode not in {"true", "false", "auto"}:
         raise RuntimeError(
-            "Invalid JOB_HUNTER_SESSION_COOKIE_SECURE value. "
-            "Use true, false, or auto."
+            "Invalid JOB_HUNTER_SESSION_COOKIE_SECURE value. Use true, false, or auto."
         )
     if _is_network_exposed_host(host) and secure_mode != "true":
         raise RuntimeError(
@@ -180,7 +185,9 @@ def read_session_user(request: Request) -> dict | None:
     try:
         payload_b64, signature = token.split(".", 1)
     except ValueError:
-        logger.warning("[AUTH][WARN] Rejected session cookie with invalid format; expected payload.signature.")
+        logger.warning(
+            "[AUTH][WARN] Rejected session cookie with invalid format; expected payload.signature."
+        )
         return None
     expected = hmac.new(
         config.session_secret.encode(AUTH_ENCODING),
@@ -193,7 +200,9 @@ def read_session_user(request: Request) -> dict | None:
     try:
         padding = "=" * (-len(payload_b64) % 4)
         payload = json.loads(
-            base64.urlsafe_b64decode((payload_b64 + padding).encode(AUTH_ENCODING)).decode(AUTH_ENCODING)
+            base64.urlsafe_b64decode((payload_b64 + padding).encode(AUTH_ENCODING)).decode(
+                AUTH_ENCODING
+            )
         )
     except Exception as exc:
         logger.warning("[AUTH][WARN] Failed to decode session cookie payload: %s", exc)
@@ -204,7 +213,11 @@ def read_session_user(request: Request) -> dict | None:
         logger.warning("[AUTH][WARN] Rejected session cookie payload missing user_id or email.")
         return None
     # Always re-derive role from env so admin_email changes take effect without re-login.
-    role = "admin" if config.admin_email and email.lower() == config.admin_email.strip().lower() else "candidate"
+    role = (
+        "admin"
+        if config.admin_email and email.lower() == config.admin_email.strip().lower()
+        else "candidate"
+    )
     name = str(payload.get("name") or "").strip()
     return {"user_id": user_id, "email": email, "role": role, "name": name}
 
@@ -282,6 +295,7 @@ def auth_required_response(next_path: str, accepts_html: bool) -> RedirectRespon
 
 
 # ── Internal helpers ────────────────────────────────────────────────────────
+
 
 def _get_session_cookie_params(request: Request) -> tuple[str, bool]:
     base_name = os.getenv("JOB_HUNTER_SESSION_COOKIE_NAME", SESSION_COOKIE_DEFAULT_NAME)

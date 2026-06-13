@@ -8,6 +8,7 @@ from typing import Any
 from job_hunter_agent.settings.global_settings_defaults import (
     CAPABILITY_STRENGTH_PRESETS,
     DEFAULT_COUNTRY_SUFFIX,
+    DEFAULT_DESCRIPTION_COMPACTION_SETTINGS,
     DEFAULT_DESCRIPTION_TRUST_SETTINGS,
     DEFAULT_EVIDENCE_TIER_WEIGHTS,
     DEFAULT_FIT_HIGHLIGHTS,
@@ -24,60 +25,65 @@ from job_hunter_agent.settings.global_settings_defaults import (
     DEFAULT_SOURCE_DOCUMENT_SETTINGS,
     HISTORY_SETTING_LIMITS,
     KEY_ARCHIVE_STALE_AFTER_DAYS,
+    KEY_CANDIDATE_APPLICATION_HISTORY,
     KEY_CAPABILITY_STRENGTH_PRESETS,
+    KEY_COMPACTION_ENABLED,
+    KEY_COMPACTION_MIN_CHARS,
+    KEY_COMPACTION_MIN_RETENTION,
     KEY_CV_CHARS_PER_PAGE,
     KEY_DATE_RANGE_DAYS,
     KEY_DEFAULT_COUNTRY_SUFFIX,
+    KEY_DESCRIPTION_COMPACTION_SETTINGS,
     KEY_DESCRIPTION_TRUST_SETTINGS,
     KEY_EVIDENCE_TIER_WEIGHTS,
     KEY_FIT_HIGHLIGHTS,
-    KEY_HISTORY_SETTINGS,
     KEY_HIDDEN_REVIEW_DAYS,
+    KEY_HISTORY_SETTINGS,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_MAX_CHARS,
     KEY_LLM_MAX_CHARS_LIMITS,
-    KEY_CANDIDATE_APPLICATION_HISTORY,
+    KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
-    KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
-    KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
-    KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
+    KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
     KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
     KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
+    KEY_LLM_PROMPT_EVIDENCE_TIERS,
+    KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
+    KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
     KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
     KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
     KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
-    KEY_LLM_PROMPT_EVIDENCE_TIERS,
     KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
+    KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
+    KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
+    KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
-    KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
-    KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
-    KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_SETTINGS,
     KEY_LLM_PROMPT_TEMPLATES,
-    KEY_LLM_PRICING_PER_1M,
     KEY_LLM_SETTINGS,
+    KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
     KEY_MODEL_OPTIONS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
     KEY_ONBOARDING_SETTINGS,
-    KEY_PLAYWRIGHT_HEADLESS,
     KEY_PLAYWRIGHT_BROWSER_MODE,
+    KEY_PLAYWRIGHT_HEADLESS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
     KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
     KEY_PREFERENCE_WEIGHTS,
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
     KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
-    KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
+    KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT,
     KEY_REVIEW_MAX_EXAMPLES_PER_SKILL,
     KEY_REVIEW_MAX_SAMPLES_PER_REJECTION,
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
@@ -86,18 +92,12 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SALARY_LIMITS,
     KEY_SEARCH_LIMITS,
     KEY_SEARCH_SETTINGS,
+    KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
     KEY_SOURCE_DOCUMENT_SETTINGS,
     KEY_SOURCE_DOCUMENT_SUFFIXES,
-    KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
-    KEY_DESCRIPTION_COMPACTION_SETTINGS,
-    KEY_COMPACTION_ENABLED,
-    KEY_COMPACTION_MIN_CHARS,
-    KEY_COMPACTION_MIN_RETENTION,
-    DEFAULT_DESCRIPTION_COMPACTION_SETTINGS,
     ONBOARDING_SETTING_LIMITS,
     SEARCH_SETTING_LIMITS,
-    KEY_SEEK_MAX_PAGES,
 )
 
 
@@ -108,18 +108,24 @@ def _require_int(source: dict[str, Any], key: str, default: int, minimum: int, m
     except (TypeError, ValueError) as exc:
         raise ValueError(f"global_settings.{key} must be an integer, got {raw!r}") from exc
     if value < minimum or value > maximum:
-        raise ValueError(f"global_settings.{key} must be between {minimum} and {maximum}, got {value}")
+        raise ValueError(
+            f"global_settings.{key} must be between {minimum} and {maximum}, got {value}"
+        )
     return value
 
 
-def _require_float(source: dict[str, Any], key: str, default: float, minimum: float, maximum: float) -> float:
+def _require_float(
+    source: dict[str, Any], key: str, default: float, minimum: float, maximum: float
+) -> float:
     raw = source.get(key, default)
     try:
         value = float(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"global_settings.{key} must be a number, got {raw!r}") from exc
     if value < minimum or value > maximum:
-        raise ValueError(f"global_settings.{key} must be between {minimum} and {maximum}, got {value}")
+        raise ValueError(
+            f"global_settings.{key} must be between {minimum} and {maximum}, got {value}"
+        )
     return value
 
 
@@ -142,22 +148,32 @@ def _normalize_int_bounds(source: dict[str, Any], defaults: dict[str, int]) -> d
     return {"min": min_value, "max": max_value}
 
 
-def _normalize_llm_pricing_map(source: dict[str, Any], defaults: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
+def _normalize_llm_pricing_map(
+    source: dict[str, Any], defaults: dict[str, dict[str, float]]
+) -> dict[str, dict[str, float]]:
     normalized: dict[str, dict[str, float]] = {}
     for model, raw_prices in source.items():
         if not isinstance(raw_prices, dict):
-            raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M}.{model} must be a dict")
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M}.{model} must be a dict"
+            )
         default_prices = defaults.get(model, {"input": 0.0, "output": 0.0})
         normalized[model] = {
-            "input": _require_float(raw_prices, "input", float(default_prices["input"]), 0.0, 10_000.0),
-            "output": _require_float(raw_prices, "output", float(default_prices["output"]), 0.0, 10_000.0),
+            "input": _require_float(
+                raw_prices, "input", float(default_prices["input"]), 0.0, 10_000.0
+            ),
+            "output": _require_float(
+                raw_prices, "output", float(default_prices["output"]), 0.0, 10_000.0
+            ),
         }
     if not normalized:
         normalized = copy.deepcopy(defaults)
     return normalized
 
 
-def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bool = False) -> dict[str, Any]:
+def _normalize_llm_prompt_settings(
+    source: dict[str, Any], *, strict_managed: bool = False
+) -> dict[str, Any]:
     templates_source = source.get(KEY_LLM_PROMPT_TEMPLATES, {})
     if not isinstance(templates_source, dict):
         raise ValueError(
@@ -188,7 +204,9 @@ def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bo
             {
                 "profile_key": profile_key,
                 "label": str(tier_source.get("label") or default_tier["label"]).strip(),
-                "weight_label": str(tier_source.get("weight_label") or default_tier["weight_label"]).strip(),
+                "weight_label": str(
+                    tier_source.get("weight_label") or default_tier["weight_label"]
+                ).strip(),
                 "default_weight": _require_float(
                     tier_source,
                     "default_weight",
@@ -229,7 +247,7 @@ def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bo
     fit_decision_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
-        minimum=100,   # min needed for a valid fit_review + a few contextual matches
+        minimum=100,  # min needed for a valid fit_review + a few contextual matches
         maximum=2_000,
     )
     learning_candidates_max_output_tokens = _prompt_int(
@@ -325,7 +343,10 @@ def _normalize_llm_prompt_settings(source: dict[str, Any], *, strict_managed: bo
 
     try:
         learning_max_items = int(
-            source.get(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS, DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS])
+            source.get(
+                KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
+                DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS],
+            )
             or DEFAULT_LLM_PROMPT_SETTINGS[KEY_LLM_PROMPT_LEARNING_MAX_ITEMS]
         )
     except (TypeError, ValueError) as exc:
@@ -408,7 +429,9 @@ def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
 def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[str]) -> list[str]:
     raw_suffixes = source.get(KEY_SOURCE_DOCUMENT_SUFFIXES, defaults)
     if not isinstance(raw_suffixes, list):
-        raise ValueError(f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must be a list")
+        raise ValueError(
+            f"global_settings.{KEY_SOURCE_DOCUMENT_SETTINGS}.{KEY_SOURCE_DOCUMENT_SUFFIXES} must be a list"
+        )
 
     normalized: list[str] = []
     for value in raw_suffixes:
@@ -445,15 +468,21 @@ def _normalize_limit_map(
         if not isinstance(raw_bounds, dict):
             raw_bounds = {}
         normalized[key] = {
-            "min": _require_int(raw_bounds, "min", int(default.get("min", minimum)), minimum, maximum),
-            "max": _require_int(raw_bounds, "max", int(default.get("max", maximum)), minimum, maximum),
+            "min": _require_int(
+                raw_bounds, "min", int(default.get("min", minimum)), minimum, maximum
+            ),
+            "max": _require_int(
+                raw_bounds, "max", int(default.get("max", maximum)), minimum, maximum
+            ),
         }
         if normalized[key]["min"] > normalized[key]["max"]:
             raise ValueError(f"global_settings.{key}.min must be <= max")
     return normalized
 
 
-def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed: bool = False) -> dict[str, Any]:
+def normalize_global_settings(
+    payload: dict[str, Any] | None, *, strict_managed: bool = False
+) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
@@ -471,7 +500,9 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
     description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
     description_compaction_source = source.get(KEY_DESCRIPTION_COMPACTION_SETTINGS, {})
     source_document_source = source.get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
-    default_country_suffix = str(source.get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)).strip()
+    default_country_suffix = str(
+        source.get(KEY_DEFAULT_COUNTRY_SUFFIX, DEFAULT_COUNTRY_SUFFIX)
+    ).strip()
     onboarding_source = source.get(KEY_ONBOARDING_SETTINGS, {})
     llm_source = source.get(KEY_LLM_SETTINGS, {})
     playwright_source = source.get("playwright_settings", {})
@@ -479,17 +510,29 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
     candidate_application_history_source = source.get(KEY_CANDIDATE_APPLICATION_HISTORY, {})
 
     if not isinstance(fit_source, dict):
-        raise ValueError(f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}"
+        )
     if not isinstance(search_source, dict):
-        raise ValueError(f"global_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_SEARCH_SETTINGS} must be a dict, got {type(search_source).__name__!r}"
+        )
     if not isinstance(limits_source, dict):
-        raise ValueError(f"global_settings.{KEY_LIMITS} must be a dict, got {type(limits_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_LIMITS} must be a dict, got {type(limits_source).__name__!r}"
+        )
     if not isinstance(preference_source, dict):
-        raise ValueError(f"global_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_PREFERENCE_WEIGHTS} must be a dict, got {type(preference_source).__name__!r}"
+        )
     if not isinstance(evidence_source, dict):
-        raise ValueError(f"global_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_EVIDENCE_TIER_WEIGHTS} must be a dict, got {type(evidence_source).__name__!r}"
+        )
     if not isinstance(history_source, dict):
-        raise ValueError(f"global_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}"
+        )
     if not isinstance(description_trust_source, dict):
         raise ValueError(
             f"global_settings.{KEY_DESCRIPTION_TRUST_SETTINGS} must be a dict, got {type(description_trust_source).__name__!r}"
@@ -505,18 +548,35 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
     if not default_country_suffix:
         raise ValueError("global_settings.default_country_suffix must not be empty")
     if not isinstance(playwright_source, dict):
-        raise ValueError(f"global_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.playwright_settings must be a dict, got {type(playwright_source).__name__!r}"
+        )
     if not isinstance(onboarding_source, dict):
-        raise ValueError(f"global_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_ONBOARDING_SETTINGS} must be a dict, got {type(onboarding_source).__name__!r}"
+        )
     if not isinstance(llm_source, dict):
-        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS} must be a dict, got {type(llm_source).__name__!r}"
+        )
     if not isinstance(review_source, dict):
-        raise ValueError(f"global_settings.{KEY_REVIEW_SETTINGS} must be a dict, got {type(review_source).__name__!r}")
+        raise ValueError(
+            f"global_settings.{KEY_REVIEW_SETTINGS} must be a dict, got {type(review_source).__name__!r}"
+        )
 
-    preset_name = str(
-        onboarding_source.get("capability_strength_preset") or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
-    ).strip().lower()
-    preset_name = preset_name if preset_name in CAPABILITY_STRENGTH_PRESETS else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    preset_name = (
+        str(
+            onboarding_source.get("capability_strength_preset")
+            or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+        )
+        .strip()
+        .lower()
+    )
+    preset_name = (
+        preset_name
+        if preset_name in CAPABILITY_STRENGTH_PRESETS
+        else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    )
     preset_defaults = CAPABILITY_STRENGTH_PRESETS[preset_name]
     merged_onboarding = {
         **DEFAULT_ONBOARDING_SETTINGS,
@@ -524,7 +584,9 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
         **{k: v for k, v in onboarding_source.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS},
     }
 
-    model_options_source = llm_source.get(KEY_MODEL_OPTIONS, DEFAULT_LLM_SETTINGS[KEY_MODEL_OPTIONS])
+    model_options_source = llm_source.get(
+        KEY_MODEL_OPTIONS, DEFAULT_LLM_SETTINGS[KEY_MODEL_OPTIONS]
+    )
     if not isinstance(model_options_source, list):
         raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must be a list")
     normalized_model_options: list[str] = []
@@ -533,30 +595,53 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
         if model and model not in normalized_model_options:
             normalized_model_options.append(model)
     if not normalized_model_options:
-        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must contain at least one model")
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_MODEL_OPTIONS} must contain at least one model"
+        )
     pricing_source = llm_source.get(KEY_LLM_PRICING_PER_1M, {})
     if not isinstance(pricing_source, dict):
-        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict")
-    normalized_llm_pricing = _normalize_llm_pricing_map(pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M])
-    pricing_metadata_source = llm_source.get("pricing_metadata", DEFAULT_LLM_SETTINGS.get("pricing_metadata", {}))
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PRICING_PER_1M} must be a dict"
+        )
+    normalized_llm_pricing = _normalize_llm_pricing_map(
+        pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M]
+    )
+    pricing_metadata_source = llm_source.get(
+        "pricing_metadata", DEFAULT_LLM_SETTINGS.get("pricing_metadata", {})
+    )
     if not isinstance(pricing_metadata_source, dict):
         raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.pricing_metadata must be a dict")
     pricing_unit = str(pricing_metadata_source.get("unit") or "").strip().lower()
-    if pricing_unit not in {"per_1m_tokens", "per_million_tokens", "per_1000000_tokens", "per_1k_tokens", "per_thousand_tokens", "per_1000_tokens"}:
-        raise ValueError("global_settings.llm_settings.pricing_metadata.unit must be per_1m_tokens or per_1k_tokens")
+    if pricing_unit not in {
+        "per_1m_tokens",
+        "per_million_tokens",
+        "per_1000000_tokens",
+        "per_1k_tokens",
+        "per_thousand_tokens",
+        "per_1000_tokens",
+    }:
+        raise ValueError(
+            "global_settings.llm_settings.pricing_metadata.unit must be per_1m_tokens or per_1k_tokens"
+        )
     normalized_pricing_metadata = copy.deepcopy(pricing_metadata_source)
     normalized_pricing_metadata["unit"] = pricing_unit
     max_chars_limits_source = llm_source.get(KEY_LLM_MAX_CHARS_LIMITS, {})
     if not isinstance(max_chars_limits_source, dict):
-        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS_LIMITS} must be a dict")
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS_LIMITS} must be a dict"
+        )
     normalized_max_chars_limits = _normalize_int_bounds(
         max_chars_limits_source,
         DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS_LIMITS],
     )
     prompt_source = llm_source.get(KEY_LLM_PROMPT_SETTINGS, {})
     if not isinstance(prompt_source, dict):
-        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict")
-    normalized_llm_prompt_settings = _normalize_llm_prompt_settings(prompt_source, strict_managed=strict_managed)
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_PROMPT_SETTINGS} must be a dict"
+        )
+    normalized_llm_prompt_settings = _normalize_llm_prompt_settings(
+        prompt_source, strict_managed=strict_managed
+    )
 
     try:
         max_llm_chars = int(
@@ -564,8 +649,13 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
             or DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_CHARS]
         )
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be an integer") from exc
-    if max_llm_chars < normalized_max_chars_limits["min"] or max_llm_chars > normalized_max_chars_limits["max"]:
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be an integer"
+        ) from exc
+    if (
+        max_llm_chars < normalized_max_chars_limits["min"]
+        or max_llm_chars > normalized_max_chars_limits["max"]
+    ):
         raise ValueError(
             f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MAX_CHARS} must be between "
             f"{normalized_max_chars_limits['min']} and {normalized_max_chars_limits['max']}"
@@ -595,12 +685,20 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
             raise ValueError(f"global_settings.search_limits.{limit_key}.min must be <= max")
         normalized_search_limits[limit_key] = {"min": min_value, "max": max_value}
 
-    normalized_salary_limits = _normalize_limit_map(salary_limits_source, DEFAULT_SALARY_LIMITS, maximum=10_000_000)
+    normalized_salary_limits = _normalize_limit_map(
+        salary_limits_source, DEFAULT_SALARY_LIMITS, maximum=10_000_000
+    )
     normalized_onboarding_limits = _normalize_limit_map(
-        onboarding_limits_source, {k: {"min": v[0], "max": v[1]} for k, v in ONBOARDING_SETTING_LIMITS.items()}, minimum=1, maximum=1000
+        onboarding_limits_source,
+        {k: {"min": v[0], "max": v[1]} for k, v in ONBOARDING_SETTING_LIMITS.items()},
+        minimum=1,
+        maximum=1000,
     )
     normalized_history_limits = _normalize_limit_map(
-        history_limits_source, {k: {"min": v[0], "max": v[1]} for k, v in HISTORY_SETTING_LIMITS.items()}, minimum=1, maximum=1000
+        history_limits_source,
+        {k: {"min": v[0], "max": v[1]} for k, v in HISTORY_SETTING_LIMITS.items()},
+        minimum=1,
+        maximum=1000,
     )
 
     normalized_history_settings = {
@@ -658,9 +756,12 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
         ),
     }
     normalized_description_compaction_settings = {
-        KEY_COMPACTION_ENABLED: bool(description_compaction_source.get(
-            KEY_COMPACTION_ENABLED, DEFAULT_DESCRIPTION_COMPACTION_SETTINGS[KEY_COMPACTION_ENABLED]
-        )),
+        KEY_COMPACTION_ENABLED: bool(
+            description_compaction_source.get(
+                KEY_COMPACTION_ENABLED,
+                DEFAULT_DESCRIPTION_COMPACTION_SETTINGS[KEY_COMPACTION_ENABLED],
+            )
+        ),
         KEY_COMPACTION_MIN_CHARS: _require_int(
             description_compaction_source,
             KEY_COMPACTION_MIN_CHARS,
@@ -690,32 +791,65 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
         ),
     }
 
-    browser_mode = str(
-        playwright_source.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE) or DEFAULT_PLAYWRIGHT_BROWSER_MODE
-    ).strip().lower()
+    browser_mode = (
+        str(
+            playwright_source.get(KEY_PLAYWRIGHT_BROWSER_MODE, DEFAULT_PLAYWRIGHT_BROWSER_MODE)
+            or DEFAULT_PLAYWRIGHT_BROWSER_MODE
+        )
+        .strip()
+        .lower()
+    )
     if browser_mode not in {"ephemeral", "persistent"}:
-        raise ValueError("global_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'")
+        raise ValueError(
+            "global_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'"
+        )
 
     return {
         KEY_FIT_HIGHLIGHTS: {
             "strong_capability_count": _require_int(
-                fit_source, "strong_capability_count", DEFAULT_FIT_HIGHLIGHTS["strong_capability_count"], 0, 10
+                fit_source,
+                "strong_capability_count",
+                DEFAULT_FIT_HIGHLIGHTS["strong_capability_count"],
+                0,
+                10,
             ),
             "working_capability_count": _require_int(
-                fit_source, "working_capability_count", DEFAULT_FIT_HIGHLIGHTS["working_capability_count"], 0, 10
+                fit_source,
+                "working_capability_count",
+                DEFAULT_FIT_HIGHLIGHTS["working_capability_count"],
+                0,
+                10,
             ),
             "basic_capability_count": _require_int(
-                fit_source, "basic_capability_count", DEFAULT_FIT_HIGHLIGHTS["basic_capability_count"], 0, 10
+                fit_source,
+                "basic_capability_count",
+                DEFAULT_FIT_HIGHLIGHTS["basic_capability_count"],
+                0,
+                10,
             ),
             "reviewed_signal_count": _require_int(
-                fit_source, "reviewed_signal_count", DEFAULT_FIT_HIGHLIGHTS["reviewed_signal_count"], 0, 10
+                fit_source,
+                "reviewed_signal_count",
+                DEFAULT_FIT_HIGHLIGHTS["reviewed_signal_count"],
+                0,
+                10,
             ),
-            "max_highlights": _require_int(fit_source, "max_highlights", DEFAULT_FIT_HIGHLIGHTS["max_highlights"], 1, 20),
+            "max_highlights": _require_int(
+                fit_source, "max_highlights", DEFAULT_FIT_HIGHLIGHTS["max_highlights"], 1, 20
+            ),
         },
         KEY_SEARCH_SETTINGS: {
             "keywords": str(search_source.get("keywords") or "").strip(),
-            "locations": [str(value).strip() for value in search_source.get("locations", []) if str(value).strip()],
-            "classification_ids": [str(value).strip() for value in search_source.get("classification_ids", []) if str(value).strip()],
+            "locations": [
+                str(value).strip()
+                for value in search_source.get("locations", [])
+                if str(value).strip()
+            ],
+            "classification_ids": [
+                str(value).strip()
+                for value in search_source.get("classification_ids", [])
+                if str(value).strip()
+            ],
             KEY_DATE_RANGE_DAYS: _require_int(
                 search_source,
                 KEY_DATE_RANGE_DAYS,
@@ -752,9 +886,11 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
                 if search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY) in (None, "")
                 else (
                     True
-                    if str(search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY)).strip().lower() == "true"
+                    if str(search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY)).strip().lower()
+                    == "true"
                     else False
-                    if str(search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY)).strip().lower() == "false"
+                    if str(search_source.get(KEY_LINKEDIN_EASY_APPLY_ONLY)).strip().lower()
+                    == "false"
                     else None
                 )
             ),
@@ -786,8 +922,12 @@ def normalize_global_settings(payload: dict[str, Any] | None, *, strict_managed:
             "onboarding": normalized_onboarding_limits,
             "history": normalized_history_limits,
         },
-        KEY_PREFERENCE_WEIGHTS: _normalize_float_map(preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0),
-        KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS),
+        KEY_PREFERENCE_WEIGHTS: _normalize_float_map(
+            preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0
+        ),
+        KEY_EVIDENCE_TIER_WEIGHTS: _normalize_float_map(
+            evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS
+        ),
         KEY_HISTORY_SETTINGS: normalized_history_settings,
         KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
         KEY_DESCRIPTION_COMPACTION_SETTINGS: normalized_description_compaction_settings,

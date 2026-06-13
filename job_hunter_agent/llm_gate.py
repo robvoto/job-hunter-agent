@@ -1,4 +1,4 @@
-﻿"""LLM fit-decision gateway.
+"""LLM fit-decision gateway.
 
 This module provides a gateway for interacting with Large Language Models (LLMs)
 to perform various job-hunting related tasks. It handles the construction of
@@ -32,14 +32,43 @@ from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import BaseModel, Field
 
 from job_hunter_agent.config import DEBUG_MODE
-from job_hunter_agent.user_settings import load_user_settings, DEFAULT_USER_SETTINGS
+from job_hunter_agent.global_settings import (
+    KEY_LLM_PRICING_PER_1M,
+    KEY_LLM_PROMPT_EVIDENCE_TIERS,
+    KEY_LLM_PROMPT_SETTINGS,
+    KEY_LLM_PROMPT_TEMPLATES,
+    KEY_LLM_SETTINGS,
+    get_llm_capability_naming_aliases_max_items,
+    get_llm_capability_naming_max_output_tokens,
+    get_llm_capability_rule_aliases_max_items,
+    get_llm_capability_rules_max_items,
+    get_llm_fit_decision_max_output_tokens,
+    get_llm_job_description_max_chars,
+    get_llm_job_requirements_max_items,
+    get_llm_job_requirements_max_output_tokens,
+    get_llm_learning_candidates_max_items,
+    get_llm_learning_candidates_max_output_tokens,
+    get_llm_max_chars,
+    get_llm_profile_brief_max_chars,
+    get_llm_raw_output_log_max_chars,
+    get_llm_rejection_blocker_suggestions_max_items,
+    get_llm_rejection_blocker_suggestions_max_output_tokens,
+    get_llm_rejection_blocker_suggestions_max_words,
+    load_global_settings,
+)
+from job_hunter_agent.hard_blocker_rules import (
+    normalize_rejection_blocker_suggestions as _normalize_rejection_blocker_suggestions,
+)
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_IMPORTANCES,
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
+    LLM_FIT_REVIEW_PROMPT_SHAPE,
+    LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
+    LLM_LEARNING_ONLY_PROMPT_SHAPE,
+    LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER,
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
-    LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER,
     LLM_PROMPT_CLUSTERS_HEADER,
     LLM_PROMPT_DEBUG_REASON_INTRO,
     LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER,
@@ -54,59 +83,11 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
-    LLM_FIT_REVIEW_PROMPT_SHAPE,
-    LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
-    LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
 )
-from job_hunter_agent.hard_blocker_rules import normalize_rejection_blocker_suggestions as _normalize_rejection_blocker_suggestions
-from job_hunter_agent.global_settings import (
-    KEY_LLM_PRICING_PER_1M,
-    KEY_LLM_SETTINGS,
-    KEY_LLM_PROMPT_EVIDENCE_TIERS,
-    KEY_LLM_PROMPT_SETTINGS,
-    KEY_LLM_PROMPT_TEMPLATES,
-    get_llm_capability_naming_aliases_max_items,
-    get_llm_capability_naming_max_output_tokens,
-    get_llm_capability_rule_aliases_max_items,
-    get_llm_capability_rules_max_items,
-
-    get_llm_fit_decision_max_output_tokens,
-
-    get_llm_max_chars,
-    get_llm_job_description_max_chars,
-    get_llm_job_requirements_max_items,
-    get_llm_job_requirements_max_output_tokens,
-    get_llm_learning_candidates_max_items,
-    get_llm_learning_candidates_max_output_tokens,
-    get_llm_profile_brief_max_chars,
-    get_llm_raw_output_log_max_chars,
-    get_llm_rejection_blocker_suggestions_max_items,
-    get_llm_rejection_blocker_suggestions_max_output_tokens,
-    get_llm_rejection_blocker_suggestions_max_words,
-    load_global_settings,
-)
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
-from job_hunter_agent.runtime_helpers import (
-    CLI_FLAG_NO_LLM,
-    append_llm_cost_log,
-    build_llm_cost_entry,
-    has_cli_flag,
-)
-from job_hunter_agent.text_processing import compact_whitespace
-from job_hunter_agent.signal_schema import (
-    CATEGORY_HARD_BLOCKER_PATTERN,
-    LEARNING_CONFIDENCE_KEY,
-    LEARNING_CONTEXT_TERMS_KEY,
-    LEARNING_SIGNAL_KEY,
-    LEARNING_NEEDS_REVIEW_KEY,
-    LEARNING_SUGGESTED_CATEGORY_KEY,
-    LEARNING_SUGGESTED_VALUES_KEY,
-    LEARNING_ORIGINAL_TEXTS_KEY,
-    PATTERN_SIGNAL_CATEGORIES,
-    VALID_SIGNAL_CATEGORIES,
-)
+
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
@@ -114,6 +95,26 @@ from job_hunter_agent.profile_store import (
     get_candidate_profile_tiers,
     load_profile,
 )
+from job_hunter_agent.runtime_helpers import (
+    CLI_FLAG_NO_LLM,
+    append_llm_cost_log,
+    build_llm_cost_entry,
+    has_cli_flag,
+)
+from job_hunter_agent.signal_schema import (
+    CATEGORY_HARD_BLOCKER_PATTERN,
+    LEARNING_CONFIDENCE_KEY,
+    LEARNING_CONTEXT_TERMS_KEY,
+    LEARNING_NEEDS_REVIEW_KEY,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
+    PATTERN_SIGNAL_CATEGORIES,
+    VALID_SIGNAL_CATEGORIES,
+)
+from job_hunter_agent.text_processing import compact_whitespace
+from job_hunter_agent.user_settings import DEFAULT_USER_SETTINGS, load_user_settings
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,9 @@ def _calculate_llm_cost_usd(tok_in: int, tok_out: int, prices: dict[str, float])
 
 
 def _get_llm_prompt_settings() -> dict[str, Any]:
-    prompt_settings = load_global_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
+    prompt_settings = (
+        load_global_settings().get(KEY_LLM_SETTINGS, {}).get(KEY_LLM_PROMPT_SETTINGS, {})
+    )
     if not isinstance(prompt_settings, dict) or not prompt_settings:
         raise ValueError("No LLM prompt settings are configured in Admin.")
     return prompt_settings
@@ -173,10 +176,10 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
     if usage is None:
         return
     # Responses API uses input_tokens/output_tokens; Chat uses prompt_tokens/completion_tokens
-    tok_in  = getattr(usage, "input_tokens",  None) or getattr(usage, "prompt_tokens",     0) or 0
-    tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens",  0) or 0
-    prices  = _get_llm_pricing_per_1m()[model]
-    cost    = _calculate_llm_cost_usd(tok_in, tok_out, prices)
+    tok_in = getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", 0) or 0
+    tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0) or 0
+    prices = _get_llm_pricing_per_1m()[model]
+    cost = _calculate_llm_cost_usd(tok_in, tok_out, prices)
     _session_cost_usd += cost
 
     entry = build_llm_cost_entry(
@@ -191,12 +194,21 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
     if DEBUG_MODE:
         logger.info(
             "[LLM][COST] purpose=%s model=%s input_tokens=%d output_tokens=%d call_cost_usd=%.6f session_cost_usd=%.6f",
-            purpose, model, tok_in, tok_out, cost, _session_cost_usd,
+            purpose,
+            model,
+            tok_in,
+            tok_out,
+            cost,
+            _session_cost_usd,
         )
     else:
         logger.info(
             "[LLM] %-30s  $%.4f  (%d in + %d out tokens)  session: $%.4f",
-            purpose, cost, tok_in, tok_out, _session_cost_usd,
+            purpose,
+            cost,
+            tok_in,
+            tok_out,
+            _session_cost_usd,
         )
 
 
@@ -220,6 +232,7 @@ def _profile_fingerprint() -> str:
     try:
         from job_hunter_agent.database import db_conn
         from job_hunter_agent.paths import get_active_user_id
+
         user_id = get_active_user_id()
         with db_conn() as conn:
             row = conn.execute(
@@ -293,7 +306,15 @@ class _LLMFitReviewPayload(BaseModel):
 class LLMCallError(RuntimeError):
     """LLM API call failed. Carries metadata for structured pipeline logging."""
 
-    def __init__(self, message: str, *, purpose: str, model: str, status_code: int | None = None, is_timeout: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        purpose: str,
+        model: str,
+        status_code: int | None = None,
+        is_timeout: bool = False,
+    ) -> None:
         super().__init__(message)
         self.purpose = purpose
         self.model = model
@@ -320,6 +341,7 @@ ALLOWED_LEARNING_CATEGORIES = frozenset(VALID_SIGNAL_CATEGORIES - {CATEGORY_HARD
 
 def _load_managed_prompt_lines(key: str) -> tuple[str, ...]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     payload = get_knowledge(key)
     if payload is None:
         raise RuntimeError(f"Knowledge '{key}' not found in knowledge table — seed the DB first")
@@ -336,7 +358,9 @@ FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_defaults")
 CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines("llm_capability_naming_defaults")
 JOB_REQUIREMENTS_DEFAULT_LINES = _load_managed_prompt_lines("llm_job_requirements_defaults")
 LEARNING_DEFAULT_LINES = _load_managed_prompt_lines("llm_learning_defaults")
-REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines("llm_rejection_suggestions_defaults")
+REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines(
+    "llm_rejection_suggestions_defaults"
+)
 REQUIREMENT_COVERAGE_DEFAULT_LINES = _load_managed_prompt_lines("llm_requirement_coverage_defaults")
 FIT_REVIEW_GRADE_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_grade_defaults")
 
@@ -347,11 +371,12 @@ def llm_is_enabled() -> bool:
 
 def build_profile_prompt_context() -> str:
     from job_hunter_agent.profile_store import (
+        KEY_CANDIDATE_CAPABILITIES,
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
-        KEY_CANDIDATE_CAPABILITIES,
     )
+
     profile = load_profile()
     llm_profile_brief = str(profile.get("llm_profile_brief") or "").strip()
     star_evidence_text = str(profile.get("star_evidence_text") or "").strip()
@@ -362,16 +387,20 @@ def build_profile_prompt_context() -> str:
     prompt_evidence_tiers = prompt_settings[KEY_LLM_PROMPT_EVIDENCE_TIERS]
     capability_rules = profile.get(KEY_CANDIDATE_CAPABILITIES, [])
     salary_preferences = profile.get("salary_preferences", {})
-    match_preferences = profile.get("match_preferences", {}) if isinstance(profile.get("match_preferences", {}), dict) else {}
+    match_preferences = (
+        profile.get("match_preferences", {})
+        if isinstance(profile.get("match_preferences", {}), dict)
+        else {}
+    )
 
     parts = []
     if llm_profile_brief:
         parts.append(LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER)
-        parts.append(llm_profile_brief[:get_llm_profile_brief_max_chars()])
+        parts.append(llm_profile_brief[: get_llm_profile_brief_max_chars()])
 
     if isinstance(capability_rules, list) and capability_rules:
         parts.append(LLM_PROMPT_CAPABILITY_LEVELS_HEADER)
-        for rule in capability_rules[:get_llm_capability_rules_max_items()]:
+        for rule in capability_rules[: get_llm_capability_rules_max_items()]:
             if not isinstance(rule, dict):
                 continue
             name = str(rule.get("name") or "").strip()
@@ -381,7 +410,7 @@ def build_profile_prompt_context() -> str:
             aliases_list = raw_aliases if isinstance(raw_aliases, list) else []
             aliases = ", ".join(
                 str(alias).strip()
-                for alias in aliases_list[:get_llm_capability_rule_aliases_max_items()]
+                for alias in aliases_list[: get_llm_capability_rule_aliases_max_items()]
                 if str(alias).strip()
             )
             if name and level:
@@ -397,12 +426,18 @@ def build_profile_prompt_context() -> str:
     preference_lines = []
     if minimum_salary_yearly > 0 or minimum_daily_rate > 0:
         if minimum_salary_yearly > 0:
-            preference_lines.append(prompt_templates["compensation_target_yearly"].format(value=minimum_salary_yearly))
+            preference_lines.append(
+                prompt_templates["compensation_target_yearly"].format(value=minimum_salary_yearly)
+            )
         if minimum_daily_rate > 0:
-            preference_lines.append(prompt_templates["compensation_target_daily"].format(value=minimum_daily_rate))
+            preference_lines.append(
+                prompt_templates["compensation_target_daily"].format(value=minimum_daily_rate)
+            )
     home_location = str(match_preferences.get("home_location") or "").strip()
     if home_location:
-        preference_lines.append(prompt_templates["home_location"].format(home_location=home_location))
+        preference_lines.append(
+            prompt_templates["home_location"].format(home_location=home_location)
+        )
     if match_preferences.get("prefer_permanent"):
         preference_lines.append(prompt_templates["prefer_permanent"])
     if preference_lines:
@@ -414,8 +449,12 @@ def build_profile_prompt_context() -> str:
     # See docs/ARCHITECTURE.md parked decisions.
 
     primary_evidence = str(evidence_tiers.get(KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT) or "").strip()
-    secondary_evidence = str(evidence_tiers.get(KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT) or "").strip()
-    background_evidence = str(evidence_tiers.get(KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT) or "").strip()
+    secondary_evidence = str(
+        evidence_tiers.get(KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT) or ""
+    ).strip()
+    background_evidence = str(
+        evidence_tiers.get(KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT) or ""
+    ).strip()
 
     tier_text_by_key = {
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: primary_evidence,
@@ -431,7 +470,9 @@ def build_profile_prompt_context() -> str:
         tier_text = str(tier_text_by_key.get(tier_key) or "").strip()
         if not tier_key or not tier_label or not tier_limit or not tier_text:
             continue
-        parts.append(f"{tier_label} ({weight_label} weight {evidence_weights.get(tier_key, tier_weight):.2f}):")
+        parts.append(
+            f"{tier_label} ({weight_label} weight {evidence_weights.get(tier_key, tier_weight):.2f}):"
+        )
         parts.append(tier_text[:tier_limit])
 
     return "\n".join(part for part in parts if part)
@@ -487,7 +528,9 @@ def build_capability_naming_guidance() -> str:
 
 
 def build_llm_cache_key(job_description_text: str) -> str:
-    desc_hash = hashlib.sha256(str(job_description_text or "").encode("utf-8", errors="ignore")).hexdigest()
+    desc_hash = hashlib.sha256(
+        str(job_description_text or "").encode("utf-8", errors="ignore")
+    ).hexdigest()
     return f"{_profile_fingerprint()}:{desc_hash}"
 
 
@@ -500,9 +543,13 @@ def _require_fit_review(value: Any) -> Dict[str, str]:
         if not grade:
             raise ValueError("LLM fit review is missing grade")
         if decision not in LLM_ALLOWED_DECISIONS:
-            raise ValueError(f"LLM fit review decision must be one of {sorted(LLM_ALLOWED_DECISIONS)}: {decision!r}")
+            raise ValueError(
+                f"LLM fit review decision must be one of {sorted(LLM_ALLOWED_DECISIONS)}: {decision!r}"
+            )
         if grade not in LLM_ALLOWED_GRADES:
-            raise ValueError(f"LLM fit review grade must be one of {sorted(LLM_ALLOWED_GRADES)}: {grade!r}")
+            raise ValueError(
+                f"LLM fit review grade must be one of {sorted(LLM_ALLOWED_GRADES)}: {grade!r}"
+            )
         return {"decision": decision, "grade": grade}
 
     if isinstance(value, str):
@@ -512,7 +559,9 @@ def _require_fit_review(value: Any) -> Dict[str, str]:
         decision, _, grade = text.partition("|")
         return _require_fit_review({"decision": decision, "grade": grade})
 
-    raise ValueError(f"LLM fit review must be a dict or DECISION|GRADE string, got {type(value).__name__}")
+    raise ValueError(
+        f"LLM fit review must be a dict or DECISION|GRADE string, got {type(value).__name__}"
+    )
 
 
 def normalize_llm_review(value: Any) -> Dict[str, str]:
@@ -523,7 +572,9 @@ def _clean_learning_candidate_text(value: Any) -> str:
     return compact_whitespace(value)
 
 
-def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) -> list[dict[str, Any]]:
+def normalize_llm_learning_candidates(
+    value: Any, max_items: int | None = None
+) -> list[dict[str, Any]]:
     if max_items is None:
         max_items = get_llm_learning_candidates_max_items()
     if isinstance(value, dict):
@@ -541,10 +592,22 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
     for item in value:
         if not isinstance(item, dict):
             continue
-        signal = _clean_learning_candidate_text(item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name"))
-        category = re.sub(r"[^a-z0-9_]+", "_", _clean_learning_candidate_text(item.get(LEARNING_SUGGESTED_CATEGORY_KEY))).strip("_").lower()
+        signal = _clean_learning_candidate_text(
+            item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name")
+        )
+        category = (
+            re.sub(
+                r"[^a-z0-9_]+",
+                "_",
+                _clean_learning_candidate_text(item.get(LEARNING_SUGGESTED_CATEGORY_KEY)),
+            )
+            .strip("_")
+            .lower()
+        )
         suggested_values = []
-        raw_suggested_values = item.get(LEARNING_SUGGESTED_VALUES_KEY) or item.get("suggested_values") or []
+        raw_suggested_values = (
+            item.get(LEARNING_SUGGESTED_VALUES_KEY) or item.get("suggested_values") or []
+        )
         if isinstance(raw_suggested_values, str):
             raw_suggested_values = [raw_suggested_values]
         if isinstance(raw_suggested_values, list):
@@ -569,7 +632,9 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
                     continue
                 seen_context_terms.add(lowered)
                 context_terms.append(cleaned)
-        confidence = compact_whitespace(item.get(LEARNING_CONFIDENCE_KEY) or item.get("confidence")).lower()
+        confidence = compact_whitespace(
+            item.get(LEARNING_CONFIDENCE_KEY) or item.get("confidence")
+        ).lower()
         needs_review = bool(item.get(LEARNING_NEEDS_REVIEW_KEY, True))
         if not signal or category not in ALLOWED_LEARNING_CATEGORIES:
             continue
@@ -611,15 +676,17 @@ def normalize_llm_learning_candidates(value: Any, max_items: int | None = None) 
     return candidates
 
 
-_ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset({"supported", "partially_supported", "not_shown", "mismatch"})
+_ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset(
+    {"supported", "partially_supported", "not_shown", "mismatch"}
+)
 
 # Importance weights used by derive_fit_review_grade.
 # mandatory requirements dominate the grade; nice_to_have items barely affect it.
 _IMPORTANCE_WEIGHTS: dict[str, float] = {
-    "mandatory":           3.0,
-    "strongly_preferred":  2.0,
-    "preferred":           1.0,
-    "nice_to_have":        0.25,
+    "mandatory": 3.0,
+    "strongly_preferred": 2.0,
+    "preferred": 1.0,
+    "nice_to_have": 0.25,
 }
 
 
@@ -637,7 +704,9 @@ def _build_valid_capability_lookup(
     return lookup
 
 
-def _normalize_capability_name(value: Any, valid_capability_names: dict[str, str] | None = None) -> str:
+def _normalize_capability_name(
+    value: Any, valid_capability_names: dict[str, str] | None = None
+) -> str:
     cleaned = compact_whitespace(value)
     if not cleaned:
         return ""
@@ -670,12 +739,18 @@ def normalize_llm_requirement_coverage(
     for item in value:
         if not isinstance(item, dict):
             continue
-        requirement = _clean_job_requirement_text(item.get("requirement") or item.get("job_requirement") or item.get("text"))
+        requirement = _clean_job_requirement_text(
+            item.get("requirement") or item.get("job_requirement") or item.get("text")
+        )
         raw_importance = compact_whitespace(item.get("importance")).lower()
-        importance = raw_importance if raw_importance in LLM_ALLOWED_COVERAGE_IMPORTANCES else "preferred"
+        importance = (
+            raw_importance if raw_importance in LLM_ALLOWED_COVERAGE_IMPORTANCES else "preferred"
+        )
         status = compact_whitespace(item.get("status")).lower()
         capability_name = _normalize_capability_name(item.get("capability_name"), valid_lookup)
-        matched_job_text = compact_whitespace(item.get("matched_job_text") or item.get("matched_text"))
+        matched_job_text = compact_whitespace(
+            item.get("matched_job_text") or item.get("matched_text")
+        )
         raw_support = item.get("profile_support") or []
         if isinstance(raw_support, str):
             raw_support = [raw_support]
@@ -703,14 +778,16 @@ def normalize_llm_requirement_coverage(
         if key in seen:
             continue
         seen.add(key)
-        results.append({
-            "requirement": requirement,
-            "importance": importance,
-            "status": status,
-            "capability_name": capability_name,
-            "matched_job_text": matched_job_text,
-            "profile_support": profile_support,
-        })
+        results.append(
+            {
+                "requirement": requirement,
+                "importance": importance,
+                "status": status,
+                "capability_name": capability_name,
+                "matched_job_text": matched_job_text,
+                "profile_support": profile_support,
+            }
+        )
         if len(results) >= max_items:
             break
     return results
@@ -821,10 +898,14 @@ def _normalize_llm_review_text(value: Any, *, max_chars: int) -> str:
     return cleaned[:max_chars]
 
 
-def normalize_llm_review_payload(value: Any, valid_capability_names: dict[str, str] | None = None) -> dict[str, Any]:
+def normalize_llm_review_payload(
+    value: Any, valid_capability_names: dict[str, str] | None = None
+) -> dict[str, Any]:
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
-        has_explicit_fit_review = isinstance(fit_review, dict) or "decision" in value or "grade" in value
+        has_explicit_fit_review = (
+            isinstance(fit_review, dict) or "decision" in value or "grade" in value
+        )
         if has_explicit_fit_review:
             if fit_review is None:
                 fit_review = {
@@ -838,12 +919,19 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: dict[str, s
             job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
             derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
             fit_review_normalized = _require_fit_review(fit_review)
-            cited_capabilities = list(dict.fromkeys(
-                str(_item.get("capability_name") or "").strip()
-                for _item in requirement_coverage
-                if _item.get("capability_name") and _item.get("status") in {"supported", "partially_supported"}
-            ))
-            grade_to_use = derived_grade if requirement_coverage else (fit_review_normalized.get("grade") or derived_grade)
+            cited_capabilities = list(
+                dict.fromkeys(
+                    str(_item.get("capability_name") or "").strip()
+                    for _item in requirement_coverage
+                    if _item.get("capability_name")
+                    and _item.get("status") in {"supported", "partially_supported"}
+                )
+            )
+            grade_to_use = (
+                derived_grade
+                if requirement_coverage
+                else (fit_review_normalized.get("grade") or derived_grade)
+            )
             # Count by importance × status for structured logging.
             _imp_status: dict[str, int] = {}
             for _item in requirement_coverage:
@@ -863,7 +951,9 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: dict[str, s
             )
             return {
                 "fit_review": {**fit_review_normalized, "grade": grade_to_use},
-                "debug_reason": _normalize_llm_review_text(value.get("debug_reason"), max_chars=300),
+                "debug_reason": _normalize_llm_review_text(
+                    value.get("debug_reason"), max_chars=300
+                ),
                 "requirement_coverage": requirement_coverage,
                 "job_requirements": job_requirements,
             }
@@ -871,7 +961,9 @@ def normalize_llm_review_payload(value: Any, valid_capability_names: dict[str, s
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
             return {
                 "fit_review": None,
-                "learning_candidates": normalize_llm_learning_candidates(value.get("learning_candidates")),
+                "learning_candidates": normalize_llm_learning_candidates(
+                    value.get("learning_candidates")
+                ),
                 "requirement_coverage": [],
                 "job_requirements": [],
             }
@@ -888,6 +980,7 @@ def _strip_json_fence(value: str) -> str:
     if match:
         return match.group(1).strip()
     return raw
+
 
 def normalize_rejection_blocker_suggestions(value: Any, max_items: int | None = None) -> list[str]:
     if max_items is None:
@@ -909,7 +1002,8 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
         return []
 
     system_prompt = "\n".join(
-        part for part in [
+        part
+        for part in [
             build_rejection_suggestions_guidance(),
             f"{LLM_PROMPT_JSON_ONLY}, in this exact shape: {LLM_REJECTION_SUGGESTIONS_JSON_SHAPE}. Return an empty array if unsure.",
             build_profile_prompt_context(),
@@ -951,13 +1045,13 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     if raw_output:
         logger.info(
             "[LLM][RESULT] purpose=rejection_suggestions raw=%r",
-            raw_output[:get_llm_raw_output_log_max_chars()],
+            raw_output[: get_llm_raw_output_log_max_chars()],
         )
     logger.info("[LLM][RESULT] purpose=rejection_suggestions normalized=%s", suggestions)
     if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
         logger.warning(
             "[LLM][WARN] purpose=rejection_suggestions output_could_not_be_normalized=%r",
-            str(resp.output_text).strip()[:get_llm_raw_output_log_max_chars()],
+            str(resp.output_text).strip()[: get_llm_raw_output_log_max_chars()],
         )
     return suggestions
 
@@ -978,10 +1072,12 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         ]
         if not seed:
             continue
-        payload.append({
-            "seed": seed,
-            "aliases": aliases[:get_llm_capability_naming_aliases_max_items()],
-        })
+        payload.append(
+            {
+                "seed": seed,
+                "aliases": aliases[: get_llm_capability_naming_aliases_max_items()],
+            }
+        )
     if not payload:
         return []
 
@@ -997,7 +1093,9 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         )
         resp = active_client.responses.create(
             model=_model,
-            input=[{"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}],
+            input=[
+                {"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}
+            ],
             max_output_tokens=get_llm_capability_naming_max_output_tokens(),
         )
         _log_llm_call(resp, "capability_naming", _model)
@@ -1005,45 +1103,61 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
         labels = _json_mod.loads(raw)
-        if not isinstance(labels, list): # Catches any exception during JSON loading
-            logger.warning("[LLM][CAPABILITY_NAMING][WARN] LLM returned non-list for capability naming: %r", raw[:200])
+        if not isinstance(labels, list):  # Catches any exception during JSON loading
+            logger.warning(
+                "[LLM][CAPABILITY_NAMING][WARN] LLM returned non-list for capability naming: %r",
+                raw[:200],
+            )
             return []
         return [str(label).strip().lower() for label in labels[: len(payload)]]
     except Exception as exc:
         logger.error("[LLM][FAIL] purpose=capability_naming error=%s", exc)
         return []
 
+
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:
-    return normalize_llm_review(llm_should_consider_with_learning(job_description_text).get("fit_review"))
+    return normalize_llm_review(
+        llm_should_consider_with_learning(job_description_text).get("fit_review")
+    )
 
 
 def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> str:
-    parts = [LLM_PROMPT_SYSTEM_REVIEW_INTRO if fit_review else "You help decide whether a candidate should apply for a job and identify only pending learning signals."]
+    parts = [
+        LLM_PROMPT_SYSTEM_REVIEW_INTRO
+        if fit_review
+        else "You help decide whether a candidate should apply for a job and identify only pending learning signals."
+    ]
     parts.append(LLM_PROMPT_JSON_ONLY)
     if fit_review:
-        parts.extend([
-            LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
-            build_fit_review_guidance(),
-            LLM_PROMPT_DEBUG_REASON_INTRO,
-            f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
-            build_requirement_coverage_guidance(),
-            build_fit_review_grade_guidance(),
-            build_job_requirements_guidance(),
-            f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
-        ])
+        parts.extend(
+            [
+                LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
+                build_fit_review_guidance(),
+                LLM_PROMPT_DEBUG_REASON_INTRO,
+                f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
+                build_requirement_coverage_guidance(),
+                build_fit_review_grade_guidance(),
+                build_job_requirements_guidance(),
+                f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
+            ]
+        )
     else:
-        parts.extend([
-            LLM_PROMPT_DO_NOT_SAVE,
-            LLM_PROMPT_DO_NOT_INVENT,
-            LLM_PROMPT_USE_VISIBLE_STRINGS,
-        ])
+        parts.extend(
+            [
+                LLM_PROMPT_DO_NOT_SAVE,
+                LLM_PROMPT_DO_NOT_INVENT,
+                LLM_PROMPT_USE_VISIBLE_STRINGS,
+            ]
+        )
         parts.append(LLM_PROMPT_LEARNING_PENDING_ONLY)
-        parts.extend([
-            build_learning_guidance(),
-            f"Return exactly this shape: {LLM_LEARNING_ONLY_PROMPT_SHAPE}",
-            LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
-            f"Use at most {get_llm_learning_candidates_max_items()} learning candidates.",
-        ])
+        parts.extend(
+            [
+                build_learning_guidance(),
+                f"Return exactly this shape: {LLM_LEARNING_ONLY_PROMPT_SHAPE}",
+                LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
+                f"Use at most {get_llm_learning_candidates_max_items()} learning candidates.",
+            ]
+        )
     parts.append(build_profile_prompt_context())
     return "\n".join(part for part in parts if part)
 
@@ -1076,13 +1190,21 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
             "fit_review" if fit_review else "learning_candidates",
             model,
             len(job_description_text),
-            get_llm_fit_decision_max_output_tokens() if fit_review else get_llm_learning_candidates_max_output_tokens(),
+            get_llm_fit_decision_max_output_tokens()
+            if fit_review
+            else get_llm_learning_candidates_max_output_tokens(),
         )
         resp = client.responses.parse(
             model=model,
             input=[
-                {"role": "system", "content": _build_learning_prompt(job_description_text, fit_review=fit_review)},
-                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + job_description_text},
+                {
+                    "role": "system",
+                    "content": _build_learning_prompt(job_description_text, fit_review=fit_review),
+                },
+                {
+                    "role": "user",
+                    "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + job_description_text,
+                },
             ],
             max_output_tokens=(
                 get_llm_fit_decision_max_output_tokens()
@@ -1091,7 +1213,9 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
             ),
             text_format=_LLMFitReviewPayload if fit_review else _LLMReviewPayload,
         )
-        _log_llm_call(resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model)
+        _log_llm_call(
+            resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model
+        )
     except APITimeoutError as exc:
         raise LLMCallError(
             f"APITimeoutError: Request timed out.",
@@ -1117,7 +1241,9 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     if parsed is None:
         raise ValueError("LLM review payload is missing parsed output")
 
-    payload = normalize_llm_review_payload(parsed.model_dump(), valid_capability_names=valid_capability_names)
+    payload = normalize_llm_review_payload(
+        parsed.model_dump(), valid_capability_names=valid_capability_names
+    )
     if fit_review:
         if payload.get("fit_review") is None:
             raise ValueError("LLM fit review payload is missing fit_review")
@@ -1130,10 +1256,12 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
     if active_client is None or not description:
         return []
 
-    system_prompt = "\n".join([
-        "You extract only the explicit job requirements visible in the ad.",
-        build_job_requirements_prompt(),
-    ])
+    system_prompt = "\n".join(
+        [
+            "You extract only the explicit job requirements visible in the ad.",
+            build_job_requirements_prompt(),
+        ]
+    )
 
     try:
         model = _log_llm_model_once()
@@ -1169,7 +1297,7 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
     if raw_output:
         logger.info(
             "[LLM][RESULT] purpose=job_requirements raw=%r",
-            raw_output[:get_llm_raw_output_log_max_chars()],
+            raw_output[: get_llm_raw_output_log_max_chars()],
         )
     return normalize_llm_job_requirements(parsed.model_dump())
 
@@ -1179,7 +1307,9 @@ def llm_should_consider_with_learning(job_description_text: str) -> dict[str, An
 
 
 def llm_should_consider_learning_candidates(job_description_text: str) -> list[dict[str, Any]]:
-    return normalize_llm_review_payload(_request_learning_payload(job_description_text, fit_review=False)).get("learning_candidates", [])
+    return normalize_llm_review_payload(
+        _request_learning_payload(job_description_text, fit_review=False)
+    ).get("learning_candidates", [])
 
 
 def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, Any] | None:
@@ -1192,15 +1322,17 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
     if active_client is None or not label:
         return None
 
-    system_prompt = "\n".join([
-        "You are routing a CV section heading to one of three profile support tiers for a job-match assistant.",
-        "primary: current or recent work experience (roles, projects, achievements).",
-        "secondary: older or supporting work experience.",
-        "supplementary: education, certifications, training, or non-work background sections.",
-        f"Return JSON only, shape: {LLM_SECTION_LABEL_CLASSIFICATION_SHAPE}",
-        "Set confident=true only if the heading unambiguously maps to one tier.",
-        "Set confident=false if the heading is ambiguous (e.g. Overview, Profile, Summary).",
-    ])
+    system_prompt = "\n".join(
+        [
+            "You are routing a CV section heading to one of three profile support tiers for a job-match assistant.",
+            "primary: current or recent work experience (roles, projects, achievements).",
+            "secondary: older or supporting work experience.",
+            "supplementary: education, certifications, training, or non-work background sections.",
+            f"Return JSON only, shape: {LLM_SECTION_LABEL_CLASSIFICATION_SHAPE}",
+            "Set confident=true only if the heading unambiguously maps to one tier.",
+            "Set confident=false if the heading is ambiguous (e.g. Overview, Profile, Summary).",
+        ]
+    )
 
     try:
         model = _log_llm_model_once()
@@ -1258,9 +1390,9 @@ def get_cost_summary() -> dict[str, Any]:
                 p = entry.get("purpose", "unknown")
                 if p not in totals:
                     totals[p] = {"calls": 0, "tok_in": 0, "tok_out": 0, "cost_usd": 0.0}
-                totals[p]["calls"]    += 1
-                totals[p]["tok_in"]   += entry.get("tok_in", 0)
-                totals[p]["tok_out"]  += entry.get("tok_out", 0)
+                totals[p]["calls"] += 1
+                totals[p]["tok_in"] += entry.get("tok_in", 0)
+                totals[p]["tok_out"] += entry.get("tok_out", 0)
                 totals[p]["cost_usd"] += entry.get("cost_usd", 0.0)
     except FileNotFoundError:
         pass

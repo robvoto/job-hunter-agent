@@ -1,4 +1,4 @@
-﻿"""Profile persistence and defaults.
+"""Profile persistence and defaults.
 
 This module defines the runtime profile structure used by matching and review flows.
 It provides logic for creating a safe default profile, loading/saving profile.json,
@@ -17,7 +17,6 @@ import json
 import re
 from typing import Any
 
-from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     DEFAULT_EVIDENCE_TIER_WEIGHTS,
@@ -27,11 +26,10 @@ from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_DATE_RANGE_DAYS,
+    KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
-    KEY_ONBOARDING_SETTINGS as GLOBAL_KEY_ONBOARDING_SETTINGS,
-    KEY_LIMITS,
     KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
@@ -39,7 +37,11 @@ from job_hunter_agent.global_settings import (
     get_salary_limits,
     load_global_settings,
 )
+from job_hunter_agent.global_settings import (
+    KEY_ONBOARDING_SETTINGS as GLOBAL_KEY_ONBOARDING_SETTINGS,
+)
 from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
     KEY_P_ROUTING_DEFAULT,
@@ -47,8 +49,7 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SECONDARY,
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
-from job_hunter_agent.utils import deep_merge, coerce_int
-
+from job_hunter_agent.utils import coerce_int, deep_merge
 
 # Shared Profile and Settings Keys
 KEY_KEYWORDS = "keywords"
@@ -59,10 +60,12 @@ KEY_PREFER_SECTOR = "prefer_sector"
 KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 
+
 class Engagement:
     PERMANENT = "permanent"
     CONTRACT = "contract"
     FULL_TIME_CONTRACT = "full_time_contract"
+
 
 ENGAGEMENT_TYPE_OPTIONS = (
     {"value": Engagement.PERMANENT, "label": "Permanent"},
@@ -83,12 +86,14 @@ MIN_CONTRACT_MONTH_HELP_TEXT = (
     "Only applies when the listing states a duration explicitly."
 )
 
+
 class WorkMode:
     NONE = ""
     REMOTE = "remote"
     HYBRID = "hybrid"
     ONSITE = "onsite"
     UNKNOWN = "unknown"
+
 
 WORK_MODE_PREFERENCE_OPTIONS = (
     {"value": WorkMode.REMOTE, "label": "Remote"},
@@ -101,10 +106,12 @@ WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to inclu
 WORK_MODE_PREFERENCE_NONE_LABEL = "Any"
 WORK_TYPE_PREFERENCE_HELP_TEXT = "Select both if permanent versus contract does not matter."
 
+
 class GovPref:
     ANY = "any"
     GOVERNMENT = "government"
     PRIVATE = "private"
+
 
 SECTOR_PREFERENCE_OPTIONS = (
     {"value": GovPref.ANY, "label": "No preference"},
@@ -115,7 +122,9 @@ SECTOR_PREFERENCE_CHOICE_OPTIONS = (
     {"value": GovPref.GOVERNMENT, "label": "Public sector"},
     {"value": GovPref.PRIVATE, "label": "Private sector"},
 )
-VALID_SECTOR_PREFERENCE_VALUES = frozenset({item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS})
+VALID_SECTOR_PREFERENCE_VALUES = frozenset(
+    {item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS}
+)
 SECTOR_PREFERENCE_DEFAULT_LABEL = next(
     (item["label"] for item in SECTOR_PREFERENCE_OPTIONS if item["value"] == GovPref.ANY), ""
 )
@@ -153,51 +162,61 @@ KEY_LLM_GRADE_POINTS = "llm_grade_points"
 KEY_LLM_GRADE_BANDS = "llm_grade_bands"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
-MATCHING_RULE_PROFILE_KEYS = frozenset({
-    KEY_CANDIDATE_CAPABILITIES,
-    KEY_PRIMARY_PATTERNS,
-    KEY_SECONDARY_PATTERNS,
-    KEY_MUST_NOT_REQUIRED_SKILLS,
-    "reject_title_rules",
-    "reject_description_phrase_rules",
-})
+MATCHING_RULE_PROFILE_KEYS = frozenset(
+    {
+        KEY_CANDIDATE_CAPABILITIES,
+        KEY_PRIMARY_PATTERNS,
+        KEY_SECONDARY_PATTERNS,
+        KEY_MUST_NOT_REQUIRED_SKILLS,
+        "reject_title_rules",
+        "reject_description_phrase_rules",
+    }
+)
 
 KEY_NAME = "name"
 KEY_LEVEL = "level"
 KEY_ALIASES = "aliases"
 KEY_ICON_KEY = "icon_key"
 CAPABILITY_ICON_GENERIC = "generic_capability"
-VALID_CAPABILITY_ICON_KEYS = frozenset({
-    "people_support",
-    "communication_stakeholders",
-    "analysis_requirements",
-    "operations_process",
-    "delivery_project",
-    "technical_build",
-    "systems_platforms",
-    "data_reporting",
-    "finance_commercial",
-    "risk_compliance_security",
-    "creative_marketing_content",
-    CAPABILITY_ICON_GENERIC,
-})
+VALID_CAPABILITY_ICON_KEYS = frozenset(
+    {
+        "people_support",
+        "communication_stakeholders",
+        "analysis_requirements",
+        "operations_process",
+        "delivery_project",
+        "technical_build",
+        "systems_platforms",
+        "data_reporting",
+        "finance_commercial",
+        "risk_compliance_security",
+        "creative_marketing_content",
+        CAPABILITY_ICON_GENERIC,
+    }
+)
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
 PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE = "Create your profile before reviewing jobs."
-PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = (
+    "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+)
+
 
 class CapabilityLevel:
     STRONG = "strong"
     WORKING = "working"
     BASIC = "basic"
 
-VALID_CAPABILITY_RULE_LEVELS = frozenset({CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC})
+
+VALID_CAPABILITY_RULE_LEVELS = frozenset(
+    {CapabilityLevel.STRONG, CapabilityLevel.WORKING, CapabilityLevel.BASIC}
+)
 
 LEVEL_STRONG = CapabilityLevel.STRONG
 LEVEL_WORKING = CapabilityLevel.WORKING
 LEVEL_BASIC = CapabilityLevel.BASIC
 
-DEFAULT_CANDIDATE_PROFILE_TIERS  = {
+DEFAULT_CANDIDATE_PROFILE_TIERS = {
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT: "",
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT: "",
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT: "",
@@ -205,9 +224,11 @@ DEFAULT_CANDIDATE_PROFILE_TIERS  = {
 
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
 
+
 class BriefMode:
     AUTO = "auto"
     MANUAL = "manual"
+
 
 DEFAULT_LLM_PROFILE_BRIEF_MODE = BriefMode.AUTO
 
@@ -218,10 +239,14 @@ class ProfileLoadError(RuntimeError):
 
 def _load_default_scoring_rules() -> dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+
     payload = get_knowledge("scoring_rules")
     if payload is None:
         raise RuntimeError("scoring_rules not found in knowledge table — seed the DB first")
-    if str(payload.get("kind") or "").strip() != "system_config" or str(payload.get("name") or "").strip() != "scoring_rules":
+    if (
+        str(payload.get("kind") or "").strip() != "system_config"
+        or str(payload.get("name") or "").strip() != "scoring_rules"
+    ):
         raise ValueError("scoring_rules must be managed knowledge")
     return {
         "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
@@ -230,7 +255,9 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),
-        "deterministic_review_thresholds": dict(payload.get("deterministic_review_thresholds") or {}),
+        "deterministic_review_thresholds": dict(
+            payload.get("deterministic_review_thresholds") or {}
+        ),
         "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
         "salary": dict(payload.get("salary") or {}),
@@ -251,7 +278,7 @@ DEFAULT_PROFILE = {
     "review_controls": {
         "applied_job_keys": [],
         "hidden_job_keys": [],
-    },    
+    },
     KEY_ONBOARDING_COMPLETE: False,
     "salary_preferences": {
         "minimum_salary_yearly": 0,
@@ -276,8 +303,8 @@ DEFAULT_PROFILE = {
     "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
     "llm_profile_brief": "",
     "star_candidate_profile_text": "",
-    KEY_EVIDENCE_TIERS : {
-        **DEFAULT_CANDIDATE_PROFILE_TIERS ,
+    KEY_EVIDENCE_TIERS: {
+        **DEFAULT_CANDIDATE_PROFILE_TIERS,
     },
     "candidate_profile_tier_weights": {
         **DEFAULT_EVIDENCE_TIER_WEIGHTS,
@@ -287,16 +314,17 @@ DEFAULT_PROFILE = {
     "target_roles": [],
     "also_consider_roles": [],
     KEY_TARGET_OCCUPATION_QUERIES: [],
-    "must_not_require_skills": [],  
+    "must_not_require_skills": [],
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
     },
 }
+
+
 def _decode_escaped_newlines(value: Any) -> str:
     text = str(value or "")
     return (
-        text
-        .replace("\r\n", "\n")
+        text.replace("\r\n", "\n")
         .replace("\r", "\n")
         .replace("\\r\\n", "\n")
         .replace("\\n", "\n")
@@ -353,30 +381,48 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
     except Exception as exc:
         global_onboarding = {}
         print(f"[PROFILE_STORE][WARN] Failed to load global onboarding settings: {exc}")
-    global_presets = global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
+    global_presets = (
+        global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
+    )
 
     # Preset resolution: source > global > code default.
-    raw_preset = str(
-        source.get("capability_strength_preset")
-        or global_onboarding.get("capability_strength_preset")
-        or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
-    ).strip().lower()
-    preset_name = raw_preset if raw_preset in global_presets else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    raw_preset = (
+        str(
+            source.get("capability_strength_preset")
+            or global_onboarding.get("capability_strength_preset")
+            or DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+        )
+        .strip()
+        .lower()
+    )
+    preset_name = (
+        raw_preset
+        if raw_preset in global_presets
+        else DEFAULT_ONBOARDING_SETTINGS["capability_strength_preset"]
+    )
     preset_values = global_presets[preset_name]
 
     # Merge layer: code defaults -> global settings -> chosen preset -> all explicit source overrides.
     merged: dict[str, Any] = {**DEFAULT_ONBOARDING_SETTINGS}
-    merged.update({k: v for k, v in global_onboarding.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS})
+    merged.update(
+        {k: v for k, v in global_onboarding.items() if k != KEY_CAPABILITY_STRENGTH_PRESETS}
+    )
     merged.update(preset_values)
-    merged.update({
-        k: v for k, v in source.items()
-        if k not in (KEY_CAPABILITY_STRENGTH_PRESETS, "capability_strength_preset") and v is not None
-    })
+    merged.update(
+        {
+            k: v
+            for k, v in source.items()
+            if k not in (KEY_CAPABILITY_STRENGTH_PRESETS, "capability_strength_preset")
+            and v is not None
+        }
+    )
 
     result: dict[str, Any] = {"capability_strength_preset": preset_name}
     onboarding_limits = load_global_settings()[KEY_LIMITS]["onboarding"]
     for key, bounds in onboarding_limits.items():
-        result[key] = coerce_int(merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], bounds["min"], bounds["max"])
+        result[key] = coerce_int(
+            merged.get(key), DEFAULT_ONBOARDING_SETTINGS[key], bounds["min"], bounds["max"]
+        )
     return result
 
 
@@ -387,7 +433,9 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
 
     merged[KEY_PREFER_SECTOR] = normalize_sector_preference_values(merged.get(KEY_PREFER_SECTOR))
 
-    merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(merged.get(KEY_WORK_MODE_PREFERENCE))
+    merged[KEY_WORK_MODE_PREFERENCE] = normalize_work_mode_preferences(
+        merged.get(KEY_WORK_MODE_PREFERENCE)
+    )
 
     merged["home_location"] = str(merged.get("home_location") or "").strip()
     merged["secondary_location"] = str(merged.get("secondary_location") or "").strip()
@@ -402,7 +450,9 @@ def normalize_match_preferences(payload: dict[str, Any] | None) -> dict[str, Any
 
 def normalize_work_mode_preferences(values: Any) -> list[str]:
     if isinstance(values, str):
-        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+        source_values = [
+            part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()
+        ]
     elif isinstance(values, (list, tuple, set)):
         source_values = [str(value).strip().lower() for value in values if str(value).strip()]
     else:
@@ -421,7 +471,9 @@ def normalize_sector_preference_values(values: Any) -> list[str]:
     if isinstance(values, bool):
         return [GovPref.GOVERNMENT] if values else []
     if isinstance(values, str):
-        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+        source_values = [
+            part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()
+        ]
     elif isinstance(values, (list, tuple, set)):
         source_values = [str(value).strip().lower() for value in values if str(value).strip()]
     else:
@@ -438,7 +490,9 @@ def normalize_sector_preference_values(values: Any) -> list[str]:
 
 def normalize_engagement_type_preferences(values: Any, *, default_to_all: bool = True) -> list[str]:
     if isinstance(values, str):
-        source_values = [part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()]
+        source_values = [
+            part.strip().lower() for part in re.split(r"[,\n|/]+", values) if part.strip()
+        ]
     elif isinstance(values, (list, tuple, set)):
         source_values = [str(value).strip().lower() for value in values if str(value).strip()]
     else:
@@ -466,8 +520,12 @@ def normalize_capability_rules(
 
     choose_capability_name = None
     try:
-        from job_hunter_agent.capability_matrix import derive_job_description_aliases as _derive_job_description_aliases
-        from job_hunter_agent.capability_matrix import choose_capability_name as _choose_capability_name
+        from job_hunter_agent.capability_matrix import (
+            choose_capability_name as _choose_capability_name,
+        )
+        from job_hunter_agent.capability_matrix import (
+            derive_job_description_aliases as _derive_job_description_aliases,
+        )
 
         derive_job_description_aliases = _derive_job_description_aliases
         choose_capability_name = _choose_capability_name
@@ -476,7 +534,10 @@ def normalize_capability_rules(
 
     source_onboarding = onboarding_settings if isinstance(onboarding_settings, dict) else {}
     try:
-        alias_limit = int(source_onboarding.get(KEY_CAPABILITY_ALIAS_LIMIT) or DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
+        alias_limit = int(
+            source_onboarding.get(KEY_CAPABILITY_ALIAS_LIMIT)
+            or DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT]
+        )
     except Exception as exc:
         alias_limit = int(DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
         print(f"[PROFILE_STORE][WARN] Failed to normalise capability alias limit: {exc}")
@@ -506,7 +567,9 @@ def normalize_capability_rules(
             alias_items = list(raw_aliases or [])
 
         if derive_job_description_aliases:
-            alias_items = derive_job_description_aliases(name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=alias_limit)
+            alias_items = derive_job_description_aliases(
+                name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=alias_limit
+            )
 
         name_norm = re.sub(r"\s+", " ", name).strip().lower()
         if not name_norm or name_norm in seen_names:
@@ -531,17 +594,23 @@ def normalize_capability_rules(
         if aliases:
             needs_review = True
 
-        canonical_name = choose_capability_name(name, alias_items) if choose_capability_name else name_norm
+        canonical_name = (
+            choose_capability_name(name, alias_items) if choose_capability_name else name_norm
+        )
         if not canonical_name:
             continue
 
-        cleaned.append({
-            "name": canonical_name,
-            "level": level,
-            "aliases": aliases,
-            "needs_review": needs_review,
-            KEY_ICON_KEY: str(rule.get(KEY_ICON_KEY) or CAPABILITY_ICON_GENERIC).strip().lower(),
-        })
+        cleaned.append(
+            {
+                "name": canonical_name,
+                "level": level,
+                "aliases": aliases,
+                "needs_review": needs_review,
+                KEY_ICON_KEY: str(rule.get(KEY_ICON_KEY) or CAPABILITY_ICON_GENERIC)
+                .strip()
+                .lower(),
+            }
+        )
 
     return cleaned
 
@@ -552,14 +621,18 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
     merged.pop("".join(["llm", "_capability_naming_guidance"]), None)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
-    merged["salary_preferences"] = normalize_salary_preferences(merged.get("salary_preferences", {}))
-    merged["preference_weights"] = normalize_preference_weights(merged.get("preference_weights", {}))
+    merged["salary_preferences"] = normalize_salary_preferences(
+        merged.get("salary_preferences", {})
+    )
+    merged["preference_weights"] = normalize_preference_weights(
+        merged.get("preference_weights", {})
+    )
     merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
     merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
     merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
         merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
     )
-    merged[KEY_EVIDENCE_TIERS ] = normalize_candidate_profile_tiers(
+    merged[KEY_EVIDENCE_TIERS] = normalize_candidate_profile_tiers(
         merged.get(KEY_EVIDENCE_TIERS, {}),
     )
     merged["candidate_profile_tier_weights"] = normalize_candidate_profile_tier_weights(
@@ -569,11 +642,13 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         merged.get("onboarding_settings", {})
     )
     merged[KEY_ONBOARDING_COMPLETE] = bool(merged.get(KEY_ONBOARDING_COMPLETE, False))
-    merged["match_preferences"] = normalize_match_preferences(
-        merged.get("match_preferences", {})
-    )
+    merged["match_preferences"] = normalize_match_preferences(merged.get("match_preferences", {}))
     primary_search_location = next(
-        (str(value).strip() for value in merged["search_settings"].get("locations", []) if str(value).strip()),
+        (
+            str(value).strip()
+            for value in merged["search_settings"].get("locations", [])
+            if str(value).strip()
+        ),
         "",
     )
     if primary_search_location and not merged["match_preferences"].get("home_location"):
@@ -600,6 +675,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
 def load_profile() -> dict[str, Any]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     with db_conn() as conn:
         row = conn.execute("SELECT data FROM user_profile WHERE user_id = ?", (user_id,)).fetchone()
@@ -617,7 +693,9 @@ def profile_exists() -> bool:
 
     user_id = get_active_user_id()
     with db_conn() as conn:
-        row = conn.execute("SELECT 1 FROM user_profile WHERE user_id = ? LIMIT 1", (user_id,)).fetchone()
+        row = conn.execute(
+            "SELECT 1 FROM user_profile WHERE user_id = ? LIMIT 1", (user_id,)
+        ).fetchone()
     return row is not None
 
 
@@ -658,13 +736,16 @@ def require_profile_ready_for_review(
 ) -> dict[str, Any]:
     status = profile_review_status(profile=profile, has_profile=has_profile)
     if not status["profile_ready_for_review"]:
-        raise ValueError(str(status.get("blocking_reason") or PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE))
+        raise ValueError(
+            str(status.get("blocking_reason") or PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE)
+        )
     return status
 
 
 def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
+
     user_id = get_active_user_id()
     normalized = normalize_full_profile(profile)
     persisted = dict(normalized)
@@ -718,7 +799,11 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         merged[KEY_LINKEDIN_HOURS_OLD] = max(
             search_limits[KEY_LINKEDIN_HOURS_OLD]["min"],
             min(
-                int(merged.get(KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD])),
+                int(
+                    merged.get(
+                        KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+                    )
+                ),
                 search_limits[KEY_LINKEDIN_HOURS_OLD]["max"],
             ),
         )
@@ -740,12 +825,16 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
             ),
         )
     except Exception as exc:
-        merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
+        merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[
+            KEY_LINKEDIN_RESULTS_PER_SEARCH
+        ]
         print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_results_per_search: {exc}")
 
     merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()
-    merged["locations"] = [str(value).strip() for value in merged.get("locations", []) if str(value).strip()]
+    merged["locations"] = [
+        str(value).strip() for value in merged.get("locations", []) if str(value).strip()
+    ]
     easy_apply_only = merged.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
     if easy_apply_only is None or easy_apply_only == "":
         merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = None
@@ -768,13 +857,19 @@ def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, in
     yearly_cap = int(salary_limits.get(KEY_MIN_SALARY_YEARLY, {}).get("max", 0) or 0)
     daily_cap = int(salary_limits.get(KEY_MIN_DAILY_RATE, {}).get("max", 0) or 0)
     try:
-        minimum_salary_yearly = max(0, int(str(source.get("minimum_salary_yearly", 0)).replace(",", "").strip() or 0))
+        minimum_salary_yearly = max(
+            0, int(str(source.get("minimum_salary_yearly", 0)).replace(",", "").strip() or 0)
+        )
     except Exception as exc:
         minimum_salary_yearly = 0
         print(f"[PROFILE_STORE][WARN] Failed to parse minimum_salary_yearly: {exc}")
-    minimum_salary_yearly = min(minimum_salary_yearly, yearly_cap) if yearly_cap > 0 else minimum_salary_yearly
+    minimum_salary_yearly = (
+        min(minimum_salary_yearly, yearly_cap) if yearly_cap > 0 else minimum_salary_yearly
+    )
     try:
-        minimum_daily_rate = max(0, int(str(source.get("minimum_daily_rate", 0)).replace(",", "").strip() or 0))
+        minimum_daily_rate = max(
+            0, int(str(source.get("minimum_daily_rate", 0)).replace(",", "").strip() or 0)
+        )
     except Exception as exc:
         minimum_daily_rate = 0
         print(f"[PROFILE_STORE][WARN] Failed to parse minimum_daily_rate: {exc}")
@@ -841,7 +936,9 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
     # Preserve dict sections from source that the live default does not yet know about.
     # This ensures new sections (e.g. llm_grade_bands) from scoring_rules.json are available
     # to feature code even if the DB version lags behind the file (e.g. between restarts).
-    _METADATA_KEYS = frozenset({"kind", "name", "version", "updated_at", "description", "calibration_notes"})
+    _METADATA_KEYS = frozenset(
+        {"kind", "name", "version", "updated_at", "description", "calibration_notes"}
+    )
     for key, value in source.items():
         if key not in normalized and key not in _METADATA_KEYS and isinstance(value, dict):
             normalized[key] = copy.deepcopy(value)
@@ -859,6 +956,7 @@ def normalize_llm_profile_brief_mode(value: Any) -> str:
         return BriefMode.MANUAL
     return DEFAULT_LLM_PROFILE_BRIEF_MODE
 
+
 _SECTION_BUCKET_TO_TIER = {
     "primary": KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
     "secondary": KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
@@ -875,13 +973,20 @@ def classify_candidate_profile_section_label(label: str) -> str:
     primary_labels = routing.get(KEY_P_ROUTING_PRIMARY)
     secondary_labels = routing.get(KEY_P_ROUTING_SECONDARY)
     supplementary_labels = routing.get(KEY_P_ROUTING_SUPPLEMENTARY)
-    if not all(isinstance(items, list) for items in (primary_labels, secondary_labels, supplementary_labels)):
+    if not all(
+        isinstance(items, list)
+        for items in (primary_labels, secondary_labels, supplementary_labels)
+    ):
         raise ValueError("candidate_profile_section_routing labels must be lists")
     if default_bucket not in DEFAULT_CANDIDATE_PROFILE_TIERS:
         raise ValueError(f"{KEY_P_ROUTING}.{KEY_P_ROUTING_DEFAULT} must be a known profile bucket")
     primary_tokens = [str(token).strip().lower() for token in primary_labels if str(token).strip()]
-    secondary_tokens = [str(token).strip().lower() for token in secondary_labels if str(token).strip()]
-    supplementary_tokens = [str(token).strip().lower() for token in supplementary_labels if str(token).strip()]
+    secondary_tokens = [
+        str(token).strip().lower() for token in secondary_labels if str(token).strip()
+    ]
+    supplementary_tokens = [
+        str(token).strip().lower() for token in supplementary_labels if str(token).strip()
+    ]
     if not lowered:
         return default_bucket
     if any(token in lowered for token in primary_tokens):
@@ -896,7 +1001,10 @@ def classify_candidate_profile_section_label(label: str) -> str:
 def _classify_unknown_section_label(lowered: str, default_bucket: str) -> str:
     from job_hunter_agent import llm_gate  # lazy import — llm_gate imports profile_store
     from job_hunter_agent.signal_registry import register_signals, upsert_profile_section_label
-    from job_hunter_agent.signal_schema import CATEGORY_PROFILE_SECTION_LABEL, LEARNING_SUGGESTED_VALUES_KEY
+    from job_hunter_agent.signal_schema import (
+        CATEGORY_PROFILE_SECTION_LABEL,
+        LEARNING_SUGGESTED_VALUES_KEY,
+    )
 
     result = llm_gate.llm_classify_section_label(lowered)
     if result is None:
@@ -908,12 +1016,18 @@ def _classify_unknown_section_label(lowered: str, default_bucket: str) -> str:
     if result["confident"]:
         upsert_profile_section_label(lowered, bucket)
     else:
-        register_signals([{
-            "signal": lowered,
-            "category": CATEGORY_PROFILE_SECTION_LABEL,
-            LEARNING_SUGGESTED_VALUES_KEY: [bucket],
-            "evidence": [f'## {lowered} (profile section — LLM classified as {bucket}, confidence uncertain)'],
-        }])
+        register_signals(
+            [
+                {
+                    "signal": lowered,
+                    "category": CATEGORY_PROFILE_SECTION_LABEL,
+                    LEARNING_SUGGESTED_VALUES_KEY: [bucket],
+                    "evidence": [
+                        f"## {lowered} (profile section — LLM classified as {bucket}, confidence uncertain)"
+                    ],
+                }
+            ]
+        )
 
     return tier
 
@@ -933,8 +1047,10 @@ def _combine_unique_sections(parts: list[str]) -> str:
     return "\n\n".join(cleaned_parts).strip()
 
 
-def build_candidate_profile_tiers_from_sections(sections: list[dict[str, str]] | None) -> dict[str, str]:
-    buckets = {key: [] for key in DEFAULT_CANDIDATE_PROFILE_TIERS }
+def build_candidate_profile_tiers_from_sections(
+    sections: list[dict[str, str]] | None,
+) -> dict[str, str]:
+    buckets = {key: [] for key in DEFAULT_CANDIDATE_PROFILE_TIERS}
     for section in sections or []:
         if not isinstance(section, dict):
             continue
@@ -945,14 +1061,11 @@ def build_candidate_profile_tiers_from_sections(sections: list[dict[str, str]] |
         bucket = classify_candidate_profile_section_label(label)
         # Headings only decide the bucket; the text itself is preserved unchanged.
         buckets[bucket].append(text)
-    return {
-        bucket: _combine_unique_sections(parts)
-        for bucket, parts in buckets.items()
-    }
+    return {bucket: _combine_unique_sections(parts) for bucket, parts in buckets.items()}
 
 
 def normalize_candidate_profile_tiers(payload: dict[str, Any] | None) -> dict[str, str]:
-    normalized = dict(DEFAULT_CANDIDATE_PROFILE_TIERS )
+    normalized = dict(DEFAULT_CANDIDATE_PROFILE_TIERS)
     source = payload if isinstance(payload, dict) else {}
     for key in normalized:
         normalized[key] = str(source.get(key) or "").strip()
@@ -977,7 +1090,9 @@ def get_candidate_profile_tiers(profile: dict[str, Any]) -> dict[str, str]:
 
 
 def get_candidate_profile_tier_weights(profile: dict[str, Any]) -> dict[str, float]:
-    return normalize_candidate_profile_tier_weights(profile.get("candidate_profile_tier_weights", {}))
+    return normalize_candidate_profile_tier_weights(
+        profile.get("candidate_profile_tier_weights", {})
+    )
 
 
 def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:

@@ -83,7 +83,12 @@ def compute_profile_gaps(
         capability_name = str(item.get("capability_name") or "").strip()
         if not capability_name:
             continue
-        if classify_requirement_status(capability_name, candidate_capabilities, must_not_require_skills) != STATUS_UNKNOWN:
+        if (
+            classify_requirement_status(
+                capability_name, candidate_capabilities, must_not_require_skills
+            )
+            != STATUS_UNKNOWN
+        ):
             continue
         raw_requirement = str(item.get("requirement") or "").strip()
         matched_job_text = str(item.get("matched_job_text") or "").strip()

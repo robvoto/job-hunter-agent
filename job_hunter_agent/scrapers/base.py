@@ -12,12 +12,12 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
     RECORD_DECISION_KEY,
-    RECORD_DETAILS_STATUS_KEY,
-    RECORD_DETAILS_LENGTH_KEY,
-    RECORD_DETAILS_TEXT_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
-    RECORD_FIT_HIGHLIGHTS_KEY,
+    RECORD_DETAILS_LENGTH_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DETAILS_TEXT_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
+    RECORD_FIT_HIGHLIGHTS_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
@@ -29,30 +29,35 @@ from job_hunter_agent.record_schema import (
     RECORD_PAGE_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
-    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
-    RECORD_SALARY_KEY,
-    RECORD_SEARCH_KEYWORDS_KEY,
-    RECORD_SEARCH_CLASSIFICATIONS_KEY,
-    RECORD_SEARCH_LOCATION_KEY,
-    RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
-    RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
-    RECORD_SOURCE_METADATA_KEY,
-    RECORD_SOFT_RISK_REASONS_KEY,
-    RECORD_SOURCE_KEY,
-    RECORD_RUN_STARTED_AT_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
-    RECORD_TITLE_MATCH_METADATA_KEY,
-    RECORD_TITLE_REASON_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
+    RECORD_SALARY_KEY,
+    RECORD_SEARCH_CLASSIFICATIONS_KEY,
+    RECORD_SEARCH_KEYWORDS_KEY,
+    RECORD_SEARCH_LOCATION_KEY,
+    RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_SOURCE_METADATA_KEY,
+    RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
     RECORD_TEASER_KEY,
     RECORD_TITLE_KEY,
+    RECORD_TITLE_MATCH_METADATA_KEY,
+    RECORD_TITLE_REASON_KEY,
     RECORD_URL_KEY,
-    RECORD_WORK_MODE_KEY,
-    RECORD_WORK_MODE_SOURCE_KEY,
     RECORD_WORK_MODE_EVIDENCE_KEY,
+    RECORD_WORK_MODE_KEY,
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
+    RECORD_WORK_MODE_SOURCE_KEY,
     RECORD_WORK_TYPE_KEY,
+)
+from job_hunter_agent.salary import (
+    KEY_CURRENCIES_WITH_DOLLAR,
+    KEY_INTERVAL_DIVISOR,
+    KEY_INTERVAL_SUFFIX,
 )
 from job_hunter_agent.signal_schema import (
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
@@ -65,11 +70,6 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SUGGESTED_VALUES_KEY,
 )
 from job_hunter_agent.work_mode_extraction import extract_from_linkedin
-from job_hunter_agent.salary import (
-    KEY_CURRENCIES_WITH_DOLLAR,
-    KEY_INTERVAL_DIVISOR,
-    KEY_INTERVAL_SUFFIX,
-)
 
 JOBSPY_DATE_POSTED_KEY = "date_posted"
 JOBSPY_MIN_AMOUNT_KEY = "min_amount"
@@ -238,7 +238,9 @@ def build_initial_flat_record(
     record.update(_build_initial_llm_state())
     record.update(_build_initial_review_state())
     record.update(_build_initial_scoring_state())
-    record[RECORD_SOURCE_METADATA_KEY] = source_metadata if source_metadata is not None else blank_source_metadata(source)
+    record[RECORD_SOURCE_METADATA_KEY] = (
+        source_metadata if source_metadata is not None else blank_source_metadata(source)
+    )
     return record
 
 
@@ -324,6 +326,7 @@ class BaseJobScraper(ABC):
         """
         ...
 
+
 def _safe_row_dict(row: Any) -> dict:
     if hasattr(row, "to_dict"):
         try:
@@ -374,6 +377,7 @@ def normalize_jobspy_record(
     """Map a python-jobspy DataFrame row to the project's normalized record shape."""
     try:
         import pandas as pd  # noqa: F401 - only used for pd.isna
+
         _pd = pd
     except ImportError:
         _pd = None
@@ -436,7 +440,8 @@ def normalize_jobspy_record(
     max_amt = _safe_float(_get(JOBSPY_MAX_AMOUNT_KEY))
     interval_raw = _safe_str(_get(JOBSPY_INTERVAL_KEY), "")
     currency_raw = _safe_str(_get(JOBSPY_CURRENCY_KEY), "")
-    salary_str = _build_salary_string(min_amt,
+    salary_str = _build_salary_string(
+        min_amt,
         max_amt,
         interval_raw,
         currency_raw,
@@ -549,6 +554,7 @@ def _build_salary_string(
     except Exception:
         return ""
 
+
 def _map_job_type(raw: str, mapping: dict) -> str:
     """
     Normalize a raw job type label from a job source into a standard internal value.
@@ -593,14 +599,17 @@ def _register_unknown_job_type(raw_value: str) -> None:
         return
     from job_hunter_agent.signal_registry import register_signals
 
-    register_signals([
-        {
-            LEARNING_SIGNAL_KEY: cleaned_raw,
-            LEARNING_CATEGORY_KEY: CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
-            LEARNING_SOURCE_KEY: "job parsing",
-            LEARNING_EVIDENCE_KEY: [cleaned_raw],
-            LEARNING_ORIGINAL_TEXTS_KEY: [cleaned_raw],
-            LEARNING_SUGGESTED_VALUES_KEY: [cleaned_raw],
-            LEARNING_NEEDS_REVIEW_KEY: True,
-        }
-    ], category=CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE)
+    register_signals(
+        [
+            {
+                LEARNING_SIGNAL_KEY: cleaned_raw,
+                LEARNING_CATEGORY_KEY: CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+                LEARNING_SOURCE_KEY: "job parsing",
+                LEARNING_EVIDENCE_KEY: [cleaned_raw],
+                LEARNING_ORIGINAL_TEXTS_KEY: [cleaned_raw],
+                LEARNING_SUGGESTED_VALUES_KEY: [cleaned_raw],
+                LEARNING_NEEDS_REVIEW_KEY: True,
+            }
+        ],
+        category=CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+    )

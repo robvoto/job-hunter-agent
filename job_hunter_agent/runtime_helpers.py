@@ -1,7 +1,7 @@
 """Shared runtime helpers for CLI flags and runtime logs.
 
-This module provides common utilities for the job hunter agent's 
-execution environment. It includes logic for detecting command-line 
+This module provides common utilities for the job hunter agent's
+execution environment. It includes logic for detecting command-line
 arguments and maintains persistent runtime logs for LLM costs and
 investigation events.
 """
@@ -97,4 +97,6 @@ def append_uncertainty_log(path: Path, entry: dict[str, Any]) -> None:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
     except Exception as exc:
-        logger.warning("[RUNTIME_HELPERS][WARN] Failed to write uncertainty log to %s: %s", path, exc)
+        logger.warning(
+            "[RUNTIME_HELPERS][WARN] Failed to write uncertainty log to %s: %s", path, exc
+        )

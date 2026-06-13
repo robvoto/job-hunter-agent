@@ -8,17 +8,26 @@ import re
 from typing import List, Optional
 from urllib.parse import urljoin
 
-from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.source_registry import SOURCE_SEEK
-from job_hunter_agent.scrapers.base import map_job_type
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.job_types import load_job_type
-from job_hunter_agent.record_schema import RECORD_LOCATION_KEY, RECORD_WORK_TYPE_KEY, RECORD_WORK_MODE_KEY, RECORD_WORK_MODE_SOURCE_KEY, RECORD_WORK_MODE_EVIDENCE_KEY, RECORD_WORK_MODE_NEEDS_REVIEW_KEY, RECORD_CARD_SALARY_KEY, RECORD_TEASER_KEY
+from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.record_schema import (
+    RECORD_CARD_SALARY_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_TEASER_KEY,
+    RECORD_WORK_MODE_EVIDENCE_KEY,
+    RECORD_WORK_MODE_KEY,
+    RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
+    RECORD_WORK_MODE_SOURCE_KEY,
+    RECORD_WORK_TYPE_KEY,
+)
+from job_hunter_agent.scrapers.base import map_job_type
+from job_hunter_agent.scrapers.location_adapters import to_seek
+from job_hunter_agent.source_registry import SOURCE_SEEK
 from job_hunter_agent.utils import set_query_param
 from job_hunter_agent.work_mode_extraction import extract_from_seek_card
-from job_hunter_agent.locations import resolve_location
-from job_hunter_agent.scrapers.location_adapters import to_seek
 
 # ---------------------------------------------------------------------------
 # Playwright CSS selectors (SEEK-specific DOM)
@@ -123,7 +132,9 @@ def extract_card_metadata(card, filter_state=None) -> dict:
     }
 
 
-def build_seek_search_targets(profile: dict, configured_date_range: int, sort_newest_first: bool) -> List[dict]:
+def build_seek_search_targets(
+    profile: dict, configured_date_range: int, sort_newest_first: bool
+) -> List[dict]:
     search_settings = get_search_settings(profile)
     keywords = str(search_settings.get("keywords") or "").strip()
     if not keywords:
@@ -216,7 +227,12 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 
         details_status = classify_detail_page_text(details_text)
         if details_text and details_status == "ok":
-            return {"text": details_text, "status": "ok", "source": "jobAdDetails", "retryable": False}
+            return {
+                "text": details_text,
+                "status": "ok",
+                "source": "jobAdDetails",
+                "retryable": False,
+            }
 
         try:
             detail_page.wait_for_load_state("networkidle", timeout=4000)
@@ -231,7 +247,9 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 
         last_text = body_text or details_text or ""
         last_status = body_status if body_text else details_status
-        should_retry = last_status in {"challenge_page", "blocked_page"} and attempt_index < (attempts - 1)
+        should_retry = last_status in {"challenge_page", "blocked_page"} and attempt_index < (
+            attempts - 1
+        )
         if not should_retry:
             break
         try:
@@ -265,6 +283,7 @@ def build_full_seek_url(relative_or_full_url: Optional[str]) -> Optional[str]:
 # Async Playwright helpers — mirror of the sync versions above, used by
 # the parallel detail-fetch path in seek_runner.py.
 # ---------------------------------------------------------------------------
+
 
 async def _expand_detail_page_async(page) -> None:
     for selector in [
@@ -316,7 +335,12 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
         details_text = await _read_visible_text_async(page, SELECTOR_DETAILS)
         details_status = classify_detail_page_text(details_text)
         if details_text and details_status == "ok":
-            return {"text": details_text, "status": "ok", "source": "jobAdDetails", "retryable": False}
+            return {
+                "text": details_text,
+                "status": "ok",
+                "source": "jobAdDetails",
+                "retryable": False,
+            }
 
         try:
             await page.wait_for_load_state("networkidle", timeout=4000)
@@ -330,7 +354,9 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
 
         last_text = body_text or details_text or ""
         last_status = body_status if body_text else details_status
-        should_retry = last_status in {"challenge_page", "blocked_page"} and attempt_index < (attempts - 1)
+        should_retry = last_status in {"challenge_page", "blocked_page"} and attempt_index < (
+            attempts - 1
+        )
         if not should_retry:
             break
         try:

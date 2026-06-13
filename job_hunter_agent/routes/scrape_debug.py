@@ -7,8 +7,8 @@ import threading
 from fastapi import APIRouter, Body
 
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.run_control import clear_run_stop_request
 from job_hunter_agent.routes.responses import json_response
+from job_hunter_agent.run_control import clear_run_stop_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

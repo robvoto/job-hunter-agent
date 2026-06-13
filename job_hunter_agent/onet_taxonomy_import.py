@@ -52,6 +52,7 @@ def normalize_title(value: str | None) -> str:
 # OccupationalListings xlsx readers
 # ---------------------------------------------------------------------------
 
+
 def _read_xlsx_from_zip(zip_path: Path, member: str) -> list[dict[str, Any]]:
     with zipfile.ZipFile(zip_path) as archive, TemporaryDirectory() as tmp_dir:
         extracted = Path(tmp_dir) / Path(member).name
@@ -102,6 +103,7 @@ def _read_listings_format(zip_path: Path) -> tuple[list[dict], list[dict]]:
 # Full O*NET database txt readers
 # ---------------------------------------------------------------------------
 
+
 def _read_txt_from_zip(zip_path: Path, member: str) -> list[dict[str, str]]:
     with zipfile.ZipFile(zip_path) as archive:
         raw = archive.read(member).decode("utf-8-sig")
@@ -144,6 +146,7 @@ def _read_fulldb_format(zip_path: Path) -> tuple[list[dict], list[dict]]:
 # Format detection
 # ---------------------------------------------------------------------------
 
+
 def _detect_format(zip_path: Path) -> str:
     with zipfile.ZipFile(zip_path) as archive:
         names = archive.namelist()
@@ -162,6 +165,7 @@ def _detect_format(zip_path: Path) -> str:
 # ---------------------------------------------------------------------------
 # Index builder (shared)
 # ---------------------------------------------------------------------------
+
 
 def build_taxonomy(zip_path: Path) -> dict[str, Any]:
     """Return occupations, alternate titles, and normalized lookup index."""
@@ -286,7 +290,9 @@ def write_taxonomy_files(zip_path: Path, output_dir: Path = DEFAULT_OUTPUT_DIR) 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("zip_path", type=Path, help="Path to O*NET zip (OccupationalListings or full database)")
+    parser.add_argument(
+        "zip_path", type=Path, help="Path to O*NET zip (OccupationalListings or full database)"
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,

@@ -1,7 +1,7 @@
 """Common utility functions for the job hunter agent.
 
 This module provides shared helper functions for recursive dictionary
-merging, safe type coercion, and URL parameter manipulation. It also 
+merging, safe type coercion, and URL parameter manipulation. It also
 includes best-effort logic for extracting salary info and age data from
 scraped job text based on parsing rules.
 """
@@ -10,7 +10,8 @@ import copy
 import re
 from html import escape
 from typing import Any, Optional
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
 from job_hunter_agent.io_utils import load_parsing_rules
 
 
@@ -44,7 +45,14 @@ def set_query_param(url: str, key: str, value: str | int) -> str:
     query_params[key] = [str(value)]
     new_query = urlencode(query_params, doseq=True)
     return urlunparse(
-        (parsed_url.scheme, parsed_url.netloc, parsed_url.path, parsed_url.params, new_query, parsed_url.fragment)
+        (
+            parsed_url.scheme,
+            parsed_url.netloc,
+            parsed_url.path,
+            parsed_url.params,
+            new_query,
+            parsed_url.fragment,
+        )
     )
 
 
@@ -73,17 +81,14 @@ def extract_salary(details_text: str) -> str:
     lines = [line.strip() for line in details_text.splitlines() if line.strip()]
     for line in lines[:20]:
         line_lower = line.lower()
-        if (
-            len(line) <= 120
-            and (
-                "salary" in line_lower
-                or "package" in line_lower
-                or "$" in line
-                or "k p.a." in line_lower
-                or "per day" in line_lower
-                or "daily rate" in line_lower
-                or "incl super" in line_lower
-            )
+        if len(line) <= 120 and (
+            "salary" in line_lower
+            or "package" in line_lower
+            or "$" in line
+            or "k p.a." in line_lower
+            or "per day" in line_lower
+            or "daily rate" in line_lower
+            or "incl super" in line_lower
         ):
             return line
     return ""
@@ -105,7 +110,9 @@ def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
                 try:
                     return float(days)
                 except Exception as exc:
-                    print(f"[UTILS][WARN] Failed to parse seek age days from label '{label}': {exc}")
+                    print(
+                        f"[UTILS][WARN] Failed to parse seek age days from label '{label}': {exc}"
+                    )
                     return None
 
     pattern = str(rules.get("relative_text_pattern") or "").strip()
@@ -124,5 +131,7 @@ def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
     try:
         return float(amount) * float(unit_days[unit])
     except Exception as exc:
-        print(f"[UTILS][WARN] Failed to calculate seek age days from relative text '{posted_text}': {exc}")
+        print(
+            f"[UTILS][WARN] Failed to calculate seek age days from relative text '{posted_text}': {exc}"
+        )
         return None

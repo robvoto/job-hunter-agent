@@ -1,13 +1,13 @@
 """Job quality signal detection - evidence collection only.
 
-This module focuses on detecting signals related to job quality, such as 
-CV-farming patterns, job closure indicators, and date mismatches. It uses 
-managed knowledge files to identify suspicious job postings and provides 
-functions to fetch external HTML for deeper analysis. The module collects 
+This module focuses on detecting signals related to job quality, such as
+CV-farming patterns, job closure indicators, and date mismatches. It uses
+managed knowledge files to identify suspicious job postings and provides
+functions to fetch external HTML for deeper analysis. The module collects
 evidence for review signals but does not make final decisions on job rejection.
 
-CV-farming language is learned through managed knowledge in `data/cv_farming_rules.json` 
-and approved through the signal registry. Closed-job and date-mismatch checks stay 
+CV-farming language is learned through managed knowledge in `data/cv_farming_rules.json`
+and approved through the signal registry. Closed-job and date-mismatch checks stay
 in `data/dodgy_job_rules.json`.
 """
 
@@ -25,8 +25,8 @@ from job_hunter_agent.paths import (
     CV_FARMING_RULES_NAME,
     CV_FARMING_RULES_VERSION,
 )
-from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.signal_schema import CATEGORY_CV_FARMING_PATTERN
+from job_hunter_agent.text_processing import compact_whitespace
 
 SIGNAL_KIND_DATE_MISMATCH = "date_mismatch"
 SIGNAL_KIND_JOB_CLOSED = "job_closed"
@@ -34,9 +34,18 @@ SIGNAL_KIND_CV_FARMING = "cv_farming"
 SIGNAL_KIND_BROAD_ENGAGEMENT = "broad_engagement"
 
 _MONTH_NAMES = {
-    "january": 1, "february": 2, "march": 3, "april": 4,
-    "may": 5, "june": 6, "july": 7, "august": 8,
-    "september": 9, "october": 10, "november": 11, "december": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
 }
 
 
@@ -97,7 +106,10 @@ def _merge_entries(entries: list[dict[str, object]]) -> list[dict[str, object]]:
             }
             merged[value_key] = bucket
             order.append(value_key)
-        seen_aliases = {str(bucket["value"]).lower(), *(str(alias).lower() for alias in bucket["aliases"])}
+        seen_aliases = {
+            str(bucket["value"]).lower(),
+            *(str(alias).lower() for alias in bucket["aliases"]),
+        }
         for alias in normalized["aliases"]:
             alias_key = str(alias).lower()
             if alias_key in seen_aliases:
@@ -110,6 +122,7 @@ def _merge_entries(entries: list[dict[str, object]]) -> list[dict[str, object]]:
 def load_cv_farming_rules() -> list[dict[str, object]]:
     """Load approved CV-farming patterns from managed knowledge."""
     from job_hunter_agent.knowledge_store import get_knowledge
+
     payload = get_knowledge("cv_farming_rules") or {}
     entries = payload.get("entries")
     if not isinstance(entries, list):
@@ -127,6 +140,7 @@ def save_cv_farming_rules(entries: list[dict[str, object]]) -> dict[str, object]
         "entries": _merge_entries(entries),
     }
     from job_hunter_agent.knowledge_store import set_knowledge
+
     set_knowledge("cv_farming_rules", payload)
     return payload
 
@@ -155,28 +169,39 @@ def upsert_cv_farming_rule(value: str, aliases: list[str] | None = None) -> dict
         entry["aliases"] = merged
         return save_cv_farming_rules(entries)
 
-    entries.append({
-        "value": cleaned_value,
-        "aliases": incoming_aliases,
-    })
+    entries.append(
+        {
+            "value": cleaned_value,
+            "aliases": incoming_aliases,
+        }
+    )
     return save_cv_farming_rules(entries)
 
 
 def load_dodgy_job_rules() -> dict:
     """Load the quality rules used for closed-job and CV-farming detection."""
     from job_hunter_agent.knowledge_store import get_knowledge
+
     base_rules = get_knowledge("dodgy_job_rules") or {}
     if "external_date_mismatch_flag_days" not in base_rules:
         raise ValueError("dodgy_job_rules.json must define external_date_mismatch_flag_days")
     try:
         flag_days = int(base_rules["external_date_mismatch_flag_days"])
     except Exception as exc:
-        raise ValueError("dodgy_job_rules.json must define a whole-number external_date_mismatch_flag_days") from exc
+        raise ValueError(
+            "dodgy_job_rules.json must define a whole-number external_date_mismatch_flag_days"
+        ) from exc
     if flag_days <= 0:
-        raise ValueError("dodgy_job_rules.json must define a positive external_date_mismatch_flag_days")
+        raise ValueError(
+            "dodgy_job_rules.json must define a positive external_date_mismatch_flag_days"
+        )
 
     return {
-        "cv_farming_patterns": [str(entry.get("value") or "") for entry in load_cv_farming_rules() if _clean_text(entry.get("value"))],
+        "cv_farming_patterns": [
+            str(entry.get("value") or "")
+            for entry in load_cv_farming_rules()
+            if _clean_text(entry.get("value"))
+        ],
         "job_closed_indicators": [
             _clean_text(value)
             for value in base_rules.get("job_closed_indicators", [])
@@ -246,7 +271,7 @@ def _absolute_date_from_html(html: str) -> Optional[date]:
         except (ValueError, KeyError):
             print(f"[JOB_QUALITY][WARN] Failed to parse date from HTML (format 3): {m.group(0)}")
             pass
-    
+
     return None
 
 
@@ -264,12 +289,14 @@ def detect_external_date_signals(
 
     for pat in rules.get("job_closed_indicators", []):
         if re.search(pat, html, re.IGNORECASE):
-            signals.append({
-                "kind": SIGNAL_KIND_JOB_CLOSED,
-                "label": "Job Closed",
-                "evidence": "External page indicates this role is no longer available.",
-                "needs_review": True,
-            })
+            signals.append(
+                {
+                    "kind": SIGNAL_KIND_JOB_CLOSED,
+                    "label": "Job Closed",
+                    "evidence": "External page indicates this role is no longer available.",
+                    "needs_review": True,
+                }
+            )
             return signals
 
     external_age = _approx_age_days_from_html(html)
@@ -281,19 +308,21 @@ def detect_external_date_signals(
     if external_age is not None and linkedin_age_days is not None:
         diff = external_age - float(linkedin_age_days)
         if diff >= flag_days:
-            signals.append({
-                "kind": SIGNAL_KIND_DATE_MISMATCH,
-                "label": "Date Mismatch",
-                "evidence": (
-                    f"LinkedIn shows ~{int(linkedin_age_days)}d old; "
-                    f"external page suggests ~{external_age}d old "
-                    f"({int(diff)}d discrepancy)."
-                ),
-                "needs_review": True,
-                "linkedin_age_days": int(linkedin_age_days),
-                "external_age_days": external_age,
-                "mismatch_days": int(diff),
-            })
+            signals.append(
+                {
+                    "kind": SIGNAL_KIND_DATE_MISMATCH,
+                    "label": "Date Mismatch",
+                    "evidence": (
+                        f"LinkedIn shows ~{int(linkedin_age_days)}d old; "
+                        f"external page suggests ~{external_age}d old "
+                        f"({int(diff)}d discrepancy)."
+                    ),
+                    "needs_review": True,
+                    "linkedin_age_days": int(linkedin_age_days),
+                    "external_age_days": external_age,
+                    "mismatch_days": int(diff),
+                }
+            )
 
     return signals
 
@@ -308,12 +337,14 @@ def detect_broad_engagement_signal(record: dict) -> list:
     is_perm = any(k in work_type for k in perm_keywords)
     is_contract = any(k in work_type for k in contract_keywords)
     if is_perm and is_contract:
-        return [{
-            "kind": SIGNAL_KIND_BROAD_ENGAGEMENT,
-            "label": "Broad Ad",
-             "evidence": f'Ad lists both permanent and contract work types ("{work_type}") — may be a wide talent-pool search rather than a specific vacancy.',
-            "needs_review": False,
-        }]
+        return [
+            {
+                "kind": SIGNAL_KIND_BROAD_ENGAGEMENT,
+                "label": "Broad Ad",
+                "evidence": f'Ad lists both permanent and contract work types ("{work_type}") — may be a wide talent-pool search rather than a specific vacancy.',
+                "needs_review": False,
+            }
+        ]
     return []
 
 
@@ -327,13 +358,15 @@ def detect_cv_farming_signals(description_text: str, rules: dict) -> list:
         m = re.search(pat, description_text, re.IGNORECASE)
         if m:
             match_text = _clean_text(m.group(0))[:80]
-            return [{
-                "kind": SIGNAL_KIND_CV_FARMING,
-                "label": "CV Farming",
-                "signal": pat,
-                "suggested_category": CATEGORY_CV_FARMING_PATTERN,
-                "original_texts": [match_text],
-                "evidence": f'Description matches talent-pool pattern: "{match_text}"',
-                "needs_review": True,
-            }]
+            return [
+                {
+                    "kind": SIGNAL_KIND_CV_FARMING,
+                    "label": "CV Farming",
+                    "signal": pat,
+                    "suggested_category": CATEGORY_CV_FARMING_PATTERN,
+                    "original_texts": [match_text],
+                    "evidence": f'Description matches talent-pool pattern: "{match_text}"',
+                    "needs_review": True,
+                }
+            ]
     return []

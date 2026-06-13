@@ -53,7 +53,9 @@ def load_job_type(force_reload: bool = False) -> dict:
     raw = _load_raw()
     source = raw.get("mapping", raw) if "mapping" in raw else raw
     if not isinstance(source, dict):
-        logger.warning("[JOB_TYPES][WARN] Job type mapping was not a dict; returning an empty mapping.")
+        logger.warning(
+            "[JOB_TYPES][WARN] Job type mapping was not a dict; returning an empty mapping."
+        )
         _cached_mapping = {}
         return _cached_mapping
     _cached_mapping = {
@@ -149,14 +151,16 @@ def infer_work_type_from_description(
     desc_lower = description_text.lower()
     for rule in rules:
         trigger_types = [
-            _canonical_compare(t)
-            for t in (rule.get("trigger_work_types") or [])
-            if _clean_text(t)
+            _canonical_compare(t) for t in (rule.get("trigger_work_types") or []) if _clean_text(t)
         ]
         if current_compare not in trigger_types:
             continue
 
-        keywords = [str(k).strip().lower() for k in (rule.get("contract_signal_keywords") or []) if str(k).strip()]
+        keywords = [
+            str(k).strip().lower()
+            for k in (rule.get("contract_signal_keywords") or [])
+            if str(k).strip()
+        ]
         matched_keyword = next((k for k in keywords if k in desc_lower), None)
         if matched_keyword:
             inferred = str(rule.get("contract_signal_infers") or "").strip()

@@ -1,8 +1,8 @@
 """Review history service.
 
 This module manages the persistence and retrieval of job-level review history and audit records.
-It provides services to track user feedback actions (such as hiding, applying, or blocking 
-jobs) and retrieves job descriptions from history or cached search results to support 
+It provides services to track user feedback actions (such as hiding, applying, or blocking
+jobs) and retrieves job descriptions from history or cached search results to support
 consistent review signals across sessions.
 """
 
@@ -11,7 +11,11 @@ import re
 from datetime import datetime
 from typing import Any
 
-from job_hunter_agent.filters import build_title_block_rule, normalize_title_block_phrase, suggest_title_block_phrase
+from job_hunter_agent.filters import (
+    build_title_block_rule,
+    normalize_title_block_phrase,
+    suggest_title_block_phrase,
+)
 from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.paths import OUTPUT_DIR
@@ -29,12 +33,12 @@ from job_hunter_agent.record_schema import (
     RECORD_LAST_APPLIED_AT_KEY,
     RECORD_LAST_BLOCK_TITLE_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_LAST_NOT_FOR_ME_AT_KEY,
     RECORD_LAST_SEEN_AT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
-    RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_REJECT_TITLE_RULES_KEY,
     RECORD_REVIEW_EVENTS_KEY,
     RECORD_TEASER_KEY,
@@ -74,7 +78,11 @@ def get_job_description(job_id: str) -> str:
             if isinstance(rows, list):
                 for row in rows:
                     if normalize_job_key(str(row.get(RECORD_JOB_KEY) or "")) == normalized_key:
-                        return row.get(RECORD_FULL_DESCRIPTION_KEY) or row.get(RECORD_FIT_SOURCE_TEXT_KEY) or ""
+                        return (
+                            row.get(RECORD_FULL_DESCRIPTION_KEY)
+                            or row.get(RECORD_FIT_SOURCE_TEXT_KEY)
+                            or ""
+                        )
         except Exception as exc:
             print(f"[REVIEW_HISTORY][WARN] Failed to read job description from seek_results: {exc}")
     return ""
@@ -101,9 +109,13 @@ def _append_review_event(
         "timestamp": occurred_at,
     }
     resolved_title = title or entry.get(RECORD_TITLE_KEY) or snapshot.get(RECORD_TITLE_KEY) or ""
-    resolved_company = company or entry.get(RECORD_COMPANY_KEY) or snapshot.get(RECORD_COMPANY_KEY) or ""
+    resolved_company = (
+        company or entry.get(RECORD_COMPANY_KEY) or snapshot.get(RECORD_COMPANY_KEY) or ""
+    )
     resolved_url = url or entry.get(RECORD_URL_KEY) or snapshot.get(RECORD_URL_KEY) or ""
-    resolved_teaser = teaser or snapshot.get(RECORD_TEASER_KEY) or entry.get(RECORD_TEASER_KEY) or ""
+    resolved_teaser = (
+        teaser or snapshot.get(RECORD_TEASER_KEY) or entry.get(RECORD_TEASER_KEY) or ""
+    )
 
     if resolved_title:
         event[RECORD_TITLE_KEY] = resolved_title
@@ -174,7 +186,9 @@ def persist_review_event(
         entry[RECORD_TIMES_NOT_FOR_ME_KEY] = int(entry.get(RECORD_TIMES_NOT_FOR_ME_KEY, 0) or 0) + 1
     elif action in ("block_similar", "block_title"):
         entry[RECORD_LAST_BLOCK_TITLE_AT_KEY] = now_iso
-        entry[RECORD_TIMES_BLOCK_TITLE_KEY] = int(entry.get(RECORD_TIMES_BLOCK_TITLE_KEY, 0) or 0) + 1
+        entry[RECORD_TIMES_BLOCK_TITLE_KEY] = (
+            int(entry.get(RECORD_TIMES_BLOCK_TITLE_KEY, 0) or 0) + 1
+        )
 
     _append_review_event(
         entry,
@@ -320,7 +334,9 @@ def save_not_for_me_feedback(
     normalized = normalize_job_key(job_key or url)
     if not normalized:
         raise ValueError("Missing job key")
-    persist_review_event("not_for_me", normalized, url=url, title=title, company=company, teaser=teaser)
+    persist_review_event(
+        "not_for_me", normalized, url=url, title=title, company=company, teaser=teaser
+    )
     return {
         "ok": True,
         "action": "not_for_me",
@@ -390,7 +406,9 @@ def save_block_similar_feedback(
     if added_rules and skipped_phrases:
         message = f"Blocked '{added_labels}'. {len(skipped_phrases)} pattern(s) already existed."
     elif added_rules:
-        message = f"Blocked {len(added_rules)} pattern(s). Similar jobs will be filtered in future runs."
+        message = (
+            f"Blocked {len(added_rules)} pattern(s). Similar jobs will be filtered in future runs."
+        )
     else:
         message = "All selected patterns already existed as title block rules."
 
@@ -448,7 +466,9 @@ def save_description_block_feedback(
     if added_rules:
         profile["reject_description_phrase_rules"] = existing + added_rules
         save_profile(profile)
-        rebuild_workspace_after_rule_change(f"description phrase rule added for {', '.join(resolved)}")
+        rebuild_workspace_after_rule_change(
+            f"description phrase rule added for {', '.join(resolved)}"
+        )
 
     persist_review_event(
         "block_description",
