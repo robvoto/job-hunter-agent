@@ -1,0 +1,77 @@
+flowchart TD
+    %% Job Hunter scoring process overview.
+    %% This is the approved review draft with product-specific notes.
+    %% Render with Mermaid in GitHub, VS Code Mermaid preview, or docs tooling.
+
+    A((Start: Job found)) --> B[Scraper captures job record]
+
+    B --> C[Normalise source fields<br/>title, company, location, salary, work mode, description]
+    C -. Note .-> Cn[Unique signal:<br/>structured job metadata is preserved separately from description text]
+
+    C --> D{Enough basic data<br/>to assess?}
+    D -- No --> D1[Mark incomplete / low trust<br/>do not invent missing data]
+    D1 --> Z1((End: Needs review or skipped))
+
+    D -- Yes --> E[Run deterministic pre-LLM checks]
+    E -. Note .-> En[Unique signal:<br/>cheap deterministic checks run before expensive LLM review]
+
+    E --> F{Approved hard blocker?}
+    F -- Yes --> F1[Reject before LLM<br/>record blocker reason]
+    F1 --> Z2((End: Rejected))
+
+    F -- No --> G{O*NET title / occupation taxonomy<br/>clearly outside target?}
+    G -. Note .-> Gn[Unique signal:<br/>O*NET near / far / uncertain classification<br/>uses target occupation queries]
+    G -- Yes --> G1[Reject before LLM<br/>title or taxonomy reason]
+    G1 --> Z2
+
+    G -- No / uncertain --> H[Prepare fit review input<br/>structured metadata + fit_source_text]
+    H -. Note .-> Hn[Unique signal:<br/>description compaction + trust metadata<br/>full description remains preserved]
+
+    H --> I{Safe deterministic review<br/>available?}
+    I -- Yes --> J[Create deterministic review outcome<br/>grade + rationale + review_source]
+    I -- No --> K[Send to LLM fit review]
+
+    K --> L[Extract requirements<br/>and map to candidate capabilities]
+    J --> L
+    L -. Note .-> Ln[Unique signal:<br/>LLM requirement coverage maps requirements<br/>to known candidate capabilities]
+
+    L --> M{Requirement coverage usable?}
+    M -- No --> M1[Use model grade fallback<br/>flag coverage missing]
+    M -- Yes --> N[Derive grade from coverage]
+
+    M1 --> O[Build frozen score breakdown]
+    N --> O
+
+    O --> P[Apply grade band clamp<br/>score stays inside grade band]
+    P -. Note .-> Pn[Unique signal:<br/>band-anchored scoring avoids pretending<br/>the score is a qualification percentage]
+
+    P --> Q{Hard blockers after review?}
+    Q -- Yes --> Q1[Apply hard blocker penalty<br/>force score near zero]
+    Q -- No --> R[Store frozen score + explanation]
+
+    Q1 --> R
+
+    R --> S[Apply display-time ranking only<br/>freshness, viewed status]
+    S -. Note .-> Sn[Unique signal:<br/>frozen score is separated from display score]
+
+    S --> T[Show ranked job to user<br/>with explanation]
+
+    T --> U{User action}
+    U -- Apply / save --> U1[Record positive action]
+    U -- Skip / not for me --> U2[Record rejection feedback]
+    U -- Needs correction --> U3[Improve profile / rules / backlog]
+
+    U1 --> V[Learning signal]
+    U2 --> V
+    U3 --> V
+    V -. Note .-> Vn[Unique signal:<br/>user feedback improves future runs<br/>without silently changing scoring rules]
+
+    V --> W((End: Improves future runs))
+
+    classDef decision fill:#fff3cd,stroke:#b58900,stroke-width:1px;
+    classDef endstate fill:#f8d7da,stroke:#842029,stroke-width:1px;
+    classDef note fill:#e7f1ff,stroke:#084298,stroke-dasharray: 4 3;
+
+    class D,F,G,I,M,Q,U decision;
+    class Z1,Z2,W endstate;
+    class Cn,En,Gn,Hn,Ln,Pn,Sn,Vn note;

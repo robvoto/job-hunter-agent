@@ -5,6 +5,13 @@ import pytest
 from job_hunter_agent import llm_gate
 
 
+def test_openai_environment_key_is_not_used(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
+
+    assert llm_gate._build_openai_client() is None
+    assert llm_gate.llm_is_enabled() is False
+
+
 def test_build_capability_naming_guidance_uses_managed_defaults_only():
     prompt = llm_gate.build_capability_naming_guidance()
 

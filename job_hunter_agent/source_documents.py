@@ -76,6 +76,9 @@ UPLOAD_SLOT_MAP = {
     "primary cv": "primary_cv",
 }
 
+_NON_FILENAME_CHARS_RE = re.compile(r"[^a-z0-9._-]+")
+_WHITESPACE_RE = re.compile(r"\s+")
+
 
 def _format_count(count: int, singular: str, plural: str) -> str:
     if count == 0:
@@ -85,14 +88,38 @@ def _format_count(count: int, singular: str, plural: str) -> str:
     return f"{count} {plural}"
 
 
+def _normalize_uploaded_filename(filename: str) -> str:
+    value = Path(str(filename or "").strip()).name
+    if not value:
+        return ""
+    path = Path(value)
+    suffix = "".join(path.suffixes).lower()
+    stem = path.name[: -len(suffix)] if suffix else path.name
+    stem = _NON_FILENAME_CHARS_RE.sub("_", stem.lower()).strip("_")
+    suffix = _NON_FILENAME_CHARS_RE.sub("", suffix)
+    if not stem:
+        stem = "file"
+    return f"{stem}{suffix}"
+
+
+def _normalize_source_label(label: str, filename: str, fallback: str) -> str:
+    value = str(label or "").strip()
+    if value:
+        return _WHITESPACE_RE.sub(" ", value)
+    normalized_filename = _normalize_uploaded_filename(filename)
+    if normalized_filename:
+        return Path(normalized_filename).stem.replace("_", " ")
+    return fallback
+
+
 def _normalize_profile_sources(items: Any) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        label = str(item.get("label") or "").strip()
+        filename = _normalize_uploaded_filename(item.get("filename") or "")
+        label = _normalize_source_label(item.get("label") or "", filename, filename or "Source")
         content = str(item.get("content") or "").strip()
-        filename = str(item.get("filename") or "").strip()
         if label and content:
             normalized.append({"label": label, "filename": filename, "content": content})
     return normalized
@@ -104,9 +131,9 @@ def _normalize_cv_variants(items: Any) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         key = str(item.get("key") or "").strip()
-        label = str(item.get("label") or "").strip()
+        filename = _normalize_uploaded_filename(item.get("filename") or "")
+        label = _normalize_source_label(item.get("label") or "", filename, key or "CV variant")
         content = str(item.get("content") or "").strip()
-        filename = str(item.get("filename") or "").strip()
         use_for = [str(value).strip() for value in item.get("use_for", []) if str(value).strip()]
         if key and label and content:
             normalized.append(
@@ -188,8 +215,12 @@ def persist_uploaded_source_pack(
     for index, item in enumerate(files_payload or [], start=1):
         if not isinstance(item, dict):
             continue
-        label = str(item.get("label") or item.get("filename") or f"CV File {index}").strip()
-        filename = str(item.get("filename") or "").strip()
+        filename = _normalize_uploaded_filename(item.get("filename") or "")
+        label = _normalize_source_label(
+            item.get("label") or "",
+            filename,
+            f"CV File {index}",
+        )
         content_base64 = str(item.get("content_base64") or "").strip()
         if not filename or not content_base64:
             continue

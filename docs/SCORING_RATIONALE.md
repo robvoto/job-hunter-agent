@@ -48,6 +48,87 @@ job_hunter_agent/llm_gate.py
 
 ---
 
+## Process flow overview
+
+This section is the high-level process map for the scoring pipeline. Treat each referenced module or doc as a subprocess owner, not as duplicate instructions to be reimplemented here.
+
+Primary visual diagram:
+
+```text
+docs/diagrams/scoring_process_flow.mmd
+```
+
+Inline renderable copy:
+
+```mermaid
+flowchart TD
+    A((Start: Job found)) --> B[Scraper captures job record]
+    B --> C[Normalise source fields<br/>title, company, location, salary, work mode, description]
+    C --> D{Enough basic data<br/>to assess?}
+    D -- No --> D1[Mark incomplete / low trust<br/>do not invent missing data]
+    D1 --> Z1((End: Needs review or skipped))
+    D -- Yes --> E[Run deterministic pre-LLM checks]
+    E --> F{Approved hard blocker?}
+    F -- Yes --> F1[Reject before LLM<br/>record blocker reason]
+    F1 --> Z2((End: Rejected))
+    F -- No --> G{O*NET title / occupation taxonomy<br/>clearly outside target?}
+    G -- Yes --> G1[Reject before LLM<br/>title or taxonomy reason]
+    G1 --> Z2
+    G -- No / uncertain --> H[Prepare fit review input<br/>structured metadata + fit_source_text]
+    H --> I{Safe deterministic review<br/>available?}
+    I -- Yes --> J[Create deterministic review outcome<br/>grade + rationale + review_source]
+    I -- No --> K[Send to LLM fit review]
+    K --> L[Extract requirements<br/>and map to candidate capabilities]
+    J --> L
+    L --> M{Requirement coverage usable?}
+    M -- No --> M1[Use model grade fallback<br/>flag coverage missing]
+    M -- Yes --> N[Derive grade from coverage]
+    M1 --> O[Build frozen score breakdown]
+    N --> O
+    O --> P[Apply grade band clamp<br/>score stays inside grade band]
+    P --> Q{Hard blockers after review?}
+    Q -- Yes --> Q1[Apply hard blocker penalty<br/>force score near zero]
+    Q -- No --> R[Store frozen score + explanation]
+    Q1 --> R
+    R --> S[Apply display-time ranking only<br/>freshness, viewed status]
+    S --> T[Show ranked job to user<br/>with explanation]
+    T --> U{User action}
+    U -- Apply / save --> U1[Record positive action]
+    U -- Skip / not for me --> U2[Record rejection feedback]
+    U -- Needs correction --> U3[Improve profile / rules / backlog]
+    U1 --> V[Learning signal]
+    U2 --> V
+    U3 --> V
+    V --> W((End: Improves future runs))
+```
+
+### Process stages
+
+| Stage | Input | Owner / subprocess | Output | Decision point |
+|---|---|---|---|---|
+| Source normalisation | Raw scraper fields | `source_connector.py`, scraper modules, source docs | Normalised job record | Missing or low-trust source fields may reduce confidence. |
+| Title and occupation filtering | Job title, profile target roles, target occupation queries | `filters.py`, `occupation_taxonomy.py`, `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Title reason, O*NET near/far/uncertain signal | Approved hard blockers may stop the job before LLM. Uncertain signals continue. |
+| Description preparation | Full description, structured scraper metadata | `description_compactor.py`, `description_trust.py`, config/rules governance | `fit_source_text`, description trust metadata | Unsafe compaction is skipped explicitly; full description remains preserved. |
+| Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic rules. |
+| Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage drives grade when present. Unsupported capability claims are dropped. |
+| Frozen scoring | Reviewed job record with `llm_fit_grade` | `fit_scoring.py`, `data/knowledge/scoring_rules.json` | Frozen score and score breakdown | Grade band clamps non-hard-block score. Hard blockers apply after clamp. |
+| Display scoring | Frozen score, current age/viewed state | `fit_scoring.py`, UI consumers | Displayed score and ordering | Freshness/viewed status can move displayed rank, not capability proof. |
+| Human review and learning | User keep/skip/apply/reject decisions | Review history, learning modules, backlog if needed | Future profile/rule improvements | Learning must not silently become hidden scoring logic. |
+
+### Handover points
+
+The main handover from filtering to scoring is the reviewed job record containing `llm_fit_grade`. If that grade is missing, scoring must stop rather than inventing a score.
+
+The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus.
+
+The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Display-time freshness and viewed status are ranking adjustments only, not new evidence that the candidate fits the job.
+
+### End states
+
+A job can end as pre-LLM rejected, LLM/deterministic rejected, kept for review, displayed lower due to weak fit or hard blockers, or improved later through user feedback. Only reviewed jobs with a valid grade enter the normal scoring pipeline.
+
+---
+
 ## Grade bands
 
 The grade controls the non-hard-block score range.

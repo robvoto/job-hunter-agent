@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from job_hunter_agent.paths import REPO_ROOT
+from job_hunter_agent.syntax_checks import check_python_syntax
 
 ROOT_DIR = REPO_ROOT
 
@@ -31,8 +32,21 @@ def main() -> int:
         "-m", dest="marker", default="", help="Only run tests matching this marker expression."
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Run pytest in verbose mode.")
+    parser.add_argument(
+        "--skip-syntax-check",
+        action="store_true",
+        help="Skip the Python syntax pass before pytest.",
+    )
     parser.add_argument("pytest_args", nargs="*", help="Additional arguments passed to pytest.")
     args, extra_pytest_args = parser.parse_known_args()
+
+    if not args.skip_syntax_check:
+        failed_paths = check_python_syntax()
+        if failed_paths:
+            print("[syntax-check] Failed files:")
+            for path in failed_paths:
+                print(f" - {path}")
+            return 1
 
     command = [_python_executable(), "-m", "pytest"]
     if args.verbose:

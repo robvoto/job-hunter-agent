@@ -23,7 +23,6 @@ from __future__ import annotations
 import hashlib
 import json as _json_mod
 import logging
-import os
 import re
 import sys
 from typing import Any, Dict
@@ -322,17 +321,14 @@ class LLMCallError(RuntimeError):
         self.is_timeout = is_timeout
 
 
-_api_key = os.environ.get("OPENAI_API_KEY")
-
-
 def _build_openai_client() -> OpenAI | None:
-    if not _api_key or _NO_LLM_MODE:
-        return None
-    settings = load_global_settings().get(KEY_LLM_SETTINGS, {})
-    # Defaults match global_settings.json; active after db_seed --upgrade on existing deployments.
-    timeout = float(settings.get("request_timeout_seconds") or 30.0)
-    max_retries = int(settings.get("max_retries") if settings.get("max_retries") is not None else 0)
-    return OpenAI(api_key=_api_key, timeout=timeout, max_retries=max_retries)
+    """Return the configured LLM client.
+
+    Provider keys must come from explicit user/provider configuration, not process
+    environment variables. Until that provider-key store exists, LLM calls remain
+    disabled rather than silently using developer or machine-level keys.
+    """
+    return None
 
 
 client = _build_openai_client()
@@ -1164,7 +1160,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
 
 def _request_learning_payload(job_description_text: str, *, fit_review: bool) -> dict[str, Any]:
     if client is None:
-        raise RuntimeError("LLM review requested but LLM is disabled or OPENAI_API_KEY is missing")
+        raise RuntimeError("LLM review requested but no provider key is configured")
 
     valid_capability_names: dict[str, str] | None = None
     if fit_review:

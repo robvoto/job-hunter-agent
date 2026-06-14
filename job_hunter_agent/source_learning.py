@@ -341,7 +341,7 @@ def resolve_llm_review_payload(
             return {**cached, "payload_source": "cache"}
 
     if not llm_is_enabled():
-        raise RuntimeError("LLM review requested but OPENAI_API_KEY is missing")
+        raise RuntimeError("LLM review requested but no provider key is configured")
 
     logger.info(
         "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=MISS"
