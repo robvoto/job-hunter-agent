@@ -6,12 +6,15 @@ Always-loaded agent loader. Keep this file project-agnostic and small.
 
 Project-specific context lives in `docs/PROJECT_CONTEXT.md`.
 
+Shared setup/standards pointers live in `docs/STANDARDS_INDEX.md`.
+
 ## Load only what is needed
 
 1. Read this file.
 2. If project context is needed, read `docs/PROJECT_CONTEXT.md`.
-3. Load the single most relevant skill from `.skills/`.
-4. Read only linked details, docs, code, or git history needed for the task.
+3. If changing project setup, docs, AGENTS.md, skills, config, runtime commands, tests, env examples, packaging, templates, AI model/provider defaults, cost logging, approval workflows, or long-running workflows, read `docs/STANDARDS_INDEX.md` first.
+4. Load the single most relevant skill from `.skills/`.
+5. Read only linked details, docs, code, or git history needed for the task.
 
 Do not read every skill, every doc, or the whole repo.
 
