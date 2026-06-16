@@ -420,8 +420,8 @@
     "enabled": true,
     "source_type": "local_runtime_json",
     "sync_before_run": false,
-    "spreadsheet_id": "1kayUdF2fML62pUSLgJSUbzgvI3orz5SvR-3EPK1cAko",
-    "tab_name": "Job_Rejections",
+    "spreadsheet_id": "",
+    "tab_name": "",
     "required_headers": [
       "Run Date",
       "Company",

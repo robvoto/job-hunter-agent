@@ -92,13 +92,11 @@ By default, the application is configured for local use on `localhost`. If you a
 
 ## LLM Notes
 
-The app uses `python-dotenv` to load environment variables. To use the LLM:
+Desktop v1 ignores `OPENAI_API_KEY` and any other global/provider key source. The rule is:
 
-1. Create a `.env` file in the root directory.
-2. Add your key: `OPENAI_API_KEY=sk-your-key-here`
-3. Ensure the dependency is installed: `pip install python-dotenv`.
+> No global keys. No shared learning. No upload without consent.
 
-If the key is not set, the app still works, but the live LLM review step is effectively disabled and falls back to deterministic filtering plus `MAYBE`.
+Live LLM review stays disabled until user-owned provider-key support is added.
 
 ## Daily Agent Notes
 

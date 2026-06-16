@@ -109,6 +109,21 @@ def test_default_match_preferences_are_neutral():
     assert normalize_work_mode_preferences([]) == []
 
 
+def test_candidate_application_history_defaults_do_not_ship_personal_sheet_config():
+
+    import json
+
+    settings_path = ROOT_DIR / "data" / "config" / "global_settings.json"
+    settings = json.loads(settings_path.read_text(encoding="utf-8-sig"))
+    history_settings = settings["candidate_application_history"]
+
+    assert history_settings["enabled"] is True
+    assert history_settings["source_type"] == "local_runtime_json"
+    assert history_settings["sync_before_run"] is False
+    assert history_settings["spreadsheet_id"] == ""
+    assert history_settings["tab_name"] == ""
+
+
 def test_active_modules_import():
 
     modules = [

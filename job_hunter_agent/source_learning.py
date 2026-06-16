@@ -48,6 +48,7 @@ from job_hunter_agent.signal_schema import (
     TITLE_REASON_POTENTIAL_MATCH,
 )
 from job_hunter_agent.text_processing import compact_whitespace
+from job_hunter_agent.runtime_helpers import is_desktop_runtime
 
 
 def deterministic_review_outcome(
@@ -134,6 +135,8 @@ def register_hard_blocker_learning_from_rejection(
     reason = compact_whitespace(reject_reason)
 
     if not reason:
+        return
+    if is_desktop_runtime():
         return
 
     prefix, _, detail = reason.partition(":")
@@ -267,6 +270,8 @@ def merge_pending_learning_signals(*signal_groups: list[dict[str, Any]]) -> list
 
 
 def register_pending_learning_signals(signals: list[dict[str, Any]]) -> None:
+    if is_desktop_runtime():
+        return
 
     filtered = filter_registerable_signals(signals)
 

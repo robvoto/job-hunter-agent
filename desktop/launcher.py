@@ -36,6 +36,7 @@ def _set_env_defaults() -> None:
 
     appdata = Path(os.environ.get("APPDATA", Path.home()))
     app_dir = Path(__file__).resolve().parent.parent
+    os.environ.setdefault("JOB_HUNTER_DESKTOP_MODE", "1")
 
     data_dir = Path(os.environ.setdefault(
         "JOB_HUNTER_DATA_DIR", str(appdata / "JobHunterAgent" / "data")

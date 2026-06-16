@@ -7,11 +7,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
+from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH, RUNTIME_DIR
 from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
 
 _DB_KEY = "global_settings"
+# Rob-only local integration override. The file lives under data/runtime,
+# which is ignored by git and must not be shipped in desktop builds.
+_LOCAL_CANDIDATE_APPLICATION_HISTORY_OVERRIDE_PATH = (
+    RUNTIME_DIR / "rob_candidate_application_history_import.local.json"
+)
 
 
 class GlobalSettingsLoadError(RuntimeError):
@@ -244,9 +249,28 @@ def get_cv_chars_per_page() -> int:
     return int(load_global_settings()[KEY_SOURCE_DOCUMENT_SETTINGS][KEY_CV_CHARS_PER_PAGE])
 
 
+def _load_local_candidate_application_history_override() -> dict[str, Any]:
+    """Load local-only ignored runtime settings when present."""
+    if not _LOCAL_CANDIDATE_APPLICATION_HISTORY_OVERRIDE_PATH.exists():
+        return {}
+
+    data = json.loads(
+        _LOCAL_CANDIDATE_APPLICATION_HISTORY_OVERRIDE_PATH.read_text(encoding="utf-8-sig")
+    )
+    if not isinstance(data, dict):
+        raise GlobalSettingsLoadError("Local override must contain a JSON object")
+
+    section = data.get(KEY_CANDIDATE_APPLICATION_HISTORY, data)
+    if not isinstance(section, dict):
+        raise GlobalSettingsLoadError("Local override section must contain a JSON object")
+    return section
+
+
 def get_candidate_application_history_settings() -> dict[str, Any]:
-    """Return the full candidate_application_history config section."""
-    return load_global_settings()[KEY_CANDIDATE_APPLICATION_HISTORY]
+    """Return settings with ignored local runtime override applied."""
+    settings = dict(load_global_settings()[KEY_CANDIDATE_APPLICATION_HISTORY])
+    settings.update(_load_local_candidate_application_history_override())
+    return settings
 
 
 def is_candidate_application_history_enabled() -> bool:

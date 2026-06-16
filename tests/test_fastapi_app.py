@@ -8,10 +8,12 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request as StarletteRequest
 
 import job_hunter_agent.fastapi_app as _fa
+import job_hunter_agent.routes.profile_materials as _profile_materials
 import job_hunter_agent.routes.pages as _pages
 from job_hunter_agent.fastapi_app import _bootstrap_runtime_knowledge, _cors_origin, create_app
 
 _FAKE_USER = {"user_id": "test", "email": "test@example.com", "role": "admin"}
+_CANDIDATE_USER = {"user_id": "candidate", "email": "candidate@example.com", "role": "candidate"}
 
 
 def test_fastapi_health_and_unknown_route_json_errors(monkeypatch):
@@ -45,6 +47,71 @@ def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["location"] == "/start"
+
+
+def test_global_settings_page_requires_admin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _CANDIDATE_USER)
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "read_session_user", lambda request: _CANDIDATE_USER)
+    monkeypatch.setattr(_pages, "is_admin", lambda request: False)
+
+    client = TestClient(create_app())
+    response = client.get("/global-settings", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/login?next=%2Fglobal-settings"
+
+
+def test_global_settings_page_allows_admin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_pages, "is_admin", lambda request: True)
+
+    client = TestClient(create_app())
+    response = client.get("/global-settings")
+
+    assert response.status_code == 200
+    assert 'data-page-mode="admin"' in response.text
+    assert 'id="section-admin"' in response.text
+
+
+def test_global_settings_api_requires_admin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _CANDIDATE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: False)
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/global-settings")
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+    response = client.patch("/api/global-settings", json={"feature_flag": True})
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+
+def test_global_settings_api_allows_admin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: True)
+    monkeypatch.setattr(_profile_materials.srv, "load_global_settings", lambda: {"enabled": True})
+    monkeypatch.setattr(
+        _profile_materials,
+        "save_global_settings",
+        lambda body: {"saved": True, **body},
+    )
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/global-settings")
+    assert response.status_code == 200
+    assert response.json() == {"enabled": True}
+
+    response = client.patch("/api/global-settings", json={"feature_flag": True})
+    assert response.status_code == 200
+    assert response.json() == {"saved": True, "feature_flag": True}
 
 
 def test_workspace_page_bootstrap_includes_user_id(monkeypatch):

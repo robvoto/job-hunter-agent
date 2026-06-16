@@ -101,6 +101,10 @@ Install layout:
 
 Data is written to `%APPDATA%\JobHunterAgent\` in both modes.
 
+Desktop v1 rule:
+
+> No global keys. No shared learning. No upload without consent.
+
 Behaviour:
 
 - Tray icon shows in the system tray; left-click or double-click to open the app.
@@ -682,6 +686,15 @@ If `curl` cannot connect, inspect the latest traceback in `journalctl` before ma
 ## Runtime files during deploy
 
 Production uses `JOB_HUNTER_DATA_DIR` for live runtime data. On AWS this is `/var/lib/job-hunter/data`.
+
+The full production storage contract is:
+
+```text
+JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
+JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
+/etc/job-hunter/job-hunter.env -> root-owned runtime config and secrets
+```
 
 `db_seed --upgrade` must ensure required repo-managed runtime files exist there, including:
 

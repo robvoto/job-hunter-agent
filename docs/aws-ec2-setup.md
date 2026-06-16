@@ -105,6 +105,24 @@ Xvfb wired into service: no
 
 `/var/lib/job-hunter` is mounted on a separate data disk.
 
+### Persistent storage contract
+
+```text
+/var/lib/job-hunter                     EBS-backed persistent volume
+/var/lib/job-hunter/data                JOB_HUNTER_DATA_DIR
+/var/lib/job-hunter/output              JOB_HUNTER_OUTPUT_DIR
+/var/lib/job-hunter/data/job_hunter.db  JOB_HUNTER_DB_PATH
+/etc/job-hunter/job-hunter.env          root-owned runtime config and secrets
+```
+
+Keep the runtime data on the EBS-backed volume and keep `/etc/job-hunter/job-hunter.env`
+out of git. The environment file should stay restricted with:
+
+```bash
+sudo chown root:ubuntu /etc/job-hunter/job-hunter.env
+sudo chmod 640 /etc/job-hunter/job-hunter.env
+```
+
 ### Nginx routing
 
 Nginx listens on port 80. Job Hunter remains private on localhost and must not expose port `8765` directly to the internet.
@@ -1003,6 +1021,18 @@ deploy-jobhunter
 9. show service status and recent logs
 
 Do not use `INSTALL` as the command name for normal updates. This is a deployment/update workflow.
+
+## 23. Production checklist
+
+Before calling the environment ready for use, check these in order:
+
+1. Confirm `/var/lib/job-hunter` is mounted on the EBS data disk, not only the root volume.
+2. Confirm `/etc/job-hunter/job-hunter.env` exists, is not committed to git, and keeps the `640` permissions above.
+3. Run `deploy-jobhunter` or `sudo systemctl restart job-hunter` after code or env changes.
+4. Verify service health with `sudo systemctl status job-hunter --no-pager`, `sudo journalctl -u job-hunter -n 80 --no-pager`, and `curl -I http://127.0.0.1:8765/start`.
+5. Confirm Nginx proxies the public host to `127.0.0.1:8765` and does not expose FastAPI directly.
+6. Confirm browser access uses HTTPS for `jobhunter.robvoto.com`.
+7. Confirm the backup plan exists, either EBS snapshots or S3 exports of `/var/lib/job-hunter`.
 
 ## AWS Session Manager access
 

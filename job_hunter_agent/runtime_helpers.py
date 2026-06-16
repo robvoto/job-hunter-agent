@@ -6,6 +6,7 @@ arguments and maintains persistent runtime logs for LLM costs and
 investigation events.
 """
 
+import os
 import json
 import logging
 from datetime import datetime, timezone
@@ -18,10 +19,21 @@ CLI_FLAG_NO_LLM = "--no-llm"
 CLI_FLAG_DEBUG = "--debug"
 CLI_FLAG_REBUILD_WORKSPACE = "--rebuild-workspace"
 CLI_FLAG_RESET_NEW_TO_YOU = "--reset-new-to-you"
+DESKTOP_RUNTIME_ENV_VAR = "JOB_HUNTER_DESKTOP_MODE"
 
 
 def has_cli_flag(argv: list[str], flag: str) -> bool:
     return flag in argv
+
+
+def is_desktop_runtime() -> bool:
+    """Return True when the desktop launcher has marked this runtime as desktop."""
+    return str(os.environ.get(DESKTOP_RUNTIME_ENV_VAR, "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def build_uncertainty_entry(

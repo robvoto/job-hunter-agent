@@ -46,6 +46,7 @@ from job_hunter_agent.profile_store import (
     CapabilityLevel,
     WorkMode,
 )
+from job_hunter_agent.runtime_helpers import is_desktop_runtime
 from job_hunter_agent.text_processing import compact_whitespace
 
 KEY_NEEDS_REVIEW = "needs_review"
@@ -545,7 +546,7 @@ def build_learning_patch(
     )
 
     patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
-    if review_signals:
+    if review_signals and not is_desktop_runtime():
         register_signals(review_signals)
 
     max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
