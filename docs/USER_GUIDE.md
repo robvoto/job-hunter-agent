@@ -33,6 +33,12 @@ If you open the app from another device on your local network, the login session
 
 The app will create or enrich your runtime profile (stored in the SQLite DB), which becomes your working profile for job matching.
 
+## Privacy And CV Data
+
+Job Hunter does not keep the raw uploaded CV as a long-term user-facing file.
+
+It uses the uploaded document to extract matching signals and profile structure, then keeps the runtime profile, review state, and other working data needed for job matching. If you want the broader retention context, start from the documentation index and the operational docs.
+
 ## What Onboarding Creates
 
 The onboarding flow creates a runtime profile from your source documents.
@@ -197,7 +203,10 @@ These checks are shown for review and do not replace your own judgment.
 
 ## LLM Use
 
-The LLM is optional and requires an OpenAI API key.
+Desktop v1 does not use `OPENAI_API_KEY` or any other global/provider key source.
+The desktop rule is:
+
+> No global keys. No shared learning. No upload without consent.
 
 Current behavior:
 
@@ -207,10 +216,7 @@ Current behavior:
 - it returns only `KEEP`, `REJECT`, or `MAYBE`
 - you can tune AI fit review guidance and AI capability naming guidance in **Settings**
 
-To enable:
-- Set `OPENAI_API_KEY=sk-your-actual-key` in the environment (e.g. via the systemd service file `Environment=` directive for server deployments, or exported in your shell for local use).
-
-If the variable is not set, the app runs without live LLM review.
+If user-owned provider-key support is not configured, the app runs without live LLM review.
 
 ## Security and Network Access
 

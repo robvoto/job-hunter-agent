@@ -7,17 +7,17 @@ export const capabilityLevelMeta = {
   strong: {
     label: 'Strong',
     tone: 'strength-strong',
-    summary: 'Use this when the capability is current, repeated, and clearly one of your strongest areas.',
+    summary: 'Use this when the capability is current, repeated, and should carry the most weight in matching.',
   },
   working: {
     label: 'Working',
     tone: 'strength-working',
-    summary: 'Professional proficiency. Independent execution with solid recent evidence in production environments.',
+    summary: 'Use this when the capability is real and useful, but should influence matching less than your strongest areas.',
   },
   basic: {
     label: 'Basic',
     tone: 'strength-basic',
-    summary: 'Use this when the experience is real but stale, thin, or no longer a current strength capability.',
+    summary: 'Use this when the experience is real but thin, stale, or should have only a light influence on matching.',
   },
 };
 

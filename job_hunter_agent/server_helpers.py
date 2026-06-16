@@ -95,7 +95,11 @@ from job_hunter_agent.profile_store import (
     normalize_onboarding_settings,
     normalize_search_settings,
     normalize_work_mode_preferences,
+    profile_review_status,
+    patch_profile,
     save_profile,
+    require_profile_ready_for_review,
+    validate_search_keywords,
 )
 from job_hunter_agent.run_control import (
     clear_run_progress,
@@ -958,8 +962,7 @@ def _validate_required_onboarding_inputs(
         search_preferences.get(KEY_ENGAGEMENT_TYPE), default_to_all=False
     )
 
-    if keywords and (len(keywords) < 2 or len(keywords) > 120):
-        raise ValueError("Please keep the primary search title between 2 and 120 characters.")
+    validate_search_keywords(keywords, require_phrase=True)
     if len(locations) != 1:
         raise ValueError("Please choose one search location.")
     location = locations[0]

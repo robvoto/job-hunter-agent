@@ -1,5 +1,6 @@
 """Tests for settings template."""
 
+import json
 import re
 from pathlib import Path
 
@@ -196,6 +197,15 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="choice-card choice-card--work-mode"' in html
 
     assert 'select id="sector_preference"' not in html
+
+
+def test_capability_help_text_explains_matching_weight():
+    labels_path = ROOT_DIR / "data" / "knowledge" / "ui_labels.json"
+    ui_labels = json.loads(labels_path.read_text(encoding="utf-8"))
+    help_text = ui_labels["capability_ui_labels"]["help_text"]
+
+    assert "the strength you choose changes how much each capability influences matching" in help_text.lower()
+    assert "strong for your best evidence" in help_text.lower()
 
 
 def test_settings_review_panel_empty_state_copy_is_defined():

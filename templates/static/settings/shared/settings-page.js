@@ -53,6 +53,19 @@ function readOnboardingWelcomeSearchKeywords() {
   }
 }
 
+function validateSearchKeywords(keyword) {
+  const text = String(keyword || '').trim();
+  if (!text) {
+    return;
+  }
+  if (text.length < 2 || text.length > 120) {
+    throw new Error('Please keep the search keyword between 2 and 120 characters.');
+  }
+  if (text.split(/\s+/).filter(Boolean).length < 2) {
+    throw new Error('Please use at least two words for the search title, or leave it blank.');
+  }
+}
+
 let loadedUserSettings = null;
 let loadedProfile = null;
 let loadedGlobalSettings = null;
@@ -227,6 +240,7 @@ function collectProfile() {
   if (!Number.isFinite(seekMaxPages)) {
     throw new Error('Please choose a valid SEEK page limit.');
   }
+  validateSearchKeywords(settingsField('keywords').value);
   const engagementTypeValues = getEngagementTypeValues();
   const contractEnabled = engagementTypeValues.includes('contract') || engagementTypeValues.includes('full_time_contract');
   const minContractEl = document.getElementById('min_contract_months');

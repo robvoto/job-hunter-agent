@@ -150,6 +150,22 @@ def test_onboarding_template_uses_shared_primary_cv_copy_placeholders():
     assert "__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_HINT__" in html_text
 
 
+def test_onboarding_privacy_copy_links_to_docs(monkeypatch):
+    monkeypatch.setattr(
+        _fa,
+        "read_session_user",
+        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+    )
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
+    monkeypatch.setattr(_pages, "get_user_id_for_runtime", lambda: "test-user")
+
+    client = TestClient(create_app())
+    html = client.get("/onboarding").text
+
+    assert 'href="/docs"' in html
+    assert "fuller retention decision" in html.lower()
+
+
 def test_onboarding_flow_labels_include_capability_review_copy():
     labels = server_helpers.load_onboarding_flow_labels()
 
@@ -750,6 +766,26 @@ def test_validate_required_onboarding_inputs_rejects_bad_boundaries():
         assert str(exc)
     else:
         raise AssertionError("Expected ValueError for invalid onboarding boundaries")
+
+
+def test_validate_required_onboarding_inputs_rejects_single_word_keyword():
+    with pytest.raises(ValueError, match="at least two words"):
+        server_helpers._validate_required_onboarding_inputs(
+            {
+                "keywords": "Analyst",
+                "locations": ["Sydney"],
+                "engagement_type": ["permanent", "contract"],
+            },
+            {
+                "extraction_lookback_years": 12,
+                "title_extraction_min_months": 6,
+            },
+        )
+
+
+def test_save_profile_rejects_single_word_keyword():
+    with pytest.raises(ValueError, match="at least two words"):
+        profile_store.save_profile({"search_settings": {"keywords": "Analyst"}})
 
 
 def test_normalize_onboarding_settings_payload_supports_current_key():

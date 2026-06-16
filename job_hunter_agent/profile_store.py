@@ -49,6 +49,7 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SECONDARY,
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
+from job_hunter_agent.runtime_helpers import is_desktop_runtime
 from job_hunter_agent.utils import coerce_int, deep_merge
 
 # Shared Profile and Settings Keys
@@ -747,6 +748,10 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     from job_hunter_agent.paths import get_active_user_id
 
     user_id = get_active_user_id()
+    validate_search_keywords(
+        (profile or {}).get("search_settings", {}).get("keywords"),
+        require_phrase=True,
+    )
     normalized = normalize_full_profile(profile)
     persisted = dict(normalized)
     persisted.pop("scoring_rules", None)
@@ -849,6 +854,19 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
     else:
         merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = bool(easy_apply_only)
     return merged
+
+
+def validate_search_keywords(value: object, *, require_phrase: bool = False) -> str:
+    keywords = str(value or "").strip()
+    if not keywords:
+        return ""
+    if len(keywords) < 2 or len(keywords) > 120:
+        raise ValueError("Please keep the primary search title between 2 and 120 characters.")
+    if require_phrase and len(keywords.split()) < 2:
+        raise ValueError(
+            "Please use at least two words for the primary search title, or leave it blank."
+        )
+    return keywords
 
 
 def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, int]:
@@ -999,6 +1017,8 @@ def classify_candidate_profile_section_label(label: str) -> str:
 
 
 def _classify_unknown_section_label(lowered: str, default_bucket: str) -> str:
+    if is_desktop_runtime():
+        return default_bucket
     from job_hunter_agent import llm_gate  # lazy import — llm_gate imports profile_store
     from job_hunter_agent.signal_registry import register_signals, upsert_profile_section_label
     from job_hunter_agent.signal_schema import (

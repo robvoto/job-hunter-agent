@@ -703,6 +703,9 @@ export function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.keywords && (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120)) {
     throw new Error(`Please keep the ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()} between 2 and 120 characters.`);
   }
+  if (searchPrefs.keywords && searchPrefs.keywords.trim().split(/\s+/).filter(Boolean).length < 2) {
+    throw new Error('Please use at least two words for the search title, or leave it blank.');
+  }
   if (searchPrefs.locations.length !== 1) {
     throw new Error('Please choose one search location.');
   }
