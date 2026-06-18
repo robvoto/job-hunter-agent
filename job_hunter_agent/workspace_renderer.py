@@ -158,6 +158,7 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "date_range_label",
     "last_run_heading",
     "crawler_stats_heading",
+    "crawler_stats_helper",
     "applications_heading",
     "run_efficiency_summary",
     "show_hide_hint",
@@ -1474,13 +1475,13 @@ def render_job_card(
         '<div class="job-header-copy">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         + (
-            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="Hide future roles whose titles contain the selected words, before description review.">Hide similar titles</button>'
+            f'<button class="title-block-btn" type="button" data-review-action="block_similar" data-block-phrase="{block_phrase}" data-block-phrases="{block_phrases_json}" {button_data_attrs} title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip", "Hide future roles whose titles contain the selected words, before description review."))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label", "Hide similar titles"))}</button>'
             '<div class="block-confirm" data-block-confirm hidden>'
-            f'<div class="feature-guide-note">{safe_html(TITLE_BLOCK_GUIDANCE_COPY)}</div>'
-            f'<p class="block-confirm-copy">{safe_html(TITLE_BLOCK_PROMPT_COPY)}</p>'
+            f'<div class="feature-guide-note">{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy", TITLE_BLOCK_GUIDANCE_COPY))}</div>'
+            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy", TITLE_BLOCK_PROMPT_COPY))}</p>'
             '<details class="block-confirm-help">'
-            f"<summary>{safe_html(TITLE_BLOCK_HELP_SUMMARY)}</summary>"
-            f"<p>{safe_html(TITLE_BLOCK_GUIDANCE_COPY)}</p>"
+            f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary", TITLE_BLOCK_HELP_SUMMARY))}</summary>'
+            f'<p>{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy", TITLE_BLOCK_GUIDANCE_COPY))}</p>'
             "</details>"
             '<p class="block-confirm-copy">Block future titles with:</p>'
             '<div class="block-phrase-checks" data-block-phrase-checks></div>'
@@ -1488,10 +1489,10 @@ def render_job_card(
             '<div class="block-manual-row">'
             '<span class="block-manual-label">Add title words</span>'
             '<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. project manager, payroll">'
-            f'<span class="block-manual-help">{safe_html(TITLE_BLOCK_MANUAL_HELP)}</span>'
+            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help", TITLE_BLOCK_MANUAL_HELP))}</span>'
             "</div>"
             '<p class="block-impact" data-block-impact></p>'
-            f'<p class="block-confirm-sub">{safe_html(TITLE_BLOCK_STRONG_FILTER_COPY)}</p>'
+            f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy", TITLE_BLOCK_STRONG_FILTER_COPY))}</p>'
             '<div class="block-confirm-actions">'
             '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Block Selected Titles</button>'
             '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'

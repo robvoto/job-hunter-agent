@@ -26,7 +26,7 @@ _test_db_dir = tempfile.mkdtemp(prefix="jh_test_")
 
 _test_db_path = Path(_test_db_dir) / "test.db"
 
-os.environ.setdefault("JOB_HUNTER_DB_PATH", str(_test_db_path))
+os.environ["JOB_HUNTER_DB_PATH"] = str(_test_db_path)
 
 
 from job_hunter_agent.database import init_db  # noqa: E402

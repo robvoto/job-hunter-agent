@@ -5,9 +5,18 @@
                 <h2>Search Settings</h2>
                 <p class="panel-copy">__JOB_HUNTER_SEARCH_SOURCE_SHARED_INPUTS_COPY__</p>
                 <p class="panel-copy">Where sector, work type, or work mode cannot be determined from the ad, the job is always included for you to review.</p>
+                <div class="settings-section-actions">
+                  <button class="primary" id="save_search_settings_shortcut" type="button">__JOB_HUNTER_SETTINGS_SEARCH_SAVE_BUTTON_LABEL__</button>
+                </div>
               </div>
 
               <div class="search-settings-stack">
+                <aside class="subpanel search-settings-subcard settings-privacy-note" aria-labelledby="settings_privacy_title">
+                  <h3 id="settings_privacy_title">__JOB_HUNTER_SETTINGS_PRIVACY_TITLE__</h3>
+                  <p>__JOB_HUNTER_SETTINGS_PRIVACY_COPY__</p>
+                  <a href="/docs" target="_blank" rel="noopener">__JOB_HUNTER_SETTINGS_PRIVACY_LINK_LABEL__</a>
+                </aside>
+
                 <section class="subpanel search-settings-subcard">
                   <div class="settings-form-grid settings-form-grid--search-basics">
                     <div class="settings-form-field settings-form-field--full">
@@ -238,31 +247,31 @@
                     </section>
                   </div>
                 </section>
-              </div>
-            </section>
 
-            <section class="panel search-operations-panel" id="schedule-panel">
-              <div class="search-operations-head">
-                <div>
-                  <h2>Run &amp; Schedule</h2>
-                  <p class="panel-copy">These controls use your current search settings.</p>
-                </div>
-              </div>
-
-              <div class="search-operations-grid">
-                <section class="search-operation-card">
-                  <h3>Daily schedule</h3>
-                  <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
-                  <div class="field-label-row">
-                    <label for="schedule_daily_time_local">Run every day at</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help">i</summary>
-                      <div class="field-info-panel">This uses your local machine time.</div>
-                    </details>
+                <section class="subpanel search-settings-subcard search-operations-panel" id="schedule-panel">
+                  <div class="search-operations-head">
+                    <div>
+                      <h3>Run &amp; Schedule</h3>
+                      <p class="panel-copy">These controls use your current search settings.</p>
+                    </div>
                   </div>
-                  <input id="schedule_daily_time_local" type="time">
-                  <div class="panel-actions search-operation-actions">
-                    <button class="secondary" id="save_daily_schedule" type="button">Save Daily Schedule</button>
+
+                  <div class="search-operations-grid">
+                    <section class="search-operation-card">
+                      <h3>Daily schedule</h3>
+                      <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
+                      <div class="field-label-row">
+                        <label for="schedule_daily_time_local">Run every day at</label>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel">This uses your local machine time.</div>
+                        </details>
+                      </div>
+                      <input id="schedule_daily_time_local" type="time">
+                      <div class="panel-actions search-operation-actions">
+                        <button class="secondary" id="save_daily_schedule" type="button">Save Daily Schedule</button>
+                      </div>
+                    </section>
                   </div>
                 </section>
               </div>

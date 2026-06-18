@@ -100,6 +100,14 @@ The runtime profile is authoritative system state.
 
 Source onboarding material is evidence input, not runtime truth.
 
+Raw uploaded CV retention decision:
+
+* uploaded CV files are onboarding input, not long-term user-facing records
+* the app imports extracted profile support into the SQLite runtime profile
+* raw uploaded CV files must not be treated as canonical matching state
+* future application-pack features must ask for or manage source documents explicitly instead of silently relying on old uploaded CV files
+* packaged or shared builds must not include a developer's personal CV, profile, job history, scraped jobs, logs, output, runtime DB, or private examples
+
 ---
 
 ## Filtering Pipeline

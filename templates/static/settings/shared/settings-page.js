@@ -111,6 +111,7 @@ export function showInlineStatus(element, message, kind) {
 export function markDirty() {
   if (suppressDirtyTracking) return;
   if (activeSaveButton) activeSaveButton.disabled = false;
+  if (searchSaveShortcut) searchSaveShortcut.disabled = false;
   if (stickySaveBar) {
     stickySaveBar.hidden = false;
     stickySaveBar.dataset.dirty = 'true';
@@ -119,6 +120,7 @@ export function markDirty() {
 
 export function clearDirty() {
   if (activeSaveButton) activeSaveButton.disabled = true;
+  if (searchSaveShortcut) searchSaveShortcut.disabled = true;
   if (stickySaveBar) {
     stickySaveBar.hidden = true;
     delete stickySaveBar.dataset.dirty;
@@ -382,18 +384,85 @@ function setSettingsHashWithoutScroll(sectionId) {
 function scrollSettingsToTop() {
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 }
+
+function normalizeSettingsSearchText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getSettingsSectionNavItems() {
+  return Array.from(document.querySelectorAll(`.nav-item[data-section][data-screen="${pageMode}"]`));
+}
+
+function setActiveSettingsSection(sectionId, options = {}) {
+  if (!sectionId) return;
+  const activeButton = document.querySelector(`.nav-item[data-section="${sectionId}"][data-screen="${pageMode}"]`);
+  document.querySelectorAll('.settings-group').forEach(group => {
+    group.classList.toggle('is-active', group.id === sectionId);
+  });
+  document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+    item.classList.toggle('is-active', item === activeButton);
+  });
+  setSettingsHashWithoutScroll(sectionId);
+  if (options.scrollToTop) {
+    scrollSettingsToTop();
+  }
+}
+
+function settingsSectionSearchHaystack(button) {
+  const section = document.getElementById(button.dataset.section || '');
+  return normalizeSettingsSearchText(`${button.textContent || ''} ${section?.textContent || ''}`);
+}
+
+function applySettingsSectionSearch(query) {
+  const searchText = normalizeSettingsSearchText(query);
+  const navItems = getSettingsSectionNavItems();
+  const matchedSectionIds = new Set();
+
+  navItems.forEach((button) => {
+    const isMatch = !searchText || settingsSectionSearchHaystack(button).includes(searchText);
+    button.hidden = !isMatch;
+    button.classList.toggle('is-search-match', Boolean(searchText && isMatch));
+    if (isMatch && button.dataset.section) {
+      matchedSectionIds.add(button.dataset.section);
+    }
+  });
+
+  if (!searchText) {
+    document.querySelectorAll(`.settings-group[data-screen="${pageMode}"]`).forEach((group) => {
+      group.classList.remove('is-search-result');
+    });
+    const hashSection = window.location.hash.replace('#', '');
+    const target = navItems.find((button) => button.dataset.section === hashSection) || navItems[0];
+    if (target) setActiveSettingsSection(target.dataset.section);
+    return;
+  }
+
+  document.querySelectorAll(`.settings-group[data-screen="${pageMode}"]`).forEach((group) => {
+    group.classList.remove('is-active');
+    group.classList.toggle('is-search-result', matchedSectionIds.has(group.id));
+  });
+
+  const firstMatch = navItems.find((button) => !button.hidden);
+  document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+    item.classList.toggle('is-active', item === firstMatch);
+  });
+  if (firstMatch?.dataset.section) {
+    setSettingsHashWithoutScroll(firstMatch.dataset.section);
+  }
+}
+
+const settingsSectionSearch = document.getElementById('settings_section_search');
+settingsSectionSearch?.addEventListener('input', () => {
+  applySettingsSectionSearch(settingsSectionSearch.value);
+});
 // -- Navigation --------------------------------------------
 document.querySelectorAll('.nav-item[data-section]').forEach(btn => {
   btn.addEventListener('click', () => {
-    const sectionId = btn.dataset.section;
-    document.querySelectorAll('.settings-group').forEach(group => {
-      group.classList.toggle('is-active', group.id === sectionId);
-    });
-    document.querySelectorAll('.nav-item').forEach(item => {
-      item.classList.toggle('is-active', item === btn);
-    });
-    setSettingsHashWithoutScroll(sectionId);
-    scrollSettingsToTop();
+    if (settingsSectionSearch) {
+      settingsSectionSearch.value = '';
+      applySettingsSectionSearch('');
+    }
+    setActiveSettingsSection(btn.dataset.section, { scrollToTop: true });
   });
 });
 
@@ -435,17 +504,29 @@ const stickySaveBar = document.getElementById('sticky_save_bar');
 const activeSaveButton = isAdminPage ? document.getElementById('save_admin_btn') : document.getElementById('save_settings_btn');
 const activeDiscardButton = isAdminPage ? document.getElementById('discard_admin_changes_btn') : document.getElementById('discard_changes_btn');
 const globalStatus = document.getElementById('global_save_status');
+const searchSaveShortcut = document.getElementById('save_search_settings_shortcut');
 
 if (activeSaveButton) activeSaveButton.disabled = true;
+if (searchSaveShortcut) searchSaveShortcut.disabled = true;
 
 bindCurrencyFields(['minimum_salary_yearly', 'minimum_daily_rate', 'salary_limit_minimum_salary_yearly_max', 'salary_limit_minimum_daily_rate_max']);
 
 document.querySelectorAll('input, select, textarea').forEach(el => {
-  if (el.id === 'capability_matrix_filter' || el.classList.contains('is-readonly') || el.type === 'hidden') return;
+  if (
+    el.id === 'capability_matrix_filter'
+    || el.id === 'settings_section_search'
+    || el.classList.contains('is-readonly')
+    || el.type === 'hidden'
+  ) return;
   el.addEventListener('change', markDirty);
   if (el.tagName === 'TEXTAREA' || ['text', 'time', 'number', 'password', 'search'].includes(el.type)) {
     el.addEventListener('input', markDirty);
   }
+});
+
+searchSaveShortcut?.addEventListener('click', () => {
+  if (!activeSaveButton || activeSaveButton.disabled) return;
+  activeSaveButton.click();
 });
 
 const pageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__;

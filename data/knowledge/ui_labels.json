@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 34,
+  "version": 35,
   "updated_at": "2026-06-11",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -96,7 +96,13 @@
     "search_elapsed_prefix": "Search elapsed: ",
     "search_stopping_title": "Stopping search",
     "search_stopping_copy": "Job Hunter is stopping the current search and will show the results collected so far.",
-    "search_stopping_subcopy": "Keep this tab open while the current run wraps up."
+    "search_stopping_subcopy": "Keep this tab open while the current run wraps up.",
+    "settings_section_search_label": "Find setting",
+    "settings_section_search_placeholder": "Search settings",
+    "settings_privacy_title": "CV data and privacy",
+    "settings_privacy_copy": "Job Hunter uses your uploaded CV to build the runtime profile used for matching. The raw CV is not the long-term source of truth, and packaged or shared builds must not include developer CVs, scraped jobs, logs, runtime databases, or private examples.",
+    "settings_privacy_link_label": "Read the retention decision",
+    "settings_search_save_button_label": "Save Search Settings"
   },
   "onboarding_import_summary_labels_description": "Display labels for the onboarding import helper summary.",
   "onboarding_import_summary_labels": {
@@ -147,7 +153,7 @@
     "guidance_avoid_image_layouts": "Image-heavy layouts where the text is hard to extract",
     "guidance_avoid_missing_dates": "CVs with missing dates or vague role names",
     "guidance_avoid_mixed_directions": "Multiple different target directions crammed into a short summary",
-    "guidance_note": "Plain, detailed content beats pretty formatting.",
+    "guidance_note": "Plain, detailed content beats pretty formatting. For the full optional checklist, see <a href=\"/docs\" target=\"_blank\" rel=\"noopener\">the User Guide</a>.",
     "experience_priority_label": "Prioritise recent or total experience?",
     "experience_priority_help": "Choose how much older experience should count when matching you to jobs.",
     "experience_priority_option_recent": "Focus on recent experience",
@@ -194,7 +200,7 @@
     "create_profile_status_reading_pages": "Reading the first {count} pages of your CV...",
     "create_profile_status_reading_cv": "Reading your CV...",
     "create_profile_status_extracting": "Extracting titles and capabilities...",
-    "create_profile_status_reviewing": "Reviewing role history and recency...",
+    "create_profile_status_reviewing": "Calculating experience duration and recency...",
     "create_profile_status_building": "Building your draft profile...",
     "review_capability_helper_copy": "Review the capability groups extracted from your CV.",
     "review_capability_extracted_skills_label_one": "1 extracted skill",
@@ -363,7 +369,14 @@
     "importance_mandatory": "Required",
     "importance_strongly_preferred": "Expected",
     "importance_preferred": "Preferred",
-    "importance_nice_to_have": "Bonus"
+    "importance_nice_to_have": "Bonus",
+    "title_block_button_label": "Hide similar titles",
+    "title_block_button_tooltip": "Hide future roles whose titles contain the selected words before Job Hunter spends time reading the full ad.",
+    "title_block_guidance_copy": "Use this when a job title is clearly outside your search, such as platform-specific or admin-heavy roles you keep rejecting. Job Hunter will block matching titles before description review, which keeps future runs cleaner and avoids spending time or AI tokens on repeated noise.",
+    "title_block_prompt_copy": "Block future titles before description review.",
+    "title_block_help_summary": "What this does",
+    "title_block_manual_help": "Adds to the checked words above. Use commas to add more than one.",
+    "title_block_strong_filter_copy": "This is a strong filter. Matching titles will be hidden before description review."
   },
   "workspace_page_labels_description": "Labels for the main workspace page (results.html).",
   "workspace_page_labels": {
@@ -411,6 +424,7 @@
     "date_range_label": "Date range",
     "last_run_heading": "Last Run",
     "crawler_stats_heading": "Crawler Stats",
+    "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail.",
     "applications_heading": "Applications",
     "run_efficiency_summary": "Run Efficiency",
     "show_hide_hint": "Show / hide",

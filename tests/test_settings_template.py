@@ -18,6 +18,10 @@ SETTINGS_ADMIN_PARTIAL_PATH = (
 SETTINGS_PAGE_CSS_PATH = (
     ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
 )
+SETTINGS_TEMPLATE_PATH = ROOT_DIR / "templates" / "settings.html"
+SETTINGS_SEARCH_PARTIAL_PATH = (
+    ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
+)
 SETTINGS_ADMIN_JS_PATH = (
     ROOT_DIR / "templates" / "static" / "settings" / "global" / "settings-admin.js"
 )
@@ -116,12 +120,14 @@ def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):
 
 
 def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
+    session_user = {"user_id": "test", "email": "test@example.com", "role": "admin"}
 
     monkeypatch.setattr(
         _fa,
         "read_session_user",
-        lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"},
+        lambda request: session_user,
     )
+    monkeypatch.setattr(_pages, "read_session_user", lambda request: session_user)
 
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
 
@@ -148,8 +154,14 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="settings-section-head"' in html
 
     assert "Search Settings" in html
+    assert "CV data and privacy" in html
+    assert "The raw CV is not the long-term source of truth" in html
+    assert 'id="save_search_settings_shortcut"' in html
+    assert "Save Search Settings" in html
 
     assert "Job board search" in html
+    assert 'class="panel search-operations-panel"' not in html
+    assert 'class="subpanel search-settings-subcard search-operations-panel"' in html
 
     assert "search-common-panel" not in html
 
@@ -259,17 +271,53 @@ def test_settings_matrix_section_omits_outer_panel_wrapper(monkeypatch):
 
     assert "Decision Weights" in html
 
-    assert "Capability Matrix" in html
 
-    assert "Rules" in html
+def test_settings_sidebar_has_client_side_section_search():
+    html = SETTINGS_TEMPLATE_PATH.read_text(encoding="utf-8")
+    labels = json.loads((ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
+    css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
 
-    assert "Alerts &amp; AI" in html
+    assert 'id="settings_section_search"' in html
+    assert "__JOB_HUNTER_SETTINGS_SECTION_SEARCH_LABEL__" in html
+    assert "__JOB_HUNTER_SETTINGS_SECTION_SEARCH_PLACEHOLDER__" in html
+    assert labels["shared_ui_labels"]["settings_section_search_label"] == "Find setting"
+    assert labels["shared_ui_labels"]["settings_section_search_placeholder"] == "Search settings"
+    assert "applySettingsSectionSearch" in js
+    assert "settingsSectionSearchHaystack" in js
+    assert "group.classList.remove('is-active');" in js
+    assert "save_search_settings_shortcut" in js
+    assert "activeSaveButton.click();" in js
+    assert "el.id === 'settings_section_search'" in js
+    assert ".settings-sidebar-search" in css
+    assert ".settings-group.is-search-result" in css
+    assert ".settings-privacy-note" in css
 
-    assert "Optimise" in html
 
-    assert 'id="schedule-panel"' in html
+def test_search_settings_partial_has_privacy_subcards_and_local_save_shortcut():
+    html = SETTINGS_SEARCH_PARTIAL_PATH.read_text(encoding="utf-8")
+    labels = json.loads((ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
 
-    assert 'id="capability_matrix_editor"' in html
+    assert 'class="panel search-settings-shell settings-section-shell"' in html
+    assert 'class="subpanel search-settings-subcard settings-privacy-note"' in html
+    assert "__JOB_HUNTER_SETTINGS_PRIVACY_TITLE__" in html
+    assert "__JOB_HUNTER_SETTINGS_PRIVACY_COPY__" in html
+    assert labels["shared_ui_labels"]["settings_privacy_title"] == "CV data and privacy"
+    assert "raw CV is not the long-term source of truth" in labels["shared_ui_labels"]["settings_privacy_copy"]
+
+    assert 'id="save_search_settings_shortcut"' in html
+    assert "__JOB_HUNTER_SETTINGS_SEARCH_SAVE_BUTTON_LABEL__" in html
+    assert labels["shared_ui_labels"]["settings_search_save_button_label"] == "Save Search Settings"
+    assert "searchSaveShortcut?.addEventListener('click'" in js
+    assert "activeSaveButton.click();" in js
+
+    assert 'class="panel search-operations-panel"' not in html
+    assert 'class="subpanel search-settings-subcard search-operations-panel"' in html
 
 
 def test_settings_alerts_section_uses_shared_settings_shell(monkeypatch):

@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign in — Job Hunter</title>
+  <script>
+    (function () {
+      var THEMES = ['soft-professional', 'bold-aggressive', 'dark-professional'];
+      var saved = localStorage.getItem('jha-theme');
+      if (THEMES.indexOf(saved) !== -1) {
+        document.documentElement.setAttribute('data-theme', saved);
+      }
+    }());
+  </script>
   <link rel="stylesheet" href="/static/theme/themes.css">
   <link rel="stylesheet" href="/static/login/login-page.css">
 </head>

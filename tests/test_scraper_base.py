@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from job_hunter_agent.record_schema import (
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
+    RECORD_SOURCE_ADVERTISER_ID_KEY,
     RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
 )
@@ -71,8 +73,10 @@ def test_normalize_jobspy_record_sets_expected_shape():
         "platform": "linkedin",
         "apply_url": "https://jobs.lever.co/acme/123",
         "apply_domain": "jobs.lever.co",
+        RECORD_SOURCE_CANONICAL_URL_KEY: "https://example.com/job/123",
         "company_profile_url": "https://acme.com.au",
         "company_profile_name": "Acme",
+        RECORD_SOURCE_ADVERTISER_ID_KEY: "",
         "poster_company": "Acme",
         "hiring_company": "Acme",
         "ats_source": "jobs.lever.co",

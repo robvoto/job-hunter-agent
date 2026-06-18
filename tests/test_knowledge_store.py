@@ -394,6 +394,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
             "date_range_label": "Date range",
             "last_run_heading": "Last Run",
             "crawler_stats_heading": "Crawler Stats",
+            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail.",
             "applications_heading": "Applications",
             "run_efficiency_summary": "Run Efficiency",
             "show_hide_hint": "Show / hide",

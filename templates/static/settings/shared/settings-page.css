@@ -110,6 +110,29 @@
       text-transform: uppercase;
       color: var(--text-muted);
     }
+    /* Local layout exception: this search filters the settings sidebar sections only. */
+    .settings-sidebar-search {
+      display: grid;
+      gap: 6px;
+      margin: 0 var(--surface-pad-inline-sm) 12px;
+    }
+    .settings-sidebar-search__label {
+      font-size: var(--text-role-micro-font-size);
+      font-weight: var(--text-role-overline-font-weight);
+      letter-spacing: var(--text-role-overline-letter-spacing);
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .settings-sidebar-search input {
+      width: 100%;
+      min-height: var(--control-height-md);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      background: var(--bg-input, var(--bg-surface));
+      color: var(--text-primary);
+      padding: 0 var(--surface-pad-inline-sm);
+      font: inherit;
+    }
     .sidebar-group-label-global {
       margin-top: 22px;
       padding-top: 14px;
@@ -155,6 +178,7 @@
     .settings-content-area { max-width: 1100px; margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
     .settings-group { display: none; }
     .settings-group.is-active { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .settings-group.is-search-result { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
     @keyframes slideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
     .save-footer {
@@ -255,6 +279,37 @@
     }
     .search-operations-panel {
       grid-column: 1 / -1;
+    }
+    .settings-section-actions {
+      margin-top: var(--surface-gap-sm);
+      display: flex;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: var(--surface-gap-sm);
+    }
+    .settings-privacy-note {
+      display: grid;
+      gap: 8px;
+    }
+    .settings-privacy-note h3 {
+      margin: 0;
+      font-size: var(--text-role-panel-title-font-size);
+      font-weight: var(--text-role-panel-title-font-weight);
+    }
+    .settings-privacy-note p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: var(--text-role-body-compact-font-size);
+      line-height: var(--text-role-body-compact-line-height);
+    }
+    .settings-privacy-note a {
+      justify-self: start;
+      color: var(--selection-accent);
+      font-weight: var(--text-role-button-font-weight);
+      text-decoration: none;
+    }
+    .settings-privacy-note a:hover {
+      text-decoration: underline;
     }
     .search-operations-head {
       display: flex;

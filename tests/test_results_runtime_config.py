@@ -168,8 +168,8 @@ def test_candidate_application_history_sync_failure_logs_warning_and_uses_local_
     assert "sheet unavailable" in str(mock_warning.call_args.args[1])
 
 
-def test_rendered_workspace_html_content():
-    mock_output_path = Path("mock_rendered_workspace.html")
+def test_rendered_workspace_html_content(tmp_path):
+    mock_output_path = tmp_path / "mock_rendered_workspace.html"
     mock_run_started_at = datetime.now()
     mock_reference_time = datetime.now()
 
@@ -242,6 +242,7 @@ def test_rendered_workspace_html_content():
             "date_range_label": "Date range",
             "last_run_heading": "Last Run",
             "crawler_stats_heading": "Crawler Stats",
+            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail.",
             "applications_heading": "Applications",
             "run_efficiency_summary": "Run Efficiency",
             "show_hide_hint": "Show / hide",
@@ -354,6 +355,8 @@ def test_rendered_workspace_html_content():
             '<button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs (0)</button>'
             in rendered_html
         )
+        assert "Cards seen is the number of source cards scanned." in rendered_html
+        assert "Ads reviewed is the smaller set" in rendered_html
         assert (
             '<span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">Permanent</span>'
             in rendered_html

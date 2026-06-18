@@ -73,6 +73,23 @@ Server logging:
 - `job_hunter_agent/review_insights.py`
   Aggregates audit data and skill observations to suggest profile tuning.
 
+### LLM Prompt Context Loading
+
+`llm_gate.build_profile_prompt_context()` is the owner for loading the runtime profile into LLM prompt context.
+
+Current reviewed state:
+
+- `build_system_prompt()` calls `build_profile_prompt_context()` internally.
+- `llm_suggest_rejection_blockers()` also calls `build_profile_prompt_context()` directly when it builds its own focused system prompt.
+- This can mean separate LLM paths load the profile independently, but there is no confirmed duplicate load inside a single shared prompt-builder call chain.
+
+Rule:
+
+- call `build_system_prompt()` when the normal fit-review system prompt is needed
+- call `build_profile_prompt_context()` directly only for focused prompts that intentionally do not use the normal full system prompt
+- do not call both in the same prompt assembly path unless the caller has a specific reason and documents it
+- if duplicate profile loading becomes measurable, extract a request-scoped prompt context object rather than adding hidden caching inside prompt builders
+
 ### Suggested Tuning Flow
 
 The Settings > Optimise > Suggested Tuning panel is a confirmation layer, not automatic learning.

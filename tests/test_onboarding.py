@@ -175,6 +175,16 @@ def test_onboarding_flow_labels_include_capability_review_copy():
     )
     assert labels["review_capability_extracted_skills_label_one"] == "1 extracted skill"
     assert labels["review_capability_extracted_skills_label_many"] == "{count} extracted skills"
+    assert labels["create_profile_status_extracting"] == "Extracting titles and capabilities..."
+    assert labels["create_profile_status_reviewing"] == "Calculating experience duration and recency..."
+
+
+def test_onboarding_guidance_links_to_user_guide():
+    labels = server_helpers.load_onboarding_page_labels()
+
+    assert "Plain, detailed content beats pretty formatting." in labels["guidance_note"]
+    assert 'href="/docs"' in labels["guidance_note"]
+    assert "User Guide" in labels["guidance_note"]
 
 
 def test_onboarding_import_summary_labels_include_cost_copy():

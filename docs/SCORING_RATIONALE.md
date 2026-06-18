@@ -180,6 +180,19 @@ Preference entries include location and salary/rate.
 
 They help ranking, but they must not be read as evidence that the candidate meets mandatory job requirements.
 
+### Location scoring decision
+
+Current location matching is intentionally conservative. The search location usually comes from the same candidate setting that is sent to SEEK and LinkedIn, so a broad location match often proves only that the source query worked.
+
+Until proper radius, commute, and near-home support exists, location should be treated as a weak preference signal rather than strong fit evidence:
+
+- a clear broad match may keep the job from being penalised
+- unclear, hybrid, or source-normalised locations should stay visible for review
+- location should not inflate the score as if it proves role quality
+- out-of-area hard filtering belongs to explicit exclusion/radius rules, not implicit score bonuses
+
+Future radius support should make the decision explicit: jobs can then be compared against a home/suburb plus distance threshold, with uncertain geocoding preserved for review rather than silently discarded.
+
 ### 4. Convenience entries
 
 Convenience entries include:
@@ -252,6 +265,18 @@ Current derivation rules:
 Important limitation:
 
 Mandatory `not_shown` lowers the weighted ratio but does not automatically reject the job. That is deliberate for now, because a missing profile capability may mean the candidate profile is incomplete rather than the candidate cannot do it.
+
+### Missing CV evidence default
+
+Default rule for new or incomplete profiles:
+
+- if a capability, tool, certification, clearance, domain, or role duration is not present in the runtime profile, the system must not claim the candidate has it
+- missing evidence is treated as `not_shown`, not as supported evidence
+- missing evidence can lower requirement coverage and score
+- missing evidence should not automatically become a hard rejection unless an approved hard-block rule applies
+- when the missing item looks important, surface it as a visible gap or review signal so the user can improve the profile if the CV omitted real experience
+
+This keeps the system strict without pretending the CV is perfect. The profile is the current evidence source, not an omniscient model of the candidate.
 
 ---
 

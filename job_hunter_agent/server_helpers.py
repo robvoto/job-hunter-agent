@@ -196,6 +196,12 @@ _SHARED_UI_LABEL_KEYS = (
     "search_stopping_title",
     "search_stopping_copy",
     "search_stopping_subcopy",
+    "settings_section_search_label",
+    "settings_section_search_placeholder",
+    "settings_privacy_title",
+    "settings_privacy_copy",
+    "settings_privacy_link_label",
+    "settings_search_save_button_label",
 )
 _SEARCH_SOURCE_LABEL_KEYS = (
     "section_title",

@@ -22,6 +22,7 @@ Use this file to decide where information belongs. Do not create a new markdown 
 | `docs/DEVELOPER_GUIDE.md` | Developer workflow and code ownership map. |
 | `docs/OPERATIONS.md` | Commands, flags, diagnostics, recovery, and deployment operations. |
 | `docs/USER_GUIDE.md` | User-facing application behaviour and usage. |
+| `docs/SHOWCASE_NOTES.md` | Local demo, showcase, and product-positioning notes tied to visible proof. |
 | `docs/aws-ec2-setup.md` | Current AWS EC2 production setup. |
 
 ## Domain/reference docs

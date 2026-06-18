@@ -124,6 +124,103 @@ def test_candidate_application_history_defaults_do_not_ship_personal_sheet_confi
     assert history_settings["tab_name"] == ""
 
 
+def test_showcase_notes_are_indexed_and_proof_oriented():
+    doc_index = (ROOT_DIR / "docs" / "DOC_INDEX.md").read_text(encoding="utf-8")
+    showcase_notes = (ROOT_DIR / "docs" / "SHOWCASE_NOTES.md").read_text(encoding="utf-8")
+
+    assert "docs/SHOWCASE_NOTES.md" in doc_index
+    assert "Proof / demo note" in showcase_notes
+    assert "Keep claims tied to visible behaviour or tests in the repo." in showcase_notes
+
+
+def test_user_guide_documents_cv_structure_and_search_placement():
+    user_guide = (ROOT_DIR / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
+
+    assert "CV Structure For Better Extraction" in user_guide
+    assert "roles listed in reverse chronological order" in user_guide
+    assert "dates for each role, ideally month and year" in user_guide
+    assert "Search placement rule:" in user_guide
+    assert "configure search terms, location, enabled sources, and preference settings in `Settings`" in user_guide
+    assert "start or stop an actual search from the `Workspace`" in user_guide
+
+
+def test_scoring_rationale_documents_location_scoring_decision():
+    scoring_rationale = (ROOT_DIR / "docs" / "SCORING_RATIONALE.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Location scoring decision" in scoring_rationale
+    assert "weak preference signal rather than strong fit evidence" in scoring_rationale
+    assert "Future radius support should make the decision explicit" in scoring_rationale
+
+
+def test_scoring_rationale_documents_missing_cv_evidence_default():
+    scoring_rationale = (ROOT_DIR / "docs" / "SCORING_RATIONALE.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Missing CV evidence default" in scoring_rationale
+    assert "the system must not claim the candidate has it" in scoring_rationale
+    assert "missing evidence is treated as `not_shown`" in scoring_rationale
+    assert "not automatically become a hard rejection" in scoring_rationale
+
+
+def test_architecture_and_user_guide_document_raw_cv_retention_decision():
+    architecture = (ROOT_DIR / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    user_guide = (ROOT_DIR / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
+
+    assert "Raw uploaded CV retention decision:" in architecture
+    assert "uploaded CV files are onboarding input, not long-term user-facing records" in architecture
+    assert "future application-pack features must ask for or manage source documents explicitly" in architecture
+    assert "the raw uploaded CV is not treated as the ongoing source of truth" in user_guide
+    assert "packaged/shared builds must not include developer CVs" in user_guide
+
+
+def test_developer_guide_documents_prompt_context_loading_rule():
+    developer_guide = (ROOT_DIR / "docs" / "DEVELOPER_GUIDE.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "LLM Prompt Context Loading" in developer_guide
+    assert "`build_system_prompt()` calls `build_profile_prompt_context()` internally" in developer_guide
+    assert "do not call both in the same prompt assembly path" in developer_guide
+    assert "request-scoped prompt context object" in developer_guide
+
+
+def test_showcase_notes_are_available_in_docs_api_allow_list():
+    from job_hunter_agent.config import ALLOWED_DOC_REL_PATHS
+
+    assert "docs/SHOWCASE_NOTES.md" in ALLOWED_DOC_REL_PATHS
+
+
+def test_workspace_title_block_copy_is_managed_and_explains_impact():
+    import json
+
+    labels = json.loads((ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    card_labels = labels["workspace_card_labels"]
+    renderer = (ROOT_DIR / "job_hunter_agent" / "workspace_renderer.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert card_labels["title_block_button_label"] == "Hide similar titles"
+    assert "before Job Hunter spends time reading the full ad" in card_labels["title_block_button_tooltip"]
+    assert "avoids spending time or AI tokens on repeated noise" in card_labels["title_block_guidance_copy"]
+    assert "_workspace_label(\"workspace_card_labels\", \"title_block_guidance_copy\"" in renderer
+
+
+def test_recent_roles_label_no_longer_exists_in_runtime_ui():
+    checked_paths = [
+        ROOT_DIR / "data" / "knowledge" / "ui_labels.json",
+        ROOT_DIR / "job_hunter_agent" / "workspace_renderer.py",
+        ROOT_DIR / "templates" / "results.html",
+        ROOT_DIR / "templates" / "settings.html",
+        ROOT_DIR / "templates" / "onboarding.html",
+    ]
+
+    for path in checked_paths:
+        assert "Recent roles" not in path.read_text(encoding="utf-8")
+
+
 def test_active_modules_import():
 
     modules = [

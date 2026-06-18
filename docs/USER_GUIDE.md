@@ -33,11 +33,42 @@ If you open the app from another device on your local network, the login session
 
 The app will create or enrich your runtime profile (stored in the SQLite DB), which becomes your working profile for job matching.
 
+## CV Structure For Better Extraction
+
+This guidance is optional. Job Hunter should not force you to rewrite a CV before onboarding, but extraction is more reliable when the source document is structured clearly.
+
+Best input:
+
+- roles listed in reverse chronological order
+- dates for each role, ideally month and year
+- clear job titles and employer names
+- bullet points that describe what you actually did
+- skills, tools, domains, and platforms near the roles where you used them
+- recent detailed roles first, with older or less relevant roles kept shorter
+
+Avoid when possible:
+
+- one-page marketing CVs with almost no role detail
+- image-heavy layouts where text extraction may fail
+- missing dates or vague time ranges
+- mixing several unrelated target directions into one short summary
+
+Plain, detailed content usually beats polished formatting. If the extracted draft looks wrong, improve the source structure and rebuild onboarding rather than hand-tuning every downstream setting.
+
 ## Privacy And CV Data
 
 Job Hunter does not keep the raw uploaded CV as a long-term user-facing file.
 
-It uses the uploaded document to extract matching signals and profile structure, then keeps the runtime profile, review state, and other working data needed for job matching. If you want the broader retention context, start from the documentation index and the operational docs.
+It uses the uploaded document to extract matching signals and profile structure, then keeps the runtime profile, review state, and other working data needed for job matching.
+
+Decision:
+
+- the runtime profile is what matching uses after onboarding
+- the raw uploaded CV is not treated as the ongoing source of truth
+- if a future application-pack feature needs a CV file, the app should ask for or manage that source document explicitly
+- packaged/shared builds must not include developer CVs, profiles, job history, scraped jobs, logs, runtime DBs, or private examples
+
+If you want the broader retention context, start from the documentation index and the operational docs.
 
 ## What Onboarding Creates
 
@@ -67,6 +98,13 @@ Tabs:
 - `Test`: latest run stats and rejected samples
 
 Think of settings as the maintenance surface for your profile, not the place where you upload raw source files every time.
+
+Search placement rule:
+
+- configure search terms, location, enabled sources, and preference settings in `Settings`
+- start or stop an actual search from the `Workspace`
+- review results, run status, and job decisions in the `Workspace`
+- return to `Settings` only when you want to change what the next run should search for
 
 Search location uses one canonical AU choice only. The UI defaults to a recommended state or capital city, then SEEK and LinkedIn adapt that same value to their own search format.
 
@@ -151,7 +189,7 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 Follow the standard refresh workflow in [OPERATIONS.md](OPERATIONS.md).
 
-The runtime profile controls which sources are active. If `LinkedIn` is not in `enabled_sources` for the current user profile, the run will skip it.
+Before running, confirm search setup in `Settings > Search`. The runtime profile controls which sources are active. If `LinkedIn` is not in `enabled_sources` for the current user profile, the run will skip it.
 
 Then open the workspace at:
 

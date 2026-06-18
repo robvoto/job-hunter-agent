@@ -39,7 +39,9 @@ from job_hunter_agent.record_schema import (
     RECORD_SEARCH_KEYWORDS_KEY,
     RECORD_SEARCH_LOCATION_KEY,
     RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_SOURCE_ADVERTISER_ID_KEY,
     RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
@@ -90,8 +92,10 @@ def blank_source_metadata(source: str) -> dict:
         "platform": source,
         "apply_url": "",
         "apply_domain": "",
+        RECORD_SOURCE_CANONICAL_URL_KEY: "",
         "company_profile_url": "",
         "company_profile_name": "",
+        RECORD_SOURCE_ADVERTISER_ID_KEY: "",
         "poster_company": "",
         "hiring_company": "",
         "ats_source": "",
@@ -113,8 +117,10 @@ def _build_initial_source_metadata(
     source: str,
     raw_source_fields: dict,
     apply_url: str = "",
+    canonical_url: str = "",
     company_profile_url: str = "",
     company_profile_name: str = "",
+    advertiser_id: str = "",
     poster_company: str = "",
     hiring_company: str = "",
     platform_job_id: str = "",
@@ -126,8 +132,10 @@ def _build_initial_source_metadata(
         {
             "apply_url": apply_url,
             "apply_domain": _url_domain(apply_url),
+            RECORD_SOURCE_CANONICAL_URL_KEY: canonical_url,
             "company_profile_url": company_profile_url,
             "company_profile_name": company_profile_name,
+            RECORD_SOURCE_ADVERTISER_ID_KEY: advertiser_id,
             "poster_company": poster_company or company_profile_name,
             "hiring_company": hiring_company or company_profile_name,
             "ats_source": _url_domain(apply_url) if ats_source is None else ats_source,
@@ -463,6 +471,7 @@ def normalize_jobspy_record(
     raw_id = _safe_str(_get(JOBSPY_ID_KEY), "")
     job_key = normalize_job_key(raw_id, source=source) if raw_id else None
     apply_url = _first_non_empty(_get("job_url_direct"), _get(JOBSPY_JOB_URL_KEY))
+    canonical_url = _safe_str(_get(JOBSPY_JOB_URL_KEY))
     company_profile_url = _first_non_empty(_get("company_url_direct"), _get("company_url"))
     company_profile_name = _first_non_empty(_get("company_name"), _get(JOBSPY_COMPANY_KEY))
     raw_source_fields = _json_safe_value(_safe_row_dict(row))
@@ -470,6 +479,7 @@ def normalize_jobspy_record(
         source=source,
         raw_source_fields=raw_source_fields,
         apply_url=apply_url,
+        canonical_url=canonical_url,
         company_profile_url=company_profile_url,
         company_profile_name=company_profile_name,
         poster_company=company_profile_name,

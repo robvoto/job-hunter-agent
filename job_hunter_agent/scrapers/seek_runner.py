@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import sys
 import threading
 import time
 import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Set
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +135,36 @@ def _seek_json_safe_value(value: object):
     return value
 
 
+def _seek_canonical_url(url: str) -> str:
+    """Return the SEEK job URL with tracking params and fragment stripped."""
+    try:
+        parsed = urlsplit(url)
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    except Exception:
+        return url.split("?", 1)[0].split("#", 1)[0]
+
+
+def _seek_job_id_from_url(url: str) -> str:
+    """Extract the numeric SEEK job ID from a job listing URL."""
+    m = re.search(r"/job/(\d+)", url)
+    return m.group(1) if m else ""
+
+
+def _seek_advertiser_id_from_payload(payload: object) -> str:
+    """Extract the advertiser or hirer ID from a SEEK page payload when present."""
+    if not isinstance(payload, dict):
+        return ""
+    for block_key in ("advertiser", "hirer"):
+        block = payload.get(block_key)
+        if isinstance(block, dict):
+            aid = str(block.get("id") or "").strip()
+            if aid:
+                return aid
+    return ""
+
+
 def _seek_source_metadata(
-    detail_page, details_payload: dict, *, redux_payload=None
+    detail_page, details_payload: dict, *, redux_payload=None, url: str = ""
 ) -> tuple[dict, object]:
     if redux_payload is None and detail_page is not None:
         try:
@@ -177,12 +207,19 @@ def _seek_source_metadata(
     platform_job_id = str(
         _seek_string_value(combined_payload, ("seekPostingSourceCode",)) or ""
     ).strip()
+    # Fall back to the numeric job ID embedded in the listing URL when payload lacks it.
+    if not platform_job_id and url:
+        platform_job_id = _seek_job_id_from_url(url)
+    canonical_url = _seek_canonical_url(url) if url else ""
+    advertiser_id = _seek_advertiser_id_from_payload(combined_payload)
     metadata = _build_initial_source_metadata(
         source="seek",
         raw_source_fields=raw_source_fields,
         apply_url=apply_url,
+        canonical_url=canonical_url,
         company_profile_url=company_profile_url,
         company_profile_name=company_profile_name,
+        advertiser_id=advertiser_id,
         poster_company=poster_company,
         hiring_company=hiring_company,
         platform_job_id=platform_job_id,
@@ -339,7 +376,8 @@ async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     raw_html = await page.content() if DEBUG_CAPTURE_SOURCE_PAYLOADS else None
 
     source_metadata, raw_source_payload = _seek_source_metadata(
-        None, details_payload, redux_payload=redux_payload
+        None, details_payload, redux_payload=redux_payload,
+        url=str(record.get(rs.RECORD_URL_KEY) or ""),
     )
     record[rs.RECORD_SOURCE_METADATA_KEY] = source_metadata
     record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
