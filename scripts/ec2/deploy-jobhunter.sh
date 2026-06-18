@@ -8,14 +8,14 @@ HEALTH_URL="${JOB_HUNTER_HEALTH_URL:-http://127.0.0.1:8765/start}"
 
 show_help() {
   cat <<HELP
-Deploy Job Hunter on AWS EC2.
+Deploy Job Hunter on AWS EC2 using uv.
 
 What this does:
   1. moves to the app repo
   2. confirms Git working tree state
   3. pulls latest GitHub code using --ff-only
-  4. activates the project virtual environment
-  5. installs dependencies from requirements.txt
+  4. ensures uv is installed
+  5. syncs the production .venv from pyproject.toml
   6. loads /etc/job-hunter/job-hunter.env
   7. applies the same production runtime path defaults used by systemd
   8. runs db_seed --upgrade so runtime files land in the real production data dir
@@ -31,9 +31,30 @@ Usage:
 Important:
   - This is the normal update/deploy command, not a first-install script.
   - Do not manually pip install production dependencies on AWS.
+  - Dependencies belong in pyproject.toml and are installed with uv sync.
   - Do not manually copy runtime JSON files as the permanent solution.
   - Add dependencies/runtime seed rules to the repo, commit, push, then run this command.
 HELP
+}
+
+ensure_uv() {
+  if command -v uv >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "==> Install uv"
+  echo "Teaching: uv is the project dependency manager. It creates/updates .venv from pyproject.toml."
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "ERROR: curl is required to install uv. Install curl first." >&2
+    exit 1
+  fi
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "ERROR: uv install completed but uv is still not on PATH." >&2
+    exit 1
+  fi
 }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
@@ -42,7 +63,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 echo "==> Deploying Job Hunter"
-echo "Teaching: deployment must pull GitHub and install from requirements.txt so AWS matches the repo."
+echo "Teaching: deployment must pull GitHub and sync dependencies with uv so AWS matches the repo."
 
 cd "$APP_DIR"
 
@@ -52,12 +73,16 @@ git status --short
 echo "==> Pull latest code"
 git pull --ff-only
 
-echo "==> Activate venv"
-# shellcheck disable=SC1091
-source "$APP_DIR/.venv/bin/activate"
+ensure_uv
 
-echo "==> Install/update dependencies"
-python -m pip install -r requirements.txt
+echo "==> uv version"
+uv --version
+
+echo "==> Sync production dependencies"
+uv sync --no-dev
+
+echo "==> Install/update Playwright Chromium"
+uv run playwright install chromium
 
 echo "==> Load production secrets/env file"
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -85,7 +110,7 @@ sudo chown -R ubuntu:ubuntu "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 
 echo "==> Upgrade DB/config seed"
 echo "Teaching: this copies all repo-managed runtime knowledge files into JOB_HUNTER_DATA_DIR, including salary rules and O*NET taxonomy indexes."
-python -m job_hunter_agent.db_seed --upgrade
+uv run python -m job_hunter_agent.db_seed --upgrade
 
 echo "==> Verify required runtime files"
 required_runtime_files=(
