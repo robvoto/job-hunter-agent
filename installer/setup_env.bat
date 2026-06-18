@@ -3,23 +3,23 @@ setlocal
 
 set APP_DIR=%~dp0..
 
-echo Creating Python virtual environment...
-python -m venv "%APP_DIR%\.venv"
+echo Checking uv...
+where uv >nul 2>nul
 if errorlevel 1 (
-    echo ERROR: Failed to create virtual environment.
-    echo Ensure Python 3.12 or later is installed and available in PATH.
+    echo ERROR: uv is required but was not found in PATH.
+    echo Install uv first, then run this setup again.
     exit /b 1
 )
 
-echo Installing dependencies...
-"%APP_DIR%\.venv\Scripts\pip.exe" install --quiet -r "%APP_DIR%\requirements.txt"
+echo Syncing Python environment with uv...
+uv sync --no-dev
 if errorlevel 1 (
-    echo ERROR: Failed to install dependencies.
+    echo ERROR: Failed to sync dependencies with uv.
     exit /b 1
 )
 
 echo Installing Playwright Chromium browser...
-"%APP_DIR%\.venv\Scripts\python.exe" -m playwright install chromium
+uv run playwright install chromium
 if errorlevel 1 (
     echo ERROR: Failed to install Playwright Chromium.
     exit /b 1

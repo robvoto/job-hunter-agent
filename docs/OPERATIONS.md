@@ -399,7 +399,7 @@ python -m job_hunter_agent.agent_runner --no-notify
 ```powershell
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+uv sync --no-dev
 python -m playwright install chromium
 ```
 
@@ -516,7 +516,7 @@ Run the full suite before merging into `main`.
 Install dev tools:
 
 ```powershell
-pip install -r requirements-dev.txt
+uv sync --group dev
 ```
 
 Check formatting and linting:
@@ -657,7 +657,7 @@ deploy-jobhunter
 
 `deploy-jobhunter` updates the EC2 app from GitHub, installs declared dependencies, loads production environment variables, runs `db_seed --upgrade`, restarts `job-hunter.service`, and prints status/logs.
 
-This is the correct path for production updates. Do not manually install Python packages on AWS as a permanent fix. Missing packages must be added to `requirements.txt` and deployed through Git.
+This is the correct path for production updates. Do not manually install Python packages on AWS as a permanent fix. Missing packages must be added to `pyproject.toml`, locked with `uv.lock`, committed, and deployed through Git.
 
 ## AWS status check
 

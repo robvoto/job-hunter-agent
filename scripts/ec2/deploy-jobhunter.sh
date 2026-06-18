@@ -14,15 +14,14 @@ What this does:
   1. moves to the app repo
   2. confirms Git working tree state
   3. pulls latest GitHub code using --ff-only
-  4. activates the project virtual environment
-  5. installs dependencies from requirements.txt
-  6. loads /etc/job-hunter/job-hunter.env
-  7. applies the same production runtime path defaults used by systemd
-  8. runs db_seed --upgrade so runtime files land in the real production data dir
-  9. verifies required production knowledge files, including salary and O*NET taxonomy
-  10. verifies the repo-managed AWS service contract is installed
-  11. restarts job-hunter.service
-  12. waits briefly, then proves the app is alive with curl
+  4. syncs dependencies from pyproject.toml using uv
+  5. loads /etc/job-hunter/job-hunter.env
+  6. applies production runtime path defaults
+  7. runs db_seed --upgrade
+  8. verifies required production knowledge files
+  9. verifies the repo-managed AWS service contract is installed
+  10. restarts job-hunter.service
+  11. waits briefly, then proves the app is alive with curl
 
 Usage:
   deploy-jobhunter
@@ -31,8 +30,7 @@ Usage:
 Important:
   - This is the normal update/deploy command, not a first-install script.
   - Do not manually pip install production dependencies on AWS.
-  - Do not manually copy runtime JSON files as the permanent solution.
-  - Add dependencies/runtime seed rules to the repo, commit, push, then run this command.
+  - Dependencies belong in pyproject.toml and uv.lock.
 HELP
 }
 
@@ -42,7 +40,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 echo "==> Deploying Job Hunter"
-echo "Teaching: deployment must pull GitHub and install from requirements.txt so AWS matches the repo."
+echo "Teaching: deployment must pull GitHub and sync from pyproject.toml with uv."
 
 cd "$APP_DIR"
 
@@ -52,12 +50,17 @@ git status --short
 echo "==> Pull latest code"
 git pull --ff-only
 
-echo "==> Activate venv"
-# shellcheck disable=SC1091
-source "$APP_DIR/.venv/bin/activate"
+echo "==> Check uv"
+if ! command -v uv >/dev/null 2>&1; then
+  echo "ERROR: uv is required but was not found on PATH." >&2
+  exit 1
+fi
 
-echo "==> Install/update dependencies"
-python -m pip install -r requirements.txt
+echo "==> Sync production dependencies"
+uv sync --no-dev
+
+echo "==> Install/update Playwright Chromium"
+uv run playwright install chromium
 
 echo "==> Load production secrets/env file"
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -70,7 +73,6 @@ source "$ENV_FILE"
 set +a
 
 echo "==> Apply production runtime path defaults"
-echo "Teaching: systemd defines these runtime paths for the live service. The seed step must use the same paths."
 export JOB_HUNTER_DATA_DIR="${JOB_HUNTER_DATA_DIR:-/var/lib/job-hunter/data}"
 export JOB_HUNTER_OUTPUT_DIR="${JOB_HUNTER_OUTPUT_DIR:-/var/lib/job-hunter/output}"
 export JOB_HUNTER_DB_PATH="${JOB_HUNTER_DB_PATH:-/var/lib/job-hunter/data/job_hunter.db}"
@@ -84,8 +86,7 @@ sudo mkdir -p "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 sudo chown -R ubuntu:ubuntu "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 
 echo "==> Upgrade DB/config seed"
-echo "Teaching: this copies all repo-managed runtime knowledge files into JOB_HUNTER_DATA_DIR, including salary rules and O*NET taxonomy indexes."
-python -m job_hunter_agent.db_seed --upgrade
+uv run python -m job_hunter_agent.db_seed --upgrade
 
 echo "==> Verify required runtime files"
 required_runtime_files=(
@@ -102,7 +103,6 @@ for required_file in "${required_runtime_files[@]}"; do
 done
 
 echo "==> Verify AWS service contract"
-echo "Teaching: deploy must fail if the live service drifts from the repo-managed production runtime contract."
 service_cat="$(sudo systemctl cat "$SERVICE")"
 if ! grep -q '^ExecStart=/usr/bin/xvfb-run ' <<<"$service_cat"; then
   echo "ERROR: $SERVICE.service is not using /usr/bin/xvfb-run. Run: sudo -E $APP_DIR/scripts/ec2/install-jobhunter-service.sh" >&2
@@ -117,7 +117,6 @@ echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
 
 echo "==> Wait for app startup"
-echo "Teaching: systemd can say active before Python finishes importing. Wait, then curl proves the app is listening."
 sleep 3
 
 echo "==> Service status"

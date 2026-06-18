@@ -23,7 +23,8 @@
 ;     data\signals\*.json                           Seeds
 ;     .venv\                                        Python virtual environment (created by setup_env.bat)
 ;     installer\setup_env.bat                       Dep-install utility
-;     requirements.txt
+;     pyproject.toml
+;     uv.lock
 ;
 ;   %APPDATA%\JobHunterAgent\data\                  User data root (JOB_HUNTER_DATA_DIR)
 ;     config\global_settings.json                   Direct-read by global_settings_defaults.py
@@ -68,7 +69,8 @@ Source: "job_hunter_agent.ico";  DestDir: "{app}";                  Flags: ignor
 Source: "..\job_hunter_agent\*"; DestDir: "{app}\job_hunter_agent"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__,*.pyc,*.pyo"
 Source: "..\desktop\*";         DestDir: "{app}\desktop";          Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\templates\*";       DestDir: "{app}\templates";        Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\requirements.txt";  DestDir: "{app}";                  Flags: ignoreversion
+Source: "..\pyproject.toml";    DestDir: "{app}";                  Flags: ignoreversion
+Source: "..\uv.lock";           DestDir: "{app}";                  Flags: ignoreversion skipifsourcedoesntexist
 Source: "setup_env.bat";        DestDir: "{app}\installer";        Flags: ignoreversion
 
 ; Knowledge / config seeds in the app dir (used by upgrade_knowledge_from_dir and bootstrap)

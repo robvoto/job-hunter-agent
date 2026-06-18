@@ -415,8 +415,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 python --version
 which python
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
+uv sync --no-dev
+uv sync --no-dev
 ```
 
 Expected:
@@ -763,7 +763,7 @@ ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236
 cd /home/ubuntu/job-hunter-agent
 git pull
 source .venv/bin/activate
-pip install -r requirements.txt
+uv sync --no-dev
 set -a
 source /etc/job-hunter/job-hunter.env
 set +a
@@ -1014,7 +1014,7 @@ deploy-jobhunter
 2. show `git status --short`
 3. pull latest code with `git pull --ff-only`
 4. activate `/home/ubuntu/job-hunter-agent/.venv`
-5. install dependencies with `pip install -r requirements.txt`
+5. install dependencies with `uv sync --no-dev`
 6. load `/etc/job-hunter/job-hunter.env`
 7. run `python -m job_hunter_agent.db_seed --upgrade`
 8. restart `job-hunter.service`
@@ -1093,7 +1093,7 @@ config/global_settings.json
 defaults/user_settings.json
 ```
 
-If code imports a Python package, that package must be declared in `requirements.txt`. Do not manually install packages on AWS as the permanent solution. Fix `requirements.txt`, commit, push, then run `deploy-jobhunter`.
+If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, commit, push, then run `deploy-jobhunter`.
 
 ## Version-controlled EC2 helper scripts
 
