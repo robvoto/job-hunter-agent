@@ -4,8 +4,9 @@ Local-first job discovery and fit-evaluation system.
 
 Deployment target:
 
-- AWS EC2 with a small EBS-backed root volume
-- production-style operation, not prototype-only handling
+- WSL-based local development on the PC
+- AWS EC2 production operation
+- desktop packaging as a separate distribution flow
 - keep runtime state and deployment notes aligned with server operation
 
 The product goal is simple: a user gives the app strong source material about their experience, the app builds a working profile, reviews jobs against that profile, and keeps a meaningful shortlist instead of forcing the user to search manually every day.
@@ -25,6 +26,24 @@ The architecture is intentionally broader than a single site. SEEK is the curren
 
 ## Quick Start
 
+The supported local developer runtime is **WSL + uv**.
+
+From WSL:
+
+```bash
+cd /mnt/e/Programming/job-hunter-agent
+./scripts/run-jobhunter.sh debug
+```
+
+Common commands:
+
+```bash
+./scripts/run-jobhunter.sh sync
+./scripts/run-jobhunter.sh test
+./scripts/run-jobhunter.sh no-llm
+./scripts/run-jobhunter.sh rebuild
+```
+
 Do not duplicate setup or runtime commands in this README.
 
 - For day-to-day use, follow [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
@@ -38,6 +57,7 @@ Search design note:
 ## Architecture Note: Shell & Fragment
 
 The workspace UI uses a decoupled pattern for performance and maintainability:
+
 - **workspace.html (The Shell)**: The main entry point. It contains the navigation, branding, and JavaScript logic to poll for updates.
 - **results.html (The Fragment)**: A template used by the server to render the actual job results.
 
@@ -46,9 +66,10 @@ When you load the workspace, the Shell is served first, and the Fragment is fetc
 ## Tech Stack
 
 - **Core**: Python 3.12+
+- **Dependency/runtime management**: uv with `pyproject.toml`
 - **Automation**: Playwright (SEEK scraping)
 - **Multi-Source**: `python-jobspy` (LinkedIn)
-- **Intelligence**: OpenAI API (GPT-4o / GPT-4o-mini)
+- **Intelligence**: OpenAI API where user-owned provider keys are enabled
 - **Parsing**: `python-docx` and `pandas`
 - **UI**: FastAPI + uvicorn; HTML/JS templates under `templates/` and `static/` (routes in `job_hunter_agent/routes/`)
 - **Environment**: `python-dotenv`
@@ -57,38 +78,42 @@ Logic and core modules reside in the `job_hunter_agent/` package.
 
 ## Important Files
 
-- `data/profile.json`
-  Runtime source of truth for matching.
- 
-- `data/agent_settings.template.json`
+- `pyproject.toml`  
+  Dependency source of truth for uv.
+
+- `scripts/run-jobhunter.sh`  
+  WSL runner for sync, app startup, scraping, tests, linting, and Playwright setup.
+
+- SQLite DB (`JOB_HUNTER_DB_PATH`)  
+  Runtime source of truth for profile, history, user settings, and run outputs.
+
+- `data/agent_settings.template.json`  
   Starter template for daily-agent scheduling and notification delivery.
 
-- `output/workspace.html`
-  Persistent shortlist workspace from the latest run plus local history.
+- `data/knowledge/`  
+  Baseline business knowledge seeds.
 
-- `output/audit_records.json`
-- `output/run_stats.json`
-- `output/review_data.json`
-  Debugging and tuning outputs.
+- `data/config/`  
+  Global/default config seeds.
 
 ## Local-Only State
 
 These are intended to stay local and ignored:
 
 - `.venv/`
+- `uv.lock` until generated/reviewed and intentionally committed
 - `TODO.txt`
-- `data/profile.json`
-- `data/job_history.json`
-- `data/llm_cache.json` 
-- `data/agent_settings.json`
-- `data/agent_state.json`
-- `data/llm_costs.jsonl`
-- `output/rejection_rules.json`
+- `data/app.db`
+- `data/app.db-shm`
+- `data/app.db-wal`
+- `data/runtime/`
+- `data/users/`
 - `output/`
+- local/private env files and API keys
 
 ## Security
 
-By default, the application is configured for local use on `localhost`. If you access the workspace over a network (e.g., binding to `0.0.0.0`), the system enforces `Secure` and `__Host-` prefixed session cookies. **This requires an HTTPS connection** (usually handled via a reverse proxy like Caddy or Nginx) for the session management to function.
+By default, the application is configured for local use on `localhost`. If you access the workspace over a network, put it behind a proper HTTPS reverse proxy and keep session-cookie settings aligned with `docs/OPERATIONS.md`.
 
 ## LLM Notes
 
