@@ -148,10 +148,22 @@ Local operational UI.
 python -m job_hunter_agent.fastapi_app
 ```
 
+Repo-root launcher:
+
+```bash
+./run
+```
+
 Debug mode:
 
 ```powershell
 python -m job_hunter_agent.fastapi_app --debug
+```
+
+Repo-root launcher:
+
+```bash
+./run --debug
 ```
 
 Server logs:

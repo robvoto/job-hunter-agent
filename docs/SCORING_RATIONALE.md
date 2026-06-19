@@ -58,6 +58,12 @@ Primary visual diagram:
 docs/diagrams/scoring_process_flow.mmd
 ```
 
+Openable render:
+
+```text
+docs/diagrams/scoring_process_flow.svg
+```
+
 Inline renderable copy:
 
 ```mermaid
