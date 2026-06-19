@@ -241,6 +241,7 @@ def set_session_cookie(
         return
     value = _build_session_cookie_value(user, config.session_secret)
     name, secure_flag = _get_session_cookie_params(request)
+    max_age_days = int(os.getenv("JOB_HUNTER_SESSION_MAX_AGE_DAYS", "7"))
     response.set_cookie(
         name,
         value,
@@ -250,6 +251,7 @@ def set_session_cookie(
         samesite="lax",
         secure=secure_flag,
         path=SESSION_COOKIE_PATH,
+        max_age=max_age_days * 86400,
     )
 
 
