@@ -356,7 +356,9 @@
     .admin-settings-grid > .panel {
       min-width: 0;
     }
-    /* Admin panel fields are direct children (no wrapper divs) — add stack spacing via adjacent siblings */
+    /* Admin panel fields are direct children. upgradeSettingsHelpBlocks() removes .field-help and
+       wraps each label in .field-label-row, so live DOM is: .field-label-row → input → .field-label-row.
+       Target both pre- and post-upgrade patterns for robustness. */
     .admin-settings-grid .panel > label + label,
     .admin-settings-grid .panel > input + label,
     .admin-settings-grid .panel > select + label,
@@ -367,7 +369,15 @@
     .admin-settings-grid .panel > .field-label-row + label,
     .admin-settings-grid .panel > .field-help + .toggle-switch,
     .admin-settings-grid .panel > input + .toggle-switch,
-    .admin-settings-grid .panel > select + .toggle-switch {
+    .admin-settings-grid .panel > select + .toggle-switch,
+    /* Post-upgrade: labels wrapped in .field-label-row, .field-help removed */
+    .admin-settings-grid .panel > input + .field-label-row,
+    .admin-settings-grid .panel > select + .field-label-row,
+    .admin-settings-grid .panel > textarea + .field-label-row,
+    .admin-settings-grid .panel > button + .field-label-row,
+    .admin-settings-grid .panel > .toggle-switch + .field-label-row,
+    .admin-settings-grid .panel > .field-help + .field-label-row,
+    .admin-settings-grid .panel > .field-label-row + .field-label-row {
       margin-top: var(--field-stack-gap);
     }
     .subpanel {

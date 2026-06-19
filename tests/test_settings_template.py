@@ -60,6 +60,10 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
 
     assert "Global settings" in html
 
+    assert 'id="knowledge_sync_db_file"' in html
+    assert 'id="knowledge_sync_button"' in html
+    assert "Upload and merge knowledge" in html
+
     assert 'id="source_document_allowed_suffixes"' in html
 
     assert "account-bar-shortcut" not in html

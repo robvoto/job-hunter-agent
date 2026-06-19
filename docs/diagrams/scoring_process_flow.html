@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scoring Process Flow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fbff;
+      --panel: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #dbe4f0;
+      --shadow: 0 18px 60px rgba(15, 23, 42, 0.10);
+      --accent: #2f5cff;
+    }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef2ff 100%);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+    .shell {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+    .meta {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .meta code {
+      color: var(--text);
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.8);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: auto;
+      padding: 28px 24px;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-width: max-content;
+    }
+    .help {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    textarea {
+      display: none;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const source = document.getElementById("diagram-source").value.trim();
+      const diagram = document.getElementById("diagram");
+      diagram.textContent = source;
+
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "loose",
+        theme: "base",
+        flowchart: {
+          useMaxWidth: true,
+          curve: "basis"
+        },
+        themeVariables: {
+          fontFamily: 'Inter, "Segoe UI", Arial, sans-serif'
+        }
+      });
+
+      mermaid.run({ nodes: [diagram] });
+    });
+  </script>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <div>
+        <h1>Scoring Process Flow</h1>
+        <div class="meta">Human-friendly sibling view for <code>scoring_process_flow.mmd</code></div>
+      </div>
+      <a class="chip" href="./scoring_process_flow.mmd">Open Mermaid source</a>
+    </div>
+    <div class="panel">
+      <div id="diagram" class="mermaid"></div>
+    </div>
+    <div class="help">This view is meant to sit next to the Mermaid source and render it directly in your browser.</div>
+  </div>
+
+  <textarea id="diagram-source">
+flowchart TD
+    %% Job Hunter scoring process overview.
+    %% Render with Mermaid in GitHub, VS Code Mermaid preview, or the local app at /static/diagrams/scoring_process_flow.
+
+    A((Start: Job found)) --> B[Capture job posting]
+
+    B --> C[Prepare the job record&lt;br/&gt;title, company, location, salary, work mode, description]
+    C -. Business note .-> Cn[Store structured fields in the database&lt;br/&gt;and keep the raw description separate]
+
+    C --> D{Enough information&lt;br/&gt;to assess?}
+    D -- No --> D1[Mark as incomplete / low confidence&lt;br/&gt;do not guess missing details]
+    D1 --> Z1((End: Needs review or skipped))
+
+    D -- Yes --> E[Run rule-based checks before AI]
+    E -. Business note .-> En[Quick checks run first&lt;br/&gt;to save time and AI cost]
+
+    E --> F{Blocked by a clear rule?}
+    F -- Yes --> F1[Reject before AI&lt;br/&gt;record the reason]
+    F1 --> Z2((End: Rejected))
+
+    F -- No --> G{Outside the target job family?}
+    G -. Business note .-> Gn[Compare the role to the target job family&lt;br/&gt;using O*NET guidance]
+    G -- Yes --> G1[Reject before AI&lt;br/&gt;title or taxonomy reason]
+    G1 --> Z2
+
+    G -- No / uncertain --> H[Prepare the review packet&lt;br/&gt;structured record + trimmed description]
+    H -. Business note .-> Hn[Keep the full description&lt;br/&gt;but present a compact version for review]
+
+    H --> I{Can this be scored&lt;br/&gt;with rules alone?}
+    I -- Yes --> J[Create a rule-based assessment&lt;br/&gt;grade + rationale + source]
+    I -- No --> K[Send to AI review]
+
+    K --> L[Extract requirements&lt;br/&gt;and match them to candidate strengths]
+    J --> L
+    L -. Business note .-> Ln[Map job requirements&lt;br/&gt;to known candidate capabilities]
+
+    L --> M{Enough evidence&lt;br/&gt;to score?}
+    M -- No --> M1[Use fallback grade&lt;br/&gt;mark coverage as missing]
+    M -- Yes --> N[Derive the grade from coverage]
+
+    M1 --> O[Build the frozen score summary]
+    N --> O
+
+    O --> P[Apply the grade band limit&lt;br/&gt;keep score within the chosen band]
+    P -. Business note .-> Pn[The frozen score is not a percentage&lt;br/&gt;of qualification]
+
+    P --> Q{Any hard blockers&lt;br/&gt;after review?}
+    Q -- Yes --> Q1[Apply the blocker penalty&lt;br/&gt;push score near zero]
+    Q -- No --> R[Store the final score + explanation]
+
+    Q1 --> R
+
+    R --> S[Adjust display ranking only&lt;br/&gt;freshness, viewed status]
+    S -. Business note .-> Sn[Display ranking can change;&lt;br/&gt;the frozen score does not]
+
+    S --> T[Show the ranked job to the user]
+
+    T --> U{User action}
+    U -- Apply / save --> U1[Record a positive signal]
+    U -- Skip / not for me --> U2[Record a rejection signal]
+    U -- Needs correction --> U3[Update profile, rules, or backlog]
+
+    U1 --> V[Learning signal]
+    U2 --> V
+    U3 --> V
+    V -. Business note .-> Vn[Feedback improves future runs&lt;br/&gt;without silently changing scoring]
+
+    V --> W((End: Improves future runs))
+
+    classDef decision fill:#fff3cd,stroke:#b58900,stroke-width:1px;
+    classDef endstate fill:#f8d7da,stroke:#842029,stroke-width:1px;
+    classDef note fill:#e7f1ff,stroke:#084298,stroke-dasharray: 4 3;
+
+    class D,F,G,I,M,Q,U decision;
+    class Z1,Z2,W endstate;
+    class Cn,En,Gn,Hn,Ln,Pn,Sn,Vn note;
+  </textarea>
+</body>
+</html>

@@ -3,6 +3,18 @@
           <p class="panel-copy">These controls are separate from your normal settings. They are shared, centrally managed values that shape search defaults, limits, scoring, onboarding, and workspace behaviour.</p>
           <div class="grid admin-settings-grid">
           <section class="panel">
+            <h2>Knowledge Sync</h2>
+            <p class="panel-copy">Use this to merge approved learning between your desktop app and AWS. It updates the live AWS knowledge store and downloads a merged desktop copy so you can keep the same shared learning on both sides.</p>
+
+            <label for="knowledge_sync_db_file">Desktop database file</label>
+            <input id="knowledge_sync_db_file" type="file" accept=".db,.sqlite,.sqlite3,application/x-sqlite3">
+            <div class="field-help">Pick the desktop app database you want to sync. The merged result will include any approved learning already present in AWS.</div>
+
+            <button id="knowledge_sync_button" type="button" class="btn btn-secondary">Upload and merge knowledge</button>
+            <div id="knowledge_sync_status" class="field-help">Choose the desktop database file, then upload it here. The app will merge shared knowledge into AWS and download the merged desktop copy.</div>
+          </section>
+
+          <section class="panel">
             <h2>Card Highlight Display</h2>
             <p class="panel-copy">These are global workspace rendering controls. They change what appears on every card, not the candidate profile or scoring rules.</p>
 

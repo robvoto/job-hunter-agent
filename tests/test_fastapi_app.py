@@ -1,16 +1,16 @@
 """Tests for fastapi app."""
 
 import inspect
+import json
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request as StarletteRequest
 
 import job_hunter_agent.fastapi_app as _fa
-import job_hunter_agent.routes.profile_materials as _profile_materials
 import job_hunter_agent.routes.pages as _pages
-from job_hunter_agent.fastapi_app import _bootstrap_runtime_knowledge, _cors_origin, create_app
+import job_hunter_agent.routes.profile_materials as _profile_materials
+from job_hunter_agent.fastapi_app import _cors_origin, create_app
 
 _FAKE_USER = {"user_id": "test", "email": "test@example.com", "role": "admin"}
 _CANDIDATE_USER = {"user_id": "candidate", "email": "candidate@example.com", "role": "candidate"}
@@ -121,6 +121,70 @@ def test_global_settings_api_allows_admin(monkeypatch):
     response = client.patch("/api/global-settings", json={"feature_flag": True})
     assert response.status_code == 200
     assert response.json() == {"saved": True, "feature_flag": True}
+
+
+def test_admin_knowledge_sync_merges_uploaded_database(monkeypatch, isolated_db, tmp_path):
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
+
+    set_knowledge(
+        "capability_knowledge",
+        {
+            "kind": "managed_knowledge",
+            "name": "capability_knowledge",
+            "version": 1,
+            "entries": [
+                {"value": "BPMN 2.0", "aliases": ["Business Process Modelling"]},
+            ],
+        },
+        isolated_db,
+    )
+
+    uploaded_db = tmp_path / "desktop.db"
+    init_db(uploaded_db)
+    set_knowledge(
+        "capability_knowledge",
+        {
+            "kind": "managed_knowledge",
+            "name": "capability_knowledge",
+            "version": 1,
+            "entries": [
+                {"value": "BPMN 2.0", "aliases": ["workflow mapping"]},
+                {"value": "SQL", "aliases": []},
+            ],
+        },
+        uploaded_db,
+    )
+
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: True)
+
+    client = TestClient(create_app())
+
+    with uploaded_db.open("rb") as handle:
+        response = client.post(
+            "/api/admin/knowledge-sync",
+            content=handle.read(),
+            headers={"X-Source-Filename": "desktop.db", "X-CSRF-Token": "token"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["x-sync-source-filename"] == "desktop.db"
+    assert response.headers["x-sync-download-filename"] == "desktop.merged.db"
+    assert "capability_knowledge" in json.loads(response.headers["x-sync-updated-keys"])
+
+    merged_download = tmp_path / "merged-desktop.db"
+    merged_download.write_bytes(response.content)
+    merged_entries = get_knowledge("capability_knowledge", merged_download)["entries"]
+    assert merged_entries[0]["value"] == "BPMN 2.0"
+    assert set(merged_entries[0]["aliases"]) == {"Business Process Modelling", "workflow mapping"}
+    assert merged_entries[1] == {"value": "SQL", "aliases": []}
+
+    entries = get_knowledge("capability_knowledge", isolated_db)["entries"]
+    assert entries[0]["value"] == "BPMN 2.0"
+    assert set(entries[0]["aliases"]) == {"Business Process Modelling", "workflow mapping"}
+    assert entries[1] == {"value": "SQL", "aliases": []}
 
 
 def test_workspace_page_bootstrap_includes_user_id(monkeypatch):

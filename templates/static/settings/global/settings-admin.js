@@ -481,6 +481,93 @@ export const JobHunterAdminSettings = (function () {
     };
   }
 
-  return { fillGlobalForm, collectGlobalSettings, loadGlobalSettingsHelp, applyGlobalSettingsHelp };
+  function initKnowledgeSyncControls(showStatus) {
+    const input = document.getElementById('knowledge_sync_db_file');
+    const button = document.getElementById('knowledge_sync_button');
+    const status = document.getElementById('knowledge_sync_status');
+    if (!input || !button || !status || typeof window.jobHunterFetch !== 'function') {
+      return;
+    }
+    if (button.dataset.syncBound === 'true') {
+      return;
+    }
+    button.dataset.syncBound = 'true';
+
+    const setStatus = (message, kind) => {
+      status.textContent = String(message || '');
+      status.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
+      if (typeof showStatus === 'function') {
+        showStatus(message, kind);
+      }
+    };
+
+    const triggerDownload = (blob, filename) => {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename || 'knowledge-sync.merged.db';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    button.addEventListener('click', async () => {
+      const file = input.files?.[0];
+      if (!file) {
+        setStatus('Choose a desktop database file first.', 'error');
+        return;
+      }
+
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Uploading...';
+      setStatus(`Uploading ${file.name}, merging approved knowledge into AWS, and preparing the merged desktop copy...`, 'loading');
+
+      try {
+        const response = await window.jobHunterFetch('/api/admin/knowledge-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-Source-Filename': file.name,
+          },
+          body: file,
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || 'Could not sync knowledge.');
+        }
+        const mergedKeysHeader = response.headers.get('X-Sync-Updated-Keys') || '[]';
+        const mergedFilename = response.headers.get('X-Sync-Download-Filename') || 'knowledge-sync.merged.db';
+        let mergedKeys = [];
+        try {
+          mergedKeys = JSON.parse(mergedKeysHeader);
+        } catch {
+          mergedKeys = [];
+        }
+        const summary = Array.isArray(mergedKeys) && mergedKeys.length
+          ? `Merged knowledge keys: ${mergedKeys.join(', ')}`
+          : 'Knowledge was already in sync.';
+        const mergedBlob = await response.blob();
+        triggerDownload(mergedBlob, mergedFilename);
+        setStatus(`${summary} Your merged desktop copy is downloading now.`, 'success');
+        input.value = '';
+      } catch (error) {
+        setStatus(error.message || 'Could not sync knowledge.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+  }
+
+  return {
+    fillGlobalForm,
+    collectGlobalSettings,
+    loadGlobalSettingsHelp,
+    applyGlobalSettingsHelp,
+    initKnowledgeSyncControls,
+  };
 }());
 

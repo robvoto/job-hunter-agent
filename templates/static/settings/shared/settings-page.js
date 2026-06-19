@@ -86,6 +86,7 @@ if (isAdminPage && bootstrapGlobalSettings) {
   loadedGlobalSettings = bootstrapGlobalSettings;
   adminSettings.fillGlobalForm(bootstrapGlobalSettings);
   adminSettings.loadGlobalSettingsHelp?.();
+  adminSettings.initKnowledgeSyncControls?.(showStatus);
   renderLlmModelOptions();
 }
 
@@ -740,6 +741,7 @@ async function saveActivePage() {
       loadedGlobalSettings = globalPayload;
       adminSettings.fillGlobalForm(globalPayload);
       adminSettings.applyGlobalSettingsHelp?.();
+      adminSettings.initKnowledgeSyncControls?.(showStatus);
       renderLlmModelOptions();
       showInlineStatus(globalStatus, 'Global settings saved.', 'success');
       showStatus('Global settings saved successfully.', 'success');
