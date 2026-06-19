@@ -146,9 +146,6 @@
     "fit": 1.0,
     "salary": 1.0,
     "location": 1.0,
-    "work_mode": 1.0,
-    "contract": 1.0,
-    "government": 1.0,
     "freshness": 1.0
   },
   "candidate_profile_tier_weights": {

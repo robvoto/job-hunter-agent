@@ -38,6 +38,15 @@ def test_docs_route_returns_docs_payload(monkeypatch):
     assert isinstance(payload["docs"], list)
 
 
+def test_diagram_viewer_renders_mermaid_source():
+    client = TestClient(create_app())
+    response = client.get("/static/diagrams/scoring_process_flow")
+    assert response.status_code == 200
+    assert "mermaid.min.js" in response.text
+    assert "scoring_process_flow.mmd" in response.text
+    assert "Scoring Process Flow" in response.text
+
+
 def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)

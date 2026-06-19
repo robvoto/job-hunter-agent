@@ -320,7 +320,7 @@ class LinkedInScraper(BaseJobScraper):
     def _fetch_jobspy(self, target: dict):
         from jobspy import scrape_jobs  # noqa: PLC0415
 
-        kwargs = {
+        search_params = {
             "site_name": ["linkedin"],
             "search_term": target["search_term"],
             "location": target["location"],
@@ -331,5 +331,5 @@ class LinkedInScraper(BaseJobScraper):
             "verbose": 0,
         }
         if target.get("easy_apply") is not None:
-            kwargs["easy_apply"] = target["easy_apply"]
-        return scrape_jobs(**kwargs)
+            search_params["easy_apply"] = target["easy_apply"]
+        return scrape_jobs(**search_params)

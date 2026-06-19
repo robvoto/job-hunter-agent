@@ -437,9 +437,6 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "fit_weight_label",
     "salary_weight_label",
     "location_weight_label",
-    "work_mode_weight_label",
-    "contract_weight_label",
-    "government_weight_label",
     "freshness_weight_label",
     "history_retention_heading",
     "history_retention_copy",
@@ -1137,9 +1134,7 @@ def _write_run_stats_field(key: str, value: object) -> None:
 def _run_scrape_job() -> None:
     try:
         scrape_jobs_direct()
-        run_stats = load_run_stats()
-        if not str((run_stats or {}).get("last_run_error") or "").strip():
-            _write_run_stats_field("last_run_error", None)
+        _write_run_stats_field("last_run_error", None)
     except Exception as exc:
         if run_stop_requested():
             print("[RUN][INFO] Scrape run stopped by request; preserving partial results.")

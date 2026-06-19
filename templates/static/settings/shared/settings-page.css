@@ -356,6 +356,20 @@
     .admin-settings-grid > .panel {
       min-width: 0;
     }
+    /* Admin panel fields are direct children (no wrapper divs) — add stack spacing via adjacent siblings */
+    .admin-settings-grid .panel > label + label,
+    .admin-settings-grid .panel > input + label,
+    .admin-settings-grid .panel > select + label,
+    .admin-settings-grid .panel > textarea + label,
+    .admin-settings-grid .panel > .field-help + label,
+    .admin-settings-grid .panel > .currency-input-wrap + label,
+    .admin-settings-grid .panel > .cap-strength-row + label,
+    .admin-settings-grid .panel > .field-label-row + label,
+    .admin-settings-grid .panel > .field-help + .toggle-switch,
+    .admin-settings-grid .panel > input + .toggle-switch,
+    .admin-settings-grid .panel > select + .toggle-switch {
+      margin-top: var(--field-stack-gap);
+    }
     .subpanel {
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-xl);
     }

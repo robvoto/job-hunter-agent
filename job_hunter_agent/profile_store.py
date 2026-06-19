@@ -252,6 +252,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
     return {
         "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
         KEY_LLM_GRADE_POINTS: dict(payload.get(KEY_LLM_GRADE_POINTS) or {}),
+        KEY_LLM_GRADE_BANDS: dict(payload.get(KEY_LLM_GRADE_BANDS) or {}),
         KEY_CAPABILITY_LEVEL_WEIGHTS: dict(payload.get(KEY_CAPABILITY_LEVEL_WEIGHTS) or {}),
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),

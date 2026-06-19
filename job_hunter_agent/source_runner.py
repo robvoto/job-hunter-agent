@@ -7,11 +7,15 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
+import logging
+
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
-from job_hunter_agent.scrapers.seek_runner import seek_scrape_to_records
+from job_hunter_agent.scrapers.seek_runner import BotChallengeDetected, seek_scrape_to_records
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,7 +44,8 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         search_targets = build_seek_search_targets(
             context.profile, context.configured_date_range, context.sort_newest_first
         )
-        kept, audit, skills = seek_scrape_to_records(
+        headless = bool(getattr(context, "headless", False))
+        _seek_kwargs = dict(
             profile=context.profile,
             search_targets=search_targets,
             job_history=job_history,
@@ -54,8 +59,15 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             playwright_viewport_height=context.playwright_viewport_height,
             playwright_selector_timeout=context.playwright_selector_timeout,
             seek_parallel_detail_workers=context.seek_parallel_detail_workers,
-            headless=bool(getattr(context, "headless", False)),
         )
+        try:
+            kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
+        except BotChallengeDetected:
+            if not headless:
+                raise
+            logger.warning("[SEEK] Bot challenge detected with headless=True; retrying with headless=False")
+            set_run_progress("SEEK retrying (bot challenge, switching to visible browser)")
+            kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
         return SourceRunResult(
             source=SOURCE_SEEK,
             kept_records=kept,

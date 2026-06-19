@@ -50,9 +50,6 @@ export const JobHunterAdminSettings = (function () {
     preference_fit_weight: ['preference_weights', 'fit'],
     preference_salary_weight: ['preference_weights', 'salary'],
     preference_location_weight: ['preference_weights', 'location'],
-    preference_work_mode_weight: ['preference_weights', 'work_mode'],
-    preference_contract_weight: ['preference_weights', 'contract'],
-    preference_government_weight: ['preference_weights', 'government'],
     preference_freshness_weight: ['preference_weights', 'freshness'],
     history_archive_stale_after_days: ['history_settings', 'archive_stale_after_days'],
     history_hidden_review_days: ['history_settings', 'hidden_review_days'],
@@ -241,9 +238,6 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('preference_fit_weight', preferenceWeights.fit);
     setFieldValue('preference_salary_weight', preferenceWeights.salary);
     setFieldValue('preference_location_weight', preferenceWeights.location);
-    setFieldValue('preference_work_mode_weight', preferenceWeights.work_mode);
-    setFieldValue('preference_contract_weight', preferenceWeights.contract);
-    setFieldValue('preference_government_weight', preferenceWeights.government);
     setFieldValue('preference_freshness_weight', preferenceWeights.freshness);
 
     setFieldValue('history_repeated_listing_min_times_seen', historySettings.repeated_listing_min_times_seen);
@@ -254,6 +248,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('onboarding_title_extraction_min_months', onboarding.title_extraction_min_months);
     setFieldValue('onboarding_max_target_patterns', onboarding.max_target_patterns);
     setFieldValue('onboarding_max_secondary_patterns', onboarding.max_secondary_patterns);
+    setFieldValue('onboarding_cv_max_pages', onboarding.cv_max_pages);
     setFieldValue('onboarding_capability_alias_limit', onboarding.capability_alias_limit);
     setFieldValue('onboarding_signal_cluster_min_alias_hits', onboarding.signal_cluster_min_alias_hits);
     setFieldValue('onboarding_signal_cluster_min_snippet_hits', onboarding.signal_cluster_min_snippet_hits);
@@ -328,6 +323,7 @@ export const JobHunterAdminSettings = (function () {
     const currentDescriptionTrust = current.description_trust_settings || {};
     const currentCompaction = current.description_compaction_settings || {};
     const currentSourceDocuments = current.source_document_settings || {};
+    const currentPreferenceWeights = current.preference_weights || {};
     const currentEvidenceWeights = current.candidate_profile_tier_weights || {};
     const currentReviewSettings = current.review_settings || {};
     const currentPlaywright = current.playwright_settings || {};
@@ -407,6 +403,13 @@ export const JobHunterAdminSettings = (function () {
           },
         },
       },
+      preference_weights: {
+        ...currentPreferenceWeights,
+        fit: readNumber('preference_fit_weight', currentPreferenceWeights.fit),
+        salary: readNumber('preference_salary_weight', currentPreferenceWeights.salary),
+        location: readNumber('preference_location_weight', currentPreferenceWeights.location),
+        freshness: readNumber('preference_freshness_weight', currentPreferenceWeights.freshness),
+      },
       candidate_profile_tier_weights: {
         ...currentEvidenceWeights,
         primary_candidate_profile_context: readNumber('evidence_primary_weight', currentEvidenceWeights.primary_candidate_profile_context),
@@ -442,6 +445,7 @@ export const JobHunterAdminSettings = (function () {
         title_extraction_min_months: readNumber('onboarding_title_extraction_min_months', currentOnboarding.title_extraction_min_months),
         max_target_patterns: readNumber('onboarding_max_target_patterns', currentOnboarding.max_target_patterns),
         max_secondary_patterns: readNumber('onboarding_max_secondary_patterns', currentOnboarding.max_secondary_patterns),
+        cv_max_pages: readNumber('onboarding_cv_max_pages', currentOnboarding.cv_max_pages),
         capability_alias_limit: readNumber('onboarding_capability_alias_limit', currentOnboarding.capability_alias_limit),
         signal_cluster_min_alias_hits: readNumber('onboarding_signal_cluster_min_alias_hits', currentOnboarding.signal_cluster_min_alias_hits),
         signal_cluster_min_snippet_hits: readNumber('onboarding_signal_cluster_min_snippet_hits', currentOnboarding.signal_cluster_min_snippet_hits),

@@ -245,23 +245,6 @@ def _render_template_with_locations(
         "__JOB_HUNTER_SETTINGS_SECTION_SEARCH_PLACEHOLDER__",
         shared_labels["settings_section_search_placeholder"],
     )
-    html = html.replace(
-        "__JOB_HUNTER_SETTINGS_PRIVACY_TITLE__",
-        shared_labels["settings_privacy_title"],
-    )
-    html = html.replace(
-        "__JOB_HUNTER_SETTINGS_PRIVACY_COPY__",
-        shared_labels["settings_privacy_copy"],
-    )
-    html = html.replace(
-        "__JOB_HUNTER_SETTINGS_PRIVACY_LINK_LABEL__",
-        shared_labels["settings_privacy_link_label"],
-    )
-    html = html.replace(
-        "__JOB_HUNTER_SETTINGS_SEARCH_SAVE_BUTTON_LABEL__",
-        shared_labels["settings_search_save_button_label"],
-    )
-
     if template_path == SETTINGS_HTML_PATH:
         title_tier_labels = srv.load_onboarding_title_tier_labels()
 
@@ -280,6 +263,23 @@ def _render_template_with_locations(
 
             else:
                 html = html.replace(token, srv._render_template(partial_path))
+
+        html = html.replace(
+            "__JOB_HUNTER_SETTINGS_PRIVACY_TITLE__",
+            shared_labels["settings_privacy_title"],
+        )
+        html = html.replace(
+            "__JOB_HUNTER_SETTINGS_PRIVACY_COPY__",
+            shared_labels["settings_privacy_copy"],
+        )
+        html = html.replace(
+            "__JOB_HUNTER_SETTINGS_PRIVACY_LINK_LABEL__",
+            shared_labels["settings_privacy_link_label"],
+        )
+        html = html.replace(
+            "__JOB_HUNTER_SETTINGS_SEARCH_SAVE_BUTTON_LABEL__",
+            shared_labels["settings_search_save_button_label"],
+        )
 
         html = html.replace(
             "__JOB_HUNTER_ADMIN_BADGE__",

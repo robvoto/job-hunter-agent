@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import pathlib
 import re
 import sys
 import threading
@@ -59,6 +60,10 @@ from job_hunter_agent.work_mode_extraction import (
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 RUN_PROGRESS_ITEM_SEPARATOR = " | "
+
+
+class BotChallengeDetected(Exception):
+    """Raised when a bot-challenge page is detected and does not auto-resolve."""
 
 # Chromium flags and init script applied to every browser launch to suppress the
 # navigator.webdriver fingerprint that automated browsers expose. Without these,
@@ -627,8 +632,10 @@ def seek_scrape_to_records(
                         # 3–5s before redirecting to the real SEEK page. Wait for it to clear first
                         # so the card selector timeout counts from after the redirect, not from the
                         # challenge page load.
+                        _bot_challenge_blocked = False
                         try:
                             if "just a moment" in (list_page.title() or "").lower():
+                                _bot_challenge_blocked = True
                                 logger.info(
                                     "%s Cloudflare challenge detected; waiting for auto-resolve",
                                     page_tag,
@@ -637,9 +644,10 @@ def seek_scrape_to_records(
                                     "() => !document.title.toLowerCase().includes('just a moment')",
                                     timeout=15000,
                                 )
+                                _bot_challenge_blocked = False
                                 logger.info("%s Cloudflare challenge resolved", page_tag)
                         except Exception:
-                            pass
+                            pass  # _bot_challenge_blocked stays True if challenge did not resolve
                         list_page.wait_for_selector(
                             SELECTOR_CARDS, timeout=playwright_selector_timeout
                         )
@@ -662,13 +670,15 @@ def seek_scrape_to_records(
                                 page_url_actual,
                                 body_text,
                             )
-                            import pathlib
-
                             screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
                             list_page.screenshot(path=str(screenshot_path), full_page=False)
                             logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
                         except Exception as diag_exc:
                             logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
+                        if _bot_challenge_blocked:
+                            raise BotChallengeDetected(
+                                f"SEEK bot challenge page did not resolve (headless={headless})"
+                            ) from exc
                         break
 
                     job_cards = list_page.query_selector_all(SELECTOR_CARDS)

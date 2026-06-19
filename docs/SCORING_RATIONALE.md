@@ -61,7 +61,7 @@ docs/diagrams/scoring_process_flow.mmd
 Openable render:
 
 ```text
-docs/diagrams/scoring_process_flow.svg
+docs/diagrams/scoring_process_flow.html
 ```
 
 Inline renderable copy:

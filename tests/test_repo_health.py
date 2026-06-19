@@ -221,6 +221,50 @@ def test_recent_roles_label_no_longer_exists_in_runtime_ui():
         assert "Recent roles" not in path.read_text(encoding="utf-8")
 
 
+def test_no_module_uses_logger_without_defining_it():
+    """Catch any module that calls logger.X() without logger = logging.getLogger(__name__)."""
+    import ast
+
+    pkg_root = ROOT_DIR / "job_hunter_agent"
+    offenders = []
+
+    for path in sorted(pkg_root.rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(src, filename=str(path))
+        except SyntaxError:
+            continue
+
+        # Collect line numbers of module-level `logger = ...` assignments.
+        logger_assigned_at = set()
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name) and t.id == "logger":
+                        logger_assigned_at.add(node.lineno)
+            elif isinstance(node, (ast.AnnAssign,)):
+                if isinstance(getattr(node, "target", None), ast.Name) and node.target.id == "logger":
+                    logger_assigned_at.add(node.lineno)
+
+        if logger_assigned_at:
+            continue  # module defines logger — OK
+
+        # Check for any attribute access on a bare `logger` name.
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "logger"
+            ):
+                rel = path.relative_to(ROOT_DIR)
+                offenders.append(f"{rel}:{node.lineno} — logger.{node.attr}() used but logger not defined")
+                break  # one report per file is enough
+
+    assert not offenders, (
+        "These modules use `logger` without defining it:\n  " + "\n  ".join(offenders)
+    )
+
+
 def test_active_modules_import():
 
     modules = [
