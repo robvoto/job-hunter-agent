@@ -18,7 +18,7 @@ The production runtime is on AWS EC2. Local development happens on the PC in VS 
 
 ---
 
-## Current production state - 2026-06-07
+## Current production state - 2026-06-19
 
 This section is the current source of truth for the AWS deployment.
 
@@ -94,13 +94,11 @@ Environment file: /etc/job-hunter/job-hunter.env
 Persistent data: /var/lib/job-hunter/data
 Persistent output: /var/lib/job-hunter/output
 Service: job-hunter.service
-Service command: /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+ExecStart: /usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 Local bind: 127.0.0.1:8765
 Docker: not used
-Xvfb: installed
-xvfb-run: installed
-xauth: installed
-Xvfb wired into service: no
+Xvfb wired into service: YES
+Playwright headless setting: OFF (headed via Xvfb)
 ```
 
 `/var/lib/job-hunter` is mounted on a separate data disk.
@@ -405,52 +403,27 @@ The source of truth for code is GitHub. The local PC edits and pushes. EC2 pulls
 
 ---
 
-## 9. Create Python virtual environment
+## 9. Run the first deploy
 
-Run on EC2:
+`deploy-jobhunter` handles venv, dependencies, Playwright browser + OS libs, service install, and DB seed in one command:
 
 ```bash
 cd /home/ubuntu/job-hunter-agent
-python3 -m venv .venv
-source .venv/bin/activate
-python --version
-which python
-uv sync --no-dev
-uv sync --no-dev
+git pull --ff-only
+sudo bash scripts/ec2/install-helpers.sh
+deploy-jobhunter
 ```
 
-Expected:
+`install-helpers.sh` is only needed once to put `deploy-jobhunter` on PATH. After that, every future update is just:
 
-```text
-/home/ubuntu/job-hunter-agent/.venv/bin/python
+```bash
+use-ubuntu
+deploy-jobhunter
 ```
 
 ---
 
-## 10. Install Playwright Chromium
-
-Run on EC2 with the venv active:
-
-```bash
-cd /home/ubuntu/job-hunter-agent
-source .venv/bin/activate
-python -m playwright install chromium
-sudo /home/ubuntu/job-hunter-agent/.venv/bin/python -m playwright install-deps chromium
-python -m playwright install chromium
-```
-
-Check:
-
-```bash
-python - <<'PY'
-from playwright.sync_api import sync_playwright
-print('playwright import ok')
-PY
-```
-
----
-
-## 11. Production environment file
+## 10. Production environment file
 
 Create:
 
@@ -501,35 +474,34 @@ sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/enviro
 
 ---
 
-## 12. Seed or upgrade the database
+## 12. DB seed (manual)
 
-Run after first install and after schema/config changes:
+`deploy-jobhunter` runs this automatically. Only run manually for a hard reset:
 
 ```bash
-cd /home/ubuntu/job-hunter-agent
-source .venv/bin/activate
-set -a
-source /etc/job-hunter/job-hunter.env
-set +a
-python -m job_hunter_agent.db_seed --upgrade
+# upgrade (safe — preserves approved knowledge)
+uv run python -m job_hunter_agent.db_seed --upgrade
+
+# overwrite (destructive — wipes approved knowledge)
+uv run python -m job_hunter_agent.db_seed --overwrite
 ```
 
-Use `--overwrite` only for a deliberate hard reset because it can wipe approved local knowledge.
+Set production env vars first if running outside the service context:
+
+```bash
+export JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
+export JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
+```
 
 ---
 
-## 13. Current systemd service
+## 13. Systemd service
 
-View the live service file:
+The repo-managed service file is `scripts/ec2/job-hunter.service`. `deploy-jobhunter` installs it automatically.
 
-```bash
-sudo systemctl cat job-hunter
-```
-
-Current verified service:
+Current service:
 
 ```ini
-# /etc/systemd/system/job-hunter.service
 [Unit]
 Description=Job Hunter FastAPI App
 After=network.target
@@ -538,11 +510,11 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/job-hunter-agent
 EnvironmentFile=/etc/job-hunter/job-hunter.env
-Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin"
+Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
-ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
 Restart=always
 RestartSec=5
 
@@ -550,100 +522,33 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Manage the service:
+Manage:
 
 ```bash
-sudo systemctl status job-hunter --no-pager
-sudo systemctl restart job-hunter
-sudo journalctl -u job-hunter -n 80 --no-pager
-sudo journalctl -u job-hunter -f
-```
-
-Expected:
-
-```text
-Active: active (running)
+sudo systemctl restart job-hunter && jobhunter-status
+sudo systemctl restart job-hunter && jobhunter-status -f   # + live log tail
 ```
 
 ---
 
 ## 14. Xvfb for non-headless Playwright on AWS
 
-SEEK may behave differently when Playwright runs in normal headless mode. The preferred AWS setup is:
-
-```text
-Playwright headless setting: OFF
-Linux server display: Xvfb virtual display
-```
-
-This lets Chromium run as a headed browser even though the EC2 server has no physical screen.
-
-Verified installed binaries:
-
-```text
-/usr/bin/Xvfb
-/usr/bin/xvfb-run
-/usr/bin/xauth
-```
-
-Current status:
+Xvfb is active. The service runs Chromium in headed mode via a virtual display so SEEK scraping avoids Cloudflare bot challenges.
 
 ```text
 Installed: yes
-Wired into job-hunter.service: no
+Wired into job-hunter.service: YES (via xvfb-run)
+Playwright headless setting: OFF
+Viewport: 1400x900
 ```
 
-Current production service still starts FastAPI directly:
+`deploy-jobhunter` installs and maintains this automatically via `scripts/ec2/job-hunter.service`.
 
-```ini
-ExecStart=/home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
-```
-
-Do not change this casually. When approved, back up the service file before wiring Xvfb.
-
-Approved change pattern:
+Verify during a scrape:
 
 ```bash
-sudo cp /etc/systemd/system/job-hunter.service /etc/systemd/system/job-hunter.service.bak.$(date +%Y%m%d-%H%M%S)
-
-sudo sed -i 's|^ExecStart=.*|ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app|' /etc/systemd/system/job-hunter.service
-
-sudo systemctl daemon-reload
-sudo systemctl restart job-hunter
-sudo systemctl status job-hunter --no-pager
+ps auxww | grep -E 'Xvfb|xvfb|chromium|chrome' | grep -v grep
 ```
-
-Verify after restart:
-
-```bash
-sudo systemctl cat job-hunter
-ps auxww | grep -E 'Xvfb|xvfb|job_hunter|python' | grep -v grep
-```
-
-Expected `ExecStart` after Xvfb is wired:
-
-```ini
-ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
-```
-
-Rollback:
-
-```bash
-ls -1 /etc/systemd/system/job-hunter.service.bak.*
-sudo cp /etc/systemd/system/job-hunter.service.bak.<timestamp> /etc/systemd/system/job-hunter.service
-sudo systemctl daemon-reload
-sudo systemctl restart job-hunter
-sudo systemctl status job-hunter --no-pager
-```
-
-Admin setting alignment after Xvfb is wired:
-
-```text
-Run browser headless = OFF
-Viewport = 1400 x 900
-```
-
-Do not add Playwright stealth patches as the first fix. First make headed Chromium under Xvfb reliable.
 
 ---
 
@@ -746,38 +651,22 @@ sudo systemctl restart job-hunter
 
 ## 17. Deployment from local PC to AWS
 
-Local PC / VS Code:
+Local (push code):
 
 ```bash
-cd /mnt/e/Programming/job-hunter-agent
-git status
-git add .
-git commit -m "Update Job Hunter"
+git add <files>
+git commit -m "..."
 git push
 ```
 
-AWS EC2:
+AWS EC2 (deploy):
 
 ```bash
-ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
-cd /home/ubuntu/job-hunter-agent
-git pull
-source .venv/bin/activate
-uv sync --no-dev
-set -a
-source /etc/job-hunter/job-hunter.env
-set +a
-python -m job_hunter_agent.db_seed --upgrade
-sudo systemctl restart job-hunter
-sudo systemctl status job-hunter --no-pager
+use-ubuntu
+deploy-jobhunter
 ```
 
-Check logs:
-
-```bash
-sudo journalctl -u job-hunter -n 80 --no-pager
-tail -n 80 /var/log/job-hunter/app.log
-```
+That's it. `deploy-jobhunter` pulls, syncs deps, updates service, seeds DB, restarts, and health-checks.
 
 ---
 
