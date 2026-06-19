@@ -25,7 +25,10 @@ output/
 data/playwright_user_data/
 data/runtime/
 data/users/
-data/signals/
+# Ignore local/generated signal files, but keep managed seed defaults in git.
+data/signals/*
+!data/signals/
+!data/signals/signal_defaults.json
 data/*.db*
 docs/signals/
 
