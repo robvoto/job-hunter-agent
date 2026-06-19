@@ -6,82 +6,73 @@ ENV_FILE="${JOB_HUNTER_ENV_FILE:-/etc/job-hunter/job-hunter.env}"
 SERVICE="${JOB_HUNTER_SERVICE:-job-hunter}"
 HEALTH_URL="${JOB_HUNTER_HEALTH_URL:-http://127.0.0.1:8765/start}"
 
-show_help() {
-  cat <<HELP
-Deploy Job Hunter on AWS EC2.
-
-What this does:
-  1. moves to the app repo
-  2. stashes any local uncommitted changes, then pulls latest GitHub code
-  3. syncs dependencies from pyproject.toml using uv
-  4. installs Playwright Chromium browser binary
-  5. installs Playwright system OS dependencies (libatk, libgbm, etc.)
-  6. installs repo-managed helper commands into /usr/local/bin
-  7. installs repo-managed systemd service (xvfb-run + full PATH)
-  8. loads /etc/job-hunter/job-hunter.env
-  9. applies production runtime path defaults
-  10. runs db_seed --upgrade
-  11. verifies required production knowledge files exist
-  12. restarts job-hunter.service
-  13. waits briefly, then proves the app is alive with curl
-
-Usage:
-  deploy-jobhunter
-  deploy-jobhunter --help
-
-Important:
-  - Safe to run on every deploy — all steps are idempotent.
-  - Do not manually install Python packages on AWS; use pyproject.toml.
-HELP
-}
+# Old one-off scripts that used to live on the server but are no longer needed.
+OLD_SERVER_SCRIPTS=(
+  "$APP_DIR/scripts/ec2/restartServer.sh"
+  "$APP_DIR/scripts/ec2/start-ngrok.sh"
+  "$APP_DIR/scripts/ec2/status-ngrok.sh"
+  "$APP_DIR/scripts/ec2/stop-ngrok.sh"
+)
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  show_help
+  cat <<HELP
+Deploy Job Hunter on AWS EC2. Safe to run on every update.
+
+Steps:
+  1. Remove known-old server scripts
+  2. Reset any tracked file edits, pull latest code from GitHub
+  3. Sync Python dependencies (uv)
+  4. Install Playwright Chromium browser + OS system libraries
+  5. Install repo-managed helper commands into /usr/local/bin
+  6. Install repo-managed systemd service (xvfb-run)
+  7. Run db_seed --upgrade
+  8. Restart job-hunter.service and health-check
+HELP
   exit 0
 fi
 
-echo "==> Deploying Job Hunter"
-
-# uv is typically installed per-user; ensure common locations are on PATH
+# uv installs per-user; ensure it's on PATH
 export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+
+echo "==> Job Hunter deploy"
 
 cd "$APP_DIR"
 
-echo "==> Git status before pull"
-git status --short
+echo "==> Remove old server scripts"
+for f in "${OLD_SERVER_SCRIPTS[@]}"; do
+  [[ -f "$f" ]] && rm -f "$f" && echo "  removed: $f" || true
+done
 
-echo "==> Stash any local changes so pull can proceed"
-git stash --include-untracked --quiet && echo "  (stashed)" || true
-
-echo "==> Pull latest code"
+echo "==> Reset local changes and pull"
+git checkout -- . 2>/dev/null || true
 git pull --ff-only
 
 echo "==> Check uv"
 if ! command -v uv >/dev/null 2>&1; then
-  echo "==> uv not found — installing"
+  echo "==> Installing uv"
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$PATH"
 fi
-echo "uv: $(uv --version)"
+echo "  uv $(uv --version)"
 
-echo "==> Sync production dependencies"
+echo "==> Sync dependencies"
 uv sync --no-dev
 
-echo "==> Install/update Playwright Chromium browser"
+echo "==> Playwright browser"
 uv run playwright install chromium
 
-echo "==> Install Playwright OS system dependencies"
+echo "==> Playwright OS deps"
 sudo "$(uv run which python)" -m playwright install-deps chromium
 
-echo "==> Install repo-managed helper commands"
+echo "==> Install helpers"
 sudo bash "$APP_DIR/scripts/ec2/install-helpers.sh"
 
-echo "==> Install repo-managed systemd service"
+echo "==> Install service"
 sudo bash "$APP_DIR/scripts/ec2/install-jobhunter-service.sh"
 
-echo "==> Load production secrets/env file"
+echo "==> Load env"
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ERROR: Missing environment file: $ENV_FILE" >&2
+  echo "ERROR: Missing $ENV_FILE" >&2
   exit 1
 fi
 set -a
@@ -89,49 +80,37 @@ set -a
 source "$ENV_FILE"
 set +a
 
-echo "==> Apply production runtime path defaults"
 export JOB_HUNTER_DATA_DIR="${JOB_HUNTER_DATA_DIR:-/var/lib/job-hunter/data}"
 export JOB_HUNTER_OUTPUT_DIR="${JOB_HUNTER_OUTPUT_DIR:-/var/lib/job-hunter/output}"
 export JOB_HUNTER_DB_PATH="${JOB_HUNTER_DB_PATH:-/var/lib/job-hunter/data/job_hunter.db}"
 
-echo "JOB_HUNTER_DATA_DIR=$JOB_HUNTER_DATA_DIR"
-echo "JOB_HUNTER_OUTPUT_DIR=$JOB_HUNTER_OUTPUT_DIR"
-echo "JOB_HUNTER_DB_PATH=$JOB_HUNTER_DB_PATH"
+echo "  DATA_DIR=$JOB_HUNTER_DATA_DIR"
+echo "  DB_PATH=$JOB_HUNTER_DB_PATH"
 
-echo "==> Ensure runtime directories exist"
+echo "==> Ensure runtime dirs"
 sudo mkdir -p "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 sudo chown -R ubuntu:ubuntu "$JOB_HUNTER_DATA_DIR" "$JOB_HUNTER_OUTPUT_DIR"
 
-echo "==> Upgrade DB/config seed"
+echo "==> DB seed"
 uv run python -m job_hunter_agent.db_seed --upgrade
 
-echo "==> Verify required runtime files"
-required_runtime_files=(
-  "$JOB_HUNTER_DATA_DIR/knowledge/locations_au.json"
-  "$JOB_HUNTER_DATA_DIR/knowledge/salary.json"
-  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_index.json"
-  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_occupations.json"
-  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_alternate_titles.json"
-)
-
-for required_file in "${required_runtime_files[@]}"; do
-  test -f "$required_file"
-  echo "Found: $required_file"
+echo "==> Verify runtime files"
+for f in \
+  "$JOB_HUNTER_DATA_DIR/knowledge/locations_au.json" \
+  "$JOB_HUNTER_DATA_DIR/knowledge/salary.json" \
+  "$JOB_HUNTER_DATA_DIR/knowledge/occupation_taxonomy/onet_index.json"; do
+  test -f "$f" && echo "  ok: $f" || { echo "MISSING: $f" >&2; exit 1; }
 done
 
 echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
-
-echo "==> Wait for app startup"
 sleep 5
 
-echo "==> Service status"
+echo "==> Status"
 sudo systemctl status "$SERVICE" --no-pager
+sudo journalctl -u "$SERVICE" -n 30 --no-pager
 
-echo "==> Recent logs"
-sudo journalctl -u "$SERVICE" -n 40 --no-pager
-
-echo "==> HTTP health check"
-curl -sI "$HEALTH_URL" | head -5
+echo "==> Health check"
+curl -sI "$HEALTH_URL" | head -3
 
 echo "==> Done"

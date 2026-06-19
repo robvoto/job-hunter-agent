@@ -995,32 +995,25 @@ Consider PostgreSQL/RDS only after the data model stabilizes
 
 ## Production deploy command
 
-The standard AWS update command is:
-
-```bash
-deploy-jobhunter
-```
-
-Run it from the EC2 host after switching to the app owner:
+Every deploy — first install or update — is the same single command:
 
 ```bash
 use-ubuntu
 deploy-jobhunter
 ```
 
-`deploy-jobhunter` is an update/deploy command, not a first-install command. It is expected to:
+`deploy-jobhunter` is fully self-healing and safe to run repeatedly. It:
 
-1. change to `/home/ubuntu/job-hunter-agent`
-2. show `git status --short`
-3. pull latest code with `git pull --ff-only`
-4. activate `/home/ubuntu/job-hunter-agent/.venv`
-5. install dependencies with `uv sync --no-dev`
-6. load `/etc/job-hunter/job-hunter.env`
-7. run `python -m job_hunter_agent.db_seed --upgrade`
-8. restart `job-hunter.service`
-9. show service status and recent logs
-
-Do not use `INSTALL` as the command name for normal updates. This is a deployment/update workflow.
+1. Removes known old server scripts
+2. Resets any local tracked-file edits, pulls latest code from GitHub
+3. Installs/updates uv if missing
+4. Syncs Python dependencies (`uv sync --no-dev`)
+5. Installs Playwright Chromium browser binary
+6. Installs Playwright OS system libraries (`libatk`, `libgbm`, etc.)
+7. Installs repo-managed helpers into `/usr/local/bin`
+8. Installs repo-managed systemd service (`xvfb-run` + full PATH)
+9. Runs `db_seed --upgrade`
+10. Restarts `job-hunter.service` and health-checks
 
 ## 23. Production checklist
 
