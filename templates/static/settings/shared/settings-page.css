@@ -353,8 +353,31 @@
     .panel {
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-xl);
     }
+    .admin-settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(390px, 1fr));
+      gap: var(--surface-gap-lg);
+      align-items: start;
+    }
     .admin-settings-grid > .panel {
       min-width: 0;
+      padding-top: var(--surface-pad-block-lg);
+      display: grid;
+      gap: var(--field-stack-gap);
+    }
+    .admin-settings-grid > .panel > .panel-header {
+      display: grid;
+      gap: 10px;
+      padding-bottom: 18px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+    }
+    .admin-settings-grid > .panel > .panel-header > h2 {
+      margin: 0;
+    }
+    .admin-settings-grid > .panel > .panel-header > .panel-copy {
+      margin-top: 0;
+      max-width: 68ch;
     }
     /* Admin panel fields are direct children. upgradeSettingsHelpBlocks() removes .field-help and
        wraps each label in .field-label-row, so live DOM is: .field-label-row → input → .field-label-row.

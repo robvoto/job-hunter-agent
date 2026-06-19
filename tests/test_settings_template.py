@@ -77,8 +77,14 @@ def test_global_settings_layout_css_prevents_panel_overflow():
 
     css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
 
+    assert ".admin-settings-grid {" in css
+    assert "grid-template-columns: repeat(auto-fit, minmax(390px, 1fr));" in css
+    assert "gap: var(--surface-gap-lg);" in css
     assert ".admin-settings-grid > .panel {" in css
     assert "min-width: 0;" in css
+    assert ".admin-settings-grid > .panel > .panel-header {" in css
+    assert ".admin-settings-grid > .panel > .panel-header > h2 {" in css
+    assert ".admin-settings-grid > .panel > .panel-header > .panel-copy {" in css
     assert ".panel-copy {" in css
     assert "overflow-wrap: anywhere;" in css
     assert ".subpanel .field-help {" in css

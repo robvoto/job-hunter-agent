@@ -4,4 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/job-hunter-agent-uv-cache}"
 mkdir -p "$UV_CACHE_DIR"
-exec uv run python -m job_hunter_agent.knowledge_sync "$@"
+if [[ $# -ne 0 ]]; then
+  echo "sync-knowledge now runs the AWS round trip with no arguments." >&2
+  echo "Use environment variables if you need to override the defaults." >&2
+  exit 2
+fi
+
+exec uv run python -m job_hunter_agent.knowledge_sync_roundtrip
