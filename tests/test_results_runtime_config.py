@@ -16,6 +16,11 @@ def test_results_page_uses_runtime_workspace_config():
 
     assert "window.__JOB_HUNTER_WORKSPACE__" in results_html
     assert 'href="/settings#section-search"' in results_html
+    assert 'class="rejection-panel-actions"' in results_html
+    assert 'class="block-admin-tip"' in results_html
+    assert results_html.index('class="rejection-panel-actions"') < results_html.index(
+        'class="block-admin-tip"'
+    )
     assert "SEEK Settings" not in results_html
     assert "LinkedIn Settings" not in results_html
     assert "Run Search Now" not in results_html
@@ -261,8 +266,8 @@ def test_rendered_workspace_html_content(tmp_path):
             "rejection_save_button": "Save &amp; Continue",
             "rejection_skip_button": "Continue Without Extra Blocks",
             "rejection_cancel_button": "Cancel",
-            "rejection_admin_tip_prefix": "View and edit saved rules in the ",
-            "rejection_admin_tip_link_text": "Settings panel",
+            "rejection_admin_tip_prefix": "Need to edit saved rules? ",
+            "rejection_admin_tip_link_text": "Open Settings",
         }
     }
 

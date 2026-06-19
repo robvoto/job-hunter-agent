@@ -527,12 +527,56 @@ export const JobHunterAdminSettings = (function () {
     });
   }
 
+  function initRejectionHistorySyncControls(showStatus) {
+    const button = document.getElementById('rejection_history_sync_button');
+    const status = document.getElementById('rejection_history_sync_status');
+    if (!button || !status || typeof window.jobHunterFetch !== 'function') {
+      return;
+    }
+    if (button.dataset.syncBound === 'true') {
+      return;
+    }
+    button.dataset.syncBound = 'true';
+
+    const setStatus = (message, kind) => {
+      status.textContent = String(message || '');
+      status.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
+      if (typeof showStatus === 'function') {
+        showStatus(message, kind);
+      }
+    };
+
+    button.addEventListener('click', async () => {
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Syncing...';
+      setStatus('Fetching rejection history from sheet...', 'loading');
+
+      try {
+        const response = await window.jobHunterFetch('/api/admin/rejection-history-sync', {
+          method: 'POST',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || 'Could not sync rejection history.');
+        }
+        setStatus(payload.message || 'Rejection history synced.', 'success');
+      } catch (error) {
+        setStatus(error.message || 'Could not sync rejection history.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+  }
+
   return {
     fillGlobalForm,
     collectGlobalSettings,
     loadGlobalSettingsHelp,
     applyGlobalSettingsHelp,
     initKnowledgeSyncControls,
+    initRejectionHistorySyncControls,
   };
 }());
 

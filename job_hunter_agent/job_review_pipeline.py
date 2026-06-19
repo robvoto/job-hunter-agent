@@ -32,6 +32,7 @@ _REASON_LABELS: dict[str, str] = {
     "CONTENT_REJECT": "description did not pass content filters",
     "LLM_REJECT": "LLM reviewer rejected",
     "LLM_ERROR": "LLM review failed with an error",
+    "LLM_UNAVAILABLE": "LLM review unavailable",
     "REVIEW_FAILED_TIMEOUT": "LLM review timed out — not reviewed, will retry next run",
     "DET_REJECT": "deterministic reviewer rejected",
     "ALREADY_APPLIED": "you already applied to this one",
@@ -948,7 +949,12 @@ def review_post_detail_normalized_job(
         return _build_outcome(record), record, skill_observations
     except Exception as llm_exc:
         _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
-        logger.error(
+        no_provider_key = (
+            isinstance(llm_exc, RuntimeError)
+            and str(llm_exc) == "LLM review requested but no provider key is configured"
+        )
+        log_level = logger.warning if no_provider_key else logger.error
+        log_level(
             format_log_block(
                 "PIPELINE][LLM_CALL_ERROR",
                 {
@@ -966,12 +972,17 @@ def review_post_detail_normalized_job(
             )
         )
         record["_obs_llm_called"] = True
-        record["_obs_llm_error"] = True
         record[RECORD_DECISION_KEY] = "REJECT"
-        record[RECORD_REJECT_REASON_KEY] = "LLM_ERROR"
+        record[RECORD_REJECT_REASON_KEY] = "LLM_UNAVAILABLE" if no_provider_key else "LLM_ERROR"
+        if not no_provider_key:
+            record["_obs_llm_error"] = True
         _finalize(record, context)
         _pipeline_log(
-            "FINAL_DECISION", record, context.source_name, decision="REJECT", reason="LLM_ERROR"
+            "FINAL_DECISION",
+            record,
+            context.source_name,
+            decision="REJECT",
+            reason=record[RECORD_REJECT_REASON_KEY],
         )
         return _build_outcome(record), record, skill_observations
 
@@ -1127,6 +1138,9 @@ def print_job_human_summary(
     elif reject_reason == "LLM_ERROR":
         cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
         lines.append(f"  [!] LLM review failed (API error){cost_note}")
+    elif reject_reason == "LLM_UNAVAILABLE":
+        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
+        lines.append(f"  [~] LLM review unavailable — no provider key configured{cost_note}")
 
     lines.append("")
 

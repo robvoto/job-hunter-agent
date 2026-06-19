@@ -87,6 +87,7 @@ if (isAdminPage && bootstrapGlobalSettings) {
   adminSettings.fillGlobalForm(bootstrapGlobalSettings);
   adminSettings.loadGlobalSettingsHelp?.();
   adminSettings.initKnowledgeSyncControls?.(showStatus);
+  adminSettings.initRejectionHistorySyncControls?.(showStatus);
   renderLlmModelOptions();
 }
 
@@ -112,7 +113,6 @@ export function showInlineStatus(element, message, kind) {
 export function markDirty() {
   if (suppressDirtyTracking) return;
   if (activeSaveButton) activeSaveButton.disabled = false;
-  if (searchSaveShortcut) searchSaveShortcut.disabled = false;
   if (stickySaveBar) {
     stickySaveBar.hidden = false;
     stickySaveBar.dataset.dirty = 'true';
@@ -121,7 +121,6 @@ export function markDirty() {
 
 export function clearDirty() {
   if (activeSaveButton) activeSaveButton.disabled = true;
-  if (searchSaveShortcut) searchSaveShortcut.disabled = true;
   if (stickySaveBar) {
     stickySaveBar.hidden = true;
     delete stickySaveBar.dataset.dirty;
@@ -505,10 +504,8 @@ const stickySaveBar = document.getElementById('sticky_save_bar');
 const activeSaveButton = isAdminPage ? document.getElementById('save_admin_btn') : document.getElementById('save_settings_btn');
 const activeDiscardButton = isAdminPage ? document.getElementById('discard_admin_changes_btn') : document.getElementById('discard_changes_btn');
 const globalStatus = document.getElementById('global_save_status');
-const searchSaveShortcut = document.getElementById('save_search_settings_shortcut');
 
 if (activeSaveButton) activeSaveButton.disabled = true;
-if (searchSaveShortcut) searchSaveShortcut.disabled = true;
 
 bindCurrencyFields(['minimum_salary_yearly', 'minimum_daily_rate', 'salary_limit_minimum_salary_yearly_max', 'salary_limit_minimum_daily_rate_max']);
 
@@ -523,11 +520,6 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
   if (el.tagName === 'TEXTAREA' || ['text', 'time', 'number', 'password', 'search'].includes(el.type)) {
     el.addEventListener('input', markDirty);
   }
-});
-
-searchSaveShortcut?.addEventListener('click', () => {
-  if (!activeSaveButton || activeSaveButton.disabled) return;
-  activeSaveButton.click();
 });
 
 const pageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__;
@@ -742,6 +734,7 @@ async function saveActivePage() {
       adminSettings.fillGlobalForm(globalPayload);
       adminSettings.applyGlobalSettingsHelp?.();
       adminSettings.initKnowledgeSyncControls?.(showStatus);
+      adminSettings.initRejectionHistorySyncControls?.(showStatus);
       renderLlmModelOptions();
       showInlineStatus(globalStatus, 'Global settings saved.', 'success');
       showStatus('Global settings saved successfully.', 'success');

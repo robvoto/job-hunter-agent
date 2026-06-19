@@ -389,6 +389,13 @@
   font-size: 0.92rem;
 }
 
+.job-requirements-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 .job-insight-group.is-secondary strong {
   color: var(--text-muted);
 }
@@ -785,9 +792,15 @@
 .rejection-panel-footer {
   padding: 12px 22px 16px;
   border-top: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 10px;
+}
+
+.rejection-panel-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .rejection-btn-save {
@@ -1091,6 +1104,7 @@
   font-size: 0.78rem;
   color: var(--text-muted);
   margin: 0;
+  line-height: 1.45;
 }
 
 .block-admin-tip a {

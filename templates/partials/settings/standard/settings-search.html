@@ -5,18 +5,9 @@
                 <h2>Search Settings</h2>
                 <p class="panel-copy">__JOB_HUNTER_SEARCH_SOURCE_SHARED_INPUTS_COPY__</p>
                 <p class="panel-copy">Where sector, work type, or work mode cannot be determined from the ad, the job is always included for you to review.</p>
-                <div class="settings-section-actions">
-                  <button class="primary" id="save_search_settings_shortcut" type="button">__JOB_HUNTER_SETTINGS_SEARCH_SAVE_BUTTON_LABEL__</button>
-                </div>
               </div>
 
               <div class="search-settings-stack">
-                <aside class="subpanel search-settings-subcard settings-privacy-note" aria-labelledby="settings_privacy_title">
-                  <h3 id="settings_privacy_title">__JOB_HUNTER_SETTINGS_PRIVACY_TITLE__</h3>
-                  <p>__JOB_HUNTER_SETTINGS_PRIVACY_COPY__</p>
-                  <a href="/docs" target="_blank" rel="noopener">__JOB_HUNTER_SETTINGS_PRIVACY_LINK_LABEL__</a>
-                </aside>
-
                 <section class="subpanel search-settings-subcard">
                   <div class="settings-form-grid settings-form-grid--search-basics">
                     <div class="settings-form-field settings-form-field--full">
@@ -148,6 +139,7 @@
                       </div>
                     </div>
                   </div>
+
                 </section>
 
                 <section class="subpanel search-settings-subcard search-source-panel-group">
@@ -256,10 +248,10 @@
                     </div>
                   </div>
 
-                  <div class="search-operations-grid">
-                    <section class="search-operation-card">
-                      <h3>Daily schedule</h3>
-                      <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
+                  <div class="search-operations-body">
+                    <h3>Daily schedule</h3>
+                    <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
+                    <div class="settings-form-field">
                       <div class="field-label-row">
                         <label for="schedule_daily_time_local">Run every day at</label>
                         <details class="field-info-drawer">
@@ -268,12 +260,18 @@
                         </details>
                       </div>
                       <input id="schedule_daily_time_local" type="time">
-                      <div class="panel-actions search-operation-actions">
-                        <button class="secondary" id="save_daily_schedule" type="button">Save Daily Schedule</button>
-                      </div>
-                    </section>
+                    </div>
+                    <div class="panel-actions search-operation-actions">
+                      <button class="secondary" id="save_daily_schedule" type="button">Save Daily Schedule</button>
+                    </div>
                   </div>
                 </section>
+
+                <aside class="subpanel search-settings-subcard settings-privacy-note" aria-labelledby="settings_privacy_title">
+                  <h3 id="settings_privacy_title">__JOB_HUNTER_SETTINGS_PRIVACY_TITLE__</h3>
+                  <p>__JOB_HUNTER_SETTINGS_PRIVACY_COPY__</p>
+                  <a href="/docs/view?doc=docs/ARCHITECTURE.md#candidate-profile-runtime" target="_blank" rel="noopener">__JOB_HUNTER_SETTINGS_PRIVACY_LINK_LABEL__</a>
+                </aside>
               </div>
             </section>
           </div>

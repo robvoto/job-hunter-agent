@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import re
 from typing import Any
 
@@ -50,6 +51,7 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
+from job_hunter_agent.runtime_helpers import log_settings_change
 from job_hunter_agent.utils import coerce_int, deep_merge
 
 # Shared Profile and Settings Keys
@@ -201,6 +203,8 @@ PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE = "Create your profile before reviewin
 PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = (
     "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CapabilityLevel:
@@ -749,6 +753,10 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
     from job_hunter_agent.paths import get_active_user_id
 
     user_id = get_active_user_id()
+    try:
+        current = load_profile()
+    except Exception:
+        current = None
     validate_search_keywords(
         (profile or {}).get("search_settings", {}).get("keywords"),
         require_phrase=True,
@@ -764,6 +772,12 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
             (user_id, json.dumps(persisted, ensure_ascii=False)),
         )
+    log_settings_change(
+        logger,
+        scope="PROFILE_SETTINGS",
+        before=current,
+        after=normalized,
+    )
     return normalized
 
 

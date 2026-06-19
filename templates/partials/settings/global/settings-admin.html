@@ -11,6 +11,15 @@
             <div id="knowledge_sync_status" class="field-help">Click once. The app will sync your local approved knowledge with AWS automatically.</div>
           </section>
 
+          <section class="panel" id="rejection_history_panel">
+            <div class="panel-header">
+              <h2>Rejection History</h2>
+              <p class="panel-copy">Imports your personal job rejection history from the configured Google Sheet. Cards for companies that previously rejected you will show a "Rejected before" badge. Requires the sheet to be shared as <em>Anyone with the link can view</em>.</p>
+            </div>
+            <button id="rejection_history_sync_button" type="button" class="btn btn-secondary">Sync rejection history</button>
+            <div id="rejection_history_sync_status" class="field-help">Click once. Fetches the latest rows from your Job_Rejections sheet and updates the local store.</div>
+          </section>
+
           <section class="panel">
             <div class="panel-header">
               <h2>Card Highlight Display</h2>
@@ -148,13 +157,8 @@
             <label for="search_limit_linkedin_results_per_search_max">LinkedIn results maximum</label>
             <input id="search_limit_linkedin_results_per_search_max" type="number" min="1" max="1000" step="1">
             <div class="field-help">Allowed range for the LinkedIn result budget per search term.</div>
-          </section>
 
-          <section class="panel">
-            <div class="panel-header">
-              <h2>Salary Limits</h2>
-              <p class="panel-copy">These caps control the largest salary values users can save in Search and Onboarding. They are managed globally so the UI and API stay aligned.</p>
-            </div>
+            <h3 class="panel-subheading">Salary limits</h3>
 
             <label for="salary_limit_minimum_salary_yearly_max">Maximum permanent salary</label>
             <div class="currency-input-wrap">

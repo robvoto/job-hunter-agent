@@ -274,3 +274,35 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert stop_response.json()["stop_requested"] is True
     assert stop_response.json()["progress"] == "SEEK page 1/3"
     assert stop_calls == [True]
+
+
+def test_job_history_endpoint_uses_saved_history(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+    )
+    monkeypatch.setattr(
+        workspace_api,
+        "load_job_history",
+        lambda: {
+            "seek:123": {
+                "times_viewed": 4,
+                "first_viewed_at": "2026-05-26T00:00:00+10:00",
+                "last_viewed_at": "2026-05-27T00:00:00+10:00",
+            }
+        },
+    )
+
+    client = TestClient(create_app())
+    response = client.get("/api/job-history")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jobs": {
+            "seek:123": {
+                "times_viewed": 4,
+                "first_viewed_at": "2026-05-26T00:00:00+10:00",
+                "last_viewed_at": "2026-05-27T00:00:00+10:00",
+            }
+        }
+    }

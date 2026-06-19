@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 35,
-  "updated_at": "2026-06-11",
+  "version": 39,
+  "updated_at": "2026-06-19",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -28,9 +28,9 @@
   },
   "title_match_labels_description": "Display labels for preferred- and alternative-role score breakdown entries.",
   "title_match_labels": {
-    "primary_match": "Preferred role-family match",
-    "primary_seniority": "Preferred seniority adjustment",
-    "secondary_match": "Alternative role-family match"
+    "primary_match": "The job title matches one of your target roles",
+    "primary_seniority": "The seniority level matches your experience",
+    "secondary_match": "The job title matches one of your alternative roles"
   },
   "title_tier_labels_description": "Display labels and help text for the preferred-role, alternative-role, and keyword fields.",
   "title_tier_labels": {
@@ -94,9 +94,9 @@
     "search_stop_label": "Stop search",
     "search_progress_prefix": "Current step:",
     "search_elapsed_prefix": "Search elapsed: ",
-    "search_stopping_title": "Stopping search",
-    "search_stopping_copy": "Job Hunter is stopping the current search and will show the results collected so far.",
-    "search_stopping_subcopy": "Keep this tab open while the current run wraps up.",
+    "search_stopping_title": "Run stopped by request",
+    "search_stopping_copy": "The current search was stopped on purpose. Job Hunter will keep the results collected so far.",
+    "search_stopping_subcopy": "This is an intentional stop, not a failure. Keep this tab open while the run wraps up.",
     "settings_section_search_label": "Find setting",
     "settings_section_search_placeholder": "Search settings",
     "settings_privacy_title": "CV data and privacy",
@@ -307,17 +307,18 @@
   },
   "grade_labels_description": "Display labels for fit grades.",
   "grade_labels": {
-    "EXCELLENT": "Description fit is excellent",
-    "STRONG": "Description fit is strong",
-    "SOLID": "Description fit is solid",
-    "WEAK": "Description fit is mixed",
-    "POOR": "Description fit is weak",
-    "MISMATCH": "Description fit is a mismatch"
+    "EXCELLENT": "The job ad closely matches your experience",
+    "STRONG": "The job ad matches your experience well",
+    "SOLID": "The job ad is a reasonable match for your experience",
+    "WEAK": "Parts of the job ad match your experience",
+    "POOR": "The job ad has limited overlap with your experience",
+    "MISMATCH": "The job ad doesn't strongly match your experience"
   },
   "fit_highlight_labels_description": "Display labels for fit highlight categories shown on cards.",
   "fit_highlight_labels": {
     "strong_capability_match": "Strong capability match",
     "capability_match": "Capability match",
+    "capability_match_sentence": "The ad asks for {capability}, and your profile includes this.",
     "matched_signal": "Related term found",
     "long_contract": "12+ month contract",
     "permanent_role": "Permanent role",
@@ -354,7 +355,8 @@
     "posting_channel_likely_recruiter_tooltip": "Recruiter language detected in the description. This may be posted on behalf of an employer.",
     "posting_channel_unknown_badge": "Source unclear",
     "posting_channel_unknown_tooltip": "Couldn't determine whether this was posted by the employer directly or via a recruiter.",
-    "job_requirements_summary": "Mandatory Job Requirements",
+    "job_requirements_summary": "Requirements",
+    "job_requirements_empty_state": "No requirements were extracted for this job.",
     "debug_only_badge": "Debug only",
     "debug_only_tooltip": "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
     "hard_blocked_badge": "Hard blocked",
@@ -443,8 +445,8 @@
     "rejection_save_button": "Save & Continue",
     "rejection_skip_button": "Continue Without Extra Blocks",
     "rejection_cancel_button": "Cancel",
-    "rejection_admin_tip_prefix": "View and edit saved rules in the ",
-    "rejection_admin_tip_link_text": "Settings panel"
+    "rejection_admin_tip_prefix": "Need to edit saved rules? ",
+    "rejection_admin_tip_link_text": "Open Settings"
   },
   "global_settings_labels_description": "Display labels and help text for the global settings admin panel.",
   "global_settings_labels": {

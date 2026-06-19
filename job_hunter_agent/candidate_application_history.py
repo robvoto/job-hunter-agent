@@ -556,12 +556,7 @@ def _candidate_history_store_entry_to_runtime(entry: dict) -> dict:
         "needs_review": bool(entry.get("needs_review", False)),
         "review_reason": _clean(entry.get("review_reason")) or None,
     }
-    if (
-        not normalized["id"]
-        or not normalized["date"]
-        or not normalized["company"]
-        or not normalized["role"]
-    ):
+    if not normalized["id"] or not normalized["date"] or not normalized["company"]:
         raise ValueError("candidate history store entry is missing required fields")
     if normalized["status"] != _CANDIDATE_HISTORY_STATUS_REJECTION:
         raise ValueError(

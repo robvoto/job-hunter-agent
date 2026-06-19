@@ -14,15 +14,16 @@ DEFAULT_AWS_HOST = os.environ.get(
 )
 DEFAULT_SSH_KEY = os.environ.get("JOB_HUNTER_SYNC_SSH_KEY", "/tmp/KeyPair-JobHunter.pem")
 DEFAULT_LOCAL_DB = os.environ.get("JOB_HUNTER_SYNC_LOCAL_DB")
-DEFAULT_REMOTE_DB = os.environ.get(
-    "JOB_HUNTER_SYNC_REMOTE_DB",
-    "/var/lib/job-hunter/data/job_hunter.db",
-)
+DEFAULT_REMOTE_DB = os.environ.get("JOB_HUNTER_SYNC_REMOTE_DB")
 DEFAULT_REMOTE_USER = os.environ.get("JOB_HUNTER_SYNC_REMOTE_USER", "ubuntu")
 DEFAULT_REMOTE_TMP = os.environ.get("JOB_HUNTER_SYNC_REMOTE_TMP", "/tmp/desktop.db")
 DEFAULT_REMOTE_APP_DIR = os.environ.get(
     "JOB_HUNTER_SYNC_REMOTE_APP_DIR",
     "/home/ubuntu/job-hunter-agent",
+)
+REMOTE_DB_CANDIDATES = (
+    "/var/lib/job-hunter/data/app.db",
+    "/var/lib/job-hunter/data/job_hunter.db",
 )
 
 
@@ -52,15 +53,48 @@ def _run_checked(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
 
+def _run_output(command: list[str]) -> str:
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    return str(result.stdout or "").strip()
+
+
+def _remote_db_probe_command(candidates: tuple[str, ...]) -> str:
+    parts = [
+        "for p in",
+        " ".join(shlex.quote(candidate) for candidate in candidates),
+        "; do",
+        '  [ -f "$p" ] && printf "%s" "$p" && exit 0;',
+        "done; exit 1",
+    ]
+    return " ".join(parts)
+
+
+def _resolve_remote_db_path(
+    ssh_prefix: list[str],
+    remote_db: str | None,
+) -> str:
+    if remote_db:
+        return remote_db
+
+    env_remote_db = os.environ.get("JOB_HUNTER_SYNC_REMOTE_DB")
+    candidates = []
+    if env_remote_db:
+        candidates.append(env_remote_db)
+    candidates.extend(REMOTE_DB_CANDIDATES)
+    unique_candidates = tuple(dict.fromkeys(candidates))
+    probe_cmd = _remote_db_probe_command(unique_candidates)
+    return _run_output([*ssh_prefix, probe_cmd])
+
+
 def sync_knowledge_roundtrip(
     *,
-    host: str,
-    key: str,
+    host: str = DEFAULT_AWS_HOST,
+    key: str = DEFAULT_SSH_KEY,
     local_db: str | None = None,
-    remote_db: str = "/var/lib/job-hunter/data/job_hunter.db",
-    remote_user: str = "ubuntu",
-    remote_tmp: str = "/tmp/desktop.db",
-    remote_app_dir: str = "/home/ubuntu/job-hunter-agent",
+    remote_db: str | None = None,
+    remote_user: str = DEFAULT_REMOTE_USER,
+    remote_tmp: str = DEFAULT_REMOTE_TMP,
+    remote_app_dir: str = DEFAULT_REMOTE_APP_DIR,
 ) -> Path:
     """Push the local DB to AWS, merge there, then pull the merged DB back."""
     local_db_path = _resolve_local_db(local_db)
@@ -88,11 +122,12 @@ def sync_knowledge_roundtrip(
         "-o",
         f"UserKnownHostsFile={known_hosts}",
     ]
+    resolved_remote_db = _resolve_remote_db_path(ssh_prefix, remote_db)
     remote_merge_cmd = (
         f"cd {shlex.quote(remote_app_dir)} && "
         "uv run python -m job_hunter_agent.knowledge_sync "
         f"--left-db {shlex.quote(remote_tmp)} "
-        f"--right-db {shlex.quote(remote_db)}"
+        f"--right-db {shlex.quote(resolved_remote_db)}"
     )
 
     print(f"Uploading {local_db_path} to {target}:{remote_tmp}")
@@ -127,11 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_LOCAL_DB,
         help="Local SQLite DB path. Defaults to JOB_HUNTER_DB_PATH or data/app.db.",
     )
-    parser.add_argument(
-        "--remote-db",
-        default=DEFAULT_REMOTE_DB,
-        help="Remote AWS SQLite DB path.",
-    )
+    parser.add_argument("--remote-db", default=DEFAULT_REMOTE_DB, help="Remote AWS SQLite DB path.")
     parser.add_argument("--remote-user", default=DEFAULT_REMOTE_USER, help="SSH user for the AWS host.")
     parser.add_argument("--remote-tmp", default=DEFAULT_REMOTE_TMP, help="Temporary file path on AWS.")
     parser.add_argument(

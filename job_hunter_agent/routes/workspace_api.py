@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from starlette.responses import Response
 
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.io_utils import load_review_data, load_run_stats
+from job_hunter_agent.io_utils import load_job_history, load_review_data, load_run_stats
 from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.run_control import get_run_progress, request_run_stop, run_stop_requested
@@ -120,7 +120,7 @@ def api_review_data():  # type: ignore[no-untyped-def]
 @router.get("/api/job-history")
 def api_job_history():  # type: ignore[no-untyped-def]
 
-    history = srv.load_job_history()
+    history = load_job_history()
 
     slim_history: dict[str, dict] = {}
 

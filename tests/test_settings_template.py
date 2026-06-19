@@ -60,9 +60,8 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
 
     assert "Global settings" in html
 
-    assert 'id="knowledge_sync_db_file"' in html
     assert 'id="knowledge_sync_button"' in html
-    assert "Upload and merge knowledge" in html
+    assert "Sync knowledge with AWS" in html
 
     assert 'id="source_document_allowed_suffixes"' in html
 
@@ -166,9 +165,6 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert "Search Settings" in html
     assert "CV data and privacy" in html
     assert "The raw CV is not the long-term source of truth" in html
-    assert 'id="save_search_settings_shortcut"' in html
-    assert "Save Search Settings" in html
-
     assert "Job board search" in html
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html
@@ -298,15 +294,14 @@ def test_settings_sidebar_has_client_side_section_search():
     assert "applySettingsSectionSearch" in js
     assert "settingsSectionSearchHaystack" in js
     assert "group.classList.remove('is-active');" in js
-    assert "save_search_settings_shortcut" in js
-    assert "activeSaveButton.click();" in js
+    assert "saveActivePage()" in js
     assert "el.id === 'settings_section_search'" in js
     assert ".settings-sidebar-search" in css
     assert ".settings-group.is-search-result" in css
     assert ".settings-privacy-note" in css
 
 
-def test_search_settings_partial_has_privacy_subcards_and_local_save_shortcut():
+def test_search_settings_partial_has_privacy_subcards_and_shared_save_bar():
     html = SETTINGS_SEARCH_PARTIAL_PATH.read_text(encoding="utf-8")
     labels = json.loads((ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
     js = (
@@ -320,11 +315,8 @@ def test_search_settings_partial_has_privacy_subcards_and_local_save_shortcut():
     assert labels["shared_ui_labels"]["settings_privacy_title"] == "CV data and privacy"
     assert "raw CV is not the long-term source of truth" in labels["shared_ui_labels"]["settings_privacy_copy"]
 
-    assert 'id="save_search_settings_shortcut"' in html
-    assert "__JOB_HUNTER_SETTINGS_SEARCH_SAVE_BUTTON_LABEL__" in html
-    assert labels["shared_ui_labels"]["settings_search_save_button_label"] == "Save Search Settings"
-    assert "searchSaveShortcut?.addEventListener('click'" in js
-    assert "activeSaveButton.click();" in js
+    assert "saveActivePage()" in js
+    assert 'id="save_search_settings_shortcut"' not in html
 
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html

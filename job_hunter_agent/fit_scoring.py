@@ -213,27 +213,33 @@ def build_fit_highlights(
 
     matched_profile_areas = (
         [
-            (highlight_labels["strong_capability_match"], area)
+            (True, area)
             for area in capability_matches[CapabilityLevel.STRONG][
                 : hl_config["strong_capability_count"]
             ]
         ]
         + [
-            (highlight_labels["capability_match"], area)
+            (False, area)
             for area in capability_matches[CapabilityLevel.WORKING][
                 : hl_config["working_capability_count"]
             ]
         ]
         + [
-            (highlight_labels["capability_match"], area)
+            (False, area)
             for area in capability_matches[CapabilityLevel.BASIC][
                 : hl_config["basic_capability_count"]
             ]
         ]
     )
-    for prefix, area in matched_profile_areas:
+    cap_template = highlight_labels.get(
+        "capability_match_sentence",
+        "The ad asks for {capability}, and your profile includes this.",
+    )
+    for _strong, area in matched_profile_areas:
         label = friendly_capability_label(area)
-        entry = f"{prefix}: {label}" if label else ""
+        if not label:
+            continue
+        entry = cap_template.format(capability=label)
         if entry and entry not in highlights:
             highlights.append(entry)
 

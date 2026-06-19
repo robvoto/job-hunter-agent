@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import contextvars
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
-
-import logging
 
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
@@ -65,9 +64,22 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         except BotChallengeDetected:
             if not headless:
                 raise
-            logger.warning("[SEEK] Bot challenge detected with headless=True; retrying with headless=False")
-            set_run_progress("SEEK retrying (bot challenge, switching to visible browser)")
-            kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
+            logger.warning(
+                "[SEEK] Headless SEEK run timed out or was blocked; retrying with headless=False"
+            )
+            set_run_progress("SEEK retrying (timeout/captcha, switching to visible browser)")
+            try:
+                kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
+            except BotChallengeDetected as retry_exc:
+                logger.warning(
+                    "[SEEK] Visible SEEK retry was still blocked; continuing without SEEK results: %s",
+                    retry_exc,
+                )
+                return SourceRunResult(
+                    source=SOURCE_SEEK,
+                    _job_history_snapshot=job_history,
+                    _llm_cache_snapshot=llm_cache,
+                )
         return SourceRunResult(
             source=SOURCE_SEEK,
             kept_records=kept,

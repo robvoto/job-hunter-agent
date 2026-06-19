@@ -11,7 +11,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -111,4 +111,63 @@ def append_uncertainty_log(path: Path, entry: dict[str, Any]) -> None:
     except Exception as exc:
         logger.warning(
             "[RUNTIME_HELPERS][WARN] Failed to write uncertainty log to %s: %s", path, exc
+        )
+
+
+_SENSITIVE_SETTING_KEYWORDS = ("password", "secret", "token", "api_key", "apikey", "key")
+
+
+def _is_sensitive_setting_path(path: tuple[str, ...]) -> bool:
+    if not path:
+        return False
+    leaf = path[-1].lower()
+    return any(keyword in leaf for keyword in _SENSITIVE_SETTING_KEYWORDS)
+
+
+def _format_setting_value(value: Any, *, redact: bool) -> str:
+    if redact:
+        return "<redacted>"
+    try:
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except TypeError:
+        text = repr(value)
+    return text if len(text) <= 240 else f"{text[:237]}..."
+
+
+def _iter_settings_diffs(
+    before: Any,
+    after: Any,
+    path: tuple[str, ...] = (),
+) -> Iterable[tuple[tuple[str, ...], Any, Any]]:
+    if isinstance(before, dict) and isinstance(after, dict):
+        keys = sorted(set(before) | set(after))
+        for key in keys:
+            yield from _iter_settings_diffs(before.get(key), after.get(key), path + (str(key),))
+        return
+    if before != after:
+        yield path, before, after
+
+
+def log_settings_change(
+    logger: logging.Logger,
+    *,
+    scope: str,
+    before: Any,
+    after: Any,
+) -> None:
+    """Log a small before/after summary for saved settings payloads."""
+    diffs = list(_iter_settings_diffs(before or {}, after or {}))
+    if not diffs:
+        logger.info("[%s] settings saved; no effective changes", scope)
+        return
+
+    logger.info("[%s] settings changed (%d field%s):", scope, len(diffs), "" if len(diffs) == 1 else "s")
+    for path, old_value, new_value in diffs:
+        redact = _is_sensitive_setting_path(path)
+        logger.info(
+            "[%s] %s: %s -> %s",
+            scope,
+            ".".join(path) or "(root)",
+            _format_setting_value(old_value, redact=redact),
+            _format_setting_value(new_value, redact=redact),
         )

@@ -7,8 +7,6 @@ import threading
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-import pytest
-
 from job_hunter_agent import source_runner
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
@@ -234,6 +232,67 @@ def test_seek_exception_printed_and_continued(monkeypatch, capsys):
 
     assert len(kept) == 1
     assert kept[0]["job_key"] == "linkedin:1"
+
+
+def test_seek_headless_bot_challenge_retries_visible_browser(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    calls: list[bool] = []
+
+    def fake_seek_scrape_to_records(*, headless, **kwargs):
+        calls.append(headless)
+        if headless:
+            raise source_runner.BotChallengeDetected("headless challenge")
+        return ([{"job_key": "seek:1"}], [], [])
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert calls == [True, False]
+    assert result.error is None
+    assert result.kept_records == [{"job_key": "seek:1"}]
+
+
+def test_seek_headless_timeout_retries_visible_browser(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    calls: list[bool] = []
+
+    def fake_seek_scrape_to_records(*, headless, **kwargs):
+        calls.append(headless)
+        if headless:
+            raise source_runner.BotChallengeDetected("headless timeout waiting for cards")
+        return ([{"job_key": "seek:1"}], [], [])
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert calls == [True, False]
+    assert result.error is None
+    assert result.kept_records == [{"job_key": "seek:1"}]
+
+
+def test_seek_visible_bot_challenge_is_treated_as_non_fatal_source_skip(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    calls: list[bool] = []
+
+    def fake_seek_scrape_to_records(*, headless, **kwargs):
+        calls.append(headless)
+        raise source_runner.BotChallengeDetected(f"challenge (headless={headless})")
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert calls == [True, False]
+    assert result.error is None
+    assert result.kept_records == []
 
 
 def test_linkedin_scraper_exception_is_caught_and_printed(monkeypatch, capsys):

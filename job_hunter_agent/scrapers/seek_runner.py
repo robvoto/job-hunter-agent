@@ -63,7 +63,7 @@ RUN_PROGRESS_ITEM_SEPARATOR = " | "
 
 
 class BotChallengeDetected(Exception):
-    """Raised when a bot-challenge page is detected and does not auto-resolve."""
+    """Raised when SEEK needs a visible browser retry after a headless failure."""
 
 # Chromium flags and init script applied to every browser launch to suppress the
 # navigator.webdriver fingerprint that automated browsers expose. Without these,
@@ -675,9 +675,9 @@ def seek_scrape_to_records(
                             logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
                         except Exception as diag_exc:
                             logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
-                        if _bot_challenge_blocked:
+                        if _bot_challenge_blocked or headless:
                             raise BotChallengeDetected(
-                                f"SEEK bot challenge page did not resolve (headless={headless})"
+                                f"SEEK headless page did not load cards and needs a visible retry (headless={headless})"
                             ) from exc
                         break
 

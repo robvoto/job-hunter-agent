@@ -14,11 +14,10 @@ from datetime import datetime
 from functools import lru_cache
 from html import escape
 from string import Template
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.capability_matching import (
     build_risk_and_missing_profile_support,
-    capability_fit_highlights,
     reviewed_signal_match_summary,
 )
 from job_hunter_agent.company_normalization import normalize_company_name
@@ -30,9 +29,7 @@ from job_hunter_agent.description_trust import (
 from job_hunter_agent.filters import suggest_title_block_phrases
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
-    fit_score,
     fit_score_and_breakdown_displayed,
-    fit_score_breakdown,
     fit_score_displayed,
 )
 from job_hunter_agent.global_settings import get_default_country_suffix
@@ -57,7 +54,12 @@ from job_hunter_agent.profile_gaps import (
     classify_requirement_status,
     compute_profile_gaps,
 )
-from job_hunter_agent.profile_store import ENGAGEMENT_TYPE_OPTIONS, get_match_levels, load_profile
+from job_hunter_agent.profile_store import (
+    ENGAGEMENT_TYPE_OPTIONS,
+    VALID_ENGAGEMENT_TYPES,
+    get_match_levels,
+    load_profile,
+)
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
@@ -226,9 +228,43 @@ def _duplicate_match_label(matched_on: str) -> str:
 
 _CAPABILITY_ENTRY_TAGS = ("[canonical]", "[alias:", "[contextual_llm]")
 
+_NV1_PATTERNS = re.compile(r"\bnv\s*1\b|\bnegative\s+vetting\s*1\b", re.IGNORECASE)
+_CLEARANCE_PATTERNS = re.compile(
+    r"\b(baseline|nv\s*2|top\s+secret|protected)\s*(clearance)?\b|\bclearance\s+required\b",
+    re.IGNORECASE,
+)
+
+
+def _humanize_check_item(text: str) -> str:
+    """Convert raw hard-block / risk text into plain-English check items."""
+    t = safe_html(text)
+    lower = text.lower()
+    if _NV1_PATTERNS.search(lower):
+        return (
+            "This job appears to require NV1 clearance. "
+            "Your profile does not show NV1, so this may block the application."
+        )
+    if _CLEARANCE_PATTERNS.search(lower):
+        return (
+            "This job appears to require a security clearance. "
+            "Check whether your clearance level meets the requirement before applying."
+        )
+    return t
+
 
 def _is_capability_entry(label: str) -> bool:
     return any(tag in label for tag in _CAPABILITY_ENTRY_TAGS)
+
+
+def _all_work_types_selected(active_profile: Optional[dict]) -> bool:
+    if not isinstance(active_profile, dict):
+        return False
+    from job_hunter_agent.preferences import get_match_preferences
+    from job_hunter_agent.profile_store import normalize_engagement_type_preferences
+
+    prefs = get_match_preferences(active_profile)
+    selected = frozenset(normalize_engagement_type_preferences(prefs.get("engagement_type")))
+    return selected == VALID_ENGAGEMENT_TYPES
 
 
 def visible_fit_reasons(
@@ -236,6 +272,7 @@ def visible_fit_reasons(
     score_breakdown: List[dict],
     max_items: int = 4,
     include_values: bool = False,
+    active_profile: Optional[dict] = None,
 ) -> List[str]:
     reasons = dedupe_preserve_order(
         [compact_whitespace(item) for item in fit_highlights if compact_whitespace(item)]
@@ -243,6 +280,9 @@ def visible_fit_reasons(
     excluded = {
         "Passed content filters",
     }
+    # Work type is only a fit reason when the user has a specific work type preference.
+    # When all types are accepted, it's a neutral fact shown as a badge, not a fit signal.
+    suppress_work_type = _all_work_types_selected(active_profile)
 
     for item in score_breakdown:
         label = compact_whitespace(item.get("label") or "")
@@ -250,15 +290,15 @@ def visible_fit_reasons(
         # Per-capability entries (tagged [canonical], [alias:...], [contextual_llm]) are scoring
         # internals already surfaced via fit_highlights — skip them here.
         if not label or value <= 0 or label in excluded or _is_capability_entry(label):
-            if not (
-                (
-                    label.startswith("Work mode")
-                    or label.startswith("Work type")
-                    or label.startswith("Sector")
-                )
-                and label not in reasons
-            ):
+            is_pref_signal = (
+                label.startswith("Work mode")
+                or label.startswith("Work type")
+                or label.startswith("Sector")
+            )
+            if not (is_pref_signal and label not in reasons):
                 continue
+        if suppress_work_type and label.startswith("Work type"):
+            continue
         if label not in reasons:
             reasons.append(label)
         if len(reasons) >= max_items:
@@ -563,7 +603,6 @@ def render_job_card(
     company_display = normalize_company_name(
         str(record.get("company") or "")
     ) or compact_whitespace(str(record.get("company") or "N/A"))
-    company = safe_html(company_display or "N/A")
     url = safe_html(record.get("url", "#"))
     job_key = safe_html(str(record.get("job_key") or ""))
     title_reason = record.get("title_reason")
@@ -644,7 +683,7 @@ def render_job_card(
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
     visible_reasons = visible_fit_reasons(
-        fit_highlights, score_breakdown, include_values=active_debug_mode
+        fit_highlights, score_breakdown, include_values=active_debug_mode, active_profile=scoring_profile
     )
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
@@ -957,19 +996,21 @@ def render_job_card(
         + "</div>"
     )
 
-    posted_display = posted_display_label(record)
+    _posted_raw = posted_display_label(record)
+    posted_display = "Unknown" if not _posted_raw or _posted_raw == "N/A" else _posted_raw
     meta_items = []
-    for label, value in [
-        ("Posted", posted_display),
-        ("Location", display_record.get("location")),
-        ("Work mode", display_work_mode_label(display_record)),
+    for label, value, always_show in [
+        ("Posted", posted_display, True),
+        ("Location", display_record.get("location"), False),
+        ("Work mode", display_work_mode_label(display_record), False),
         (
             _workspace_label("workspace_meta_labels", "work_type", "Work type"),
             display_work_type_label(display_record),
+            False,
         ),
-        ("Salary", display_record.get("salary")),
+        ("Salary", display_record.get("salary"), False),
     ]:
-        if value and value != "N/A" and value != "Unknown":
+        if always_show or (value and value != "N/A" and value != "Unknown"):
             meta_items.append(
                 f'<span class="job-meta-item"><strong>{safe_html(label)}</strong> {safe_html(str(value))}</span>'
             )
@@ -1020,14 +1061,14 @@ def render_job_card(
     if visible_reasons:
         insight_sections.append(
             '<div class="job-insight-group">'
-            "<strong>Why it fits</strong>"
+            "<strong>Why this looks like a good fit</strong>"
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in visible_reasons)}</ul>"
             "</div>"
         )
     if reviewed_signal_matches["matched"]:
         insight_sections.append(
             '<div class="job-insight-group">'
-            "<strong>Matched profile support</strong>"
+            "<strong>Your approved experience appears in this ad</strong>"
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in reviewed_signal_matches['matched'])}</ul>"
             "</div>"
         )
@@ -1089,86 +1130,145 @@ def render_job_card(
                 "</div>"
             )
     job_requirements_html = ""
-    if requirement_statuses:
+    raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    merged_requirement_rows: dict[str, dict[str, Any]] = {}
+    merged_requirement_order: list[str] = []
+    if requirement_statuses or isinstance(raw_coverage, list):
         status_labels = {
             STATUS_CONFIRMED_HAVE: "In profile",
             STATUS_CONFIRMED_DO_NOT_HAVE: "Not in profile",
             STATUS_UNKNOWN: "Check",
         }
-        requirement_items_html = "".join(
-            f'<li class="job-requirement-item job-requirement-item--{safe_html(item["status"].replace("_", "-"))}">'
-            f'<span class="job-requirement-text">{safe_html(item["requirement"])}</span>'
-            f'<span class="job-requirement-status">{safe_html(status_labels.get(item["status"], "Check"))}</span>'
-            f"</li>"
-            for item in requirement_statuses
-        )
-        job_requirements_html = (
-            '<details class="job-insights job-requirements-panel">'
-            f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary', 'Job requirements'))}</summary>"
-            f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
-            "</details>"
-        )
-    requirement_coverage_html = ""
-    raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
-    if isinstance(raw_coverage, list) and raw_coverage:
-        _coverage_status_label_keys = {
-            "supported": "coverage_status_supported",
-            "partially_supported": "coverage_status_partially_supported",
-            "not_shown": "coverage_status_not_shown",
-            "mismatch": "coverage_status_mismatch",
+        coverage_status_labels = {
+            "supported": "Supported",
+            "partially_supported": "Partial",
+            "not_shown": "Not shown",
+            "mismatch": "Mismatch",
         }
-        _importance_label_keys = {
+        importance_label_keys = {
             "mandatory": "importance_mandatory",
             "strongly_preferred": "importance_strongly_preferred",
             "preferred": "importance_preferred",
             "nice_to_have": "importance_nice_to_have",
         }
-        coverage_items_html = ""
-        for item in raw_coverage:
-            if not isinstance(item, dict):
-                continue
+
+        def _requirement_key(value: str) -> str:
+            return compact_whitespace(value).lower()
+
+        for item in requirement_statuses:
             req_text = compact_whitespace(str(item.get("requirement") or ""))
             if not req_text:
                 continue
-            status = str(item.get("status") or "not_shown").strip().lower()
-            importance = str(item.get("importance") or "preferred").strip().lower()
-            cap_name = compact_whitespace(str(item.get("capability_name") or ""))
-            matched_text = compact_whitespace(str(item.get("matched_job_text") or ""))
-            status_label_key = _coverage_status_label_keys.get(status, "coverage_status_not_shown")
-            status_label = _workspace_label(
-                "workspace_card_labels", status_label_key, status.replace("_", " ").title()
-            )
-            importance_label_key = _importance_label_keys.get(importance, "importance_preferred")
-            importance_label = _workspace_label(
-                "workspace_card_labels", importance_label_key, importance.replace("_", " ").title()
-            )
-            # Compound CSS class: mandatory+not_shown is red (same visual weight as mismatch).
-            if status == "not_shown" and importance == "mandatory":
+            key = _requirement_key(req_text)
+            row = merged_requirement_rows.get(key)
+            if row is None:
+                row = {"requirement": req_text}
+                merged_requirement_rows[key] = row
+                merged_requirement_order.append(key)
+            row["profile_status"] = item.get("status")
+
+        if isinstance(raw_coverage, list):
+            for item in raw_coverage:
+                if not isinstance(item, dict):
+                    continue
+                req_text = compact_whitespace(str(item.get("requirement") or ""))
+                if not req_text:
+                    continue
+                key = _requirement_key(req_text)
+                row = merged_requirement_rows.get(key)
+                if row is None:
+                    row = {"requirement": req_text}
+                    merged_requirement_rows[key] = row
+                    merged_requirement_order.append(key)
+                row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
+                row["importance"] = str(item.get("importance") or "preferred").strip().lower()
+                row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
+                row["matched_job_text"] = compact_whitespace(
+                    str(item.get("matched_job_text") or "")
+                )
+
+        requirement_items_html = ""
+        for key in merged_requirement_order:
+            row = merged_requirement_rows.get(key)
+            if not isinstance(row, dict):
+                continue
+            req_text = compact_whitespace(str(row.get("requirement") or ""))
+            if not req_text:
+                continue
+            profile_status = str(row.get("profile_status") or "").strip()
+            coverage_status = str(row.get("coverage_status") or "").strip().lower()
+            importance = str(row.get("importance") or "").strip().lower()
+            cap_name = compact_whitespace(str(row.get("capability_name") or ""))
+            matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
+
+            if profile_status == STATUS_CONFIRMED_HAVE:
+                css_modifier = "confirmed-have"
+            elif profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+                css_modifier = "confirmed-do-not-have"
+            elif profile_status == STATUS_UNKNOWN:
+                css_modifier = "unknown"
+            elif coverage_status == "not_shown" and importance == "mandatory":
                 css_modifier = "mandatory-not-shown"
+            elif coverage_status:
+                css_modifier = coverage_status.replace("_", "-")
             else:
-                css_modifier = status.replace("_", "-")
+                css_modifier = "unknown"
+
+            if profile_status in status_labels:
+                status_label = status_labels[profile_status]
+            elif coverage_status:
+                status_label = coverage_status_labels.get(
+                    coverage_status, coverage_status.replace("_", " ").title()
+                )
+            else:
+                status_label = "Check"
+
+            importance_label = ""
+            if importance:
+                importance_label = _workspace_label(
+                    "workspace_card_labels",
+                    importance_label_keys.get(importance, "importance_preferred"),
+                    importance.replace("_", " ").title(),
+                )
+
             detail_parts = []
             if cap_name:
                 detail_parts.append(cap_name)
-            if matched_text:
+            if matched_text and compact_whitespace(matched_text).lower() != req_text.lower():
                 detail_parts.append(f'"{matched_text}"')
             detail_html = (
                 f'<span class="req-coverage-detail">{safe_html(" · ".join(detail_parts))}</span>'
                 if detail_parts
                 else ""
             )
-            coverage_items_html += (
+            importance_html = (
+                f'<span class="job-req-importance">{safe_html(importance_label)}</span>'
+                if importance_label
+                else ""
+            )
+
+            requirement_items_html += (
                 f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
                 f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
-                f'<span class="job-req-importance">{safe_html(importance_label)}</span>'
+                f"{importance_html}"
                 f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
                 f"</li>"
             )
-        if coverage_items_html:
-            requirement_coverage_html = (
-                '<details class="job-insights job-coverage-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'requirement_coverage_summary', 'Requirement coverage'))}</summary>"
-                f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{coverage_items_html}</ul></div>'
+
+        if requirement_items_html:
+            job_requirements_html = (
+                '<details class="job-insights job-requirements-panel">'
+                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary', 'Requirements'))}</summary>"
+                f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
+                "</details>"
+            )
+        else:
+            job_requirements_html = (
+                '<details class="job-insights job-requirements-panel">'
+                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary', 'Requirements'))}</summary>"
+                '<div class="job-insight-group is-secondary">'
+                f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state", "No requirements were extracted for this job."))}</p>'
+                '</div>'
                 "</details>"
             )
 
@@ -1311,8 +1411,8 @@ def render_job_card(
     if negative_items:
         insight_sections.append(
             '<div class="job-insight-group job-insight-warning">'
-            "<strong>What lowers it</strong>"
-            f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in negative_items)}</ul>"
+            "<strong>Things to check before applying</strong>"
+            f"<ul>{''.join(f'<li>{_humanize_check_item(item)}</li>' for item in negative_items)}</ul>"
             "</div>"
         )
     if active_debug_mode:
@@ -1413,21 +1513,15 @@ def render_job_card(
         except ValueError:
             pass
         _ch_items = []
-        if _cand_hist_badge_label:
-            _ch_items.append(f"Status: {_cand_hist_badge_label}")
-        _ch_summary_parts = [p for p in [_ch_formatted_date, _ch_role, _ch_company] if p]
-        if _ch_summary_parts:
-            _ch_items.append(" — ".join(_ch_summary_parts))
-        if _ch_company:
-            _ch_items.append(f"Company: {_ch_company}")
+        _ch_header_parts = [p for p in [_ch_company, _ch_formatted_date] if p]
+        if _ch_header_parts:
+            _ch_items.append(" — ".join(_ch_header_parts))
         if _ch_role:
             _ch_items.append(f"Role: {_ch_role}")
-        if _ch_run_date:
-            _ch_items.append(f"Run date: {_ch_run_date}")
+        if _ch_evidence_raw:
+            _ch_items.append(f"Evidence: {_ch_evidence_raw}")
         if _ch_confidence:
             _ch_items.append(f"Confidence: {_ch_confidence}")
-        if _ch_evidence:
-            _ch_items.append(f"Evidence: {_ch_evidence}")
         if _cand_hist_review_reason:
             _ch_items.append(f"Review reason: {_cand_hist_review_reason}")
         candidate_history_html = (
@@ -1511,7 +1605,6 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{note_html}"
         f"{insight_html}"
-        f"{requirement_coverage_html}"
         f"{llm_review_html}"
         f"{job_requirements_html}"
         f"{profile_gaps_html}"

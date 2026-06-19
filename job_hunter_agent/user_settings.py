@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from typing import Any
 
 from job_hunter_agent.match_labels import MATCH_LEVELS
 from job_hunter_agent.paths import DEFAULT_USER_SETTINGS_PATH
+from job_hunter_agent.runtime_helpers import log_settings_change
 from job_hunter_agent.utils import coerce_int, deep_merge
 
 # Settings keys
@@ -46,6 +48,8 @@ MIN_MAX_JOBS_IN_DIGEST = 1
 MAX_MAX_JOBS_IN_DIGEST = 20
 
 MAX_TELEGRAM_UPDATE_ID = 2147483647
+
+logger = logging.getLogger(__name__)
 
 
 def _load_default_user_settings_seed() -> dict[str, Any]:
@@ -217,6 +221,10 @@ def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn, ensure_user_row
 
     uid = _resolve_user_id(user_id)
+    try:
+        current = load_user_settings(uid, create_if_missing=False)
+    except Exception:
+        current = None
     normalized = normalize_user_settings(payload)
     ensure_user_row(uid)
     with db_conn() as conn:
@@ -226,6 +234,12 @@ def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
             (uid, json.dumps(normalized, ensure_ascii=False)),
         )
+    log_settings_change(
+        logger,
+        scope="USER_SETTINGS",
+        before=current,
+        after=normalized,
+    )
     return normalized
 
 

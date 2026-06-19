@@ -754,6 +754,85 @@ def test_llm_call_error_log_emitted_with_structured_fields(caplog, monkeypatch):
     assert "elapsed_ms" in error_log
 
 
+def test_llm_missing_provider_key_is_reported_as_unavailable(caplog, monkeypatch):
+    record = _base_record("seek", "seek_detail", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "passes_content_filters",
+        lambda details_text, card_location, title_reason: (True, "OK"),
+    )
+    monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
+    monkeypatch.setattr(
+        job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK")
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: []
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "build_risk_and_missing_profile_support",
+        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "deterministic_review_outcome", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "resolve_llm_review_payload",
+        lambda record, llm_cache: (_ for _ in ()).throw(
+            RuntimeError("LLM review requested but no provider key is configured")
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "register_pending_learning_signals", lambda signals: None
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: []
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "reviewed_signal_matches_for_text", lambda details_text: []
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "evaluate_competitive_signal_alignment", lambda signal, profile: signal
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "extract_skill_observations", lambda record, profile: []
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "build_ad_learning_signals", lambda record, details_text, profile: []
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
+    )
+
+    with caplog.at_level(logging.WARNING, logger="job_hunter_agent.job_review_pipeline"):
+        outcome, updated_record, _ = review_post_detail_normalized_job(
+            record,
+            ReviewPipelineContext(
+                profile=_review_profile(),
+                job_history={},
+                audit_rows=[],
+                llm_cache={},
+                applied_job_keys=set(),
+                hidden_job_keys=set(),
+                run_iso="2026-05-26T00:00:00+10:00",
+                date_range_days=30,
+                source_name="SEEK",
+            ),
+        )
+
+    assert outcome["decision"] == "REJECT"
+    assert outcome["reject_reason"] == "LLM_UNAVAILABLE"
+
+    warning_logs = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+    warning_log = next((m for m in warning_logs if "LLM_CALL_ERROR" in m), None)
+    assert warning_log is not None, "expected [PIPELINE][LLM_CALL_ERROR] warning log"
+    assert "no provider key is configured" in warning_log
+    assert "error_type" in warning_log
+
+
 def _patch_review_post_detail_for_work_type_assertions(monkeypatch, expected_work_type):
     def _assert_inferred_work_type(record, profile):
         actual_work_type = record[RECORD_WORK_TYPE_KEY]

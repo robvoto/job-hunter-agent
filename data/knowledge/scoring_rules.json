@@ -1,8 +1,8 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 8,
-  "updated_at": "2026-06-02",
+  "version": 9,
+  "updated_at": "2026-06-19",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
     "design": "Band-anchored scoring. The LLM grade defines the band (floor/ceiling); other signals adjust the score within that band. Grade and score cannot contradict — a MISMATCH grade always produces a low score; a STRONG grade always produces a good score.",
